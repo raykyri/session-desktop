@@ -351,11 +351,11 @@ export type ResearchNodeStatus =
   | "failed"
   | "cancelled";
 
-/** A node's type, the tag of its body: a post (written by the user: a saved
- * link or tweet, or a post delivered to the network), an exchange (a
- * question and the agent run that answers it), or a document (long-form
- * content with no run: an imported report, an authored document, or an
- * exported terminal transcript). */
+/** A node's type, the tag of its body: a post (written by the user and shown
+ * as a note: text, a saved link or an X post), an exchange (a question and
+ * the agent run that answers it), or a document (long-form content with no
+ * run: an imported report, an authored document, or an exported terminal
+ * transcript). */
 export type ResearchNodeType = "post" | "exchange" | "document";
 
 /** Where a document's content came from. */
@@ -367,7 +367,8 @@ export type DocumentSource = "imported" | "authored" | "transcript";
 export type PostFormat = "text" | "link";
 
 /** What a follow-up was asked about in its parent: a passage of the parent's
- * answer or document, or a reply on the parent post. */
+ * answer or document, or a stored reply on the parent post (no longer
+ * created; replies are not shown). */
 export type NodeAnchor =
   | { kind: "passage"; anchor: ResearchHighlightAnchor }
   | { kind: "reply"; replyId: string };
@@ -386,8 +387,11 @@ export interface PostReply {
   createdAt: number;
 }
 
-/** Network state of a post published with Ask network. Nothing is transmitted
- * yet; `posted` records the user's intent. */
+/** Sharing state of a post. A post with a delivery record is shared with
+ * other users; one without is private. The desktop app creates notes without
+ * one and does not show replies; posts written by earlier builds with "Post
+ * to network" keep theirs. Nothing is transmitted; `posted` records the
+ * intent. */
 export interface PostDelivery {
   status: "posted";
   postedAt: number;
@@ -421,8 +425,6 @@ export interface ResearchTree {
   updatedAt: number;
   archivedAt?: number | null;
   lastViewedAt?: number | null;
-  /** Home's Follow control; persisted on the thread. */
-  followed?: boolean;
   /** Home's Bookmark control; persisted on the thread. */
   bookmarked?: boolean;
 }
@@ -489,11 +491,14 @@ interface ResearchNodeBase {
   chainOrder?: string[];
 }
 
+/** A post node is shown as a note: text or a saved link the user wrote. Its
+ * children are AI follow-ups (exchanges) and follow-up notes (posts). The
+ * stored type stays `post`. */
 export interface ResearchPostNode extends ResearchNodeBase {
   type: "post";
   message: UserMessage;
   format: PostFormat;
-  /** Only on posts delivered with Ask network. */
+  /** Only on shared posts (see PostDelivery). */
   delivery?: PostDelivery | null;
   /** Default agent for AI follow-ups; not provenance. */
   followUpAgent: AgentSpec;
@@ -570,7 +575,7 @@ export interface RecentResearchQuery {
   source?: DocumentSource | null;
   /** A post's format. */
   format?: PostFormat | null;
-  /** A post's network state, with replies cut to the first five top-level
+  /** A post's sharing state, with replies cut to the first five top-level
    * threads; `replyCount` is the full top-level count. */
   delivery?: PostDelivery | null;
   replyCount?: number;
@@ -667,7 +672,6 @@ export interface ResearchTreeSummary {
   cancelledCount: number;
   updatedAt: number;
   archivedAt?: number | null;
-  followed?: boolean;
   bookmarked?: boolean;
   hasUnseenUpdate: boolean;
   /** A failure settled after the tree was last viewed. Attention flag —

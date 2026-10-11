@@ -133,21 +133,16 @@ export function replyAnchorId(node: Pick<ResearchNode, "anchor">): string | null
   return node.anchor?.kind === "reply" ? node.anchor.replyId : null;
 }
 
-/** The excerpt a follow-up of a post quotes as its source: the reply it was
- * asked about, else the post's own text, on one line, without emphasis and
- * code markers, and cut at a word boundary to at most `maxChars` characters
- * (the ellipsis included). Null when `parent` is not a post. */
-export function postFollowUpSourceExcerpt(
-  parent: ResearchNode,
-  child: Pick<ResearchNode, "anchor">,
-  maxChars = 120,
-): string | null {
+/** The excerpt a follow-up of a note quotes as its source: the note's text
+ * on one line, without emphasis and code markers, and cut at a word boundary
+ * to at most `maxChars` characters (the ellipsis included). A follow-up asked
+ * about a stored reply quotes the note too, since replies are not shown.
+ * Null when `parent` is not a post (a note). */
+export function postFollowUpSourceExcerpt(parent: ResearchNode, maxChars = 120): string | null {
   if (parent.type !== "post") {
     return null;
   }
-  const replyId = replyAnchorId(child);
-  const reply = replyId ? parent.delivery?.replies?.find((candidate) => candidate.id === replyId) : undefined;
-  const text = (reply?.body ?? parent.message.text)
+  const text = parent.message.text
     .replace(/\*\*|__|`/g, "")
     .split(/\s+/)
     .join(" ")

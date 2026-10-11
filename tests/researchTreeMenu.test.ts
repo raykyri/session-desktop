@@ -115,8 +115,6 @@ function feedCardMenu(
         folders,
         archiveShortcut: overrides.archiveShortcut ?? true,
         onToggleBookmark: noop,
-        followDisabledReason: archived ? "Archived questions don't send notifications" : null,
-        onToggleFollow: noop,
         onMove: noop,
         onNewFolder: noop,
       },
@@ -136,7 +134,6 @@ function feedCardMenu(
 test("a feed card's one menu lists the question's actions, then the thread's, Delete last; Archive is under Move to", () => {
   assert.deepEqual(menuOutline(feedCardMenu()), [
     "Bookmark",
-    "Follow",
     "|",
     "Move to",
     "Unfiled",
@@ -152,7 +149,7 @@ test("a feed card's one menu lists the question's actions, then the thread's, De
     "Delete",
   ]);
   // Without a recap, Rename alone precedes the separator.
-  assert.deepEqual(menuOutline(feedCardMenu({ recap: false })).slice(10), [
+  assert.deepEqual(menuOutline(feedCardMenu({ recap: false })).slice(9), [
     "|",
     "Rename",
     "|",
@@ -174,7 +171,6 @@ test("an archived card's menu ends with Unarchive and Delete", () => {
   const html = feedCardMenu({ archived: true });
   assert.deepEqual(menuOutline(html), [
     "Bookmark",
-    "Follow",
     "|",
     "Move to",
     "Unfiled",
@@ -187,7 +183,6 @@ test("an archived card's menu ends with Unarchive and Delete", () => {
     "Unarchive research",
     "Delete",
   ]);
-  assert.match(html, /disabled="" title="Archived questions don&#x27;t send notifications"/);
 });
 
 test("a starred child row's menu has Remove star and the question's actions, no thread actions", () => {
@@ -197,7 +192,6 @@ test("a starred child row's menu has Remove star and the question's actions, no 
       folders,
       onRemoveStar: noop,
       onToggleBookmark: noop,
-      onToggleFollow: noop,
       onMove: noop,
       onNewFolder: noop,
     }),
@@ -206,7 +200,6 @@ test("a starred child row's menu has Remove star and the question's actions, no 
     "Remove star",
     "|",
     "Bookmark",
-    "Follow",
     "|",
     "Move to",
     "Unfiled",

@@ -1,6 +1,6 @@
-/* Posts: Ask-network questions and saved links, on Home cards and on a post's
-   page. Replies and follow-ups are items with an avatar (or glyph) gutter
-   joined by a spine; a post page lists them as rows in its thread column. */
+/* Notes (post nodes): text notes and saved links, on Home cards and on a
+   note's page. Follow-ups are items with a glyph gutter; a note's page lists
+   them as rows in its follow-ups column. */
 
 /* — Outline — */
 
@@ -11,11 +11,6 @@
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.post-thread-list.is-nested {
-  --post-gutter: 16px;
-  margin-top: 10px;
 }
 
 .post-thread-item {
@@ -30,16 +25,6 @@
   padding-bottom: 0;
 }
 
-/* The spine runs from below this item's avatar to the next item's. */
-.post-thread-item:not(:last-child)::before {
-  content: "";
-  position: absolute;
-  top: calc(var(--post-gutter) + 2px);
-  bottom: 2px;
-  left: calc(var(--post-gutter) / 2 - 0.5px);
-  border-left: 1px solid var(--surface-border-default);
-}
-
 .post-thread-gutter {
   display: flex;
   justify-content: center;
@@ -49,7 +34,6 @@
   min-width: 0;
 }
 
-.post-avatar,
 .post-glyph {
   position: relative;
   z-index: 1;
@@ -59,43 +43,13 @@
   height: var(--post-gutter);
   align-items: center;
   justify-content: center;
-}
-
-.post-avatar {
-  border-radius: 50%;
-  color: var(--post-avatar-fg);
-  font-size: calc(var(--post-gutter) * 0.45);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.post-avatar.tone-0 {
-  background: var(--post-avatar-tone-0);
-}
-
-.post-avatar.tone-1 {
-  background: var(--post-avatar-tone-1);
-}
-
-.post-avatar.tone-2 {
-  background: var(--post-avatar-tone-2);
-}
-
-.post-avatar.is-self {
-  background: var(--control-bg);
-  color: var(--text-muted);
-  border: 1px solid var(--control-border);
-  font-size: calc(var(--post-gutter) * 0.32);
-}
-
-.post-glyph {
   border: 1px solid var(--control-border);
   border-radius: 50%;
   background: var(--control-bg);
   color: var(--text-muted);
 }
 
-/* — Replies — */
+/* — Row heads — */
 
 .post-reply-head {
   display: flex;
@@ -111,19 +65,6 @@
 .post-reply-author {
   color: var(--text-secondary);
   font-weight: 500;
-}
-
-.post-reply-text {
-  margin-top: 1px;
-}
-
-/* Row actions stay visible in the metadata color: a hidden row still took
-   its space, which spaced replies unevenly against follow-ups, and the
-   actions were found only by hovering. */
-.post-thread-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 3px;
 }
 
 .post-thread-link {
@@ -173,70 +114,10 @@
   overflow-wrap: anywhere;
 }
 
-.post-thread-spinner,
-.post-field-spinner {
+.post-thread-spinner {
   flex: none;
   color: var(--text-muted);
   animation: spinner-spin 0.9s linear infinite;
-}
-
-/* — Fields — */
-
-.post-field {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px 3px 4px;
-  border: 1px solid var(--surface-border-default);
-  border-radius: var(--radius-lg);
-  transition: border-color var(--transition-fast);
-}
-
-.post-field:focus-within {
-  border-color: var(--control-border);
-  background: var(--field-bg, transparent);
-}
-
-.post-field.is-respond {
-  margin-top: 8px;
-  padding-left: 8px;
-}
-
-.post-field input {
-  flex: 1;
-  min-width: 0;
-  padding: 4px 2px;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--text-strong);
-  font: inherit;
-  font-size: calc(var(--research-body-font-size) - 0.5px);
-}
-
-.post-field input::placeholder {
-  color: var(--text-subtle);
-}
-
-.post-field-target {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  min-height: 0;
-  padding: 1px 6px;
-  border: 0;
-  border-radius: 4px;
-  background: var(--surface-fill-subtle);
-  color: var(--text-muted);
-  font-size: calc(12px + var(--font-ui-size-offset));
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.post-field-target:hover {
-  color: var(--text-primary);
 }
 
 /* — Saved links — */
@@ -267,12 +148,12 @@
   font-size: calc(12.5px + var(--font-ui-size-offset));
 }
 
-/* — Post page — */
+/* — Note page — */
 
-/* A post page is two columns. The post column holds the post laid out as one
-   turn (research.css): the post where a question sits, its delivery line
-   where an answer sits. The thread column holds the follow-up composer and
-   the replies and follow-ups. */
+/* A note's page is two columns. The note column holds the note laid out as
+   one turn (research.css): the note where a question sits, its time line
+   below it. The follow-ups column holds the follow-up composer and the
+   follow-ups. */
 .post-parent {
   display: block;
   margin-bottom: 6px;
@@ -292,7 +173,7 @@
   text-underline-offset: 2px;
 }
 
-/* Show the Post and Ask switch and Send on a row under the text once the
+/* Show the Ask/Note switch and Send on a row under the text once the
    composer is focused or filled: the switch at the leading edge, Send at the
    trailing edge, as in the Home ask box. */
 .post-composer-row {
@@ -312,9 +193,9 @@
   margin-top: 8px;
 }
 
-/* — Thread column — */
+/* — Follow-ups column — */
 
-/* Place the follow-up composer before the thread rows. */
+/* Place the follow-up composer before the follow-up rows. */
 .post-thread > .post-composer {
   padding: 12px 12px 14px;
   border-bottom: 1px solid var(--surface-divider);
@@ -329,8 +210,8 @@
 
 /* Rows are bubbles, as message rows are (research.css): no fill at rest, the
    open follow-up filled, a faint accent ring on the row the keys act on.
-   An item's avatar or glyph sits on its name line and its text takes the
-   row's full width; responses indent under their reply. */
+   An item's glyph sits on its name line and its text takes the row's full
+   width. */
 .post-thread-rows {
   --post-gutter: 16px;
   gap: 2px;
@@ -342,20 +223,12 @@
   column-gap: 6px;
 }
 
-.post-thread-rows .post-thread-item::before {
-  content: none;
-}
-
 .post-thread-rows .post-thread-body {
   display: contents;
 }
 
 .post-thread-rows .post-thread-body > :not(.post-reply-head) {
   grid-column: 1 / -1;
-}
-
-.post-thread-rows .post-thread-list.is-nested {
-  margin-left: 14px;
 }
 
 .post-thread-rows > .post-thread-item,
@@ -367,7 +240,6 @@
 
 /* The focused row, or the row ⌃Tab made current while focus stayed in a
    text field (data-current). */
-.post-thread-rows > .post-thread-item:focus,
 .post-thread-rows > .post-thread-item[data-current] {
   outline: none;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
@@ -416,7 +288,7 @@
   pointer-events: auto;
 }
 
-/* Use the same font size for questions and replies. */
+/* Use the same font size for questions and follow-up notes. */
 .post-thread-question {
   margin-top: 1px;
   color: var(--text-primary);

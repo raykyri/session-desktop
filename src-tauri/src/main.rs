@@ -1751,9 +1751,9 @@ async fn create_research_post_follow_up(
 }
 
 /// The post author's response to a member reply (`in_reply_to` set). There
-/// is no network transport, so nothing else can deliver member replies yet;
-/// debug builds accept `member` (with no `in_reply_to`) so the reply UI can
-/// be exercised from the webview. Release builds refuse it.
+/// is no transport for replies from other users and the desktop UI shows no
+/// replies; debug builds accept `member` (with no `in_reply_to`) to seed
+/// stored replies. Release builds refuse it.
 #[tauri::command]
 fn add_research_post_reply(
     state: tauri::State<'_, AppState>,
@@ -1764,7 +1764,7 @@ fn add_research_post_reply(
 ) -> Result<ResearchNodeView, String> {
     let author = match member {
         Some(member @ research::PostReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
-        Some(_) => return Err("member replies can only arrive from the network".to_string()),
+        Some(_) => return Err("member replies can only come from other users".to_string()),
         None => research::PostReplyAuthor::Author,
     };
     state
@@ -2181,15 +2181,6 @@ fn rename_research_tree(
     title: String,
 ) -> Result<ResearchTree, String> {
     state.rename_research_tree(&tree_id, title)
-}
-
-#[tauri::command]
-fn set_research_tree_followed(
-    state: tauri::State<'_, AppState>,
-    tree_id: String,
-    followed: bool,
-) -> Result<ResearchTree, String> {
-    state.set_research_tree_followed(&tree_id, followed)
 }
 
 #[tauri::command]
@@ -3519,7 +3510,6 @@ fn main() {
             retry_research_node,
             cancel_research_node,
             rename_research_tree,
-            set_research_tree_followed,
             set_research_tree_bookmarked,
             rename_research_node,
             set_research_node_starred,

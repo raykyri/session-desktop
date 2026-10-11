@@ -257,34 +257,23 @@ export function listRecentActivityForTrees(treeIds: string[]) {
   return invoke<RecentResearchQuery[]>("list_recent_activity_for_trees", { treeIds });
 }
 
-/** Creates a post tree. `askNetwork` posts are published to the network (no
- * transport yet); a body that is a single URL can be saved with
- * `askNetwork: false` as a link or post. The agent fields are the default
- * for the post's AI follow-ups. */
+/** Creates a note (a post tree): text, or a single URL saved as a link. The
+ * desktop app never sets the backend's `share` flag, so the note has no
+ * delivery record. The agent fields are the default for the note's AI
+ * follow-ups. */
 export function createResearchPost(request: {
   body: string;
   adapter: string;
   model?: string | null;
   effort?: string | null;
   workspaceId: string;
-  askNetwork: boolean;
 }) {
   return invoke<ResearchTreeDetail>("create_research_post", { request });
 }
 
-/** A network follow-up: another post under a network post. */
+/** A follow-up note: another note under a note or saved link. */
 export function createResearchPostFollowUp(parentNodeId: string, body: string) {
   return invoke<ResearchNode>("create_research_post_follow_up", { parentNodeId, body });
-}
-
-/** The post author's response to a member's reply. */
-export function respondToResearchPostReply(nodeId: string, inReplyTo: string, body: string) {
-  return invoke<ResearchNode>("add_research_post_reply", { nodeId, inReplyTo, body });
-}
-
-/** Deletes one of the post author's own responses. */
-export function removeResearchPostReply(nodeId: string, replyId: string) {
-  return invoke<ResearchNode>("remove_research_post_reply", { nodeId, replyId });
 }
 
 export function getResearchTree(treeId: string) {
@@ -389,10 +378,6 @@ export function renameResearchTree(treeId: string, title: string) {
 
 export function listResearchHighlights() {
   return invoke<ResearchHighlightFeedItem[]>("list_research_highlights");
-}
-
-export function setResearchTreeFollowed(treeId: string, followed: boolean) {
-  return invoke<ResearchTree>("set_research_tree_followed", { treeId, followed });
 }
 
 export function setResearchTreeBookmarked(treeId: string, bookmarked: boolean) {

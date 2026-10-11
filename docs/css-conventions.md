@@ -20,9 +20,9 @@ Session uses global CSS with cascade layers. The application imports one entrypo
 - Put shared Home/research page chrome, reading typography, and content-card recipes in
   `features/research-surface.css`.
 - Keep research-thread and research-sidebar details in `features/research.css`, Home feed
-  details in `features/feed.css`, post replies and follow-ups (on Home cards and post
-  pages) in `features/posts.css`, and outer application/sidebar layout in
-  `features/shell.css`.
+  details in `features/feed.css`, notes (post nodes: the note column, saved-link cards,
+  the follow-ups column and its composer) in `features/posts.css`, and outer
+  application/sidebar layout in `features/shell.css`.
 
 Feature styles should not rely on an unrelated file loading later to complete or correct
 their layout. When two destinations share a visual contract, give that contract a shared

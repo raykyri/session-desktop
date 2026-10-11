@@ -105,12 +105,12 @@ test("a post's own column and an empty thread fall back to the feed", () => {
     strip.columns.map((column) => column.id),
     ["N0", "T0", "E0"],
   );
-  // The thread has rows: the editor and the thread cycle it; the post is
-  // left of it.
+  // The follow-ups column has rows: the editor and the follow-ups column
+  // cycle it; the note is left of it.
   assert.equal(researchCycleColumn(["T0"], "E0"), "T0");
   assert.equal(researchCycleColumn(["T0"], "T0"), "T0");
   assert.equal(researchCycleColumn(["T0"], "N0"), "feed");
-  // No replies or follow-ups: nothing to cycle in the strip.
+  // No follow-ups: nothing to cycle in the strip.
   assert.equal(researchCycleColumn([], "T0"), "feed");
   assert.equal(researchCycleColumn([], "E0"), "feed");
 });

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bell, Bookmark, Check, House, Plus, Star } from "lucide-react";
+import { Bookmark, Check, House, Plus, Star } from "lucide-react";
 import type { ResearchFolder } from "../../types";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -33,10 +33,6 @@ export interface ResearchTreeMenuProps {
   folders: ResearchFolder[];
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
-  followed?: boolean;
-  /** Why Follow is unavailable (an archived question). */
-  followDisabledReason?: string | null;
-  onToggleFollow?: () => void;
   /** Shows A on the available Archive target and enables it as a menu shortcut. */
   archiveShortcut?: boolean;
   /** Given with `onNewFolder`: adds Move to and New folder…. */
@@ -44,7 +40,7 @@ export interface ResearchTreeMenuProps {
   onNewFolder?: () => void;
 }
 
-/** The actions on a whole question: Bookmark and Follow when given, then
+/** The actions on a whole question: Bookmark when given, then
  * Move to with every folder (the current one disabled and checked), then New
  * folder…, which creates a folder and moves the question into it. A feed
  * card's menu follows them with the thread's own actions (Generate recap,
@@ -55,9 +51,6 @@ export function ResearchTreeMenuItems({
   folders,
   bookmarked,
   onToggleBookmark,
-  followed = false,
-  followDisabledReason = null,
-  onToggleFollow,
   archiveShortcut = false,
   onMove,
   onNewFolder,
@@ -73,24 +66,6 @@ export function ResearchTreeMenuItems({
             }
             label={bookmarked ? "Remove bookmark" : "Bookmark"}
             onSelect={onToggleBookmark}
-          />
-          {onToggleFollow || !move ? null : <ResearchMenuSeparator />}
-        </>
-      ) : null}
-      {onToggleFollow ? (
-        <>
-          <ResearchMenuItem
-            icon={
-              <Bell
-                size={15}
-                aria-hidden="true"
-                fill={followed && !followDisabledReason ? "currentColor" : "none"}
-              />
-            }
-            label={followed && !followDisabledReason ? "Unfollow" : "Follow"}
-            disabled={followDisabledReason !== null}
-            title={followDisabledReason ?? undefined}
-            onSelect={onToggleFollow}
           />
           {move ? <ResearchMenuSeparator /> : null}
         </>
@@ -170,7 +145,7 @@ interface ResearchFeedRowMenuItemsProps extends ResearchTreeMenuProps {
 }
 
 /** A feed row's menu items. A card's menu holds its question's actions
- * (Bookmark, Follow, Move to), then after a separator the thread's actions
+ * (Bookmark, Move to), then after a separator the thread's actions
  * passed as `children` (Generate recap, Rename, Archive, Delete). A starred
  * child row's menu starts with Remove star, then its question's actions. */
 export function ResearchFeedRowMenuItems({ onRemoveStar, children, ...items }: ResearchFeedRowMenuItemsProps) {

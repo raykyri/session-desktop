@@ -211,8 +211,6 @@
   --research-meta-line-height: 1.35;
   --research-compact-font-size: var(--research-meta-font-size);
   --research-compact-line-height: 1.45;
-  --research-quote-font-size: calc(var(--research-meta-font-size) + 0.5px);
-  --research-quote-line-height: 1.45;
   /* Transcript children add the face offset at their own declarations. Remove
      it from this baseline delta so research prose receives it exactly once. */
   --research-markdown-font-delta: calc(
@@ -255,13 +253,6 @@
   font-weight: 400;
   line-height: var(--research-recap-line-height);
   white-space: normal;
-}
-
-.research-prompt-quote {
-  color: var(--text-tertiary);
-  font-size: var(--research-quote-font-size);
-  font-style: italic;
-  line-height: var(--research-quote-line-height);
 }
 
 /* Shared tweet embed used both as a Home item and as a research-message

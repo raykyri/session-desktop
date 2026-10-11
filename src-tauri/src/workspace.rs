@@ -3595,7 +3595,7 @@ mod tests {
                     model: None,
                     effort: None,
                     workspace_id: workspace.id.clone(),
-                    ask_network: true,
+                    share: true,
                 },
                 Vec::new(),
             )

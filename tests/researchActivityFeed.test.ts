@@ -78,10 +78,10 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("cards have no metadata row: no time, counts, recap, Follow or Bookmark", () => {
+test("cards have no metadata row: no time, counts, recap or Bookmark", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
-    researchTrees: [{ ...tree, followed: true, bookmarked: true }],
+    researchTrees: [{ ...tree, bookmarked: true }],
   });
   assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
   // Direct follow-ups are not rows of their own unless starred.
@@ -430,7 +430,7 @@ test("the agent setup guide appears only when the Home feed is empty", () => {
   const emptyWithGuide = renderFeed({ setupGuide });
   assert.match(emptyWithGuide, /Agent setup guide/);
   assert.doesNotMatch(emptyWithGuide, /appear here\. New ones start at the top/);
-  assert.match(renderFeed({}), /appear here\. New ones start at the top/);
+  assert.match(renderFeed({}), /Research, notes, and saved links appear here\. New ones start at the top\./);
   assert.doesNotMatch(renderFeed({ setupGuide, items: [savedLink] }), /Agent setup guide/);
 });
 

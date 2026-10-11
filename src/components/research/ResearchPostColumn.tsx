@@ -9,9 +9,9 @@ import {
   postFollowUpSourceExcerpt,
 } from "../../lib/researchNodeTypes";
 
-/** A post's own column body: the post as a turn's question. Replies,
- * follow-ups and the follow-up composer are in the thread column to its
- * right (ResearchPostThread). The column header carries the history buttons. */
+/** A note's own column body: the note as a turn's question. Follow-ups and
+ * the follow-up composer are in the follow-ups column to its right
+ * (ResearchPostThread). The column header carries the history buttons. */
 export default function ResearchPostColumn({
   detail,
   post,
@@ -24,14 +24,14 @@ export default function ResearchPostColumn({
   const parent = post.parentNodeId
     ? detail.nodes.find((node) => node.id === post.parentNodeId) ?? null
     : null;
-  // A network follow-up's parent is always a post (the backend refuses any
+  // A follow-up note's parent is always a note (the backend refuses any
   // other parent).
-  const parentExcerpt = parent ? postFollowUpSourceExcerpt(parent, post, 60) : null;
+  const parentExcerpt = parent ? postFollowUpSourceExcerpt(parent, 60) : null;
   const editedAt = nodeEditedAt(post);
 
   return (
     <div className="post-column">
-      {/* Use the turn layout for the post. */}
+      {/* Use the turn layout for the note. */}
       <article className="research-turn post-turn">
         <div className="research-turn-question">
           {parent && parentExcerpt !== null ? (
@@ -40,7 +40,7 @@ export default function ResearchPostColumn({
               className="post-parent"
               onClick={() => onSelectNode(parent.id)}
             >
-              ↳ Network follow-up of “{parentExcerpt}”
+              ↳ Follow-up to “{parentExcerpt}”
             </button>
           ) : null}
           <ResearchUserMessage className="research-prompt research-turn-prompt">

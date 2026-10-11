@@ -114,8 +114,8 @@ test("a message row's meta line shows the starred mark and branch count, with no
   const branches = html.indexOf("research-msg-branches");
   const more = html.indexOf('aria-label="Answer actions"');
   assert.ok(starred >= 0 && branches > starred && more > branches);
-  // Follow, Bookmark and Move are in the feed row's … menu, not here.
-  assert.doesNotMatch(html, /Bookmark|Follow/);
+  // Bookmark and Move are in the feed row's … menu, not here.
+  assert.doesNotMatch(html, /Bookmark/);
 });
 
 test("a settled row with nothing to show has no meta line; the starred mark shows only where offered", () => {
@@ -220,13 +220,6 @@ test("exported conversation assistant messages remain uncarded research prose", 
   assert.match(html, /research-response-message/);
   assert.match(html, /turn-markdown research-prose research-prose--body/);
   assert.doesNotMatch(html, /research-user-message|research-content-card|research-prompt/);
-});
-
-test("a follow-up of a post reply quotes the reply above the question", () => {
-  const html = row(questionNode({ prompt: "Why?" }), { replyQuote: "Selected   reply\npassage" });
-
-  assert.match(html, /research-prompt-quote">Selected reply passage<\/blockquote>/);
-  assert.ok(html.indexOf("Selected reply passage") < html.indexOf("research-user-message"));
 });
 
 test("resolved trailing tweet URLs are presentation-only while the embed renders", () => {

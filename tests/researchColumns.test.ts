@@ -57,7 +57,7 @@ test("a loading thread's header keeps back and forward in place", () => {
   const noop = () => {};
   const html = renderToStaticMarkup(
     createElement(ResearchThreadPlaceholder, {
-      title: "Post",
+      title: "Note",
       children: createElement("p", null, "Loading research…"),
       history: {
         canGoBack: true,
@@ -69,7 +69,7 @@ test("a loading thread's header keeps back and forward in place", () => {
       },
     }),
   );
-  assert.ok(html.indexOf('aria-label="Research history"') < html.indexOf(">Post</h2>"));
+  assert.ok(html.indexOf('aria-label="Research history"') < html.indexOf(">Note</h2>"));
   assert.match(html, /aria-label="Back"/);
   assert.match(html, /disabled=""[^>]*aria-label="Forward"/);
 });

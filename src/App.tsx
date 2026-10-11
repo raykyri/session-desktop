@@ -313,7 +313,6 @@ import {
   renameResearchTree,
   setResearchNodeStarred,
   setResearchTreeBookmarked,
-  setResearchTreeFollowed,
   removeResearchTree,
   removeResearchBranch,
   restoreResearchTree,
@@ -343,8 +342,6 @@ import {
   getResearchTree,
   createResearchPost,
   createResearchPostFollowUp,
-  respondToResearchPostReply,
-  removeResearchPostReply,
   openExternalUrl,
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
@@ -5257,7 +5254,7 @@ function MainApp() {
       resolveResearchComposerWorkspace,
     ],
   );
-  // A post stays on Home: the feed shows it at the top, unlike a research
+  // A note stays on Home: the feed shows it at the top, unlike a research
   // launch, which opens its thread.
   const submitNewPost = useCallback(
     async (input: {
@@ -5266,7 +5263,6 @@ function MainApp() {
       model: string | null;
       effort: string | null;
       workspaceId: string | null;
-      askNetwork: boolean;
     }) => {
       const group = await resolveResearchComposerWorkspace(input.workspaceId);
       const detail = await createResearchPost({ ...input, workspaceId: group.id });
@@ -5422,28 +5418,17 @@ function MainApp() {
     },
     [],
   );
-  // Replies, follow-ups, and retries under posts, shared by Home's post cards
-  // and the post page. The resulting node events update the feed and the open
-  // thread, so nothing is patched here.
+  // Follow-ups and retries under notes, in a note's follow-ups column. The
+  // resulting node events update the feed and the open thread, so nothing is
+  // patched here.
   const postActions = useMemo<PostActions>(
     () => ({
-      onAskFollowUp: async ({ parentNodeId, prompt, network, replyId }) => {
-        if (network) {
+      onAskFollowUp: async ({ parentNodeId, prompt, asNote }) => {
+        if (asNote) {
           await createResearchPostFollowUp(parentNodeId, prompt);
           return;
         }
-        await createResearchFollowup(
-          parentNodeId,
-          prompt,
-          replyId ? { kind: "reply", replyId } : null,
-          false,
-        );
-      },
-      onRespond: async (nodeId, replyId, body) => {
-        await respondToResearchPostReply(nodeId, replyId, body);
-      },
-      onDeleteResponse: async (nodeId, replyId) => {
-        await removeResearchPostReply(nodeId, replyId);
+        await createResearchFollowup(parentNodeId, prompt, null, false);
       },
       onRetry: retryResearchRun,
     }),
@@ -7095,17 +7080,6 @@ function MainApp() {
     },
     [showResearchToast],
   );
-  // Follow persists on the tree; the resulting tree update event patches the
-  // feed and the open thread, so nothing is set here.
-  const followResearchTreeFromFeed = useCallback(
-    (treeId: string, followed: boolean) => {
-      void setResearchTreeFollowed(treeId, followed).then(
-        () => showResearchToast(followed ? "Following. You'll be notified of replies." : "Unfollowed."),
-        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
-      );
-    },
-    [showResearchToast],
-  );
   const bookmarkResearchTreeFromFeed = useCallback(
     (treeId: string, bookmarked: boolean) => {
       void setResearchTreeBookmarked(treeId, bookmarked).then(
@@ -7115,7 +7089,7 @@ function MainApp() {
     },
     [showResearchToast],
   );
-  // The open question's Follow, Bookmark and Move to, listed in its root
+  // The open question's Bookmark and Move to, listed in its root
   // answer menus with the same state as its feed row's menu.
   const activeResearchTreeSummary = useMemo(
     () =>
@@ -7137,10 +7111,7 @@ function MainApp() {
       currentPlace: researchTreePlace(tree, researchFolderState),
       folders: researchFolders,
       bookmarked: Boolean(tree.bookmarked),
-      followed: Boolean(tree.followed),
-      followDisabledReason: tree.archivedAt ? "Archived questions don't send notifications" : null,
       onSetBookmarked: (bookmarked) => bookmarkResearchTreeFromFeed(tree.id, bookmarked),
-      onSetFollowed: (followed) => followResearchTreeFromFeed(tree.id, followed),
       onMove: (place) => moveResearchTreeFromFeed(tree.id, place),
       onNewFolder: (trigger) => openNewResearchFolderDialog(tree.id, trigger),
     };
@@ -7149,7 +7120,6 @@ function MainApp() {
     researchFolderState,
     researchFolders,
     bookmarkResearchTreeFromFeed,
-    followResearchTreeFromFeed,
     moveResearchTreeFromFeed,
     openNewResearchFolderDialog,
   ]);
@@ -8672,7 +8642,6 @@ function MainApp() {
                       onRestoreResearch={restoreResearchTreeFromMenu}
                       onRemoveResearch={removeResearchTreeFromMenu}
                       onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
-                      onSetResearchFollowed={followResearchTreeFromFeed}
                       onMoveTree={moveResearchTreeFromFeed}
                       onReorderTree={reorderResearchTreeFromFeed}
                       onReorderDraft={moveResearchDraftFromFeed}

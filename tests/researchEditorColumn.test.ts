@@ -48,7 +48,7 @@ test("Ask as a question is enabled within the limit and names the model", () => 
   assert.match(html, /Ask as a question/);
   assert.doesNotMatch(html, /aria-disabled/);
   assert.match(html, /Asks Claude Opus/);
-  assert.match(html, /aria-label="Edit post"/);
+  assert.match(html, /aria-label="Edit note"/);
   assert.match(html, />Save</);
 });
 
@@ -61,10 +61,11 @@ test("over the limit, Ask as a question stays visible but disabled with the coun
   assert.match(html, new RegExp(`id="${describedBy}"[^>]*>612 / 500 characters<`));
 });
 
-test("the post editor is titled Edit post, saves with Save and has no correction mode", () => {
+test("the note editor is titled Edit note, saves with Save and has no correction mode", () => {
   const html = editor("New text", { dirty: true, canSave: true });
-  assert.match(html, /aria-label="Edit post"/);
-  assert.match(html, /aria-label="Post text"/);
+  assert.match(html, /aria-label="Edit note"/);
+  assert.match(html, /aria-label="Note text"/);
+  assert.doesNotMatch(html, /[Pp]ost/);
   assert.match(html, /<span>Save<\/span>/);
   assert.doesNotMatch(html, /[Cc]orrect/);
 });

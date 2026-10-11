@@ -240,12 +240,6 @@
   --agent-codex-fg: #8fc7a6;
   /* Brand-blue link color for external embeds (tweets). */
   --link-external-fg: #1d9bf0;
-  /* Avatars on post replies: identity tints keyed by member id, with light
-     initials. The light appearance uses paler tints of the same hues. */
-  --post-avatar-fg: #ffffff;
-  --post-avatar-tone-0: #5b7a96;
-  --post-avatar-tone-1: #8a6f5b;
-  --post-avatar-tone-2: #6b8a5f;
 
   --status-failed-fg: #d98787;
   --status-attention-fg: #e0796d;
@@ -583,10 +577,6 @@
   --agent-claude-fg: #a85f2f;
   --agent-codex-fg: #2f7f4f;
   --link-external-fg: #1a7fc9;
-  --post-avatar-fg: #ffffff;
-  --post-avatar-tone-0: #7d9bb6;
-  --post-avatar-tone-1: #b39179;
-  --post-avatar-tone-2: #8fae82;
 
   --status-failed-fg: #b5484a;
   --status-attention-fg: #c0563f;

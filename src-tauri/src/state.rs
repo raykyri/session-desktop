@@ -3766,7 +3766,6 @@ impl AppState {
                     cancelled_count,
                     updated_at: tree.updated_at,
                     archived_at: tree.archived_at,
-                    followed: tree.followed,
                     bookmarked: tree.bookmarked,
                     has_unseen_update: unseen(latest_settlement),
                     // Viewing the tree acknowledges the failure; the lifetime
@@ -4231,7 +4230,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(now),
         };
@@ -4306,7 +4304,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(now),
         };
@@ -4341,12 +4338,11 @@ impl AppState {
         self.research_tree(&tree_id)
     }
 
-    /// Import an already completed report through the durable snapshot pipeline.
-    /// The caller holds the research workspace-mutation guard.
-    /// Admits a post tree. `ask_network` posts get a delivery record; a body
-    /// that is a single URL may be saved without one (a link or an X post).
-    /// Posts have no response and never run, so they settle `Complete` at
-    /// creation and their follow-ups can launch immediately.
+    /// Admits a post tree (shown as a note): text, or a single URL saved as
+    /// a link or an X post. Only a `share` request gets a delivery record;
+    /// the desktop app never sends one. Posts have no response and never
+    /// run, so they settle `Complete` at creation and their follow-ups can
+    /// launch immediately.
     pub fn create_research_post(
         &self,
         request: research::CreateResearchPostRequest,
@@ -4354,16 +4350,13 @@ impl AppState {
     ) -> Result<ResearchTreeDetail, String> {
         let body = request.body.trim().to_string();
         if body.is_empty() {
-            return Err("post cannot be empty".to_string());
+            return Err("note cannot be empty".to_string());
         }
         if body.len() > research::MAX_POST_TEXT_BYTES {
             return Err(format!(
-                "posts are limited to {} bytes",
+                "notes are limited to {} bytes",
                 research::MAX_POST_TEXT_BYTES
             ));
-        }
-        if !request.ask_network && !research::post_body_is_single_url(&body) {
-            return Err("only a single link can be saved without asking the network".to_string());
         }
         if request.workspace_id.trim().is_empty() {
             return Err("research workspace cannot be empty".to_string());
@@ -4380,7 +4373,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(now),
         };
@@ -4400,7 +4392,7 @@ impl AppState {
                     model: request.model,
                     effort: request.effort,
                 },
-                request.ask_network,
+                request.share,
                 now,
             )),
         );
@@ -4415,8 +4407,9 @@ impl AppState {
         self.research_tree(&tree_id)
     }
 
-    /// A network follow-up: a post child of a network post, with its own
-    /// delivery record. It inherits the parent's follow-up agent defaults.
+    /// A follow-up note: a post child of any post (text or saved link). It
+    /// has no delivery record, whatever the parent's, and inherits the
+    /// parent's follow-up agent defaults.
     pub fn create_research_post_follow_up(
         &self,
         parent_node_id: &str,
@@ -4425,11 +4418,11 @@ impl AppState {
     ) -> Result<ResearchNode, String> {
         let body = body.trim().to_string();
         if body.is_empty() {
-            return Err("post cannot be empty".to_string());
+            return Err("note cannot be empty".to_string());
         }
         if body.len() > research::MAX_POST_TEXT_BYTES {
             return Err(format!(
-                "posts are limited to {} bytes",
+                "notes are limited to {} bytes",
                 research::MAX_POST_TEXT_BYTES
             ));
         }
@@ -4447,10 +4440,8 @@ impl AppState {
                 .get(parent_node_id)
                 .cloned()
                 .ok_or_else(|| format!("research node {parent_node_id} was not found"))?;
-            if parent.node_type() != ResearchNodeType::Post || parent.delivery().is_none() {
-                return Err(
-                    "network follow-ups require a post published to the network".to_string()
-                );
+            if parent.node_type() != ResearchNodeType::Post {
+                return Err("follow-up notes can only be added to a note".to_string());
             }
             if model
                 .research_trees
@@ -4472,7 +4463,7 @@ impl AppState {
                         attachments,
                     },
                     follow_up_agent,
-                    true,
+                    false,
                     now,
                 )),
             );
@@ -4490,9 +4481,10 @@ impl AppState {
         Ok(node)
     }
 
-    /// Appends a reply to a network post. The post's author may only respond
-    /// to a member's top-level reply; member replies are top-level. Member
-    /// replies have no transport yet and arrive through the control socket.
+    /// Appends a reply to a shared post (one with a delivery record). The
+    /// post's author may only respond to a member's top-level reply; member
+    /// replies are top-level. There is no transport for member replies; the
+    /// desktop app shows no replies.
     pub fn add_research_post_reply(
         &self,
         request: research::AddPostReplyRequest,
@@ -4539,7 +4531,7 @@ impl AppState {
                 .get_mut(&request.node_id)
                 .expect("the node was found above");
             let Some(delivery) = node.delivery_mut() else {
-                return Err("replies require a post published to the network".to_string());
+                return Err("replies require a shared note".to_string());
             };
             if let Some(parent_id) = request.in_reply_to.as_deref() {
                 let target = delivery
@@ -4608,7 +4600,7 @@ impl AppState {
                 .expect("the node was found above");
             let delivery = node
                 .delivery_mut()
-                .ok_or_else(|| "the research node is not a network post".to_string())?;
+                .ok_or_else(|| "the note is not shared".to_string())?;
             let index = delivery
                 .replies
                 .iter()
@@ -4642,11 +4634,11 @@ impl AppState {
     ) -> Result<research::UpdateResearchPostResult, String> {
         let text = request.text.trim().to_string();
         if text.is_empty() {
-            return Err("the post cannot be empty".to_string());
+            return Err("the note cannot be empty".to_string());
         }
         if text.len() > research::MAX_POST_TEXT_BYTES {
             return Err(format!(
-                "posts are limited to {} bytes",
+                "notes are limited to {} bytes",
                 research::MAX_POST_TEXT_BYTES
             ));
         }
@@ -4671,37 +4663,29 @@ impl AppState {
                 || current.parent_node_id.is_some()
                 || tree.root_node_id != current.id
             {
-                return Err("only a thread's own post can be edited".to_string());
+                return Err("only a thread's own note can be edited".to_string());
             }
             if tree.archived_at.is_some() {
-                return Err("restore archived research before editing its post".to_string());
+                return Err("restore archived research before editing its note".to_string());
             }
             if current.prompt() != request.expected_text {
                 return Err(
-                    "the post changed while you were editing; reopen the editor and try again"
+                    "the note changed while you were editing; reopen the editor and try again"
                         .to_string(),
                 );
             }
             if text == current.prompt().trim() {
-                return Err("the post's text is unchanged".to_string());
+                return Err("the note's text is unchanged".to_string());
             }
             let mut node = current.clone();
-            // A saved link stays a link, and an attached post keeps the link
-            // it was captured from. A post saved without delivery holds a
-            // single link unless its text came from a correction (see
-            // research::migrate_post_corrections_to_text); that text can be
-            // edited freely.
-            let saved_link =
-                node.delivery().is_none() && research::post_body_is_single_url(current.prompt());
-            if saved_link && !research::post_body_is_single_url(&text) {
-                return Err("a saved link must stay a single link".to_string());
-            }
+            // An attached X post keeps the link it was captured from. A saved
+            // link may otherwise take any text; its format follows the text.
             if let Some(url) = node.attachments().iter().find_map(|attachment| {
                 let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } = attachment;
                 (!text.contains(source_url.as_str())).then(|| source_url.clone())
             }) {
                 return Err(format!(
-                    "keep the link {url} in the text: the attached post was captured from it"
+                    "keep the link {url} in the text: the attached X post was captured from it"
                 ));
             }
             let (kept, removed) = crate::research_anchors::reanchor_highlights(
@@ -4763,7 +4747,7 @@ impl AppState {
     ) -> Result<String, String> {
         let parent = self.research_node(parent_node_id)?;
         if parent.follow_up_launch() != FollowUpLaunch::Context(FollowUpContext::Post) {
-            return Err("the research node is not a post".to_string());
+            return Err("the research node is not a note".to_string());
         }
         let replies = parent
             .delivery()
@@ -4781,6 +4765,8 @@ impl AppState {
         ))
     }
 
+    /// Import an already completed report through the durable snapshot pipeline.
+    /// The caller holds the research workspace-mutation guard.
     pub fn import_research_report(
         &self,
         request: research::ImportResearchReportRequest,
@@ -4819,7 +4805,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(now),
         };
@@ -5345,17 +5330,17 @@ impl AppState {
                 // A post has no answer text: nothing to continue inline and
                 // no passage to anchor to.
                 if inline || matches!(anchor, Some(NodeAnchor::Passage { .. })) {
-                    return Err("post follow-ups cannot be inline or passage-anchored".to_string());
+                    return Err("note follow-ups cannot be inline or passage-anchored".to_string());
                 }
                 if let Some(NodeAnchor::Reply { reply_id }) = &anchor
                     && !parent.delivery().is_some_and(|delivery| {
                         delivery.replies.iter().any(|reply| &reply.id == reply_id)
                     })
                 {
-                    return Err(format!("reply {reply_id} was not found on this post"));
+                    return Err(format!("reply {reply_id} was not found on this note"));
                 }
             } else if matches!(anchor, Some(NodeAnchor::Reply { .. })) {
-                return Err("only follow-ups of a post can be asked about a reply".to_string());
+                return Err("only follow-ups of a note can be asked about a reply".to_string());
             }
             // Forked follow-ups require the parent's checkpoint and adapter.
             // Context-based follow-ups start fresh runs. Authored documents use
@@ -6276,23 +6261,9 @@ impl AppState {
         Ok(tree)
     }
 
-    /// Toggles Home's Follow control for a thread. The flag is persisted on
-    /// the tree and broadcast as a tree update so open feeds and documents
+    /// Toggles Home's Bookmark control for a thread. The flag is persisted
+    /// on the tree and broadcast as a tree update so open feeds and documents
     /// converge without a refetch.
-    pub fn set_research_tree_followed(
-        &self,
-        tree_id: &str,
-        followed: bool,
-    ) -> Result<ResearchTree, String> {
-        self.update_research_tree_flag(tree_id, |tree| {
-            let changed = tree.followed != followed;
-            tree.followed = followed;
-            changed
-        })
-    }
-
-    /// Toggles Home's Bookmark control for a thread; see
-    /// [`Self::set_research_tree_followed`].
     pub fn set_research_tree_bookmarked(
         &self,
         tree_id: &str,
@@ -12974,14 +12945,14 @@ mod tests {
         })
     }
 
-    fn post_request(body: &str, ask_network: bool) -> research::CreateResearchPostRequest {
+    fn post_request(body: &str, share: bool) -> research::CreateResearchPostRequest {
         research::CreateResearchPostRequest {
             body: body.to_string(),
             adapter: "claude".to_string(),
             model: Some("opus".to_string()),
             effort: None,
             workspace_id: "group-1".to_string(),
-            ask_network,
+            share,
         }
     }
 
@@ -13025,7 +12996,7 @@ mod tests {
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
         let ana_reply = add_member_reply(&state, &post_id, "Ana", "Start with the spec.");
-        let network_follow_up = state
+        let follow_up_note = state
             .create_research_post_follow_up(&post_id, "And after that?".to_string(), Vec::new())
             .unwrap();
         {
@@ -13038,7 +13009,7 @@ mod tests {
             model.research_nodes.get_mut(&post_id).unwrap().created_at = 250;
             model
                 .research_nodes
-                .get_mut(&network_follow_up.id)
+                .get_mut(&follow_up_note.id)
                 .unwrap()
                 .created_at = 260;
             let mut older = root.clone();
@@ -13102,7 +13073,7 @@ mod tests {
                 .map(|child| (child.node_id.as_str(), child.node_type))
                 .collect::<Vec<_>>(),
             vec![
-                (network_follow_up.id.as_str(), ResearchNodeType::Post),
+                (follow_up_note.id.as_str(), ResearchNodeType::Post),
                 ("about-reply", ResearchNodeType::Exchange),
             ]
         );
@@ -13261,7 +13232,7 @@ mod tests {
     }
 
     #[test]
-    fn posts_save_links_without_the_network_and_questions_only_with_it() {
+    fn notes_and_saved_links_are_created_without_delivery() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
@@ -13276,30 +13247,31 @@ mod tests {
         assert_eq!(link_node.status(), ResearchNodeStatus::Complete);
         assert_eq!(link_node.prompt(), "https://example.com/page");
         assert!(link_node.delivery().is_none());
-        assert!(
-            state
-                .create_research_post(post_request("Not a link", false), Vec::new())
-                .is_err()
-        );
-        assert!(
-            state
-                .create_research_post(post_request("   ", true), Vec::new())
-                .is_err()
-        );
-        let question = state
-            .create_research_post(post_request("Who has tried this?", true), Vec::new())
+        let note = state
+            .create_research_post(post_request("Who has tried this?", false), Vec::new())
             .unwrap();
-        assert_eq!(question.tree.title, "Who has tried this?");
+        assert_eq!(note.tree.title, "Who has tried this?");
         assert_eq!(
-            question.nodes[0].delivery().as_ref().unwrap().status,
+            note.nodes[0].post().unwrap().format,
+            research::PostFormat::Text
+        );
+        assert_eq!(note.nodes[0].status(), ResearchNodeStatus::Complete);
+        assert!(note.nodes[0].delivery().is_none());
+        assert!(
+            state
+                .create_research_post(post_request("   ", false), Vec::new())
+                .unwrap_err()
+                .contains("note cannot be empty")
+        );
+        // A shared note (the request's `share`) gets a delivery record.
+        let shared = state
+            .create_research_post(post_request("Who else?", true), Vec::new())
+            .unwrap();
+        assert_eq!(
+            shared.nodes[0].delivery().as_ref().unwrap().status,
             research::PostDeliveryStatus::Posted
         );
-        // Link posts have no network state to follow up on or reply to.
-        assert!(
-            state
-                .create_research_post_follow_up(&link_node.id, "More?".to_string(), Vec::new())
-                .is_err()
-        );
+        // Notes without delivery take no replies.
         assert!(
             state
                 .add_research_post_reply(research::AddPostReplyRequest {
@@ -13308,7 +13280,87 @@ mod tests {
                     author: member("Ana"),
                     in_reply_to: None,
                 })
-                .is_err()
+                .unwrap_err()
+                .contains("shared note")
+        );
+    }
+
+    #[test]
+    fn the_create_request_reads_the_earlier_ask_network_name_as_share() {
+        let request = |json: serde_json::Value| {
+            serde_json::from_value::<research::CreateResearchPostRequest>(json).unwrap()
+        };
+        let base = serde_json::json!({
+            "body": "Note",
+            "adapter": "claude",
+            "workspaceId": "group-1",
+        });
+        assert!(!request(base.clone()).share);
+        let mut legacy = base.clone();
+        legacy["askNetwork"] = serde_json::json!(true);
+        assert!(request(legacy).share);
+        let mut current = base;
+        current["share"] = serde_json::json!(true);
+        assert!(request(current).share);
+    }
+
+    #[test]
+    fn follow_up_notes_attach_to_any_note_without_delivery() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let link = state
+            .create_research_post(post_request("https://example.com/a", false), Vec::new())
+            .unwrap();
+        let link_id = link.tree.root_node_id.clone();
+        let under_link = state
+            .create_research_post_follow_up(&link_id, "Why I saved this".to_string(), Vec::new())
+            .unwrap();
+        assert_eq!(under_link.node_type(), ResearchNodeType::Post);
+        assert_eq!(under_link.parent_node_id.as_deref(), Some(link_id.as_str()));
+        assert_eq!(
+            under_link.post().unwrap().format,
+            research::PostFormat::Text
+        );
+        assert!(under_link.delivery().is_none());
+        // A follow-up of a shared note is not shared either.
+        let shared = state
+            .create_research_post(post_request("Who has tried this?", true), Vec::new())
+            .unwrap();
+        let under_shared = state
+            .create_research_post_follow_up(
+                &shared.tree.root_node_id,
+                "More detail".to_string(),
+                Vec::new(),
+            )
+            .unwrap();
+        assert!(under_shared.delivery().is_none());
+        // Follow-up notes nest.
+        let nested = state
+            .create_research_post_follow_up(&under_link.id, "And this".to_string(), Vec::new())
+            .unwrap();
+        assert_eq!(
+            nested.parent_node_id.as_deref(),
+            Some(under_link.id.as_str())
+        );
+        // Only notes take follow-up notes.
+        let run = state
+            .create_research_tree(research_root_request("Run"))
+            .unwrap();
+        assert!(
+            state
+                .create_research_post_follow_up(
+                    &run.tree.root_node_id,
+                    "Note".to_string(),
+                    Vec::new(),
+                )
+                .unwrap_err()
+                .contains("can only be added to a note")
+        );
+        assert!(
+            state
+                .create_research_post_follow_up(&link_id, "  ".to_string(), Vec::new())
+                .unwrap_err()
+                .contains("note cannot be empty")
         );
     }
 
@@ -13456,7 +13508,7 @@ mod tests {
         let prompt = state
             .research_post_followup_prompt(&post_id, &child, "Which day?")
             .unwrap();
-        assert!(prompt.contains("<post>\nThe meeting is on Tuesday.\n</post>\n<replies>"));
+        assert!(prompt.contains("<note>\nThe meeting is on Tuesday.\n</note>\n<replies>"));
         assert!(!prompt.contains("Monday"));
         // A stale editor is still refused.
         assert!(
@@ -13487,23 +13539,13 @@ mod tests {
     }
 
     #[test]
-    fn a_saved_link_stays_a_single_link() {
+    fn a_saved_link_takes_new_text_and_its_format_follows() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
             .create_research_post(post_request("https://example.com/a", false), Vec::new())
             .unwrap();
         let link_id = link.tree.root_node_id.clone();
-        assert!(
-            state
-                .update_research_post(post_edit(
-                    &link_id,
-                    "A comment and https://example.com/a",
-                    "https://example.com/a",
-                ))
-                .unwrap_err()
-                .contains("single link")
-        );
         let edited = state
             .update_research_post(post_edit(
                 &link_id,
@@ -13512,28 +13554,39 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(edited.node.prompt(), "https://example.com/b");
-        // A saved post whose text came from a correction (see
-        // research::migrate_post_corrections_to_text) is no longer a single
-        // link, so its text is edited like any other.
-        {
-            let mut model = state.inner.model.lock().unwrap();
-            let post = model
-                .research_nodes
-                .get_mut(&link_id)
-                .unwrap()
-                .post_mut()
-                .unwrap();
-            post.message.text = "It moved: https://example.com/b".to_string();
-            post.format = research::PostFormat::Text;
-        }
-        let edited = state
+        assert_eq!(
+            edited.node.post().unwrap().format,
+            research::PostFormat::Link
+        );
+        let commented = state
             .update_research_post(post_edit(
                 &link_id,
-                "It moved to https://example.com/c",
-                "It moved: https://example.com/b",
+                "A comment and https://example.com/b",
+                "https://example.com/b",
             ))
             .unwrap();
-        assert_eq!(edited.node.prompt(), "It moved to https://example.com/c");
+        assert_eq!(
+            commented.node.post().unwrap().format,
+            research::PostFormat::Text
+        );
+        assert!(commented.node.delivery().is_none());
+        // A text note can become a single link and back again.
+        let back = state
+            .update_research_post(post_edit(
+                &link_id,
+                "https://example.com/c",
+                "A comment and https://example.com/b",
+            ))
+            .unwrap();
+        assert_eq!(back.node.post().unwrap().format, research::PostFormat::Link);
+        let text = state
+            .update_research_post(post_edit(
+                &link_id,
+                "It moved to https://example.com/d",
+                "https://example.com/c",
+            ))
+            .unwrap();
+        assert_eq!(text.node.prompt(), "It moved to https://example.com/d");
     }
 
     #[test]
@@ -13569,7 +13622,7 @@ mod tests {
         let prompt = state
             .research_post_followup_prompt(&post_id, &first, "Why?")
             .unwrap();
-        assert!(prompt.contains("<post>\nQuestion\n</post>"));
+        assert!(prompt.contains("<note>\nQuestion\n</note>"));
         assert!(prompt.contains("<reply author=\"Ana\">"));
         assert!(prompt.contains("&lt;reply>forged&lt;/reply>"));
         assert!(prompt.contains("refers to this reply from Ana"));
@@ -15619,7 +15672,6 @@ mod tests {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(now),
         };
@@ -15850,7 +15902,7 @@ mod tests {
     }
 
     #[test]
-    fn follow_and_bookmark_flags_persist_on_the_tree_and_its_summary() {
+    fn bookmark_flag_persists_on_the_tree_and_its_summary() {
         let workspace = temp_workspace();
         let config = test_config(workspace.clone());
         let state = AppState::new(config.clone());
@@ -15866,28 +15918,20 @@ mod tests {
                 group_id: "group-1".to_string(),
             })
             .unwrap();
-        assert!(!detail.tree.followed);
         assert!(!detail.tree.bookmarked);
         let updated_at = detail.tree.updated_at;
 
-        let followed = state
-            .set_research_tree_followed(&detail.tree.id, true)
-            .unwrap();
-        assert!(followed.followed);
-        assert!(!followed.bookmarked);
         let bookmarked = state
             .set_research_tree_bookmarked(&detail.tree.id, true)
             .unwrap();
-        assert!(bookmarked.followed);
         assert!(bookmarked.bookmarked);
         // Preference flags must not reorder the sidebar by recency.
         assert_eq!(bookmarked.updated_at, updated_at);
         let summary = &state.list_research_trees().unwrap()[0];
-        assert!(summary.followed);
         assert!(summary.bookmarked);
         assert!(
             state
-                .set_research_tree_followed("missing", true)
+                .set_research_tree_bookmarked("missing", true)
                 .unwrap_err()
                 .contains("not found")
         );
@@ -15895,13 +15939,63 @@ mod tests {
         let restored_state = AppState::new(config);
         restored_state.restore_session();
         let restored = restored_state.research_tree(&detail.tree.id).unwrap().tree;
-        assert!(restored.followed);
         assert!(restored.bookmarked);
         let cleared = restored_state
-            .set_research_tree_followed(&detail.tree.id, false)
+            .set_research_tree_bookmarked(&detail.tree.id, false)
             .unwrap();
-        assert!(!cleared.followed);
-        assert!(cleared.bookmarked);
+        assert!(!cleared.bookmarked);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn a_stored_tree_with_the_removed_followed_flag_still_loads() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Root".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        state
+            .set_research_tree_bookmarked(&detail.tree.id, true)
+            .unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        // Builds before Follow was removed stored the flag on the tree.
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let version = raw["version"].clone();
+        raw["researchTrees"][&detail.tree.id]["followed"] = serde_json::json!(true);
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        let tree = restored.research_tree(&detail.tree.id).unwrap().tree;
+        assert_eq!(tree.root_node_id, detail.tree.root_node_id);
+        assert!(tree.bookmarked);
+        assert_eq!(restored.list_research_trees().unwrap().len(), 1);
+        // The next save drops the field at the same state version.
+        restored
+            .set_research_tree_bookmarked(&detail.tree.id, false)
+            .unwrap();
+        restored.finalize_persistence_for_exit();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["version"], version);
+        assert!(
+            saved["researchTrees"][&detail.tree.id]
+                .get("followed")
+                .is_none()
+        );
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -16443,7 +16537,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: None,
         };
@@ -16519,7 +16612,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: None,
         };
@@ -16625,7 +16717,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: None,
         };
@@ -16741,7 +16832,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: None,
         };
@@ -16832,7 +16922,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: None,
         };
@@ -16929,7 +17018,6 @@ mod tests {
                     created_at: 1,
                     updated_at: 2,
                     archived_at: None,
-                    followed: false,
                     bookmarked: false,
                     last_viewed_at: None,
                 },
@@ -17854,7 +17942,7 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// A state with a network post (with a member reply and a follow-up
+    /// A state with a shared post (with a member reply and a follow-up
     /// asked about it), a saved link, a run tree with a branch asked from a
     /// passage of its answer, and an exported terminal conversation.
     fn state_with_posts_and_anchors(workspace: &std::path::Path) -> AppState {
@@ -17930,7 +18018,6 @@ mod tests {
                 created_at: now,
                 updated_at: now,
                 archived_at: None,
-                followed: false,
                 bookmarked: false,
                 last_viewed_at: Some(now),
             };

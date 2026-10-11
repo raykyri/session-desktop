@@ -625,7 +625,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   level,
   label,
   showPrompt,
-  replyQuote = null,
   selected,
   starrable,
   retryQueued = false,
@@ -647,8 +646,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   label: string;
   /** Documents and conversations carry no question: the row shows `label`. */
   showPrompt: boolean;
-  /** For a follow-up of a post asked about one reply: that reply's text. */
-  replyQuote?: string | null;
   selected: boolean;
   /** The message can be starred (root follow-ups and a branch's first
    * message); a starred one shows a filled star in its meta line. */
@@ -725,9 +722,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         onClick={(event) => onSelect(node.id, level, event.currentTarget)}
       />
       <div id={labelId} className="research-msg-content" data-research-drag-label="">
-        {showPrompt && replyQuote ? (
-          <blockquote className="research-prompt-quote">{replyQuote.split(/\s+/).join(" ").trim()}</blockquote>
-        ) : null}
         {prompt}
       </div>
       {pill || imported || starred || showBranches ? (

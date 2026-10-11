@@ -26,7 +26,7 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
   return renderToStaticMarkup(createElement(ResearchPostColumn, { detail, post: selected, onSelectNode: noop }));
 }
 
-test("a post's post column uses the turn layout for the post only", () => {
+test("a note's column uses the turn layout for the note only", () => {
   const html = render([post]);
   assert.doesNotMatch(html, /post-kind/);
   // Use the turn's question section for the post, with no answer section.
@@ -35,12 +35,12 @@ test("a post's post column uses the turn layout for the post only", () => {
   assert.match(html, /research-prompt research-turn-prompt"/);
   assert.doesNotMatch(html, /research-turn-answer|post-status|Posted to your network|No replies yet/);
   // The column header carries the title and history, so the body repeats
-  // neither; replies, follow-ups and the composer are in the thread column.
+  // neither; follow-ups and the composer are in the follow-ups column.
   assert.doesNotMatch(html, /research-thread-actions|research-breadcrumb/);
   assert.doesNotMatch(html, /research-composer|post-thread/);
 });
 
-test("a post's post column has no Activity section", () => {
+test("a note's column shows no stored replies or follow-ups", () => {
   const withActivityFields = {
     ...postFields,
     delivery: {
@@ -59,12 +59,13 @@ test("a post's post column has no Activity section", () => {
   assert.doesNotMatch(html, /wit-bindgen doubled|Anyone measured wizer/);
 });
 
-test("a network follow-up's page links back to its post", () => {
+test("a follow-up note's page links back to its parent note", () => {
   const childFields = {
     ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
   const child = researchNode(childFields);
   const html = render([post, child], child);
-  assert.match(html, /Network follow-up of “Who ships component-model plugins\?”/);
+  assert.match(html, /↳ Follow-up to “Who ships component-model plugins\?”/);
+  assert.doesNotMatch(html, /network/i);
   assert.doesNotMatch(html, /research-thread-actions/);
 });
 

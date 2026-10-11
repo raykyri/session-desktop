@@ -11,7 +11,7 @@ import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../
 interface ResearchEditorColumnProps {
   column: EditorColumn;
   current: boolean;
-  /** What is edited: a document's Markdown, or a post's text. */
+  /** What is edited: a document's Markdown, or a note's text (a post node). */
   kind: "document" | "post";
   value: string;
   onChange: (value: string) => void;
@@ -74,7 +74,7 @@ export function ResearchEditorColumn({
       ? "No research agent is ready"
       : null;
   const questionNote = questionBlocker ?? `Asks ${questionModel}`;
-  const heading = kind === "document" ? "Edit document" : "Edit post";
+  const heading = kind === "document" ? "Edit document" : "Edit note";
   const saveLabel = saving ? "Saving…" : "Save";
 
   const setField = (element: HTMLTextAreaElement | null) => {
@@ -138,7 +138,7 @@ export function ResearchEditorColumn({
             className={`research-editor-field${kind === "document" ? " is-source" : ""}`}
             value={value}
             spellCheck={kind === "post"}
-            aria-label={kind === "document" ? "Document Markdown" : "Post text"}
+            aria-label={kind === "document" ? "Document Markdown" : "Note text"}
             onChange={(event) => {
               setConfirmingDiscard(false);
               onChange(event.currentTarget.value);

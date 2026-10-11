@@ -1,26 +1,13 @@
 import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
-import { Globe, Sparkles } from "lucide-react";
-import type { PostReply, ResearchNode } from "../../types";
-import { nodeAdapter, nodeAgent, nodeDelivery, nodePrompt, nodeStatus, nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
+import { Sparkles, StickyNote } from "lucide-react";
+import type { ResearchNode } from "../../types";
+import { nodeAdapter, nodeAgent, nodePrompt, nodeStatus, nodeType } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
-import {
-  PostFollowUpField,
-  PostFollowUpStatus,
-  PostReplyItem,
-  postReplyTargetFor,
-  type PostActions,
-  type PostReplyTarget,
-} from "./ResearchPost";
-
-/** One row of a post's thread column: a top-level reply (with the author's
- * responses to it) or a follow-up. */
-type PostThreadEntry =
-  | { kind: "reply"; key: string; at: number; reply: PostReply }
-  | { kind: "follow-up"; key: string; at: number; node: ResearchNode };
+import { PostFollowUpField, PostFollowUpStatus, type PostActions } from "./ResearchPost";
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is
@@ -30,26 +17,22 @@ export interface ResearchPostThreadHandle {
   makeCurrent: (row: HTMLElement) => void;
 }
 
-/** The rows of a post's thread, oldest first: its top-level network replies,
- * and its follow-ups (child nodes other than documents), merged by time. A follow-up row's key is its node id. */
-export function postThreadEntries(nodes: readonly ResearchNode[], post: ResearchNode): PostThreadEntry[] {
-  const followUps = nodes
+/** The rows of a note's follow-ups column, oldest first: its follow-ups
+ * (child nodes other than documents), AI follow-ups and follow-up notes
+ * alike. Stored replies (`delivery.replies`) are not rows. */
+export function postThreadEntries(nodes: readonly ResearchNode[], post: ResearchNode): ResearchNode[] {
+  return nodes
     .filter((node) => node.parentNodeId === post.id && nodeType(node) !== "document")
     .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
-  const replies = (nodeDelivery(post)?.replies ?? []).filter((reply) => !reply.inReplyTo);
-  return [
-    ...replies.map((reply): PostThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
-    ...followUps.map((node): PostThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
-  ].sort((left, right) => left.at - right.at);
 }
 
-/** A post's thread column body: the follow-up composer at the top, then one
- * row per reply and follow-up, oldest first. A reply shows in full with its
- * responses nested under it; a follow-up row shows its reply count (a network
- * follow-up) or its answer state (an AI follow-up), and opens the follow-up
- * as the next level. One row is in the tab order: the open follow-up's, else
- * the row focused last, else the first. ResearchThreadPage handles the column's
- * keys. Each row carries its entry's key in `data-thread-key`. */
+/** A note's follow-ups column body: the follow-up composer at the top, then
+ * one row per follow-up, oldest first. A follow-up note's row shows its text;
+ * an AI follow-up's row also shows its answer state. A row opens its
+ * follow-up as the next level. One row is in the tab order: the open
+ * follow-up's, else the row focused last, else the first. ResearchThreadPage
+ * handles the column's keys. Each row carries its node id in
+ * `data-thread-key`. */
 export default function ResearchPostThread({
   nodes,
   post,
@@ -73,7 +56,6 @@ export default function ResearchPostThread({
   threadRef?: Ref<ResearchPostThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
 }) {
-  const [target, setTarget] = useState<PostReplyTarget | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
   // The row made current by makeCurrent, marked while focus stays elsewhere.
   const [markedKey, setMarkedKey] = useState<string | null>(null);
@@ -103,9 +85,8 @@ export default function ResearchPostThread({
       setActiveKey(openNodeId);
     }
   }
-  const entries = useMemo(() => postThreadEntries(nodes, post), [nodes, post]);
-  const replies = nodeDelivery(post)?.replies ?? [];
-  const tabKey = entries.some((entry) => entry.key === activeKey) ? activeKey : (entries[0]?.key ?? null);
+  const followUps = useMemo(() => postThreadEntries(nodes, post), [nodes, post]);
+  const tabKey = followUps.some((node) => node.id === activeKey) ? activeKey : (followUps[0]?.id ?? null);
   const markedRowKey = markedKey === tabKey ? markedKey : null;
   const modelLabel = formatResearchModelSummary(nodeAdapter(post), nodeAgent(post)?.model);
 
@@ -113,80 +94,41 @@ export default function ResearchPostThread({
     <div className="post-thread">
       {!archived ? (
         <PostFollowUpField
-          key={target?.id ?? "post"}
           composerRef={composerRef}
-          networkAvailable={Boolean(nodeDelivery(post))}
           modelLabel={modelLabel}
-          target={target}
-          autoFocus={target !== null}
           fullWidth
           requireCmdEnter={requireCmdEnterToSend}
-          onClearTarget={() => setTarget(null)}
-          onSubmit={(prompt, network) =>
-            actions
-              .onAskFollowUp({
-                parentNodeId: post.id,
-                prompt,
-                network,
-                replyId: network ? null : target?.id ?? null,
-              })
-              .then(() => setTarget(null))
-          }
+          onSubmit={(prompt, asNote) => actions.onAskFollowUp({ parentNodeId: post.id, prompt, asNote })}
         />
       ) : null}
-      {entries.length > 0 ? (
-        <ol className="post-thread-list post-thread-rows" aria-label="Replies and follow-ups">
-          {entries.map((entry) =>
-            entry.kind === "reply" ? (
-              <PostReplyItem
-                key={entry.key}
-                nodeId={post.id}
-                reply={entry.reply}
-                responses={replies.filter((reply) => reply.inReplyTo === entry.reply.id)}
-                archived={archived}
-                actions={actions}
-                onAskAbout={setTarget}
-                rowProps={{
-                  tabIndex: tabKey === entry.key ? 0 : -1,
-                  "data-research-thread-row": "",
-                  "data-thread-key": entry.key,
-                  "data-current": markedRowKey === entry.key ? "" : undefined,
-                  onFocus: (event) => {
-                    if (event.target === event.currentTarget) {
-                      focusRow(entry.key);
-                    }
-                  },
-                }}
-              />
-            ) : (
-              <PostFollowUpRow
-                key={entry.key}
-                child={entry.node}
-                replies={replies}
-                archived={archived}
-                open={entry.node.id === openNodeId}
-                tabbable={tabKey === entry.key}
-                marked={markedRowKey === entry.key}
-                onRetry={actions.onRetry}
-                onOpen={onOpenFollowUp}
-                onFocus={() => focusRow(entry.key)}
-              />
-            ),
-          )}
+      {followUps.length > 0 ? (
+        <ol className="post-thread-list post-thread-rows" aria-label="Follow-ups">
+          {followUps.map((node) => (
+            <PostFollowUpRow
+              key={node.id}
+              child={node}
+              archived={archived}
+              open={node.id === openNodeId}
+              tabbable={tabKey === node.id}
+              marked={markedRowKey === node.id}
+              onRetry={actions.onRetry}
+              onOpen={onOpenFollowUp}
+              onFocus={() => focusRow(node.id)}
+            />
+          ))}
         </ol>
       ) : (
-        <p className="post-thread-empty">No replies or follow-ups yet.</p>
+        <p className="post-thread-empty">No follow-ups yet.</p>
       )}
     </div>
   );
 }
 
-/** A follow-up as a row: who asked where, the question, and the reply count
- * or answer state. One button under the row's content opens the follow-up;
- * Retry stays its own target above it. */
+/** A follow-up as a row: who wrote or asked it, its text, and an AI
+ * follow-up's answer state. One button under the row's content opens the
+ * follow-up; Retry stays its own target above it. */
 function PostFollowUpRow({
   child,
-  replies,
   archived,
   open,
   tabbable,
@@ -196,8 +138,6 @@ function PostFollowUpRow({
   onFocus,
 }: {
   child: ResearchNode;
-  /** The post's replies, for a follow-up asked about one of them. */
-  replies: PostReply[];
   archived: boolean;
   open: boolean;
   tabbable: boolean;
@@ -207,16 +147,13 @@ function PostFollowUpRow({
   onFocus: () => void;
 }) {
   const labelId = useId();
-  const network = nodeType(child) === "post";
-  const anchored = postReplyTargetFor(replies, replyAnchorId(child));
+  const note = nodeType(child) === "post";
   const model = formatResearchModelSummary(nodeAdapter(child), nodeAgent(child)?.model) || "AI";
-  let state: ReactNode;
-  if (network) {
-    const count = nodeDelivery(child)?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
-    state = count > 0 ? <div className="post-thread-meta">{count === 1 ? "1 reply" : `${count} replies`}</div> : null;
-  } else if (nodeStatus(child) === "complete") {
+  // A note has no answer state.
+  let state: ReactNode = null;
+  if (!note && nodeStatus(child) === "complete") {
     state = <div className="post-thread-meta">Answered</div>;
-  } else {
+  } else if (!note) {
     const summary = recentResearchQueryFromNode(child, true);
     state = summary ? <PostFollowUpStatus child={summary} archived={archived} onRetry={onRetry} /> : null;
   }
@@ -234,20 +171,20 @@ function PostFollowUpRow({
         data-node-id={child.id}
         aria-current={open ? "true" : undefined}
         aria-labelledby={labelId}
-        title={network ? "Open this follow-up" : "Open this answer"}
+        title={note ? "Open this note" : "Open this answer"}
         tabIndex={tabbable ? 0 : -1}
         onClick={() => onOpen(child.id)}
         onFocus={onFocus}
       />
       <div className="post-thread-gutter">
         <span className="post-glyph" aria-hidden="true">
-          {network ? <Globe size={10} /> : <Sparkles size={10} />}
+          {note ? <StickyNote size={10} /> : <Sparkles size={10} />}
         </span>
       </div>
       <div className="post-thread-body">
         <div className="post-reply-head">
           <span className="post-reply-author">You</span>
-          {network ? null : <span>{`asked ${model}${anchored ? ` about ${anchored.author}’s reply` : ""}`}</span>}
+          {note ? null : <span>{`asked ${model}`}</span>}
           <span aria-hidden="true">·</span>
           <time dateTime={new Date(child.createdAt).toISOString()} title={new Date(child.createdAt).toLocaleString()}>
             {shortWhen(child.createdAt)}

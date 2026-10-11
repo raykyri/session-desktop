@@ -31,7 +31,7 @@ import {
   researchReadinessLabel,
 } from "../../lib/adapterReadiness";
 import { postFormatOf } from "../../lib/researchNodeTypes";
-import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
+import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
 import { ResearchModelNameDialog } from "./ResearchModelNameDialog";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 
@@ -57,6 +57,26 @@ export function researchEffortOptionsFor(adapter: string): LauncherSelectOption[
 
 export function askModeShowsAiControls(askMode: AskMode) {
   return askMode === "ai";
+}
+
+/** The Home ask box's placeholder and send button name for a mode. In Note
+ * mode a body that is a single URL is saved as a link. */
+export function askBoxCopy(
+  askMode: AskMode,
+  prompt: string,
+  submitting: boolean,
+  askPlaceholder: string,
+): { placeholder: string; submitLabel: string } {
+  if (askMode === "note") {
+    return {
+      placeholder: "Write a note, or paste a link to save",
+      submitLabel: submitting ? "Saving…" : postFormatOf(prompt) === "link" ? "Save link" : "Save note",
+    };
+  }
+  return {
+    placeholder: askPlaceholder,
+    submitLabel: submitting ? "Starting research…" : "Start research",
+  };
 }
 
 /* The Ask picker lists every agent's models in one menu, so each option's
@@ -114,15 +134,14 @@ interface ResearchQueryComposerProps {
     effort: string | null;
     workspaceId: string | null;
   }) => Promise<void>;
-  /** Post: creates a post. The selected agent and model are stored as
-   * the default for the post's AI follow-ups. */
+  /** Note mode: saves a note (a post node). The selected agent and model are
+   * stored as the default for the note's AI follow-ups. */
   onPost: (input: {
     body: string;
     adapter: string;
     model: string | null;
     effort: string | null;
     workspaceId: string | null;
-    askNetwork: boolean;
   }) => Promise<void>;
   /** Save draft: keeps the question in Drafts and clears the text; the agent,
    * model, and effort choice stays. */
@@ -168,7 +187,7 @@ export function homeComposerDraftToStore(
 }
 
 /** The feed's composer: a one-line "Ask a question" field that grows when it
- * has focus or text and then shows a row under it with the Ask/Post switcher
+ * has focus or text and then shows a row under it with the Ask/Note switch
  * and the send button. Once there is text, a … button before Send opens a
  * menu with Save draft. */
 export default function ResearchQueryComposer({
@@ -329,11 +348,11 @@ export default function ResearchQueryComposer({
       : "";
   const resolvedEffort = selectedEffort || null;
 
-  // A post never launches an agent, so posting one needs no ready adapter.
+  // A note never launches an agent, so saving one needs no ready adapter.
   const canSubmit =
     Boolean(prompt.trim()) &&
     !submitting &&
-    (askMode === "network" || (Boolean(adapter) && adapterReady));
+    (askMode === "note" || (Boolean(adapter) && adapterReady));
 
   async function submit() {
     if (!prompt.trim()) {
@@ -346,15 +365,13 @@ export default function ResearchQueryComposer({
     setSubmitting(true);
     setError(null);
     try {
-      if (askMode === "network") {
-        const body = prompt.trim();
+      if (askMode === "note") {
         await onPost({
-          body,
+          body: prompt.trim(),
           adapter,
           model: resolvedModel,
           effort: resolvedEffort,
           workspaceId,
-          askNetwork: postFormatOf(body) === "text",
         });
       } else {
         await onCreate({
@@ -365,7 +382,7 @@ export default function ResearchQueryComposer({
           workspaceId,
         });
       }
-      // A successful launch opens its research page, and a post appears at the
+      // A successful launch opens its research page, and a note appears at the
       // top of the feed. Clear the text; the agent, model, and effort stay
       // selected for the next ask.
       setPrompt("");
@@ -381,16 +398,12 @@ export default function ResearchQueryComposer({
     window.requestAnimationFrame(collapseIfFocusLeft);
   }
 
-  const submitLabel =
-    askMode === "network"
-      ? submitting
-        ? "Posting…"
-        : postFormatOf(prompt) === "link"
-          ? "Save link"
-          : "Post to network"
-      : submitting
-        ? "Starting research…"
-        : "Start research";
+  const { placeholder: shownPlaceholder, submitLabel } = askBoxCopy(
+    askMode,
+    prompt,
+    submitting,
+    placeholder,
+  );
   const sendShortcut = requireCmdEnterToSend ? "⌘↵" : "↵";
 
   // The selected agent's Custom option shows the model name it launches with.
@@ -410,7 +423,7 @@ export default function ResearchQueryComposer({
   const askSegmentRef = useRef<HTMLButtonElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   // The model menu belongs to the expanded row in Ask; it never reopens by
-  // itself after a collapse or a switch to Post.
+  // itself after a collapse or a switch to Note.
   useEffect(() => {
     if (!expanded || askMode !== "ai") setMenuOpen(false);
   }, [askMode, expanded]);
@@ -537,9 +550,7 @@ export default function ResearchQueryComposer({
           className="new-research-input"
           rows={1}
           value={prompt}
-          placeholder={
-            askMode === "network" ? "Ask your network, or paste a link to save" : placeholder
-          }
+          placeholder={shownPlaceholder}
           aria-label="New question"
           onChange={(event) => {
             sessionDraftTouchedRef.current = true;
@@ -567,12 +578,13 @@ export default function ResearchQueryComposer({
         />
         {expanded ? (
           <div ref={rowRef} className="new-research-row">
-            {/* Ask (the agent's icon) and Post side by side; the selected Ask
+            {/* Ask (the agent's icon) and Note side by side; the selected Ask
                 segment opens the model menu. Send ends the row. */}
-            <AskPostSwitch
+            <AskNoteSwitch
               askMode={askMode}
               askIcon={<OptionIcon option={askIcon} />}
               askLabel={askLabel}
+              noteLabel="Save as note"
               menuOpen={menuOpen}
               askRef={askSegmentRef}
               onModeChange={(mode) => {

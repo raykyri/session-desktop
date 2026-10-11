@@ -69,7 +69,7 @@ test("follow-ups that fork need the session checkpoint; context launches do not"
   assert.equal(canFollowUpFrom(node({ status: "running", sessionReady: true })), false);
 });
 
-test("a post's follow-up quotes the reply it was asked about, else the post", () => {
+test("a note's follow-up quotes the note's text, not a stored reply", () => {
   const post = node({
     id: "post",
     type: "post",
@@ -80,14 +80,11 @@ test("a post's follow-up quotes the reply it was asked about, else the post", ()
       replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana" }, body: "We saw a plateau.", createdAt: 2 }],
     },
   });
-  const whole = node({ id: "fu", parentNodeId: "post" });
-  const onReply = node({ id: "fu2", parentNodeId: "post", anchor: { kind: "reply", replyId: "r1" } });
-  assert.equal(postFollowUpSourceExcerpt(post, whole), "Has anyone compared RLHF and DPO on long-horizon tasks?");
-  assert.equal(postFollowUpSourceExcerpt(post, onReply), "We saw a plateau.");
+  assert.equal(postFollowUpSourceExcerpt(post), "Has anyone compared RLHF and DPO on long-horizon tasks?");
   // Long text is cut at a word boundary, the ellipsis within the limit.
-  const cut = postFollowUpSourceExcerpt(post, whole, 30);
+  const cut = postFollowUpSourceExcerpt(post, 30);
   assert.equal(cut, "Has anyone compared RLHF and…");
   assert.ok(cut!.length <= 30);
   // Only posts have a follow-up source excerpt.
-  assert.equal(postFollowUpSourceExcerpt(node({ id: "q" }), whole), null);
+  assert.equal(postFollowUpSourceExcerpt(node({ id: "q" })), null);
 });

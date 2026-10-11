@@ -1,46 +1,22 @@
 import { useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, LiHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
-import { ArrowRight, ExternalLink, LoaderCircle, Sparkles, X } from "lucide-react";
-import type {
-  PostReply,
-  PostFormat,
-  RecentResearchQuery,
-  ResearchMessageAttachment,
-} from "../../types";
+import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
+import { ArrowRight, ExternalLink, LoaderCircle, Sparkles } from "lucide-react";
+import type { PostFormat, RecentResearchQuery, ResearchMessageAttachment } from "../../types";
 import { openExternalUrl } from "../../lib/api";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { growComposerTextarea } from "../../lib/composerTextarea";
-import { postReplyAuthorName } from "../../lib/activity";
-import { shortWhen } from "../../lib/shortTime";
-import {
-  ResearchMarkdown,
-  ResearchMessageBody,
-  type ResearchProseVariant,
-} from "./ResearchMessage";
-import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
+import { ResearchMessageBody, type ResearchProseVariant } from "./ResearchMessage";
+import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 
-/** Handlers shared by the Home post card and the post page. Each rejects
- * with the backend's message so the control that started it can show it. */
+/** Handlers for a note's follow-ups column. Each rejects with the backend's
+ * message so the control that started it can show it. */
 export interface PostActions {
-  /** An AI follow-up (a run child) or, with `network`, a network follow-up
-   * (a post child). `replyId` names the reply an AI follow-up is about. */
-  onAskFollowUp: (input: {
-    parentNodeId: string;
-    prompt: string;
-    network: boolean;
-    replyId: string | null;
-  }) => Promise<void>;
-  onRespond: (nodeId: string, replyId: string, body: string) => Promise<void>;
-  onDeleteResponse: (nodeId: string, replyId: string) => Promise<void>;
+  /** An AI follow-up (a run child) or, with `asNote`, a follow-up note (a
+   * post child). */
+  onAskFollowUp: (input: { parentNodeId: string; prompt: string; asNote: boolean }) => Promise<void>;
   onRetry: (nodeId: string) => Promise<void>;
-}
-
-/** The reply an AI follow-up is being composed about. */
-export interface PostReplyTarget {
-  id: string;
-  author: string;
 }
 
 function errorMessage(err: unknown): string {
@@ -106,183 +82,6 @@ export function PostContent({
   );
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts;
-  return letters.map((part) => Array.from(part)[0] ?? "").join("").toUpperCase() || "?";
-}
-
-/** Stable avatar tint per member id, from a small fixed palette. */
-function avatarTone(id: string): number {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash % 3;
-}
-
-function ReplyAvatar({ reply }: { reply: PostReply }) {
-  if (reply.author.kind === "author") {
-    return (
-      <span className="post-avatar is-self" aria-hidden="true">
-        You
-      </span>
-    );
-  }
-  return (
-    <span className={`post-avatar tone-${avatarTone(reply.author.id)}`} aria-hidden="true">
-      {initials(reply.author.displayName)}
-    </span>
-  );
-}
-
-/** One reply on the avatar spine, followed one level down by the author's
- * responses to it. `rowProps` go on the item itself (the thread column makes
- * a top-level reply a keyboard row). */
-export function PostReplyItem({
-  nodeId,
-  reply,
-  responses,
-  archived,
-  actions,
-  onAskAbout,
-  rowProps,
-}: {
-  nodeId: string;
-  reply: PostReply;
-  responses: PostReply[];
-  archived: boolean;
-  actions: PostActions;
-  onAskAbout?: (target: PostReplyTarget) => void;
-  rowProps?: LiHTMLAttributes<HTMLLIElement> & { [attribute: `data-${string}`]: string | undefined };
-}) {
-  const [responding, setResponding] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const member = reply.author.kind === "member" ? reply.author : null;
-  const submitResponse = () => {
-    const body = draft.trim();
-    if (!body || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    actions
-      .onRespond(nodeId, reply.id, body)
-      .then(() => {
-        setDraft("");
-        setResponding(false);
-      })
-      .catch((err) => setError(errorMessage(err)))
-      .finally(() => setSubmitting(false));
-  };
-  return (
-    <li className="post-thread-item" data-type={member ? "reply" : "self"} {...rowProps}>
-      <div className="post-thread-gutter">
-        <ReplyAvatar reply={reply} />
-      </div>
-      <div className="post-thread-body">
-        <div className="post-reply-head">
-          <span className="post-reply-author">{member ? member.displayName : "You"}</span>
-          {member?.handle ? <span>@{member.handle}</span> : null}
-          <span aria-hidden="true">·</span>
-          <time
-            dateTime={new Date(reply.createdAt).toISOString()}
-            title={new Date(reply.createdAt).toLocaleString()}
-          >
-            {shortWhen(reply.createdAt)}
-          </time>
-        </div>
-        <ResearchMarkdown className="post-reply-text" text={reply.body} variant="compact" />
-        {!archived ? (
-          <div className="post-thread-actions" onClick={stopForInteractive}>
-            {member ? (
-              <>
-                <button
-                  type="button"
-                  className="post-thread-link"
-                  onClick={() => setResponding(true)}
-                >
-                  Respond
-                </button>
-                {onAskAbout ? (
-                  <button
-                    type="button"
-                    className="post-thread-link"
-                    onClick={() => onAskAbout({ id: reply.id, author: member.displayName })}
-                  >
-                    Ask AI about this
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <button
-                type="button"
-                className="post-thread-link"
-                onClick={() => {
-                  setError(null);
-                  actions
-                    .onDeleteResponse(nodeId, reply.id)
-                    .catch((err) => setError(errorMessage(err)));
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        ) : null}
-        {error ? (
-          <p className="post-thread-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {responses.length > 0 ? (
-          <ol className="post-thread-list is-nested">
-            {responses.map((response) => (
-              <PostReplyItem
-                key={response.id}
-                nodeId={nodeId}
-                reply={response}
-                responses={[]}
-                archived={archived}
-                actions={actions}
-              />
-            ))}
-          </ol>
-        ) : null}
-        {responding ? (
-          <label className="post-field is-respond" onClick={stopForInteractive}>
-            <input
-              type="text"
-              autoFocus
-              value={draft}
-              disabled={submitting}
-              placeholder={`Respond to ${member?.displayName ?? "this reply"}`}
-              aria-label="Response"
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  submitResponse();
-                } else if (event.key === "Escape") {
-                  event.preventDefault();
-                  setResponding(false);
-                }
-              }}
-            />
-            {submitting ? <LoaderCircle className="post-field-spinner" size={13} /> : null}
-          </label>
-        ) : null}
-      </div>
-    </li>
-  );
-}
-
-export function postReplyTargetFor(
-  replies: PostReply[] | undefined,
-  replyId: string | null | undefined,
-): PostReplyTarget | null {
-  const reply = replyId ? replies?.find((candidate) => candidate.id === replyId) : undefined;
-  return reply ? { id: reply.id, author: postReplyAuthorName(reply) } : null;
-}
-
 /** Status line of an AI follow-up that has no answer to show: a spinner
  * while it runs, and the error with Retry (which reruns the same node) after
  * a failure or cancellation. */
@@ -340,40 +139,44 @@ export function PostFollowUpStatus({
   return null;
 }
 
-/** Follow-up composer at the top of a post's thread column. Like the Home
- * ask box it is one line until focused or filled; then the Post and Ask
- * switch and Send appear on a row under the text. On a network post it posts
- * to the network by default. Ask, marked with the AI follow-up rows' icon,
- * uses the post's model, so the switch has no model menu. A saved link, or a
- * follow-up about a reply, can only ask, so it has no switch. A reply target
- * shows above the field as a removable "@Ana's reply" chip. The send
- * shortcut follows the "Require ⌘↵ to send" setting. */
+/** The follow-up box's placeholder and send button name and tooltip for a
+ * mode. `askPlaceholder` and `askLabel` ("Ask {model}") apply in Ask. */
+export function postFollowUpCopy(
+  asNote: boolean,
+  askPlaceholder: string,
+  askLabel: string,
+): { placeholder: string; sendName: string; sendTitle: string } {
+  return asNote
+    ? { placeholder: "Add a note", sendName: "Add note", sendTitle: "Add note" }
+    : { placeholder: askPlaceholder, sendName: "Ask", sendTitle: askLabel };
+}
+
+/** Follow-up composer at the top of a note's follow-ups column. Like the
+ * Home ask box it is one line until focused or filled; then the Ask/Note
+ * switch and Send appear on a row under the text. It starts in Ask, marked
+ * with the AI follow-up rows' icon, which uses the note's model, so the
+ * switch has no model menu. "Add a note" adds a follow-up note instead. The
+ * send shortcut follows the "Require ⌘↵ to send" setting. */
 export function PostFollowUpField({
-  networkAvailable,
   modelLabel,
-  target,
   placeholder = "Ask a follow-up",
   autoFocus = false,
   fullWidth = false,
   requireCmdEnter,
   composerRef,
-  onClearTarget,
   onSubmit,
 }: {
-  networkAvailable: boolean;
   modelLabel: string;
-  target: PostReplyTarget | null;
   placeholder?: string;
   autoFocus?: boolean;
   fullWidth?: boolean;
   requireCmdEnter: boolean;
   /** Lets the document focus the field (⌘J). */
   composerRef?: Ref<ResearchComposerHandle>;
-  onClearTarget: () => void;
-  onSubmit: (prompt: string, network: boolean) => Promise<void>;
+  onSubmit: (prompt: string, asNote: boolean) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
-  const [mode, setMode] = useState<AskMode>("network");
+  const [mode, setMode] = useState<AskMode>("ai");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -389,9 +192,8 @@ export function PostFollowUpField({
       growComposerTextarea(textareaRef.current);
     }
   }, [draft]);
-  const expanded = focused || Boolean(draft) || target !== null || submitting;
-  const canPost = networkAvailable && !target;
-  const toNetwork = canPost && mode === "network";
+  const expanded = focused || Boolean(draft) || submitting;
+  const asNote = mode === "note";
   const askLabel = `Ask ${modelLabel || "AI"}`;
   const ready = Boolean(draft.trim()) && !submitting;
   const submit = () => {
@@ -399,7 +201,7 @@ export function PostFollowUpField({
     if (!prompt || submitting) return;
     setSubmitting(true);
     setError(null);
-    onSubmit(prompt, toNetwork)
+    onSubmit(prompt, asNote)
       .then(() => setDraft(""))
       .catch((err) => setError(errorMessage(err)))
       .finally(() => {
@@ -412,14 +214,12 @@ export function PostFollowUpField({
       event.preventDefault();
       submit();
     } else if (event.key === "Escape") {
-      // Esc first drops a reply target, then leaves the field, which
-      // collapses again when it is empty.
+      // Esc leaves the field, which collapses again when it is empty.
       event.preventDefault();
-      if (target) onClearTarget();
-      else event.currentTarget.blur();
+      event.currentTarget.blur();
     }
   };
-  const sendLabel = toNetwork ? "Post to your network" : askLabel;
+  const copy = postFollowUpCopy(asNote, placeholder, askLabel);
   const shortcut = requireCmdEnter ? "⌘↵" : "↵";
 
   return (
@@ -431,19 +231,6 @@ export function PostFollowUpField({
       onClick={stopForInteractive}
       {...rootProps}
     >
-      {target ? (
-        <div className="research-composer-note">
-          <button
-            type="button"
-            className="post-field-target"
-            title="Ask without this reply"
-            onClick={onClearTarget}
-          >
-            @{target.author}’s reply
-            <X size={11} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
       <form
         className={`research-composer${ready ? " is-ready" : ""}`}
         onSubmit={(event) => {
@@ -457,36 +244,29 @@ export function PostFollowUpField({
           rows={1}
           autoFocus={autoFocus}
           disabled={submitting}
-          placeholder={
-            toNetwork
-              ? "Post a follow-up"
-              : target
-                ? `Ask about ${target.author}’s reply`
-                : placeholder
-          }
+          placeholder={copy.placeholder}
           aria-label="Follow-up"
           onChange={(event) => setDraft(event.currentTarget.value)}
           onKeyDown={onKeyDown}
         />
         {expanded ? (
           <div className="post-composer-row">
-            {canPost ? (
-              <AskPostSwitch
-                askMode={mode}
-                askIcon={<Sparkles size={14} aria-hidden="true" />}
-                askLabel={askLabel}
-                onModeChange={(next) => {
-                  setMode(next);
-                  setError(null);
-                }}
-              />
-            ) : null}
+            <AskNoteSwitch
+              askMode={mode}
+              askIcon={<Sparkles size={14} aria-hidden="true" />}
+              askLabel={askLabel}
+              noteLabel="Add a note"
+              onModeChange={(next) => {
+                setMode(next);
+                setError(null);
+              }}
+            />
             <button
               className="control-button research-composer-send"
               type="submit"
               disabled={!ready}
-              aria-label={toNetwork ? "Post" : "Ask"}
-              title={`${sendLabel} (${shortcut})`}
+              aria-label={copy.sendName}
+              title={`${copy.sendTitle} (${shortcut})`}
             >
               {submitting ? (
                 <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />

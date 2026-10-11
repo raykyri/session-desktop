@@ -57,7 +57,7 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeDelivery, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, postFollowUpSourceExcerpt, replyAnchorId } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, postFollowUpSourceExcerpt } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
@@ -202,8 +202,8 @@ interface ResearchThreadPageProps {
   /** Durable sidebar title shown in the header while tree detail is loading. */
   treeTitle?: string;
   /** The root's kind from the sidebar summary, known before the detail
-   * loads. A post's loading header reads "Post", as its post column's does,
-   * rather than the post's text. */
+   * loads. A note's loading header reads "Note", as its note column's does,
+   * rather than the note's text. */
   treeType?: ResearchNodeType;
   /** Archived trees remain browsable, but cannot be branched. */
   archived: boolean;
@@ -218,7 +218,7 @@ interface ResearchThreadPageProps {
     inline?: boolean,
     replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
-  /** Replies and follow-ups on a post page (see ResearchPostColumn). */
+  /** Follow-ups in a note's follow-ups column (see ResearchPostThread). */
   postActions: PostActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
@@ -267,17 +267,15 @@ interface ResearchThreadPageProps {
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
-  /** The whole question's Follow, Bookmark and Move to actions, which the
+  /** The whole question's Bookmark and Move to actions, which the
    * root level's answer menus list below their own actions. */
   treeMenu?: ResearchThreadTreeMenu;
 }
 
 export interface ResearchThreadTreeMenu
-  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onMove" | "onNewFolder"> {
+  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onMove" | "onNewFolder"> {
   bookmarked: boolean;
-  followed: boolean;
   onSetBookmarked: (bookmarked: boolean) => void;
-  onSetFollowed: (followed: boolean) => void;
   onMove: (place: string) => void;
   /** `trigger` is where focus returns when the folder dialog closes. */
   onNewFolder: (trigger: HTMLElement | undefined) => void;
@@ -1933,8 +1931,8 @@ function ResearchThreadPage({
         }
         if (levelPathRef.current.length > 0 && document.querySelector(".research-columns")?.contains(target ?? document.body)) {
           event.preventDefault();
-          // On a post, Esc also closes the open follow-up; focus returns to
-          // its row in the thread column.
+          // On a note, Esc also closes the open follow-up; focus returns to
+          // its row in the follow-ups column.
           const levelsNow = stripRef.current.levels;
           if (levelsNow[0]?.kind === "post" && levelsNow.length > 1) {
             closeAfter(0);
@@ -2062,9 +2060,9 @@ function ResearchThreadPage({
       return;
     }
     const key = event.key;
-    // A post's thread column: ↑/↓ move between its rows, Enter or → on a
-    // follow-up opens it as the next level (focus goes to its message), → on
-    // a reply goes to the open follow-up, ← goes to the post.
+    // A note's follow-ups column: ↑/↓ move between its rows, Enter or → on a
+    // follow-up opens it as the next level (focus goes to its message), ←
+    // goes to the note.
     if (target.matches("[data-research-thread-row]")) {
       const column = target.closest<HTMLElement>(columnSelector());
       const level = columnLevelIndex(columnIdOf(column));
@@ -2088,15 +2086,6 @@ function ResearchThreadPage({
       if (followUpId && (key === "Enter" || key === " " || key === "ArrowRight")) {
         event.preventDefault();
         goBranch(level, followUpId);
-        return;
-      }
-      if (key === "ArrowRight") {
-        event.preventDefault();
-        if (level === 0 && editorRef.current) {
-          requestFocus({ kind: "editor" }, "settle");
-        } else if (levelPathRef.current.length > level + 1) {
-          requestFocus({ kind: "row", level: level + 1 }, "reveal");
-        }
         return;
       }
       if (key === "ArrowLeft") {
@@ -2272,7 +2261,7 @@ function ResearchThreadPage({
   // it is in a text field. A column without rows uses the nearest one to its
   // left. Returns false when the column to cycle is the feed, which then
   // handles the request.
-  // The thread column of each post level, by level index.
+  // The follow-ups column of each note level, by level index.
   const threadHandlesRef = useRef(new Map<number, ResearchPostThreadHandle>());
   const registerThread = (level: number) => (handle: ResearchPostThreadHandle | null) => {
     if (handle) {
@@ -4463,8 +4452,8 @@ function ResearchThreadPage({
         const removed = result.removedHighlightCount;
         onToast(
           removed > 0
-            ? `Post saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
-            : "Post saved",
+            ? `Note saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
+            : "Note saved",
         );
       }
       closeEditor();
@@ -4594,7 +4583,7 @@ function ResearchThreadPage({
       ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
       : treeType;
     const headerTitle =
-      rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
+      rootKind === "post" ? "Note" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
       <ResearchThreadPlaceholder title={headerTitle} history={historyNav}>
         <div className="research-placeholder">
@@ -4668,11 +4657,6 @@ function ResearchThreadPage({
       // A transcript, or a document with no question, is one row for the
       // whole document (nodeMessage is null for both).
       const whole = nodeMessage(node) === null;
-      const replyId = replyAnchorId(node);
-      const replyParent = replyId ? nodeById.get(node.parentNodeId ?? "") : undefined;
-      const replyQuote = replyParent
-        ? nodeDelivery(replyParent)?.replies?.find((reply) => reply.id === replyId)?.body ?? null
-        : null;
       const selected = levelPath[level] === id;
       return (
         <ResearchMessageRow
@@ -4681,7 +4665,6 @@ function ResearchThreadPage({
           level={level}
           label={nodeLabel(node, treeTitleText)}
           showPrompt={!whole}
-          replyQuote={replyQuote}
           selected={selected}
           starrable={researchMessageStarrable(node, nodeById.get(headId))}
           retryQueued={queuedRetries.has(id)}
@@ -4859,10 +4842,10 @@ function ResearchThreadPage({
 
   /** What a branch was asked about, a muted block at the top of its first
    * column: the passage of the parent's answer, the whole answer, or, for a
-   * follow-up of a post, the post's text or the reply it was asked about. */
+   * follow-up of a note, the note's text. */
   const sourceBlock = (anchor: ResearchHighlightAnchor | null, parentId: string, branch: ResearchNode | null) => {
     const parent = nodeById.get(parentId);
-    const postExcerpt = parent && branch ? postFollowUpSourceExcerpt(parent, branch) : null;
+    const postExcerpt = parent && branch ? postFollowUpSourceExcerpt(parent) : null;
     const resolves = branch
       ? branchRangeOffsetsRef.current.some((entry) => entry.id === branch.id)
       : Boolean(anchor);
@@ -4874,7 +4857,7 @@ function ResearchThreadPage({
         <span className="research-branch-source-quote">
           {postExcerpt !== null ? (
             <>
-              Follow-up of <i>“{postExcerpt}”</i>
+              Follow-up to <i>“{postExcerpt}”</i>
             </>
           ) : quote && (resolves || !parentLoaded) ? (
             <i>“{quote}”</i>
@@ -5157,9 +5140,9 @@ function ResearchThreadPage({
     );
   };
 
-  /** One column of the strip. A post root is its post column and its thread
-   * column; a level's messages and answer are two; the unsent branch is the
-   * pending column. */
+  /** One column of the strip. A post root (a note) is its note column and
+   * its follow-ups column; a level's messages and answer are two; the unsent
+   * branch is the pending column. */
   const renderColumn = (column: ResearchColumn) => {
     switch (column.role) {
       case "post": {
@@ -5187,18 +5170,18 @@ function ResearchThreadPage({
             key={columnKey(column)}
             className={`research-pair-post${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(post, "Post")}`}
+            aria-label={`Note: ${level === 0 ? treeTitleText : nodeLabel(post, "Note")}`}
           >
-            {/* The post itself starts the column, so the header names the
-                column ("Post") rather than repeating the post's text. */}
+            {/* The note itself starts the column, so the header names the
+                column ("Note") rather than repeating the note's text. */}
             <ResearchPairHeader
-              title="Post"
+              title="Note"
               history={level === 0 ? historyNav : null}
               archived={archived}
               menu={
                 hasPostMenu
                   ? {
-                      label: "Post actions",
+                      label: "Note actions",
                       open: menu?.kind === "post" && Boolean(menu.trigger),
                       onOpen: (trigger) =>
                         setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
@@ -5215,7 +5198,7 @@ function ResearchThreadPage({
                 )}
               </div>
             </div>
-            <ResearchColumnResizer kind="answer" label="Resize post column" />
+            <ResearchColumnResizer kind="answer" label="Resize note column" />
           </section>
         );
       }
@@ -5231,9 +5214,9 @@ function ResearchThreadPage({
             key={columnKey(column)}
             className={`research-pair-thread${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label="Thread"
+            aria-label="Follow-ups"
           >
-            <ResearchPairHeader title="Thread" count={count} />
+            <ResearchPairHeader title="Follow-ups" count={count} />
             <div className="research-column-scroll">
               <div className="research-column-content research-reading-surface">
                 <ResearchPostThread
@@ -5252,7 +5235,7 @@ function ResearchThreadPage({
                 />
               </div>
             </div>
-            <ResearchColumnResizer kind="messages" label="Resize thread column" />
+            <ResearchColumnResizer kind="messages" label="Resize follow-ups column" />
           </section>
         );
       }
@@ -5402,14 +5385,14 @@ function ResearchThreadPage({
           anchor={menu.anchor}
           align={menu.align}
           trigger={menu.trigger}
-          label="Post actions"
+          label="Note actions"
           onClose={() => setMenu(null)}
         >
           <ResearchMenuItem
             icon={<Pencil size={15} aria-hidden="true" />}
-            label="Edit post"
+            label="Edit note"
             disabled={archived}
-            title={archived ? "Move this post out of Archive to edit it" : undefined}
+            title={archived ? "Move this note out of Archive to edit it" : undefined}
             onSelect={() => {
               const trigger = menu.trigger ?? null;
               setMenu(null);
@@ -5426,12 +5409,6 @@ function ResearchThreadPage({
                 onToggleBookmark={() => {
                   setMenu(null);
                   treeMenu.onSetBookmarked(!treeMenu.bookmarked);
-                }}
-                followed={treeMenu.followed}
-                followDisabledReason={treeMenu.followDisabledReason}
-                onToggleFollow={() => {
-                  setMenu(null);
-                  treeMenu.onSetFollowed(!treeMenu.followed);
                 }}
                 onMove={(place) => {
                   setMenu(null);
@@ -5666,12 +5643,6 @@ function ResearchThreadPage({
               onToggleBookmark={() => {
                 setMenu(null);
                 treeMenu.onSetBookmarked(!treeMenu.bookmarked);
-              }}
-              followed={treeMenu.followed}
-              followDisabledReason={treeMenu.followDisabledReason}
-              onToggleFollow={() => {
-                setMenu(null);
-                treeMenu.onSetFollowed(!treeMenu.followed);
               }}
               onMove={(place) => {
                 setMenu(null);

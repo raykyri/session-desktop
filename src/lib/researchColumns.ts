@@ -2,11 +2,11 @@
 // level per open chain: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
-// level whose head is a post (a post root, or a network follow-up of a post),
-// which renders as the post column and its thread column (replies,
-// follow-ups and the follow-up composer). An unsent branch adds a
-// pending column after the level it was asked from, and editing the root's
-// document or post adds an editor column after the root level's columns.
+// level whose head is a post, shown as a note (a note root, or a follow-up
+// note), which renders as the note column and its follow-ups column
+// (follow-ups and the follow-up composer). An unsent branch adds a pending
+// column after the level it was asked from, and editing the root's document
+// or note adds an editor column after the root level's columns.
 //
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
@@ -39,15 +39,15 @@ export interface ResearchLevel {
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
   anchor: ResearchHighlightAnchor | null;
-  /** A level whose head is a post (the root, or a network follow-up of a
-   * post) is a post column and a thread column, with no answer. */
+  /** A level whose head is a post (the root note, or a follow-up note) is a
+   * note column and a follow-ups column, with no answer. */
   kind: "root" | "branch" | "post";
 }
 
-/** `Tn`: level n's messages column (a post's thread column); `An`: its
- * answer column; `Nn`: a post's own column, left of its thread; `Pn`: an
+/** `Tn`: level n's messages column (a note's follow-ups column); `An`: its
+ * answer column; `Nn`: a note's own column, left of its follow-ups; `Pn`: an
  * unsent branch asked from level n - 1; `En`: the editor of the document or
- * post that level n shows. */
+ * note that level n shows. */
 export type ResearchColumnId =
   | "feed"
   | "placeholder"
@@ -218,8 +218,8 @@ export function columnIdOf(element: Element | null | undefined): ResearchColumnI
 }
 
 /** Whether `id` names a messages-side column (a level's messages column or
- * a post's thread column, a draft, or a pending branch). A post's own column
- * is not one. */
+ * a note's follow-ups column, a draft, or a pending branch). A note's own
+ * column is not one. */
 export function isMessagesColumnId(id: string | null | undefined): boolean {
   return Boolean(id && /^[TP]\d+$/.test(id));
 }
@@ -260,7 +260,8 @@ function pairAttributes(id: ResearchColumnId, pair: "messages" | "answer" | "pos
 
 /** The row that keyboard focus returns to in a messages-side column: the
  * selected message's row in a messages column, or the row in the tab order
- * in a post's thread column (the open follow-up's, else the last focused). */
+ * in a note's follow-ups column (the open follow-up's, else the last
+ * focused). */
 export const COLUMN_ROW_SELECTOR =
   ".research-msg-row.is-selected .research-msg-hit, [data-research-thread-row][tabindex='0']";
 

@@ -156,7 +156,6 @@ export interface ResearchActivityFeedProps {
   onRestoreResearch: (treeId: string) => Promise<void>;
   onRemoveResearch: (treeId: string) => Promise<void>;
   onSetResearchBookmarked: (treeId: string, bookmarked: boolean) => void;
-  onSetResearchFollowed?: (treeId: string, followed: boolean) => void;
   onMoveTree?: (treeId: string, place: string) => void;
   /** Moves a card within its place (⌥↑ and ⌥↓). */
   onReorderTree?: (treeId: string, place: string, position: ResearchDropPosition) => void;
@@ -378,7 +377,6 @@ function ResearchActivityFeed({
   onRestoreResearch,
   onRemoveResearch,
   onSetResearchBookmarked,
-  onSetResearchFollowed,
   onMoveTree,
   onReorderTree,
   onReorderDraft,
@@ -1420,7 +1418,7 @@ function ResearchActivityFeed({
                     <div className="feed-setup-guide">{setupGuide}</div>
                   ) : homeHasNothing ? (
                     <div className="research-feed-empty">
-                      Research, posts, and saved links appear here. New ones start at the top.
+                      Research, notes, and saved links appear here. New ones start at the top.
                     </div>
                   ) : (
                     <div className="research-feed-empty">
@@ -1507,16 +1505,6 @@ function ResearchActivityFeed({
             closeMenu(true);
             onSetResearchBookmarked(menuTree.id, !menuTree.bookmarked);
           }}
-          followed={Boolean(menuTree.followed)}
-          followDisabledReason={menuTree.archivedAt ? "Archived questions don't send notifications" : null}
-          onToggleFollow={
-            onSetResearchFollowed
-              ? () => {
-                  closeMenu(true);
-                  onSetResearchFollowed(menuTree.id, !menuTree.followed);
-                }
-              : undefined
-          }
           onMove={
             onMoveTree
               ? (place) => {

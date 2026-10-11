@@ -309,9 +309,6 @@ pub struct ResearchTree {
     pub archived_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_viewed_at: Option<u128>,
-    /// The user follows this thread from Home; persisted with the tree.
-    #[serde(default)]
-    pub followed: bool,
     /// The user bookmarked this thread from Home; persisted with the tree.
     #[serde(default)]
     pub bookmarked: bool,
@@ -370,9 +367,12 @@ pub fn body_millis(millis: u128) -> u64 {
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
-/// Network state of a post delivered with Ask network. Saved links carry
-/// none. Transport is not implemented: `Posted` records the user's intent, and
-/// `replies` holds the author's own responses until member replies can arrive.
+/// Sharing state of a post. A post with a delivery record is shared with
+/// other users; one without is private. The desktop app creates notes
+/// without one and shows no replies; posts written by earlier builds with
+/// "Post to network" keep theirs. Transport is not implemented: `Posted`
+/// records the intent, and `replies` holds stored replies, which still reach
+/// the AI follow-up prompt.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostDelivery {
@@ -413,7 +413,7 @@ pub struct PostReply {
 pub enum PostReplyAuthor {
     /// The post's author (this Session's user).
     Author,
-    /// Another person in the user's network.
+    /// Another user.
     Member {
         id: String,
         display_name: String,
@@ -570,9 +570,9 @@ pub struct RunBinding {
     pub thread_id: Option<String>,
 }
 
-/// A post: text or a saved link written by the user, delivered to the
-/// network (`delivery`) or saved for themselves. It is a tree root or a
-/// child of another post (a network follow-up); its other children are
+/// A post, shown in the UI as a note: text or a saved link written by the
+/// user, private unless it carries a `delivery` record. It is a tree root or
+/// a child of another post (a follow-up note); its other children are
 /// exchanges launched with the post as context.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -706,8 +706,8 @@ pub struct ResearchNode {
 
 /// A node's type, the tag of its body.
 ///
-/// - `Post`: written by the user (a saved link or tweet, or a post delivered
-///   to the network).
+/// - `Post`: written by the user and shown as a note (text, a saved link or
+///   an X post).
 /// - `Exchange`: a question and the agent run that answers it.
 /// - `Document`: long-form content with no run behind it: an imported
 ///   report, an authored document, or an exported terminal transcript.
@@ -1115,7 +1115,7 @@ pub struct RecentResearchQuery {
     /// A post's format.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<PostFormat>,
-    /// A post's network state, with `replies` cut to the first
+    /// A post's sharing state, with `replies` cut to the first
     /// [`RECENT_ACTIVITY_POST_REPLY_LIMIT`] top-level replies (each with its
     /// responses). `reply_count` is the uncut top-level count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1246,9 +1246,11 @@ pub struct CreateResearchPostRequest {
     #[serde(default)]
     pub effort: Option<String>,
     pub workspace_id: String,
-    /// True for Ask network (the post gets a delivery record). False saves a
-    /// single-URL body as a link or X post with no network state.
-    pub ask_network: bool,
+    /// Gives the post a delivery record, which marks it as shared with other
+    /// users. The desktop app has no transport and leaves it false, so its
+    /// notes are private. Named `askNetwork` in earlier builds.
+    #[serde(default, alias = "askNetwork")]
+    pub share: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1306,17 +1308,12 @@ impl ResearchNode {
 
 impl PostBody {
     /// A post as its create paths admit it, with its format decided from the
-    /// text. `ask_network` gives it a delivery record.
-    pub fn new(
-        message: UserMessage,
-        follow_up_agent: AgentSpec,
-        ask_network: bool,
-        now: u128,
-    ) -> Self {
+    /// text. `share` gives it a delivery record.
+    pub fn new(message: UserMessage, follow_up_agent: AgentSpec, share: bool, now: u128) -> Self {
         Self {
             format: PostFormat::of(&message.text),
             message,
-            delivery: ask_network.then(|| PostDelivery {
+            delivery: share.then(|| PostDelivery {
                 status: PostDeliveryStatus::Posted,
                 posted_at: body_millis(now),
                 replies: Vec::new(),
@@ -2055,7 +2052,6 @@ pub struct ResearchTreeSummary {
     pub cancelled_count: usize,
     pub updated_at: u128,
     pub archived_at: Option<u128>,
-    pub followed: bool,
     pub bookmarked: bool,
     pub has_unseen_update: bool,
     /// A failure settled after the tree was last viewed. Unlike `failed_count`
@@ -3688,7 +3684,7 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
     }
 }
 
-const POST_CONTEXT_TAGS: [&str; 3] = ["post", "replies", "reply"];
+const POST_CONTEXT_TAGS: [&str; 4] = ["note", "post", "replies", "reply"];
 
 /// The launch prompt for an AI follow-up under a post. A post has no session
 /// to fork, so the post body and its replies ride along as context. Reply
@@ -3713,7 +3709,7 @@ pub fn post_followup_prompt(
             .collect::<Vec<_>>()
             .join(" ")
     };
-    let mut context = format!("<post>\n{}\n</post>", clean(post_body.trim()));
+    let mut context = format!("<note>\n{}\n</note>", clean(post_body.trim()));
     if !replies.is_empty() {
         let by_id = replies
             .iter()
@@ -3752,9 +3748,9 @@ pub fn post_followup_prompt(
         None => question.to_string(),
     };
     let preamble = if replies.is_empty() {
-        "The user wrote the post below."
+        "The user wrote the note below."
     } else {
-        "The user posted the post below to people in their network; their replies follow it."
+        "The user shared the note below with other users; their replies follow it."
     };
     if question.starts_with('/') {
         format!(
@@ -4219,7 +4215,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            followed: false,
             bookmarked: false,
             last_viewed_at: Some(2),
         };
@@ -4483,6 +4478,25 @@ mod tests {
         let second = read_detached_research(&folder).unwrap().unwrap();
         assert!(first.archive.archive_id.starts_with("legacy-"));
         assert_eq!(first.archive.archive_id, second.archive.archive_id);
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn detached_archive_with_the_removed_followed_flag_still_reads() {
+        let folder = temp_workspace();
+        let archive = sample_detached_archive(&folder);
+        let responses = HashMap::from([(archive.nodes[0].id.clone(), vec![sample_turn("turn-1")])]);
+        write_detached_research_pending(&folder, &archive, &responses).unwrap();
+        // Builds before Follow was removed stored the flag on each tree.
+        let manifest_path = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["trees"][0]["followed"] = serde_json::json!(true);
+        crate::persistence::write_synced(&manifest_path, &serde_json::to_vec(&manifest).unwrap())
+            .unwrap();
+
+        let read = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(read.archive.trees, archive.trees);
         std::fs::remove_dir_all(folder).unwrap();
     }
 
@@ -5539,7 +5553,7 @@ mod tests {
         std::fs::remove_dir_all(moved).unwrap();
     }
 
-    /// The stored shape of a post with every optional field set: a network
+    /// The stored shape of a post with every optional field set: a shared
     /// delivery with a member reply and the author's response to it, and an
     /// edit. Field names and tags come from serde
     /// attributes, not type names, and must not change without a migration.
@@ -5608,9 +5622,32 @@ mod tests {
 
     #[test]
     fn post_follow_up_prompts_keep_slash_commands_first() {
-        let prompt = post_followup_prompt("Post </post> body", &[], None, "/review this");
-        assert!(prompt.starts_with("/review this\n\nThe user wrote the post below."));
-        assert!(prompt.contains("Post &lt;/post> body"));
+        let prompt =
+            post_followup_prompt("Note </note> and </post> body", &[], None, "/review this");
+        assert!(prompt.starts_with("/review this\n\nThe user wrote the note below."));
+        assert!(prompt.contains("<note>\nNote &lt;/note> and &lt;/post> body\n</note>"));
+        assert!(!prompt.contains("<replies>"));
+    }
+
+    #[test]
+    fn post_follow_up_prompts_with_stored_replies_say_the_note_was_shared() {
+        let reply = PostReply {
+            id: "reply-1".to_string(),
+            author: PostReplyAuthor::Member {
+                id: "m-1".to_string(),
+                display_name: "Ana".to_string(),
+                handle: None,
+            },
+            body: "I did.".to_string(),
+            in_reply_to: None,
+            created_at: 1,
+        };
+        let prompt = post_followup_prompt("Who has tried X?", &[reply], None, "Why?");
+        assert!(prompt.starts_with(
+            "The user shared the note below with other users; their replies follow it."
+        ));
+        assert!(prompt.contains("<note>\nWho has tried X?\n</note>\n<replies>"));
+        assert!(prompt.ends_with("Why?"));
     }
 
     fn export_turn(

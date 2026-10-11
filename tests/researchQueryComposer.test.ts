@@ -9,6 +9,7 @@ import type { AgentAdapterMetadata } from "../src/types";
 register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
+  askBoxCopy,
   askModeShowsAiControls,
   homeComposerDraftToStore,
   parseResearchModelChoice,
@@ -16,7 +17,7 @@ const {
   researchModelChoiceValue,
   researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
-const { AskPostSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskPostSwitch");
+const { AskNoteSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskNoteSwitch");
 const { postFormatOf } = await import("../src/lib/researchNodeTypes");
 const { LauncherSelect, OptionIcon: LauncherSelectIcon } = await import("../src/components/LauncherSelect");
 
@@ -134,19 +135,33 @@ test("a model choice value round-trips to its agent and preset", () => {
   assert.deepEqual(parseResearchModelChoice("codex:"), { adapter: "codex", preset: "" });
 });
 
-test("network mode hides AI controls", () => {
+test("note mode hides AI controls", () => {
   assert.equal(askModeShowsAiControls("ai"), true);
-  assert.equal(askModeShowsAiControls("network"), false);
+  assert.equal(askModeShowsAiControls("note"), false);
 });
 
-function renderSwitch(askMode: "ai" | "network") {
+test("note mode saves a note, or a link when the text is one URL", () => {
+  assert.deepEqual(askBoxCopy("note", "Read the spec first", false, "Ask a question"), {
+    placeholder: "Write a note, or paste a link to save",
+    submitLabel: "Save note",
+  });
+  assert.equal(askBoxCopy("note", " https://example.com/page ", false, "Ask a question").submitLabel, "Save link");
+  assert.equal(askBoxCopy("note", "Read the spec first", true, "Ask a question").submitLabel, "Saving…");
+  assert.deepEqual(askBoxCopy("ai", "https://example.com/page", false, "Ask a question"), {
+    placeholder: "Ask a question",
+    submitLabel: "Start research",
+  });
+});
+
+function renderSwitch(askMode: "ai" | "note") {
   return renderToStaticMarkup(
-    createElement(AskPostSwitch, {
+    createElement(AskNoteSwitch, {
       askMode,
       askIcon: createElement(LauncherSelectIcon, {
         option: { value: "claude", label: "Claude Code", iconSrc: "claude.svg" },
       }),
       askLabel: "Ask with Claude Code Fable",
+      noteLabel: "Save as note",
       menuOpen: false,
       askRef: { current: null },
       onModeChange: () => {},
@@ -155,9 +170,9 @@ function renderSwitch(askMode: "ai" | "network") {
   );
 }
 
-test("Ask and Post are two icon radios; only the selected one is a tab stop", () => {
+test("Ask and Note are two icon radios; only the selected one is a tab stop", () => {
   const ask = renderSwitch("ai");
-  assert.match(ask, /<div class="new-research-switch" role="radiogroup" aria-label="Send to">/);
+  assert.match(ask, /<div class="new-research-switch" role="radiogroup" aria-label="Ask or save as note">/);
   // Ask: the agent's icon and, while selected, a chevron and the hint that
   // Enter opens the model menu.
   const askRadio = ask.match(/<button[^>]*aria-label="Ask with Claude Code Fable"[^>]*>(.*?)<\/button>/);
@@ -171,37 +186,41 @@ test("Ask and Post are two icon radios; only the selected one is a tab stop", ()
   assert.match(ask, new RegExp(`<span id="${describedBy}" hidden="">Press Enter to choose a model</span>`));
   assert.match(
     ask,
-    /<button type="button" role="radio" aria-checked="false" tabindex="-1" class="new-research-switch-option" aria-label="Post to network" title="Post to network"><svg[^>]*lucide-users/,
+    /<button type="button" role="radio" aria-checked="false" tabindex="-1" class="new-research-switch-option" aria-label="Save as note" title="Save as note"><svg[^>]*lucide-sticky-note/,
   );
+  assert.doesNotMatch(ask, /network|lucide-users|lucide-globe/i);
 
-  const post = renderSwitch("network");
-  assert.match(post, /role="radio" aria-checked="false" tabindex="-1"[^>]*aria-label="Ask with Claude Code Fable"/);
-  assert.match(post, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Post to network"/);
-  // In Post the Ask segment opens no menu, so it has no chevron or hint.
-  assert.doesNotMatch(post, /lucide-chevron-down|aria-describedby/);
+  const note = renderSwitch("note");
+  assert.match(note, /role="radio" aria-checked="false" tabindex="-1"[^>]*aria-label="Ask with Claude Code Fable"/);
+  assert.match(note, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Save as note"/);
+  // In Note the Ask segment opens no menu, so it has no chevron or hint.
+  assert.doesNotMatch(note, /lucide-chevron-down|aria-describedby/);
 });
 
 test("a switch with no model menu shows no chevron or menu hint on Ask", () => {
-  // A post's follow-up box: Ask uses the post's model.
+  // A note's follow-up box: Ask uses the note's model.
   const html = renderToStaticMarkup(
-    createElement(AskPostSwitch, {
+    createElement(AskNoteSwitch, {
       askMode: "ai",
       askIcon: null,
       askLabel: "Ask Claude Fable",
+      noteLabel: "Add a note",
       onModeChange: () => {},
     }),
   );
+  assert.match(html, /role="radiogroup" aria-label="Ask or add a note"/);
   assert.match(html, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Ask Claude Fable"/);
+  assert.match(html, /aria-label="Add a note" title="Add a note"/);
   assert.doesNotMatch(html, /lucide-chevron-down|aria-describedby|Press Enter to choose a model/);
 });
 
-test("arrow keys switch the mode; Home is Ask and End is Post", () => {
-  assert.equal(askSwitchKeyTarget("ArrowRight", "ai"), "network");
-  assert.equal(askSwitchKeyTarget("ArrowLeft", "ai"), "network");
-  assert.equal(askSwitchKeyTarget("ArrowRight", "network"), "ai");
-  assert.equal(askSwitchKeyTarget("ArrowLeft", "network"), "ai");
-  assert.equal(askSwitchKeyTarget("Home", "network"), "ai");
-  assert.equal(askSwitchKeyTarget("End", "ai"), "network");
+test("arrow keys switch the mode; Home is Ask and End is Note", () => {
+  assert.equal(askSwitchKeyTarget("ArrowRight", "ai"), "note");
+  assert.equal(askSwitchKeyTarget("ArrowLeft", "ai"), "note");
+  assert.equal(askSwitchKeyTarget("ArrowRight", "note"), "ai");
+  assert.equal(askSwitchKeyTarget("ArrowLeft", "note"), "ai");
+  assert.equal(askSwitchKeyTarget("Home", "note"), "ai");
+  assert.equal(askSwitchKeyTarget("End", "ai"), "note");
   // ↓ opens the menu from Ask instead; Enter and Space click.
   assert.equal(askSwitchKeyTarget("ArrowDown", "ai"), null);
   assert.equal(askSwitchKeyTarget("Enter", "ai"), null);

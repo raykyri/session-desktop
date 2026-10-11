@@ -38,8 +38,9 @@ export function cappedPostDelivery(delivery: PostDelivery, limit: number): PostD
   };
 }
 
-/** Display name of a reply's author as follow-ups name it ("@Ana's reply"). */
-export function postReplyAuthorName(reply: PostReply): string {
+/** Display name of a reply's author, as the backend's `replyAnchorAuthor`
+ * names it. */
+function postReplyAuthorName(reply: PostReply): string {
   return reply.author.kind === "member" ? reply.author.displayName : "You";
 }
 

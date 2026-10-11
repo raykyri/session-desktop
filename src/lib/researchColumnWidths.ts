@@ -1,6 +1,6 @@
 // Column widths of the research strip. The feed, the messages-side columns
-// (a level's messages column, a post's thread column, a pending branch, a
-// draft) and the answer-side columns (a level's answer column, a post's own
+// (a level's messages column, a note's follow-ups column, a pending branch,
+// a draft) and the answer-side columns (a level's answer column, a note's own
 // column, the editor) each have one width. Each width is automatic (a share of
 // the column area's width) until its resize handle sets it; a set width is
 // kept per device and applies to every column of its kind, at every level.

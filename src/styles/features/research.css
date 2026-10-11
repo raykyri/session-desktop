@@ -407,16 +407,6 @@
   max-width: 100%;
 }
 
-/* The quoted passage a targeted follow-up was asked about, shown above the
-   question on the follow-up's own page. */
-.research-prompt-quote {
-  width: fit-content;
-  max-width: min(100%, 640px);
-  margin: 6px 0;
-  padding-left: 10px;
-  border-left: 1.5px solid var(--accent-color);
-}
-
 .research-response {
   min-width: 0;
   /* The answer's reading width, inside a wider answer column. */
@@ -2250,7 +2240,7 @@
   white-space: nowrap;
 }
 
-/* In the post column, the preview takes the post's (a turn's) insets. */
+/* In the note column, the preview takes the note's (a turn's) insets. */
 .research-pair-post .research-edit-preview {
   padding: 18px 26px 14px 24px;
 }

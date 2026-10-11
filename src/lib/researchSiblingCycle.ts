@@ -1,7 +1,7 @@
 // ⌃Tab / ⌃⇧Tab in the research columns: select the next or previous row of
 // the column the person last interacted with, wrapping at both ends. The
 // feed cycles its cards (or a card's child rows), a messages column its
-// chain, and a post's thread column its rows. ResearchColumns tracks the
+// chain, and a note's follow-ups column its rows. ResearchColumns tracks the
 // column and dispatches the key; the feed and the document do the moves.
 // This module holds the parts that need no DOM.
 
@@ -52,7 +52,7 @@ export function cycleIndex(count: number, index: number, direction: ResearchCycl
 }
 
 /** A column's position in the strip, left to right: Nn, Tn, An, En for level
- * n. An unsent branch's Pn takes the slot level n's post column would have,
+ * n. An unsent branch's Pn takes the slot level n's note column would have,
  * after level n - 1's columns. Null for the feed, the placeholder and
  * unknown ids. */
 function stripRank(id: string): number | null {
@@ -65,7 +65,7 @@ function stripRank(id: string): number | null {
 }
 
 /** The column whose rows ⌃Tab cycles. `candidates` are the strip's columns
- * that have rows (messages columns, and thread columns with at least one
+ * that have rows (messages columns, and follow-ups columns with at least one
  * row). The column last interacted with is used when it is one; an answer
  * column cycles its level's messages column, and any other column without
  * rows (a post, an editor, a pending branch, a draft) falls back to the

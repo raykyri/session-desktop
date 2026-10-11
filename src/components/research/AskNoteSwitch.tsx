@@ -1,62 +1,65 @@
 import { useId, useRef } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "react";
-import { ChevronDown, Users } from "lucide-react";
+import { ChevronDown, StickyNote } from "lucide-react";
 
-/** Who a question goes to: an agent ("ai"), or the network, which posts a
- * post to Home (network delivery itself is not built yet); a body that is a
- * single URL is saved as a link or post instead of asked. The Ask/Post
- * switcher sets it. */
-export type AskMode = "network" | "ai";
+/** What the text in an ask box becomes: a question for an agent ("ai"), or
+ * a note ("note"), which is saved without running anything; a body that is a
+ * single URL is saved as a link. The Ask/Note switch sets it. */
+export type AskMode = "note" | "ai";
 
-/** The mode a key on the Ask/Post switcher selects, or null for any other
- * key: ← and → move to the other segment, Home to Ask, End to Post. */
+/** The mode a key on the Ask/Note switch selects, or null for any other key:
+ * ← and → move to the other segment, Home to Ask, End to Note. */
 export function askSwitchKeyTarget(key: string, current: AskMode): AskMode | null {
   switch (key) {
     case "ArrowLeft":
     case "ArrowRight":
-      return current === "ai" ? "network" : "ai";
+      return current === "ai" ? "note" : "ai";
     case "Home":
       return "ai";
     case "End":
-      return "network";
+      return "note";
     default:
       return null;
   }
 }
 
-interface AskPostSwitchProps {
+interface AskNoteSwitchProps {
   askMode: AskMode;
   /** The Ask segment's icon: the selected agent's in the Home ask box. */
   askIcon: ReactNode;
   /** "Ask with {agent} {model}": the Ask segment's name and tooltip. */
   askLabel: string;
+  /** The Note segment's name and tooltip: "Save as note" in the Home ask
+   * box, "Add a note" in a note's follow-up box. */
+  noteLabel: string;
   /** Whether the model menu is open. Omit with onMenuOpenChange for a
-   * switch with no model menu, as in a post's follow-up box, whose AI
-   * follow-up uses the post's model. */
+   * switch with no model menu, as in a note's follow-up box, whose AI
+   * follow-up uses the note's model. */
   menuOpen?: boolean;
   askRef?: RefObject<HTMLButtonElement | null>;
   onModeChange: (mode: AskMode) => void;
   onMenuOpenChange?: (open: boolean) => void;
 }
 
-/** Ask and Post as two icon segments in a radiogroup with a roving tabindex.
+/** Ask and Note as two icon segments in a radiogroup with a roving tabindex.
  * A press on the selected Ask segment (or Enter, Space or ↓ on it) opens the
- * model menu; from Post, Ask only switches back, keeping the last model. A
+ * model menu; from Note, Ask only switches back, keeping the last model. A
  * radio cannot carry aria-haspopup, so the menu is announced through a
  * description instead. */
-export function AskPostSwitch({
+export function AskNoteSwitch({
   askMode,
   askIcon,
   askLabel,
+  noteLabel,
   menuOpen = false,
   askRef: askRefProp,
   onModeChange,
   onMenuOpenChange,
-}: AskPostSwitchProps) {
+}: AskNoteSwitchProps) {
   const hintId = useId();
   const ownAskRef = useRef<HTMLButtonElement | null>(null);
   const askRef = askRefProp ?? ownAskRef;
-  const postRef = useRef<HTMLButtonElement | null>(null);
+  const noteRef = useRef<HTMLButtonElement | null>(null);
   const ask = askMode === "ai";
   const hasMenu = Boolean(onMenuOpenChange);
 
@@ -66,7 +69,7 @@ export function AskPostSwitch({
     if (target) {
       event.preventDefault();
       onModeChange(target);
-      (target === "ai" ? askRef : postRef).current?.focus();
+      (target === "ai" ? askRef : noteRef).current?.focus();
       return;
     }
     if (segment === "ai" && ask && event.key === "ArrowDown" && onMenuOpenChange) {
@@ -76,7 +79,11 @@ export function AskPostSwitch({
   };
 
   return (
-    <div className="new-research-switch" role="radiogroup" aria-label="Send to">
+    <div
+      className="new-research-switch"
+      role="radiogroup"
+      aria-label={`Ask or ${noteLabel.charAt(0).toLowerCase()}${noteLabel.slice(1)}`}
+    >
       <button
         ref={askRef}
         type="button"
@@ -102,21 +109,21 @@ export function AskPostSwitch({
         ) : null}
       </button>
       <button
-        ref={postRef}
+        ref={noteRef}
         type="button"
         role="radio"
         aria-checked={!ask}
         tabIndex={ask ? -1 : 0}
         className="new-research-switch-option"
-        aria-label="Post to network"
-        title="Post to network"
+        aria-label={noteLabel}
+        title={noteLabel}
         onClick={(event) => {
           event.currentTarget.focus();
-          onModeChange("network");
+          onModeChange("note");
         }}
-        onKeyDown={(event) => onKeyDown(event, "network")}
+        onKeyDown={(event) => onKeyDown(event, "note")}
       >
-        <Users size={14} aria-hidden="true" />
+        <StickyNote size={14} aria-hidden="true" />
       </button>
       {hasMenu ? (
         <span id={hintId} hidden>
