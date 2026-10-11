@@ -140,7 +140,7 @@ test("starred follow-ups and branches are indented rows under their question", (
   const html = renderFeed({
     items: [{
       ...question,
-      promoted: [
+      starred: [
         { ...question, nodeId: "follow", parentNodeId: "node", inline: true, prompt: "A starred follow-up", branchDepth: 0 },
         { ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", title: "Branch title", branchDepth: 1 },
         { ...question, nodeId: "deep", parentNodeId: "branch", inline: false, prompt: "Deep", branchDepth: 3, status: "running" as const },
@@ -179,12 +179,12 @@ test("starred follow-ups and branches are indented rows under their question", (
 
   // The open nodes' rows are marked (a follow-up whose message is selected
   // in the root pair, an open branch); other cards' rows are not.
-  const promoted = [
+  const starred = [
     { ...question, nodeId: "follow", parentNodeId: "node", inline: true, prompt: "A starred follow-up", branchDepth: 0 },
     { ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", branchDepth: 1 },
   ];
   const open = renderFeed({
-    items: [{ ...question, promoted }],
+    items: [{ ...question, starred }],
     researchTrees: [tree],
     selectedTreeId: "tree",
     selectedChildNodeIds: ["follow", "branch"],
@@ -193,7 +193,7 @@ test("starred follow-ups and branches are indented rows under their question", (
   assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><svg/);
   assert.match(open, /research-feed-card is-selected/);
   const elsewhere = renderFeed({
-    items: [{ ...question, promoted }],
+    items: [{ ...question, starred }],
     researchTrees: [tree],
     selectedChildNodeIds: ["follow", "branch"],
   });

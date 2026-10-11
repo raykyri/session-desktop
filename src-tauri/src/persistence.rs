@@ -35,6 +35,13 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
 ///
+/// Version 10 renames two keys: a research node's star timestamp
+/// `promotedAt` becomes `starredAt`, and the per-agent composer text
+/// `drafts` becomes `agentComposerText`. Builds that accept up to version 9
+/// ignore both new keys and would drop stars and composer text on their next
+/// save, so they must refuse the file. Loads rename the old keys
+/// (`migrate_v9_keys` and `research::migrate_promoted_at_to_starred_at`).
+///
 /// Version 9 stores research nodes as an envelope with a tagged body (see
 /// `research::ResearchNode`); builds that accept up to version 8 read flat
 /// records and would drop every node. Version 8 denotes two shapes, both
@@ -45,9 +52,10 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// conversations, message attachments, imported documents) so older builds
 /// kept reading states without those features; with every node in the body
 /// shape, a state holds either no research nodes or version-9 nodes.
-pub const STATE_VERSION: u32 = 9;
-/// Written when the state contains no research nodes, so it stays loadable by
-/// builds that accept versions 2 to 4.
+pub const STATE_VERSION: u32 = 10;
+/// Written when the state contains no research nodes and no agent composer
+/// text (the data whose keys changed in versions 9 and 10), so it stays
+/// loadable by builds that accept versions 2 to 4.
 pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
 const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
@@ -63,12 +71,16 @@ const PRE_POSTS_BACKUP_FILE: &str = "state.v7.bak";
 /// The state file as it was before it was rewritten at version 9, when it was
 /// written at version 8 (in either of that version's shapes).
 const PRE_BODY_VERSION_BACKUP_FILE: &str = "state.v8.bak";
+/// The state file as it was before it was rewritten at version 10 (with
+/// `starredAt` and `agentComposerText`), when it was written at version 9.
+const PRE_STARRED_AT_BACKUP_FILE: &str = "state.v9.bak";
 /// Every migration backup name; their scratch files are named after them.
-const MIGRATION_BACKUP_FILES: [&str; 4] = [
+const MIGRATION_BACKUP_FILES: [&str; 5] = [
     V2_BACKUP_FILE,
     PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
     PRE_POSTS_BACKUP_FILE,
     PRE_BODY_VERSION_BACKUP_FILE,
+    PRE_STARRED_AT_BACKUP_FILE,
 ];
 pub(crate) const STATE_DIR: &str = ".session";
 
@@ -96,11 +108,13 @@ pub struct PersistedState {
     /// workspace-scoped) and are pruned when their group is deleted.
     #[serde(default)]
     pub artifacts: Vec<ArtifactInfo>,
-    /// Per-agent composer drafts: the unsent text sitting in the right-pane input.
-    /// Persisted so an in-progress draft survives a restart, recovered alongside
-    /// queues and transcripts.
-    #[serde(default)]
-    pub drafts: HashMap<String, String>,
+    /// Unsent text in each terminal agent's composer, by agent id. Persisted so
+    /// an in-progress message survives a restart, recovered alongside queues
+    /// and transcripts. Stored as `drafts` before version 10. Omitted when
+    /// empty; a state that holds any is written at version 10 (see
+    /// `STATE_VERSION_WITHOUT_RESEARCH_NODES`).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub agent_composer_text: HashMap<String, String>,
     /// Application-global prompt drafts (the home Drafts rail), oldest first.
     #[serde(default)]
     pub global_drafts: Vec<GlobalDraft>,
@@ -164,7 +178,7 @@ impl Default for PersistedState {
             agents: Vec::new(),
             queues: HashMap::new(),
             artifacts: Vec::new(),
-            drafts: HashMap::new(),
+            agent_composer_text: HashMap::new(),
             global_drafts: Vec::new(),
             inflight: HashMap::new(),
             pane_splits: Vec::new(),
@@ -610,8 +624,10 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     // records here, before lenient deserialization, so every reader sees one
     // shape and no node is dropped for having the old one. The migration is
     // shape-based and idempotent, so it runs on files of every version:
-    // version-8 files hold either flat posts or the body shape.
+    // version-8 files hold either flat posts or the body shape. Version 10
+    // renames `promotedAt` (a node migration step) and `drafts`.
     let research_nodes_migrated = migrate_research_nodes(&mut value);
+    migrate_v9_keys(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -691,7 +707,23 @@ fn migrate_v2_to_v3(value: &mut Value) {
     map.insert("version".to_string(), Value::from(STATE_VERSION));
 }
 
-/// Pure JSON-shape migration of the research nodes to the version-9 shape
+/// Pure JSON-shape migration of the version-9 top-level key `drafts` to
+/// `agentComposerText`. A file that already has the new key keeps it, and the
+/// old key is dropped either way, so the migration is idempotent. The nodes'
+/// `promotedAt` is renamed with the other node migrations.
+fn migrate_v9_keys(value: &mut Value) {
+    let Value::Object(map) = value else {
+        return;
+    };
+    let Some(drafts) = map.remove("drafts") else {
+        return;
+    };
+    if map.get("agentComposerText").is_none_or(Value::is_null) {
+        map.insert("agentComposerText".to_string(), drafts);
+    }
+}
+
+/// Pure JSON-shape migration of the research nodes to the version-10 shape
 /// (see `research::migrate_research_node_values`). Returns whether any node
 /// changed.
 fn migrate_research_nodes(value: &mut Value) -> bool {
@@ -729,7 +761,7 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
     state.group_order = take_string_vec(&mut map, "groupOrder");
     state.queues = take_map_of_vecs(&mut map, "queues", "queued turn", &mut dropped);
     state.inflight = take_typed_map(&mut map, "inflight", "in-flight turn", &mut dropped);
-    state.drafts = take_string_map(&mut map, "drafts");
+    state.agent_composer_text = take_string_map(&mut map, "agentComposerText");
     state.global_drafts = take_vec(&mut map, "globalDrafts", "global draft", &mut dropped);
     state.threads = take_typed_map(&mut map, "threads", "thread", &mut dropped);
     state.thread_focus = take_string_map(&mut map, "threadFocus");
@@ -917,13 +949,14 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
 }
 
-/// Preserves the bytes of a state file written at `source_version` (3 to 8)
-/// before a save rewrites state.json with research nodes at version 9, which
-/// the source's builds refuse, the way `backup_v2_state_for_migration` does
-/// for version 2: versions 3 to 6 as `state.v6.bak`, version 7 as
-/// `state.v7.bak` and version 8 as `state.v8.bak`. Each backup is readable by
-/// the builds its name gives. A version-9 source needs none.
-pub fn backup_research_node_state_for_migration(
+/// Preserves the bytes of a state file written at `source_version` (3 to 9)
+/// before a save rewrites state.json at the current version, which the
+/// source's builds refuse, the way `backup_v2_state_for_migration` does for
+/// version 2: versions 3 to 6 as `state.v6.bak`, version 7 as `state.v7.bak`,
+/// version 8 as `state.v8.bak` and version 9 as `state.v9.bak`. Each backup
+/// is readable by the builds its name gives. A current-version source needs
+/// none.
+pub fn backup_state_for_current_version(
     workspace_root: &Path,
     source_version: u32,
 ) -> Result<Option<PathBuf>, String> {
@@ -935,6 +968,7 @@ pub fn backup_research_node_state_for_migration(
         ),
         7 => backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7"),
         8 => backup_state_for_migration(workspace_root, PRE_BODY_VERSION_BACKUP_FILE, "version-8"),
+        9 => backup_state_for_migration(workspace_root, PRE_STARRED_AT_BACKUP_FILE, "version-9"),
         _ => Ok(None),
     }
 }
@@ -1579,6 +1613,24 @@ mod tests {
     }
 
     #[test]
+    fn version_nine_drafts_become_agent_composer_text_once() {
+        let mut value = serde_json::json!({"version": 9, "drafts": {"agent-1": "text"}});
+        migrate_v9_keys(&mut value);
+        assert_eq!(
+            value,
+            serde_json::json!({"version": 9, "agentComposerText": {"agent-1": "text"}})
+        );
+        let migrated = value.clone();
+        migrate_v9_keys(&mut value);
+        assert_eq!(value, migrated);
+        // The new key wins when a file has both.
+        let mut both =
+            serde_json::json!({"drafts": {"a": "old"}, "agentComposerText": {"a": "new"}});
+        migrate_v9_keys(&mut both);
+        assert_eq!(both, serde_json::json!({"agentComposerText": {"a": "new"}}));
+    }
+
+    #[test]
     fn version_two_migration_backup_is_never_overwritten() {
         let root = temp_root();
         let path = state_path(&root);
@@ -1879,13 +1931,11 @@ mod tests {
 
         // No backup yet: the plain name.
         fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
-        let first = backup_research_node_state_for_migration(&root, 7)
-            .unwrap()
-            .unwrap();
+        let first = backup_state_for_current_version(&root, 7).unwrap().unwrap();
         assert_eq!(first, dir.join("state.v7.bak"));
         // The same source again (its save did not land): nothing new.
         assert_eq!(
-            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            backup_state_for_current_version(&root, 7).unwrap(),
             Some(first.clone())
         );
         assert_eq!(backups(), ["state.v7.bak"]);
@@ -1893,9 +1943,7 @@ mod tests {
         // Another source while state.v7.bak holds the first: a timestamped
         // sibling, and the first backup stays as it was.
         fs::write(&path, br#"{"version":7,"a":2}"#).unwrap();
-        let second = backup_research_node_state_for_migration(&root, 7)
-            .unwrap()
-            .unwrap();
+        let second = backup_state_for_current_version(&root, 7).unwrap().unwrap();
         assert_ne!(second, first);
         assert_eq!(fs::read(&second).unwrap(), br#"{"version":7,"a":2}"#);
         assert_eq!(fs::read(&first).unwrap(), br#"{"version":7,"a":1}"#);
@@ -1906,13 +1954,13 @@ mod tests {
             .unwrap();
         assert!(millis.bytes().all(|byte| byte.is_ascii_digit()), "{name}");
         assert_eq!(
-            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            backup_state_for_current_version(&root, 7).unwrap(),
             Some(second.clone())
         );
         // Either earlier source again: its backup is found, nothing new.
         fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
         assert_eq!(
-            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            backup_state_for_current_version(&root, 7).unwrap(),
             Some(first)
         );
         assert_eq!(backups().len(), 2);

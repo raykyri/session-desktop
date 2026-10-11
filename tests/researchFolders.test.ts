@@ -153,7 +153,7 @@ const root = {
 test("starred children list follow-ups as text rows and branches with a level", () => {
   const children = researchFeedChildren({
     ...root,
-    promoted: [
+    starred: [
       { ...root, nodeId: "f", parentNodeId: "root", inline: true, prompt: " Follow-up ", title: "Ignored", branchDepth: 0 },
       { ...root, nodeId: "b", parentNodeId: "root", prompt: "Branch prompt", title: "Branch title", branchDepth: 1, status: "running" },
       { ...root, nodeId: "bb", parentNodeId: "b", prompt: "Deeper", branchDepth: 4 },
@@ -177,16 +177,16 @@ test("starred children list follow-ups as text rows and branches with a level", 
 test("node updates keep a root's starred list current, or ask for a refetch", () => {
   const items = [{
     ...root,
-    promoted: [{ ...root, nodeId: "f", parentNodeId: "root", inline: true, prompt: "Old", branchDepth: 0, promotedAt: 5 }],
+    starred: [{ ...root, nodeId: "f", parentNodeId: "root", inline: true, prompt: "Old", branchDepth: 0, starredAt: 5 }],
   }];
-  const node = (id: string, promotedAt: number | null, prompt = "New") =>
-    researchNode({ id, treeId: "t", prompt, title: null, status: "running", promotedAt });
+  const node = (id: string, starredAt: number | null, prompt = "New") =>
+    researchNode({ id, treeId: "t", prompt, title: null, status: "running", starredAt });
   const updated = patchRecentActivityStarred(items, node("f", 5));
   assert.equal(updated.stale, false);
-  assert.equal(updated.items[0].promoted?.[0].prompt, "New");
-  assert.equal(updated.items[0].promoted?.[0].status, "running");
+  assert.equal(updated.items[0].starred?.[0].prompt, "New");
+  assert.equal(updated.items[0].starred?.[0].status, "running");
   const unstarred = patchRecentActivityStarred(items, node("f", null));
-  assert.deepEqual(unstarred.items[0].promoted, []);
+  assert.deepEqual(unstarred.items[0].starred, []);
   const starred = patchRecentActivityStarred(items, node("g", 9));
   assert.equal(starred.stale, true);
   assert.equal(starred.items, items);

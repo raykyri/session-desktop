@@ -26,7 +26,7 @@ export interface NodeFixture {
   title?: string | null;
   groupId?: string;
   createdAt?: number;
-  promotedAt?: number | null;
+  starredAt?: number | null;
   highlights?: ResearchHighlight[];
   /** Defaults to "exchange". */
   type?: ResearchNodeType;
@@ -61,7 +61,7 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
     title: fields.title ?? null,
     groupId: fields.groupId ?? "group",
     createdAt: fields.createdAt ?? 1,
-    promotedAt: fields.promotedAt ?? null,
+    starredAt: fields.starredAt ?? null,
     highlights: fields.highlights ?? [],
   };
   const message = { text: fields.prompt ?? "Question", attachments: fields.attachments ?? [] };

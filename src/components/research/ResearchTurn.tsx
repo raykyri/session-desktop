@@ -249,7 +249,7 @@ function sameTurnNode(a: ResearchNode, b: ResearchNode) {
     nodeRun(a)?.startedAt === nodeRun(b)?.startedAt &&
     nodeRun(a)?.completedAt === nodeRun(b)?.completedAt &&
     a.createdAt === b.createdAt &&
-    a.promotedAt === b.promotedAt &&
+    a.starredAt === b.starredAt &&
     nodeAdapter(a) === nodeAdapter(b) &&
     nodeAgent(a)?.model === nodeAgent(b)?.model &&
     documentSource(a) === documentSource(b)
@@ -654,7 +654,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
 }) {
   const labelId = useId();
   const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
-  const starred = Boolean(node.promotedAt);
+  const starred = Boolean(node.starredAt);
   const pill = researchMessagePill(nodeStatus(node), retryQueued);
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;

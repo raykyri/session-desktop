@@ -33,7 +33,7 @@ import {
   getResearchNodeContent,
   removeResearchHighlights,
   renameResearchNode,
-  setResearchNodePromoted,
+  setResearchNodeStarred,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import ResearchPostColumn from "./ResearchPostColumn";
@@ -3775,8 +3775,8 @@ function ResearchThreadPage({
     if (!node) {
       return;
     }
-    const starred = !node.promotedAt;
-    setResearchNodePromoted(nodeId, starred)
+    const starred = !node.starredAt;
+    setResearchNodeStarred(nodeId, starred)
       .then(() =>
         onToastRef.current(
           starred

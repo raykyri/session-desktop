@@ -98,7 +98,7 @@ test("research prompts preserve Markdown blockquotes", () => {
 });
 
 test("a message row's meta line shows short time, star, branch count and … with even spacing", () => {
-  const html = row(questionNode({ inline: true, parentNodeId: "root", promotedAt: NOW }), {
+  const html = row(questionNode({ inline: true, parentNodeId: "root", starredAt: NOW }), {
     selected: true,
     starrable: true,
     branchCount: 3,

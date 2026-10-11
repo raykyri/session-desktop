@@ -2338,14 +2338,16 @@ impl AppState {
         {
             migration_warnings.push(err);
         }
-        // The next save writes the research nodes at version 9, which the
-        // source's builds refuse. A version-8 source can need no node
-        // migration (its nodes may already have the body shape) and still be
-        // rewritten. A version-2 source is already preserved whole as
-        // state.v2.bak.
-        if (research_nodes_migrated || !persisted.research_nodes.is_empty())
+        // The next save writes research nodes and agent composer text at the
+        // current version, which the source's builds refuse. A version-8 or
+        // version-9 source can need no node migration (its nodes may already
+        // have the body shape, and need no star) and still be rewritten. A
+        // version-2 source is already preserved whole as state.v2.bak.
+        if (research_nodes_migrated
+            || !persisted.research_nodes.is_empty()
+            || !persisted.agent_composer_text.is_empty())
             && let Some(source_version) = source_version.filter(|version| *version != 2)
-            && let Err(err) = persistence::backup_research_node_state_for_migration(
+            && let Err(err) = persistence::backup_state_for_current_version(
                 &self.inner.config.workspace_root,
                 source_version,
             )
@@ -2486,7 +2488,7 @@ impl AppState {
             }
             for agent_id in &dropped_agent_ids {
                 persisted.queues.remove(agent_id);
-                persisted.drafts.remove(agent_id);
+                persisted.agent_composer_text.remove(agent_id);
             }
             research_reconciled = true;
         }
@@ -2555,7 +2557,7 @@ impl AppState {
             }
             for agent_id in &dropped_sdk_agent_ids {
                 persisted.queues.remove(agent_id);
-                persisted.drafts.remove(agent_id);
+                persisted.agent_composer_text.remove(agent_id);
             }
             research_reconciled = true;
         }
@@ -2718,7 +2720,7 @@ impl AppState {
                     .or_default()
                     .push_front(turn);
             }
-            for (agent_id, draft) in persisted.drafts {
+            for (agent_id, draft) in persisted.agent_composer_text {
                 // Drop drafts whose agent no longer exists so dead entries don't
                 // accumulate in state.json across restarts. (Agents are hydrated above.)
                 if !draft.trim().is_empty() && model.agents.contains_key(&agent_id) {
@@ -2890,10 +2892,12 @@ impl AppState {
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
-                // Research nodes are stored as an envelope with a tagged body
-                // only builds that accept version 9 read. A state without
-                // research nodes stays loadable by builds that accept 2 to 4.
-                version: if model.research_nodes.is_empty() {
+                // Research nodes (an envelope with a tagged body and
+                // `starredAt`) and `agentComposerText` are read only by builds
+                // that accept version 10; older builds would drop them. A
+                // state without either stays loadable by builds that accept
+                // 2 to 4.
+                version: if model.research_nodes.is_empty() && model.agent_drafts.is_empty() {
                     persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
                 } else {
                     persistence::STATE_VERSION
@@ -2909,7 +2913,7 @@ impl AppState {
                     .map(|(agent_id, queue)| (agent_id.clone(), queue.iter().cloned().collect()))
                     .collect(),
                 artifacts: model.artifacts.clone(),
-                drafts: model.agent_drafts.clone(),
+                agent_composer_text: model.agent_drafts.clone(),
                 global_drafts: model.global_drafts.clone(),
                 inflight: model.agent_inflight.clone(),
                 pane_splits: normalized_pane_splits(&model, model.pane_splits.clone(), false)
@@ -3893,14 +3897,14 @@ impl AppState {
 
     /// Home's feed: every research root (exchanges, posts and documents),
     /// newest first, each with its direct follow-ups oldest first and every
-    /// promoted node in its tree.
+    /// starred node in its tree.
     pub fn list_recent_activity(
         &self,
         limit: usize,
         before: Option<RecentResearchQueryCursor>,
     ) -> Result<research::RecentActivityPage, String> {
         // List every root. Nested documents are invalid, so exclude them from
-        // child and promoted rows.
+        // child and starred rows.
         let is_feed_child = |node: &ResearchNode| node.node_type() != ResearchNodeType::Document;
         let compare = |left: &&ResearchNode, right: &&ResearchNode| {
             right
@@ -3943,13 +3947,13 @@ impl AppState {
             }
         });
         let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
-        let mut trees_with_promotions = HashSet::new();
+        let mut trees_with_stars = HashSet::new();
         for node in model.research_nodes.values() {
             if let Some(parent_id) = node.parent_node_id.as_deref() {
                 children_by_parent.entry(parent_id).or_default().push(node);
             }
-            if node.promoted_at.is_some() {
-                trees_with_promotions.insert(node.tree_id.as_str());
+            if node.starred_at.is_some() {
+                trees_with_stars.insert(node.tree_id.as_str());
             }
         }
         let sorted_children = |parent: &ResearchNode| {
@@ -3985,9 +3989,9 @@ impl AppState {
                     .filter(|child| is_feed_child(child))
                     .map(|child| feed_entry(root, child, u32::from(!child.inline)))
                     .collect();
-                if trees_with_promotions.contains(root.tree_id.as_str()) {
+                if trees_with_stars.contains(root.tree_id.as_str()) {
                     // Depth-first. A node's branches (oldest first) come before
-                    // its inline continuation, so each promoted branch follows
+                    // its inline continuation, so each starred branch follows
                     // the turn it was asked from. Stray documents are skipped
                     // with their subtrees, matching `children`. The stack holds
                     // each level reversed so the next entry pops first.
@@ -4004,8 +4008,8 @@ impl AppState {
                         .map(|child| (root, child, u32::from(!child.inline)))
                         .collect::<Vec<_>>();
                     while let Some((parent, node, depth)) = stack.pop() {
-                        if node.promoted_at.is_some() {
-                            query.promoted.push(feed_entry(parent, node, depth));
+                        if node.starred_at.is_some() {
+                            query.starred.push(feed_entry(parent, node, depth));
                         }
                         stack.extend(
                             traversal_order(node)
@@ -6486,13 +6490,13 @@ impl AppState {
         Ok(node)
     }
 
-    /// Promotes a follow-up into its tree's Home feed entry, or clears the
-    /// promotion. Re-promoting keeps the original timestamp; a no-op persists
-    /// and emits nothing.
-    pub fn set_research_node_promoted(
+    /// Stars a follow-up, listing it under its tree's Home feed entry, or
+    /// clears the star. Re-starring keeps the original timestamp; a no-op
+    /// persists and emits nothing.
+    pub fn set_research_node_starred(
         &self,
         node_id: &str,
-        promoted: bool,
+        starred: bool,
     ) -> Result<ResearchNode, String> {
         let (node, changed) = {
             let mut model = self
@@ -6505,11 +6509,11 @@ impl AppState {
                 .get_mut(node_id)
                 .ok_or_else(|| format!("Research node {node_id} was not found."))?;
             if node.parent_node_id.is_none() {
-                return Err("The root of a research tree cannot be promoted.".to_string());
+                return Err("The root of a research tree cannot be starred.".to_string());
             }
-            let changed = node.promoted_at.is_some() != promoted;
+            let changed = node.starred_at.is_some() != starred;
             if changed {
-                node.promoted_at = promoted.then(now_millis);
+                node.starred_at = starred.then(now_millis);
             }
             (node.clone(), changed)
         };
@@ -13518,12 +13522,12 @@ mod tests {
         node.parent_node_id = Some(parent_id.to_string());
         node.inline = inline;
         node.created_at = created_at;
-        node.promoted_at = None;
+        node.starred_at = None;
         model.research_nodes.insert(node.id.clone(), node);
     }
 
     #[test]
-    fn research_node_promotion_sets_clears_and_emits_node_updates() {
+    fn research_node_star_sets_clears_and_emits_node_updates() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
@@ -13534,43 +13538,41 @@ mod tests {
         state.take_emitted_events();
 
         assert_eq!(
-            state
-                .set_research_node_promoted(&root_id, true)
-                .unwrap_err(),
-            "The root of a research tree cannot be promoted."
+            state.set_research_node_starred(&root_id, true).unwrap_err(),
+            "The root of a research tree cannot be starred."
         );
-        assert!(state.set_research_node_promoted("missing", true).is_err());
+        assert!(state.set_research_node_starred("missing", true).is_err());
         assert!(state.take_emitted_events().is_empty());
 
-        let promoted = state.set_research_node_promoted("branch", true).unwrap();
-        let promoted_at = promoted.promoted_at.expect("promotion timestamp");
+        let starred = state.set_research_node_starred("branch", true).unwrap();
+        let starred_at = starred.starred_at.expect("star timestamp");
         assert_eq!(
-            state.research_node("branch").unwrap().promoted_at,
-            Some(promoted_at)
+            state.research_node("branch").unwrap().starred_at,
+            Some(starred_at)
         );
         let events = state.take_emitted_events();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "research.node.updated");
         assert_eq!(
-            events[0].payload["node"]["promotedAt"],
-            serde_json::json!(promoted_at)
+            events[0].payload["node"]["starredAt"],
+            serde_json::json!(starred_at)
         );
 
-        // Re-promoting keeps the original timestamp and emits nothing.
-        let again = state.set_research_node_promoted("branch", true).unwrap();
-        assert_eq!(again.promoted_at, Some(promoted_at));
+        // Re-starring keeps the original timestamp and emits nothing.
+        let again = state.set_research_node_starred("branch", true).unwrap();
+        assert_eq!(again.starred_at, Some(starred_at));
         assert!(state.take_emitted_events().is_empty());
 
-        let cleared = state.set_research_node_promoted("branch", false).unwrap();
-        assert_eq!(cleared.promoted_at, None);
+        let cleared = state.set_research_node_starred("branch", false).unwrap();
+        assert_eq!(cleared.starred_at, None);
         let events = state.take_emitted_events();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "research.node.updated");
-        assert!(events[0].payload["node"].get("promotedAt").is_none());
+        assert!(events[0].payload["node"].get("starredAt").is_none());
     }
 
     #[test]
-    fn recent_activity_lists_promoted_nodes_in_tree_order_with_branch_depth() {
+    fn recent_activity_lists_starred_nodes_in_tree_order_with_branch_depth() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
@@ -13614,7 +13616,7 @@ mod tests {
             .unwrap()
             .body = test_document_body(research::DocumentSource::Authored);
         for id in ["b1", "a1", "c", "b2", "a", "d", "d1"] {
-            state.set_research_node_promoted(id, true).unwrap();
+            state.set_research_node_starred(id, true).unwrap();
         }
 
         let page = state.list_recent_activity(10, None).unwrap();
@@ -13640,7 +13642,7 @@ mod tests {
         // from B) comes before B2, and C and B (asked from the root) come
         // before the root's continuation A.
         assert_eq!(
-            entries(&root.promoted),
+            entries(&root.starred),
             vec![
                 ("c".to_string(), 1),
                 ("b1".to_string(), 2),
@@ -13650,26 +13652,26 @@ mod tests {
             ]
         );
         assert!(
-            root.promoted
+            root.starred
                 .iter()
-                .all(|entry| entry.promoted_at.is_some() && entry.promoted.is_empty())
+                .all(|entry| entry.starred_at.is_some() && entry.starred.is_empty())
         );
-        assert_eq!(root.promoted[2].parent_node_id.as_deref(), Some("b"));
-        assert_eq!(root.promoted[4].parent_node_id.as_deref(), Some("a"));
+        assert_eq!(root.starred[2].parent_node_id.as_deref(), Some("b"));
+        assert_eq!(root.starred[4].parent_node_id.as_deref(), Some("a"));
 
         let json = serde_json::to_value(&page.items).unwrap();
         assert_eq!(json[0]["branchDepth"], serde_json::json!(0));
-        assert_eq!(json[0]["promoted"][1]["nodeId"], serde_json::json!("b1"));
-        assert_eq!(json[0]["promoted"][1]["branchDepth"], serde_json::json!(2));
-        assert!(json[0]["promoted"][1]["promotedAt"].is_number());
-        assert!(json[0]["promoted"][1]["status"].is_string());
-        assert!(json[0].get("promotedAt").is_none());
-        // A tree without promotions carries no `promoted` key.
+        assert_eq!(json[0]["starred"][1]["nodeId"], serde_json::json!("b1"));
+        assert_eq!(json[0]["starred"][1]["branchDepth"], serde_json::json!(2));
+        assert!(json[0]["starred"][1]["starredAt"].is_number());
+        assert!(json[0]["starred"][1]["status"].is_string());
+        assert!(json[0].get("starredAt").is_none());
+        // A tree without stars carries no `starred` key.
         assert_eq!(
             json[1]["nodeId"],
             serde_json::json!(other.tree.root_node_id)
         );
-        assert!(json[1].get("promoted").is_none());
+        assert!(json[1].get("starred").is_none());
         assert_eq!(json[1]["branchDepth"], serde_json::json!(0));
     }
 
@@ -15237,7 +15239,7 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: now,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Document(crate::research::DocumentBody {
                 message: None,
@@ -16006,7 +16008,7 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -16135,7 +16137,7 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -16240,7 +16242,7 @@ mod tests {
             title: None,
             group_id: group.id.clone(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -16355,7 +16357,7 @@ mod tests {
             title: None,
             group_id: group.id.clone(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -16445,7 +16447,7 @@ mod tests {
             title: None,
             group_id: "missing-group".to_string(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -16544,7 +16546,7 @@ mod tests {
                     title: None,
                     group_id: group_id,
                     created_at: 1,
-                    promoted_at: None,
+                    starred_at: None,
                     highlights: Vec::new(),
                     body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                         message: crate::research::UserMessage {
@@ -17021,9 +17023,10 @@ mod tests {
 
     /// The flat record a build before state version 9 and archive version 11
     /// stored for `node` (a serialized node in the current shape): the
-    /// inverse of `research::migrate_flat_node_to_body`. Imported reports
-    /// are documents and posts are `post`, as builds of state version 7
-    /// stored them; callers rewrite those for older versions.
+    /// inverse of `research::migrate_flat_node_to_body`, with a star as
+    /// `promotedAt`. Imported reports are documents and posts are `post`, as
+    /// builds of state version 7 stored them; callers rewrite those for older
+    /// versions.
     fn flat_legacy_node(node: &serde_json::Value) -> serde_json::Value {
         fn copy(
             flat: &mut serde_json::Map<String, serde_json::Value>,
@@ -17037,6 +17040,9 @@ mod tests {
             }
         }
         let mut flat = node.as_object().unwrap().clone();
+        if let Some(star) = flat.remove("starredAt") {
+            flat.insert("promotedAt".into(), star);
+        }
         let body = flat.remove("body").unwrap();
         let message = body.get("message");
         flat.insert(
@@ -17139,7 +17145,7 @@ mod tests {
     }
 
     #[test]
-    fn version_six_state_migrates_imported_runs_to_documents_and_round_trips_at_nine() {
+    fn version_six_state_migrates_imported_runs_to_documents_and_round_trips() {
         let workspace = temp_workspace();
         let (state, root_id, child_id) = imported_report_with_child(&workspace);
         let original = research_nodes_by_id(&state);
@@ -17162,8 +17168,8 @@ mod tests {
         let version_six_bytes = std::fs::read(&path).unwrap();
         let restored = AppState::new(test_config(workspace.clone()));
         restored.restore_session();
-        // The version-9 save will replace a file version-6 builds can read;
-        // its bytes are kept beside it first.
+        // The save at the current version will replace a file version-6
+        // builds can read; its bytes are kept beside it first.
         assert_eq!(
             std::fs::read(path.with_file_name("state.v6.bak")).unwrap(),
             version_six_bytes
@@ -17190,8 +17196,8 @@ mod tests {
         assert_eq!(page.items[0].node_id, root_id);
         assert_eq!(page.items[0].children[0].node_id, child_id);
 
-        // Saved again, the file is version 9 with the body shape, and it
-        // loads back unchanged.
+        // Saved again, the file is at the current version with the body
+        // shape, and it loads back unchanged.
         restored.finalize_persistence_for_exit();
         drop(restored);
         let raw: serde_json::Value =
@@ -17384,7 +17390,13 @@ mod tests {
             &bundle.responses,
         )
         .unwrap_err();
-        assert!(error.contains("written at version 11"), "{error}");
+        assert!(
+            error.contains(&format!(
+                "written at version {}",
+                research::DETACHED_RESEARCH_ARCHIVE_VERSION
+            )),
+            "{error}"
+        );
         std::fs::remove_dir_all(source).unwrap();
     }
 
@@ -17577,6 +17589,7 @@ mod tests {
     /// version 8 stored: flat records, notes without a format, separate
     /// query and reply anchors, and transcripts as conversations.
     fn rewrite_as_pre_post_state(raw: &mut serde_json::Value, version: u32) {
+        rewrite_with_version_nine_keys(raw);
         raw["version"] = serde_json::json!(version);
         flatten_legacy_nodes(&mut raw["researchNodes"]);
         for node in raw["researchNodes"].as_object_mut().unwrap().values_mut() {
@@ -17601,8 +17614,203 @@ mod tests {
         state.inner.model.lock().unwrap().research_nodes.clone()
     }
 
+    /// Rewrites `raw` (a saved state file) with the keys builds before
+    /// version 10 stored, at version 9: a node's star as `promotedAt`, the
+    /// agent composer text as `drafts` (always present, as those builds wrote
+    /// it), and a `starred` list in the folder state.
+    fn rewrite_with_version_nine_keys(raw: &mut serde_json::Value) {
+        raw["version"] = serde_json::json!(9);
+        let state = raw.as_object_mut().unwrap();
+        let composer_text = state
+            .remove("agentComposerText")
+            .unwrap_or_else(|| serde_json::json!({}));
+        state.insert("drafts".into(), composer_text);
+        if let Some(folders) = state
+            .get_mut("researchFolders")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            folders.insert("starred".into(), serde_json::json!(["gone-tree"]));
+        }
+        if let Some(nodes) = state
+            .get_mut("researchNodes")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for node in nodes.values_mut() {
+                let node = node.as_object_mut().unwrap();
+                if let Some(star) = node.remove("starredAt") {
+                    node.insert("promotedAt".into(), star);
+                }
+            }
+        }
+    }
+
+    fn backup_names(workspace: &std::path::Path) -> Vec<String> {
+        let dir = persistence::state_path(workspace)
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let mut names = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".bak"))
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    /// Version 9 stored a star as `promotedAt`, the agent composer text as
+    /// `drafts`, and an unused `starred` list in the folder state. Version 10
+    /// builds keep the version-9 bytes as state.v9.bak, load the stars and the
+    /// composer text under their new keys, and save with only the new keys.
+    /// A second load changes nothing and writes no further backup.
     #[test]
-    fn version_seven_state_migrates_every_node_and_round_trips_at_nine() {
+    fn version_nine_state_renames_stars_and_composer_text_at_version_ten() {
+        let workspace = temp_workspace();
+        let state = state_with_posts_and_anchors(&workspace);
+        let follow_ups = research_nodes_by_id(&state)
+            .into_values()
+            .filter(|node| node.parent_node_id.is_some())
+            .map(|node| node.id)
+            .collect::<Vec<_>>();
+        assert_eq!(follow_ups.len(), 2);
+        for node_id in &follow_ups {
+            state.set_research_node_starred(node_id, true).unwrap();
+        }
+        state.insert_agent(sample_agent("agent-1")).unwrap();
+        state
+            .set_agent_draft("agent-1", "half-written thought".to_string())
+            .unwrap();
+        let mut folders = state.research_folders().unwrap();
+        folders.folders.push(research::ResearchFolder {
+            id: "rf-1".to_string(),
+            name: "Reading".to_string(),
+            workspace_id: "group-1".to_string(),
+        });
+        state.set_research_folders(folders).unwrap();
+        let original = research_nodes_by_id(&state);
+        assert_eq!(original.len(), 6);
+        assert_eq!(
+            original
+                .values()
+                .filter(|node| node.starred_at.is_some())
+                .count(),
+            2
+        );
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        rewrite_with_version_nine_keys(&mut raw);
+        let stored = serde_json::to_string(&raw).unwrap();
+        assert_eq!(stored.matches("\"promotedAt\"").count(), 2);
+        assert!(!stored.contains("starredAt") && !stored.contains("agentComposerText"));
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let version_nine_bytes = std::fs::read(&path).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        assert_eq!(
+            std::fs::read(path.with_file_name("state.v9.bak")).unwrap(),
+            version_nine_bytes
+        );
+        assert_eq!(backup_names(&workspace), vec!["state.v9.bak".to_string()]);
+        assert_eq!(research_nodes_by_id(&restored), original);
+        assert_eq!(
+            restored.agent_draft("agent-1").unwrap().as_deref(),
+            Some("half-written thought")
+        );
+        let page = restored.list_recent_activity(10, None).unwrap();
+        let starred = page
+            .items
+            .iter()
+            .flat_map(|item| item.starred.iter().map(|entry| entry.node_id.clone()))
+            .collect::<HashSet<_>>();
+        assert_eq!(starred, follow_ups.iter().cloned().collect());
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+
+        let saved = std::fs::read(&path).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+        assert_eq!(raw["version"], serde_json::json!(10));
+        let text = String::from_utf8(saved.clone()).unwrap();
+        assert_eq!(text.matches("\"starredAt\"").count(), 2);
+        assert!(!text.contains("promotedAt"));
+        assert!(raw.get("drafts").is_none());
+        assert_eq!(
+            raw["agentComposerText"],
+            serde_json::json!({"agent-1": "half-written thought"})
+        );
+        assert!(raw["researchFolders"].get("starred").is_none());
+        assert_eq!(raw["researchFolders"]["folders"][0]["id"], "rf-1");
+
+        // Idempotent: a version-10 load migrates nothing and backs up nothing.
+        let reloaded = AppState::new(test_config(workspace.clone()));
+        reloaded.restore_session();
+        assert_eq!(research_nodes_by_id(&reloaded), original);
+        reloaded.finalize_persistence_for_exit();
+        drop(reloaded);
+        let again: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(again, raw);
+        assert_eq!(backup_names(&workspace), vec!["state.v9.bak".to_string()]);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    /// Agent composer text without research nodes is still written at
+    /// version 10: builds that accept versions 2 to 4 read only `drafts` and
+    /// would drop it. A version-4 source holding composer text is kept as
+    /// state.v6.bak first.
+    #[test]
+    fn composer_text_alone_raises_the_state_to_version_ten() {
+        let workspace = temp_workspace();
+        let path = persistence::state_path(&workspace);
+        let version = || {
+            let raw: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            raw["version"].clone()
+        };
+        let state = AppState::new(test_config(workspace.clone()));
+        assert!(state.restore_session().is_empty());
+        state.insert_agent(sample_agent("agent-1")).unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+        assert_eq!(version(), persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES);
+
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(raw.get("agentComposerText").is_none());
+        raw["drafts"] = serde_json::json!({"agent-1": "unsent"});
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let version_four_bytes = std::fs::read(&path).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        assert_eq!(
+            std::fs::read(path.with_file_name("state.v6.bak")).unwrap(),
+            version_four_bytes
+        );
+        assert_eq!(
+            restored.agent_draft("agent-1").unwrap().as_deref(),
+            Some("unsent")
+        );
+        restored.finalize_persistence_for_exit();
+        assert_eq!(version(), persistence::STATE_VERSION);
+        // Clearing the text drops the state back to version 4.
+        restored.set_agent_draft("agent-1", String::new()).unwrap();
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        assert_eq!(version(), persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES);
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(raw.get("agentComposerText").is_none() && raw.get("drafts").is_none());
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn version_seven_state_migrates_every_node_and_round_trips() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
         let original = research_nodes_by_id(&state);
@@ -17697,11 +17905,11 @@ mod tests {
     }
 
     /// Version 8 was written with flat posts and, by later builds, with the
-    /// body shape. Builds that write either refuse version 9, so both are
-    /// kept as state.v8.bak before the version-9 save, and both load as the
-    /// same nodes.
+    /// body shape. Builds that write either refuse later versions, so both
+    /// are kept as state.v8.bak before the save at the current version, and
+    /// both load as the same nodes.
     #[test]
-    fn version_eight_state_in_either_shape_is_backed_up_and_saved_at_nine() {
+    fn version_eight_state_in_either_shape_is_backed_up_and_saved_at_the_current_version() {
         for flat in [true, false] {
             let workspace = temp_workspace();
             let state = state_with_posts_and_anchors(&workspace);
@@ -17711,6 +17919,7 @@ mod tests {
             let path = persistence::state_path(&workspace);
             let mut raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            rewrite_with_version_nine_keys(&mut raw);
             raw["version"] = serde_json::json!(8);
             if flat {
                 flatten_legacy_nodes(&mut raw["researchNodes"]);
@@ -17734,7 +17943,7 @@ mod tests {
             let raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             assert_eq!(raw["version"], persistence::STATE_VERSION);
-            assert_eq!(persistence::STATE_VERSION, 9);
+            assert_eq!(persistence::STATE_VERSION, 10);
             std::fs::remove_dir_all(workspace).unwrap();
         }
     }
@@ -17744,7 +17953,12 @@ mod tests {
     /// beside it under a timestamped name.
     #[test]
     fn existing_migration_backup_with_other_bytes_gets_a_new_sibling() {
-        for (version, backup) in [(4, "state.v6"), (7, "state.v7"), (8, "state.v8")] {
+        for (version, backup) in [
+            (4, "state.v6"),
+            (7, "state.v7"),
+            (8, "state.v8"),
+            (9, "state.v9"),
+        ] {
             let workspace = temp_workspace();
             let state = state_with_posts_and_anchors(&workspace);
             let original = research_nodes_by_id(&state);
@@ -17753,7 +17967,11 @@ mod tests {
             let path = persistence::state_path(&workspace);
             let mut raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            rewrite_as_pre_post_state(&mut raw, version);
+            if version == 9 {
+                rewrite_with_version_nine_keys(&mut raw);
+            } else {
+                rewrite_as_pre_post_state(&mut raw, version);
+            }
             std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
             let source_bytes = std::fs::read(&path).unwrap();
             let stale = br#"{"version":6,"researchNodes":{}}"#;
@@ -17779,7 +17997,7 @@ mod tests {
             assert_eq!(siblings.len(), 1, "v{version}: {siblings:?}");
             assert_eq!(std::fs::read(&siblings[0]).unwrap(), source_bytes);
 
-            // The next launch reads version 9 and migrates nothing.
+            // The next launch reads the current version and migrates nothing.
             let reloaded = AppState::new(test_config(workspace.clone()));
             reloaded.restore_session();
             reloaded.finalize_persistence_for_exit();
@@ -17794,10 +18012,10 @@ mod tests {
         }
     }
 
-    /// A version-9 state needs no backup: its builds read what this build
-    /// writes.
+    /// A state at the current version needs no backup: its builds read what
+    /// this build writes.
     #[test]
-    fn version_nine_state_is_not_backed_up() {
+    fn current_version_state_is_not_backed_up() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
         state.finalize_persistence_for_exit();

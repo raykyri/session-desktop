@@ -2247,13 +2247,13 @@ fn rename_research_node(
 }
 
 #[tauri::command]
-fn set_research_node_promoted(
+fn set_research_node_starred(
     state: tauri::State<'_, AppState>,
     node_id: String,
-    promoted: bool,
+    starred: bool,
 ) -> Result<ResearchNodeView, String> {
     state
-        .set_research_node_promoted(&node_id, promoted)
+        .set_research_node_starred(&node_id, starred)
         .map(|node| node.view())
 }
 
@@ -3567,7 +3567,7 @@ fn main() {
             set_research_tree_followed,
             set_research_tree_bookmarked,
             rename_research_node,
-            set_research_node_promoted,
+            set_research_node_starred,
             create_research_highlight,
             remove_research_highlights,
             mark_research_tree_viewed,
