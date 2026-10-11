@@ -1,0 +1,100 @@
+// The content-derived render state of one answer: which timeline items it
+// shows, its copy text, word count and editable Markdown.
+
+import { countResearchDocumentWords } from "./researchDocuments";
+import { documentHoldsMarkdown, documentSource } from "./researchNodeTypes";
+import {
+  assistantTextFromTimelineItems,
+  buildTimelineItems,
+  formatPlainTextTranscript,
+  timelineItemsAfterLastToolCall,
+  timelineItemsContainTranscriptActivity,
+  type MessageItem,
+} from "./turnTimeline";
+import type { ResearchNode, ResearchNodeContent } from "../types";
+
+/** Content-derived render state for one turn, cached per node so the whole
+ * view identity survives detail replacements — which is what lets the turn's
+ * memo and the markdown renderer's cache hold. `node` is the node as of the
+ * last content/toggle change and MAY BE STALE on volatile fields (status,
+ * error, timestamps); consumers needing fresh metadata take the live node
+ * separately. */
+export interface SegmentView {
+  node: ResearchNode;
+  content: ResearchNodeContent | null;
+  isConversation: boolean;
+  showAllTurns: boolean;
+  showFullTrace: boolean;
+  timelineItems: MessageItem[];
+  displayedTimelineItems: MessageItem[];
+  visibleTimelineItems: MessageItem[];
+  hiddenTimelineItemCount: number;
+  hasTranscriptActivity: boolean;
+  rawAnswer: string;
+  conversationCopyText: string | null;
+  answerWordCount: number;
+  editableDocumentMarkdown: string | null;
+}
+
+/** How many timeline items an answer renders until the reader asks for the
+ * rest. */
+export const TIMELINE_ITEM_RENDER_WINDOW = 100;
+
+/** Content-derived render state for one answer. */
+export function buildSegmentView(
+  node: ResearchNode,
+  content: ResearchNodeContent | null,
+  showAllTurns: boolean,
+  showFullTrace: boolean,
+): SegmentView {
+  // A transcript document's whole timeline is the document: there is no
+  // "answer" fold to collapse to and no fuller trace to reveal. The document
+  // source selects the transcript renderer.
+  const isConversation =
+    documentSource(node) === "transcript" ||
+    (content ? documentSource(content.node) === "transcript" : false);
+  const timelineItems = buildTimelineItems(content?.turns ?? []);
+  const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
+  const hasTranscriptActivity = !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
+  const displayedTimelineItems = isConversation || showFullTrace ? timelineItems : answerTimelineItems;
+  // A run trace reads bottom-up (the answer is the tail), so its window
+  // keeps the newest items; a conversation reads top-down from its opening
+  // question, so its window keeps the head.
+  const visibleTimelineItems =
+    showAllTurns || displayedTimelineItems.length <= TIMELINE_ITEM_RENDER_WINDOW
+      ? displayedTimelineItems
+      : isConversation
+        ? displayedTimelineItems.slice(0, TIMELINE_ITEM_RENDER_WINDOW)
+        : displayedTimelineItems.slice(-TIMELINE_ITEM_RENDER_WINDOW);
+  const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
+  const conversationCopyText =
+    isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
+  // Only an imported or authored document holds editable Markdown; a
+  // transcript's snapshot is a conversation.
+  let editableDocumentMarkdown: string | null = null;
+  if (content && documentHoldsMarkdown(content.node)) {
+    for (const turn of content.turns) {
+      const block = turn.blocks.find((candidate) => candidate.type === "text");
+      if (block?.type === "text") {
+        editableDocumentMarkdown = block.text;
+        break;
+      }
+    }
+  }
+  return {
+    node,
+    content,
+    isConversation,
+    showAllTurns,
+    showFullTrace,
+    timelineItems,
+    displayedTimelineItems,
+    visibleTimelineItems,
+    hiddenTimelineItemCount: displayedTimelineItems.length - visibleTimelineItems.length,
+    hasTranscriptActivity,
+    rawAnswer,
+    conversationCopyText,
+    answerWordCount: countResearchDocumentWords(conversationCopyText ?? rawAnswer),
+    editableDocumentMarkdown,
+  };
+}

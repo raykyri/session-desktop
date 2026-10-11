@@ -1,0 +1,130 @@
+import type { ComponentProps, Ref } from "react";
+import { columnAttributes, type ResearchColumn } from "../../lib/researchColumns";
+import type { ResearchNode, ResearchTreeDetail } from "../../types";
+import { ResearchPairHeader } from "./ResearchColumnChrome";
+import { ResearchColumnResizer } from "./ResearchColumnResizer";
+import type { ResearchComposerHandle } from "./ResearchConversationComposer";
+import type { PostActions } from "./ResearchPost";
+import ResearchPostColumn from "./ResearchPostColumn";
+import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
+import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+
+type HistoryNav = ComponentProps<typeof ResearchPairHeader>["history"];
+
+/** A note level's note column (N{level}): the note itself. The thread's
+ * root note has a … menu in the header, which is also the column's context
+ * menu. */
+export function ResearchNoteColumn({
+  column,
+  current,
+  detail,
+  post,
+  title,
+  history,
+  archived,
+  menu,
+  scrollRef,
+  onSelectNode,
+}: {
+  column: Extract<ResearchColumn, { role: "post" }>;
+  current: boolean;
+  detail: ResearchTreeDetail;
+  post: ResearchNode;
+  /** The note's name, for the column's accessible name. */
+  title: string;
+  history: HistoryNav;
+  archived: boolean;
+  /** The root note's menu: whether it is open from its … button, and how it
+   * opens from the button or as a context menu. */
+  menu: {
+    open: boolean;
+    onOpen: (trigger: HTMLButtonElement) => void;
+    onContextMenu: (placement: ResearchUnitMenuPlacement) => void;
+  } | null;
+  scrollRef: Ref<HTMLDivElement> | undefined;
+  onSelectNode: (nodeId: string) => void;
+}) {
+  const menuProps = menu
+    ? researchUnitMenuProps(menu.onContextMenu, (scroll) => ({
+        element: scroll.closest("section")?.querySelector<HTMLElement>(".research-head-menu") ?? null,
+        align: "end",
+      }))
+    : null;
+  return (
+    <section
+      className={`research-pair-post${current ? " is-current" : ""}`}
+      {...columnAttributes(column)}
+      aria-label={`Note: ${title}`}
+    >
+      {/* The note itself starts the column, so the header names the
+          column ("Note") rather than repeating the note's text. */}
+      <ResearchPairHeader
+        title="Note"
+        history={history}
+        archived={archived}
+        menu={menu ? { label: "Note actions", open: menu.open, onOpen: menu.onOpen } : null}
+      />
+      <div ref={scrollRef} className="research-column-scroll" tabIndex={-1} {...menuProps}>
+        <div className="research-column-content research-reading-surface">
+          <ResearchPostColumn detail={detail} post={post} onSelectNode={onSelectNode} />
+        </div>
+      </div>
+      <ResearchColumnResizer kind="answer" label="Resize note column" />
+    </section>
+  );
+}
+
+/** A note level's follow-ups column (T{level}): the note's follow-ups, with
+ * the one open as the next level marked. */
+export function ResearchFollowUpsColumn({
+  column,
+  current,
+  nodes,
+  post,
+  archived,
+  postActions,
+  requireCmdEnterToSend,
+  openNodeId,
+  composerRef,
+  threadRef,
+  onOpenFollowUp,
+}: {
+  column: Extract<ResearchColumn, { role: "thread" }>;
+  current: boolean;
+  nodes: ResearchNode[];
+  post: ResearchNode;
+  archived: boolean;
+  postActions: PostActions;
+  requireCmdEnterToSend: boolean;
+  /** The follow-up open as the next level. */
+  openNodeId: string | null;
+  composerRef: Ref<ResearchComposerHandle>;
+  threadRef: Ref<ResearchPostThreadHandle>;
+  onOpenFollowUp: (nodeId: string) => void;
+}) {
+  return (
+    <section
+      className={`research-pair-thread${current ? " is-current" : ""}`}
+      {...columnAttributes(column)}
+      aria-label="Follow-ups"
+    >
+      <ResearchPairHeader title="Follow-ups" count={postThreadEntries(nodes, post).length} />
+      <div className="research-column-scroll">
+        <div className="research-column-content research-reading-surface">
+          <ResearchPostThread
+            nodes={nodes}
+            post={post}
+            archived={archived}
+            actions={postActions}
+            requireCmdEnterToSend={requireCmdEnterToSend}
+            openNodeId={openNodeId}
+            composerRef={composerRef}
+            threadRef={threadRef}
+            onOpenFollowUp={onOpenFollowUp}
+          />
+        </div>
+      </div>
+      <ResearchColumnResizer kind="messages" label="Resize follow-ups column" />
+    </section>
+  );
+}

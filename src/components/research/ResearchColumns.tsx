@@ -406,3 +406,24 @@ export default function ResearchColumns({
     </ResearchColumnsContext.Provider>
   );
 }
+
+/** Brings `element` (a row, or the row it sits in) fully into its column; a
+ * row taller than the column scrolls its top to the column's top. */
+export function scrollIntoColumn(element: Element, behavior: ScrollBehavior = "auto") {
+  const scroller = element.closest<HTMLElement>(".research-column-scroll");
+  if (!scroller) {
+    return;
+  }
+  const target = element.closest(".research-msg-row") ?? element;
+  const rect = target.getBoundingClientRect();
+  const bounds = scroller.getBoundingClientRect();
+  let delta = 0;
+  if (rect.height > bounds.height || rect.top < bounds.top) {
+    delta = rect.top - bounds.top;
+  } else if (rect.bottom > bounds.bottom) {
+    delta = rect.bottom - bounds.bottom;
+  }
+  if (delta) {
+    scroller.scrollTo({ top: scroller.scrollTop + delta, behavior });
+  }
+}

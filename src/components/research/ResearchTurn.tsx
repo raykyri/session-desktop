@@ -15,13 +15,15 @@ import {
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { formatRunDuration } from "../../lib/shortTime";
 import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
-import type { ResearchNode, ResearchNodeContent, ResearchNodeStatus } from "../../types";
+import type { ResearchNode, ResearchNodeStatus } from "../../types";
 import {
   RawTranscriptDisclosure,
   TranscriptActivityItem,
   timelineContextStatusClass,
   timelineStatusClass,
 } from "../TranscriptActivity";
+import { ResearchElapsedClock } from "./ResearchClock";
+import type { SegmentView } from "../../lib/researchSegmentView";
 import ResearchRecap from "./ResearchRecap";
 import ResearchRowRail from "./ResearchRowRail";
 import ResearchRowGlyph from "./ResearchRowGlyph";
@@ -51,29 +53,6 @@ const OVERSIZED_MARKDOWN_POLICY = {
   maxDisplayCharacters: PLAINTEXT_DISPLAY_CHAR_LIMIT,
   fallbackClassName: "research-plaintext",
 } as const;
-
-/** Content-derived render state for one turn, cached per node so the whole
- * view identity survives detail replacements — which is what lets the turn's
- * memo and the markdown renderer's cache hold. `node` is the node as of the
- * last content/toggle change and MAY BE STALE on volatile fields (status,
- * error, timestamps); consumers needing fresh metadata take the live node
- * separately. */
-export interface SegmentView {
-  node: ResearchNode;
-  content: ResearchNodeContent | null;
-  isConversation: boolean;
-  showAllTurns: boolean;
-  showFullTrace: boolean;
-  timelineItems: MessageItem[];
-  displayedTimelineItems: MessageItem[];
-  visibleTimelineItems: MessageItem[];
-  hiddenTimelineItemCount: number;
-  hasTranscriptActivity: boolean;
-  rawAnswer: string;
-  conversationCopyText: string | null;
-  answerWordCount: number;
-  editableDocumentMarkdown: string | null;
-}
 
 export type SegmentDomKind = "anchor" | "root";
 
@@ -291,8 +270,9 @@ interface ResearchAnswerPaneProps {
   node: ResearchNode;
   contentError: string | null;
   cancelling: boolean;
-  /** Elapsed clock for an active run ("1:08"), ticking once a second. */
-  elapsedText: string | null;
+  /** When an active run started: the pane shows its elapsed clock ("1:08"),
+   * which ticks in its own leaf (ResearchElapsedClock). */
+  elapsedSince: number | null;
   /** A queued run whose parent's answer is still running. */
   waitsForParent: boolean;
   recapPending: boolean;
@@ -347,7 +327,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   node,
   contentError,
   cancelling,
-  elapsedText,
+  elapsedSince,
   waitsForParent,
   recapPending,
   pointerOverAnnotation,
@@ -440,7 +420,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           <div className="research-turn-run" role="status">
             <span className="research-pulse" aria-hidden="true" />
             <span>{runStatusText(nodeStatus(node), waitsForParent)}</span>
-            {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
+            {elapsedSince !== null ? <ResearchElapsedClock since={elapsedSince} /> : null}
             {stopButton("Stop")}
           </div>
         ) : null}
@@ -532,7 +512,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
               nodeStatus(node) === "running" ? latestToolActivityLabel(view.timelineItems) : null,
             )}
           </span>
-          {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
+          {elapsedSince !== null ? <ResearchElapsedClock since={elapsedSince} /> : null}
           {view.hasTranscriptActivity ? (
             <button
               type="button"
