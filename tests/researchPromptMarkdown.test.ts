@@ -70,7 +70,6 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       label: nodePrompt(node),
       showPrompt: true,
       selected: false,
-      now: NOW,
       starrable: false,
       branchCount: 0,
       branchOpen: false,
@@ -78,7 +77,6 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onToggleStarred: noop,
       onShowBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
@@ -97,7 +95,7 @@ test("research prompts preserve Markdown blockquotes", () => {
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("a message row's meta line shows short time, star, branch count and … with even spacing", () => {
+test("a message row's meta line shows the starred mark and branch count, with no time", () => {
   const html = row(questionNode({ inline: true, parentNodeId: "root", starredAt: NOW }), {
     selected: true,
     starrable: true,
@@ -106,32 +104,34 @@ test("a message row's meta line shows short time, star, branch count and … wit
     branchUnread: true,
   });
 
-  assert.match(html, /research-msg-meta"><time[^>]*>2d<\/time>/);
-  assert.match(html, /research-msg-star is-on"[^>]*aria-pressed="true"/);
+  assert.doesNotMatch(html, /<time/);
+  assert.match(html, /research-msg-meta"><span class="research-msg-starred" role="img" aria-label="Starred"/);
   assert.match(html, /research-msg-branches is-open"/);
   // The unread dot is announced as part of the button's name.
   assert.match(html, /aria-label="3 branches from this answer, one with a new answer"/);
   assert.match(html, /research-turn-unread" aria-hidden="true"/);
-  const star = html.indexOf("research-msg-star");
+  const starred = html.indexOf("research-msg-starred");
   const branches = html.indexOf("research-msg-branches");
   const more = html.indexOf('aria-label="Answer actions"');
-  assert.ok(star >= 0 && branches > star && more > branches);
+  assert.ok(starred >= 0 && branches > starred && more > branches);
   // Follow, Bookmark and Move are in the feed row's … menu, not here.
   assert.doesNotMatch(html, /Bookmark|Follow/);
 });
 
-test("the branch count shows only once the answer has branches, and the star only where offered", () => {
+test("a settled row with nothing to show has no meta line; the starred mark shows only where offered", () => {
   const settled = row(questionNode());
-  assert.doesNotMatch(settled, /research-msg-branches/);
-  assert.doesNotMatch(settled, /research-msg-star/);
+  assert.doesNotMatch(settled, /research-msg-meta/);
+  assert.doesNotMatch(settled, /<time/);
   // A branch from the whole answer starts from the … menu.
   assert.match(settled, /aria-label="Answer actions"/);
+  // Starred, but not starrable here (a branch's later follow-up).
+  assert.doesNotMatch(row(questionNode({ starredAt: NOW })), /research-msg-starred|research-msg-meta/);
 
   const running = row(questionNode({ status: "running", createdAt: NOW - 31 * 60 * 1000 }), {
     starrable: true,
     branchCount: 2,
   });
-  assert.match(running, /<time[^>]*>31 min<\/time>/);
+  assert.doesNotMatch(running, /<time/);
   assert.match(running, /research-msg-pill is-run"/);
   assert.match(running, />Running</);
   // Branches appear once the answer has finished.
@@ -150,13 +150,14 @@ test("documents and conversations show their title in place of a question", () =
   });
   assert.doesNotMatch(html, /research-prompt/);
   assert.match(html, /research-msg-plain">Imported report</);
-  assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
+  assert.match(html, /research-msg-meta"><span class="research-msg-provenance"[^>]*>Imported<\/span><\/div>/);
 });
 
 test("an imported report's row shows the question it answers and the Imported time", () => {
   const html = row(questionNode({ type: "document", source: "imported", prompt: "What did the survey find?" }));
   assert.match(html, /What did the survey find\?/);
-  assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
+  assert.match(html, />Imported</);
+  assert.doesNotMatch(html, /<time/);
 });
 
 test("the shared user-message primitive stays unboxed", () => {

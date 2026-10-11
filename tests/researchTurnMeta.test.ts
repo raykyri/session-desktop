@@ -35,7 +35,6 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
       label: "A question",
       showPrompt: true,
       selected: true,
-      now: 60_000,
       starrable: true,
       retryQueued,
       branchCount: 2,
@@ -44,21 +43,54 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onToggleStarred: noop,
       onShowBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
     }),
   );
 
-test("the answer's … menu button follows the star and branch count in the message's meta line", () => {
+test("the answer's … menu button sits in the row's corner pill, after the meta line", () => {
   const html = row();
-  const meta = html.slice(html.indexOf('class="research-msg-meta"'));
-  const star = meta.indexOf('aria-label="Star"');
-  const branch = meta.indexOf('aria-label="2 branches from this answer"');
-  const more = meta.indexOf('aria-label="Answer actions"');
-  assert.ok(star >= 0 && branch > star && more > branch);
-  assert.match(meta, /<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*aria-label="Answer actions"/);
+  const meta = html.indexOf('class="research-msg-meta"');
+  const branch = html.indexOf('aria-label="2 branches from this answer"');
+  const rail = html.indexOf('class="research-feed-rail"');
+  assert.ok(meta >= 0 && branch > meta && rail > branch);
+  const pill = html.slice(rail);
+  assert.match(
+    pill,
+    /^class="research-feed-rail"><button type="button" class="research-feed-icon-button research-feed-card-menu" title="Answer details and actions" aria-label="Answer actions" aria-haspopup="menu" aria-expanded="false" tabindex="0"/,
+  );
+  // The star is an item of that menu, not a button in the row.
+  assert.doesNotMatch(html, /aria-label="Star"|aria-pressed/);
+});
+
+test("a row whose menu is open keeps its pill shown", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchMessageRow, {
+      node: node(),
+      level: 0,
+      label: "A question",
+      showPrompt: true,
+      selected: false,
+      starrable: false,
+      branchCount: 0,
+      branchOpen: false,
+      branchUnread: false,
+      answerMenuOpen: true,
+      registerSegmentElement: noop,
+      onSelect: noop,
+      onShowBranches: noop,
+      onOpenAnswerMenu: noop,
+      onOpenContextMenu: noop,
+      dragPlace: "chain:n1",
+      onDragStart: noop,
+    }),
+  );
+  assert.match(html, /class="research-msg-row is-status-complete has-open-menu"/);
+  assert.match(
+    html,
+    /class="research-feed-rail"><span class="research-feed-card-grip" aria-hidden="true">[^]*aria-expanded="true" tabindex="-1"/,
+  );
 });
 
 test("the answer menu is hidden for queued runs and retries and shown for running answers", () => {

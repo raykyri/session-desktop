@@ -23,6 +23,7 @@ import {
   Pencil,
   RefreshCw,
   ScrollText,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -97,6 +98,7 @@ import {
   inlineChainFor,
   isActiveResearchStatus,
   chainComposerPlaceholder,
+  researchMessageStarrable,
 } from "../../lib/researchChains";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
@@ -755,7 +757,7 @@ function answerMenuButton(nodeId: string) {
     document
       .querySelector(`[data-research-row][data-node-id="${CSS.escape(nodeId)}"]`)
       ?.closest("li")
-      ?.querySelector<HTMLElement>(".research-turn-more") ?? null
+      ?.querySelector<HTMLElement>(".research-feed-card-menu") ?? null
   );
 }
 
@@ -3887,9 +3889,9 @@ function ResearchThreadPage({
       setMenu(null);
       return;
     }
-    // Opens to the right of the button in the question's meta row, so it
-    // stays over the conversation column.
-    setMenu({ kind: "answer", nodeId, anchor: trigger, align: "start", trigger });
+    // Opens below the button in the row's top-right corner, aligned to its
+    // right edge, as a feed row's menu does.
+    setMenu({ kind: "answer", nodeId, anchor: trigger, align: "end", trigger });
   }, []);
   // A context menu (see researchUnitMenuProps) is the … menu at another
   // placement, with no trigger: focus returns to what had it.
@@ -4670,8 +4672,7 @@ function ResearchThreadPage({
           showPrompt={!whole}
           replyQuote={replyQuote}
           selected={selected}
-          now={minuteNow}
-          starrable={level === 0 ? id !== headId && Boolean(node.inline) : id === headId}
+          starrable={researchMessageStarrable(node, nodeById.get(headId))}
           retryQueued={queuedRetries.has(id)}
           branchCount={branches.length}
           branchOpen={selected && (levelPath.length > level + 1 || activePending?.parentNodeId === id)}
@@ -4679,7 +4680,6 @@ function ResearchThreadPage({
           answerMenuOpen={menu?.kind === "answer" && menu.nodeId === id && Boolean(menu.trigger)}
           registerSegmentElement={registerSegmentElement}
           onSelect={selectRow}
-          onToggleStarred={toggleStarred}
           onShowBranches={showBranches}
           onOpenAnswerMenu={openAnswerMenu}
           onOpenContextMenu={openContextMenu}
@@ -4732,9 +4732,6 @@ function ResearchThreadPage({
             <div className="research-msg-plain is-typed">{item.prompt}</div>
           </div>
           <div className="research-msg-meta">
-            <time dateTime={new Date(item.createdAt).toISOString()} title={new Date(item.createdAt).toLocaleString()}>
-              {shortWhen(item.createdAt, minuteNow)}
-            </time>
             <span className={`research-msg-pill${item.failed || stalled ? " is-error" : " is-plain"}`}>
               {item.failed || stalled ? "Not sent" : "Queued"}
             </span>
@@ -4973,7 +4970,7 @@ function ResearchThreadPage({
       nodeStatus(node) !== "queued" && !queuedRetries.has(nodeId)
         ? researchUnitMenuProps(
             (placement) => openContextMenu(nodeId, placement),
-            () => ({ element: answerMenuButton(nodeId), align: "start" }),
+            () => ({ element: answerMenuButton(nodeId), align: "end" }),
           )
         : null;
     return (
@@ -5462,6 +5459,9 @@ function ResearchThreadPage({
     const view = segmentViews.get(node.id) ?? null;
     const content = contentByNode[node.id] ?? null;
     const chainIds = inlineChainFor(nodes, node.id);
+    // As the message row offers it; a queued question has no answer menu.
+    const starrable =
+      nodeStatus(node) !== "queued" && researchMessageStarrable(node, nodeById.get(chainIds[0] ?? node.id));
     const deleteLabel = isRoot
       ? "Delete research"
       : node.inline
@@ -5537,6 +5537,17 @@ function ResearchThreadPage({
           />
         ) : null}
         {stats || hiddenHighlights > 0 ? <ResearchMenuSeparator /> : null}
+        {starrable ? (
+          <ResearchMenuItem
+            icon={<Star size={15} aria-hidden="true" />}
+            label={node.starredAt ? "Remove star" : "Star"}
+            title={node.starredAt ? undefined : "List this under its question in the feed"}
+            onSelect={() => {
+              setMenu(null);
+              toggleStarred(node.id);
+            }}
+          />
+        ) : null}
         <ResearchMenuItem
           icon={<ResearchBranchIcon size={15} />}
           label="Branch from the whole answer"

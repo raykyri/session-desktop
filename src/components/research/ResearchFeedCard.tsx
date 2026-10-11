@@ -1,7 +1,8 @@
 import { useRef, type CSSProperties, type ReactNode } from "react";
-import { Ellipsis, GripVertical, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
+import ResearchRowRail from "./ResearchRowRail";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 export type ResearchFeedCardStatus = "running" | "failed";
@@ -93,47 +94,6 @@ export function researchFeedCardControl(
  * (`anchor`): wait while that button is still listed and focused; once it is
  * gone with focus left on the page body, focus the card in its new place;
  * drop it once focus went anywhere else. */
-/** A row's controls: the drag handle and the … button in one pill in the
- * row's top-right corner, where the status dot sits. The pill shows on hover
- * or focus and hides the dot. The handle is decoration: a press anywhere on
- * the row starts a drag, except on the … button. */
-function FeedRowRail({
-  grip,
-  menuLabel,
-  menuOpen,
-  onMenu,
-}: {
-  grip: boolean;
-  menuLabel: string;
-  menuOpen: boolean;
-  onMenu?: (anchor: HTMLElement) => void;
-}) {
-  if (!grip && !onMenu) return null;
-  return (
-    <span className="research-feed-rail">
-      {grip ? (
-        <span className="research-feed-card-grip" aria-hidden="true">
-          <GripVertical size={14} />
-        </span>
-      ) : null}
-      {onMenu ? (
-        <button
-          type="button"
-          className="research-feed-icon-button research-feed-card-menu"
-          title={menuLabel}
-          aria-label={menuLabel}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          data-research-no-drag
-          onClick={(event) => onMenu(event.currentTarget)}
-        >
-          <Ellipsis size={14} aria-hidden="true" />
-        </button>
-      ) : null}
-    </span>
-  );
-}
-
 export function researchCardRefocus(
   anchor: { isConnected: boolean },
   active: unknown,
@@ -223,7 +183,7 @@ export default function ResearchFeedCard({
             aria-hidden="true"
           />
         ) : null}
-        <FeedRowRail
+        <ResearchRowRail
           grip={Boolean(onDragStart)}
           menuLabel={menuLabel}
           menuOpen={menuOpen}
@@ -278,7 +238,7 @@ export default function ResearchFeedCard({
             {child.running ? (
               <span className="research-feed-status is-running" title="Running" aria-hidden="true" />
             ) : null}
-            <FeedRowRail
+            <ResearchRowRail
               grip={Boolean(onDragStart)}
               menuLabel="Remove the star, bookmark, follow or move"
               menuOpen={childMenuOpen}

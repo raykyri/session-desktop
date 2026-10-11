@@ -1,9 +1,7 @@
 import { memo, useCallback, useId } from "react";
 import type { ReactNode } from "react";
 import {
-  GripVertical,
   LoaderCircle,
-  MoreHorizontal,
   RotateCcw,
   Square,
   Star,
@@ -15,7 +13,7 @@ import {
   conversationToolCallLabel,
 } from "../../lib/researchConversations";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
-import { formatRunDuration, shortWhen } from "../../lib/shortTime";
+import { formatRunDuration } from "../../lib/shortTime";
 import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
 import type { ResearchNode, ResearchNodeContent, ResearchNodeStatus } from "../../types";
 import {
@@ -25,6 +23,7 @@ import {
   timelineStatusClass,
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
+import ResearchRowRail from "./ResearchRowRail";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
@@ -603,15 +602,17 @@ export function researchMessagePill(
 }
 
 /** One message in a level's messages column: the user's message in full,
- * then a meta line with the short time, the state pill, the star (root
- * follow-ups and a branch's first message), the branch count (only once the
- * answer has branches) and the answer's … menu. The row is a bubble: one
- * button under its content selects the message; links in the message and
- * the meta line's buttons stay their own targets. Only the selected row is
- * in the tab order (the column's keys move between rows). With `dragPlace`
- * (the column's drop zone), a press on the row starts a drag that reorders
- * the column, and a grip shows in the row's top-right corner on hover and
- * focus, as on a feed card. */
+ * then a meta line, shown only when it has something to show: the state
+ * pill, "Imported" for an imported report, a filled star when the message is
+ * starred, and the branch count (only once the answer has branches). The
+ * row's time is not shown; the answer's footer has it. The row is a bubble:
+ * one button under its content selects the message; links in the message
+ * and the meta line's buttons stay their own targets. Only the selected row
+ * is in the tab order (the column's keys move between rows). The answer's …
+ * button sits in a pill in the row's top-right corner, which shows on hover
+ * and focus as on a feed card, with a drag handle when the row reorders by
+ * drag (`dragPlace`, the column's drop zone): a press on the row then starts
+ * a drag that reorders the column. */
 export const ResearchMessageRow = memo(function ResearchMessageRow({
   node,
   level,
@@ -619,7 +620,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   showPrompt,
   replyQuote = null,
   selected,
-  now,
   starrable,
   retryQueued = false,
   branchCount,
@@ -628,7 +628,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   answerMenuOpen,
   registerSegmentElement,
   onSelect,
-  onToggleStarred,
   onShowBranches,
   onOpenAnswerMenu,
   onOpenContextMenu,
@@ -644,18 +643,18 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** For a follow-up of a post asked about one reply: that reply's text. */
   replyQuote?: string | null;
   selected: boolean;
-  /** Clock for the relative time; the parent refreshes it once a minute. */
-  now: number;
+  /** The message can be starred (root follow-ups and a branch's first
+   * message); a starred one shows a filled star in its meta line. */
   starrable: boolean;
   retryQueued?: boolean;
   branchCount: number;
   /** One of the answer's branches is open as the next level. */
   branchOpen: boolean;
   branchUnread: boolean;
+  /** The answer's menu is open from this row's … button. */
   answerMenuOpen: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
-  onToggleStarred: (nodeId: string) => void;
   onShowBranches: (nodeId: string, level: number) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   /** Opens the answer's menu at `placement`: a right-click on the row, or
@@ -666,18 +665,22 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
 }) {
   const labelId = useId();
   const draggable = Boolean(dragPlace && onDragStart);
-  const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
-  const starred = Boolean(node.starredAt);
-  const pill = researchMessagePill(nodeStatus(node), retryQueued);
+  const status = nodeStatus(node);
+  const settled = status === "complete" || status === "failed" || status === "cancelled";
+  const starred = starrable && status !== "queued" && Boolean(node.starredAt);
+  // Provenance: the document source records it.
+  const imported = documentSource(node) === "imported";
+  const pill = researchMessagePill(status, retryQueued);
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
+  const showBranches = settled && branchCount > 0;
   // The row's context menu is its … menu, so a row without the … button (a
   // queued question) keeps the webview's menu.
-  const hasMenu = nodeStatus(node) !== "queued" && !retryQueued;
+  const hasMenu = status !== "queued" && !retryQueued;
   const unitMenuProps = hasMenu
     ? researchUnitMenuProps(
         (placement) => onOpenContextMenu(node.id, placement),
-        (row) => ({ element: row.querySelector<HTMLElement>(".research-turn-more"), align: "start" }),
+        (row) => ({ element: row.querySelector<HTMLElement>(".research-feed-card-menu"), align: "end" }),
       )
     : null;
   let prompt: ReactNode = <span className="research-msg-plain">{label}</span>;
@@ -691,7 +694,9 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   return (
     <li
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
-      className={`research-msg-row is-status-${retryQueued ? "queued" : nodeStatus(node)}${selected ? " is-selected" : ""}`}
+      className={`research-msg-row is-status-${retryQueued ? "queued" : status}${selected ? " is-selected" : ""}${
+        answerMenuOpen ? " has-open-menu" : ""
+      }`}
       data-segment-anchor={node.id}
       data-research-card={draggable ? node.id : undefined}
       data-research-card-kind={draggable ? "message" : undefined}
@@ -718,71 +723,50 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         ) : null}
         {prompt}
       </div>
-      <div className="research-msg-meta">
-        <time dateTime={new Date(node.createdAt).toISOString()} title={new Date(node.createdAt).toLocaleString()}>
-          {/* Provenance: the document source records it. */}
-          {documentSource(node) === "imported" ? "Imported " : ""}
-          {shortWhen(node.createdAt, now)}
-        </time>
-        {pill ? (
-          <span className={`research-msg-pill is-${pill.tone}`}>
-            {pill.tone === "run" ? <span className="research-pulse" aria-hidden="true" /> : null}
-            {pill.label}
-          </span>
-        ) : null}
-        {starrable && nodeStatus(node) !== "queued" ? (
-          <button
-            type="button"
-            className={`control-button research-msg-button research-msg-star${starred ? " is-on" : ""}`}
-            data-research-no-drag=""
-            aria-pressed={starred}
-            aria-label="Star"
-            title={starred ? "Unstar" : "Star: list this under its question in the feed"}
-            tabIndex={tabIndex}
-            onClick={() => onToggleStarred(node.id)}
-          >
-            <Star size={13} aria-hidden="true" fill={starred ? "currentColor" : "none"} />
-          </button>
-        ) : null}
-        {settled && branchCount > 0 ? (
-          <button
-            type="button"
-            className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}`}
-            data-research-no-drag=""
-            aria-label={`${branchLabel} from this answer${branchUnread ? ", one with a new answer" : ""}`}
-            title={`${branchLabel}: marked in the answer's right margin`}
-            data-research-branch-trigger={node.id}
-            tabIndex={tabIndex}
-            onClick={() => onShowBranches(node.id, level)}
-          >
-            <ResearchBranchIcon size={13} />
-            <span className="research-tnum">{branchCount}</span>
-            {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
-          </button>
-        ) : null}
-        {hasMenu ? (
-          <button
-            type="button"
-            className="control-button research-msg-button research-turn-more"
-            data-research-no-drag=""
-            aria-haspopup="menu"
-            aria-expanded={answerMenuOpen}
-            aria-label="Answer actions"
-            title="Answer details and actions"
-            tabIndex={tabIndex}
-            onClick={(event) => onOpenAnswerMenu(event.currentTarget, node.id)}
-          >
-            <MoreHorizontal size={13} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-      {draggable ? (
-        <span className="research-feed-rail research-msg-rail" aria-hidden="true">
-          <span className="research-feed-card-grip">
-            <GripVertical size={14} />
-          </span>
-        </span>
+      {pill || imported || starred || showBranches ? (
+        <div className="research-msg-meta">
+          {imported ? (
+            <span className="research-msg-provenance" title={new Date(node.createdAt).toLocaleString()}>
+              Imported
+            </span>
+          ) : null}
+          {pill ? (
+            <span className={`research-msg-pill is-${pill.tone}`}>
+              {pill.tone === "run" ? <span className="research-pulse" aria-hidden="true" /> : null}
+              {pill.label}
+            </span>
+          ) : null}
+          {starred ? (
+            <span className="research-msg-starred" role="img" aria-label="Starred" title="Starred">
+              <Star size={13} aria-hidden="true" fill="currentColor" />
+            </span>
+          ) : null}
+          {showBranches ? (
+            <button
+              type="button"
+              className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}`}
+              data-research-no-drag=""
+              aria-label={`${branchLabel} from this answer${branchUnread ? ", one with a new answer" : ""}`}
+              title={`${branchLabel}: marked in the answer's right margin`}
+              data-research-branch-trigger={node.id}
+              tabIndex={tabIndex}
+              onClick={() => onShowBranches(node.id, level)}
+            >
+              <ResearchBranchIcon size={13} />
+              <span className="research-tnum">{branchCount}</span>
+              {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
+            </button>
+          ) : null}
+        </div>
       ) : null}
+      <ResearchRowRail
+        grip={draggable}
+        menuLabel="Answer actions"
+        menuTitle="Answer details and actions"
+        menuOpen={answerMenuOpen}
+        menuTabIndex={tabIndex}
+        onMenu={hasMenu ? (anchor) => onOpenAnswerMenu(anchor, node.id) : undefined}
+      />
     </li>
   );
 }, propsEqualExceptNode);

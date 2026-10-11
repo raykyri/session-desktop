@@ -822,8 +822,9 @@
   pointer-events: none;
 }
 
-/* Shown at 85% opacity so the text under the pill stays faintly visible. */
-:is(.research-feed-card, .research-feed-child):is(:hover, :focus-within, .has-open-menu)
+/* Shown at 85% opacity so the text under the pill stays faintly visible. A
+   thread's message rows use the same pill (see research.css). */
+:is(.research-feed-card, .research-feed-child, .research-msg-row):is(:hover, :focus-within, .has-open-menu)
   > .research-feed-rail {
   opacity: 0.85;
 }

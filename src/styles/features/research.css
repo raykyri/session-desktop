@@ -846,7 +846,7 @@
   bottom: -2px;
 }
 
-.is-research-dragging .research-msg-row > .research-feed-rail {
+.is-research-dragging .research-msg-list > .research-msg-row > .research-feed-rail {
   opacity: 0;
 }
 
