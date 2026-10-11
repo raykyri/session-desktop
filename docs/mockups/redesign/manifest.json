@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:47:57.953Z",
+  "generated": "2026-10-11T06:52:29.252Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -427,6 +427,67 @@
         "thumb": "thumbs/r2-linear.jpg"
       }
     },
-    "3": {}
+    "3": {
+      "ulysses": {
+        "slug": "ulysses",
+        "round": 3,
+        "title": "Ulysses restyle",
+        "influence": "Ulysses (ulysses.app)",
+        "summary": "The current Session layout and UX, unchanged: sidebar or rail, Home feed with the Ask/Post box, and the column strip of [messages | answer] pairs with branch markers. Only the visual language changes: a calm writing face for questions and answers, Ulysses' tinted sidebar and list-row anatomy, one gold accent, faint Markdown markup on answer headings and lists, and run status and statistics set as quiet small caps.",
+        "nouns": [
+          "Research",
+          "Branch",
+          "Highlight",
+          "Post",
+          "Folder"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Sans, tinted sidebar",
+            "summary": "System sans writing face and a tinted sidebar material, as in Ulysses' default theme."
+          },
+          {
+            "id": "b",
+            "label": "Serif writing face",
+            "summary": "Questions, answers and posts set in a serif writing face with slightly larger type; UI text stays sans."
+          },
+          {
+            "id": "c",
+            "label": "Sheet cards",
+            "summary": "Feed cards and message rows drawn as paper sheets on the list material instead of flat rows with hairlines."
+          },
+          {
+            "id": "d",
+            "label": "Plain and compact",
+            "summary": "Untinted sidebar matching the editor background, tighter row padding and smaller answer type."
+          },
+          {
+            "id": "e",
+            "label": "Typewriter focus",
+            "summary": "In the answer column, paragraphs other than the one under the pointer (or the one being written) are dimmed."
+          }
+        ],
+        "changes": [
+          "Answer and question text use a writing face at a measured 640px line with 1.6 leading, from Ulysses' editor typography; UI chrome stays in the system face.",
+          "Answer Markdown shows faint hanging markup (## before headings, - before list items, muted list numbers), from Ulysses' markup display.",
+          "Highlights are Ulysses-style soft gold marks; branch-anchored passages get a dotted gold underline instead of a blue tint, so the single accent stays gold.",
+          "Feed cards and message rows follow Ulysses' sheet-list anatomy: bold title, writing-face excerpt, quiet 11px metadata, gold selection when the column has focus.",
+          "Sidebar and rail use Ulysses' tinted library material with thin-line toolbar icons; selected rows use a neutral fill with a gold icon.",
+          "Run status (Working, Queued, Stopped) and the answer footer (words, duration, tool calls) are set as quiet small-caps statistics, from Ulysses' dashboard and statistics.",
+          "Menus, the command palette, Settings and Agents use Ulysses' rounded sheet panels and segmented tabs; the selection popover is a dark HUD like Ulysses' markup bar.",
+          "Dark mode follows Ulysses' dark theme: near-black editor, slightly lighter list materials, gold accent kept."
+        ],
+        "decisions": [
+          "Kept as-is: every region, its order and position, the [messages | answer] pairs, branch markers, the Ask/Post switch, all menus and all shortcuts (⌘N, ⇧⌘G, ⌘,, ⌘K, ⌘J, ⌘O, ⌃Tab, A/H in the selection popover).",
+          "Kept the current vocabulary (Home, Bookmarks, Highlights, Folders, Drafts, Archive, branch, highlight, recap, star, follow); only labels were left unchanged or given existing shortcut hints.",
+          "Not adopted: gluing sheets, because Session has no manuscript concept and the thread page already joins follow-ups.",
+          "Not adopted: Ulysses' three-pane library replacing Home, and keywords replacing folders, because they change navigation and the sidebar model.",
+          "Not adopted: the attachments inspector and editor goals, because the branch markers and pairs already cover attachments and Session has no writing targets."
+        ],
+        "file": "r3/ulysses.html",
+        "thumb": "thumbs/r3-ulysses.jpg"
+      }
+    }
   }
 }
