@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:16:18.894Z",
+  "generated": "2026-10-11T06:16:55.260Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -130,6 +130,49 @@
         ],
         "file": "r1/notes.html",
         "thumb": "thumbs/r1-notes.jpg"
+      },
+      "obsidian": {
+        "slug": "obsidian",
+        "round": 1,
+        "title": "Vault of linked notes",
+        "influence": "Obsidian",
+        "summary": "Everything is a Markdown note in a local vault: a chat is a note whose body holds Ask blocks, a branch is a new note linked to the highlighted passage it came from, and backlinks, the outline pane and the graph are computed from those links. Every empty tab and the first-run screen lead with one Ask box, and agent sign-in never blocks writing or queueing.",
+        "nouns": [
+          "Vault",
+          "Note",
+          "Ask",
+          "Link",
+          "Highlight"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Asks as callouts",
+            "summary": "Chats are notes; each question and answer renders as a foldable callout, with backlinks over a local graph in the right sidebar."
+          },
+          {
+            "id": "b",
+            "label": "Chat in sidebar",
+            "summary": "Composing moves to a right-sidebar Chat pane bound to the open note; answers are inserted into notes as callouts on request."
+          },
+          {
+            "id": "c",
+            "label": "Transcript blocks",
+            "summary": "Same structure as A, but asks render as a plain transcript (labelled question, ruled answer) instead of tinted callouts."
+          },
+          {
+            "id": "d",
+            "label": "Graph split pane",
+            "summary": "The global graph opens beside the note in a split pane and follows the active note; the right sidebar starts closed."
+          },
+          {
+            "id": "e",
+            "label": "Starter vault",
+            "summary": "First launch shows an ask-first welcome screen; the sample vault opens on a Start here note with a checklist tracked in the sidebar."
+          }
+        ],
+        "file": "r1/obsidian.html",
+        "thumb": "thumbs/r1-obsidian.jpg"
       },
       "notion": {
         "slug": "notion",
