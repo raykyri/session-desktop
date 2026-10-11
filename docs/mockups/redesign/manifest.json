@@ -174,49 +174,6 @@
         "file": "r1/inbox.html",
         "thumb": "thumbs/r1-inbox.jpg"
       },
-      "tana": {
-        "slug": "tana",
-        "round": 1,
-        "title": "Everything is a node",
-        "influence": "Tana (with nods to Roam Research, Logseq, Workflowy)",
-        "summary": "Chats and notes live in one outline. A question is a node tagged #question: \u2318\u21b5 runs it, the answer arrives as child nodes, follow-ups are child questions, and a selected passage becomes a #claim node that can be referenced anywhere. Home is today's page with one input line (\u2318\u21b5 asks, \u21b5 saves a note), so there is one first action and one place where everything lands.",
-        "nouns": [
-          "Node",
-          "Question",
-          "Tag",
-          "Reference",
-          "Workspace"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Prose answers",
-            "summary": "Answers arrive as one node per paragraph, tag fields render inline, and references are listed at the bottom of each page."
-          },
-          {
-            "id": "b",
-            "label": "Claim answers",
-            "summary": "The same answer is split into #claim nodes grouped under topic nodes, each with its source shown beside it."
-          },
-          {
-            "id": "c",
-            "label": "Fields as table",
-            "summary": "Tag fields render as a bordered field table, and live searches inside the outline render as tables."
-          },
-          {
-            "id": "d",
-            "label": "Workspace home",
-            "summary": "Home is the workspace outline instead of today's page, and the sidebar shows the outline tree instead of pins."
-          },
-          {
-            "id": "e",
-            "label": "References panel",
-            "summary": "A persistent side panel shows references and a local map for the current node, and bullets carry reference counts."
-          }
-        ],
-        "file": "r1/tana.html",
-        "thumb": "thumbs/r1-tana.jpg"
-      },
       "linear": {
         "slug": "linear",
         "round": 1,
@@ -500,65 +457,6 @@
         ],
         "file": "r2/inbox.html",
         "thumb": "thumbs/r2-inbox.jpg"
-      },
-      "tana": {
-        "slug": "tana",
-        "round": 2,
-        "title": "Everything is a node",
-        "influence": "Tana (with nods to Roam Research, Logseq, Workflowy)",
-        "summary": "Chats and notes live in one outline. A question is a node tagged #question: \u2318\u21b5 runs it, the answer arrives as child nodes, follow-ups are child questions, and any passage can be added to another node as a reference with one key (R). Every page ends in the same input line (\u2318\u21b5 asks, \u21b5 adds a note), and the first run states what Session does and which agent is ready.",
-        "nouns": [
-          "Node",
-          "Question",
-          "Tag",
-          "Reference",
-          "Workspace"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Prose answers",
-            "summary": "Answers arrive as one node per paragraph; paragraph actions and follow-up markers sit in the right margin; references are listed at the bottom of each page."
-          },
-          {
-            "id": "b",
-            "label": "Claim answers",
-            "summary": "The same answer is split into #claim nodes grouped under topic nodes, each with its source beside it, so a claim can be added to the outline directly."
-          },
-          {
-            "id": "c",
-            "label": "Capture bar",
-            "summary": "The input line is pinned to the bottom of the window on every page and names the node it adds to, as in a chat app."
-          },
-          {
-            "id": "d",
-            "label": "Workspace home",
-            "summary": "Home is the workspace outline instead of today's page, and the sidebar shows the outline tree instead of pins."
-          },
-          {
-            "id": "e",
-            "label": "References panel",
-            "summary": "A persistent side panel shows references and a local map for the current node, and bullets carry reference counts."
-          }
-        ],
-        "changes": [
-          "The input line is now the last line of every page (pinned to the window in C); in round 1 it was at the top of daily pages and at the bottom elsewhere (S-10).",
-          "Paragraph actions moved into the right margin, and a passage with follow-ups shows a persistent '\u21b3 1 follow-up' marker; in round 1 hover buttons covered the text and anchored follow-ups were invisible at the passage (S-07).",
-          "Added 'Add to\u2026' (R on a selection, or in the margin) that puts a reference to a passage or node into any outline node; round 1 had no direct way to file part of an answer into Chapter 3.",
-          "Search matches Summary fields and retired terms ('recap', 'highlight', 'bookmark', 'branch') and says what replaced them; in round 1 'recap' found nothing.",
-          "First run states what Session does, shows the detected agent as Ready, and keeps a 0/4 checklist above the focused input; round 1 relied on a bullet list.",
-          "Today's live search no longer repeats items already on the page, map labels no longer overlap, and placeholder text meets 4.5:1 (S-17).",
-          "Replaced the cosmetic 'Fields as table' variant with 'Capture bar'; disabled menu items show their reason inline (S-16) and the Agents panel re-checks automatically (S-08)."
-        ],
-        "decisions": [
-          "Does an answer laid out as outline nodes read as a chat transcript, or do first-time users expect message bubbles?",
-          "Which input do people find without help: the last line of the page (A) or the pinned capture bar (C)?",
-          "Is the difference between File in (move a question) and Add to (reference anything) clear, or should it be one gesture?",
-          "Prose paragraphs (A) or claim nodes (B) as the default answer shape?",
-          "Do ringed reference bullets communicate 'the same node, shown here'?"
-        ],
-        "file": "r2/tana.html",
-        "thumb": "thumbs/r2-tana.jpg"
       },
       "linear": {
         "slug": "linear",

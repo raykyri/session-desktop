@@ -1,9 +1,9 @@
 # Session redesign candidates
 
-Six interactive redesign mocks, each in the idiom of one reference app (Ulysses, macOS
-system apps, Apple Notes, Front, Tana, Linear), in two rounds. Each mock has five or more
+Five interactive redesign mocks, each in the idiom of one reference app (Ulysses, macOS
+system apps, Apple Notes, Front, Linear), in two rounds. Each mock has five or more
 variants. Round 2 is each candidate's revision after a self-review against a first-use task
-script and the issues in `issues.json`. Obsidian and Notion candidates were dropped; they are
+script and the issues in `issues.json`. Obsidian, Notion and Tana candidates were dropped; they are
 in the git history.
 
 - `index.html`: the compilation (candidate tabs, round and variant switches, notes, issues).
