@@ -1,8 +1,8 @@
 # Session redesign candidates
 
 Restyles of the current Session app that keep its layout, navigation, controls, keys and
-vocabulary and adopt one reference app's visual style: macOS system apps (vibrant sidebar),
-Front (light nav and cards, no avatars) and Linear (bordered cards). Earlier rounds of full
+vocabulary and adopt one reference app's visual style: Front (light nav and cards, no avatars) and Linear
+(bordered cards). Earlier rounds of full
 redesigns in eight reference idioms, and the other variants, were dropped; they are in the git
 history.
 

@@ -4,53 +4,6 @@
     "1": {},
     "2": {},
     "3": {
-      "macos": {
-        "slug": "macos",
-        "round": 3,
-        "title": "macOS system restyle",
-        "influence": "Apple macOS system apps (HIG; Finder, Mail, Notes, System Settings)",
-        "summary": "The current Session layout, vocabulary and keys, drawn with macOS system materials: a translucent source-list sidebar, unified toolbar segments over the column strip, Mail-style list rows with accent selection, native menus and popovers, a Spotlight-style palette and System Settings forms. Nothing moves; someone who uses Session today recognises every screen.",
-        "nouns": [
-          "Question",
-          "Branch",
-          "Highlight",
-          "Folder",
-          "Workspace"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Vibrant sidebar",
-            "summary": "Translucent source-list sidebar and rail over a blurred wallpaper tint, regular toolbar, plain Mail-style rows."
-          }
-        ],
-        "changes": [
-          "Sidebar and rail → translucent source list (Finder, Mail): vibrancy material, 11 pt section header, accent-tinted line glyphs, rounded selection that turns accent while the sidebar has focus.",
-          "Feed, thread and post headers → unified toolbar segments (Mail): 52 pt bar aligned to the split-view dividers, back/forward as a toolbar navigation pair, borderless toolbar buttons.",
-          "Feed cards and message rows → Mail list rows: inset hairline separators, blue unread dot in the leading gutter, accent selection while the list has focus and gray selection otherwise.",
-          "Ask/Post switch → segmented control with icon segments; model menu → native menu with agent section headers, checkmarks and an Effort submenu.",
-          "Selection popover, branch-marker tips, … menus and context menus → popover and menu material with right-aligned key equivalents (A, H, E).",
-          "Command palette → Spotlight-style floating panel; Settings and Agent Setup → System Settings grouped forms with switches, pop-up buttons and toolbar tabs.",
-          "Column dividers → split-view hairlines with a wider resize hit area and accent highlight while dragging; overlay scrollers in every column.",
-          "Notifications → Notification Center banners; feed toast → HUD; light and dark appearances built from semantic colours (label, separator, control accent)."
-        ],
-        "decisions": [
-          "Kept: sidebar → feed column → column strip, with the 52 px rail at ⇧⌘G or when the window is narrow.",
-          "Kept: every label and empty text (Home, Bookmarks, Highlights, Drafts, Archive, Ask/Post, + Ask, Save draft, Branch · N messages, Recap:, Show trace, Stop).",
-          "Kept: cards without a metadata row, status dots top-right, starred child rows under the question, trays after the Unfiled list.",
-          "Kept: ask box at the top of each messages column with messages newest first; branch markers in the answer's right margin; branches open as the next pair.",
-          "Kept: all shortcuts (⌘N, ⌘J, ⌘O, ⌘K, ⌘,, ⇧⌘G, ⌘[ ⌘], A/H/E, ⌥↑/⌥↓, ⌃Tab).",
-          "Not adopted: Finder view modes (icon, column, gallery), because the feed is one list with trays and a view switch would add a mode.",
-          "Not adopted: an inspector replacing the branch markers and the next pair, because branches stay in the column strip.",
-          "Not adopted: Finder tags in place of folders, because folders and workspaces are the current filing model.",
-          "Not adopted: a Freeform-style canvas or map, because the app has no such view.",
-          "Not adopted: Messages-style chat bubbles for the conversation, because the messages column is a selection list that chooses which answer the answer column shows.",
-          "Not adopted: a date column on feed cards (Mail), because cards carry no metadata row today.",
-          "Not adopted: a separate Settings window, because Settings and Agent Setup open as panels over the main window; only their contents take the System Settings form style."
-        ],
-        "file": "r3/macos.html",
-        "thumb": "thumbs/r3-macos.jpg"
-      },
       "inbox": {
         "slug": "inbox",
         "round": 3,
@@ -73,13 +26,13 @@
         ],
         "changes": [
           "Sidebar: dense 29 px rows, uppercase FOLDERS section header and right-aligned counts on the existing rows (from the left mailbox nav of shared inboxes); the selected row is a raised white pill.",
-          "Home feed cards: conversation-list rows without avatars: sender line (agent · model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
-          "Feed card quick actions: the existing drag grip, Bookmark, Follow and … menu revealed on hover in a floating action pill that replaces the time (from inbox hover actions).",
+          "Home feed cards: conversation-list rows without avatars: sender line (agent \u00b7 model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
+          "Feed card quick actions: the existing drag grip, Bookmark, Follow and \u2026 menu revealed on hover in a floating action pill that replaces the time (from inbox hover actions).",
           "Trays: sticky uppercase group headers with a count pill and chevron, like grouped sections in an inbox list.",
           "Thread page: questions and answers as message cards with a header line (author or agent, model chip, time, status chip); recap as a tinted summary strip; sources as attachment-style chips (from the conversation view).",
           "Post-mode content (posts, the Post composer) styled as internal notes with a yellow tint and a Post label, distinct from Ask messages, like comments versus replies.",
           "Ask box: a reply box with a bottom toolbar; the Ask/Post switch gains text labels and acts as the reply/comment toggle, and the box turns note-yellow in Post mode.",
-          "Menus, command palette and toasts: keycap hints on existing shortcuts (A, D, H, ⌘N, ⇧⌘G, ⌘,), a search-bar style palette with a key legend, and a dark floating undo bar."
+          "Menus, command palette and toasts: keycap hints on existing shortcuts (A, D, H, \u2318N, \u21e7\u2318G, \u2318,), a search-bar style palette with a key legend, and a dark floating undo bar."
         ],
         "decisions": [
           "Kept as-is: the sidebar order, rail, workspace switcher, column strip with the feed column and one messages | answer pair per level, newest-first message rows with the ask box on top, margin markers, the selection popover (Branch A, Highlight H, Copy), menus and every shortcut.",
@@ -99,7 +52,7 @@
         "round": 3,
         "title": "Linear restyle",
         "influence": "Linear",
-        "summary": "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as bordered cards with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the ⌘K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
+        "summary": "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as bordered cards with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the \u2318K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
         "nouns": [
           "Question",
           "Answer",
@@ -117,24 +70,24 @@
         "changes": [
           "Type scale: Inter at 13 px for UI text with 500-weight labels, 12 px muted metadata and a 14.5 px answer body (Linear's UI type scale and weights).",
           "Sidebar: 28 px rows with 16 px line icons, a subtle selected-row fill, a plain 'Folders' section header, and the main area as an inset panel beside it (Linear's sidebar and app chrome).",
-          "Home feed cards: list rows with a leading run-status icon, title, muted question, right-aligned time and agent glyph, and hover-revealed Bookmark, Follow and … actions; folder trays as sticky group headers (Linear's issue list rows and grouped list headers).",
+          "Home feed cards: list rows with a leading run-status icon, title, muted question, right-aligned time and agent glyph, and hover-revealed Bookmark, Follow and \u2026 actions; folder trays as sticky group headers (Linear's issue list rows and grouped list headers).",
           "Run states: circular icons on the existing states (dashed = Queued, half-filled = Running, filled check = complete, filled cross = Failed, grey cross = Stopped) in feed rows, child rows and message rows (Linear's issue status icons).",
           "Palette: layered greys with one indigo accent in dark, and a matching light theme (Linear's dark and light themes).",
-          "Menus, the selection bar, tooltips and branch-marker tips: 9 px radius, hairline border, soft shadow, keycap chips for shortcuts that already exist (A, D, H, ⌘O, ⌘J, ⇧⌘G, ⌘,) (Linear's context menus and tooltips).",
-          "⌘K command palette with a large input, section labels and keycap hints; run activity disclosure as a vertical activity timeline (Linear's command menu and issue activity feed).",
+          "Menus, the selection bar, tooltips and branch-marker tips: 9 px radius, hairline border, soft shadow, keycap chips for shortcuts that already exist (A, D, H, \u2318O, \u2318J, \u21e7\u2318G, \u2318,) (Linear's context menus and tooltips).",
+          "\u2318K command palette with a large input, section labels and keycap hints; run activity disclosure as a vertical activity timeline (Linear's command menu and issue activity feed).",
           "Composers styled as Linear's comment box; feed toasts as elevated toasts with an Undo action (Linear's comment composer and toasts)."
         ],
         "decisions": [
-          "Kept as-is: sidebar order (Home, Bookmarks, Highlights; Folders: Drafts, user folders, Archive), the 52 px rail and ⇧⌘G, the workspace switcher and account at the sidebar foot, Home's ask box above the feed and the trays below it.",
+          "Kept as-is: sidebar order (Home, Bookmarks, Highlights; Folders: Drafts, user folders, Archive), the 52 px rail and \u21e7\u2318G, the workspace switcher and account at the sidebar foot, Home's ask box above the feed and the trays below it.",
           "Kept as-is: the column strip of [messages | answer] pairs with branches as further pairs, the composer at the top of the messages column with rows newest first, branch markers in the answer's right margin, the selection bar (Branch A, Highlight H or E, Copy), every menu's items and letter keys, and all copy.",
           "Kept as-is: Settings (Basic, Remotes) and Agent Setup as separate dialogs opened from the sidebar header, the rail and the palette.",
-          "Small polish only: the Ask segment shows the model name beside the agent glyph; feed rows show the time and agent the card already has; Bookmark and Follow from the … menu are also revealed on row hover; held-⌘ shortcut chips use keycap styling.",
+          "Small polish only: the Ask segment shows the model name beside the agent glyph; feed rows show the time and agent the card already has; Bookmark and Follow from the \u2026 menu are also revealed on row hover; held-\u2318 shortcut chips use keycap styling.",
           "Not adopted: a user-set issue status workflow (Backlog, Todo, In Progress, Done), because run states are set by the run, not by the user.",
           "Not adopted: projects, cycles and triage, because Session's containers are folders and workspaces and it has no planning cadence or inbox.",
           "Not adopted: assignees, priority and labels, because questions have one author and no such fields.",
           "Not adopted: board views and the issue properties sidebar, because the strip already spends horizontal space on branch pairs and nothing in the app maps to properties.",
           "Not adopted: sub-issues in place of branches, because branches are anchored to passages and open as column pairs.",
-          "Not adopted: G-then-X navigation chords and a workspace menu at the top of the sidebar, because the app has neither; ⌘N, ⌘O and the foot switcher stay."
+          "Not adopted: G-then-X navigation chords and a workspace menu at the top of the sidebar, because the app has neither; \u2318N, \u2318O and the foot switcher stay."
         ],
         "file": "r3/linear.html",
         "thumb": "thumbs/r3-linear.jpg"
