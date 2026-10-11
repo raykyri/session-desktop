@@ -1480,9 +1480,12 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   border-bottom: 1px solid var(--markdown-table-border);
   text-align: left;
   vertical-align: top;
-  /* Override the ambient `anywhere` so columns size to words and only long
-     unbreakable tokens break, keeping wrapping at sensible boundaries. */
+  /* Override the ambient `anywhere` (and research answers' inherited
+     `word-break: break-word`, which also lets a column shrink to one
+     character) so columns size to words and only long unbreakable tokens
+     break; a table wider than the column scrolls in its wrapper. */
   overflow-wrap: break-word;
+  word-break: normal;
 }
 
 /* Drop the frame-adjacent edges so cell separators never double up against the
