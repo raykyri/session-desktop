@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:24:59.240Z",
+  "generated": "2026-10-11T06:31:40.820Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -526,6 +526,66 @@
         ],
         "file": "r2/notes.html",
         "thumb": "thumbs/r2-notes.jpg"
+      },
+      "obsidian": {
+        "slug": "obsidian",
+        "round": 2,
+        "title": "Vault of linked notes",
+        "influence": "Obsidian",
+        "summary": "Everything is a Markdown note in a local vault: a chat is a note whose body holds Ask blocks, a branch is a new note linked to the passage it came from, and filing a passage puts a linked bullet under a chosen outline heading. The Ask box is pinned to the bottom of every note and every empty tab, each paragraph has a margin button for branch, ask and file, and agent sign-in never blocks writing or queueing.",
+        "nouns": [
+          "Vault",
+          "Note",
+          "Ask",
+          "Link",
+          "Highlight"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Asks as callouts",
+            "summary": "Chats are notes; each question and answer is a foldable callout, with backlinks over a local graph in the right sidebar."
+          },
+          {
+            "id": "b",
+            "label": "Chat in sidebar",
+            "summary": "Composing moves to a right-sidebar Chat pane bound to the open note; answers enter notes only when inserted or filed."
+          },
+          {
+            "id": "c",
+            "label": "Outline beside chat",
+            "summary": "The vault opens with the Chapter 3 outline and the chat side by side; drag a paragraph's margin handle onto a bullet to file it."
+          },
+          {
+            "id": "d",
+            "label": "Graph split pane",
+            "summary": "The global graph sits beside the note in a split pane and follows the active note; the right sidebar starts closed."
+          },
+          {
+            "id": "e",
+            "label": "Starter vault",
+            "summary": "First launch shows an ask-first welcome screen; the sample vault opens on a Start here note with a tracked checklist."
+          }
+        ],
+        "changes": [
+          "Added a branch button in the left margin of every paragraph with Branch, Ask, File and Copy link; in round 1 these appeared only after selecting text.",
+          "File to note now asks for a section and inserts a linked bullet under it; round 1 could only append an embed after the outline.",
+          "Pinned the Ask box to the bottom of each note; in round 1 it sat after the last answer, about 1,400 px below the fold.",
+          "Getting started card in every variant's sidebar and in empty vaults; round 1 explained the app only in variant E.",
+          "Replaced the cosmetic Transcript variant with Outline beside chat, where paragraphs drag from an answer onto outline bullets.",
+          "Outline bullets keep typed edits, autocomplete [[links]] and have a Link to… menu; round 1 lost edits on re-render.",
+          "Graph labels skip overlaps; notes take aliases, so search or ⌘O for “recap” finds the CAISO summary.",
+          "Mobile bottom toolbar, Tab-trapped dialogs, 4.5:1 placeholder text, and menus that say why an item is disabled."
+        ],
+        "decisions": [
+          "Does “a chat is a note” hold up when a note mixes writing and asks, or do people look for a separate chat list?",
+          "Which do first-time users find first: the margin button or the selection popover?",
+          "Should filing insert a linked bullet (current) or transclude the passage inline?",
+          "Is “Answer in: This note / New note” enough to predict where an answer is saved?",
+          "Does today’s daily note work as Home, or do people want a vault-wide activity list?"
+        ],
+        "file": "r2/obsidian.html",
+        "thumb": "thumbs/r2-obsidian.jpg"
       },
       "notion": {
         "slug": "notion",
