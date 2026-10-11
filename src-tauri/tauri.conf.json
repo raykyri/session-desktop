@@ -46,8 +46,8 @@
     },
     "resources": {
       "../src/assets/fonts/DMSans-OFL.txt": "licenses/DMSans-OFL.txt",
-      "../src/assets/fonts/IoskeleyMono-OFL.txt": "licenses/IoskeleyMono-OFL.txt",
-      "../src/assets/fonts/ValleySans-OFL.txt": "licenses/ValleySans-OFL.txt"
+      "../src/assets/fonts/Inter-OFL.txt": "licenses/Inter-OFL.txt",
+      "../src/assets/fonts/IoskeleyMono-OFL.txt": "licenses/IoskeleyMono-OFL.txt"
     },
     "icon": [
       "icons/32x32.png",

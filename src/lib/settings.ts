@@ -14,6 +14,12 @@ const SYSTEM_BODY_FONT_STACK =
 
 const BODY_FONT_OPTIONS: BodyFontOption[] = [
   {
+    id: "inter",
+    label: "Inter",
+    // Latin and Latin Extended variable faces are bundled with Session under the SIL OFL 1.1.
+    stack: `"Inter", ${SYSTEM_BODY_FONT_STACK}`,
+  },
+  {
     id: "dm-sans",
     label: "DM Sans",
     // Latin and Latin Extended variable faces are bundled with Session under the SIL OFL 1.1.
@@ -25,18 +31,6 @@ const BODY_FONT_OPTIONS: BodyFontOption[] = [
     // Personal-use font referenced from the host system; do not bundle its files.
     stack: `"Anthropic Sans Text", ${SYSTEM_BODY_FONT_STACK}`,
     localNames: ["Anthropic Sans Text Regular", "AnthropicSansText-Regular"],
-  },
-  {
-    id: "valley-sans",
-    label: "Valley Sans",
-    // Roman and italic variable faces are bundled with Session under the SIL OFL 1.1.
-    stack: `"Valley Sans", ${SYSTEM_BODY_FONT_STACK}`,
-  },
-  {
-    id: "inter",
-    label: "Inter",
-    // Latin and Latin Extended variable faces are bundled with Session under the SIL OFL 1.1.
-    stack: `"Inter", ${SYSTEM_BODY_FONT_STACK}`,
   },
   {
     id: "system",

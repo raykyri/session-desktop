@@ -71,11 +71,6 @@ const INTER_ITALIC_LATIN: &[u8] =
     include_bytes!("../../src/assets/fonts/Inter-VariableItalic-Latin.woff2");
 const INTER_ITALIC_LATIN_EXT: &[u8] =
     include_bytes!("../../src/assets/fonts/Inter-VariableItalic-LatinExt.woff2");
-const VALLEY_SANS_ROMAN_PATH: &str = "/__session/fonts/ValleySans-Variable.woff2";
-const VALLEY_SANS_ITALIC_PATH: &str = "/__session/fonts/ValleySans-VariableItalic.woff2";
-const VALLEY_SANS_ROMAN: &[u8] = include_bytes!("../../src/assets/fonts/ValleySans-Variable.woff2");
-const VALLEY_SANS_ITALIC: &[u8] =
-    include_bytes!("../../src/assets/fonts/ValleySans-VariableItalic.woff2");
 
 pub struct FileServerInfo {
     pub port: u16,
@@ -646,8 +641,6 @@ fn embedded_font_response(path: &str, is_head: bool) -> Option<Response> {
         INTER_ROMAN_LATIN_EXT_PATH => INTER_ROMAN_LATIN_EXT,
         INTER_ITALIC_LATIN_PATH => INTER_ITALIC_LATIN,
         INTER_ITALIC_LATIN_EXT_PATH => INTER_ITALIC_LATIN_EXT,
-        VALLEY_SANS_ROMAN_PATH => VALLEY_SANS_ROMAN,
-        VALLEY_SANS_ITALIC_PATH => VALLEY_SANS_ITALIC,
         _ => return None,
     };
     let mut response = Response::new(200, "OK");
@@ -908,10 +901,6 @@ const INTER_MARKDOWN_FONT_FACE_CSS: &str = "\
 @font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-VariableItalic-LatinExt.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
 @font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-VariableItalic-Latin.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }";
 
-const VALLEY_SANS_MARKDOWN_FONT_FACE_CSS: &str = "\
-@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-Variable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }\
-@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-VariableItalic.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; }";
-
 const DM_SANS_MARKDOWN_FONT_FACE_CSS: &str = "\
 @font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-Variable-LatinExt.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
 @font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-Variable-Latin.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }\
@@ -922,7 +911,6 @@ fn markdown_font_face_css(font_id: Option<&str>) -> &'static str {
     match font_id {
         Some("dm-sans") => DM_SANS_MARKDOWN_FONT_FACE_CSS,
         Some("inter") => INTER_MARKDOWN_FONT_FACE_CSS,
-        Some("valley-sans") => VALLEY_SANS_MARKDOWN_FONT_FACE_CSS,
         _ => "",
     }
 }
@@ -937,9 +925,6 @@ fn markdown_body_font(font_id: Option<&str>) -> &'static str {
         }
         Some("anthropic-sans-text") => {
             "'Anthropic Sans Text', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        }
-        Some("valley-sans") => {
-            "'Valley Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
         }
         _ => "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     }
@@ -1206,9 +1191,6 @@ mod tests {
             DM_SANS_ITALIC_LATIN_EXT.len().to_string()
         )));
 
-        let valley = embedded_font_response(VALLEY_SANS_ROMAN_PATH, false).unwrap();
-        assert_eq!(valley.body, VALLEY_SANS_ROMAN);
-
         let inter = embedded_font_response(INTER_ROMAN_LATIN_PATH, false).unwrap();
         assert_eq!(inter.body, INTER_ROMAN_LATIN);
         assert!(embedded_font_response("/__session/fonts/unknown.woff2", false).is_none());
@@ -1284,7 +1266,7 @@ mod tests {
         let selected_page = render_markdown_page(path, source, Some("anthropic-sans-text"));
         assert!(selected_page.contains("font-family: 'Anthropic Sans Text', ui-sans-serif"));
         assert!(!selected_page.contains("__SESSION_BODY_FONT__"));
-        assert!(!selected_page.contains("ValleySans-Variable.woff2"));
+        assert!(!selected_page.contains("DMSans-Variable-Latin.woff2"));
 
         let dm_sans_page = render_markdown_page(path, source, Some("dm-sans"));
         assert!(dm_sans_page.contains("font-family: 'DM Sans', ui-sans-serif"));
@@ -1295,12 +1277,10 @@ mod tests {
         assert!(!dm_sans_page.contains("__SESSION_BODY_FONT__"));
         assert!(!dm_sans_page.contains("__SESSION_FONT_FACE__"));
 
-        let valley_page = render_markdown_page(path, source, Some("valley-sans"));
-        assert!(valley_page.contains("font-family: 'Valley Sans', ui-sans-serif"));
-        assert!(valley_page.contains("ValleySans-Variable.woff2"));
-        assert!(valley_page.contains("ValleySans-VariableItalic.woff2"));
-        assert!(!valley_page.contains("__SESSION_BODY_FONT__"));
-        assert!(!valley_page.contains("__SESSION_FONT_FACE__"));
+        // A removed font id falls back to the system stack with no faces.
+        let removed_page = render_markdown_page(path, source, Some("valley-sans"));
+        assert!(removed_page.contains("font-family: ui-sans-serif, system-ui"));
+        assert!(!removed_page.contains("ValleySans"));
 
         let inter_page = render_markdown_page(path, source, Some("inter"));
         assert!(inter_page.contains("font-family: 'Inter', ui-sans-serif"));

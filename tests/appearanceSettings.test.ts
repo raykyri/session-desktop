@@ -45,3 +45,12 @@ test("appearance persists and unknown values fall back to dark", () => {
   assert.equal(JSON.parse(store.get(key)!).appearance, "light");
   assert.equal(loadSettings().colorTheme, "orange-blob");
 });
+
+test("Inter is the default body font and a removed font falls back to it", () => {
+  store.set(key, JSON.stringify({}));
+  assert.equal(loadSettings().bodyFontId, "inter");
+  store.set(key, JSON.stringify({ bodyFontId: "valley-sans" }));
+  assert.equal(loadSettings().bodyFontId, "inter");
+  store.set(key, JSON.stringify({ bodyFontId: "dm-sans" }));
+  assert.equal(loadSettings().bodyFontId, "dm-sans");
+});

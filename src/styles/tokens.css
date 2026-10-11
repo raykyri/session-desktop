@@ -163,24 +163,6 @@
     U+FEFF, U+FFFD;
 }
 
-/* Valley Sans 100–900 variable webfonts, bundled under the SIL OFL 1.1.
-   Source: HelsinkiTypeStudio/valley-sans@932cfad79399ed06430ace86af05127224d245b3 */
-@font-face {
-  font-family: "Valley Sans";
-  src: url("../assets/fonts/ValleySans-Variable.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Valley Sans";
-  src: url("../assets/fonts/ValleySans-VariableItalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 100 900;
-  font-display: swap;
-}
-
 :root {
   /* Optical compensation for the selected UI face. DM Sans reads slightly
      smaller than the other body-font options at the same nominal size. */
@@ -208,7 +190,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  --font-ui: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
