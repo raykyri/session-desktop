@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
 import { ResearchMenuItem, ResearchMenuSeparator } from "./ResearchMenu";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
-/** The items of a feed card's context menu. A and D select Archive and
- * Delete while the menu is open. */
-export function ResearchTreeMenuItems({
+/** A feed card's thread actions, the end of its menu: Generate recap and
+ * Rename, a separator, then Unarchive (on an archived card) and Delete. D
+ * selects Delete while the menu is open. */
+export function ResearchTreeLifecycleItems({
   tree,
   archived,
   onClose,
   onRename,
-  onArchive,
   onRestore,
   onDelete,
   onRegenerateRecap,
@@ -20,72 +20,50 @@ export function ResearchTreeMenuItems({
   tree: ResearchTreeSummary;
   archived: boolean;
   onClose: () => void;
-  /** Each lifecycle action renders only when its handler is passed: Rename
-   * and Archive on active rows, Unarchive on archived rows. */
+  /** Each action renders only when its handler is passed and it applies:
+   * Rename on active cards, Unarchive on archived cards. Archiving is the
+   * Archive entry under Move to. */
   onRename?: (tree: ResearchTreeSummary) => void;
-  onArchive?: (treeId: string) => void;
   onRestore?: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
-  /** Query-specific action used by Home's research activity menu. */
+  /** Generate recap, for a card whose root has a recap. */
   onRegenerateRecap?: () => void;
 }) {
   const running = tree.runningCount > 0;
+  const rename = archived ? undefined : onRename;
   return (
     <>
       {onRegenerateRecap ? (
-        <>
-          <ResearchMenuItem
-            icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Generate recap"
-            onSelect={() => {
-              onClose();
-              onRegenerateRecap();
-            }}
-          />
-          <ResearchMenuSeparator />
-        </>
+        <ResearchMenuItem
+          icon={<RefreshCw size={15} aria-hidden="true" />}
+          label="Generate recap"
+          onSelect={() => {
+            onClose();
+            onRegenerateRecap();
+          }}
+        />
       ) : null}
-      {archived ? (
-        onRestore ? (
-          <ResearchMenuItem
-            icon={<ArchiveRestore size={15} aria-hidden="true" />}
-            label="Unarchive research"
-            onSelect={() => {
-              onClose();
-              onRestore(tree.id);
-            }}
-          />
-        ) : null
-      ) : (
-        <>
-          {onRename ? (
-            <ResearchMenuItem
-              icon={<Pencil size={15} aria-hidden="true" />}
-              label="Rename"
-              onSelect={() => {
-                onClose();
-                onRename(tree);
-              }}
-            />
-          ) : null}
-          {onArchive ? (
-            <>
-              <ResearchMenuSeparator />
-              <ResearchMenuItem
-                icon={<Archive size={15} aria-hidden="true" />}
-                label="Archive"
-                shortcut="A"
-                disabled={running}
-                title={running ? "Research with active runs cannot be archived" : undefined}
-                onSelect={() => {
-                  onClose();
-                  onArchive(tree.id);
-                }}
-              />
-            </>
-          ) : null}
-        </>
-      )}
+      {rename ? (
+        <ResearchMenuItem
+          icon={<Pencil size={15} aria-hidden="true" />}
+          label="Rename"
+          onSelect={() => {
+            onClose();
+            rename(tree);
+          }}
+        />
+      ) : null}
+      {onRegenerateRecap || rename ? <ResearchMenuSeparator /> : null}
+      {archived && onRestore ? (
+        <ResearchMenuItem
+          icon={<ArchiveRestore size={15} aria-hidden="true" />}
+          label="Unarchive research"
+          onSelect={() => {
+            onClose();
+            onRestore(tree.id);
+          }}
+        />
+      ) : null}
       <ResearchMenuItem
         icon={<Trash2 size={15} aria-hidden="true" />}
         label="Delete"

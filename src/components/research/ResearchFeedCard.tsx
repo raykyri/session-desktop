@@ -41,17 +41,17 @@ interface ResearchFeedCardProps {
   menuOpen?: boolean;
   /** The child row whose … menu is open. */
   childMenuNodeId?: string | null;
-  /** The … button's name: "Bookmark, follow or move" by default. */
+  /** The … button's name: "Thread actions" by default. */
   menuLabel?: string;
   onOpen: () => void;
   onOpenChild?: (child: ResearchFeedChild) => void;
-  /** Opens the card's … menu below `anchor`. */
+  /** Opens the card's menu below its … button (`anchor`). */
   onMenu?: (anchor: HTMLElement) => void;
   /** Opens a child row's … menu below `anchor`. */
   onChildMenu?: (child: ResearchFeedChild, anchor: HTMLElement) => void;
-  /** Opens the card's context menu at `placement`: a right-click on the
-   * card, or Shift+F10 or the ContextMenu key with focus on it. `control` is
-   * the card's open button. */
+  /** Opens the card's menu, the one its … button opens, at `placement`: a
+   * right-click on the card, or Shift+F10 or the ContextMenu key with focus
+   * on it. `control` is the card's open button. */
   onContextMenu?: (placement: ResearchUnitMenuPlacement, control: HTMLElement) => void;
   /** Opens a child row's context menu (its … menu) at `placement`. `control`
    * is the row's open button. */
@@ -168,7 +168,7 @@ export default function ResearchFeedCard({
   selectedChildNodeIds = [],
   menuOpen = false,
   childMenuNodeId = null,
-  menuLabel = "Bookmark, follow or move",
+  menuLabel = "Thread actions",
   onOpen,
   onOpenChild,
   onMenu,

@@ -1,12 +1,10 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo } from "react";
 import type { ResearchTreeSummary } from "../../types";
 import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchFeedCard from "./ResearchFeedCard";
 import { researchPlaceEmptyText } from "./ResearchFeedTray";
-import { ResearchMenu } from "./ResearchMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
-import { ResearchTreeDeleteDialog, ResearchTreeMenuItems } from "./ResearchTreeMenu";
 
 export interface ResearchArchivedFeedProps {
   /** Archived trees in any order; the list sorts them newest-archived first. */
@@ -16,13 +14,13 @@ export interface ResearchArchivedFeedProps {
   /** The tree whose … menu is open. */
   menuTreeId?: string | null;
   onOpen: (treeId: string) => void;
-  onRestore: (treeId: string) => Promise<void>;
-  onRemove: (treeId: string) => Promise<void>;
+  /** Opens a card's menu below its … button. */
   onMenu?: (treeId: string, anchor: HTMLElement) => void;
+  /** Opens the same menu as a context menu at `placement`; `control` is the
+   * card's open button. */
+  onContextMenu?: (treeId: string, placement: ResearchUnitMenuPlacement, control: HTMLElement) => void;
   onDragStart?: ResearchCardDragStart;
 }
-
-type ArchivedMenu = { treeId: string; placement: ResearchUnitMenuPlacement };
 
 function archivedTooltip(archivedAt: number | null | undefined): string | undefined {
   if (archivedAt == null) return undefined;
@@ -43,22 +41,18 @@ export function archivedFeedTrees(trees: ResearchTreeSummary[]): ResearchTreeSum
 }
 
 /** The cards of Archive, in its Home tray and in its own view. Each card
- * opens its thread; the … menu moves it out, and the context menu
- * unarchives or deletes it. */
+ * opens its thread; its … button and its context menu open the same menu
+ * (Bookmark, Follow, Move to, Unarchive, Delete), which the feed owns. */
 function ResearchArchivedFeed({
   trees,
   selectedTreeId = null,
   menuTreeId = null,
   onOpen,
-  onRestore,
-  onRemove,
   onMenu,
+  onContextMenu,
   onDragStart,
 }: ResearchArchivedFeedProps) {
   const sortedTrees = useMemo(() => archivedFeedTrees(trees), [trees]);
-  const [menu, setMenu] = useState<ArchivedMenu | null>(null);
-  const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
-  const menuTree = menu ? (sortedTrees.find((tree) => tree.id === menu.treeId) ?? null) : null;
 
   return (
     <>
@@ -74,7 +68,9 @@ function ResearchArchivedFeed({
           menuOpen={tree.id === menuTreeId}
           onOpen={() => onOpen(tree.id)}
           onMenu={onMenu ? (anchor) => onMenu(tree.id, anchor) : undefined}
-          onContextMenu={(placement) => setMenu({ treeId: tree.id, placement })}
+          onContextMenu={
+            onContextMenu ? (placement, control) => onContextMenu(tree.id, placement, control) : undefined
+          }
           onDragStart={onDragStart}
         />
       ))}
@@ -82,32 +78,6 @@ function ResearchArchivedFeed({
         <div className="research-feed-empty">
           {researchPlaceEmptyText(RESEARCH_ARCHIVE_FOLDER_ID)}
         </div>
-      ) : null}
-      {menu && menuTree ? (
-        <ResearchMenu
-          anchor={menu.placement.anchor}
-          align={menu.placement.align}
-          label={`Actions for ${menuTree.title}`}
-          onClose={() => setMenu(null)}
-        >
-          <ResearchTreeMenuItems
-            tree={menuTree}
-            archived
-            onClose={() => setMenu(null)}
-            onRestore={(treeId) => void onRestore(treeId)}
-            onDelete={(tree) => {
-              setMenu(null);
-              setDeletingTree(tree);
-            }}
-          />
-        </ResearchMenu>
-      ) : null}
-      {deletingTree ? (
-        <ResearchTreeDeleteDialog
-          tree={deletingTree}
-          onClose={() => setDeletingTree(null)}
-          onRemove={onRemove}
-        />
       ) : null}
     </>
   );

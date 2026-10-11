@@ -58,7 +58,7 @@ import ResearchFeedCard, {
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
-import ResearchMoveMenu from "./ResearchMoveMenu";
+import ResearchFeedRowMenu from "./ResearchMoveMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import {
@@ -69,7 +69,7 @@ import {
 import { PostContent } from "./ResearchPost";
 import {
   ResearchTreeDeleteDialog,
-  ResearchTreeMenuItems,
+  ResearchTreeLifecycleItems,
   ResearchTreeRenameDialog,
 } from "./ResearchTreeMenu";
 
@@ -340,23 +340,19 @@ function feedViewTitle(view: ResearchFeedView, folders: ResearchFolder[]): strin
 
 /** An open feed menu. `anchor` is the … button that opened a row's menu, or
  * for a context menu (`placement` set) the row's open button; `placement`
- * places a context menu, which returns focus to what had it on its own. */
+ * places a context menu, which returns focus to what had it on its own. A
+ * tree's menu is a card's (`queryNodeId` names its loaded root, for
+ * Generate recap) or, with `child`, a starred child row's. */
 type FeedMenu =
   | {
-      kind: "move";
+      kind: "tree";
       treeId: string;
       anchor: HTMLElement;
       placement?: ResearchUnitMenuPlacement;
       child?: ResearchFeedChild;
-    }
-  | { kind: "draft"; draftId: string; anchor: HTMLElement; placement?: ResearchUnitMenuPlacement }
-  | {
-      kind: "tree";
-      treeId: string;
       queryNodeId?: string;
-      archived: boolean;
-      placement: ResearchUnitMenuPlacement;
-    };
+    }
+  | { kind: "draft"; draftId: string; anchor: HTMLElement; placement?: ResearchUnitMenuPlacement };
 
 function ResearchActivityFeed({
   view = { kind: "home" },
@@ -748,12 +744,11 @@ function ResearchActivityFeed({
     );
   }, [missingRootKey, onLoadTrees, queryByTree, rootLoadAttempt]);
 
-  const contextTree = menu?.kind === "tree" ? (treeById.get(menu.treeId) ?? null) : null;
-  const contextQuery =
+  const menuTree = menu?.kind === "tree" ? (treeById.get(menu.treeId) ?? null) : null;
+  const menuQuery =
     menu?.kind === "tree" && menu.queryNodeId
       ? items.find((item) => item.nodeId === menu.queryNodeId) ?? null
       : null;
-  const moveTree = menu?.kind === "move" ? (treeById.get(menu.treeId) ?? null) : null;
   const menuDraft =
     menu?.kind === "draft" ? (drafts.find((draft) => draft.id === menu.draftId) ?? null) : null;
   const menuStateRef = useRef(menu);
@@ -763,7 +758,7 @@ function ResearchActivityFeed({
   const closeMenu = useCallback((restoreFocus = false) => {
     const current = menuStateRef.current;
     setMenu(null);
-    if (restoreFocus && current && current.kind !== "tree" && !current.placement) {
+    if (restoreFocus && current && !current.placement) {
       current.anchor.focus({ preventScroll: true });
     }
   }, []);
@@ -817,14 +812,6 @@ function ResearchActivityFeed({
   const deleteFolderButtonRef = useRef<HTMLButtonElement | null>(null);
   const focusTitleOnViewChangeRef = useRef(false);
 
-  function openTreeContextMenu(
-    tree: ResearchTreeSummary,
-    placement: ResearchUnitMenuPlacement,
-    queryNodeId?: string,
-  ) {
-    setMenu({ kind: "tree", treeId: tree.id, queryNodeId, archived: Boolean(tree.archivedAt), placement });
-  }
-
   function openRecapDialog(nodeId: string) {
     void getResearchNodeContent(nodeId)
       .then((content) => setRecapDialogContent(content))
@@ -832,16 +819,28 @@ function ResearchActivityFeed({
   }
 
   // The row whose … button opened the open menu (aria-expanded).
-  const menuTreeId = menu?.kind === "move" && !menu.child && !menu.placement ? menu.treeId : null;
+  const menuTreeId = menu?.kind === "tree" && !menu.child && !menu.placement ? menu.treeId : null;
   const menuChildNodeId =
-    menu?.kind === "move" && !menu.placement ? (menu.child?.nodeId ?? null) : null;
+    menu?.kind === "tree" && !menu.placement ? (menu.child?.nodeId ?? null) : null;
   // A second click on the … button that opened a menu closes it.
-  const openMoveMenu = (treeId: string, anchor: HTMLElement, child?: ResearchFeedChild) =>
+  const openTreeMenu = (
+    treeId: string,
+    anchor: HTMLElement,
+    { child, queryNodeId }: { child?: ResearchFeedChild; queryNodeId?: string } = {},
+  ) =>
     setMenu((current) =>
-      current?.kind === "move" && current.anchor === anchor
+      current?.kind === "tree" && current.anchor === anchor && !current.placement
         ? null
-        : { kind: "move", treeId, anchor, child },
+        : { kind: "tree", treeId, anchor, child, queryNodeId },
     );
+  // The right-click, Shift+F10 and ContextMenu key open the … menu at
+  // `placement`; `control` is the row's open button.
+  const openTreeContextMenu = (
+    treeId: string,
+    placement: ResearchUnitMenuPlacement,
+    control: HTMLElement,
+    { child, queryNodeId }: { child?: ResearchFeedChild; queryNodeId?: string } = {},
+  ) => setMenu({ kind: "tree", treeId, anchor: control, placement, child, queryNodeId });
   const openDraftMenu = (draftId: string, anchor: HTMLElement) =>
     setMenu((current) =>
       current?.kind === "draft" && current.draftId === draftId
@@ -917,16 +916,18 @@ function ResearchActivityFeed({
         menuOpen={menuTreeId === treeId}
         onOpen={() => openTreeCard(tree, query)}
         onOpenChild={(child) => onOpenResearchQuery(child.query)}
-        onMenu={tree && onMoveTree ? (anchor) => openMoveMenu(tree.id, anchor) : undefined}
-        onChildMenu={
-          tree && onMoveTree ? (child, anchor) => openMoveMenu(tree.id, anchor, child) : undefined
+        // The … button and the context menu open the same menu.
+        onMenu={tree ? (anchor) => openTreeMenu(tree.id, anchor, { queryNodeId: query?.nodeId }) : undefined}
+        onChildMenu={tree ? (child, anchor) => openTreeMenu(tree.id, anchor, { child }) : undefined}
+        onContextMenu={
+          tree
+            ? (placement, control) =>
+                openTreeContextMenu(tree.id, placement, control, { queryNodeId: query?.nodeId })
+            : undefined
         }
-        onContextMenu={tree ? (placement) => openTreeContextMenu(tree, placement, query?.nodeId) : undefined}
-        // A child row's context menu is its … menu.
         onChildContextMenu={
-          tree && onMoveTree
-            ? (child, placement, control) =>
-                setMenu({ kind: "move", treeId: tree.id, anchor: control, placement, child })
+          tree
+            ? (child, placement, control) => openTreeContextMenu(tree.id, placement, control, { child })
             : undefined
         }
         onDragStart={tree ? onDragStart : undefined}
@@ -982,9 +983,8 @@ function ResearchActivityFeed({
           selectedTreeId={selectedTreeId}
           menuTreeId={menuTreeId}
           onOpen={(treeId) => onOpenTree?.(treeId)}
-          onRestore={onRestoreResearch}
-          onRemove={onRemoveResearch}
-          onMenu={onMoveTree ? openMoveMenu : undefined}
+          onMenu={(treeId, anchor) => openTreeMenu(treeId, anchor)}
+          onContextMenu={(treeId, placement, control) => openTreeContextMenu(treeId, placement, control)}
           onDragStart={onDragStart}
         />
       );
@@ -1499,10 +1499,11 @@ function ResearchActivityFeed({
       <div className="research-visually-hidden" role="status" aria-live="polite">
         {announcement}
       </div>
-      {menu?.kind === "move" && moveTree ? (
-        <ResearchMoveMenu
+      {menu?.kind === "tree" && menuTree ? (
+        <ResearchFeedRowMenu
           anchor={menu.placement?.anchor ?? menu.anchor}
           align={menu.placement?.align}
+          label={menu.child ? "Starred item actions" : `Actions for ${menuTree.title}`}
           onRemoveStar={
             menu.child && onUnstarChild
               ? () => {
@@ -1512,35 +1513,63 @@ function ResearchActivityFeed({
                 }
               : undefined
           }
-          currentPlace={placeOf(moveTree)}
+          currentPlace={placeOf(menuTree)}
           folders={folders}
-          bookmarked={Boolean(moveTree.bookmarked)}
+          bookmarked={Boolean(menuTree.bookmarked)}
+          archiveShortcut={view.kind === "home"}
           onToggleBookmark={() => {
             closeMenu(true);
-            onSetResearchBookmarked(moveTree.id, !moveTree.bookmarked);
+            onSetResearchBookmarked(menuTree.id, !menuTree.bookmarked);
           }}
-          followed={Boolean(moveTree.followed)}
-          followDisabledReason={moveTree.archivedAt ? "Archived questions don't send notifications" : null}
+          followed={Boolean(menuTree.followed)}
+          followDisabledReason={menuTree.archivedAt ? "Archived questions don't send notifications" : null}
           onToggleFollow={
             onSetResearchFollowed
               ? () => {
                   closeMenu(true);
-                  onSetResearchFollowed(moveTree.id, !moveTree.followed);
+                  onSetResearchFollowed(menuTree.id, !menuTree.followed);
                 }
               : undefined
           }
-          onMove={(place) => {
-            refocusCardRef.current = { cardId: moveTree.id, anchor: menu.anchor };
-            closeMenu(true);
-            onMoveTree?.(moveTree.id, place);
-          }}
-          onNewFolder={() => {
-            const trigger = menu.anchor;
-            closeMenu();
-            onNewFolder?.(moveTree.id, trigger);
-          }}
+          onMove={
+            onMoveTree
+              ? (place) => {
+                  refocusCardRef.current = { cardId: menuTree.id, anchor: menu.anchor };
+                  closeMenu(true);
+                  onMoveTree(menuTree.id, place);
+                }
+              : undefined
+          }
+          onNewFolder={
+            onMoveTree
+              ? () => {
+                  const trigger = menu.anchor;
+                  closeMenu();
+                  onNewFolder?.(menuTree.id, trigger);
+                }
+              : undefined
+          }
           onClose={() => closeMenu()}
-        />
+        >
+          {menu.child ? null : (
+            <ResearchTreeLifecycleItems
+              tree={menuTree}
+              archived={menuTree.archivedAt != null}
+              onClose={() => closeMenu()}
+              onRename={(tree) => setRenamingTree(tree)}
+              onRestore={(treeId) => void onRestoreResearch(treeId)}
+              onDelete={(tree) => setDeletingTree(tree)}
+              onRegenerateRecap={
+                menuQuery &&
+                menuTree.archivedAt == null &&
+                menuQuery.status === "complete" &&
+                menuQuery.recap?.trim()
+                  ? () => openRecapDialog(menuQuery.nodeId)
+                  : undefined
+              }
+            />
+          )}
+        </ResearchFeedRowMenu>
       ) : null}
       {menu?.kind === "draft" && menuDraft ? (
         <ResearchMenu
@@ -1565,40 +1594,6 @@ function ResearchActivityFeed({
               closeMenu();
               onDeleteDraft?.(menuDraft);
             }}
-          />
-        </ResearchMenu>
-      ) : null}
-      {menu?.kind === "tree" && contextTree ? (
-        <ResearchMenu
-          anchor={menu.placement.anchor}
-          align={menu.placement.align}
-          label={`Actions for ${contextTree.title}`}
-          onClose={() => closeMenu()}
-        >
-          <ResearchTreeMenuItems
-            tree={contextTree}
-            archived={menu.archived}
-            onClose={() => setMenu(null)}
-            onRename={(tree) => {
-              setMenu(null);
-              setRenamingTree(tree);
-            }}
-            onArchive={
-              onMoveTree ? (treeId) => onMoveTree(treeId, RESEARCH_ARCHIVE_FOLDER_ID) : undefined
-            }
-            onRestore={(treeId) => void onRestoreResearch(treeId)}
-            onDelete={(tree) => {
-              setMenu(null);
-              setDeletingTree(tree);
-            }}
-            onRegenerateRecap={
-              contextQuery &&
-              !menu.archived &&
-              contextQuery.status === "complete" &&
-              contextQuery.recap?.trim()
-                ? () => openRecapDialog(contextQuery.nodeId)
-                : undefined
-            }
           />
         </ResearchMenu>
       ) : null}
