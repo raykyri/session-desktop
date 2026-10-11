@@ -30,8 +30,16 @@ import {
   safeHref,
 } from "../lib/links";
 import { normalizeLatexMathDelimiters } from "../lib/markdownMathDelimiters";
+import {
+  isSessionWidgetClassName,
+  MAX_SESSION_WIDGET_BYTES,
+  remarkSessionWidgetFences,
+  SESSION_WIDGET_STATE_ATTRIBUTE,
+  sessionWidgetByteLength,
+} from "../lib/sessionWidgets";
 import { escapeWikilinkTablePipes, remarkWikilinks } from "../lib/wikilinks";
 import DiagramBlock, { diagramLangFromClassName, nodeText } from "./DiagramBlock";
+import SessionWidget, { SessionWidgetPending, SessionWidgetStreamingContext } from "./SessionWidget";
 
 // The TeX pipeline (remark-math + rehype-mathjax) weighs a couple of
 // megabytes of SVG glyph tables, so like mermaid/viz it lives in its own
@@ -196,7 +204,12 @@ interface MathPlugins {
 
 // The wikilink transform rides in both lists so key terms render as links from
 // the first paint instead of appearing once the math chunk swaps in.
-const baseRemarkPlugins: MarkdownPluginList = [remarkGfm, remarkBreaks, remarkWikilinks];
+const baseRemarkPlugins: MarkdownPluginList = [
+  remarkGfm,
+  remarkBreaks,
+  remarkWikilinks,
+  remarkSessionWidgetFences,
+];
 const baseRehypePlugins: MarkdownPluginList = [rehypeTranscriptArtifacts];
 
 let mathPlugins: MathPlugins | null = null;
@@ -207,7 +220,7 @@ const mathPluginListeners = new Set<() => void>();
 export const transcriptMathPluginsReady: Promise<void> = import("../lib/markdownPlugins")
   .then((module) => {
     mathPlugins = {
-      remark: module.transcriptRemarkPlugins,
+      remark: [...module.transcriptRemarkPlugins, remarkSessionWidgetFences],
       rehype: [...module.transcriptRehypePlugins, rehypeTranscriptArtifacts],
     };
     for (const listener of mathPluginListeners) {
@@ -245,6 +258,7 @@ const LinkActionsContext = createContext<LinkActions>({
 });
 
 const TranscriptArtifactLinksContext = createContext(false);
+const TranscriptWidgetsContext = createContext(false);
 
 export function TranscriptLinkActionsProvider({
   actions,
@@ -486,6 +500,59 @@ function MarkdownDiagramBlock({ lang, code }: { lang: "mermaid" | "dot"; code: s
   );
 }
 
+function formatKilobytes(bytes: number) {
+  return `${Math.ceil(bytes / 1024).toLocaleString()} KB`;
+}
+
+/** A `session-html` block: a widget frame where the renderer allows widgets,
+ * otherwise (and when the block is over the size limit) the ordinary code
+ * block. A block still streaming shows a placeholder instead of a frame. */
+function MarkdownWidgetBlock({
+  code,
+  state,
+  codeBlock,
+}: {
+  code: string;
+  state: unknown;
+  codeBlock: ReactNode;
+}) {
+  const { openLink } = useContext(LinkActionsContext);
+  const widgets = useContext(TranscriptWidgetsContext);
+  const streaming = useContext(SessionWidgetStreamingContext);
+  if (!widgets) {
+    return codeBlock;
+  }
+  if (state !== "complete") {
+    return streaming ? (
+      <SessionWidgetPending />
+    ) : (
+      <CodeBlockWithNotice notice="Widget incomplete: the block has no closing fence" codeBlock={codeBlock} />
+    );
+  }
+  // mdast-util-to-hast ends fenced code with a newline the fence body lacks.
+  const html = code.endsWith("\n") ? code.slice(0, -1) : code;
+  const bytes = sessionWidgetByteLength(html);
+  if (bytes > MAX_SESSION_WIDGET_BYTES) {
+    return (
+      <CodeBlockWithNotice
+        notice={`Widget not shown: ${formatKilobytes(bytes)} exceeds the ${formatKilobytes(MAX_SESSION_WIDGET_BYTES)} limit`}
+        codeBlock={codeBlock}
+      />
+    );
+  }
+  return <SessionWidget html={html} onOpen={openLink} />;
+}
+
+/** A widget block shown as its source, under a notice saying why. */
+function CodeBlockWithNotice({ notice, codeBlock }: { notice: string; codeBlock: ReactNode }) {
+  return (
+    <div className="session-widget-as-code">
+      <div className="session-widget-notice" role="note" aria-label={notice} data-label={notice} />
+      {codeBlock}
+    </div>
+  );
+}
+
 const CODE_MENU_PREFERRED_WIDTH = 180;
 
 // Fenced-code wrapping is a single session-wide preference, not a per-block
@@ -711,7 +778,19 @@ const markdownComponents: Components = {
     if (codeElement && lang) {
       return <MarkdownDiagramBlock lang={lang} code={nodeText(codeElement.props.children)} />;
     }
-    return <MarkdownCodeBlock {...props}>{children}</MarkdownCodeBlock>;
+    const codeBlock = <MarkdownCodeBlock {...props}>{children}</MarkdownCodeBlock>;
+    if (codeElement && isSessionWidgetClassName(codeElement.props.className)) {
+      return (
+        <div data-research-widget="">
+          <MarkdownWidgetBlock
+            code={nodeText(codeElement.props.children)}
+            state={(codeElement.props as Record<string, unknown>)[SESSION_WIDGET_STATE_ATTRIBUTE]}
+            codeBlock={codeBlock}
+          />
+        </div>
+      );
+    }
+    return codeBlock;
   },
 };
 
@@ -728,7 +807,9 @@ const researchMarkdownComponents: Components = {
 const inlineComponentOverrides: Components = {
   p: ({ node: _node, children }) => <span>{children} </span>,
   br: () => <span> </span>,
-  code: ({ node: _node, children }) => <span>{children}</span>,
+  // A widget's HTML is not text to preview.
+  code: ({ node: _node, className, children }) =>
+    isSessionWidgetClassName(className) ? null : <span>{children}</span>,
 };
 
 const inlineMarkdownComponents: Components = {
@@ -788,6 +869,9 @@ interface TranscriptMarkdownProps {
    * Disabled by default because this renderer also serves research documents
    * and compact labels that have no owning terminal pane. */
   artifactLinks?: boolean;
+  /** Display complete `session-html` blocks as sandboxed widget frames.
+   * Without it such blocks render as ordinary code. */
+  widgets?: boolean;
 }
 
 // Memoized because ReactMarkdown re-parses on every render and callers rerender
@@ -803,6 +887,7 @@ export default memo(function TranscriptMarkdown({
   oversizedContent,
   inline = false,
   artifactLinks = false,
+  widgets = false,
 }: TranscriptMarkdownProps) {
   const math = useSyncExternalStore(subscribeToMathPlugins, readMathPlugins, readMathPlugins);
   // Alias wikilinks on table rows must have their pipe escaped before
@@ -820,25 +905,27 @@ export default memo(function TranscriptMarkdown({
   }
   return (
     <TranscriptArtifactLinksContext.Provider value={artifactLinks}>
-      <div className={`turn-markdown${className ? ` ${className}` : ""}`}>
-        <ReactMarkdown
-          components={
-            inline
-              ? imageBehavior === "open"
-                ? inlineResearchMarkdownComponents
-                : inlineMarkdownComponents
-              : imageBehavior === "open"
-                ? researchMarkdownComponents
-                : markdownComponents
-          }
-          remarkPlugins={math ? math.remark : baseRemarkPlugins}
-          rehypePlugins={math ? math.rehype : baseRehypePlugins}
-          disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
-          unwrapDisallowed={inline}
-        >
-          {math ? normalizeLatexMathDelimiters(source) : source}
-        </ReactMarkdown>
-      </div>
+      <TranscriptWidgetsContext.Provider value={widgets}>
+        <div className={`turn-markdown${className ? ` ${className}` : ""}`}>
+          <ReactMarkdown
+            components={
+              inline
+                ? imageBehavior === "open"
+                  ? inlineResearchMarkdownComponents
+                  : inlineMarkdownComponents
+                : imageBehavior === "open"
+                  ? researchMarkdownComponents
+                  : markdownComponents
+            }
+            remarkPlugins={math ? math.remark : baseRemarkPlugins}
+            rehypePlugins={math ? math.rehype : baseRehypePlugins}
+            disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
+            unwrapDisallowed={inline}
+          >
+            {math ? normalizeLatexMathDelimiters(source) : source}
+          </ReactMarkdown>
+        </div>
+      </TranscriptWidgetsContext.Provider>
     </TranscriptArtifactLinksContext.Provider>
   );
 });

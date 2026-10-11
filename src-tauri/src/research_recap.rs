@@ -3,7 +3,7 @@ use crate::events::SessionEvent;
 use crate::research::{self, ResearchNodeStatus};
 use crate::state::AppState;
 use crate::transcript::{Turn, TurnBlock};
-use pulldown_cmark::{Event, Parser, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use serde_json::json;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
@@ -152,8 +152,19 @@ fn plain_text(markdown: &str) -> String {
     // `[[Term]]` markers are renderer machinery; the summarizer sees words.
     let markdown = crate::wikilinks::strip_wikilinks(markdown);
     let mut plain = String::new();
+    // Widget blocks are HTML for the answer's display, not answer prose.
+    let mut in_widget = false;
     for event in Parser::new(&markdown) {
+        if in_widget {
+            in_widget = !matches!(event, Event::End(TagEnd::CodeBlock));
+            continue;
+        }
         match event {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))
+                if crate::research_widgets::is_widget_info(&info) =>
+            {
+                in_widget = true;
+            }
             Event::Text(text) | Event::Code(text) => plain.push_str(&text),
             Event::SoftBreak
             | Event::HardBreak
@@ -273,6 +284,29 @@ mod tests {
         let mut trailing = turns;
         trailing.push(turn("assistant", vec![tool]));
         assert_eq!(recap_source(&trailing), Some(answer));
+    }
+
+    #[test]
+    fn source_excludes_widget_html_and_does_not_count_it_toward_the_cutoff() {
+        let widget = format!(
+            "```session-html\n<div id=\"demo\">{}</div>\n<script>run()</script>\n```",
+            "w ".repeat(900)
+        );
+        // Without the widget the prose is under the cutoff, so no recap.
+        let short = format!("Short answer.\n\n{widget}\n\nThe end.");
+        assert!(recap_source(&[turn("assistant", vec![text(&short)])]).is_none());
+        let prose = "Answer prose. ".repeat(70);
+        let long = format!("{prose}\n\n{widget}\n\nClosing line.");
+        let source = recap_source(&[turn("assistant", vec![text(&long)])]).unwrap();
+        assert!(
+            !source.contains("demo") && !source.contains("run()"),
+            "{source}"
+        );
+        assert!(source.ends_with("Closing line."), "{source}");
+        // An ordinary html code block is still answer text.
+        let sample = format!("{prose}\n\n```html\n<p>sample</p>\n```");
+        let source = recap_source(&[turn("assistant", vec![text(&sample)])]).unwrap();
+        assert!(source.contains("<p>sample</p>"), "{source}");
     }
 
     #[test]

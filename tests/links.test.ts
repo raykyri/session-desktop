@@ -232,6 +232,15 @@ test("pathFromFileServerUrl recovers the encoded filesystem path", () => {
   assert.equal(pathFromFileServerUrl("http://localhost:5173/app", 8123), undefined);
 });
 
+test("answer widget pages are file-server URLs that name no file", () => {
+  const widget = `http://127.0.0.1:9000/__session/widget/${"b".repeat(64)}/${"c".repeat(64)}.html`;
+  // Sandboxed and never handed to the OS browser, even before the port is known.
+  assert.equal(isFileServerUrl(widget, null), true);
+  assert.equal(isFileServerUrl(widget, 9000), true);
+  assert.equal(pathFromFileServerUrl(widget, 9000), undefined);
+  assert.equal(isFileServerUrl("http://127.0.0.1:5173/__session/widget/not-a-token/x.html", null), false);
+});
+
 test("resolveLocalLinkPath joins relative transcript paths against pane cwd", () => {
   assert.equal(resolveLocalLinkPath("/tmp/preview.html", "/repo"), "/tmp/preview.html");
   assert.equal(resolveLocalLinkPath("dev/mock.html", "/repo"), "/repo/dev/mock.html");

@@ -234,6 +234,24 @@ export default function SettingsDialog({
                   />
                 </div>
 
+                <label className="settings-row settings-toggle">
+                  <span className="settings-label-stack">
+                    <span className="settings-label">Widgets in answers</span>
+                    <span className="settings-hint settings-hint-weak">
+                      Agents may add sandboxed HTML; its scripts run only when you start them
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="settings-checkbox"
+                    checked={settings.researchInlineWidgets}
+                    onChange={(event) => {
+                      const researchInlineWidgets = event.currentTarget.checked;
+                      setSettings((current) => ({ ...current, researchInlineWidgets }));
+                    }}
+                  />
+                </label>
+
                 <div className="settings-row settings-shortcut-row">
                   <div className="settings-label">
                     <label htmlFor="settings-show-hide-shortcut">Show/hide app shortcut</label>

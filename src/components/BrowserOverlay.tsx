@@ -29,11 +29,13 @@ import {
   reloadBrowserAutomation,
   sendBrowserAutomationKey,
   sendBrowserAutomationMouse,
-  setNativeIframeShortcutFallback,
   startBrowserScreencast,
   stopBrowserScreencast,
   syncHumanBrowser,
 } from "../lib/api";
+import { registerShortcutFallbackFrame } from "../lib/iframeShortcutFallback";
+import { sessionWidgetIdentity } from "../lib/sessionWidgetExecution";
+import SessionWidgetPreview from "./SessionWidgetPreview";
 import type { BrowserAutomationSnapshot, HumanBrowserSnapshot } from "../lib/api";
 
 const MIN_BROWSER_OVERLAY_WIDTH = 360;
@@ -195,6 +197,16 @@ export default function BrowserOverlay({
       return url;
     }
   })();
+  const widgetPreview = sandbox && sessionWidgetIdentity(frameUrl) !== null;
+  const restoreFrameScroll = () => {
+    const scroll = frameScrollRef.current;
+    if (scroll?.url === frameUrl) {
+      frameRef.current?.contentWindow?.postMessage(
+        { type: "session-preview-scroll-restore", x: scroll.x, y: scroll.y },
+        "*",
+      );
+    }
+  };
 
   humanBrowserUrlRef.current = url;
   humanBrowserOccludedRef.current = occluded;
@@ -647,52 +659,17 @@ export default function BrowserOverlay({
   // document's window-level shortcut handlers never fire, and the native key
   // monitor deliberately leaves keys to a healthy WKWebView responder — so
   // every app shortcut (⌘-backtick, the ⌘⇧E toggle that closes this overlay…)
-  // goes dead the moment a click lands inside the frame. Report frame focus
-  // to the native layer so the monitor claims ⌘ chords for Session while it
-  // holds. Focus crossing into an iframe blurs the host window (its browsing
-  // context loses focus) and leaves activeElement on the frame element, so
-  // sample on window focus transitions — the framed document never forwards
-  // focusin/focusout to this one. The rAF matches the app-level samplers:
-  // activeElement settles after the event.
+  // goes dead the moment a click lands inside the frame. The shared registry
+  // reports frame focus to the native layer, which then claims ⌘ chords for
+  // Session (see lib/iframeShortcutFallback). Answer widget frames register
+  // with the same registry.
   useEffect(() => {
-    if (!url || automated || humanBrowser) {
+    const frame = frameRef.current;
+    if (!url || automated || humanBrowser || widgetPreview || !frame) {
       return;
     }
-    let frame: number | null = null;
-    let reported = false;
-    const report = (active: boolean) => {
-      if (active === reported) {
-        return;
-      }
-      reported = active;
-      void setNativeIframeShortcutFallback(active).catch(() => undefined);
-    };
-    const sample = () => {
-      frame = null;
-      report(frameRef.current !== null && document.activeElement === frameRef.current);
-    };
-    const schedule = () => {
-      if (frame === null) {
-        frame = requestAnimationFrame(sample);
-      }
-    };
-    window.addEventListener("blur", schedule);
-    window.addEventListener("focus", schedule);
-    window.addEventListener("focusin", schedule);
-    schedule();
-    return () => {
-      window.removeEventListener("blur", schedule);
-      window.removeEventListener("focus", schedule);
-      window.removeEventListener("focusin", schedule);
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-      // The frame is unmounting (overlay closed, or remounted by the reload
-      // key); WebKit fires no focus event for a removed element, so release
-      // the claim explicitly instead of leaving it wedged on.
-      report(false);
-    };
-  }, [automated, humanBrowser, url, reloadNonce]);
+    return registerShortcutFallbackFrame(frame);
+  }, [automated, humanBrowser, widgetPreview, url, reloadNonce]);
 
   useEffect(() => {
     return () => {
@@ -1140,6 +1117,13 @@ export default function BrowserOverlay({
           <div className="browser-overlay-native-slot" aria-label="WebKit browser content">
             {humanBrowserError ? <p>{humanBrowserError}</p> : null}
           </div>
+        ) : frameUrl && widgetPreview ? (
+          <SessionWidgetPreview
+            key={`${frameUrl}::${reloadNonce}`}
+            url={frameUrl}
+            frameRef={frameRef}
+            onLoad={restoreFrameScroll}
+          />
         ) : frameUrl ? (
           <iframe
             key={`${frameUrl}::${reloadNonce}`}
@@ -1151,15 +1135,7 @@ export default function BrowserOverlay({
             // allow-same-origin (opaque origin isolates the preview from Session).
             sandbox={sandbox ? "allow-scripts" : undefined}
             referrerPolicy="no-referrer"
-            onLoad={() => {
-              const scroll = frameScrollRef.current;
-              if (scroll?.url === frameUrl) {
-                frameRef.current?.contentWindow?.postMessage(
-                  { type: "session-preview-scroll-restore", x: scroll.x, y: scroll.y },
-                  "*",
-                );
-              }
-            }}
+            onLoad={restoreFrameScroll}
           />
         ) : (
           <div className="browser-overlay-empty">

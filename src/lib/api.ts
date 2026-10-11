@@ -433,6 +433,30 @@ export function setResearchLaunchInstruction(instruction: string) {
   return invoke<void>("research_launch_instruction_set", { instruction });
 }
 
+/** The stored "Widgets in answers" choice; null when never set (on). */
+export function getResearchInlineWidgets() {
+  return invoke<boolean | null>("research_inline_widgets_get");
+}
+
+export function setResearchInlineWidgets(enabled: boolean) {
+  return invoke<void>("research_inline_widgets_set", { enabled });
+}
+
+/** Loopback URLs for one stored answer widget: the static page shows its
+ * markup with the widget's scripts blocked; the run page allows them. The run
+ * page is absent while the backend does not allow widget scripts (WebRTC could
+ * not be turned off in the app web view, or not macOS). */
+export interface ResearchWidgetUrls {
+  staticUrl: string;
+  runUrl: string | null;
+}
+
+/** Stores a `session-html` block's HTML under its content hash (idempotent)
+ * and returns its widget page URLs. */
+export function prepareResearchWidget(html: string) {
+  return invoke<ResearchWidgetUrls>("research_widget_prepare", { html });
+}
+
 /** Opens an http(s)/mailto URL in the user's default external browser/mail client. */
 export function openExternalUrl(url: string) {
   return invoke<void>("open_external_url", { url });

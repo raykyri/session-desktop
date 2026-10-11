@@ -333,9 +333,16 @@ export function isFileServerUrl(url: string, fileServerPort: number | null): boo
       return true;
     }
   }
+  if (SESSION_WIDGET_URL_PATH.test(parsed.pathname)) {
+    return true;
+  }
   const firstSegment = parsed.pathname.replace(/^\/+/, "").split("/")[0] ?? "";
   return /^[0-9a-f]{64}$/.test(firstSegment);
 }
+
+// An answer widget page (src-tauri/src/research_widgets.rs): its capability
+// token follows a fixed prefix, and the path names no file on disk.
+const SESSION_WIDGET_URL_PATH = /^\/__session\/widget\/[0-9a-f]{64}\//u;
 
 /** Absolute filesystem path encoded in a token-bearing file-server URL. */
 export function pathFromFileServerUrl(
@@ -349,6 +356,9 @@ export function pathFromFileServerUrl(
   try {
     parsed = new URL(url);
   } catch {
+    return undefined;
+  }
+  if (SESSION_WIDGET_URL_PATH.test(parsed.pathname)) {
     return undefined;
   }
   const afterRoot = parsed.pathname.replace(/^\/+/u, "");

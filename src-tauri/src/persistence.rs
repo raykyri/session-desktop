@@ -258,6 +258,10 @@ pub struct AppPreferences {
     /// user's prompt unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research_launch_instruction: Option<String>,
+    /// Whether research answers render `session-html` blocks as inline widgets
+    /// and research launches tell agents about them. Absent means on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub research_inline_widgets: Option<bool>,
     /// GitHub OAuth access token from the device-flow sign-in. Kept in this
     /// owner-only file for the same reason as `open_router_key`. Absent means
     /// the user is signed out.
@@ -279,9 +283,16 @@ impl Default for AppPreferences {
             global_launcher_hotkey: None,
             open_router_key: None,
             research_launch_instruction: None,
+            research_inline_widgets: None,
             github_token: None,
             github_account: None,
         }
+    }
+}
+
+impl AppPreferences {
+    pub fn research_inline_widgets_enabled(&self) -> bool {
+        self.research_inline_widgets.unwrap_or(true)
     }
 }
 
@@ -1479,6 +1490,26 @@ mod tests {
                 .worktree_location,
             Some(WorktreeLocation::LocalClaude)
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn inline_widgets_default_on_and_persist_an_explicit_choice() {
+        let root = temp_root();
+        assert!(
+            load_preferences(&root)
+                .unwrap()
+                .research_inline_widgets_enabled()
+        );
+        let stored: AppPreferences = serde_json::from_str("{}").unwrap();
+        assert!(stored.research_inline_widgets_enabled());
+        update_preferences(&root, |preferences| {
+            preferences.research_inline_widgets = Some(false);
+        })
+        .unwrap();
+        let reread = read_preferences_from_disk(&preferences_path(&root)).unwrap();
+        assert_eq!(reread.research_inline_widgets, Some(false));
+        assert!(!reread.research_inline_widgets_enabled());
         fs::remove_dir_all(root).unwrap();
     }
 

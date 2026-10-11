@@ -404,6 +404,8 @@ pub struct ClaudeSdkSpawnSpec {
     pub effort: Option<String>,
     pub resume: Option<String>,
     pub fork: bool,
+    /// Text appended to Claude Code's default system prompt.
+    pub append_system_prompt: Option<String>,
     pub stderr_log: PathBuf,
 }
 
@@ -494,6 +496,14 @@ impl ClaudeSdkSession {
         }
         if let Some(effort) = &spec.effort {
             command.arg("--effort").arg(effort);
+        }
+        if let Some(append) = &spec.append_system_prompt {
+            command.arg("--append-system-prompt").arg(append);
+            let _ = writeln!(
+                stderr_file,
+                "session: research SDK --append-system-prompt ({} bytes)",
+                append.len()
+            );
         }
         if let Some(resume) = &spec.resume {
             command.arg(format!("--resume={resume}"));
@@ -1110,6 +1120,10 @@ if os.path.exists("expect-optional"):
     assert "--effort" in sys.argv and "high" in sys.argv
     assert "--resume=sess-parent" in sys.argv
     assert "--fork-session" in sys.argv
+    appended = sys.argv[sys.argv.index("--append-system-prompt") + 1]
+    assert appended == "Widget guidance.\nSecond line.", appended
+else:
+    assert "--append-system-prompt" not in sys.argv, sys.argv
 def read():
     line = sys.stdin.readline()
     if not line:
@@ -1184,6 +1198,7 @@ print(json.dumps({
             effort: Some("high".to_string()),
             resume: Some("sess-parent".to_string()),
             fork: true,
+            append_system_prompt: Some("Widget guidance.\nSecond line.".to_string()),
             stderr_log: dir.join("stderr.log"),
         })
         .unwrap();
@@ -1239,6 +1254,7 @@ print(json.dumps({
             effort: None,
             resume: None,
             fork: false,
+            append_system_prompt: None,
             stderr_log: dir.join("stderr.log"),
         })
         .unwrap();
@@ -1301,6 +1317,7 @@ time.sleep(8)
             effort: None,
             resume: None,
             fork: false,
+            append_system_prompt: None,
             stderr_log: dir.join("stderr.log"),
         })
         .unwrap();

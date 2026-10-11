@@ -183,6 +183,13 @@ export interface AppSettings {
    */
   researchLaunchInstruction: string;
   /**
+   * Render `session-html` blocks in research answers as sandboxed widgets and
+   * tell research agents about them. On by default. The backend persists its
+   * own copy (read on every research launch path); this mirror keeps the
+   * dialog in sync.
+   */
+  researchInlineWidgets: boolean;
+  /**
    * Show code-oriented context in tabs and the launcher: per-tab paths, git
    * worktree metadata, and the "New worktree" launcher option. When off, tabs
    * collapse to a single aligned row (status dot · title · status).
@@ -208,6 +215,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   useLoginShell: true,
   worktreeLocation: "global",
   researchLaunchInstruction: "",
+  researchInlineWidgets: true,
   codeMode: true,
   showNotifications: true,
   requireCmdEnterToSend: true,
@@ -279,6 +287,10 @@ export function loadSettings(): AppSettings {
       typeof parsed.researchLaunchInstruction === "string"
         ? clampResearchLaunchInstruction(parsed.researchLaunchInstruction)
         : DEFAULT_SETTINGS.researchLaunchInstruction;
+    const researchInlineWidgets =
+      typeof parsed.researchInlineWidgets === "boolean"
+        ? parsed.researchInlineWidgets
+        : DEFAULT_SETTINGS.researchInlineWidgets;
     const showShortcutHints =
       typeof parsed.showShortcutHints === "boolean"
         ? parsed.showShortcutHints
@@ -328,6 +340,7 @@ export function loadSettings(): AppSettings {
       useLoginShell,
       worktreeLocation,
       researchLaunchInstruction,
+      researchInlineWidgets,
       codeMode,
       showNotifications,
       requireCmdEnterToSend,

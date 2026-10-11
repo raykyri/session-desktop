@@ -48,6 +48,7 @@ import {
   resolveResearchScope,
 } from "./lib/researchScope";
 import ResearchThreadPage, { type ResearchThreadTreeMenu } from "./components/research/ResearchThreadPage";
+import { ResearchInlineWidgetsContext } from "./components/research/ResearchMessage";
 import ResearchDraftView from "./components/research/ResearchDraftView";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
@@ -1121,50 +1122,52 @@ function MainApp() {
               // Remount on tree changes to reset selection, fetched content,
               // and the follow-up draft before paint. Resetting them in effects
               // would briefly show and refetch the previous tree's node.
-              <ResearchThreadPage
-                key={activeResearchTreeId}
-                detail={activeResearchDetail}
-                treeTitle={
-                  activeResearchDetail?.tree.title ??
-                  researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
-                  archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
-                }
-                treeType={
-                  (
-                    researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
-                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
-                  )?.type
-                }
-                archived={Boolean(activeResearchDetail?.tree.archivedAt)}
-                recapPendingNodeIds={recapPendingNodeIds}
-                detailError={activeResearchDetailError}
-                onRetryDetail={retryActiveResearchDetail}
-                onFork={createResearchFollowup}
-                postActions={postActions}
-                onRemoveBranch={removeResearchBranchFromThread}
-                onRemoveTree={removeResearchTreeAndSelectFallback}
-                onRenameTree={renameResearchTreeTitle}
-                onUpdateDocument={editResearchDocument}
-                onUpdatePost={editResearchPost}
-                onAskAsQuestion={askResearchEditorQuestion}
-                readQuestionModel={readResearchQuestionModel}
-                onCancel={cancelResearchRun}
-                onRetryNode={retryResearchRun}
-                onRerunNode={rerunResearchRun}
-                linkActions={browser.linkActionsFor(researchBrowserOwnerId(activeResearchTreeId))}
-                onError={setError}
-                onToast={handleResearchThreadToast}
-                shortcutHintsShown={shortcutHintsShown}
-                requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                onOpenNodesChange={setOpenResearchNodeIds}
-                treeMenu={activeResearchTreeMenu}
-                canGoBack={researchHistoryNav.canGoBack}
-                canGoForward={researchHistoryNav.canGoForward}
-                onBack={goResearchBack}
-                onForward={goResearchForward}
-                onNavigate={reportResearchNavigation}
-                onPruneVisits={pruneResearchNodeVisits}
-              />
+              <ResearchInlineWidgetsContext.Provider value={settings.researchInlineWidgets}>
+                <ResearchThreadPage
+                  key={activeResearchTreeId}
+                  detail={activeResearchDetail}
+                  treeTitle={
+                    activeResearchDetail?.tree.title ??
+                    researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
+                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
+                  }
+                  treeType={
+                    (
+                      researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
+                    )?.type
+                  }
+                  archived={Boolean(activeResearchDetail?.tree.archivedAt)}
+                  recapPendingNodeIds={recapPendingNodeIds}
+                  detailError={activeResearchDetailError}
+                  onRetryDetail={retryActiveResearchDetail}
+                  onFork={createResearchFollowup}
+                  postActions={postActions}
+                  onRemoveBranch={removeResearchBranchFromThread}
+                  onRemoveTree={removeResearchTreeAndSelectFallback}
+                  onRenameTree={renameResearchTreeTitle}
+                  onUpdateDocument={editResearchDocument}
+                  onUpdatePost={editResearchPost}
+                  onAskAsQuestion={askResearchEditorQuestion}
+                  readQuestionModel={readResearchQuestionModel}
+                  onCancel={cancelResearchRun}
+                  onRetryNode={retryResearchRun}
+                  onRerunNode={rerunResearchRun}
+                  linkActions={browser.linkActionsFor(researchBrowserOwnerId(activeResearchTreeId))}
+                  onError={setError}
+                  onToast={handleResearchThreadToast}
+                  shortcutHintsShown={shortcutHintsShown}
+                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                  onOpenNodesChange={setOpenResearchNodeIds}
+                  treeMenu={activeResearchTreeMenu}
+                  canGoBack={researchHistoryNav.canGoBack}
+                  canGoForward={researchHistoryNav.canGoForward}
+                  onBack={goResearchBack}
+                  onForward={goResearchForward}
+                  onNavigate={reportResearchNavigation}
+                  onPruneVisits={pruneResearchNodeVisits}
+                />
+              </ResearchInlineWidgetsContext.Provider>
             ) : openResearchDraft ? (
               <ResearchDraftView
                 key={openResearchDraft.id}

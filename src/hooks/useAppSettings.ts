@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   setNativeBrowserBackground,
   setOpenRouterKey,
+  setResearchInlineWidgets,
   setResearchLaunchInstruction,
   setUseLoginShell,
   setWorktreeLocation,
@@ -27,6 +28,7 @@ interface StoredPreferences {
   storedUseLoginShell: boolean | null;
   storedWorktreeLocation: WorktreeLocation | null;
   storedResearchLaunchInstruction: string | null;
+  storedResearchInlineWidgets: boolean | null;
 }
 
 function errorMessage(err: unknown): string {
@@ -54,6 +56,7 @@ export function useAppSettings(onError: (message: string) => void) {
   const useLoginShellHydratedRef = useRef(false);
   const worktreeLocationHydratedRef = useRef(false);
   const researchLaunchInstructionHydratedRef = useRef(false);
+  const researchInlineWidgetsHydratedRef = useRef(false);
 
   const bodyFontFamily = bodyFontStackFor(settings.bodyFontId);
   // Apply the app accent before paint so switching (and restoring) color themes
@@ -189,6 +192,17 @@ export function useAppSettings(onError: (message: string) => void) {
     });
   }, [settings.researchLaunchInstruction]);
 
+  // Research launches read the widget preference on the Rust side to decide
+  // whether agents receive the widget guidance.
+  useEffect(() => {
+    if (!researchInlineWidgetsHydratedRef.current) {
+      return;
+    }
+    void setResearchInlineWidgets(settings.researchInlineWidgets).catch((err) => {
+      onErrorRef.current(`Could not save the inline-widgets setting: ${errorMessage(err)}`);
+    });
+  }, [settings.researchInlineWidgets]);
+
   // Hydrates the backend-owned preferences. If the backend has no OpenRouter
   // key but one survives in an old localStorage settings blob, that value is
   // migrated into the backend once; either way the in-memory settings track it.
@@ -198,6 +212,7 @@ export function useAppSettings(onError: (message: string) => void) {
       storedUseLoginShell,
       storedWorktreeLocation,
       storedResearchLaunchInstruction,
+      storedResearchInlineWidgets,
     }: StoredPreferences) => {
       setSettings((current) => {
         const backendKey = storedOpenRouterKey.trim();
@@ -208,6 +223,13 @@ export function useAppSettings(onError: (message: string) => void) {
         const effectiveResearchLaunchInstruction = clampResearchLaunchInstruction(
           storedResearchLaunchInstruction ?? current.researchLaunchInstruction,
         );
+        const effectiveResearchInlineWidgets =
+          storedResearchInlineWidgets ?? current.researchInlineWidgets;
+        // Never stored in the backend (which then defaults to on): record the
+        // local choice so launches follow what the dialog shows.
+        if (storedResearchInlineWidgets === null) {
+          void setResearchInlineWidgets(effectiveResearchInlineWidgets).catch(() => undefined);
+        }
         if (!backendKey && migratedKey) {
           void setOpenRouterKey(migratedKey).catch(() => undefined);
         }
@@ -215,10 +237,12 @@ export function useAppSettings(onError: (message: string) => void) {
         useLoginShellHydratedRef.current = true;
         worktreeLocationHydratedRef.current = true;
         researchLaunchInstructionHydratedRef.current = true;
+        researchInlineWidgetsHydratedRef.current = true;
         return current.openRouterKey === effectiveKey &&
           current.useLoginShell === effectiveUseLoginShell &&
           current.worktreeLocation === effectiveWorktreeLocation &&
-          current.researchLaunchInstruction === effectiveResearchLaunchInstruction
+          current.researchLaunchInstruction === effectiveResearchLaunchInstruction &&
+          current.researchInlineWidgets === effectiveResearchInlineWidgets
           ? current
           : {
               ...current,
@@ -226,6 +250,7 @@ export function useAppSettings(onError: (message: string) => void) {
               useLoginShell: effectiveUseLoginShell,
               worktreeLocation: effectiveWorktreeLocation,
               researchLaunchInstruction: effectiveResearchLaunchInstruction,
+              researchInlineWidgets: effectiveResearchInlineWidgets,
             };
       });
     },

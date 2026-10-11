@@ -69,6 +69,9 @@ pub fn kill_all_sessions() {
     }
 }
 
+/// Starts a research run. `guidance` is an instruction block delivered through
+/// each agent's system-level channel rather than the prompt (see
+/// [`crate::research_widgets::AGENT_GUIDANCE`]).
 pub fn launch(
     state: &AppState,
     node: &ResearchNode,
@@ -76,6 +79,7 @@ pub fn launch(
     prompt: String,
     resume: Option<String>,
     fork: bool,
+    guidance: Option<&str>,
 ) -> Result<ResearchNode, String> {
     let resume = resume
         .map(|session_id| validate_session_id(&session_id, node.adapter()))
@@ -85,8 +89,8 @@ pub fn launch(
             err
         })?;
     match node.adapter() {
-        "claude" => launch_claude(state, node, workspace, prompt, resume, fork),
-        "codex" | "grok" => launch_jsonl(state, node, workspace, prompt, resume, fork),
+        "claude" => launch_claude(state, node, workspace, prompt, resume, fork, guidance),
+        "codex" | "grok" => launch_jsonl(state, node, workspace, prompt, resume, fork, guidance),
         adapter => Err(format!("'{adapter}' is not a supported research agent")),
     }
 }
@@ -98,6 +102,7 @@ fn launch_claude(
     prompt: String,
     resume: Option<String>,
     fork: bool,
+    guidance: Option<&str>,
 ) -> Result<ResearchNode, String> {
     let adapter = ClaudeAdapter::new(state.config());
     let binary = adapter.ensure_binary_for_sdk().map_err(|err| {
@@ -192,6 +197,7 @@ fn launch_claude(
         effort: node.effort().map(str::to_string),
         resume,
         fork,
+        append_system_prompt: guidance.map(str::to_string),
         stderr_log,
     };
     let runtime_state = state.clone();
@@ -253,6 +259,7 @@ fn launch_jsonl(
     prompt: String,
     resume: Option<String>,
     fork: bool,
+    guidance: Option<&str>,
 ) -> Result<ResearchNode, String> {
     let flavor = match node.adapter() {
         "codex" => JsonlFlavor::Codex,
@@ -366,6 +373,7 @@ fn launch_jsonl(
             node.effort(),
             resume.as_deref(),
             fork,
+            guidance,
         ),
         JsonlFlavor::Grok => build_grok_headless_args(
             &cwd,
@@ -377,6 +385,7 @@ fn launch_jsonl(
             grok_session_id
                 .as_deref()
                 .expect("Grok session id was minted"),
+            guidance,
         ),
     };
     let runtime_state = state.clone();
@@ -418,6 +427,7 @@ fn build_codex_exec_args(
     effort: Option<&str>,
     resume: Option<&str>,
     fork: bool,
+    guidance: Option<&str>,
 ) -> Vec<String> {
     let mut args = vec![
         "--search".to_string(),
@@ -451,6 +461,17 @@ fn build_codex_exec_args(
             format!("model_reasoning_effort={}", toml_string(effort)),
         ]);
     }
+    // Codex's `developer_instructions` config key adds a developer message to
+    // the session, the channel the interactive Codex adapter also uses. Codex
+    // (0.162.1, session/mod.rs) injects it only with the full initial context,
+    // which a fork skips while its reconstructed history has a context
+    // baseline, so passing it again on `exec fork` does not repeat it.
+    if let Some(guidance) = guidance {
+        args.extend([
+            "-c".to_string(),
+            format!("developer_instructions={}", toml_string(guidance)),
+        ]);
+    }
     if fork {
         if let Some(session_id) = resume.map(str::trim).filter(|value| !value.is_empty()) {
             args.push(session_id.to_string());
@@ -468,6 +489,7 @@ fn build_grok_headless_args(
     resume: Option<&str>,
     fork: bool,
     session_id: &str,
+    guidance: Option<&str>,
 ) -> Vec<String> {
     let mut args = vec![
         "--no-auto-update".to_string(),
@@ -498,6 +520,10 @@ fn build_grok_headless_args(
     }
     if let Some(effort) = effort.map(str::trim).filter(|value| !value.is_empty()) {
         args.extend(["--reasoning-effort".to_string(), effort.to_string()]);
+    }
+    // `--rules` appends text to Grok's default system prompt.
+    if let Some(guidance) = guidance {
+        args.extend(["--rules".to_string(), guidance.to_string()]);
     }
     if fork {
         if let Some(parent) = resume.map(str::trim).filter(|value| !value.is_empty()) {
@@ -1884,7 +1910,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        let launched = launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        let launched = launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(launched.runtime(), ResearchRuntime::Sdk);
         assert!(launched.pane_id().is_none());
         let agent_id = launched
@@ -1951,7 +1986,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         state.cancel_research_node(&node.id).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
@@ -1983,7 +2027,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
 
         let deadline = Instant::now() + Duration::from_secs(5);
         while !workspace_dir.join("prompt-sent").is_file() {
@@ -2034,7 +2087,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
             state.research_node(&node.id).unwrap().status(),
@@ -2086,7 +2148,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
             state.research_node(&node.id).unwrap().status(),
@@ -2104,8 +2175,14 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
 
     #[test]
     fn codex_exec_args_are_headless_searchable_and_fail_closed() {
-        let args =
-            build_codex_exec_args("question", Some("gpt-5.6-sol"), Some("high"), None, false);
+        let args = build_codex_exec_args(
+            "question",
+            Some("gpt-5.6-sol"),
+            Some("high"),
+            None,
+            false,
+            None,
+        );
         assert_eq!(
             &args[..6],
             [
@@ -2134,8 +2211,13 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
                 .any(|arg| arg == "model_reasoning_effort=\"high\"")
         );
         assert_eq!(&args[args.len() - 2..], ["--", "question"]);
+        assert!(
+            !args
+                .iter()
+                .any(|arg| arg.starts_with("developer_instructions="))
+        );
 
-        let fork = build_codex_exec_args("branch", None, None, Some("parent-1"), true);
+        let fork = build_codex_exec_args("branch", None, None, Some("parent-1"), true, None);
         assert_eq!(
             &fork[..7],
             [
@@ -2153,6 +2235,60 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
     }
 
     #[test]
+    fn widget_guidance_reaches_codex_and_grok_through_their_system_channels() {
+        let guidance = crate::research_widgets::AGENT_GUIDANCE;
+        for fork in [false, true] {
+            let args =
+                build_codex_exec_args("q", None, None, Some("parent-1"), fork, Some(guidance));
+            let override_value = args
+                .windows(2)
+                .find(|pair| pair[0] == "-c" && pair[1].starts_with("developer_instructions="))
+                .map(|pair| pair[1].clone())
+                .expect("developer_instructions override");
+            // The TOML string must round-trip to the exact block.
+            let toml_value = override_value
+                .strip_prefix("developer_instructions=")
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<String>(toml_value).unwrap(),
+                guidance
+            );
+            // Overrides precede the `--` that delimits the prompt.
+            let dash = args.iter().position(|arg| arg == "--").unwrap();
+            assert!(args.iter().position(|arg| arg == &override_value).unwrap() < dash);
+            assert!(
+                !args[dash + 1..]
+                    .iter()
+                    .any(|arg| arg.contains("session-html"))
+            );
+        }
+        let grok = build_grok_headless_args(
+            Path::new("/tmp/research"),
+            "q",
+            None,
+            None,
+            None,
+            false,
+            "child-1",
+            Some(guidance),
+        );
+        assert!(grok.windows(2).any(|pair| pair == ["--rules", guidance]));
+        let prompt_flag = grok.iter().position(|arg| arg == "-p").unwrap();
+        assert_eq!(&grok[prompt_flag..], ["-p", "q"]);
+        let without = build_grok_headless_args(
+            Path::new("/tmp/research"),
+            "q",
+            None,
+            None,
+            None,
+            false,
+            "child-1",
+            None,
+        );
+        assert!(!without.iter().any(|arg| arg == "--rules"));
+    }
+
+    #[test]
     fn grok_headless_args_are_streaming_and_fail_closed() {
         let args = build_grok_headless_args(
             Path::new("/tmp/research"),
@@ -2162,6 +2298,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             Some("parent-1"),
             true,
             "child-1",
+            None,
         );
         assert!(
             args.windows(2)
@@ -2226,7 +2363,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         let finished = state.research_node(&node.id).unwrap();
         assert_eq!(finished.status(), ResearchNodeStatus::Complete);
@@ -2268,7 +2414,16 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             })
             .unwrap();
         let node = detail.nodes[0].clone();
-        launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
+        launch(
+            &state,
+            &node,
+            &group,
+            "hello".to_string(),
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         let finished = state.research_node(&node.id).unwrap();
         assert_eq!(finished.status(), ResearchNodeStatus::Complete);

@@ -17,6 +17,10 @@
   animation: none;
 }
 
+.app-shell.reduce-motion .session-widget-placeholder::before {
+  animation: none;
+}
+
 .app-shell.reduce-motion .user-notification,
 .app-shell.reduce-motion .user-notification.is-entering,
 .app-shell.reduce-motion .user-notification.is-exiting {

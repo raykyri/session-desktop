@@ -28,6 +28,7 @@ mod research;
 mod research_anchors;
 mod research_recap;
 mod research_runtime;
+mod research_widgets;
 mod scrollback;
 mod shell_jobs;
 mod show_hide_shortcut;
@@ -897,6 +898,11 @@ fn browser_open_preview_external(
         .file_server_port()
         .ok_or_else(|| "the file server is not running".to_string())?;
     let parsed = validated_preview_url(&url, port)?;
+    // A widget's stored HTML is a fragment written for the sandboxed widget
+    // page; a browser would load it from file:// without that page's CSP.
+    if parsed.path().starts_with(research_widgets::URL_PREFIX) {
+        return Err("Answer widgets open only in Session's browser".to_string());
+    }
     let source = file_server::resolve_tokenized_file_path(&state, parsed.path())?;
     let mut file_url = Url::from_file_path(&source)
         .map_err(|_| format!("failed to build a file URL for {}", source.display()))?;
@@ -1658,18 +1664,28 @@ fn launch_research_execution(
     prompt: String,
     fork_from: Option<&workspace::AgentInfo>,
 ) -> Result<research::ResearchNode, String> {
-    let prompt = match persistence::load_preferences(&state.config().workspace_root) {
-        Ok(preferences) => research::prompt_with_research_launch_instruction(
-            prompt,
-            preferences.research_launch_instruction.as_deref(),
-        ),
+    let preferences = match persistence::load_preferences(&state.config().workspace_root) {
+        Ok(preferences) => preferences,
         Err(err) => {
             let _ = state.fail_research_node(&node.id, err.clone());
             return Err(err);
         }
     };
+    let prompt = research::prompt_with_research_launch_instruction(
+        prompt,
+        preferences.research_launch_instruction.as_deref(),
+    );
+    let guidance = research_widgets::agent_guidance(preferences.research_inline_widgets_enabled());
     let resume = fork_from.and_then(|agent| agent.session_id.clone());
-    research_runtime::launch(state, node, workspace, prompt, resume, fork_from.is_some())
+    research_runtime::launch(
+        state,
+        node,
+        workspace,
+        prompt,
+        resume,
+        fork_from.is_some(),
+        guidance,
+    )
 }
 
 /// Launches a fresh (non-forked) agent run for a research node.
@@ -2467,6 +2483,46 @@ fn research_launch_instruction_set(
     persistence::update_preferences(&state.config().workspace_root, move |preferences| {
         preferences.research_launch_instruction = instruction;
     })
+}
+
+/// The stored choice of whether research answers render `session-html` blocks
+/// as widgets and research launches include the widget guidance. `None` when
+/// never set, which launches treat as on; the frontend then keeps its local
+/// setting and stores it.
+#[tauri::command(async)]
+fn research_inline_widgets_get(state: tauri::State<'_, AppState>) -> Result<Option<bool>, String> {
+    Ok(persistence::load_preferences(&state.config().workspace_root)?.research_inline_widgets)
+}
+
+#[tauri::command(async)]
+fn research_inline_widgets_set(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    persistence::update_preferences(&state.config().workspace_root, move |preferences| {
+        preferences.research_inline_widgets = Some(enabled);
+    })
+}
+
+/// Stores one `session-html` block from a research answer under its content
+/// hash and returns its static and run URLs on the file server. The HTML comes
+/// from answer text the frontend already displays; the URLs only ever load in
+/// sandboxed frames under the widget CSP (see `research_widgets`).
+#[tauri::command(async)]
+async fn research_widget_prepare(
+    state: tauri::State<'_, AppState>,
+    html: String,
+) -> Result<research_widgets::WidgetUrls, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let port = state
+            .file_server_port()
+            .ok_or_else(|| "the file server is not running".to_string())?;
+        let hash = research_widgets::store(&state.config().workspace_root, &html)?;
+        research_widgets::widget_urls(port, &hash)
+    })
+    .await
+    .map_err(|err| format!("research_widget_prepare task failed: {err}"))?
 }
 
 // pane_write and every agent turn-queue command below are `(async)` as a
@@ -3326,6 +3382,15 @@ fn main() {
                 if let Some(window) = app.get_webview_window("main") {
                     native_support::initialize(window.ns_view()?, state.clone())
                         .map_err(std::io::Error::other)?;
+                    // Answer widget scripts run only in a web view without
+                    // WebRTC, whose traffic no CSP directive governs.
+                    let peer_connections_disabled = native_support::disable_peer_connections();
+                    if !peer_connections_disabled {
+                        eprintln!(
+                            "session: could not turn off WebRTC in the app web view; answer widget scripts stay off"
+                        );
+                    }
+                    research_widgets::set_scripts_allowed(peer_connections_disabled);
                 }
                 // Best-effort: if the menu tweak fails, ⌘W keeps its default
                 // (window-closing) behavior and ⌘Q its instant-quit behavior rather
@@ -3571,6 +3636,9 @@ fn main() {
             use_login_shell_set,
             research_launch_instruction_get,
             research_launch_instruction_set,
+            research_inline_widgets_get,
+            research_inline_widgets_set,
+            research_widget_prepare,
             worktree_location_get,
             worktree_location_set,
             pane_write,

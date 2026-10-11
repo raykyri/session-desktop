@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { ResearchMessageAttachment } from "../../types";
 import TranscriptMarkdown, {
@@ -6,6 +7,10 @@ import TranscriptMarkdown, {
 import { TweetEmbed } from "./TweetEmbed";
 
 export type ResearchProseVariant = "body" | "compact";
+
+/** The "Widgets in answers" setting: whether answers that opt in with
+ * `widgets` display `session-html` blocks as widget frames. */
+export const ResearchInlineWidgetsContext = createContext(false);
 
 /** Research-owned adapter around the generic transcript Markdown renderer.
  * Typography is selected on the renderer itself instead of inherited from a
@@ -17,13 +22,18 @@ export function ResearchMarkdown({
   variant = "body",
   inline = false,
   oversizedContent,
+  widgets = false,
 }: {
   text: string;
   className?: string;
   variant?: ResearchProseVariant;
   inline?: boolean;
   oversizedContent?: OversizedMarkdownPolicy;
+  /** Agent-written answer text, whose `session-html` blocks may display as
+   * widgets while the setting is on. */
+  widgets?: boolean;
 }) {
+  const widgetsEnabled = useContext(ResearchInlineWidgetsContext);
   const proseClassName = `research-prose research-prose--${variant}${
     className ? ` ${className}` : ""
   }`;
@@ -34,6 +44,7 @@ export function ResearchMarkdown({
       imageBehavior="open"
       inline={inline}
       oversizedContent={oversizedContent}
+      widgets={widgets && widgetsEnabled && variant === "body" && !inline}
     />
   );
 }

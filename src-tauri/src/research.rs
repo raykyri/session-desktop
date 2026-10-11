@@ -3400,7 +3400,7 @@ pub fn validate_document_markdown(markdown: &str) -> Result<(), String> {
 /// content, with any ATX heading markers stripped, truncated like a prompt
 /// title.
 pub fn document_default_title(markdown: &str) -> String {
-    markdown
+    crate::research_widgets::strip_widget_blocks(markdown)
         .lines()
         .map(|line| line.trim().trim_start_matches('#').trim())
         .find(|line| !line.is_empty())
@@ -4633,6 +4633,10 @@ mod tests {
         // A heading-marker-only line has no content; the next line wins.
         assert_eq!(document_default_title("#\nReal title"), "Real title");
         assert_eq!(document_default_title("   \n\t"), "Untitled document");
+        assert_eq!(
+            document_default_title("```session-html\n<p>widget</p>\n```\n\n# Findings"),
+            "Findings"
+        );
     }
 
     #[test]

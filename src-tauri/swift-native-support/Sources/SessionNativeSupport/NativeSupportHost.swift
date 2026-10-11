@@ -114,6 +114,34 @@ final class NativeSupportHost {
         return true
     }
 
+    /// Turns off WebRTC peer connections in the app's web view. Their traffic
+    /// (STUN/TURN candidates, data channels) is not governed by any CSP
+    /// directive, and research answer widgets run their scripts in sandboxed
+    /// frames of this web view; the app page itself does not use WebRTC.
+    /// The switch is WebKit's `_peerConnectionEnabled` preference
+    /// (WKPreferencesPrivate.h, macOS 10.13.4+). `configuration` returns a copy
+    /// whose `preferences` is the page's live WebPreferences object, so the
+    /// change reaches the existing page and every frame created afterwards.
+    /// Human-browser web views have their own configuration and keep WebRTC.
+    func disablePeerConnections() -> Bool {
+        guard let appWebView else { return false }
+        return Self.disablePeerConnections(in: appWebView.configuration.preferences)
+    }
+
+    static func disablePeerConnections(in preferences: WKPreferences) -> Bool {
+        let setter = NSSelectorFromString("_setPeerConnectionEnabled:")
+        let getter = NSSelectorFromString("_peerConnectionEnabled")
+        guard preferences.responds(to: setter), preferences.responds(to: getter) else {
+            return false
+        }
+        typealias Setter = @convention(c) (AnyObject, Selector, ObjCBool) -> Void
+        typealias Getter = @convention(c) (AnyObject, Selector) -> ObjCBool
+        let set = unsafeBitCast(preferences.method(for: setter), to: Setter.self)
+        let get = unsafeBitCast(preferences.method(for: getter), to: Getter.self)
+        set(preferences, setter, false)
+        return !get(preferences, getter).boolValue
+    }
+
     func setHumanBrowserWebView(_ webView: WKWebView?, active: Bool) -> Bool {
         guard appWebView != nil else { return false }
         if active {

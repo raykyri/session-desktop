@@ -15,6 +15,7 @@
 //! serves one request then closes (`Connection: close`).
 
 use crate::connection_limit::ConnectionLimiter;
+use crate::research_widgets::{self, WidgetMode};
 use crate::state::AppState;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha2::{Digest, Sha256};
@@ -451,6 +452,11 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
             .any(|p| p == "codex-inline-vis" || p == "codex-inline-vis=1")
     });
     let body_font_id = query_parameter(query, "session-body-font");
+    // Research answer widgets carry their own capability tokens and live in
+    // Session's widget store rather than under any pane root.
+    if let Some(rest) = path.strip_prefix(research_widgets::URL_PREFIX) {
+        return widget_response(state, rest, is_head, body_font_id);
+    }
     // The path is "/<token>/<abs path>": the first segment is the preview capability,
     // and everything from the next '/' onward is the percent-encoded absolute path
     // (with its leading slash preserved). Tokens are hex, so they never contain a slash.
@@ -628,6 +634,52 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
         response.header("Content-Security-Policy", csp);
     }
     response.body = body;
+    response
+}
+
+/// Serves a stored research answer widget inside the Codex fragment wrapper.
+/// The token in the path selects the static page (no widget scripts) or the run
+/// page; anything else fails without revealing whether a widget exists.
+fn widget_response(
+    state: &AppState,
+    rest: &str,
+    is_head: bool,
+    body_font_id: Option<&str>,
+) -> Response {
+    let Some(port) = state.file_server_port() else {
+        return Response::error(503, "Service Unavailable");
+    };
+    let Some((mode, path)) =
+        research_widgets::resolve_request(&state.config().workspace_root, rest)
+    else {
+        return Response::error(404, "Not Found");
+    };
+    let Ok(file) = File::open(&path) else {
+        return Response::error(404, "Not Found");
+    };
+    let Ok(meta) = file.metadata() else {
+        return Response::error(404, "Not Found");
+    };
+    if !meta.is_file() {
+        return Response::error(404, "Not Found");
+    }
+    if meta.len() > research_widgets::MAX_WIDGET_BYTES as u64 {
+        return Response::error(413, "Payload Too Large");
+    }
+    let Ok(source) = read_slice(file, 0, meta.len()) else {
+        return Response::error(500, "Internal Server Error");
+    };
+    let page = render_widget_page(&String::from_utf8_lossy(&source), body_font_id, mode);
+    let mut response = Response::new(200, "OK");
+    response.header("Content-Type", "text/html; charset=utf-8");
+    response.header("Content-Length", &page.len().to_string());
+    response.header("Content-Security-Policy", &widget_csp(port, mode));
+    response.header("Cache-Control", "no-store");
+    response.header("X-DNS-Prefetch-Control", "off");
+    response.header("Permissions-Policy", WIDGET_PERMISSIONS_POLICY);
+    if !is_head {
+        response.body = page.into_bytes();
+    }
     response
 }
 
@@ -870,6 +922,137 @@ fn render_codex_inline_visualization_page(
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
          <title>{title}</title>\n<style>{css}</style>\n</head>\n\
          <body>\n{CODEX_INLINE_VIS_ERROR_REPORTER}\n{source}\n{scroll_bridge}\n</body>\n</html>\n"
+    )
+}
+
+/// Reports the widget page's content height to the embedding answer, which sizes
+/// its frame to fit. With the navigation guard and the scroll bridge, it is the
+/// only script the static page's CSP admits (by hash). It runs from `<head>`,
+/// before the widget's HTML, so markup the widget leaves open (`<textarea>`,
+/// `<!--`, `<script>`) cannot swallow it, and starts observing `<body>` once
+/// parsing has created it.
+///
+/// - Content sized from the viewport (`100vh`) grows with every report: the
+///   frame grows by the reported height, the content by the same amount. When
+///   two consecutive reports exceed the frame by the same margin right after the
+///   frame took the previous report, growth stops at the current frame height
+///   (the rest scrolls inside the frame); shrinking still reports.
+/// - Reports are throttled to one per 250 ms (trailing), and content whose
+///   height keeps reversing (a CSS animation) is followed only upwards after
+///   three reversals within two seconds, so the frame settles at the largest
+///   height instead of resizing the answer continuously.
+const WIDGET_HEIGHT_SCRIPT: &str = r#"(()=>{let h=-1,gap=-1,repeats=0,cap=Infinity,floor=0,dir=0,flips=[],last=0,timer=0;const send=()=>{timer=0;const b=document.body;if(!b)return;const vh=innerHeight;let n=Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height));if(n>vh&&vh===h&&n-vh===gap){if(++repeats>=2)cap=Math.min(cap,vh)}else{repeats=0}gap=n>vh?n-vh:-1;n=Math.max(Math.min(n,cap),floor);if(n===h)return;const d=n>h?1:-1,t=Date.now();if(h>=0&&dir&&d!==dir){flips=flips.filter((x)=>t-x<2000);flips.push(t);if(flips.length>=3){floor=Math.max(h,n);n=floor}}dir=d;if(n===h)return;h=n;last=t;parent.postMessage({type:'session-widget-height',height:n},'*')};const queue=()=>{if(!timer)timer=setTimeout(send,Math.max(0,250-(Date.now()-last)))};const start=()=>{new ResizeObserver(queue).observe(document.body);send()};if(document.body)start();else document.addEventListener('DOMContentLoaded',start);addEventListener('load',queue)})();"#;
+
+/// Keeps the widget page from navigating itself and lets the embedding answer
+/// notice when it did anyway. Runs first on the static and run pages, before
+/// any widget code:
+/// - cancels link and area activations (`click`, also from the keyboard) whose
+///   target is not a `#fragment`, so a click inside the widget sends nothing;
+/// - answers the answer's liveness pings (`session-widget-ping`) with a pong
+///   through the parent captured at startup. A document that replaced the
+///   widget page (`location = …` on the run page, which no script can cancel:
+///   the Navigation API's navigate event is disabled for opaque origins) does
+///   not answer, including one whose response never completes and so never
+///   fires `load`; the answer then removes the frame;
+/// - tells the answer when the document unloads (`session-widget-unload`, from
+///   `pagehide`), where the engine delivers that message.
+/// The listeners are registered before any widget code can register its own,
+/// so a widget cannot stop them from seeing a click or a ping.
+const WIDGET_NAVIGATION_GUARD_SCRIPT: &str = r#"(()=>{const p=parent;addEventListener('pagehide',()=>p.postMessage({type:'session-widget-unload'},'*'));addEventListener('message',(e)=>{const d=e.data;if(e.source===p&&d&&d.type==='session-widget-ping')p.postMessage({type:'session-widget-pong',id:d.id},'*')});const local=(h)=>typeof h==='string'&&h.trim().startsWith('#');addEventListener('click',(e)=>{const t=e.target;const a=t&&t.closest?t.closest('a[href],a[*|href],area[href]'):null;if(a&&!local(a.getAttribute('href')))e.preventDefault()},true)})();"#;
+
+/// Run page only, before any widget script: removes the WebRTC constructors
+/// from the widget's global object. Defence in depth: peer-connection traffic
+/// is outside every CSP directive, and the app web view already has WebRTC
+/// turned off (NativeSupportHost.disablePeerConnections), without which the run
+/// page is not served at all. A child frame the widget creates gets fresh
+/// globals that this does not reach; only the web view setting covers those.
+const WIDGET_PRELUDE_SCRIPT: &str = r#"(()=>{for(const n of["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceTransport","RTCSctpTransport","RTCDtlsTransport","RTCRtpSender","RTCRtpReceiver","RTCRtpTransceiver","RTCSessionDescription","RTCIceCandidate"])try{Object.defineProperty(window,n,{value:undefined,writable:false,configurable:false})}catch(e){}})();"#;
+
+/// Run page only: shows a generic notice when a widget script throws or a
+/// resource fails to load. Lives in `<head>` like the height reporter and adds
+/// its element to `<body>` on the first error.
+const WIDGET_ERROR_SCRIPT: &str = r#"(()=>{const reveal=(m)=>{let n=document.getElementById('session-visualization-error');if(!n){if(!document.body)return;n=document.createElement('div');n.id='session-visualization-error';n.className='session-visualization-error';n.setAttribute('role','alert');document.body.prepend(n)}n.textContent=m;n.hidden=false};addEventListener('error',(e)=>reveal(e.target===window?'This widget encountered an error.':'This widget could not load one of its resources.'),true);addEventListener('unhandledrejection',()=>reveal('This widget encountered an error.'))})();"#;
+
+/// Powerful features a widget never needs, denied for the widget page and
+/// everything it embeds.
+const WIDGET_PERMISSIONS_POLICY: &str = "camera=(), microphone=(), geolocation=(), \
+     display-capture=(), usb=(), serial=(), hid=(), payment=(), midi=(), \
+     clipboard-read=(), clipboard-write=(), fullscreen=(), screen-wake-lock=(), \
+     publickey-credentials-get=(), gyroscope=(), accelerometer=(), magnetometer=()";
+
+/// Overrides for the fragment wrapper when it hosts an answer widget: the page
+/// must not stretch to its frame, or its reported height could never shrink.
+const WIDGET_PAGE_CSS: &str = "html, body { min-height: 0; }";
+
+fn script_hash_source(script: &str) -> String {
+    format!(
+        "'sha256-{}'",
+        STANDARD.encode(Sha256::digest(script.as_bytes()))
+    )
+}
+
+/// CSP for an answer widget page. Network access is closed as for every served
+/// file (`connect-src 'none'`), and passive subresources are narrower still: only
+/// `data:`/`blob:` URLs, plus Session's bundled fonts on the file-server origin.
+/// The static page admits only Session's hashed scripts; the run page also admits
+/// the widget's inline scripts. `sandbox allow-scripts` keeps the page in an
+/// opaque origin even if it is opened outside Session's sandboxed frames.
+fn widget_csp(port: u16, mode: WidgetMode) -> String {
+    let origin = format!("http://127.0.0.1:{port}");
+    let scripts = match mode {
+        WidgetMode::Static => format!(
+            "{} {} {}",
+            script_hash_source(WIDGET_NAVIGATION_GUARD_SCRIPT),
+            script_hash_source(WIDGET_HEIGHT_SCRIPT),
+            script_hash_source(HTML_PREVIEW_SCROLL_SCRIPT)
+        ),
+        WidgetMode::Run => "'unsafe-inline'".to_string(),
+    };
+    format!(
+        "default-src 'none'; \
+         script-src {scripts}; \
+         style-src 'unsafe-inline'; \
+         img-src data: blob:; \
+         font-src data: {origin}; \
+         media-src data: blob:; \
+         connect-src 'none'; \
+         object-src 'none'; \
+         base-uri 'none'; \
+         form-action 'none'; \
+         sandbox allow-scripts"
+    )
+}
+
+/// The page for one answer widget: the Codex fragment wrapper (theme tokens,
+/// body font, utility classes) with Session's scripts in `<head>` and the
+/// widget's HTML, with `http-equiv` neutralised, as the whole `<body>`. The
+/// navigation guard comes first; the run page also carries the WebRTC prelude
+/// and the error reporter.
+fn render_widget_page(source: &str, body_font_id: Option<&str>, mode: WidgetMode) -> String {
+    let css = CODEX_INLINE_VIS_CSS
+        .replace(
+            "__SESSION_FONT_FACE__",
+            markdown_font_face_css(body_font_id),
+        )
+        .replace("__SESSION_BODY_FONT__", markdown_body_font(body_font_id));
+    let run_scripts = match mode {
+        WidgetMode::Static => String::new(),
+        WidgetMode::Run => {
+            format!(
+                "<script>{WIDGET_PRELUDE_SCRIPT}</script>\n<script>{WIDGET_ERROR_SCRIPT}</script>\n"
+            )
+        }
+    };
+    let scroll_bridge = html_preview_scroll_bridge();
+    let source = research_widgets::neutralize_http_equiv(source);
+    format!(
+        "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
+         <meta http-equiv=\"x-dns-prefetch-control\" content=\"off\">\n\
+         <title>Widget</title>\n<style>{css}\n{WIDGET_PAGE_CSS}</style>\n\
+         <script>{WIDGET_NAVIGATION_GUARD_SCRIPT}</script>\n\
+         {run_scripts}<script>{WIDGET_HEIGHT_SCRIPT}</script>\n{scroll_bridge}\n</head>\n\
+         <body>\n{source}\n</body>\n</html>\n"
     )
 }
 
@@ -1148,7 +1331,7 @@ mod tests {
             None,
         );
         assert!(page.contains(source));
-        assert!(page.contains("session-visualization-error"));
+        assert!(page.contains("id=\"session-visualization-error\""));
         assert!(page.contains("could not load one of its resources"));
         assert!(page.contains("unhandledrejection"));
         assert!(!page.contains("/tmp/activity.fragment.html"));
@@ -1686,6 +1869,184 @@ mod tests {
 
         let (status, _) = http_get(info.port, &url_path(info.port, &token, &sibling), None);
         assert!(status.contains("403"), "status: {status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    fn csp_directive<'a>(head: &'a str, name: &str) -> Option<&'a str> {
+        let csp = head
+            .lines()
+            .find_map(|line| line.strip_prefix("Content-Security-Policy: "))?;
+        csp.split(';')
+            .map(str::trim)
+            .find(|directive| directive.split_whitespace().next() == Some(name))
+    }
+
+    /// Contents of every inline `<script>` element in a served page.
+    fn page_scripts(page: &str) -> Vec<&str> {
+        page.split("<script>")
+            .skip(1)
+            .filter_map(|rest| rest.split_once("</script>").map(|(script, _)| script))
+            .collect()
+    }
+
+    #[test]
+    fn widget_page_neutralizes_http_equiv_and_keeps_session_scripts_out_of_reach() {
+        let hostile =
+            "<meta HTTP-EQUIV=\"refresh\" content=\"0;url=http://localhost:9/\"><textarea>";
+        for mode in [WidgetMode::Static, WidgetMode::Run] {
+            let page = render_widget_page(hostile, None, mode);
+            let body_start = page.find("<body>").unwrap();
+            // The only http-equiv left is Session's own DNS-prefetch pragma.
+            assert_eq!(page.matches("http-equiv").count(), 1, "{page}");
+            assert!(page[body_start..].contains("data-HTTP-EQUIV=\"refresh\""));
+            // The unclosed <textarea> can only swallow what follows it, which
+            // is no Session script.
+            assert!(!page[body_start..].contains("<script>"), "{page}");
+        }
+    }
+
+    #[test]
+    fn widget_pages_are_sandboxed_without_network_and_run_scripts_only_on_the_run_url() {
+        let base = non_temp_test_dir("widgets");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        let state = test_state(&root, &base, "pane-widgets");
+        let info = start_file_server(state.clone()).unwrap();
+        state.set_file_server(info.port);
+        // Startup allows scripts once WebRTC is off in the app web view; tests
+        // never turn it back off (the refusal is tested in research_widgets).
+        research_widgets::set_scripts_allowed(true);
+        let html = "<div id=\"demo\">Initial state</div><script>demo.textContent='ran'</script>";
+        let workspace_root = state.config().workspace_root.clone();
+        let hash = research_widgets::store(&workspace_root, html).unwrap();
+        let urls = research_widgets::widget_urls(info.port, &hash).unwrap();
+        let run_url = urls.run_url.clone().expect("scripts allowed");
+        let origin = format!("http://127.0.0.1:{}", info.port);
+        let path_of = |url: &str| url.strip_prefix(&origin).unwrap().to_string();
+
+        for (url, mode) in [(&urls.static_url, "static"), (&run_url, "run")] {
+            let (head, body) = http_get_full(info.port, &path_of(url), None);
+            let body = String::from_utf8(body).unwrap();
+            assert!(head.starts_with("HTTP/1.1 200"), "{mode}: {head}");
+            assert_eq!(
+                csp_directive(&head, "default-src"),
+                Some("default-src 'none'")
+            );
+            assert_eq!(
+                csp_directive(&head, "connect-src"),
+                Some("connect-src 'none'")
+            );
+            assert_eq!(csp_directive(&head, "img-src"), Some("img-src data: blob:"));
+            assert_eq!(
+                csp_directive(&head, "media-src"),
+                Some("media-src data: blob:")
+            );
+            assert_eq!(
+                csp_directive(&head, "form-action"),
+                Some("form-action 'none'")
+            );
+            assert_eq!(csp_directive(&head, "base-uri"), Some("base-uri 'none'"));
+            assert_eq!(
+                csp_directive(&head, "sandbox"),
+                Some("sandbox allow-scripts")
+            );
+            assert_eq!(
+                csp_directive(&head, "font-src"),
+                Some(format!("font-src data: {origin}").as_str())
+            );
+            assert!(head.contains("Cache-Control: no-store"), "{head}");
+            assert!(head.contains("X-DNS-Prefetch-Control: off"), "{head}");
+            assert!(
+                head.contains("Permissions-Policy: camera=(), microphone=(), geolocation=()"),
+                "{head}"
+            );
+            // The navigation guard is the first script, ahead of any widget code.
+            assert_eq!(
+                page_scripts(&body).first(),
+                Some(&WIDGET_NAVIGATION_GUARD_SCRIPT)
+            );
+            assert!(head.contains("Referrer-Policy: no-referrer"), "{head}");
+            assert!(body.starts_with("<!doctype html>"), "{body}");
+            assert!(
+                body.contains("--background:"),
+                "the Codex fragment wrapper: {body}"
+            );
+            assert!(body.contains(html), "{body}");
+            assert!(body.contains("session-widget-height"), "{body}");
+            assert!(body.contains(WIDGET_PAGE_CSS), "{body}");
+            // Session's scripts are in <head>, ahead of the widget's markup.
+            let head_end = body.find("</head>").unwrap();
+            assert!(body.find("session-widget-height").unwrap() < head_end);
+            assert!(body.find(html).unwrap() > head_end);
+            // Every script Session adds is admitted by the static CSP's hashes
+            // or (run page) is among the run page's own scripts.
+            let scripts = page_scripts(&body);
+            if mode == "static" {
+                let csp = csp_directive(&head, "script-src").unwrap();
+                let session_scripts: Vec<_> = scripts
+                    .iter()
+                    .filter(|script| !script.contains("demo.textContent"))
+                    .collect();
+                assert_eq!(session_scripts.len(), 3, "{scripts:?}");
+                for script in session_scripts {
+                    assert!(csp.contains(&script_hash_source(script)), "{script}");
+                }
+            } else {
+                assert!(
+                    scripts
+                        .iter()
+                        .any(|script| *script == WIDGET_PRELUDE_SCRIPT)
+                );
+                let prelude = body.find(WIDGET_PRELUDE_SCRIPT).unwrap();
+                assert!(prelude < head_end, "the prelude runs before widget code");
+            }
+        }
+
+        let (static_head, static_body) = http_get_full(info.port, &path_of(&urls.static_url), None);
+        let static_scripts = csp_directive(&static_head, "script-src").unwrap();
+        assert!(
+            !static_scripts.contains("unsafe-inline"),
+            "{static_scripts}"
+        );
+        assert!(static_scripts.contains(&script_hash_source(WIDGET_HEIGHT_SCRIPT)));
+        assert!(static_scripts.contains(&script_hash_source(HTML_PREVIEW_SCROLL_SCRIPT)));
+        assert!(
+            !String::from_utf8(static_body)
+                .unwrap()
+                .contains(WIDGET_ERROR_SCRIPT)
+        );
+        let (run_head, run_body) = http_get_full(info.port, &path_of(&run_url), None);
+        assert_eq!(
+            csp_directive(&run_head, "script-src"),
+            Some("script-src 'unsafe-inline'")
+        );
+        assert!(
+            String::from_utf8(run_body)
+                .unwrap()
+                .contains(WIDGET_ERROR_SCRIPT)
+        );
+
+        // A bogus token or an unknown hash reveals nothing.
+        let bogus = format!(
+            "{}{}/{hash}.html",
+            research_widgets::URL_PREFIX,
+            "0".repeat(64)
+        );
+        let (status, _) = http_get(info.port, &bogus, None);
+        assert!(status.contains("404"), "{status}");
+        let missing = path_of(&run_url).replace(&hash, &"a".repeat(64));
+        let (status, _) = http_get(info.port, &missing, None);
+        assert!(status.contains("404"), "{status}");
+        // A stored file that grew past the cap is refused.
+        let stored = research_widgets::widget_dir(&workspace_root).join(format!("{hash}.html"));
+        std::fs::write(&stored, "x".repeat(research_widgets::MAX_WIDGET_BYTES + 1)).unwrap();
+        let (status, _) = http_get(info.port, &path_of(&urls.static_url), None);
+        assert!(status.contains("413"), "{status}");
+        // The pane token machinery does not reach the widget store.
+        let pane_token = state.pane_file_token("pane-widgets").unwrap();
+        let (status, _) = http_get(info.port, &url_path(info.port, &pane_token, &stored), None);
+        assert!(status.contains("403"), "{status}");
 
         let _ = std::fs::remove_dir_all(&base);
     }

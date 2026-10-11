@@ -39,15 +39,27 @@ export function researchHighlightApi(): ResearchHighlightApi | null {
   };
 }
 
-function textNodesWithin(root: HTMLElement) {
+const WIDGET_SELECTOR = "[data-research-widget]";
+
+function textNodesWithin(root: Node) {
   const nodes: Text[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => node.parentElement?.closest(WIDGET_SELECTOR)
+      ? NodeFilter.FILTER_REJECT
+      : NodeFilter.FILTER_ACCEPT,
+  });
   let node = walker.nextNode();
   while (node) {
     nodes.push(node as Text);
     node = walker.nextNode();
   }
   return nodes;
+}
+
+/** The annotation projection excludes widget source in every presentation,
+ * including disabled, incomplete, oversized and failed widgets. */
+export function researchTextProjection(root: Node): string {
+  return textNodesWithin(root).map((node) => node.data).join("");
 }
 
 export function rangeForTextOffsets(root: HTMLElement, start: number, end: number) {
@@ -60,7 +72,7 @@ export function rangeForTextOffsets(root: HTMLElement, start: number, end: numbe
   let endPoint: { node: Text; offset: number } | null = null;
   for (const node of nodes) {
     const next = consumed + node.data.length;
-    if (!startPoint && start <= next) {
+    if (!startPoint && start < next) {
       startPoint = { node, offset: start - consumed };
     }
     if (end <= next) {
@@ -138,7 +150,7 @@ export function applyDirectionalSelectionRange(
 // grouped activity from selections used for highlights or branches. Raw
 // disclosures use `.tool-block` and can be nested inside a message.
 export const NON_TEXT_ROW_SELECTOR =
-  ".tool-block, .thinking-block, .activity-group-block, .research-conversation-activity";
+  `.tool-block, .thinking-block, .activity-group-block, .research-conversation-activity, ${WIDGET_SELECTOR}`;
 
 /** True when the range starts, ends, or spans across any non-text row. Because
  * `.tool-block` disclosures can sit inside a `.research-response-message`, this
@@ -157,15 +169,9 @@ export function selectionOffsets(root: HTMLElement, range: Range) {
   if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
     return null;
   }
-  const prefixRange = document.createRange();
-  prefixRange.selectNodeContents(root);
-  prefixRange.setEnd(range.startContainer, range.startOffset);
-  const throughSelectionRange = document.createRange();
-  throughSelectionRange.selectNodeContents(root);
-  throughSelectionRange.setEnd(range.endContainer, range.endOffset);
-  const start = prefixRange.cloneContents().textContent?.length ?? 0;
-  const end = throughSelectionRange.cloneContents().textContent?.length ?? 0;
-  return end > start ? { start, end } : null;
+  const start = flatTextOffsetAt(root, range.startContainer, range.startOffset);
+  const end = flatTextOffsetAt(root, range.endContainer, range.endOffset);
+  return start !== null && end !== null && end > start ? { start, end } : null;
 }
 
 /** The flat rendered-text offset of a caret position, or null when the
@@ -174,6 +180,10 @@ export function selectionOffsets(root: HTMLElement, range: Range) {
  * the same clone-and-measure approach as `selectionOffsets`. */
 export function flatTextOffsetAt(root: HTMLElement, node: Node, offsetInNode: number) {
   if (!root.contains(node)) {
+    return null;
+  }
+  const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+  if (element?.closest(WIDGET_SELECTOR)) {
     return null;
   }
   if (node.nodeType === Node.TEXT_NODE) {
@@ -193,7 +203,7 @@ export function flatTextOffsetAt(root: HTMLElement, node: Node, offsetInNode: nu
   } catch {
     return null;
   }
-  return probe.cloneContents().textContent?.length ?? 0;
+  return researchTextProjection(probe.cloneContents()).length;
 }
 
 /** Hit-tests a viewport point against the rendered text: the flat offset the

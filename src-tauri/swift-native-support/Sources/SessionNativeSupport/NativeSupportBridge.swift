@@ -47,6 +47,13 @@ public func sessionNativeSupportInitialize(
     }
 }
 
+@_cdecl("session_native_support_disable_peer_connections")
+public func sessionNativeSupportDisablePeerConnections() -> Int32 {
+    onSupportMain {
+        NativeSupportHost.shared.disablePeerConnections() ? 1 : 0
+    }
+}
+
 @_cdecl("session_native_support_set_iframe_shortcut_fallback")
 public func sessionNativeSupportSetIframeShortcutFallback(_ active: Int32) -> Int32 {
     onSupportMain {

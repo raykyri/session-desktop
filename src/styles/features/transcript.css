@@ -284,6 +284,144 @@
   background: var(--surface-fill-hover);
 }
 
+/* A `session-html` block in a research answer: a sandboxed frame under a slim
+   control bar. Labels are generated content (data-label) so the frame's chrome
+   adds no text to the answer's highlight projection or find-in-page. */
+.session-widget {
+  margin: 0 0 0.72em;
+  overflow: hidden;
+  border: 1px solid var(--surface-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-fill-subtle);
+}
+
+.session-widget-bar {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--surface-border-subtle);
+}
+
+.session-widget-bar::before {
+  margin-right: auto;
+  padding-left: 4px;
+  color: var(--text-faint);
+  content: "Widget";
+  font-size: var(--fs-sm);
+}
+
+.session-widget[data-running] .session-widget-bar::before {
+  content: "Widget · scripts running";
+}
+
+.session-widget[data-scripts="unavailable"] .session-widget-bar::before {
+  content: "Widget · scripts off";
+}
+
+.session-widget[data-scripts="stopped"] .session-widget-bar::before {
+  content: "Widget · scripts stopped: it kept taking keyboard focus";
+}
+
+.session-widget-run {
+  appearance: none;
+  display: inline-flex;
+  min-height: 0;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-body-soft);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.session-widget-run::after {
+  content: attr(data-label);
+}
+
+.session-widget-run svg,
+.session-widget-action svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.session-widget-run:hover,
+.session-widget-run:focus-visible {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.session-widget-action {
+  width: 20px;
+  min-height: 0;
+  height: 20px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--text-body-soft) 60%, transparent);
+  background: transparent;
+}
+
+.session-widget-action:hover,
+.session-widget-action:focus-visible {
+  color: var(--text-body-soft);
+  background: var(--surface-fill-hover);
+}
+
+.session-widget-run:focus-visible,
+.session-widget-action:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.session-widget-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.session-widget-placeholder {
+  display: grid;
+  min-height: 56px;
+  place-items: center;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+.session-widget-placeholder::before {
+  content: attr(data-label);
+}
+
+.session-widget[data-state="pending"] .session-widget-placeholder::before {
+  animation: session-widget-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes session-widget-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.session-widget-notice {
+  margin: 0 0 4px;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+.session-widget-notice::before {
+  content: attr(data-label);
+}
+
 /* A current Codex visualization reference is a first-class transcript object,
    rather than exposing the transport marker or its absolute local path. */
 .turn-visualization-attachment {

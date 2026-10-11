@@ -1,0 +1,151 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { act, createElement, createRef } from "react";
+import { createRoot } from "react-dom/client";
+import SessionWidget from "../src/components/SessionWidget";
+import SessionWidgetPreview from "../src/components/SessionWidgetPreview";
+import { readWidgetExecution, registerWidgetUrls, rememberWidgetExecution, sessionWidgetIdentity } from "../src/lib/sessionWidgetExecution";
+import { withWidgetDom } from "./widgetDom";
+
+test("Retry recovers a mounted widget after a transient preparation failure", async () => {
+  await withWidgetDom(async (window) => {
+    let calls = 0;
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string) => {
+      assert.equal(command, "research_widget_prepare");
+      calls++;
+      if (calls === 1) throw new Error("temporary store failure");
+      return { staticUrl: "http://127.0.0.1:1234/widget-static", runUrl: null };
+    } } });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(SessionWidget, { html: "<p>retry regression</p>", onOpen: () => undefined })));
+      assert.equal(container.querySelector("figure")?.dataset.state, "failed");
+      const retry = container.querySelector<HTMLButtonElement>('[aria-label="Retry loading widget"]')!;
+      assert.ok(retry);
+      await act(async () => retry.click());
+      assert.equal(calls, 2);
+      assert.equal(container.querySelector("figure")?.dataset.state, "ready");
+      assert.ok(container.querySelector("iframe"));
+      assert.equal(container.querySelector('[aria-label="Retry loading widget"]'), null);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+});
+
+function urlsFor(digit: string) {
+  const base = "http://127.0.0.1:1234/__session/widget/";
+  return {
+    staticUrl: `${base}${"a".repeat(64)}/${digit.repeat(64)}.html`,
+    runUrl: `${base}${"b".repeat(64)}/${digit.repeat(64)}.html`,
+  };
+}
+
+test("only token-bearing widget URLs share execution choices", () => {
+  const urls = urlsFor("1");
+  assert.equal(sessionWidgetIdentity(urls.staticUrl), sessionWidgetIdentity(`${urls.runUrl}?session-body-font=inter`));
+  for (const url of [urls.runUrl.replace("127.0.0.1", "example.com"), urls.runUrl.replace("/__session/", "/other/"), "file:///tmp/a.html", "not a URL"]) {
+    assert.equal(sessionWidgetIdentity(url), null);
+  }
+});
+
+test("expanded widgets drop navigated documents and unanswered pages", async () => {
+  await withWidgetDom(async (window) => {
+    const urls = urlsFor("2");
+    const ref = createRef<HTMLIFrameElement>();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const ticks = new Map<number, () => void>();
+    let timerId = 0;
+    window.setInterval = ((callback: () => void) => { ticks.set(++timerId, callback); return timerId; }) as typeof window.setInterval;
+    window.clearInterval = (id?: number) => { ticks.delete(id!); };
+    const render = async (key: string) => {
+      await act(async () => root.render(createElement(SessionWidgetPreview, { key, url: urls.runUrl, frameRef: ref, onLoad: () => undefined })));
+      await act(async () => ref.current!.dispatchEvent(new window.Event("load")));
+    };
+    try {
+      await render("loads");
+      await act(async () => ref.current!.dispatchEvent(new window.Event("load")));
+      assert.equal(container.querySelector("iframe"), null, "second document load drops the frame");
+      await render("unload");
+      await act(async () => window.dispatchEvent(new window.MessageEvent("message", { source: ref.current!.contentWindow, data: { type: "session-widget-unload" } })));
+      assert.equal(container.querySelector("iframe"), null, "pagehide drops a navigation before its response loads");
+      await render("heartbeat");
+      assert.equal(ticks.size, 1);
+      for (let i = 0; i < 5; i++) await act(async () => { for (const tick of [...ticks.values()]) tick(); });
+      assert.equal(container.querySelector("iframe"), null, "a replacement page cannot keep displaying by withholding load");
+      assert.equal(ticks.size, 0, "dropping the frame cleans up its heartbeat");
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+});
+
+test("a stopped widget can still open its static preview without reauthorizing scripts", async () => {
+  await withWidgetDom(async () => {
+    const urls = urlsFor("4");
+    registerWidgetUrls(urls);
+    rememberWidgetExecution(urls.runUrl, "focus");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(SessionWidgetPreview, {
+        url: `${urls.staticUrl}?session-body-font=inter`, frameRef: createRef<HTMLIFrameElement>(), onLoad: () => undefined,
+      })));
+      assert.ok(container.querySelector("iframe"), "static content remains readable after a stop");
+      assert.equal(container.querySelector("button"), null, "a static capability cannot offer to run scripts");
+      assert.equal(readWidgetExecution(urls.runUrl), "focus", "opening static content does not reauthorize execution");
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+});
+
+test("focus protection in expanded previews stops inline copies and survives remount", async () => {
+  await withWidgetDom(async (window) => {
+    const urls = urlsFor("3");
+    const html = "<button onclick='this.textContent=42'>focus regression</button>";
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: async () => urls } });
+    rememberWidgetExecution(urls.runUrl, "running");
+    const container = document.createElement("div");
+    const input = document.createElement("input");
+    document.body.append(input, container);
+    const root = createRoot(container);
+    const ref = createRef<HTMLIFrameElement>();
+    const render = (key: string) => root.render(createElement("div", { key },
+      createElement(SessionWidget, { html, onOpen: () => undefined }),
+      createElement(SessionWidgetPreview, { url: urls.runUrl, frameRef: ref, onLoad: () => undefined }),
+    ));
+    try {
+      await act(async () => render("initial"));
+      assert.equal(container.querySelector("figure")?.dataset.running, "true");
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          input.focus();
+          input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "x", bubbles: true }));
+          ref.current!.focus();
+          window.dispatchEvent(new window.Event("blur"));
+          await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+      }
+      assert.equal(readWidgetExecution(urls.staticUrl), "focus");
+      assert.equal(container.querySelector("figure")?.dataset.running, undefined);
+      assert.equal(container.querySelector("figure")?.dataset.scripts, "stopped");
+      assert.equal(container.querySelector('[title="Expanded answer widget"]'), null);
+      await act(async () => render("remounted"));
+      assert.equal(container.querySelector("figure")?.dataset.running, undefined, "reopening does not restart stopped scripts");
+      assert.equal(container.querySelector("figure")?.dataset.scripts, "stopped");
+      assert.equal(container.querySelector('[title="Expanded answer widget"]'), null, "expanded remount is stopped too");
+      const run = container.querySelector<HTMLButtonElement>('[aria-label="Run the widget\'s scripts"]')!;
+      await act(async () => run.click());
+      assert.equal(readWidgetExecution(urls.runUrl), "running");
+      assert.equal(container.querySelector("figure")?.dataset.running, "true", "explicit Run restores execution");
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+});

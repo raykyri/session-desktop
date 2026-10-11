@@ -6,6 +6,7 @@ import {
   passageBlockAt,
   rangeForTextOffsets,
   researchHighlightApi,
+  researchTextProjection,
   type ResearchNativeHighlight,
   type ResearchResolvedHighlight,
 } from "../components/research/researchTextRanges";
@@ -299,7 +300,7 @@ export function useResearchAnnotations({
         if (!root || !segmentContent?.responseRevision) {
           continue;
         }
-        const projection = root.textContent ?? "";
+        const projection = researchTextProjection(root);
         const resolved: ResearchResolvedHighlight[] = [];
         for (const highlight of segmentContent.node.highlights ?? []) {
           const offsets = resolveResearchHighlightOffset(
@@ -417,7 +418,7 @@ export function useResearchAnnotations({
       if (!root || !revision) {
         continue;
       }
-      const projection = root.textContent ?? "";
+      const projection = researchTextProjection(root);
       for (const { id, anchor } of branchEntries.filter((entry) => entry.segmentId === nodeId)) {
         const offsets = resolveResearchHighlightOffset(projection, revision, {
           id,

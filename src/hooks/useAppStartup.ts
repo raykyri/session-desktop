@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   getOpenRouterKey,
+  getResearchInlineWidgets,
   getResearchLaunchInstruction,
   getRuntimeConfig,
   getUseLoginShell,
@@ -51,17 +52,20 @@ async function loadSecondary() {
     storedUseLoginShell,
     storedWorktreeLocation,
     storedResearchLaunchInstruction,
+    storedResearchInlineWidgets,
   ] = await Promise.all([
     getOpenRouterKey().catch(() => ""),
     getUseLoginShell().catch(() => null),
     getWorktreeLocation().catch(() => null),
     getResearchLaunchInstruction().catch(() => null),
+    getResearchInlineWidgets().catch(() => null),
   ]);
   return {
     storedOpenRouterKey,
     storedUseLoginShell,
     storedWorktreeLocation,
     storedResearchLaunchInstruction,
+    storedResearchInlineWidgets,
   };
 }
 

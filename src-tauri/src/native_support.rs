@@ -81,6 +81,7 @@ mod imp {
         fn session_native_support_initialize(native_view: *mut c_void) -> i32;
         fn session_native_support_shutdown();
         fn session_native_support_set_iframe_shortcut_fallback(active: i32) -> i32;
+        fn session_native_support_disable_peer_connections() -> i32;
         fn session_native_support_set_browser_overlay_open(active: i32) -> i32;
         fn session_native_support_set_human_browser_webview(
             native_view: *mut c_void,
@@ -142,6 +143,14 @@ mod imp {
                 .map_err(|_| "native support state lock poisoned")? = None;
             Err("failed to bind native support to the app WKWebView".into())
         }
+    }
+
+    /// Turns off WebRTC peer connections in the app web view; true when the
+    /// preference now reads as off. See NativeSupportHost.disablePeerConnections.
+    pub fn disable_peer_connections() -> bool {
+        // SAFETY: no arguments; Swift reads its weakly held app web view on the
+        // main actor.
+        unsafe { session_native_support_disable_peer_connections() == 1 }
     }
 
     pub fn set_iframe_shortcut_fallback(active: bool) -> Result<(), String> {
@@ -325,6 +334,11 @@ mod imp {
         Err("native support are only available on macOS".to_string())
     }
 
+    /// No web view preference is changed off macOS, so widget scripts stay off.
+    pub fn disable_peer_connections() -> bool {
+        false
+    }
+
     pub fn set_browser_overlay_open(_active: bool) -> Result<(), String> {
         Err("native support are only available on macOS".to_string())
     }
@@ -360,9 +374,10 @@ mod imp {
 
 #[allow(unused_imports)]
 pub use imp::{
-    application_is_active, available, human_browser_history_state, initialize,
-    prepare_for_webview_reload, set_browser_overlay_open, set_human_browser_loading_background,
-    set_human_browser_webview, set_iframe_shortcut_fallback, shutdown,
+    application_is_active, available, disable_peer_connections, human_browser_history_state,
+    initialize, prepare_for_webview_reload, set_browser_overlay_open,
+    set_human_browser_loading_background, set_human_browser_webview, set_iframe_shortcut_fallback,
+    shutdown,
 };
 
 fn with_app_state(operation: impl FnOnce(&AppState)) {

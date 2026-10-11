@@ -27,6 +27,7 @@ import type { SegmentView } from "../../lib/researchSegmentView";
 import ResearchRecap from "./ResearchRecap";
 import ResearchRowRail from "./ResearchRowRail";
 import ResearchRowGlyph from "./ResearchRowGlyph";
+import { SessionWidgetStreamingContext } from "../SessionWidget";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
@@ -87,6 +88,7 @@ function ResearchMessageBlock({
         <ResearchMarkdown
           text={imported ? stripImportedReportCitations(block.text) : block.text}
           oversizedContent={imported ? undefined : OVERSIZED_MARKDOWN_POLICY}
+          widgets={role === "assistant"}
         />
       );
     }
@@ -554,16 +556,18 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
             onMouseMove={onRootMouseMove}
             onMouseLeave={onRootMouseLeave}
           >
-            {view.visibleTimelineItems.map((item) => (
-              <ResearchTimelineItem
-                key={item.key}
-                item={item}
-                conversation={view.isConversation}
-                // Provenance: the document source records it.
-                imported={documentSource(node) === "imported"}
-                expandActivities={active}
-              />
-            ))}
+            <SessionWidgetStreamingContext.Provider value={active}>
+              {view.visibleTimelineItems.map((item) => (
+                <ResearchTimelineItem
+                  key={item.key}
+                  item={item}
+                  conversation={view.isConversation}
+                  // Provenance: the document source records it.
+                  imported={documentSource(node) === "imported"}
+                  expandActivities={active}
+                />
+              ))}
+            </SessionWidgetStreamingContext.Provider>
           </div>
           {view.hiddenTimelineItemCount > 0 && view.isConversation ? (
             <button

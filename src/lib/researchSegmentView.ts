@@ -2,6 +2,7 @@
 // shows, its copy text, word count and editable Markdown.
 
 import { countResearchDocumentWords } from "./researchDocuments";
+import { stripSessionWidgetBlocks } from "./sessionWidgets";
 import { documentHoldsMarkdown, documentSource } from "./researchNodeTypes";
 import {
   assistantTextFromTimelineItems,
@@ -94,7 +95,10 @@ export function buildSegmentView(
     hasTranscriptActivity,
     rawAnswer,
     conversationCopyText,
-    answerWordCount: countResearchDocumentWords(conversationCopyText ?? rawAnswer),
+    // Widget HTML is not prose; the copy text keeps it verbatim.
+    answerWordCount: countResearchDocumentWords(
+      stripSessionWidgetBlocks(conversationCopyText ?? rawAnswer),
+    ),
     editableDocumentMarkdown,
   };
 }

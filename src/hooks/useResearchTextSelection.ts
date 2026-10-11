@@ -32,6 +32,7 @@ import {
   passageBlockAt,
   rangeForTextOffsets,
   researchHighlightApi,
+  researchTextProjection,
   selectionOffsets,
   selectionTouchesNonTextRow,
   type ResearchNativeHighlight,
@@ -170,7 +171,7 @@ export function useResearchTextSelection({
       setHighlightAction(null);
       return;
     }
-    const projection = root.textContent ?? "";
+    const projection = researchTextProjection(root);
     const copyText = projection.slice(offsets.start, offsets.end);
     // A highlight or branch passage stays within one paragraph: a selection
     // that runs into the next one is cut at the end of the first.
@@ -277,7 +278,7 @@ export function useResearchTextSelection({
 
       if (drag.snapper === undefined) {
         drag.snapper = createResearchSelectionSnapper(
-          drag.root.textContent ?? "",
+          researchTextProjection(drag.root),
           document.documentElement.lang || navigator.language,
           messageFlatBoundaries(drag.root),
         );
