@@ -34,32 +34,21 @@ import { postFormatOf } from "../../lib/researchNodeTypes";
 import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 
-// GPT-5.4 stops at extra high; every other Codex preset (and a custom model,
-// whose ceiling is unknown here) offers the full range and lets the CLI
-// reject a level the model does not support.
-const GPT_5_4_REASONING_LEVELS = ["", "low", "medium", "high", "xhigh"];
-
 const CLAUDE_RESEARCH_EFFORT_OPTIONS = CLAUDE_EFFORT_OPTIONS.map((option) => ({
   ...option,
   label: option.label.replace(/ effort$/i, ""),
 }));
 
-// The reasoning/effort levels the selected model supports, or null for
+// The reasoning/effort levels an adapter's models support, or null for
 // adapters without a reasoning-effort launch option. Every Claude model
-// (Fable, Opus, Sonnet) shares one range; Codex ranges vary by model.
-export function researchEffortOptionsFor(
-  adapter: string,
-  model: string,
-): LauncherSelectOption[] | null {
+// (Fable, Opus, Sonnet) shares one range, as does every Codex preset.
+export function researchEffortOptionsFor(adapter: string): LauncherSelectOption[] | null {
   if (adapter === CLAUDE_ADAPTER_ID) {
     return CLAUDE_RESEARCH_EFFORT_OPTIONS;
   }
   if (adapter === CODEX_ADAPTER_ID) {
-    if (model === "gpt-5.4") {
-      return CODEX_REASONING_OPTIONS.filter((option) =>
-        GPT_5_4_REASONING_LEVELS.includes(option.value),
-      );
-    }
+    // Every Codex preset offers the full range; for a custom model the CLI
+    // rejects a level the model does not support.
     return CODEX_REASONING_OPTIONS;
   }
   return null;
@@ -332,7 +321,7 @@ export default function ResearchQueryComposer({
   // Same stale-choice contract as the model picker: a level left over from
   // another adapter or model silently falls back to the default, so the
   // trigger always shows what will launch.
-  const effortOptions = researchEffortOptionsFor(adapter, selectedModel);
+  const effortOptions = researchEffortOptionsFor(adapter);
   const selectedEffort =
     effortOptions && effortOptions.some((option) => option.value === effortChoice)
       ? effortChoice

@@ -95,7 +95,7 @@ test("a single URL is saved as a link; anything else is asked", () => {
 });
 
 test("Claude reasoning options omit the word effort", () => {
-  const options = researchEffortOptionsFor("claude", "fable");
+  const options = researchEffortOptionsFor("claude");
   assert.deepEqual(options?.map((option) => option.label), [
     "Default",
     "Low",
