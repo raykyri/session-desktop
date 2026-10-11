@@ -5,8 +5,8 @@
 import type {
   DocumentSource,
   NodeAnchor,
-  NoteCorrection,
-  NoteDelivery,
+  PostCorrection,
+  PostDelivery,
   PostFormat,
   ResearchHighlight,
   ResearchMessageAttachment,
@@ -45,9 +45,9 @@ export interface NodeFixture {
   sessionReady?: boolean;
   holdsProcess?: boolean;
   recap?: ResearchRecap | null;
-  delivery?: NoteDelivery | null;
+  delivery?: PostDelivery | null;
   format?: PostFormat;
-  corrections?: NoteCorrection[];
+  corrections?: PostCorrection[];
   editedAt?: number | null;
 }
 

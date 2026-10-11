@@ -36,10 +36,10 @@ import {
   setResearchNodePromoted,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import ResearchNotePost from "./ResearchNotePost";
-import ResearchNoteThread, { noteThreadEntries, type ResearchNoteThreadHandle } from "./ResearchNoteThread";
+import ResearchPostColumn from "./ResearchPostColumn";
+import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
-import type { NoteActions } from "./ResearchNote";
+import type { PostActions } from "./ResearchPost";
 import {
   EMPTY_RESEARCH_HISTORY,
   canGoBack as historyCanGoBack,
@@ -146,7 +146,7 @@ import type {
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
-  UpdateResearchNoteResult,
+  UpdateResearchPostResult,
 } from "../../types";
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
@@ -213,8 +213,8 @@ interface ResearchThreadPageProps {
     inline?: boolean,
     replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
-  /** Replies and follow-ups on a note page (see ResearchNotePost). */
-  noteActions: NoteActions;
+  /** Replies and follow-ups on a post page (see ResearchPostColumn). */
+  postActions: PostActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
   onRenameTree: (treeId: string, title: string) => Promise<void>;
@@ -227,13 +227,13 @@ interface ResearchThreadPageProps {
     expectedHighlightIds: string[];
   }) => Promise<UpdateResearchDocumentResult>;
   /** Replaces a post's text, or appends a correction to a post with replies
-   * or follow-ups (update_research_note). */
-  onUpdateNote: (input: {
+   * or follow-ups (update_research_post). */
+  onUpdatePost: (input: {
     nodeId: string;
     text: string;
     expectedText: string;
     correction: boolean;
-  }) => Promise<UpdateResearchNoteResult>;
+  }) => Promise<UpdateResearchPostResult>;
   /** "Ask as a question" in the editor: starts a new thread with `prompt`
    * using the Home ask box's model, and opens it. */
   onAskAsQuestion: (prompt: string) => Promise<void>;
@@ -962,12 +962,12 @@ function ResearchThreadPage({
   detailError,
   onRetryDetail,
   onFork,
-  noteActions,
+  postActions,
   onRemoveBranch,
   onRemoveTree,
   onRenameTree,
   onUpdateDocument,
-  onUpdateNote,
+  onUpdatePost,
   onAskAsQuestion,
   readQuestionModel,
   onCancel,
@@ -2204,8 +2204,8 @@ function ResearchThreadPage({
   // left. Returns false when the column to cycle is the feed, which then
   // handles the request.
   // The thread column of each post level, by level index.
-  const threadHandlesRef = useRef(new Map<number, ResearchNoteThreadHandle>());
-  const registerThread = (level: number) => (handle: ResearchNoteThreadHandle | null) => {
+  const threadHandlesRef = useRef(new Map<number, ResearchPostThreadHandle>());
+  const registerThread = (level: number) => (handle: ResearchPostThreadHandle | null) => {
     if (handle) {
       threadHandlesRef.current.set(level, handle);
     } else {
@@ -4302,7 +4302,7 @@ function ResearchThreadPage({
             : "Document saved",
         );
       } else {
-        const result = await onUpdateNote({
+        const result = await onUpdatePost({
           nodeId: session.nodeId,
           text: session.text,
           expectedText: session.initialText,
@@ -5008,31 +5008,31 @@ function ResearchThreadPage({
     switch (column.role) {
       case "post": {
         const level = column.level.index;
-        const note = nodeById.get(column.level.headId);
-        if (!note) {
+        const post = nodeById.get(column.level.headId);
+        if (!post) {
           return null;
         }
-        const postEditing = editor?.kind === "post" && editor.nodeId === note.id ? editor : null;
+        const postEditing = editor?.kind === "post" && editor.nodeId === post.id ? editor : null;
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-note${currentLevel === level ? " is-current" : ""}`}
+            className={`research-pair-post${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(note, "Post")}`}
+            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(post, "Post")}`}
           >
-            {/* The note itself starts the column, so the header names the
-                column ("Post") rather than repeating the note's text. */}
+            {/* The post itself starts the column, so the header names the
+                column ("Post") rather than repeating the post's text. */}
             <ResearchPairHeader
               title="Post"
               history={level === 0 ? historyNav : null}
               archived={archived}
               menu={
-                level === 0 && note.id === rootNodeId
+                level === 0 && post.id === rootNodeId
                   ? {
                       label: "Post actions",
                       open: menu?.kind === "post",
                       onOpen: (trigger) =>
-                        setMenu({ kind: "post", nodeId: note.id, anchor: trigger, align: "end", trigger }),
+                        setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
                     }
                   : null
               }
@@ -5042,10 +5042,10 @@ function ResearchThreadPage({
                 {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
                 ) : (
-                  <ResearchNotePost detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+                  <ResearchPostColumn detail={detail} post={post} onSelectNode={(nodeId) => navigate(nodeId)} />
                 )}
                 <ResearchPostCorrections
-                  corrections={note.type === "post" ? (note.corrections ?? []) : []}
+                  corrections={post.type === "post" ? (post.corrections ?? []) : []}
                   now={minuteNow}
                 />
                 {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
@@ -5059,11 +5059,11 @@ function ResearchThreadPage({
       }
       case "thread": {
         const level = column.level.index;
-        const note = nodeById.get(column.level.headId);
-        if (!note) {
+        const post = nodeById.get(column.level.headId);
+        if (!post) {
           return null;
         }
-        const count = noteThreadEntries(nodes, note).length;
+        const count = postThreadEntries(nodes, post).length;
         return (
           <section
             key={columnKey(column)}
@@ -5074,14 +5074,14 @@ function ResearchThreadPage({
             <ResearchPairHeader title="Thread" count={count} />
             <div className="research-column-scroll">
               <div className="research-column-content research-reading-surface">
-                <ResearchNoteThread
+                <ResearchPostThread
                   nodes={nodes}
-                  note={note}
+                  post={post}
                   archived={archived}
-                  actions={noteActions}
+                  actions={postActions}
                   requireCmdEnterToSend={requireCmdEnterToSend}
                   openNodeId={levels[level + 1]?.headId ?? null}
-                  composerRef={registerComposer(note.id)}
+                  composerRef={registerComposer(post.id)}
                   threadRef={registerThread(level)}
                   onOpenFollowUp={(nodeId) => {
                     openBranch(level, nodeId);

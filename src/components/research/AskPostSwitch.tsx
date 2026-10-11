@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "
 import { ChevronDown, Users } from "lucide-react";
 
 /** Who a question goes to: an agent ("ai"), or the network, which posts a
- * note to Home (network delivery itself is not built yet); a body that is a
+ * post to Home (network delivery itself is not built yet); a body that is a
  * single URL is saved as a link or post instead of asked. The Ask/Post
  * switcher sets it. */
 export type AskMode = "network" | "ai";

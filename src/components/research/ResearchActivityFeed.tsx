@@ -67,7 +67,7 @@ import {
   ResearchUserMessage,
   visibleResearchPrompt,
 } from "./ResearchMessage";
-import { NoteBody } from "./ResearchNote";
+import { PostContent } from "./ResearchPost";
 import {
   ResearchTreeDeleteDialog,
   ResearchTreeMenuItems,
@@ -815,9 +815,9 @@ function ResearchActivityFeed({
   /** A thread's card: its root question when loaded, else its title. */
   function renderTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
     const treeId = tree?.id ?? query?.treeId ?? "";
-    const note = query ? nodeType(query) === "post" : false;
+    const isPost = query ? nodeType(query) === "post" : false;
     const question = query?.prompt ?? tree?.title ?? "";
-    const title = note ? null : researchCardTitle(tree?.title ?? query?.title, question);
+    const title = isPost ? null : researchCardTitle(tree?.title ?? query?.title, question);
     const selected = treeId === selectedTreeId;
     const status = researchFeedStatus(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
@@ -834,8 +834,8 @@ function ResearchActivityFeed({
         renderBody={(asQuestion) =>
           query ? (
             <ResearchUserMessage className="research-feed-card-message">
-              {note ? (
-                <NoteBody
+              {isPost ? (
+                <PostContent
                   prompt={query.prompt}
                   format={query.format ?? "text"}
                   attachments={query.attachments}
@@ -1338,7 +1338,7 @@ function ResearchActivityFeed({
                     <div className="feed-setup-guide">{setupGuide}</div>
                   ) : homeHasNothing ? (
                     <div className="research-feed-empty">
-                      Research, notes, and saved links appear here, newest first.
+                      Research, posts, and saved links appear here, newest first.
                     </div>
                   ) : (
                     <div className="research-feed-empty">

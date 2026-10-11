@@ -30,7 +30,7 @@ function node(id: string, overrides: NodeFixture = {}): ResearchNode {
 function editor(value: string, overrides: Partial<Parameters<typeof ResearchEditorColumn>[0]> = {}) {
   return renderToStaticMarkup(
     createElement(ResearchEditorColumn, {
-      column: { id: "E0", role: "editor", levelIndex: 0, nodeId: "note" },
+      column: { id: "E0", role: "editor", levelIndex: 0, nodeId: "post" },
       current: true,
       kind: "post",
       correction: false,
@@ -86,7 +86,7 @@ test("a post with replies is corrected: the button reads Add correction", () => 
 });
 
 test("a post has replies when it has reply items or follow-ups", () => {
-  const post = node("note", { type: "post", delivery: { status: "posted", postedAt: 1 } });
+  const post = node("post", { type: "post", delivery: { status: "posted", postedAt: 1 } });
   assert.equal(researchPostHasReplies([post], post), false);
   const replied = {
     ...post,
@@ -97,7 +97,7 @@ test("a post has replies when it has reply items or follow-ups", () => {
     },
   };
   assert.equal(researchPostHasReplies([replied], replied), true);
-  assert.equal(researchPostHasReplies([post, node("run", { parentNodeId: "note" })], post), true);
+  assert.equal(researchPostHasReplies([post, node("run", { parentNodeId: "post" })], post), true);
 });
 
 test("Markdown splits into blocks at blank lines outside code fences", () => {

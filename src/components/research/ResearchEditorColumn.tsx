@@ -8,7 +8,7 @@ import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength 
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
 import { shortWhen } from "../../lib/shortTime";
-import type { NoteCorrection } from "../../types";
+import type { PostCorrection } from "../../types";
 
 interface ResearchEditorColumnProps {
   column: EditorColumn;
@@ -280,7 +280,7 @@ export function ResearchPostCorrections({
   corrections,
   now,
 }: {
-  corrections: readonly NoteCorrection[];
+  corrections: readonly PostCorrection[];
   now: number;
 }) {
   if (corrections.length === 0) {

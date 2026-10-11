@@ -6,7 +6,7 @@
 import type {
   AgentSpec,
   DocumentSource,
-  NoteDelivery,
+  PostDelivery,
   PostFormat,
   ResearchHighlightAnchor,
   ResearchMessageAttachment,
@@ -80,7 +80,7 @@ export function nodeRecap(node: ResearchNode): ResearchRecap | null {
   return node.type === "post" ? null : (node.recap ?? null);
 }
 
-export function nodeDelivery(node: ResearchNode): NoteDelivery | null {
+export function nodeDelivery(node: ResearchNode): PostDelivery | null {
   return node.type === "post" ? (node.delivery ?? null) : null;
 }
 

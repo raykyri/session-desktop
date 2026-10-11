@@ -98,7 +98,7 @@ import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import ResearchQueryComposer, {
   type ResearchLaunchChoice,
 } from "./components/research/ResearchQueryComposer";
-import type { NoteActions } from "./components/research/ResearchNote";
+import type { PostActions } from "./components/research/ResearchPost";
 import {
   clearResearchTreeAttention,
   reconcileResearchActivity,
@@ -319,7 +319,7 @@ import {
   createResearchTree,
   importResearchReport,
   updateResearchDocument,
-  updateResearchNote,
+  updateResearchPost,
   forkResearchNode,
   markResearchTreeViewed,
   renameResearchNode,
@@ -357,10 +357,10 @@ import {
   listRecentActivity,
   listResearchTrees,
   getResearchTree,
-  createResearchNote,
-  createResearchNoteFollowUp,
-  respondToResearchNoteReply,
-  removeResearchNoteReply,
+  createResearchPost,
+  createResearchPostFollowUp,
+  respondToResearchPostReply,
+  removeResearchPostReply,
   openExternalUrl,
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
@@ -6197,9 +6197,9 @@ function MainApp() {
       resolveResearchComposerWorkspace,
     ],
   );
-  // A note stays on Home: the feed shows it at the top, unlike a research
+  // A post stays on Home: the feed shows it at the top, unlike a research
   // launch, which opens its thread.
-  const submitNewNote = useCallback(
+  const submitNewPost = useCallback(
     async (input: {
       body: string;
       adapter: string;
@@ -6209,7 +6209,7 @@ function MainApp() {
       askNetwork: boolean;
     }) => {
       const group = await resolveResearchComposerWorkspace(input.workspaceId);
-      const detail = await createResearchNote({ ...input, workspaceId: group.id });
+      const detail = await createResearchPost({ ...input, workspaceId: group.id });
       const root = detail.nodes.find((node) => node.id === detail.tree.rootNodeId);
       if (root) {
         setRecentActivityItems((current) => {
@@ -6265,9 +6265,9 @@ function MainApp() {
     },
     [],
   );
-  const editResearchNote = useCallback(
+  const editResearchPost = useCallback(
     async (input: { nodeId: string; text: string; expectedText: string; correction: boolean }) => {
-      const result = await updateResearchNote(input);
+      const result = await updateResearchPost(input);
       if (activeResearchTreeIdRef.current === result.tree.id) {
         setActiveResearchDetail((current) =>
           current?.tree.id === result.tree.id
@@ -6362,14 +6362,14 @@ function MainApp() {
     },
     [],
   );
-  // Replies, follow-ups, and retries under notes, shared by Home's note cards
-  // and the note page. The resulting node events update the feed and the open
+  // Replies, follow-ups, and retries under posts, shared by Home's post cards
+  // and the post page. The resulting node events update the feed and the open
   // thread, so nothing is patched here.
-  const noteActions = useMemo<NoteActions>(
+  const postActions = useMemo<PostActions>(
     () => ({
       onAskFollowUp: async ({ parentNodeId, prompt, network, replyId }) => {
         if (network) {
-          await createResearchNoteFollowUp(parentNodeId, prompt);
+          await createResearchPostFollowUp(parentNodeId, prompt);
           return;
         }
         await createResearchFollowup(
@@ -6380,10 +6380,10 @@ function MainApp() {
         );
       },
       onRespond: async (nodeId, replyId, body) => {
-        await respondToResearchNoteReply(nodeId, replyId, body);
+        await respondToResearchPostReply(nodeId, replyId, body);
       },
       onDeleteResponse: async (nodeId, replyId) => {
-        await removeResearchNoteReply(nodeId, replyId);
+        await removeResearchPostReply(nodeId, replyId);
       },
       onRetry: retryResearchRun,
     }),
@@ -8229,12 +8229,12 @@ function MainApp() {
     },
     [composerFolderId, fileNewResearchTree, submitNewResearch],
   );
-  const submitFeedNote = useCallback(
-    async (input: Parameters<typeof submitNewNote>[0]) => {
-      const treeId = await submitNewNote(input);
+  const submitFeedPost = useCallback(
+    async (input: Parameters<typeof submitNewPost>[0]) => {
+      const treeId = await submitNewPost(input);
       if (composerFolderId) fileNewResearchTree(treeId, composerFolderId);
     },
-    [composerFolderId, fileNewResearchTree, submitNewNote],
+    [composerFolderId, fileNewResearchTree, submitNewPost],
   );
   const saveComposerDraft = useCallback(
     async (prompt: string) => {
@@ -8313,7 +8313,7 @@ function MainApp() {
             setAgentsOpen(true);
           }}
           onCreate={submitFeedResearch}
-          onPost={submitFeedNote}
+          onPost={submitFeedPost}
           onSaveDraft={saveComposerDraft}
         />
       ) : null,
@@ -8324,7 +8324,7 @@ function MainApp() {
       researchScope,
       saveComposerDraft,
       submitFeedResearch,
-      submitFeedNote,
+      submitFeedPost,
     ],
   );
   // Show setup guide on Home only when no agents can run research.
@@ -9699,12 +9699,12 @@ function MainApp() {
                   detailError={activeResearchDetailError}
                   onRetryDetail={retryActiveResearchDetail}
                   onFork={createResearchFollowup}
-                  noteActions={noteActions}
+                  postActions={postActions}
                   onRemoveBranch={removeResearchBranchFromThread}
                   onRemoveTree={removeResearchTreeAndSelectFallback}
                   onRenameTree={renameResearchTreeTitle}
                   onUpdateDocument={editResearchDocument}
-                  onUpdateNote={editResearchNote}
+                  onUpdatePost={editResearchPost}
                   onAskAsQuestion={askResearchEditorQuestion}
                   readQuestionModel={readResearchQuestionModel}
                   onCancel={cancelResearchRun}

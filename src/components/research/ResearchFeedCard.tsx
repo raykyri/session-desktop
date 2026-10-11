@@ -18,7 +18,7 @@ interface ResearchFeedCardProps {
   place: string;
   /** The thread title, shown above the question when it differs from it. */
   title?: string | null;
-  /** Renders the question or note body. The body passes its prompt text
+  /** Renders the question or post body. The body passes its prompt text
    * through `asQuestion`, which sets it as the card's question; the question
    * and anything rendered outside it (link cards, embeds) show in full. */
   renderBody: (asQuestion: (content: ReactNode) => ReactNode) => ReactNode;

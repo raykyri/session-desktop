@@ -633,7 +633,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   label: string;
   /** Documents and conversations carry no question: the row shows `label`. */
   showPrompt: boolean;
-  /** For a follow-up of a note asked about one reply: that reply's text. */
+  /** For a follow-up of a post asked about one reply: that reply's text. */
   replyQuote?: string | null;
   selected: boolean;
   /** Clock for the relative time; the parent refreshes it once a minute. */

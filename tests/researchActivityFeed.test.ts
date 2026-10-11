@@ -60,7 +60,7 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.match(html, /role="feed"/);
   assert.match(html, /research-reading-surface/);
   assert.equal(cards(html).length, 2);
-  assert.match(html, /note-link-card research-content-card/);
+  assert.match(html, /post-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
   // The ask box starts Home, before the Unfiled list; Home's header has no
@@ -453,9 +453,9 @@ test("Home offers report import", () => {
   assert.doesNotMatch(renderFeed({ view: { kind: "bookmarks" }, onImportReport: asyncNoop }), /Import \.md report/);
 });
 
-test("a network note is an untitled card showing its body", () => {
+test("a network post is an untitled card showing its body", () => {
   const html = renderFeed({ items: [{
-    nodeId: "note", treeId: "note-tree", parentNodeId: null, inline: false,
+    nodeId: "post", treeId: "post-tree", parentNodeId: null, inline: false,
     prompt: "Who ships component-model plugins?", adapter: "claude", model: "fable",
     type: "post" as const, status: "complete" as const, createdAt: 100,
     delivery: {
@@ -466,6 +466,6 @@ test("a network note is an untitled card showing its body", () => {
   }] });
   assert.match(html, /Who ships component-model plugins\?/);
   assert.doesNotMatch(html, /research-feed-card-title/);
-  // Replies open with the note; the card shows only the question.
+  // Replies open with the post; the card shows only the question.
   assert.doesNotMatch(html, /We moved in March\.|7 replies/);
 });

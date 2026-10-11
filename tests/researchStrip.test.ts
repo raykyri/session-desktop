@@ -140,12 +140,12 @@ test("a pending branch adds its column after the level that shows its parent", (
   assert.equal(sameResearchStrip(strip, researchStrip(nodes, "b1", null)), false);
 });
 
-test("a note root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
+test("a post root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
-    node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
-    node("run", { parentNodeId: "note", createdAt: 1 }),
+    node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
+    node("run", { parentNodeId: "post", createdAt: 1 }),
   ];
-  const root = researchStrip(nodes, "note", null);
+  const root = researchStrip(nodes, "post", null);
   assert.deepEqual(ids(root), ["N0", "T0"]);
   assert.deepEqual(root.columns.map((column) => column.role), ["post", "thread"]);
   assert.equal(root.levels[0].kind, "post");
@@ -163,7 +163,7 @@ test("a note root is a post column and its thread column; its follow-ups open as
     "data-research-pair": "messages",
     "data-research-level": "0",
   });
-  assert.deepEqual(root.columns.map(columnKey), ["N0:note", "T0:note"]);
+  assert.deepEqual(root.columns.map(columnKey), ["N0:post", "T0:post"]);
   assert.equal(columnScrollKey(root.columns[0]), null);
   assert.equal(columnScrollKey(root.columns[1]), null);
   assert.equal(columnLevelIndex("N0"), 0);
@@ -174,23 +174,23 @@ test("a note root is a post column and its thread column; its follow-ups open as
   assert.deepEqual(ids(withRun), ["N0", "T0", "T1", "A1"]);
   assert.deepEqual(withRun.columns.map((column) => column.role), ["post", "thread", "messages", "answer"]);
   assert.equal(withRun.endsWithAnswer, true);
-  assert.deepEqual(withRun.openNodeIds, ["note", "run"]);
+  assert.deepEqual(withRun.openNodeIds, ["post", "run"]);
   // Closing the follow-up leaves the post and its thread.
-  assert.equal(sameResearchStrip(root, researchStrip(nodes, "note", null)), true);
+  assert.equal(sameResearchStrip(root, researchStrip(nodes, "post", null)), true);
   assert.equal(sameResearchStrip(root, withRun), false);
 });
 
 test("a network follow-up (a post under a post) opens as a post column and its thread column", () => {
   const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
   const nodes = [
-    node("note", { type: "post", delivery }),
-    node("net", { type: "post", parentNodeId: "note", createdAt: 1, delivery }),
+    node("post", { type: "post", delivery }),
+    node("net", { type: "post", parentNodeId: "post", createdAt: 1, delivery }),
     node("run", { parentNodeId: "net", createdAt: 2 }),
   ];
   const opened = researchStrip(nodes, "net", null);
   assert.deepEqual(ids(opened), ["N0", "T0", "N1", "T1"]);
   assert.equal(opened.levels[1].kind, "post");
-  assert.equal(opened.levels[1].sourceId, "note");
+  assert.equal(opened.levels[1].sourceId, "post");
   assert.equal(opened.endsWithAnswer, false);
   // Its own AI follow-up is an ordinary pair after it.
   assert.deepEqual(ids(researchStrip(nodes, "run", null)), ["N0", "T0", "N1", "T1", "T2", "A2"]);
@@ -249,6 +249,6 @@ test("editing the root adds the editor column after the root level's columns", (
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
 
   // A post's editor follows its thread column.
-  const post = [node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
-  assert.deepEqual(ids(researchStrip(post, "note", null, "note")), ["N0", "T0", "E0"]);
+  const post = [node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
+  assert.deepEqual(ids(researchStrip(post, "post", null, "post")), ["N0", "T0", "E0"]);
 });

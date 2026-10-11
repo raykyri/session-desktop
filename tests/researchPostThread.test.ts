@@ -2,22 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ResearchNoteThread, { noteThreadEntries } from "../src/components/research/ResearchNoteThread";
+import ResearchPostThread, { postThreadEntries } from "../src/components/research/ResearchPostThread";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const noop = () => {};
 const asyncNoop = async () => {};
 
-const noteFields = {
-  id: "note", treeId: "tree", prompt: "Who ships component-model plugins?",
+const postFields = {
+  id: "post", treeId: "tree", prompt: "Who ships component-model plugins?",
   adapter: "claude", model: "fable", groupId: "ws", type: "post", format: "text",
   status: "complete", createdAt: 100, highlights: [],
   delivery: { status: "posted", postedAt: 100 },} satisfies NodeFixture;
-const note = researchNode(noteFields);
+const post = researchNode(postFields);
 
 const withRepliesFields = {
-  ...noteFields,
+  ...postFields,
   delivery: {
     status: "posted", postedAt: 100,
     replies: [{
@@ -33,16 +33,16 @@ const withRepliesFields = {
   },} satisfies NodeFixture;
 const withReplies = researchNode(withRepliesFields);
 const aboutFields = {
-  ...noteFields, id: "about", parentNodeId: "note", type: "exchange", delivery: null,
+  ...postFields, id: "about", parentNodeId: "post", type: "exchange", delivery: null,
   anchor: { kind: "reply", replyId: "r1" },
   prompt: "How large is the generated surface?", status: "running", createdAt: 130,} satisfies NodeFixture;
 const about = researchNode(aboutFields);
 const answeredFields = {
-  ...noteFields, id: "answered", parentNodeId: "note", type: "exchange", delivery: null,
+  ...postFields, id: "answered", parentNodeId: "post", type: "exchange", delivery: null,
   prompt: "Which runtimes support it?", status: "complete", createdAt: 160,} satisfies NodeFixture;
 const answered = researchNode(answeredFields);
 const networkFields = {
-  ...noteFields, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
+  ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,
   delivery: {
     status: "posted", postedAt: 140,
     replies: [{
@@ -52,8 +52,8 @@ const networkFields = {
 const network = researchNode(networkFields);
 
 function render(nodes: ResearchNode[], options: { openNodeId?: string | null; archived?: boolean } = {}) {
-  return renderToStaticMarkup(createElement(ResearchNoteThread, {
-    nodes, note: nodes[0], archived: options.archived ?? false, requireCmdEnterToSend: true,
+  return renderToStaticMarkup(createElement(ResearchPostThread, {
+    nodes, post: nodes[0], archived: options.archived ?? false, requireCmdEnterToSend: true,
     openNodeId: options.openNodeId ?? null,
     actions: {
       onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop,
@@ -63,20 +63,20 @@ function render(nodes: ResearchNode[], options: { openNodeId?: string | null; ar
 }
 
 test("an empty thread has the composer and says it has no replies or follow-ups", () => {
-  const html = render([note]);
-  assert.match(html, /<p class="note-thread-empty">No replies or follow-ups yet\.<\/p>/);
-  assert.doesNotMatch(html, /note-thread-rows|data-research-thread-row/);
+  const html = render([post]);
+  assert.match(html, /<p class="post-thread-empty">No replies or follow-ups yet\.<\/p>/);
+  assert.doesNotMatch(html, /post-thread-rows|data-research-thread-row/);
   // The composer posts to the network by default. Empty and unfocused, it
   // is one line: the Post and Ask switch and Send appear once it is focused.
-  assert.match(html, /class="research-composer-wrap note-composer is-full-width"/);
+  assert.match(html, /class="research-composer-wrap post-composer is-full-width"/);
   assert.match(html, /placeholder="Post a follow-up"/);
-  assert.doesNotMatch(html, /note-composer-row|new-research-switch|research-composer-send/);
-  assert.ok(html.indexOf("note-composer") < html.indexOf("note-thread-empty"));
+  assert.doesNotMatch(html, /post-composer-row|new-research-switch|research-composer-send/);
+  assert.ok(html.indexOf("post-composer") < html.indexOf("post-thread-empty"));
 });
 
 test("the composer comes first, then replies and follow-ups as rows, oldest first", () => {
   const html = render([withReplies, answered, about, network]);
-  assert.ok(html.indexOf("note-composer") < html.indexOf("note-thread-rows"));
+  assert.ok(html.indexOf("post-composer") < html.indexOf("post-thread-rows"));
   const order = [
     "wit-bindgen doubled",
     "How large is the generated surface?",
@@ -88,12 +88,12 @@ test("the composer comes first, then replies and follow-ups as rows, oldest firs
   // An author's response is part of its reply's row, nested under it.
   assert.ok(html.indexOf("wit-bindgen doubled") < html.indexOf("Which version?"));
   assert.ok(html.indexOf("Which version?") < html.indexOf("How large is the generated surface?"));
-  assert.match(html, /<ol class="note-thread-list is-nested">/);
+  assert.match(html, /<ol class="post-thread-list is-nested">/);
   assert.equal(html.match(/data-research-thread-row=""/g)?.length, 5);
   // The first row is the one in the tab order.
   assert.match(
     html,
-    /<li class="note-thread-item" data-type="reply" tabindex="0" data-research-thread-row="" data-thread-key="reply:r1">/,
+    /<li class="post-thread-item" data-type="reply" tabindex="0" data-research-thread-row="" data-thread-key="reply:r1">/,
   );
   assert.equal(html.match(/tabindex="0"/g)?.length, 1);
   // Each row names its entry, for ⌃Tab with focus kept in a text field.
@@ -107,13 +107,13 @@ test("a follow-up row shows its reply count or its answer state", () => {
   const html = render([withReplies, answered, about, network]);
   // A network follow-up: its replies.
   assert.doesNotMatch(html, /posted to network/);
-  assert.match(html, /Anyone measured wizer\?<\/div><div class="note-thread-meta">1 reply<\/div>/);
+  assert.match(html, /Anyone measured wizer\?<\/div><div class="post-thread-meta">1 reply<\/div>/);
   // An AI follow-up: answering, or answered (no preview of the answer).
   assert.match(html, /asked Claude Fable about Ben Kowalski’s reply/);
   assert.match(html, />Answering</);
-  assert.match(html, /Which runtimes support it\?<\/div><div class="note-thread-meta">Answered<\/div>/);
-  assert.doesNotMatch(html, /Open answer|note-segment/);
-  const empty = render([note, researchNode({ ...networkFields, delivery: { status: "posted", postedAt: 140 } })]);
+  assert.match(html, /Which runtimes support it\?<\/div><div class="post-thread-meta">Answered<\/div>/);
+  assert.doesNotMatch(html, /Open answer|post-segment/);
+  const empty = render([post, researchNode({ ...networkFields, delivery: { status: "posted", postedAt: 140 } })]);
   // With no replies, the row shows no status line.
   assert.match(empty, /Anyone measured wizer\?<\/div><\/div>/);
   assert.doesNotMatch(empty, /No replies yet/);
@@ -123,7 +123,7 @@ test("the open follow-up's row is selected and in the tab order", () => {
   const html = render([withReplies, answered, about, network], { openNodeId: "net" });
   assert.match(
     html,
-    /<li class="note-thread-item note-thread-follow-up is-selected" data-type="follow-up"><button type="button" class="note-thread-hit" data-research-thread-row="" data-thread-key="net" data-node-id="net" aria-current="true"[^>]*tabindex="0"/,
+    /<li class="post-thread-item post-thread-follow-up is-selected" data-type="follow-up"><button type="button" class="post-thread-hit" data-research-thread-row="" data-thread-key="net" data-node-id="net" aria-current="true"[^>]*tabindex="0"/,
   );
   assert.equal(html.match(/tabindex="0"/g)?.length, 1);
   assert.equal(html.match(/aria-current="true"/g)?.length, 1);
@@ -136,7 +136,7 @@ test("an archived thread has rows but no composer", () => {
 });
 
 test("a saved link's thread can only ask", () => {
-  const link = researchNode({ ...noteFields, prompt: "https://example.com/page", format: "link", delivery: null });
+  const link = researchNode({ ...postFields, prompt: "https://example.com/page", format: "link", delivery: null });
   const html = render([link]);
   assert.match(html, /placeholder="Ask a follow-up"/);
   // Collapsed while empty, and with no Post option it has no switch.
@@ -145,14 +145,14 @@ test("a saved link's thread can only ask", () => {
 });
 
 test("thread entries skip documents and responses and break time ties by id", () => {
-  const documentFields = { ...noteFields, id: "doc", parentNodeId: "note", type: "document", createdAt: 105 } satisfies NodeFixture;
+  const documentFields = { ...postFields, id: "doc", parentNodeId: "post", type: "document", createdAt: 105 } satisfies NodeFixture;
   const document = researchNode(documentFields);
   const tieBFields = { ...aboutFields, id: "b", createdAt: 170 } satisfies NodeFixture;
   const tieB = researchNode(tieBFields);
   const tieAFields = { ...aboutFields, id: "a", createdAt: 170 } satisfies NodeFixture;
   const tieA = researchNode(tieAFields);
   assert.deepEqual(
-    noteThreadEntries([withReplies, document, tieB, tieA], withReplies).map((entry) => entry.key),
+    postThreadEntries([withReplies, document, tieB, tieA], withReplies).map((entry) => entry.key),
     ["reply:r1", "reply:r2", "a", "b"],
   );
 });
@@ -163,13 +163,13 @@ test("corrections are Thread rows ordered by time with the replies and follow-up
     corrections: [{ id: "c1", body: "It ships **wit-bindgen 0.30**.", createdAt: 135 }],
   });
   assert.deepEqual(
-    noteThreadEntries([corrected, about, answered], corrected).map((entry) => entry.key),
+    postThreadEntries([corrected, about, answered], corrected).map((entry) => entry.key),
     ["reply:r1", "about", "correction:c1", "reply:r2", "answered"],
   );
   const html = renderToStaticMarkup(
-    createElement(ResearchNoteThread, {
+    createElement(ResearchPostThread, {
       nodes: [corrected],
-      note: corrected,
+      post: corrected,
       archived: false,
       actions: { onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop },
       requireCmdEnterToSend: false,
@@ -178,6 +178,6 @@ test("corrections are Thread rows ordered by time with the replies and follow-up
     }),
   );
   assert.match(html, /data-type="correction"[^>]*data-research-thread-row="" data-thread-key="correction:/);
-  assert.match(html, /note-correction-label">Correction</);
+  assert.match(html, /post-correction-label">Correction</);
   assert.match(html, /<strong>wit-bindgen 0.30<\/strong>/);
 });

@@ -6,7 +6,7 @@
 @import "./styles/features/research-surface.css" layer(features);
 @import "./styles/features/research.css" layer(features);
 @import "./styles/features/feed.css" layer(features);
-@import "./styles/features/notes.css" layer(features);
+@import "./styles/features/posts.css" layer(features);
 @import "./styles/features/shell.css" layer(features);
 @import "./styles/features/agent-setup.css" layer(features);
 @import "./styles/features/terminal.css" layer(features);

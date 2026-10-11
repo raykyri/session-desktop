@@ -2,7 +2,7 @@ import { useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, LiHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
 import { ArrowRight, ExternalLink, LoaderCircle, Sparkles, X } from "lucide-react";
 import type {
-  NoteReply,
+  PostReply,
   PostFormat,
   RecentResearchQuery,
   ResearchMessageAttachment,
@@ -10,7 +10,7 @@ import type {
 import { openExternalUrl } from "../../lib/api";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { growComposerTextarea } from "../../lib/composerTextarea";
-import { noteReplyAuthorName } from "../../lib/activity";
+import { postReplyAuthorName } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import {
   ResearchMarkdown,
@@ -21,9 +21,9 @@ import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 
-/** Handlers shared by the Home note card and the note page. Each rejects
+/** Handlers shared by the Home post card and the post page. Each rejects
  * with the backend's message so the control that started it can show it. */
-export interface NoteActions {
+export interface PostActions {
   /** An AI follow-up (a run child) or, with `network`, a network follow-up
    * (a post child). `replyId` names the reply an AI follow-up is about. */
   onAskFollowUp: (input: {
@@ -38,7 +38,7 @@ export interface NoteActions {
 }
 
 /** The reply an AI follow-up is being composed about. */
-export interface NoteReplyTarget {
+export interface PostReplyTarget {
   id: string;
   author: string;
 }
@@ -54,7 +54,7 @@ function stopForInteractive(event: MouseEvent) {
 /** A post's own content, by its stored format. A link post renders as a
  * link card, or as its tweet embed once the tweet resolved (through the
  * shared message body, which then hides the URL); a text post as Markdown. */
-export function NoteBody({
+export function PostContent({
   prompt,
   format,
   attachments = [],
@@ -80,7 +80,7 @@ export function NoteBody({
     }
     return (
       <a
-        className="note-link-card research-content-card"
+        className="post-link-card research-content-card"
         href={url}
         onClick={(event) => {
           event.preventDefault();
@@ -88,8 +88,8 @@ export function NoteBody({
           void openExternalUrl(url);
         }}
       >
-        <span className="note-link-card-url">{url}</span>
-        <span className="note-link-card-host">
+        <span className="post-link-card-url">{url}</span>
+        <span className="post-link-card-host">
           <ExternalLink size={11} aria-hidden="true" />
           {host}
         </span>
@@ -119,16 +119,16 @@ function avatarTone(id: string): number {
   return hash % 3;
 }
 
-function ReplyAvatar({ reply }: { reply: NoteReply }) {
+function ReplyAvatar({ reply }: { reply: PostReply }) {
   if (reply.author.kind === "author") {
     return (
-      <span className="note-avatar is-self" aria-hidden="true">
+      <span className="post-avatar is-self" aria-hidden="true">
         You
       </span>
     );
   }
   return (
-    <span className={`note-avatar tone-${avatarTone(reply.author.id)}`} aria-hidden="true">
+    <span className={`post-avatar tone-${avatarTone(reply.author.id)}`} aria-hidden="true">
       {initials(reply.author.displayName)}
     </span>
   );
@@ -137,7 +137,7 @@ function ReplyAvatar({ reply }: { reply: NoteReply }) {
 /** One reply on the avatar spine, followed one level down by the author's
  * responses to it. `rowProps` go on the item itself (the thread column makes
  * a top-level reply a keyboard row). */
-export function NoteReplyItem({
+export function PostReplyItem({
   nodeId,
   reply,
   responses,
@@ -147,11 +147,11 @@ export function NoteReplyItem({
   rowProps,
 }: {
   nodeId: string;
-  reply: NoteReply;
-  responses: NoteReply[];
+  reply: PostReply;
+  responses: PostReply[];
   archived: boolean;
-  actions: NoteActions;
-  onAskAbout?: (target: NoteReplyTarget) => void;
+  actions: PostActions;
+  onAskAbout?: (target: PostReplyTarget) => void;
   rowProps?: LiHTMLAttributes<HTMLLIElement> & { [attribute: `data-${string}`]: string | undefined };
 }) {
   const [responding, setResponding] = useState(false);
@@ -174,13 +174,13 @@ export function NoteReplyItem({
       .finally(() => setSubmitting(false));
   };
   return (
-    <li className="note-thread-item" data-type={member ? "reply" : "self"} {...rowProps}>
-      <div className="note-thread-gutter">
+    <li className="post-thread-item" data-type={member ? "reply" : "self"} {...rowProps}>
+      <div className="post-thread-gutter">
         <ReplyAvatar reply={reply} />
       </div>
-      <div className="note-thread-body">
-        <div className="note-reply-head">
-          <span className="note-reply-author">{member ? member.displayName : "You"}</span>
+      <div className="post-thread-body">
+        <div className="post-reply-head">
+          <span className="post-reply-author">{member ? member.displayName : "You"}</span>
           {member?.handle ? <span>@{member.handle}</span> : null}
           <span aria-hidden="true">·</span>
           <time
@@ -190,14 +190,14 @@ export function NoteReplyItem({
             {shortWhen(reply.createdAt)}
           </time>
         </div>
-        <ResearchMarkdown className="note-reply-text" text={reply.body} variant="compact" />
+        <ResearchMarkdown className="post-reply-text" text={reply.body} variant="compact" />
         {!archived ? (
-          <div className="note-thread-actions" onClick={stopForInteractive}>
+          <div className="post-thread-actions" onClick={stopForInteractive}>
             {member ? (
               <>
                 <button
                   type="button"
-                  className="note-thread-link"
+                  className="post-thread-link"
                   onClick={() => setResponding(true)}
                 >
                   Respond
@@ -205,7 +205,7 @@ export function NoteReplyItem({
                 {onAskAbout ? (
                   <button
                     type="button"
-                    className="note-thread-link"
+                    className="post-thread-link"
                     onClick={() => onAskAbout({ id: reply.id, author: member.displayName })}
                   >
                     Ask AI about this
@@ -215,7 +215,7 @@ export function NoteReplyItem({
             ) : (
               <button
                 type="button"
-                className="note-thread-link"
+                className="post-thread-link"
                 onClick={() => {
                   setError(null);
                   actions
@@ -229,14 +229,14 @@ export function NoteReplyItem({
           </div>
         ) : null}
         {error ? (
-          <p className="note-thread-error" role="alert">
+          <p className="post-thread-error" role="alert">
             {error}
           </p>
         ) : null}
         {responses.length > 0 ? (
-          <ol className="note-thread-list is-nested">
+          <ol className="post-thread-list is-nested">
             {responses.map((response) => (
-              <NoteReplyItem
+              <PostReplyItem
                 key={response.id}
                 nodeId={nodeId}
                 reply={response}
@@ -248,7 +248,7 @@ export function NoteReplyItem({
           </ol>
         ) : null}
         {responding ? (
-          <label className="note-field is-respond" onClick={stopForInteractive}>
+          <label className="post-field is-respond" onClick={stopForInteractive}>
             <input
               type="text"
               autoFocus
@@ -267,7 +267,7 @@ export function NoteReplyItem({
                 }
               }}
             />
-            {submitting ? <LoaderCircle className="note-field-spinner" size={13} /> : null}
+            {submitting ? <LoaderCircle className="post-field-spinner" size={13} /> : null}
           </label>
         ) : null}
       </div>
@@ -275,18 +275,18 @@ export function NoteReplyItem({
   );
 }
 
-export function noteReplyTargetFor(
-  replies: NoteReply[] | undefined,
+export function postReplyTargetFor(
+  replies: PostReply[] | undefined,
   replyId: string | null | undefined,
-): NoteReplyTarget | null {
+): PostReplyTarget | null {
   const reply = replyId ? replies?.find((candidate) => candidate.id === replyId) : undefined;
-  return reply ? { id: reply.id, author: noteReplyAuthorName(reply) } : null;
+  return reply ? { id: reply.id, author: postReplyAuthorName(reply) } : null;
 }
 
 /** Status line of an AI follow-up that has no answer to show: a spinner
  * while it runs, and the error with Retry (which reruns the same node) after
  * a failure or cancellation. */
-export function NoteFollowUpStatus({
+export function PostFollowUpStatus({
   child,
   archived,
   onRetry,
@@ -299,8 +299,8 @@ export function NoteFollowUpStatus({
   const [error, setError] = useState<string | null>(null);
   if (child.status === "queued" || child.status === "starting" || child.status === "running") {
     return (
-      <div className="note-thread-meta" role="status">
-        <LoaderCircle className="note-thread-spinner" size={12} aria-hidden="true" />
+      <div className="post-thread-meta" role="status">
+        <LoaderCircle className="post-thread-spinner" size={12} aria-hidden="true" />
         Answering
       </div>
     );
@@ -313,14 +313,14 @@ export function NoteFollowUpStatus({
           : "Failed"
         : "Cancelled";
     return (
-      <div className="note-thread-meta is-failed" onClick={stopForInteractive}>
-        <span className="note-thread-meta-text">{error ?? label}</span>
+      <div className="post-thread-meta is-failed" onClick={stopForInteractive}>
+        <span className="post-thread-meta-text">{error ?? label}</span>
         {!archived ? (
           <>
             <span aria-hidden="true">·</span>
             <button
               type="button"
-              className="note-thread-link"
+              className="post-thread-link"
               disabled={retrying}
               onClick={() => {
                 setRetrying(true);
@@ -340,15 +340,15 @@ export function NoteFollowUpStatus({
   return null;
 }
 
-/** Follow-up composer at the top of a note's thread column. Like the Home
+/** Follow-up composer at the top of a post's thread column. Like the Home
  * ask box it is one line until focused or filled; then the Post and Ask
- * switch and Send appear on a row under the text. On a network note it posts
+ * switch and Send appear on a row under the text. On a network post it posts
  * to the network by default. Ask, marked with the AI follow-up rows' icon,
- * uses the note's model, so the switch has no model menu. A saved link, or a
+ * uses the post's model, so the switch has no model menu. A saved link, or a
  * follow-up about a reply, can only ask, so it has no switch. A reply target
  * shows above the field as a removable "@Ana's reply" chip. The send
  * shortcut follows the "Require ⌘↵ to send" setting. */
-export function NoteFollowUpField({
+export function PostFollowUpField({
   networkAvailable,
   modelLabel,
   target,
@@ -362,7 +362,7 @@ export function NoteFollowUpField({
 }: {
   networkAvailable: boolean;
   modelLabel: string;
-  target: NoteReplyTarget | null;
+  target: PostReplyTarget | null;
   placeholder?: string;
   autoFocus?: boolean;
   fullWidth?: boolean;
@@ -425,7 +425,7 @@ export function NoteFollowUpField({
   return (
     <div
       ref={wrapRef}
-      className={`research-composer-wrap note-composer${fullWidth ? " is-full-width" : ""}${
+      className={`research-composer-wrap post-composer${fullWidth ? " is-full-width" : ""}${
         expanded ? " is-expanded" : ""
       }`}
       onClick={stopForInteractive}
@@ -435,7 +435,7 @@ export function NoteFollowUpField({
         <div className="research-composer-note">
           <button
             type="button"
-            className="note-field-target"
+            className="post-field-target"
             title="Ask without this reply"
             onClick={onClearTarget}
           >
@@ -469,7 +469,7 @@ export function NoteFollowUpField({
           onKeyDown={onKeyDown}
         />
         {expanded ? (
-          <div className="note-composer-row">
+          <div className="post-composer-row">
             {canPost ? (
               <AskPostSwitch
                 askMode={mode}
@@ -503,7 +503,7 @@ export function NoteFollowUpField({
         ) : null}
       </form>
       {error ? (
-        <p className="note-thread-error" role="alert">
+        <p className="post-thread-error" role="alert">
           {error}
         </p>
       ) : null}

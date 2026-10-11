@@ -123,8 +123,8 @@ interface ResearchQueryComposerProps {
     effort: string | null;
     workspaceId: string | null;
   }) => Promise<void>;
-  /** Post: creates a note. The selected agent and model are stored as
-   * the default for the note's AI follow-ups. */
+  /** Post: creates a post. The selected agent and model are stored as
+   * the default for the post's AI follow-ups. */
   onPost: (input: {
     body: string;
     adapter: string;
@@ -337,7 +337,7 @@ export default function ResearchQueryComposer({
       : "";
   const resolvedEffort = selectedEffort || null;
 
-  // A note never launches an agent, so posting one needs no ready adapter.
+  // A post never launches an agent, so posting one needs no ready adapter.
   const canSubmit =
     Boolean(prompt.trim()) &&
     !submitting &&
@@ -373,7 +373,7 @@ export default function ResearchQueryComposer({
           workspaceId,
         });
       }
-      // A successful launch opens its research page, and a note appears at the
+      // A successful launch opens its research page, and a post appears at the
       // top of the feed. Clear the text; the agent, model, and effort stay
       // selected for the next ask.
       setPrompt("");

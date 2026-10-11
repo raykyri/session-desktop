@@ -1,7 +1,7 @@
 /* The feed column: a 44px title bar, the composer, then the list for the
    view (Home: Unfiled followed by one tray per folder). Cards carry only the
    question; status, unread, and the … menu sit in their corners
-   (features/notes.css styles note replies on note pages). */
+   (features/posts.css styles post replies on post pages). */
 
 .research-visually-hidden {
   position: absolute;

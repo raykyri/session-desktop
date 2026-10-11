@@ -2,7 +2,7 @@
 // level per open chain: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
-// level whose head is a post (a note root, or a network follow-up of a post),
+// level whose head is a post (a post root, or a network follow-up of a post),
 // which renders as the post column and its thread column (replies,
 // follow-ups and the follow-up composer). An unsent branch adds a
 // pending column after the level it was asked from, and editing the root's

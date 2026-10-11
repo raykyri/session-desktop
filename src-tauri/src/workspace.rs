@@ -3588,8 +3588,8 @@ mod tests {
         let workspace =
             create_research_workspace(&state, None, project.display().to_string()).unwrap();
         state
-            .create_research_note(
-                crate::research::CreateResearchNoteRequest {
+            .create_research_post(
+                crate::research::CreateResearchPostRequest {
                     body: "Who has tried X?".to_string(),
                     adapter: "claude".to_string(),
                     model: None,
