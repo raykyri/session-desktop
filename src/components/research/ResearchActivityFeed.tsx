@@ -1,3 +1,4 @@
+import { feedTextRuns } from "../../lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "../../lib/researchNodeTypes";
 import {
@@ -869,10 +870,13 @@ function ResearchActivityFeed({
     const selected = treeId === selectedTreeId;
     const status = researchFeedStatus(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
-    // The card shows the question as plain text; its Markdown renders in the
-    // conversation. Link cards and tweet embeds still show.
+    // The card shows the question as plain text, URLs in the link color; its
+    // Markdown renders in the conversation. Link cards and tweet embeds still
+    // show.
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
-      asQuestion(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question);
+      asQuestion(
+        feedText(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question),
+      );
     return (
       <ResearchFeedCard
         cardId={treeId}
@@ -900,7 +904,7 @@ function ResearchActivityFeed({
               )}
             </ResearchUserMessage>
           ) : (
-            asQuestion(question)
+            asQuestion(feedText(question))
           )
         }
         status={status}
@@ -945,7 +949,7 @@ function ResearchActivityFeed({
         dragKind="draft"
         place={RESEARCH_DRAFTS_FOLDER_ID}
         label={`Draft: ${draft.prompt.trim()}`}
-        renderBody={(asQuestion) => asQuestion(draft.prompt.trim())}
+        renderBody={(asQuestion) => asQuestion(feedText(draft.prompt.trim()))}
         selected={draft.id === selectedDraftId}
         menuOpen={menu?.kind === "draft" && menu.draftId === draft.id && !menu.placement}
         menuLabel="Draft actions"
@@ -1614,3 +1618,19 @@ function ResearchActivityFeed({
 }
 
 export default memo(ResearchActivityFeed);
+
+/** Feed card text with each URL in a span drawn in the link color. The card
+ * is one open button, so the URLs are not links. */
+function feedText(text: string): ReactNode {
+  const runs = feedTextRuns(text);
+  if (!runs.some((run) => run.kind === "url")) return text;
+  return runs.map((run, index) =>
+    run.kind === "url" ? (
+      <span key={index} className="research-feed-url">
+        {run.text}
+      </span>
+    ) : (
+      run.text
+    ),
+  );
+}

@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { feedTextRuns } from "../src/lib/feedLinkText";
+
+test("feed text splits http(s) URLs from the text around them", () => {
+  assert.deepEqual(feedTextRuns("See https://example.com/a?b=1 for details"), [
+    { kind: "text", text: "See " },
+    { kind: "url", text: "https://example.com/a?b=1" },
+    { kind: "text", text: " for details" },
+  ]);
+  assert.deepEqual(feedTextRuns("no links here"), [{ kind: "text", text: "no links here" }]);
+});
+
+test("trailing sentence punctuation stays outside the URL, a URL's own parenthesis stays in", () => {
+  assert.deepEqual(feedTextRuns("Read http://a.org/x."), [
+    { kind: "text", text: "Read " },
+    { kind: "url", text: "http://a.org/x" },
+    { kind: "text", text: "." },
+  ]);
+  assert.deepEqual(feedTextRuns("(https://a.org/y), then"), [
+    { kind: "text", text: "(" },
+    { kind: "url", text: "https://a.org/y" },
+    { kind: "text", text: "), then" },
+  ]);
+  assert.deepEqual(feedTextRuns("https://en.wikipedia.org/wiki/Foo_(bar)"), [
+    { kind: "url", text: "https://en.wikipedia.org/wiki/Foo_(bar)" },
+  ]);
+});

@@ -800,6 +800,12 @@
    block, so link cards and embeds after it are not clamped and keep their
    colors. The status dot's float sits beside the title's first line and does
    not reach this block. */
+/* URLs in a card's text take the link color; the whole card is one open
+   button, so they are not links. */
+.research-feed-url {
+  color: var(--accent-color);
+}
+
 .research-feed-card-title ~ * .research-feed-card-question,
 .research-feed-card-title ~ .research-feed-card-question {
   display: -webkit-box;

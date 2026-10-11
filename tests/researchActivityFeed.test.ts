@@ -344,7 +344,7 @@ test("one card per thread, even when a follow-up item is loaded", () => {
   assert.match(html, /Investigate this question/);
 });
 
-test("cards show the question as plain text; its Markdown renders in the conversation", () => {
+test("cards show the question as plain text, URLs in the link color but not as links", () => {
   const withLink = renderFeed({
     items: [{
       ...question,
@@ -354,7 +354,7 @@ test("cards show the question as plain text; its Markdown renders in the convers
   assert.doesNotMatch(withLink, /turn-markdown|<a |<strong>/);
   assert.match(
     withLink,
-    /research-feed-card-question">what would \*\*solving\*\* it look like\?\nhttps:\/\/x\.com\/example\/status\/2097801834224312595</,
+    /research-feed-card-question">what would \*\*solving\*\* it look like\?\n<span class="research-feed-url">https:\/\/x\.com\/example\/status\/2097801834224312595<\/span></,
   );
 });
 
