@@ -102,7 +102,7 @@ test("an edited post shows its text in place and Edited after its time", () => {
   });
   const html = render([edited]);
   assert.match(html, /Who ships wit-bindgen plugins\?/);
-  assert.match(html, /<div class="research-turn-meta"><time [^>]*>[^<]+<\/time><span aria-hidden="true">·<\/span><span title="[^"]+">Edited [^<]+<\/span><\/div>/);
+  assert.match(html, /<div class="research-turn-meta"><time [^>]*>[^<]+<\/time><span aria-hidden="true">·<\/span><span title="Edited [^"]+">Edited<\/span><\/div>/);
   assert.doesNotMatch(html, /[Cc]orrection/);
   // An unedited post has no Edited mark.
   assert.doesNotMatch(render([post]), /Edited/);
