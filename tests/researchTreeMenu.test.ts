@@ -31,7 +31,6 @@ test("research tree menus omit regenerate title for every node type", () => {
         archived: false,
         onClose: noop,
         onRename: noop,
-        onArchive: noop,
         onRestore: noop,
         onDelete: noop,
       }),
@@ -39,7 +38,8 @@ test("research tree menus omit regenerate title for every node type", () => {
     assert.match(html, /Rename/);
     assert.doesNotMatch(html, /Star/);
     assert.doesNotMatch(html, /folder/i);
-    assert.match(html, /Archive/);
+    // Archiving is the Archive entry under Move to.
+    assert.doesNotMatch(html, />Archive</);
     assert.match(html, /Delete/);
     assert.doesNotMatch(html, /Regenerate title/);
   }
@@ -52,7 +52,6 @@ test("research tree menus can expose recap regeneration", () => {
       archived: false,
       onClose: noop,
       onRename: noop,
-      onArchive: noop,
       onRestore: noop,
       onDelete: noop,
       onRegenerateRecap: noop,
@@ -77,18 +76,17 @@ test("archived cards' thread actions are Unarchive and Delete only", () => {
   assert.doesNotMatch(html, />Archive</);
 });
 
-test("Archive and Delete carry their A and D shortcuts, disabled with a reason while running", () => {
+test("Delete carries its D shortcut, disabled with a reason while running", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchTreeLifecycleItems, {
       tree: { ...tree, runningCount: 1 },
       archived: false,
       onClose: noop,
       onRename: noop,
-      onArchive: noop,
       onDelete: noop,
     }),
   );
-  assert.match(html, /disabled="" title="Research with active runs cannot be archived" data-shortcut="a"/);
+  assert.doesNotMatch(html, /data-shortcut="a"/);
   assert.match(html, /disabled="" title="Research with active runs cannot be deleted" data-shortcut="d"/);
   assert.equal(html.match(/role="separator"/g)?.length, 1);
 });
@@ -124,7 +122,6 @@ function feedCardMenu(overrides: { archived?: boolean; recap?: boolean } = {}) {
         archived,
         onClose: noop,
         onRename: noop,
-        onArchive: noop,
         onRestore: noop,
         onDelete: noop,
         onRegenerateRecap: overrides.recap === false || archived ? undefined : noop,
@@ -133,7 +130,7 @@ function feedCardMenu(overrides: { archived?: boolean; recap?: boolean } = {}) {
   );
 }
 
-test("a feed card's one menu lists the question's actions, then the thread's, Delete last", () => {
+test("a feed card's one menu lists the question's actions, then the thread's, Delete last; Archive is under Move to", () => {
   assert.deepEqual(menuOutline(feedCardMenu()), [
     "Bookmark",
     "Follow",
@@ -149,7 +146,6 @@ test("a feed card's one menu lists the question's actions, then the thread's, De
     "Generate recap",
     "Rename",
     "|",
-    "Archive",
     "Delete",
   ]);
   // Without a recap, Rename alone precedes the separator.
@@ -157,12 +153,13 @@ test("a feed card's one menu lists the question's actions, then the thread's, De
     "|",
     "Rename",
     "|",
-    "Archive",
     "Delete",
   ]);
   const html = feedCardMenu();
   assert.match(html, /class="research-menu-item is-danger"[^>]*data-shortcut="d"/);
-  assert.match(html, /data-shortcut="a"/);
+  // Archive appears once, under Move to, with no A shortcut.
+  assert.equal(html.match(/>Archive</g)?.length, 1);
+  assert.doesNotMatch(html, /data-shortcut="a"/);
 });
 
 test("an archived card's menu ends with Unarchive and Delete", () => {

@@ -1556,15 +1556,6 @@ function ResearchActivityFeed({
               archived={menuTree.archivedAt != null}
               onClose={() => closeMenu()}
               onRename={(tree) => setRenamingTree(tree)}
-              onArchive={
-                onMoveTree
-                  ? (treeId) => {
-                      // Focus follows the card into Archive, as for Move to.
-                      refocusCardRef.current = { cardId: treeId, anchor: menu.anchor };
-                      onMoveTree(treeId, RESEARCH_ARCHIVE_FOLDER_ID);
-                    }
-                  : undefined
-              }
               onRestore={(treeId) => void onRestoreResearch(treeId)}
               onDelete={(tree) => setDeletingTree(tree)}
               onRegenerateRecap={
