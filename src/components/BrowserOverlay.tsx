@@ -112,9 +112,6 @@ interface BrowserOverlayProps {
   // A native child cannot be covered by DOM stacking. Hide it while an app
   // modal/menu is above this overlay, then restore it to the measured slot.
   occluded: boolean;
-  // Changes whenever app layout can move a fixed-size overlay without resizing
-  // it, ensuring the native child's full bounding rect is republished.
-  geometryRevision: number;
   // Navigate to a typed address (a URL, or a bare host that gets http:// prefixed).
   onNavigate: (rawInput: string) => void;
   // Redirects and in-page navigation update the per-pane address state.
@@ -144,7 +141,6 @@ export default function BrowserOverlay({
   fullWidth,
   toggleShortcutLabel,
   occluded,
-  geometryRevision,
   onNavigate,
   onLocationChange,
   onRefresh,
@@ -417,7 +413,7 @@ export default function BrowserOverlay({
 
   useLayoutEffect(() => {
     syncHumanBrowserSlotRef.current();
-  }, [geometryRevision, humanBrowser, occluded, reloadNonce, url]);
+  }, [humanBrowser, occluded, reloadNonce, url]);
 
   useEffect(() => {
     if (!automated) {

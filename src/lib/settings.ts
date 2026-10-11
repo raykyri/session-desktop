@@ -188,17 +188,6 @@ export interface AppSettings {
    * collapse to a single aligned row (status dot · title · status).
    */
   codeMode: boolean;
-  /** show per-tab working directories when code mode is enabled */
-  showTabDirectories: boolean;
-  /** show tool calls and other activity detail in agent transcripts */
-  showToolCalls: boolean;
-  /** pin the latest user message to the top of the transcript while its reply scrolls */
-  stickyUserMessages: boolean;
-  /**
-   * Show a wall-clock timestamp after each consecutive run of assistant
-   * messages (before the next user/system message, or at the transcript tail).
-   */
-  showAssistantTimestamps: boolean;
   /** Overlay toasts for `session send` notifications. */
   showNotifications: boolean;
   /** require Command+Enter instead of bare Enter for composer submit shortcuts */
@@ -220,10 +209,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   worktreeLocation: "global",
   researchLaunchInstruction: "",
   codeMode: true,
-  showTabDirectories: true,
-  showToolCalls: true,
-  stickyUserMessages: true,
-  showAssistantTimestamps: false,
   showNotifications: true,
   requireCmdEnterToSend: true,
 };
@@ -313,18 +298,6 @@ export function loadSettings(): AppSettings {
           : DEFAULT_SETTINGS.tabTitleProvider;
     const codeMode =
       typeof parsed.codeMode === "boolean" ? parsed.codeMode : DEFAULT_SETTINGS.codeMode;
-    const showTabDirectories =
-      typeof parsed.showTabDirectories === "boolean" ? parsed.showTabDirectories : codeMode;
-    const showToolCalls =
-      typeof parsed.showToolCalls === "boolean" ? parsed.showToolCalls : codeMode;
-    const stickyUserMessages =
-      typeof parsed.stickyUserMessages === "boolean"
-        ? parsed.stickyUserMessages
-        : codeMode;
-    const showAssistantTimestamps =
-      typeof parsed.showAssistantTimestamps === "boolean"
-        ? parsed.showAssistantTimestamps
-        : DEFAULT_SETTINGS.showAssistantTimestamps;
     const showNotifications =
       typeof parsed.showNotifications === "boolean"
         ? parsed.showNotifications
@@ -356,10 +329,6 @@ export function loadSettings(): AppSettings {
       worktreeLocation,
       researchLaunchInstruction,
       codeMode,
-      showTabDirectories,
-      showToolCalls,
-      stickyUserMessages,
-      showAssistantTimestamps,
       showNotifications,
       requireCmdEnterToSend,
     };

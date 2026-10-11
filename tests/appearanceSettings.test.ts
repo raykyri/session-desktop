@@ -54,3 +54,18 @@ test("Inter is the default body font and a removed font falls back to it", () =>
   store.set(key, JSON.stringify({ bodyFontId: "dm-sans" }));
   assert.equal(loadSettings().bodyFontId, "dm-sans");
 });
+
+test("removed transcript pane settings load without error and are not saved again", () => {
+  store.set(key, JSON.stringify({ showTabDirectories: false, showToolCalls: false,
+    stickyUserMessages: false, showAssistantTimestamps: true, reduceMotion: true }));
+  const settings = loadSettings();
+  assert.equal(settings.reduceMotion, true);
+  assert.equal("showToolCalls" in settings, false);
+  saveSettings(settings);
+  const saved = JSON.parse(store.get(key)!);
+  for (const removed of ["showTabDirectories", "showToolCalls", "stickyUserMessages",
+    "showAssistantTimestamps"]) {
+    assert.equal(removed in saved, false, removed);
+  }
+  assert.equal(saved.reduceMotion, true);
+});

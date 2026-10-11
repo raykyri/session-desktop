@@ -819,52 +819,6 @@ pub fn write_conversation_history_snapshot(
     atomic_write_owner_only(&path, &raw)
 }
 
-pub fn read_conversation_history_snapshot(
-    storage_root: &Path,
-    snapshot_id: &str,
-) -> Result<Option<ConversationHistorySnapshot>, String> {
-    let path =
-        conversation_history_snapshot_path(&storage_root.display().to_string(), snapshot_id)?;
-    let raw = match fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => {
-            return Err(format!(
-                "failed to read conversation history {}: {err}",
-                path.display()
-            ));
-        }
-    };
-    let snapshot = serde_json::from_str::<ConversationHistorySnapshot>(&raw)
-        .map_err(|err| format!("invalid conversation history {}: {err}", path.display()))?;
-    if snapshot.id != snapshot_id {
-        return Err(format!(
-            "conversation history {} contains snapshot id {}, expected {snapshot_id}",
-            path.display(),
-            snapshot.id
-        ));
-    }
-    if let Some(previous_snapshot_id) = snapshot.previous_snapshot_id.as_deref() {
-        conversation_history_snapshot_path(
-            storage_root.to_string_lossy().as_ref(),
-            previous_snapshot_id,
-        )
-        .map_err(|_| {
-            format!(
-                "conversation history {} contains an invalid previous snapshot id",
-                path.display()
-            )
-        })?;
-        if previous_snapshot_id == snapshot_id {
-            return Err(format!(
-                "conversation history {} points to itself",
-                path.display()
-            ));
-        }
-    }
-    Ok(Some(snapshot))
-}
-
 pub fn thread_record_for_agent(
     agent: &AgentInfo,
     default_focused_branch_id: &str,
@@ -1877,32 +1831,15 @@ mod tests {
                 &[sample_turn("agent-1", "replacement", "assistant", 9)],
             )
             .unwrap();
-        let loaded = read_conversation_history_snapshot(&worktree, &snapshot.id)
-            .unwrap()
-            .expect("history snapshot exists");
+        let snapshot_path =
+            conversation_history_snapshot_path(worktree.to_string_lossy().as_ref(), &snapshot.id)
+                .unwrap();
+        let loaded: ConversationHistorySnapshot =
+            serde_json::from_slice(&fs::read(snapshot_path).expect("history snapshot exists"))
+                .unwrap();
         assert_eq!(loaded.id, snapshot.id);
         assert_eq!(loaded.turns.len(), 2);
         assert_eq!(loaded.previous_snapshot_id, snapshot.previous_snapshot_id);
-
-        let mismatched_snapshot = ConversationHistorySnapshot {
-            id: "history-other".to_string(),
-            adapter: "codex".to_string(),
-            turns: Vec::new(),
-            previous_snapshot_id: None,
-        };
-        let mismatched_path = conversation_history_snapshot_path(
-            worktree.to_string_lossy().as_ref(),
-            "history-mismatched",
-        )
-        .unwrap();
-        atomic_write_owner_only(
-            &mismatched_path,
-            &serde_json::to_vec(&mismatched_snapshot).unwrap(),
-        )
-        .unwrap();
-        let mismatch =
-            read_conversation_history_snapshot(&worktree, "history-mismatched").unwrap_err();
-        assert!(mismatch.contains("contains snapshot id history-other"));
 
         let child = sample_agent_with(
             "agent-2",

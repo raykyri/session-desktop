@@ -3588,49 +3588,6 @@ impl AppState {
         ))
     }
 
-    pub fn list_thread_graphs(&self) -> Result<Vec<thread_graph::ThreadGraph>, String> {
-        let records = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model.threads.values().cloned().collect::<Vec<_>>()
-        };
-
-        let mut graphs = Vec::new();
-        for record in records {
-            let store = thread_graph::ThreadStore::new(record.storage_root);
-            if let Some(graph) = store.read_thread(&record.id)? {
-                graphs.push(graph);
-            }
-        }
-        Ok(graphs)
-    }
-
-    /// Reads a single thread's graph, so streaming turn activity can refresh just
-    /// the affected thread instead of re-reading (and re-serializing) every graph
-    /// in the workspace. Returns `None` for an unknown thread or one whose graph
-    /// snapshot doesn't exist yet.
-    pub fn thread_graph(
-        &self,
-        thread_id: &str,
-    ) -> Result<Option<thread_graph::ThreadGraph>, String> {
-        let record = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model.threads.get(thread_id).cloned()
-        };
-        let Some(record) = record else {
-            return Ok(None);
-        };
-        let store = thread_graph::ThreadStore::new(record.storage_root);
-        store.read_thread(&record.id)
-    }
-
     /// Snapshots the source side of a fork before the child process starts.
     /// The returned reference names immutable session-owned content, so it remains
     /// stable after either pane closes or the source transcript is rewritten.
@@ -3730,16 +3687,6 @@ impl AppState {
             self.persist();
         }
         Ok(())
-    }
-
-    pub fn conversation_history_snapshot(
-        &self,
-        snapshot_id: &str,
-    ) -> Result<Option<thread_graph::ConversationHistorySnapshot>, String> {
-        thread_graph::read_conversation_history_snapshot(
-            &self.inner.config.workspace_root,
-            snapshot_id,
-        )
     }
 
     pub fn list_research_trees(&self) -> Result<Vec<ResearchTreeSummary>, String> {
@@ -9461,8 +9408,8 @@ impl AppState {
 
     /// Tail-scoped append: applies only while `transcript_path` is still the
     /// agent's bound transcript, and reports whether it applied. A tail checks
-    /// its binding at the top of each poll, but a rebind (rewind rotation, a
-    /// session picker choice, recovery) can land between that check and this
+    /// its binding at the top of each poll, but a rebind (rewind rotation,
+    /// recovery) can land between that check and this
     /// write — an unconditional write would splice the dead file's parse over
     /// the new tail's timeline. Checking under the model lock closes that race.
     pub fn append_turn_for_transcript(
@@ -19918,7 +19865,7 @@ mod tests {
     }
 
     // A tail re-checks its binding inside the write: a rebind (rewind
-    // rotation, session picker choice, recovery) landing between a tail's
+    // rotation, recovery) landing between a tail's
     // loop-top check and its write must not let the dead file's parse land
     // over the new transcript's timeline.
     #[test]

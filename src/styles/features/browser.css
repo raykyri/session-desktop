@@ -1,12 +1,12 @@
 .browser-overlay {
   position: absolute;
   /* Float inset from the app edges: 20px from the top, 50px from the bottom, and
-     20px in from the right edge of the terminal (left of the turn sidebar). */
+     20px in from the right edge. */
   top: 20px;
-  right: calc(var(--turn-pane-width, 0px) + 20px);
-  width: calc(100% - var(--browser-overlay-left, 64px) - var(--turn-pane-width, 0px) - 20px);
+  right: 20px;
+  width: calc(100% - var(--browser-overlay-left, 64px) - 20px);
   height: calc(100% - 70px);
-  max-width: calc(100% - var(--browser-overlay-left, 64px) - var(--turn-pane-width, 0px) - 20px);
+  max-width: calc(100% - var(--browser-overlay-left, 64px) - 20px);
   max-height: calc(100% - 70px);
   z-index: 8;
   display: flex;
@@ -22,14 +22,8 @@
   background: color-mix(in srgb, var(--field-bg) 95%, transparent);
 }
 
-.app-shell.has-expanded-transcript .browser-overlay {
-  right: 20px;
-  width: calc(100% - var(--browser-overlay-left, 64px) - 20px);
-  max-width: calc(100% - var(--browser-overlay-left, 64px) - 20px);
-}
-
-/* Full-width browser mode covers the sidebar, terminal, and turn pane while
-   preserving the regular overlay width for restore. */
+/* Full-width browser mode covers the sidebar and the columns while preserving
+   the regular overlay width for restore. */
 .app-shell .browser-overlay.is-full-width {
   left: 20px;
   right: 20px;

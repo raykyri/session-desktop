@@ -9,7 +9,6 @@ const surfaceCss = readFileSync(join(stylesDirectory, "research-surface.css"), "
 const researchCss = readFileSync(join(stylesDirectory, "research.css"), "utf8");
 const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
 const transcriptCss = readFileSync(join(stylesDirectory, "transcript.css"), "utf8");
-const turnPaneCss = readFileSync(join(stylesDirectory, "turn-pane.css"), "utf8");
 
 function ruleBody(css: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,9 +29,6 @@ test("DM Sans adds one optical half-pixel to UI type but not monospace text", ()
     ruleBody(tokensCss, ':root[data-body-font="dm-sans"]'),
     /--font-ui-size-offset:\s*0\.5px/,
   );
-
-  const turnPane = ruleBody(turnPaneCss, ".turn-pane");
-  assert.match(turnPane, /--fs-base:[^;]+var\(--font-ui-size-offset\)/s);
 
   const researchScale = ruleBody(surfaceCss, ".research-reading-surface");
   assert.match(

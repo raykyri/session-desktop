@@ -42,8 +42,6 @@ import type {
   RemoteChoice,
   RemoteProbeResult,
   SavedRemote,
-  TranscriptOption,
-  ThreadGraph,
   Turn,
   WorktreeStatus,
 } from "../types";
@@ -195,10 +193,6 @@ export function listHomeTurnHistory(
     before: before ?? null,
     limit,
   });
-}
-
-export function getThreadGraph(threadId: string) {
-  return invoke<ThreadGraph | null>("get_thread_graph", { threadId });
 }
 
 export function listResearchTrees(includeArchived = false) {
@@ -459,10 +453,6 @@ export function removeResearchBranch(nodeId: string) {
 
 export function listAgentTurnQueue(agentId: string) {
   return invoke<QueuedTurn[]>("list_agent_turn_queue", { agentId });
-}
-
-export function listAgentTranscripts(agentId: string) {
-  return invoke<TranscriptOption[]>("list_agent_transcripts", { agentId });
 }
 
 export async function spawnShell(

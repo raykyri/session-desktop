@@ -16,7 +16,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,17 +185,6 @@ pub fn start_transcript_tail(
     adapter_id: String,
 ) {
     start_transcript_tail_inner(state, agent_id, transcript_path, adapter_id, true, None);
-}
-
-/// Tails a transcript selected for historical viewing without letting its old
-/// command cwd replace the live tab's active-workspace indicator.
-fn start_historical_transcript_tail(
-    state: AppState,
-    agent_id: String,
-    transcript_path: String,
-    adapter_id: String,
-) {
-    start_transcript_tail_inner(state, agent_id, transcript_path, adapter_id, false, None);
 }
 
 /// Remote mirrors arrive in batches. Only records beyond the connection's
@@ -828,8 +817,7 @@ pub(crate) struct TranscriptCandidate {
 }
 
 /// All `*.jsonl` transcript files in `dir`, each paired with its mtime and the
-/// session id read from its filename. Shared by auto-recovery and the manual
-/// session picker so both reason over the same candidate set.
+/// session id read from its filename, for auto-recovery.
 fn gather_transcript_candidates(dir: &Path) -> Result<Vec<TranscriptCandidate>, String> {
     gather_transcript_candidates_in(dir, false)
 }
@@ -863,7 +851,7 @@ fn gather_transcript_candidates_in(
         let path = entry.path();
         // DirectoryEntry::metadata follows symlinks. Recursing on that result lets a
         // link cycle overflow the stack and lets a link under the global Codex session
-        // root pull unrelated filesystem trees into the picker scan. Classify with
+        // root pull unrelated filesystem trees into the scan. Classify with
         // lstat-style file_type instead and ignore links entirely.
         let Ok(file_type) = entry.file_type() else {
             continue;
@@ -931,75 +919,6 @@ fn select_newest_transcript_candidate(
         .cloned()
 }
 
-/// Cap on how many sessions the picker offers, newest first — old projects can
-/// accumulate hundreds of JSONL files and the user only ever wants a recent one.
-const MAX_TRANSCRIPT_OPTIONS: usize = 30;
-
-/// Characters of the first usable user message shown as a session preview.
-const PREVIEW_MAX_CHARS: usize = 90;
-const PREVIEW_USER_MESSAGE_LOOKAHEAD_LIMIT: usize = 5;
-// Session previews never need to parse an enormous tool-result record. Keep the
-// picker memory bounded even when a transcript contains a single pathological line.
-const TRANSCRIPT_META_LINE_LIMIT: u64 = 1024 * 1024;
-
-/// One selectable session for the right pane's transcript picker.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptOption {
-    pub path: String,
-    pub session_id: Option<String>,
-    pub modified_ms: u128,
-    pub preview: Option<String>,
-    pub line_count: usize,
-    /// This is the transcript the agent is currently bound to.
-    pub is_active: bool,
-    /// Another agent is tailing this file; selecting it would collide.
-    pub bound_to_other_agent: bool,
-}
-
-fn transcript_listing_root(agent: &AgentInfo, current_path: &Path) -> Option<PathBuf> {
-    if agent.adapter == "codex" {
-        codex_sessions_root(current_path)
-    } else if agent.adapter == "grok" && is_grok_native_transcript(current_path) {
-        grok_session_group_root(current_path)
-    } else {
-        current_path.parent().map(Path::to_path_buf)
-    }
-}
-
-fn is_grok_native_transcript(path: &Path) -> bool {
-    path.file_name().and_then(|name| name.to_str()) == Some("chat_history.jsonl")
-}
-
-fn grok_session_group_root(path: &Path) -> Option<PathBuf> {
-    path.parent()?.parent().map(Path::to_path_buf)
-}
-
-fn codex_sessions_root(path: &Path) -> Option<PathBuf> {
-    path.ancestors()
-        .find(|ancestor| ancestor.file_name().and_then(|name| name.to_str()) == Some("sessions"))
-        .map(Path::to_path_buf)
-}
-
-fn transcript_session_id(
-    agent: &AgentInfo,
-    path: &Path,
-    fallback: Option<String>,
-) -> Option<String> {
-    if agent.adapter == "codex" {
-        return codex_transcript_session_id(path).or(fallback);
-    }
-    if agent.adapter == "grok" && is_grok_native_transcript(path) {
-        return path
-            .parent()
-            .and_then(Path::file_name)
-            .and_then(|name| name.to_str())
-            .map(ToString::to_string)
-            .or(fallback);
-    }
-    fallback
-}
-
 pub(crate) fn codex_transcript_session_id(path: &Path) -> Option<String> {
     read_codex_transcript_session_id(path).ok().flatten()
 }
@@ -1039,28 +958,6 @@ pub(crate) fn read_codex_transcript_session_id(path: &Path) -> Result<Option<Str
         .and_then(|payload| string_field(payload, "id")))
 }
 
-/// The working directory recorded in a Codex rollout's leading `session_meta`
-/// line. Codex stores every project's sessions in one global tree (unlike Claude's
-/// per-project session directories), so this is how the picker scopes its listing
-/// to the current session's project. Best-effort: an unreadable file, an empty
-/// file, or a first line that isn't a `session_meta` with a `cwd` yields `None`.
-pub(crate) fn codex_transcript_cwd(path: &Path) -> Option<String> {
-    let file = fs::File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
-    let mut first = String::new();
-    if reader.read_line(&mut first).ok()? == 0 {
-        return None;
-    }
-    let first = first.trim_end_matches(['\n', '\r']);
-    let value = serde_json::from_str::<Value>(first).ok()?;
-    if value.get("type").and_then(Value::as_str) != Some("session_meta") {
-        return None;
-    }
-    value
-        .get("payload")
-        .and_then(|payload| string_field(payload, "cwd"))
-}
-
 pub(crate) fn string_field(value: &Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -1068,319 +965,6 @@ pub(crate) fn string_field(value: &Value, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-/// Sessions in the agent's transcript directory, newest first, for the manual
-/// picker. Empty when the agent has no transcript path yet (nothing to scan).
-pub fn list_agent_transcripts(
-    state: &AppState,
-    agent_id: &str,
-) -> Result<Vec<TranscriptOption>, String> {
-    let Some(agent) = state.agent(agent_id)? else {
-        return Ok(Vec::new());
-    };
-    let Some(current_path) = agent.transcript_path.clone() else {
-        return Ok(Vec::new());
-    };
-    let current = Path::new(&current_path);
-    let Some(dir) = transcript_listing_root(&agent, current) else {
-        return Ok(Vec::new());
-    };
-
-    let mut candidates = if agent.adapter == "codex" {
-        let mut candidates = gather_transcript_candidates_recursive(&dir)?;
-        // Codex keeps every project's rollouts in one global `sessions` tree, so the
-        // recursive scan above sees sessions from unrelated directories. Scope the
-        // picker to the project the current session ran in — its `session_meta` cwd —
-        // so it lists only same-project sessions, matching Claude's naturally
-        // per-project listing. If the active rollout's cwd can't be read, fall back to
-        // the unfiltered list rather than hiding everything.
-        if let Some(project_cwd) = codex_transcript_cwd(current) {
-            candidates.retain(|candidate| {
-                candidate.path.as_path() == current
-                    || codex_transcript_cwd(&candidate.path).as_deref()
-                        == Some(project_cwd.as_str())
-            });
-        }
-        candidates
-    } else if agent.adapter == "grok" && is_grok_native_transcript(current) {
-        let mut candidates = gather_transcript_candidates_recursive(&dir)?;
-        candidates.retain(|candidate| is_grok_native_transcript(&candidate.path));
-        candidates
-    } else {
-        gather_transcript_candidates(&dir)?
-    };
-    candidates.sort_by(|left, right| {
-        right
-            .modified
-            .cmp(&left.modified)
-            .then(left.path.cmp(&right.path))
-    });
-
-    let other = other_agent_transcript_paths(state, agent_id);
-    let options = candidates
-        .into_iter()
-        .take(MAX_TRANSCRIPT_OPTIONS)
-        .map(|candidate| {
-            let path = candidate.path.display().to_string();
-            let (preview, line_count) = read_transcript_meta(&candidate.path);
-            TranscriptOption {
-                is_active: path == current_path,
-                bound_to_other_agent: other.contains(&path),
-                modified_ms: candidate
-                    .modified
-                    .duration_since(UNIX_EPOCH)
-                    .map(|since| since.as_millis())
-                    .unwrap_or(0),
-                session_id: transcript_session_id(&agent, &candidate.path, candidate.session_id),
-                preview,
-                line_count,
-                path,
-            }
-        })
-        .collect();
-
-    Ok(options)
-}
-
-/// Repoints an agent at `path` and restarts its tail there, or clears the current
-/// binding when `path` is `None`. The old tail stops itself once it sees the agent
-/// no longer pointing at its file.
-pub fn set_agent_transcript(
-    state: &AppState,
-    agent_id: &str,
-    path: Option<&str>,
-) -> Result<AgentInfo, String> {
-    let Some(mut agent) = state.agent(agent_id)? else {
-        return Err(format!("agent {agent_id} not found"));
-    };
-    let Some(path) = path else {
-        agent.session_id = None;
-        agent.transcript_path = None;
-        state.update_agent(agent.clone())?;
-        return Ok(agent);
-    };
-
-    let candidate = Path::new(path);
-    if candidate
-        .extension()
-        .and_then(|extension| extension.to_str())
-        != Some("jsonl")
-    {
-        return Err("transcript must be a .jsonl file".to_string());
-    }
-    if !candidate.is_file() {
-        return Err(format!("transcript {path} does not exist"));
-    }
-    // Confinement needs a reference directory. A repoint is only ever offered by
-    // the session picker, which scans the directory of the agent's *current*
-    // transcript (`transcript_listing_root`) — so with no current transcript
-    // there is no legitimate source directory. Refuse instead of binding an
-    // arbitrary `.jsonl`: otherwise a caller (e.g. a compromised webview) could
-    // `set_agent_transcript(id, null)` to clear the binding and then bind any
-    // `.jsonl` on disk, turning this into an unconfined transcript-read
-    // primitive over sessions from unrelated projects. Session discovers the
-    // initial transcript itself via the adapter's SessionStart hook.
-    let Some(current) = agent.transcript_path.as_deref() else {
-        return Err("cannot repoint a transcript before this agent has an active one".to_string());
-    };
-    let current = Path::new(current);
-    if agent.adapter == "codex" {
-        let Some(root) = codex_sessions_root(current) else {
-            return Err("transcript is outside the agent's session directory".to_string());
-        };
-        let root = root.canonicalize().map_err(|err| {
-            format!(
-                "failed to resolve transcript session directory {}: {err}",
-                root.display()
-            )
-        })?;
-        let candidate_root = candidate
-            .canonicalize()
-            .map_err(|err| format!("failed to resolve transcript {path}: {err}"))?;
-        if !candidate_root.starts_with(root) {
-            return Err("transcript is outside the agent's session directory".to_string());
-        }
-        // Mirror the picker's project scoping: a Codex rollout from a different
-        // project (a different `session_meta` cwd) must not be bound here, even
-        // though it shares the global sessions root. Lenient when either cwd can't
-        // be read, so an unparseable rollout still binds rather than hard-failing.
-        if let Some(project_cwd) = codex_transcript_cwd(current)
-            && let Some(candidate_cwd) = codex_transcript_cwd(candidate)
-            && project_cwd != candidate_cwd
-        {
-            return Err("transcript belongs to a different project".to_string());
-        }
-    } else if agent.adapter == "grok" && is_grok_native_transcript(current) {
-        validate_grok_transcript_candidate(current, candidate)?;
-    } else if current.parent() != candidate.parent() {
-        return Err("transcript is outside the agent's session directory".to_string());
-    }
-
-    let already_bound = agent.transcript_path.as_deref() == Some(path);
-    agent.session_id = transcript_session_id(
-        &agent,
-        candidate,
-        session_id_from_transcript_path(candidate),
-    );
-    agent.transcript_path = Some(path.to_string());
-    state.update_agent(agent.clone())?;
-    // Clear any recovery/ambiguity notice tied to the previous binding.
-    state.emit(transcript_notice(agent_id, path, None));
-    if !already_bound {
-        start_historical_transcript_tail(
-            state.clone(),
-            agent_id.to_string(),
-            path.to_string(),
-            agent.adapter.clone(),
-        );
-    }
-
-    Ok(agent)
-}
-
-fn validate_grok_transcript_candidate(current: &Path, candidate: &Path) -> Result<(), String> {
-    if !is_grok_native_transcript(candidate) {
-        return Err("Grok transcript must be a chat_history.jsonl file".to_string());
-    }
-    let root = grok_session_group_root(current)
-        .ok_or_else(|| "transcript is outside the agent's session directory".to_string())?
-        .canonicalize()
-        .map_err(|err| format!("failed to resolve Grok session directory: {err}"))?;
-    let candidate = candidate
-        .canonicalize()
-        .map_err(|err| format!("failed to resolve Grok transcript: {err}"))?;
-    let candidate_group = candidate
-        .parent()
-        .and_then(Path::parent)
-        .ok_or_else(|| "transcript is outside the agent's session directory".to_string())?;
-    if candidate_group != root {
-        return Err("transcript is outside the agent's session directory".to_string());
-    }
-    Ok(())
-}
-
-/// Reads a transcript's first usable user-message preview and total line count with
-/// bounded memory — best-effort, so an unreadable file yields `(None, 0)`. Oversized
-/// records still count as lines but are not parsed for previews.
-pub(crate) fn read_transcript_meta(path: &Path) -> (Option<String>, usize) {
-    let Ok(file) = fs::File::open(path) else {
-        return (None, 0);
-    };
-    let mut reader = BufReader::new(file);
-    let mut line = Vec::new();
-    let mut line_count = 0;
-    let mut preview = None;
-    let mut user_messages_seen = 0;
-    loop {
-        line.clear();
-        let read = match reader
-            .by_ref()
-            .take(TRANSCRIPT_META_LINE_LIMIT + 1)
-            .read_until(b'\n', &mut line)
-        {
-            Ok(read) => read,
-            Err(_) => break,
-        };
-        if read == 0 {
-            break;
-        }
-        let complete = line.last() == Some(&b'\n');
-        let oversized = !complete && line.len() as u64 > TRANSCRIPT_META_LINE_LIMIT;
-        if oversized && discard_through_newline(&mut reader).is_err() {
-            break;
-        }
-        line_count += 1;
-        if oversized
-            || preview.is_some()
-            || user_messages_seen >= PREVIEW_USER_MESSAGE_LOOKAHEAD_LIMIT
-        {
-            continue;
-        }
-        let Ok(line) = std::str::from_utf8(&line) else {
-            continue;
-        };
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        if value.get("synthetic_reason").is_some() {
-            continue;
-        }
-        let message = transcript_message_value(&value);
-        let is_user = value.get("type").and_then(Value::as_str) == Some("user")
-            || value.get("role").and_then(Value::as_str) == Some("user")
-            || message
-                .and_then(|message| message.get("role"))
-                .and_then(Value::as_str)
-                == Some("user");
-        if !is_user {
-            continue;
-        }
-        if let Some(text) = first_text_block(message.and_then(|message| message.get("content"))) {
-            let unwrapped = unwrap_user_query_envelope(&text);
-            let trimmed = unwrapped.trim();
-            if !trimmed.is_empty() {
-                user_messages_seen += 1;
-                if !is_tagged_user_instruction(&unwrapped) {
-                    preview = Some(truncate_preview(trimmed));
-                }
-            }
-        }
-    }
-    (preview, line_count)
-}
-
-fn discard_through_newline(reader: &mut impl BufRead) -> std::io::Result<()> {
-    loop {
-        let buffer = reader.fill_buf()?;
-        if buffer.is_empty() {
-            return Ok(());
-        }
-        if let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
-            reader.consume(index + 1);
-            return Ok(());
-        }
-        let consumed = buffer.len();
-        reader.consume(consumed);
-    }
-}
-
-fn transcript_message_value(value: &Value) -> Option<&Value> {
-    if value.get("type").and_then(Value::as_str) == Some("response_item") {
-        return value
-            .get("payload")
-            .filter(|payload| payload.get("type").and_then(Value::as_str) == Some("message"));
-    }
-    Some(value.get("message").unwrap_or(value))
-}
-
-/// First textual content of a message: the string itself, or the first text block
-/// of a content array. Ignores tool results and other non-text blocks.
-fn first_text_block(content: Option<&Value>) -> Option<String> {
-    match content? {
-        Value::String(text) => Some(text.clone()),
-        Value::Array(blocks) => {
-            blocks
-                .iter()
-                .find_map(|block| match block.get("type").and_then(Value::as_str) {
-                    Some("text" | "input_text" | "output_text") => block
-                        .get("text")
-                        .and_then(Value::as_str)
-                        .map(str::to_string),
-                    _ => None,
-                })
-        }
-        _ => None,
-    }
-}
-
-fn truncate_preview(text: &str) -> String {
-    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if collapsed.chars().count() <= PREVIEW_MAX_CHARS {
-        return collapsed;
-    }
-    let head: String = collapsed.chars().take(PREVIEW_MAX_CHARS).collect();
-    format!("{head}…")
 }
 
 /// Strips session-injected tagged instruction blocks from the front of a user
@@ -1450,95 +1034,7 @@ pub(crate) fn strip_leading_tagged_instruction_blocks(text: &str) -> Option<&str
     }
 }
 
-/// Grok wraps the user's words in a `<user_query>` envelope and may prefix a
-/// `<timestamp>` metadata chip. Those tags are not injected instructions —
-/// leaving them in place makes the tagged-instruction detector collapse the
-/// whole turn into a `<timestamp> <user_query>` chip.
-pub(crate) fn unwrap_user_query_envelope(text: &str) -> String {
-    if !text.contains("<user_query>") && !text.contains("<timestamp>") {
-        return text.to_string();
-    }
-    let without_timestamps = strip_named_tagged_blocks(text, "<timestamp>", "</timestamp>");
-    unwrap_named_tagged_block(&without_timestamps, "<user_query>", "</user_query>")
-        .trim()
-        .to_string()
-}
-
-fn strip_named_tagged_blocks(text: &str, open: &str, close: &str) -> String {
-    let mut result = String::new();
-    let mut rest = text;
-    loop {
-        let Some(start) = rest.find(open) else {
-            result.push_str(rest);
-            break;
-        };
-        let content_start = start + open.len();
-        let Some(close_rel) = rest[content_start..].find(close) else {
-            result.push_str(rest);
-            break;
-        };
-        result.push_str(&rest[..start]);
-        rest = &rest[content_start + close_rel + close.len()..];
-    }
-    result
-}
-
-fn unwrap_named_tagged_block(text: &str, open: &str, close: &str) -> String {
-    let Some(start) = text.find(open) else {
-        return text.to_string();
-    };
-    let content_start = start + open.len();
-    let Some(close_rel) = text[content_start..].find(close) else {
-        return text.to_string();
-    };
-    let inner = text[content_start..content_start + close_rel].trim_matches(['\r', '\n']);
-    let mut result = String::with_capacity(text.len() - open.len() - close.len());
-    result.push_str(&text[..start]);
-    result.push_str(inner);
-    result.push_str(&text[content_start + close_rel + close.len()..]);
-    result
-}
-
-pub(crate) fn is_tagged_user_instruction(text: &str) -> bool {
-    let text = unwrap_user_query_envelope(text);
-    let Some(content_start) = tagged_instruction_content_start(&text) else {
-        return false;
-    };
-
-    if is_inline_tagged_instruction_sequence(&text[content_start..]) {
-        return true;
-    }
-
-    let content = &text[content_start..];
-    let Some(first_line_end) = content.find('\n') else {
-        return false;
-    };
-    let first_line =
-        trim_horizontal_whitespace(strip_trailing_carriage_return(&content[..first_line_end]));
-    let last_line_start = text.rfind('\n').map(|index| index + 1).unwrap_or(0);
-    let last_line =
-        trim_horizontal_whitespace(strip_trailing_carriage_return(&text[last_line_start..]));
-    let Some(opening_tag) = parse_opening_tag(first_line) else {
-        return false;
-    };
-    parse_closing_tag(last_line) == Some(opening_tag)
-}
-
-fn is_inline_tagged_instruction_sequence(text: &str) -> bool {
-    let mut saw_tag = false;
-    for raw_line in text.split('\n') {
-        let line = trim_horizontal_whitespace(strip_trailing_carriage_return(raw_line));
-        if line.is_empty() {
-            continue;
-        }
-        if parse_inline_tag(line).is_none() {
-            return false;
-        }
-        saw_tag = true;
-    }
-    saw_tag
-}
-
+#[cfg(test)]
 fn tagged_instruction_content_start(text: &str) -> Option<usize> {
     let mut start = 0;
     while start < text.len() {
@@ -1558,18 +1054,22 @@ fn tagged_instruction_content_start(text: &str) -> Option<usize> {
     None
 }
 
+#[cfg(test)]
 fn is_tagged_instruction_prefix_line(line: &str) -> bool {
     line.starts_with("# ") || trim_horizontal_whitespace(line).is_empty()
 }
 
+#[cfg(test)]
 fn strip_trailing_carriage_return(value: &str) -> &str {
     value.strip_suffix('\r').unwrap_or(value)
 }
 
+#[cfg(test)]
 fn trim_horizontal_whitespace(value: &str) -> &str {
     value.trim_matches(|char: char| char != '\n' && char != '\r' && char.is_whitespace())
 }
 
+#[cfg(test)]
 fn parse_inline_tag(line: &str) -> Option<&str> {
     if line.len() < 7 || !line.starts_with('<') {
         return None;
@@ -1586,6 +1086,7 @@ fn parse_inline_tag(line: &str) -> Option<&str> {
     line.ends_with(&closing).then_some(tag)
 }
 
+#[cfg(test)]
 fn parse_opening_tag(line: &str) -> Option<&str> {
     if line.len() < 3 || !line.starts_with('<') || !line.ends_with('>') {
         return None;
@@ -1597,6 +1098,7 @@ fn parse_opening_tag(line: &str) -> Option<&str> {
     is_instruction_tag_name(tag).then_some(tag)
 }
 
+#[cfg(test)]
 fn parse_closing_tag(line: &str) -> Option<&str> {
     if line.len() < 4 || !line.starts_with("</") || !line.ends_with('>') {
         return None;
@@ -1605,6 +1107,7 @@ fn parse_closing_tag(line: &str) -> Option<&str> {
     is_instruction_tag_name(tag).then_some(tag)
 }
 
+#[cfg(test)]
 fn is_instruction_tag_name(tag: &str) -> bool {
     !tag.is_empty()
         && tag
@@ -1613,8 +1116,8 @@ fn is_instruction_tag_name(tag: &str) -> bool {
 }
 
 /// The session id a Claude/Grok transcript path encodes: transcripts are stored as
-/// `<project dir>/<session-id>.jsonl`. Shared by the session picker and the Claude
-/// adapter's fork stale-payload guard so the naming convention has one owner.
+/// `<project dir>/<session-id>.jsonl`. The Claude adapter's fork stale-payload
+/// guard uses it so the naming convention has one owner.
 pub(crate) fn session_id_from_transcript_path(path: &Path) -> Option<String> {
     path.file_stem()
         .and_then(|stem| stem.to_str())
@@ -2108,6 +1611,64 @@ mod tests {
     /// The frontend's `TurnBlock` union in `src/types.ts` is the contract this
     /// has to satisfy. It went unmet for a long time because enum `rename_all`
     /// does not reach struct-variant fields, and nothing asserted the shape.
+    #[test]
+    fn strip_leading_tagged_instruction_blocks_mirrors_the_frontend_semantics() {
+        // Whole-message block: nothing left.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks(
+                "<system-reminder>\ninjected\n</system-reminder>"
+            ),
+            None
+        );
+        // Leading block followed by real content: the block goes, the
+        // content stays.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks(
+                "<system-reminder>\ninjected\n</system-reminder>\n\nReal question"
+            ),
+            Some("\nReal question")
+        );
+        // Repeated blocks with `# ` labels between them all strip together.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks(
+                "# label\n<a-tag>\none\n</a-tag>\n# other\n<b-tag>\ntwo\n</b-tag>\nkept"
+            ),
+            Some("kept")
+        );
+        // Inline single-line tag blocks strip too.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks("<note>inline</note>\nkept"),
+            Some("kept")
+        );
+        // Headings without a following block are content, kept intact.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks("# My heading\ncontent"),
+            Some("# My heading\ncontent")
+        );
+        // An unterminated block is content, not an instruction wrapper.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks("<config>\nkey = value"),
+            Some("<config>\nkey = value")
+        );
+        // The exact attributed Session driver block is trusted and stripped.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks(
+                "<session_instruction source=\"agent_driver\">\nsafety\n</session_instruction>\nkept"
+            ),
+            Some("kept")
+        );
+        // Other tag lines with attributes are not instruction tags.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks("<ide_context file=\"a.rs\">\nbody"),
+            Some("<ide_context file=\"a.rs\">\nbody")
+        );
+        // Nested same-name blocks are depth-matched like the frontend.
+        assert_eq!(
+            strip_leading_tagged_instruction_blocks("<t>\n<t>\ninner\n</t>\n</t>\nkept"),
+            Some("kept")
+        );
+    }
+
     #[test]
     fn blocks_serialize_with_the_field_names_the_frontend_declares() {
         assert_eq!(
@@ -2645,305 +2206,6 @@ mod tests {
     }
 
     #[test]
-    fn truncate_preview_collapses_whitespace_and_caps_length() {
-        assert_eq!(truncate_preview("  hello   world \n"), "hello world");
-        let long = "x ".repeat(120);
-        let preview = truncate_preview(&long);
-        assert!(preview.ends_with('…'));
-        assert_eq!(preview.chars().count(), PREVIEW_MAX_CHARS + 1);
-    }
-
-    #[test]
-    fn read_transcript_meta_extracts_first_user_message_and_line_count() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-meta-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.jsonl");
-        fs::write(
-            &path,
-            concat!(
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"first prompt\"}}\n",
-                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":\"reply\"}}\n",
-            ),
-        )
-        .unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview.as_deref(), Some("first prompt"));
-        assert_eq!(line_count, 2);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn read_transcript_meta_extracts_codex_user_message() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-codex-meta-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("rollout-2026-06-21T20-08-03-019eeca7.jsonl");
-        fs::write(
-            &path,
-            concat!(
-                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"019eeca7\"}}\n",
-                "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"codex prompt\"}]}}\n",
-                "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"duplicate\"}}\n",
-            ),
-        )
-        .unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview.as_deref(), Some("codex prompt"));
-        assert_eq!(line_count, 3);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn strip_leading_tagged_instruction_blocks_mirrors_the_frontend_semantics() {
-        // Whole-message block: nothing left.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks(
-                "<system-reminder>\ninjected\n</system-reminder>"
-            ),
-            None
-        );
-        // Leading block followed by real content: the block goes, the
-        // content stays.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks(
-                "<system-reminder>\ninjected\n</system-reminder>\n\nReal question"
-            ),
-            Some("\nReal question")
-        );
-        // Repeated blocks with `# ` labels between them all strip together.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks(
-                "# label\n<a-tag>\none\n</a-tag>\n# other\n<b-tag>\ntwo\n</b-tag>\nkept"
-            ),
-            Some("kept")
-        );
-        // Inline single-line tag blocks strip too.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks("<note>inline</note>\nkept"),
-            Some("kept")
-        );
-        // Headings without a following block are content, kept intact.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks("# My heading\ncontent"),
-            Some("# My heading\ncontent")
-        );
-        // An unterminated block is content, not an instruction wrapper.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks("<config>\nkey = value"),
-            Some("<config>\nkey = value")
-        );
-        // The exact attributed Session driver block is trusted and stripped.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks(
-                "<session_instruction source=\"agent_driver\">\nsafety\n</session_instruction>\nkept"
-            ),
-            Some("kept")
-        );
-        // Other tag lines with attributes are not instruction tags.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks("<ide_context file=\"a.rs\">\nbody"),
-            Some("<ide_context file=\"a.rs\">\nbody")
-        );
-        // Nested same-name blocks are depth-matched like the frontend.
-        assert_eq!(
-            strip_leading_tagged_instruction_blocks("<t>\n<t>\ninner\n</t>\n</t>\nkept"),
-            Some("kept")
-        );
-    }
-
-    #[test]
-    fn read_transcript_meta_skips_tagged_instruction_previews() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-tagged-meta-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.jsonl");
-        fs::write(
-            &path,
-            concat!(
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<context>ignore</context>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"# comment\\n<instructions>ignore</instructions>\"}}\n",
-                "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":\"reply\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"real prompt\"}}\n",
-            ),
-        )
-        .unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview.as_deref(), Some("real prompt"));
-        assert_eq!(line_count, 4);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn unwrap_user_query_envelope_extracts_the_prompt() {
-        assert_eq!(
-            unwrap_user_query_envelope(
-                "<timestamp>Wednesday, Aug 19, 2026, 3:52 PM (UTC-4)</timestamp>\n<user_query>\ncan you cherry pick those 7 commits onto HEAD, except 3b22fc07\n</user_query>"
-            ),
-            "can you cherry pick those 7 commits onto HEAD, except 3b22fc07"
-        );
-        assert!(!is_tagged_user_instruction(
-            "<timestamp>Wednesday, Aug 19, 2026, 3:52 PM (UTC-4)</timestamp>\n<user_query>\ninspect the repo\n</user_query>"
-        ));
-    }
-
-    #[test]
-    fn read_transcript_meta_unwraps_user_query_preview() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-user-query-meta-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.jsonl");
-        fs::write(
-            &path,
-            concat!(
-                "{\"role\":\"user\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"<timestamp>Wednesday, Aug 19, 2026, 3:52 PM (UTC-4)</timestamp>\\n<user_query>\\ninspect the repo\\n</user_query>\"}]}}\n",
-                "{\"role\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}\n",
-            ),
-        )
-        .unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview.as_deref(), Some("inspect the repo"));
-        assert_eq!(line_count, 2);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn read_transcript_meta_stops_preview_scan_after_five_user_messages() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-preview-limit-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.jsonl");
-        fs::write(
-            &path,
-            concat!(
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<one>ignore</one>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<two>ignore</two>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<three>ignore</three>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<four>ignore</four>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"<five>ignore</five>\"}}\n",
-                "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"sixth prompt\"}}\n",
-            ),
-        )
-        .unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview, None);
-        assert_eq!(line_count, 6);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn read_transcript_meta_skips_oversized_records_with_bounded_buffering() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-bounded-meta-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("session.jsonl");
-        let mut contents = vec![b'x'; TRANSCRIPT_META_LINE_LIMIT as usize + 1];
-        contents.extend_from_slice(
-            b"\n{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"bounded prompt\"}}\n",
-        );
-        fs::write(&path, contents).unwrap();
-
-        let (preview, line_count) = read_transcript_meta(&path);
-        assert_eq!(preview.as_deref(), Some("bounded prompt"));
-        assert_eq!(line_count, 2);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn codex_transcript_cwd_reads_session_meta_cwd() {
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-codex-cwd-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-
-        // A well-formed rollout exposes its project directory from session_meta.
-        let with_cwd = dir.join("rollout-with-cwd.jsonl");
-        fs::write(
-            &with_cwd,
-            concat!(
-                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"abc\",\"cwd\":\"/work/project\"}}\n",
-                "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}}\n",
-            ),
-        )
-        .unwrap();
-        assert_eq!(
-            codex_transcript_cwd(&with_cwd).as_deref(),
-            Some("/work/project")
-        );
-
-        // A first line that isn't a session_meta, or one without a cwd, yields None
-        // (so the picker falls back to listing rather than hiding everything).
-        let without_meta = dir.join("rollout-no-meta.jsonl");
-        fs::write(&without_meta, "{\"type\":\"response_item\"}\n").unwrap();
-        assert_eq!(codex_transcript_cwd(&without_meta), None);
-
-        let empty = dir.join("rollout-empty.jsonl");
-        fs::write(&empty, "").unwrap();
-        assert_eq!(codex_transcript_cwd(&empty), None);
-
-        assert_eq!(codex_transcript_cwd(&dir.join("missing.jsonl")), None);
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn codex_sessions_root_finds_date_sharded_parent() {
-        let path = Path::new(
-            "/Users/raymond/.codex/sessions/2026/06/21/rollout-2026-06-21T20-08-03-id.jsonl",
-        );
-
-        assert_eq!(
-            codex_sessions_root(path).as_deref(),
-            Some(Path::new("/Users/raymond/.codex/sessions"))
-        );
-    }
-
-    #[test]
     fn session_id_comes_from_transcript_filename() {
         assert_eq!(
             session_id_from_transcript_path(Path::new(
@@ -2956,78 +2218,6 @@ mod tests {
             session_id_from_transcript_path(Path::new("/tmp/.jsonl")),
             None
         );
-    }
-
-    #[test]
-    fn grok_picker_lists_chat_histories_from_sibling_sessions() {
-        let dir = temp_dir();
-        let group = dir.join("sessions").join("%2Fwork%2Fproject");
-        let first = group.join("session-1").join("chat_history.jsonl");
-        let second = group.join("session-2").join("chat_history.jsonl");
-        fs::create_dir_all(first.parent().unwrap()).unwrap();
-        fs::create_dir_all(second.parent().unwrap()).unwrap();
-        fs::write(
-            &first,
-            concat!(
-                "{\"type\":\"user\",\"synthetic_reason\":\"system_reminder\",\"content\":[{\"type\":\"text\",\"text\":\"private\"}]}\n",
-                "{\"type\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"first prompt\"}]}\n",
-            ),
-        )
-        .unwrap();
-        fs::write(
-            &second,
-            "{\"type\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"second prompt\"}]}\n",
-        )
-        .unwrap();
-        fs::write(group.join("session-2").join("updates.jsonl"), "{}\n").unwrap();
-
-        let state = test_state();
-        let mut agent = sample_agent(AgentStatus::Idle);
-        agent.adapter = "grok".to_string();
-        agent.session_id = Some("session-1".to_string());
-        agent.transcript_path = Some(first.display().to_string());
-        state.insert_agent(agent).unwrap();
-
-        let options = list_agent_transcripts(&state, "agent-1").unwrap();
-        assert_eq!(options.len(), 2);
-        assert!(
-            options
-                .iter()
-                .all(|option| option.path.ends_with("chat_history.jsonl"))
-        );
-        assert!(options.iter().any(|option| {
-            option.session_id.as_deref() == Some("session-1")
-                && option.preview.as_deref() == Some("first prompt")
-        }));
-        assert!(options.iter().any(|option| {
-            option.session_id.as_deref() == Some("session-2")
-                && option.preview.as_deref() == Some("second prompt")
-        }));
-
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn grok_picker_repoint_is_confined_to_native_sibling_sessions() {
-        let dir = temp_dir();
-        let group = dir.join("sessions").join("%2Fwork%2Fproject");
-        let current = group.join("session-1").join("chat_history.jsonl");
-        let sibling = group.join("session-2").join("chat_history.jsonl");
-        let wrong_name = group.join("session-2").join("updates.jsonl");
-        let outside = dir
-            .join("other")
-            .join("session-3")
-            .join("chat_history.jsonl");
-        for path in [&current, &sibling, &wrong_name, &outside] {
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(path, "{}\n").unwrap();
-        }
-
-        assert!(validate_grok_transcript_candidate(&current, &sibling).is_ok());
-        assert!(validate_grok_transcript_candidate(&current, &wrong_name).is_err());
-        assert!(validate_grok_transcript_candidate(&current, &outside).is_err());
-
-        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

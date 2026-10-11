@@ -66,10 +66,6 @@ import {
   mergeRailPastTurns,
   railPastTurnSummaries,
 } from "./lib/homeRails";
-import {
-  ThreadGraphRequestTracker,
-  uniqueResolvedThreadIds,
-} from "./lib/threadGraphRefresh";
 import type {
   HomeRailPastTurn,
 } from "./lib/homeRailTypes";
@@ -77,8 +73,6 @@ import LinkContextMenu from "./components/LinkContextMenu";
 import {
   UserNotificationStack,
 } from "./components/UserNotificationStack";
-import { formatTurnsTranscript } from "./lib/transcriptFormat";
-import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
 import ResearchWorkspaceSwitcher from "./components/research/ResearchWorkspaceSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
@@ -135,7 +129,6 @@ import {
   isTerminalTarget,
 
   selectPaneAfterClose,
-  upsertThreadGraphs,
 } from "./lib/appHelpers";
 import { sanitizeTerminalTitle } from "./lib/terminalTitle";
 import {
@@ -167,18 +160,9 @@ import {
   closeAllBrowserOverlaysState,
   closeBrowserOverlayState,
 } from "./lib/browserOverlay";
-import { createTranscriptScrollCaptureSlot } from "./lib/transcriptScroll";
-import { TranscriptOptionsRequestTracker } from "./lib/transcriptSessions";
 import {
-  buildSingleAgentThreadGraph,
-  focusedBranchTurns,
-  pendingGraphOverlayTurns,
-  overlayLiveTurnState,
   threadIdForAgent,
 } from "./lib/threadGraph";
-import {
-  formatPlainTextTranscript,
-} from "./lib/turnTimeline";
 import {
   requestResearchFollowupsFocus,
   requestResearchWorkspaceMenuToggle,
@@ -195,20 +179,15 @@ import type {
 } from "./appTypes";
 import {
   canSplitPaneInTree,
-  canToggleTurnSidebar,
   joinPaneSplit,
   normalizePaneSplitsForPanes,
   paneSplitAxis,
-  paneSplitFlagIsEnabled,
   paneSplitForPane,
-  paneSplitIsNested,
   paneSplitsEqual,
   paneSnapshotForPersistedPaneSplits,
   reservedTerminalStageWidth,
-  setPaneSplitFlagEnabled,
   splitAxisForPane,
   splitBranchChildCountForPane,
-  splitFractions,
 } from "./lib/paneSplits";
 import {
   APP_TEXT_SIZE,
@@ -341,7 +320,6 @@ import {
   retryResearchNode,
   setOpenRouterKey,
   openRouterChatCompletion,
-  getThreadGraph,
   getShowHideShortcut,
   activatePane,
   probeRemote,
@@ -351,7 +329,6 @@ import {
   listGroups,
   listAgents,
   listSshConfigAliases,
-  listAgentTranscripts,
   listAgentTurnQueue,
   listHomeTurnHistory,
   destroyHumanBrowser,
@@ -394,8 +371,6 @@ import {
 } from "./lib/api";
 import type {
   AgentInfo,
-  ConversationHistoryRef,
-  ConversationHistorySnapshot,
   GroupInfo,
   InitialPaneSize,
   PaneInfo,
@@ -414,25 +389,11 @@ import type {
   RemoteChoice,
   RemoteProbeResult,
   SavedRemote,
-  ThreadGraph,
   TranscriptHookEvent,
-  TranscriptOption,
   Turn,
-  WaitTarget,
 } from "./types";
 import type { ShowHideShortcutSetting } from "./lib/api";
 import { nodeRun, nodeStatus } from "./lib/researchNodeTypes";
-
-
-interface ConversationHistorySegment {
-  snapshotId: string;
-  turns: Turn[];
-}
-
-interface OrphanedQueueGroup {
-  agent: AgentInfo;
-  queuedTurns: QueuedTurn[];
-}
 
 function remoteSettingsDraft(remote: RemoteChoice): RemoteSettingsDraft {
   return {
@@ -487,9 +448,6 @@ function researchBrowserOwnerId(treeId: string) {
 // How long after the user's last keystroke we keep holding the queue before letting a
 // finished turn auto-send the next queued message.
 const INPUT_DEQUEUE_HOLD_MS = 1500;
-// Full graphs are cosmetic relative to the bounded live timeline. Collapse a
-// streaming burst into one per-thread read after activity goes quiet.
-const THREAD_GRAPH_REFRESH_DEBOUNCE_MS = 300;
 
 function partitionResearchTrees(trees: ResearchTreeSummary[]) {
   return {
@@ -588,9 +546,6 @@ const BROWSER_OVERLAY_LEFT_MARGIN = 64;
 const EXPAND_TOGGLE_SHORTCUT_LABEL = "⌘⇧E / Ctrl+Shift+E";
 const LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL = "⇧⌘G";
 const TERMINAL_MIN_WIDTH = 380;
-const TURN_PANE_MIN_WIDTH = 300;
-const TURN_PANE_DEFAULT_WIDTH = 420;
-const TURN_PANE_MAX_WIDTH = 720;
 
 const TERMINAL_SPLIT_MIN_HEIGHT = 140;
 const TERMINAL_SPLIT_MIN_WIDTH = 200;
@@ -628,52 +583,6 @@ interface PendingFirstMessageTitle {
   checkedMessages: number;
   seenTurnIds: Set<string>;
   skillCommand: string | null;
-}
-
-interface AgentTurnInfo {
-  turns: Turn[];
-  assistantLabel: string;
-  // Formats transcript strings on first call and caches them. Only the copy
-  // actions consume these, so eagerly formatting every agent's transcript on
-  // every turn/status event was pure waste; use hasTranscript for emptiness.
-  getTranscript: () => string;
-  getPlainTextTranscript: () => string;
-  hasTranscript: boolean;
-  conversationHistory: ConversationHistoryRef | null;
-}
-
-interface ConversationHistoryState {
-  /** Immediate parent first; rendering reverses this into chronological order. */
-  snapshots: ConversationHistorySnapshot[];
-  loading: boolean;
-  error: string | null;
-}
-
-interface TurnPaneSurface {
-  pane: PaneInfo;
-  agent: AgentInfo | undefined;
-  turns: Turn[];
-  assistantLabel: string;
-  getTranscript: () => string;
-  getPlainTextTranscript: () => string;
-  hasTranscript: boolean;
-  conversationHistory: ConversationHistorySegment[];
-  hasPreviousConversation: boolean;
-  previousConversationSnapshotId: string | null;
-  previousConversationLoading: boolean;
-  previousConversationError: string | null;
-  transcriptNotice: string | null;
-  transcriptOptions: TranscriptOption[];
-  queuedTurns: QueuedTurn[];
-  waitTargets: WaitTarget[];
-  draft: string;
-  orphanedQueues: OrphanedQueueGroup[];
-  queueSplit: boolean;
-  queueSplitHeight: number | undefined;
-  browserOverlay: BrowserOverlayState | undefined;
-  topFraction: number;
-  heightFraction: number;
-  hasTurnSidebar: boolean;
 }
 
 interface OpenRouterTitleConfig {
@@ -1173,10 +1082,6 @@ function MainApp() {
   const appRef = useRef<HTMLDivElement | null>(null);
   const mainStageRef = useRef<HTMLDivElement | null>(null);
 
-  // Opening/closing either side pane resizes native terminal surfaces. Keep the
-  // final focus handoff after that layout commit scoped to the active pane,
-  // especially in a split where a sibling surface is also visible.
-  const paneChromeFocusFrameRef = useRef<number | null>(null);
   // Becomes true once the single backend event subscription is live. Until then,
   // panes that want to attach are parked here so their pre-attach backlog is only
   // released after the listener can actually deliver it.
@@ -1189,21 +1094,6 @@ function MainApp() {
   // ref mirrors the state for synchronous reads from the debounced disk flush.
   const draftsByAgentRef = useRef<Record<string, string>>({});
   const draftFlushTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // Per-agent queue scroll positions, so switching tabs (even through a shell pane,
-  // which unmounts the composer) restores where each queue was left. Ephemeral: a ref
-  // so scroll updates never re-render, and the whole thing is dropped on app restart.
-  const queueScrollByAgentRef = useRef<Record<string, number>>({});
-  // Per-agent transcript scroll positions, so switching tabs — or away to Home /
-  // Research (which unmounts the docked right pane) and back — restores where each
-  // transcript was left instead of snapping to the latest turn. Same ephemeral
-  // shape as the queue scroll above; true-tail snapshots follow growth while
-  // hidden, while near-tail snapshots retain their exact offset.
-  const transcriptScrollByAgentRef = useRef<Record<string, TranscriptScrollPosition>>({});
-  // The active TurnOverlay registers a DOM-backed snapshot here. Pane selection
-  // invokes it before scheduling a tab change, preserving expanded geometry.
-  const activeTranscriptScrollCaptureSlotRef = useRef(
-    createTranscriptScrollCaptureSlot(),
-  );
   // Keep active-tab actions reachable from the global keydown listener without
   // re-registering it on every state change.
   const activePaneRef = useRef<PaneInfo | undefined>(undefined);
@@ -1211,8 +1101,6 @@ function MainApp() {
   const closeUnavailableRemotePaneRef = useRef<(pane: PaneInfo) => void>(() => {});
   const splitPaneBelowRef = useRef<(pane: PaneInfo) => void | Promise<void>>(() => {});
   const splitPaneRightRef = useRef<(pane: PaneInfo) => void | Promise<void>>(() => {});
-  const canToggleActiveTranscriptExpandedRef = useRef(false);
-  const toggleActiveTranscriptExpandedRef = useRef<() => void>(() => {});
   const browserOverlayByPaneRef = useRef<Record<string, BrowserOverlayState>>({});
   const nativeHumanBrowserOwnerIdsRef = useRef<Set<string>>(new Set());
   const activeBrowserOwnerIdRef = useRef<string | null>(null);
@@ -1308,12 +1196,6 @@ function MainApp() {
     },
     [applyRecoveredDismissals],
   );
-  // Live OSC events override the recovery snapshot, including with explicit
-  // null when a title sanitizes empty. Missing keys fall back to the pane's
-  // persisted lastOscTitle.
-  const [terminalTitleByPane, setTerminalTitleByPane] = useState<
-    Record<string, string | null>
-  >({});
   const [manuallyTitledPaneIds, setManuallyTitledPaneIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1343,10 +1225,6 @@ function MainApp() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const turnsRef = useRef(turns);
   turnsRef.current = turns;
-  const [threadGraphs, setThreadGraphs] = useState<ThreadGraph[]>([]);
-  const [conversationHistoryByThread, setConversationHistoryByThread] = useState<
-    Record<string, ConversationHistoryState>
-  >({});
   const [homeTurnHistoryByAgent, setHomeTurnHistoryByAgent] = useState<
     Record<string, HomeTurnHistoryState>
   >({});
@@ -1356,7 +1234,6 @@ function MainApp() {
   const homeHistoryRequestSequenceByAgentRef = useRef(new Map<string, number>());
   /** One auto-retry budget per agent+requestKey after an initial history load fails. */
   const homeHistoryRetryBudgetByAgentRef = useRef(new Map<string, string>());
-  const [queuedTurnsByAgent, setQueuedTurnsByAgentState] = useState<Record<string, QueuedTurn[]>>({});
   // Per-agent hook-event history. It backs only the "copy transcript as JSON"
   // export — nothing renders it — so it lives outside React state: hooks fire on
   // every tool call of a busy agent, and putting each one through setState was a
@@ -1375,21 +1252,6 @@ function MainApp() {
       existing.splice(0, existing.length - MAX_HOOK_EVENTS_PER_AGENT);
     }
   }, []);
-  // Latest unexpected-state message per agent (stalled/unreadable transcript,
-  // adapter failure). Shown under the right pane's "No activity yet" placeholder;
-  // null clears it once the transcript tail recovers.
-  const [transcriptNoticeByAgent, setTranscriptNoticeByAgent] = useState<
-    Record<string, string | null>
-  >({});
-  // Sessions available per agent for the right pane's transcript picker. Fetched
-  // lazily when an agent is viewed and refreshed when its transcript rotates.
-  const [transcriptOptionsByAgent, setTranscriptOptionsByAgent] = useState<
-    Record<string, TranscriptOption[]>
-  >({});
-  const transcriptOptionsRequestTrackerRef = useRef(new TranscriptOptionsRequestTracker());
-  const loadingConversationThreadIdsRef = useRef(new Set<string>());
-  const conversationHistoryRequestSequenceRef = useRef(new Map<string, number>());
-  const [draftsByAgent, setDraftsByAgentState] = useState<Record<string, string>>({});
   const [activePaneId, setActivePaneIdState] = useState<string | null>(null);
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
@@ -1522,9 +1384,6 @@ function MainApp() {
       if (typeof next === "function") {
         setActivePaneIdState((current) => {
           const resolved = next(current);
-          if (resolved !== current) {
-            activeTranscriptScrollCaptureSlotRef.current.capture();
-          }
           activePaneIdRef.current = resolved;
           activePaneRef.current =
             resolved && resolved !== HOME_TAB_ID
@@ -1533,9 +1392,6 @@ function MainApp() {
           return resolved;
         });
         return;
-      }
-      if (next !== activePaneIdRef.current) {
-        activeTranscriptScrollCaptureSlotRef.current.capture();
       }
       showResearchSurface();
       activePaneIdRef.current = next;
@@ -1561,7 +1417,6 @@ function MainApp() {
     [],
   );
   const [shortcutHintsVisible, setShortcutHintsVisible] = useState(false);
-  const [turnPaneWidth, setTurnPaneWidth] = useState(TURN_PANE_DEFAULT_WIDTH);
   const [sidebarWidth, setSidebarWidth] = useState(LEFT_SIDEBAR_DEFAULT_WIDTH);
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
@@ -1609,17 +1464,10 @@ function MainApp() {
   const lastFocusedWebEditableRef = useRef<HTMLElement | null>(null);
   const appBlurWebEditableRef = useRef<HTMLElement | null>(null);
   const nativeWindowFocusedRef = useRef(true);
-  const focusOrderSeqRef = useRef(0);
   // Pointer, wheel, and input events can arrive in dense bursts. One backend
   // Done probe per pane per short attention window closes event-order races
   // without turning every key repeat or trackpad tick into IPC.
   const terminalAttentionProbeAtRef = useRef(new Map<string, number>());
-  const lastUserInputSeqRef = useRef(0);
-  const lastWindowFocusSeqRef = useRef(0);
-  const userInputSinceWindowFocus = useCallback(
-    () => lastUserInputSeqRef.current > lastWindowFocusSeqRef.current,
-    [],
-  );
   const [settingsTab, setSettingsTab] = useState<"basic" | "remotes">("basic");
   const [expandedSettingsRemoteId, setExpandedSettingsRemoteId] = useState<string | null>(null);
   const [remoteAddMenuOpen, setRemoteAddMenuOpen] = useState(false);
@@ -1840,28 +1688,6 @@ function MainApp() {
     Record<string, BrowserOverlayState>
   >({});
   browserOverlayByPaneRef.current = browserOverlayByPane;
-  const [transcriptExpandedByPane, setTranscriptExpandedByPane] = useState<
-    Record<string, boolean>
-  >({});
-  const [splitTranscriptExpandedByPane, setSplitTranscriptExpandedByPane] = useState<
-    Record<string, boolean>
-  >({});
-  const [focusedAssistantTurn, setFocusedAssistantTurn] = useState<{
-    paneId: string;
-    itemKey: string;
-    restoreDockedOnClose: boolean;
-    splitMode: boolean;
-  } | null>(null);
-
-  // Tabs in a group share their right-pane visibility; switching groups restores
-  // that group's choice. Groups without a choice start with the pane open.
-  const [rightBarCollapsedByGroup, setRightBarCollapsedByGroup] = useState<
-    Record<string, boolean>
-  >({});
-  const [queueSplitByAgent] = useState<Record<string, boolean>>({});
-  const [queueSplitHeightByAgent] = useState<Record<string, number>>(
-    {},
-  );
   // Right-click chooser for a link: web URLs choose internal vs external;
   // local paths choose protected preview, reveal, or an explicit OS open.
   const [linkMenu, setLinkMenu] = useState<{
@@ -1881,11 +1707,6 @@ function MainApp() {
       researchActive || activeSurface !== "pane" ? undefined : selectedPane,
     [activeSurface, researchActive, selectedPane],
   );
-  const rightBarCollapsed = activePane
-    ? rightBarCollapsedByGroup[activePane.groupId] === true
-    : false;
-  const rightBarCollapsedRef = useRef(rightBarCollapsed);
-  rightBarCollapsedRef.current = rightBarCollapsed;
   const paneById = useMemo(
     () => new Map(panes.map((pane) => [pane.id, pane])),
     [panes],
@@ -1899,141 +1720,6 @@ function MainApp() {
     }
     return result;
   }, [agents]);
-  // Per-agent cache behind agentTurnInfoById. Rebuilding an agent's thread graph
-  // and (worse) handing out a fresh `turns` array identity invalidates the
-  // transcript timeline's memoization and re-parses all of its markdown — so an
-  // event about agent A must not churn agent B's entry, and a status-only change
-  // to A must not churn A's own turns. Entries are reused when the inputs that
-  // actually feed the computation are unchanged: the per-agent turn list
-  // (element-wise — turn objects are immutable once appended), the stored graph
-  // object, and the agent fields the graph builders read.
-  const turnInfoCacheRef = useRef(
-    new Map<
-      string,
-      {
-        agentKey: string;
-        agentTurns: Turn[];
-        storedGraph: ThreadGraph | undefined;
-        // focusedBranchTurns(storedGraph) materializes a Turn object per node
-        // and sorts the whole branch — O(full history). Cached per stored-graph
-        // identity so a streaming append (which only changes agentTurns)
-        // reuses the branch prefix and pays only for the pending suffix.
-        // Undefined when the agent had no stored graph.
-        storedBranchTurns: Turn[] | undefined;
-        info: AgentTurnInfo;
-      }
-    >(),
-  );
-  const agentTurnInfoById = useMemo(() => {
-    // The fields consulted by buildSingleAgentThreadGraph / focusedBranchTurns /
-    // pendingGraphOverlayTurns / participantForTurn. Status flips and other
-    // activity metadata deliberately don't invalidate.
-    const agentCacheKey = (agent: AgentInfo) =>
-      [
-        agent.id,
-        agent.adapter,
-        agent.threadId ?? "",
-        agent.branchId ?? "",
-        agent.sessionId ?? "",
-        agent.transcriptPath ?? "",
-        agent.createdAt,
-      ].join("\0");
-    const sameTurnList = (a: Turn[], b: Turn[]) =>
-      a.length === b.length && a.every((turn, index) => turn === b[index]);
-
-    const threadGraphById = new Map(threadGraphs.map((graph) => [graph.threadId, graph]));
-    const turnsByAgent = new Map<string, Turn[]>();
-    for (const turn of turns) {
-      const agentTurns = turnsByAgent.get(turn.agentId);
-      if (agentTurns) {
-        agentTurns.push(turn);
-      } else {
-        turnsByAgent.set(turn.agentId, [turn]);
-      }
-    }
-    const cache = turnInfoCacheRef.current;
-    const liveAgentIds = new Set<string>();
-    const result = new Map<string, AgentTurnInfo>();
-    for (const agent of agents) {
-      liveAgentIds.add(agent.id);
-      const agentTurns = turnsByAgent.get(agent.id) ?? [];
-      const agentKey = agentCacheKey(agent);
-      // Same fallback the backend keys graph records by, so agents that never
-      // got an explicit thread id still find their stored graph.
-      const storedGraph = threadGraphById.get(threadIdForAgent(agent));
-      const cached = cache.get(agent.id);
-      if (
-        cached &&
-        cached.agentKey === agentKey &&
-        cached.storedGraph === storedGraph &&
-        sameTurnList(cached.agentTurns, agentTurns)
-      ) {
-        result.set(agent.id, cached.info);
-        continue;
-      }
-      const adapter = getAgentUiAdapter(agent.adapter);
-      const normalizedTurns = adapter.normalizeTurns?.(agentTurns) ?? agentTurns;
-      // Prefer the stored graph whenever it can represent this history, even if
-      // the newest turns haven't reached it yet (its refresh is debounced behind
-      // the live stream): render the graph and overlay the pending suffix.
-      // Falling back to the 200-capped turn list whenever the graph missed one
-      // turn used to swap the whole visible history (full → capped → full) on
-      // every append of a long transcript.
-      let storedBranchTurns: Turn[] | undefined;
-      let pendingTurns: Turn[] | null = null;
-      if (storedGraph) {
-        storedBranchTurns =
-          cached && cached.agentKey === agentKey && cached.storedGraph === storedGraph
-            ? cached.storedBranchTurns
-            : undefined;
-        storedBranchTurns ??= focusedBranchTurns(storedGraph, agent);
-        pendingTurns = pendingGraphOverlayTurns(
-          storedGraph,
-          agent,
-          storedBranchTurns,
-          normalizedTurns,
-        );
-      }
-      const usesStoredGraph = Boolean(storedGraph && pendingTurns !== null);
-      const branchTurnsBase =
-        usesStoredGraph && storedBranchTurns
-          ? storedBranchTurns
-          : focusedBranchTurns(buildSingleAgentThreadGraph(agent, normalizedTurns), agent);
-      const branchTurns = usesStoredGraph
-        ? overlayLiveTurnState(branchTurnsBase, normalizedTurns)
-        : branchTurnsBase;
-      const graphTurns =
-        pendingTurns && pendingTurns.length > 0 ? [...branchTurns, ...pendingTurns] : branchTurns;
-      // Stored graphs can predate an adapter's presentation normalization and
-      // therefore still contain native metadata turns (Claude queue operations in
-      // particular). Normalize once more at the final UI boundary so the timeline
-      // and copied transcript agree regardless of which graph source won above.
-      const visibleTurns = adapter.normalizeTurns?.(graphTurns) ?? graphTurns;
-      const assistantLabel = adapter.label;
-      // Every turn formats at least its role label, so emptiness is just "no
-      // turns" — the full string is only ever built for the copy actions.
-      let transcript: string | null = null;
-      let plainTextTranscript: string | null = null;
-      const info: AgentTurnInfo = {
-        turns: visibleTurns,
-        assistantLabel,
-        getTranscript: () =>
-          (transcript ??= formatTurnsTranscript(visibleTurns, assistantLabel)),
-        getPlainTextTranscript: () =>
-          (plainTextTranscript ??= formatPlainTextTranscript(visibleTurns, assistantLabel)),
-        hasTranscript: visibleTurns.length > 0,
-        conversationHistory: storedGraph?.conversationHistory ?? null,
-      };
-      cache.set(agent.id, { agentKey, agentTurns, storedGraph, storedBranchTurns, info });
-      result.set(agent.id, info);
-    }
-    for (const agentId of cache.keys()) {
-      if (!liveAgentIds.has(agentId)) {
-        cache.delete(agentId);
-      }
-    }
-    return result;
-  }, [agents, threadGraphs, turns]);
   const activePaneSplitMembership = useMemo(
     () => paneSplitForPane(paneSplits, activePane?.id),
     [activePane?.id, paneSplits],
@@ -2044,25 +1730,6 @@ function MainApp() {
     }
     return activePaneSplitMembership;
   }, [activePaneSplitMembership]);
-  const splitLayoutActive = Boolean(activePaneSplit && activePaneSplit.paneIds.length > 1);
-  const activeSplitAxis = paneSplitAxis(activePaneSplit);
-  const activeSplitNested = paneSplitIsNested(activePaneSplit);
-  // The inline transcript strip only exists for a plain top/bottom stack: it
-  // reserves one full-height column on the right and slices it by each pane's
-  // vertical fraction, which has no meaning once panes sit side by side. A
-  // nested layout therefore takes the same path column splits already do —
-  // transcripts move to the expanded overlay and the artifact tray hosts on the
-  // stage — leaving that geometry untouched.
-  const splitRightPaneMode =
-    splitLayoutActive && activeSplitAxis === "vertical" && !activeSplitNested;
-  // A split whose transcripts cannot dock as inline cells, so they live in the
-  // stage-covering expanded overlay instead. Column splits have always been in
-  // this mode; nested layouts join them.
-  const splitOverlayTranscriptMode = splitLayoutActive && !splitRightPaneMode;
-  const activeSplitFractions = useMemo(
-    () => (activePaneSplit ? splitFractions(activePaneSplit) : []),
-    [activePaneSplit],
-  );
   // Width the stage must keep for the current layout. Memoized as a number so
   // the sidebar clamp re-runs exactly when the floor moves: a nested tree can
   // change its column count without changing the pane count or the root axis
@@ -2207,143 +1874,71 @@ function MainApp() {
     () => panesForScope(panes, groups, "terminal"),
     [groups, panes],
   );
-  // Conversation history is deliberately surface-owned. A workspace can retain
-  // hundreds of parked agents whose full thread graphs contain years of tool
-  // output; hydrating every one copied that history through Rust, IPC, JSON, and
-  // React. Terminal views retain full graphs for their visible split only. Home
-  // retains the backend's bounded turn windows for its live workstream summaries,
-  // but never full graphs. Leaving either surface evicts what it owned.
+  // Turn history is deliberately surface-owned. A workspace can retain hundreds
+  // of parked agents; hydrating every one copied their history through Rust,
+  // IPC, JSON, and React. Only agents of the visible surface keep the backend's
+  // bounded turn windows, and leaving the surface evicts what it owned.
   const turnHistoryRequestKeyByAgentRef = useRef(new Map<string, string>());
-  const graphHistoryRequestKeyByAgentRef = useRef(new Map<string, string>());
   const retainedTurnHistoryAgentIdsRef = useRef(new Set<string>());
-  const retainedGraphHistoryAgentIdsRef = useRef(new Set<string>());
-  const retainedGraphHistoryThreadIdsRef = useRef(new Set<string>());
-  const threadGraphRequestTrackerRef = useRef(new ThreadGraphRequestTracker());
-  const dirtyThreadGraphAgentIdsRef = useRef(new Set<string>());
-  const threadGraphRefreshTimerRef = useRef<number | null>(null);
-  const fetchRetainedThreadGraph = useCallback(
-    async (
-      threadId: string,
-      initialRequest?: { agentId: string; requestKey: string },
-    ): Promise<void> => {
-      const sequence = threadGraphRequestTrackerRef.current.begin(threadId);
-      try {
-        const graph = await getThreadGraph(threadId);
+  const hydrateAgentHistory = useCallback(async (agent: AgentInfo) => {
+    const requestKey = agentHistoryRequestKey(agent);
+    const needsTurns = turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey;
+    if (!needsTurns) {
+      return;
+    }
+    turnHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
+    const turnsAtRequestStart = new Map(
+      turnsRef.current
+        .filter((turn) => turn.agentId === agent.id)
+        .map((turn) => [turn.id, turn]),
+    );
+    await listTurns(agent.id)
+      .then((existingTurns) => {
         if (
-          !threadGraphRequestTrackerRef.current.isLatest(threadId, sequence) ||
-          !retainedGraphHistoryThreadIdsRef.current.has(threadId) ||
-          (initialRequest &&
-            graphHistoryRequestKeyByAgentRef.current.get(initialRequest.agentId) !==
-              initialRequest.requestKey)
+          !retainedTurnHistoryAgentIdsRef.current.has(agent.id) ||
+          turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey
         ) {
           return;
         }
-        if (graph) {
-          setThreadGraphs((current) =>
-            current.includes(graph) ? current : upsertThreadGraphs(current, [graph]),
+        // Do not let the snapshot overwrite turns delivered by the live event
+        // stream while the request was in flight. Same-id live objects win;
+        // genuinely new live turns are appended after the snapshot.
+        setTurns((current) => {
+          const liveById = new Map(
+            current
+              .filter((turn) => turn.agentId === agent.id)
+              .map((turn) => [turn.id, turn]),
           );
+          const merged = existingTurns.map((turn) => {
+            const live = liveById.get(turn.id);
+            // Prefer only turns that arrived or changed after this request
+            // began. Previously hydrated same-id turns may belong to an old
+            // transcript generation and must be replaced by this snapshot.
+            return live && live !== turnsAtRequestStart.get(turn.id) ? live : turn;
+          });
+          const snapshotIds = new Set(existingTurns.map((turn) => turn.id));
+          for (const turn of liveById.values()) {
+            if (!snapshotIds.has(turn.id)) {
+              merged.push(turn);
+            }
+          }
+          const next = [
+            ...current.filter((turn) => turn.agentId !== agent.id),
+            ...merged,
+          ];
+          return next.length === current.length &&
+            next.every((turn, index) => turn === current[index])
+            ? current
+            : next;
+        });
+      })
+      .catch((err) => {
+        if (turnHistoryRequestKeyByAgentRef.current.get(agent.id) === requestKey) {
+          turnHistoryRequestKeyByAgentRef.current.delete(agent.id);
+          setError(err instanceof Error ? err.message : String(err));
         }
-      } catch (err) {
-        // Only the newest request owns retry state. An older hydration failure
-        // must not clear the marker installed by a newer transcript generation.
-        if (threadGraphRequestTrackerRef.current.isLatest(threadId, sequence)) {
-          if (
-            initialRequest &&
-            graphHistoryRequestKeyByAgentRef.current.get(initialRequest.agentId) ===
-              initialRequest.requestKey
-          ) {
-            graphHistoryRequestKeyByAgentRef.current.delete(initialRequest.agentId);
-          }
-          for (const agentId of retainedGraphHistoryAgentIdsRef.current) {
-            const currentAgent = agentsRef.current.find((agent) => agent.id === agentId);
-            if (currentAgent && threadIdForAgent(currentAgent) === threadId) {
-              graphHistoryRequestKeyByAgentRef.current.delete(agentId);
-            }
-          }
-          if (initialRequest) {
-            setError(err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-    },
-    [],
-  );
-  const hydrateAgentHistory = useCallback(async (agent: AgentInfo, includeGraph: boolean) => {
-    const threadId = threadIdForAgent(agent);
-    const requestKey = agentHistoryRequestKey(agent);
-    const needsTurns = turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey;
-    const needsGraph =
-      includeGraph && graphHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey;
-    if (!needsTurns && !needsGraph) {
-      return;
-    }
-    if (needsTurns) {
-      turnHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
-    }
-    if (needsGraph) {
-      graphHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
-    }
-    const requests: Promise<void>[] = [];
-    if (needsTurns) {
-      const turnsAtRequestStart = new Map(
-        turnsRef.current
-          .filter((turn) => turn.agentId === agent.id)
-          .map((turn) => [turn.id, turn]),
-      );
-      requests.push(
-        listTurns(agent.id)
-          .then((existingTurns) => {
-            if (
-              !retainedTurnHistoryAgentIdsRef.current.has(agent.id) ||
-              turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey
-            ) {
-              return;
-            }
-            // Do not let the snapshot overwrite turns delivered by the live event
-            // stream while the request was in flight. Same-id live objects win;
-            // genuinely new live turns are appended after the snapshot.
-            setTurns((current) => {
-              const liveById = new Map(
-                current
-                  .filter((turn) => turn.agentId === agent.id)
-                  .map((turn) => [turn.id, turn]),
-              );
-              const merged = existingTurns.map((turn) => {
-                const live = liveById.get(turn.id);
-                // Prefer only turns that arrived or changed after this request
-                // began. Previously hydrated same-id turns may belong to an old
-                // transcript generation and must be replaced by this snapshot.
-                return live && live !== turnsAtRequestStart.get(turn.id) ? live : turn;
-              });
-              const snapshotIds = new Set(existingTurns.map((turn) => turn.id));
-              for (const turn of liveById.values()) {
-                if (!snapshotIds.has(turn.id)) {
-                  merged.push(turn);
-                }
-              }
-              const next = [
-                ...current.filter((turn) => turn.agentId !== agent.id),
-                ...merged,
-              ];
-              return next.length === current.length &&
-                next.every((turn, index) => turn === current[index])
-                ? current
-                : next;
-            });
-          })
-          .catch((err) => {
-            if (turnHistoryRequestKeyByAgentRef.current.get(agent.id) === requestKey) {
-              turnHistoryRequestKeyByAgentRef.current.delete(agent.id);
-              setError(err instanceof Error ? err.message : String(err));
-            }
-          }),
-      );
-    }
-    if (needsGraph) {
-      requests.push(fetchRetainedThreadGraph(threadId, { agentId: agent.id, requestKey }));
-    }
-    await Promise.all(requests);
-  }, [fetchRetainedThreadGraph]);
+      });
+  }, []);
   const fetchHomeTurnHistoryPage = useCallback(
     async (agent: AgentInfo, before: string | null) => {
       const requestKey = agentHistoryRequestKey(agent);
@@ -2437,34 +2032,7 @@ function MainApp() {
     () => new Set(historyTargetAgents.map((agent) => agent.id)),
     [historyTargetAgents],
   );
-  const retainedGraphHistoryAgentIds = useMemo(
-    () => new Set(historyTargetAgents.map((agent) => agent.id)),
-    [historyTargetAgents],
-  );
-  const retainedGraphHistoryThreadIds = useMemo(
-    () =>
-      new Set(historyTargetAgents.map((agent) => threadIdForAgent(agent))),
-    [historyTargetAgents],
-  );
   retainedTurnHistoryAgentIdsRef.current = retainedTurnHistoryAgentIds;
-  retainedGraphHistoryAgentIdsRef.current = retainedGraphHistoryAgentIds;
-  retainedGraphHistoryThreadIdsRef.current = retainedGraphHistoryThreadIds;
-  useEffect(() => {
-    setConversationHistoryByThread((history) => {
-      const retained = Object.entries(history).filter(([threadId]) =>
-        retainedGraphHistoryThreadIds.has(threadId),
-      );
-      return retained.length === Object.keys(history).length
-        ? history
-        : Object.fromEntries(retained);
-    });
-    for (const threadId of conversationHistoryRequestSequenceRef.current.keys()) {
-      if (!retainedGraphHistoryThreadIds.has(threadId)) {
-        conversationHistoryRequestSequenceRef.current.delete(threadId);
-        loadingConversationThreadIdsRef.current.delete(threadId);
-      }
-    }
-  }, [retainedGraphHistoryThreadIds]);
   useEffect(() => {
     if (!terminalMapOpen) {
       for (const agentId of homeHistoryRequestSequenceByAgentRef.current.keys()) {
@@ -2506,54 +2074,9 @@ function MainApp() {
       void fetchHomeTurnHistoryPage(agent, null);
     }
   }, [fetchHomeTurnHistoryPage, historyTargetAgents, terminalMapOpen]);
-  const flushDirtyThreadGraphs = useCallback(() => {
-    threadGraphRefreshTimerRef.current = null;
-    const dirtyAgentIds = [...dirtyThreadGraphAgentIdsRef.current];
-    dirtyThreadGraphAgentIdsRef.current.clear();
-    const threadIds = uniqueResolvedThreadIds(dirtyAgentIds, (agentId) => {
-      if (!retainedGraphHistoryAgentIdsRef.current.has(agentId)) {
-        return null;
-      }
-      const agent = agentsRef.current.find((candidate) => candidate.id === agentId);
-      return agent ? threadIdForAgent(agent) : null;
-    });
-    for (const threadId of threadIds) {
-      void fetchRetainedThreadGraph(threadId);
-    }
-  }, [fetchRetainedThreadGraph]);
-  const scheduleAgentThreadGraphRefresh = useCallback(
-    (agentId: string) => {
-      if (!retainedGraphHistoryAgentIdsRef.current.has(agentId)) {
-        return;
-      }
-      dirtyThreadGraphAgentIdsRef.current.add(agentId);
-      if (threadGraphRefreshTimerRef.current === null) {
-        threadGraphRefreshTimerRef.current = window.setTimeout(
-          flushDirtyThreadGraphs,
-          THREAD_GRAPH_REFRESH_DEBOUNCE_MS,
-        );
-      }
-    },
-    [flushDirtyThreadGraphs],
-  );
-  useEffect(
-    () => () => {
-      if (threadGraphRefreshTimerRef.current !== null) {
-        window.clearTimeout(threadGraphRefreshTimerRef.current);
-        threadGraphRefreshTimerRef.current = null;
-      }
-    },
-    [],
-  );
   useEffect(() => {
     setTurns((current) => {
       const retained = current.filter((turn) => retainedTurnHistoryAgentIds.has(turn.agentId));
-      return retained.length === current.length ? current : retained;
-    });
-    setThreadGraphs((current) => {
-      const retained = current.filter((graph) =>
-        retainedGraphHistoryThreadIds.has(graph.threadId),
-      );
       return retained.length === current.length ? current : retained;
     });
     for (const agentId of turnHistoryRequestKeyByAgentRef.current.keys()) {
@@ -2561,26 +2084,10 @@ function MainApp() {
         turnHistoryRequestKeyByAgentRef.current.delete(agentId);
       }
     }
-    for (const agentId of graphHistoryRequestKeyByAgentRef.current.keys()) {
-      if (!retainedGraphHistoryAgentIds.has(agentId)) {
-        graphHistoryRequestKeyByAgentRef.current.delete(agentId);
-      }
-    }
-    for (const agentId of dirtyThreadGraphAgentIdsRef.current) {
-      if (!retainedGraphHistoryAgentIds.has(agentId)) {
-        dirtyThreadGraphAgentIdsRef.current.delete(agentId);
-      }
-    }
     for (const agent of historyTargetAgents) {
-      void hydrateAgentHistory(agent, true);
+      void hydrateAgentHistory(agent);
     }
-  }, [
-    historyTargetAgents,
-    hydrateAgentHistory,
-    retainedGraphHistoryAgentIds,
-    retainedGraphHistoryThreadIds,
-    retainedTurnHistoryAgentIds,
-  ]);
+  }, [historyTargetAgents, hydrateAgentHistory, retainedTurnHistoryAgentIds]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
   const activeBrowserOwnerId = researchSurfaceActive
@@ -2611,20 +2118,6 @@ function MainApp() {
     }
     void setActiveTab(nextActiveTabId).catch(() => undefined);
   }, [activePane, groupById]);
-  // Committed per pane on a trailing debounce rather than per event: programs
-  // that stream progress into the terminal title (OSC 0/2 spinners, build
-  // percentages) emit a distinct title many times a second, and committing each
-  // one re-rendered the whole app — a busy terminal made typing lag everywhere
-  // else. A tab label lagging its
-  // terminal by a couple hundred milliseconds is imperceptible.
-
-  function paneUsesDefaultTitle(pane: PaneInfo, agent: AgentInfo | undefined): boolean {
-    if (manuallyTitledPaneIdsRef.current.has(pane.id)) {
-      return false;
-    }
-    const defaultTitle = defaultPaneTitle(pane, agent, configRef.current);
-    return defaultTitle !== null && pane.title === defaultTitle;
-  }
 
   function paneHasUserSetTitle(pane: PaneInfo, agent: AgentInfo | undefined): boolean {
     if (manuallyTitledPaneIdsRef.current.has(pane.id)) {
@@ -2640,18 +2133,6 @@ function MainApp() {
     expectedAgentId: string | undefined,
   ): boolean {
     return !expectedAgentId || agent?.id === expectedAgentId || pane.agentId === expectedAgentId;
-  }
-
-  function displayPaneTitle(pane: PaneInfo, agent: AgentInfo | undefined): string {
-    const terminalTitle = Object.prototype.hasOwnProperty.call(terminalTitleByPane, pane.id)
-      ? terminalTitleByPane[pane.id]
-      : pane.lastOscTitle;
-    const normalizedTerminalTitle = terminalTitle
-      ? sanitizeTerminalTitle(terminalTitle)
-      : null;
-    return normalizedTerminalTitle && paneUsesDefaultTitle(pane, agent)
-      ? normalizedTerminalTitle
-      : pane.title;
   }
 
   function showAppToast(message: string, tone: "normal" | "warning" = "normal") {
@@ -3264,12 +2745,6 @@ function MainApp() {
     for (const tree of [...researchTrees, ...archivedResearchTrees]) {
       browserOwnerIds.add(researchBrowserOwnerId(tree.id));
     }
-    setTerminalTitleByPane((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([paneId]) => ids.has(paneId)),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
     setManuallyTitledPaneIds((current) => {
       const next = new Set([...current].filter((paneId) => ids.has(paneId)));
       return next.size === current.size ? current : next;
@@ -3285,18 +2760,6 @@ function MainApp() {
     setBrowserOverlayByPane((current) => {
       const next = Object.fromEntries(
         Object.entries(current).filter(([ownerId]) => browserOwnerIds.has(ownerId)),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
-    setTranscriptExpandedByPane((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([paneId]) => ids.has(paneId)),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
-    setSplitTranscriptExpandedByPane((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([paneId]) => ids.has(paneId)),
       );
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
@@ -3341,13 +2804,10 @@ function MainApp() {
   // don't grow unbounded across a long session of spawning and closing agents.
   useEffect(() => {
     const ids = new Set(agents.map((agent) => agent.id));
-    transcriptOptionsRequestTrackerRef.current.retain(ids);
     const pruneRecord = <T,>(current: Record<string, T>): Record<string, T> => {
       const next = Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id)));
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     };
-    setTranscriptNoticeByAgent(pruneRecord);
-    setTranscriptOptionsByAgent(pruneRecord);
     setProcessingNewMessageByAgent(pruneRecord);
     setThinkingAgentIds((current) => {
       const next = new Set([...current].filter((id) => ids.has(id)));
@@ -3361,12 +2821,6 @@ function MainApp() {
     }
     for (const id of Object.keys(hookEventsByAgentRef.current)) {
       if (!ids.has(id)) delete hookEventsByAgentRef.current[id];
-    }
-    for (const id of Object.keys(queueScrollByAgentRef.current)) {
-      if (!ids.has(id)) delete queueScrollByAgentRef.current[id];
-    }
-    for (const id of Object.keys(transcriptScrollByAgentRef.current)) {
-      if (!ids.has(id)) delete transcriptScrollByAgentRef.current[id];
     }
     for (const agentId of pendingFirstTitleByAgentRef.current.keys()) {
       if (!ids.has(agentId)) {
@@ -3693,115 +3147,6 @@ function MainApp() {
     });
   }
 
-  function toggledPaneRecord(current: Record<string, boolean>, paneId: string) {
-    const next = { ...current };
-    if (next[paneId]) {
-      delete next[paneId];
-    } else {
-      next[paneId] = true;
-    }
-    return next;
-  }
-
-  function paneRecordWithFlag(
-    current: Record<string, boolean>,
-    paneId: string,
-    expanded: boolean,
-  ) {
-    if (expanded) {
-      return current[paneId] ? current : { ...current, [paneId]: true };
-    }
-    if (!current[paneId]) {
-      return current;
-    }
-    const next = { ...current };
-    delete next[paneId];
-    return next;
-  }
-
-  function setTranscriptExpandedForPane(
-    paneId: string,
-    expanded: boolean,
-    splitMode = splitLayoutActive,
-  ) {
-    if (!expanded) {
-      setFocusedAssistantTurn(null);
-    }
-    if (splitMode) {
-      const paneIds = paneSplitForPane(paneSplitsRef.current, paneId)?.paneIds ?? [paneId];
-      setSplitTranscriptExpandedByPane((current) =>
-        setPaneSplitFlagEnabled(current, paneIds, expanded),
-      );
-      return;
-    }
-    setTranscriptExpandedByPane((current) => paneRecordWithFlag(current, paneId, expanded));
-  }
-
-  function focusTerminalPaneAfterChromeChange(paneId: string | null | undefined) {
-    if (!paneId) {
-      return;
-    }
-    if (paneChromeFocusFrameRef.current !== null) {
-      cancelAnimationFrame(paneChromeFocusFrameRef.current);
-    }
-    paneChromeFocusFrameRef.current = requestAnimationFrame(() => {
-      paneChromeFocusFrameRef.current = null;
-      if (activePaneIdRef.current === paneId) {
-
-      }
-    });
-  }
-
-  function setRightBarCollapsedForPane(collapsed: boolean, paneId: string | null | undefined) {
-    const groupId = panesRef.current.find((pane) => pane.id === paneId)?.groupId;
-    if (!groupId) {
-      return;
-    }
-    setRightBarCollapsedByGroup((current) =>
-      current[groupId] === collapsed ? current : { ...current, [groupId]: collapsed },
-    );
-    focusTerminalPaneAfterChromeChange(paneId);
-  }
-
-  function setLeftSidebarCollapsedForActivePane(collapsed: boolean) {
-    setLeftSidebarCollapsed(collapsed);
-    if (collapsed) {
-    }
-    focusTerminalPaneAfterChromeChange(
-      activeSurfaceRef.current === "pane" ? activePaneIdRef.current : null,
-    );
-  }
-
-  function toggleTranscriptExpandedForPane(paneId: string, splitMode = splitLayoutActive) {
-    if (splitMode) {
-      const paneIds = paneSplitForPane(paneSplitsRef.current, paneId)?.paneIds ?? [paneId];
-      setSplitTranscriptExpandedByPane((current) =>
-        setPaneSplitFlagEnabled(current, paneIds, !paneSplitFlagIsEnabled(current, paneIds)),
-      );
-      return;
-    }
-    setTranscriptExpandedByPane((current) => toggledPaneRecord(current, paneId));
-  }
-
-  function toggleActiveTranscriptExpanded() {
-    const paneId = activePane?.id;
-    const canExpandStageSplit =
-      splitOverlayTranscriptMode && splitOverlayTurnPaneSurfaces.length > 0;
-    if (!paneId || (!activePaneCanToggleTurnSidebar && !canExpandStageSplit)) {
-      return;
-    }
-
-    if (rightBarCollapsed && activePaneCanToggleTurnSidebar) {
-      setRightBarCollapsedForPane(false, paneId);
-      return;
-    }
-
-    if (activeTranscriptExpanded) {
-      setFocusedAssistantTurn(null);
-    }
-    toggleTranscriptExpandedForPane(paneId);
-  }
-
   function refreshActiveBrowserOverlay() {
     if (!activeBrowserOwnerId) {
       return;
@@ -3846,10 +3191,10 @@ function MainApp() {
     }
   }
 
-  // One stable LinkActions object per transcript owner. TurnOverlay and the
-  // research thread page feed this into the shared provider. Context changes bypass
-  // memoization — a fresh object per App render re-rendered every markdown link in the
-  // transcript on every unrelated state change. Actions read the opener through
+  // One stable LinkActions object per link owner. The research thread page feeds
+  // this into the shared provider. Context changes bypass memoization — a fresh
+  // object per App render re-rendered every markdown link on every unrelated
+  // state change. Actions read the opener through
   // a ref so the cached closures never go stale.
   const openLinkForPaneRef = useRef(openLinkForPane);
   openLinkForPaneRef.current = openLinkForPane;
@@ -3895,219 +3240,6 @@ function MainApp() {
     return actions;
   }
 
-  function turnInfoForAgent(agent: AgentInfo | undefined): AgentTurnInfo {
-    if (!agent) {
-      return {
-        turns: [],
-        assistantLabel: "Claude",
-        getTranscript: () => "",
-        getPlainTextTranscript: () => "",
-        hasTranscript: false,
-        conversationHistory: null,
-      };
-    }
-    return (
-      agentTurnInfoById.get(agent.id) ?? {
-        turns: [],
-        assistantLabel: getAgentUiAdapter(agent.adapter).label,
-        getTranscript: () => "",
-        getPlainTextTranscript: () => "",
-        hasTranscript: false,
-        conversationHistory: null,
-      }
-    );
-  }
-
-  function waitTargetsForAgent(activeWaitAgent: AgentInfo | undefined): WaitTarget[] {
-    if (!activeWaitAgent) {
-      return [];
-    }
-    return sidebarPanes
-      .flatMap((pane) => {
-        const agent = agentByPaneId.get(pane.id);
-        if (!agent) {
-          return [];
-        }
-        if (agent.id === activeWaitAgent.id || agent.status === "failed") {
-          return [];
-        }
-        const queuedTurns = queuedTurnsByAgent[agent.id] ?? [];
-        const hasActiveWork =
-          agent.status === "starting" ||
-          agent.status === "running" ||
-          agent.status === "awaitingInput" ||
-          agent.status === "awaitingPermission";
-        if (!hasActiveWork && queuedTurns.length === 0) {
-          return [];
-        }
-        return [
-          {
-            agentId: agent.id,
-            paneId: pane.id,
-            label: displayPaneTitle(pane, agent),
-            status: agent.status,
-            queueCount: queuedTurns.length,
-            queueBlocked: Boolean(queuedTurns[0]?.waitFor),
-          },
-        ];
-      });
-  }
-
-  function orphanedQueuesForPane(pane: PaneInfo | undefined): OrphanedQueueGroup[] {
-    if (!pane) {
-      return [];
-    }
-    return agents
-      .filter((agent) => agent.orphanedQueuePaneId === pane.id)
-      .map((agent) => ({
-        agent,
-        queuedTurns: queuedTurnsByAgent[agent.id] ?? [],
-      }))
-      .filter((queue) => queue.queuedTurns.length > 0);
-  }
-
-  function turnPaneSurfaceForPane(pane: PaneInfo, splitIndex = -1): TurnPaneSurface {
-    const agent = agentByPaneId.get(pane.id);
-    const turnInfo = turnInfoForAgent(agent);
-    const threadId = agent ? threadIdForAgent(agent) : null;
-    const conversationHistoryState = threadId
-      ? conversationHistoryByThread[threadId]
-      : undefined;
-    const conversationHistory = (conversationHistoryState?.snapshots ?? [])
-      .slice()
-      .reverse()
-      .map((snapshot) => ({
-        snapshotId: snapshot.id,
-        turns:
-          getAgentUiAdapter(snapshot.adapter).normalizeTurns?.(snapshot.turns) ?? snapshot.turns,
-      }));
-    const loadedSnapshots = conversationHistoryState?.snapshots ?? [];
-    const oldestLoadedSnapshot = loadedSnapshots[loadedSnapshots.length - 1];
-    const previousConversationSnapshotId = oldestLoadedSnapshot
-      ? (oldestLoadedSnapshot.previousSnapshotId ?? null)
-      : (turnInfo.conversationHistory?.snapshotId ?? null);
-    const orphanedQueues = orphanedQueuesForPane(pane);
-    const topFraction =
-      splitRightPaneMode && splitIndex > 0
-        ? activeSplitFractions.slice(0, splitIndex).reduce((sum, value) => sum + value, 0)
-        : 0;
-    const heightFraction =
-      splitRightPaneMode && splitIndex >= 0 ? (activeSplitFractions[splitIndex] ?? 0) : 1;
-
-    return {
-      pane,
-      agent,
-      turns: turnInfo.turns,
-      assistantLabel: turnInfo.assistantLabel,
-      getTranscript: turnInfo.getTranscript,
-      getPlainTextTranscript: turnInfo.getPlainTextTranscript,
-      hasTranscript: turnInfo.hasTranscript,
-      conversationHistory,
-      hasPreviousConversation: Boolean(previousConversationSnapshotId),
-      previousConversationSnapshotId,
-      previousConversationLoading: conversationHistoryState?.loading ?? false,
-      previousConversationError: conversationHistoryState?.error ?? null,
-      transcriptNotice: agent ? (transcriptNoticeByAgent[agent.id] ?? null) : null,
-      transcriptOptions: agent ? (transcriptOptionsByAgent[agent.id] ?? []) : [],
-      queuedTurns: agent ? (queuedTurnsByAgent[agent.id] ?? []) : [],
-      waitTargets: waitTargetsForAgent(agent),
-      draft: agent ? (draftsByAgent[agent.id] ?? "") : "",
-      orphanedQueues,
-      queueSplit: agent ? (queueSplitByAgent[agent.id] ?? false) : false,
-      queueSplitHeight: agent ? queueSplitHeightByAgent[agent.id] : undefined,
-      browserOverlay: browserOverlayByPane[pane.id],
-      topFraction,
-      heightFraction,
-      hasTurnSidebar: Boolean(agent) || orphanedQueues.length > 0,
-    };
-  }
-
-  const activeTurnPaneSurface = activePane
-    ? turnPaneSurfaceForPane(
-        activePane,
-        activePaneSplit ? activePaneSplit.paneIds.indexOf(activePane.id) : -1,
-      )
-    : null;
-  const splitTurnPaneSurfaces = splitRightPaneMode
-    ? visibleTerminalPanes
-        .map((pane, index) => turnPaneSurfaceForPane(pane, index))
-        .filter((surface) => surface.hasTurnSidebar)
-    : [];
-  const splitOverlayTurnPaneSurfaces = splitLayoutActive
-    ? visibleTerminalPanes
-        .map((pane, index) => turnPaneSurfaceForPane(pane, index))
-        .filter((surface) => surface.hasTurnSidebar)
-    : [];
-  const visibleTurnPaneSurfaces = splitRightPaneMode
-    ? splitTurnPaneSurfaces
-    : splitOverlayTranscriptMode
-      ? []
-      : activeTurnPaneSurface?.hasTurnSidebar
-        ? [activeTurnPaneSurface]
-        : [];
-  const activePaneHasTurnSidebar = Boolean(activeTurnPaneSurface?.hasTurnSidebar);
-  const activePaneCanToggleTurnSidebar =
-    !splitOverlayTranscriptMode &&
-    canToggleTurnSidebar(
-      activePaneHasTurnSidebar,
-      splitRightPaneMode,
-      splitTurnPaneSurfaces.length,
-    );
-  const visibleRightBarSurfaces = rightBarCollapsed ? [] : visibleTurnPaneSurfaces;
-  const hasVisibleRightBar = visibleRightBarSurfaces.length > 0;
-  const hasGlobalTurnSidebar = hasVisibleRightBar && !splitRightPaneMode;
-  const splitTranscriptExpanded = Boolean(
-    activePaneSplit &&
-      paneSplitFlagIsEnabled(splitTranscriptExpandedByPane, activePaneSplit.paneIds),
-  );
-  const activeTranscriptExpanded = splitLayoutActive
-    ? splitTranscriptExpanded && splitOverlayTurnPaneSurfaces.length > 0
-    : Boolean(activePane && activePaneHasTurnSidebar && transcriptExpandedByPane[activePane.id]);
-  const activeTranscriptVisibleExpanded =
-    activeTranscriptExpanded && (splitOverlayTranscriptMode || !rightBarCollapsed);
-  const overlayTurnPaneSurfaces = splitLayoutActive
-    ? splitOverlayTurnPaneSurfaces
-    : visibleRightBarSurfaces;
-  const focusedAssistantTurnSurface = focusedAssistantTurn
-    ? overlayTurnPaneSurfaces.find(
-        (surface) => surface.pane.id === focusedAssistantTurn.paneId,
-      )
-    : undefined;
-  useEffect(() => {
-    if (
-      focusedAssistantTurn &&
-      (!activeTranscriptVisibleExpanded || !focusedAssistantTurnSurface)
-    ) {
-      if (focusedAssistantTurn.restoreDockedOnClose) {
-        setTranscriptExpandedForPane(
-          focusedAssistantTurn.paneId,
-          false,
-          focusedAssistantTurn.splitMode,
-        );
-      }
-      setFocusedAssistantTurn(null);
-    }
-  }, [
-    activeTranscriptVisibleExpanded,
-    focusedAssistantTurn,
-    focusedAssistantTurnSurface,
-  ]);
-  const activePaneHasTurnPaneHeader = Boolean(
-    hasGlobalTurnSidebar && activePaneHasTurnSidebar,
-  );
-  const activePaneReservesTurnPaneWidth = Boolean(
-    hasGlobalTurnSidebar ||
-      (splitRightPaneMode &&
-        !rightBarCollapsed &&
-        activePaneHasTurnSidebar &&
-        !activeTranscriptVisibleExpanded),
-  );
-  const visibleTurnPaneAgentIds = visibleRightBarSurfaces
-    .map((surface) => surface.agent?.id)
-    .filter((agentId): agentId is string => Boolean(agentId));
-  const visibleTurnPaneAgentIdsKey = visibleTurnPaneAgentIds.join("\0");
-  const visibleTurnPaneAgentIdsRef = useRef(visibleTurnPaneAgentIds);
-  visibleTurnPaneAgentIdsRef.current = visibleTurnPaneAgentIds;
 
   const imageLightbox = useSyncExternalStore(
     subscribeImageLightbox,
@@ -4150,11 +3282,6 @@ function MainApp() {
   const nativeBrowserOccluded = Boolean(
     nativeModalOccluded || appToast || userNotifications.length > 0 || folderPickerStatus,
   );
-  const nativeBrowserGeometryRevision = activeTranscriptVisibleExpanded
-    ? -1
-    : activePaneReservesTurnPaneWidth
-      ? turnPaneWidth
-      : 0;
   useLayoutEffect(() => {
     if (!IS_MAC) {
       return;
@@ -4164,22 +3291,12 @@ function MainApp() {
     );
   }, [activeBrowserOverlay?.open]);
 
-  // Load session lists when a pane's right side is visible so transcript pickers are ready.
-  useEffect(() => {
-    for (const agentId of visibleTurnPaneAgentIds) {
-      void refreshTranscriptOptions(agentId);
-    }
-    // refreshTranscriptOptions only touches stable setters/imports.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleTurnPaneAgentIdsKey]);
-
   useEffect(() => {
     agentsRef.current = agents;
   }, [agents]);
 
   function replaceQueuedTurnsByAgent(nextQueues: Record<string, QueuedTurn[]>) {
     queuedTurnsByAgentRef.current = nextQueues;
-    setQueuedTurnsByAgentState(nextQueues);
   }
 
   function setAgentQueuedTurns(agentId: string, queuedTurns: QueuedTurn[]) {
@@ -4192,7 +3309,6 @@ function MainApp() {
       [agentId]: queuedTurns,
     };
     queuedTurnsByAgentRef.current = nextQueues;
-    setQueuedTurnsByAgentState(nextQueues);
   }
 
   // Composer-local edit flushers, registered by each mounted NativeInput. The
@@ -4427,26 +3543,6 @@ function MainApp() {
     setAgentQueuedTurns(agentId, queuedTurns);
   }
 
-  async function refreshTranscriptOptions(agentId: string) {
-    const request = transcriptOptionsRequestTrackerRef.current.begin(agentId);
-    try {
-      const options = await listAgentTranscripts(agentId);
-      if (!transcriptOptionsRequestTrackerRef.current.isLatest(agentId, request)) {
-        return;
-      }
-      setTranscriptOptionsByAgent((current) => ({ ...current, [agentId]: options }));
-    } catch {
-      // The picker is a best-effort aid; a failed scan just leaves it hidden.
-    }
-  }
-
-  function refreshVisibleTranscriptOptions(exceptAgentId?: string) {
-    for (const agentId of visibleTurnPaneAgentIdsRef.current) {
-      if (agentId !== exceptAgentId) {
-        void refreshTranscriptOptions(agentId);
-      }
-    }
-  }
 
   function paneIdsForSplitStatusGroup(paneId: string): string[] {
     const split = paneSplitForPane(paneSplitsRef.current, paneId);
@@ -4549,25 +3645,12 @@ function MainApp() {
     void acknowledgeAgentStatuses(agentsForSplitStatusGroup(paneId), false, checkBackend);
   }
 
-  function maxTurnPaneWidth() {
-    const appWidth = appRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const available = Math.floor(appWidth - effectiveSidebarWidth - TERMINAL_MIN_WIDTH);
-    return Math.max(TURN_PANE_MIN_WIDTH, Math.min(TURN_PANE_MAX_WIDTH, available));
-  }
-
-  function clampTurnPaneWidth(width: number) {
-    return clamp(width, TURN_PANE_MIN_WIDTH, maxTurnPaneWidth());
-  }
-
-  // The sidebar may grow until the terminal stage would fall below its minimum
-  // (with the turn pane's current width reserved), capped by a comfortable
-  // absolute maximum. Column splits reserve 200px per pane plus gutters.
+  // The sidebar may grow until the stage would fall below its minimum, capped
+  // by a comfortable absolute maximum. Column splits reserve 200px per pane
+  // plus gutters.
   function maxSidebarWidth() {
     const appWidth = appRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const reservedTurnPane = hasVisibleRightBar ? turnPaneWidth : 0;
-    const available = Math.floor(
-      appWidth - reservedTerminalStageMinWidth - reservedTurnPane,
-    );
+    const available = Math.floor(appWidth - reservedTerminalStageMinWidth);
     return Math.max(LEFT_SIDEBAR_MIN_WIDTH, Math.min(LEFT_SIDEBAR_MAX_WIDTH, available));
   }
 
@@ -4583,23 +3666,12 @@ function MainApp() {
 
   // Preserve the existing bounded research/transcript text zoom.
   const turnFontDelta = Math.min(1, Math.max(0, (settings.textSize - APP_TEXT_SIZE) * 0.25));
-  const transcriptExpandedFontDelta = activeTranscriptVisibleExpanded ? 1 : 0;
-  const transcriptExpandedLineHeightDelta = activeTranscriptVisibleExpanded ? 0.1 : 0;
 
   const appStyle = {
     "--font-ui": bodyFontFamily,
     "--sidebar-width": `${effectiveSidebarWidth}px`,
     "--browser-overlay-left": `${BROWSER_OVERLAY_LEFT_MARGIN}px`,
     "--turn-font-delta": `${turnFontDelta}px`,
-    "--transcript-expanded-font-delta": `${transcriptExpandedFontDelta}px`,
-    "--transcript-expanded-line-height-delta": `${transcriptExpandedLineHeightDelta}`,
-    ...(rightBarCollapsed && activePaneHasTurnSidebar
-      ? { "--right-bar-restore-control-offset": "34px" }
-      : {}),
-    ...(activePaneReservesTurnPaneWidth ? { "--turn-pane-width": `${turnPaneWidth}px` } : {}),
-    ...(splitRightPaneMode && hasVisibleRightBar
-      ? { "--inline-turn-pane-width": `${turnPaneWidth}px` }
-      : {}),
   } as CSSProperties;
 
   const titleGenerationTestVisible = settings.tabTitleProvider === "openRouter";
@@ -4657,7 +3729,6 @@ function MainApp() {
         ...draftsByAgentRef.current,
       };
       draftsByAgentRef.current = restoredDrafts;
-      setDraftsByAgentState(restoredDrafts);
     },
     applyInitial: async ({ runtimeConfig, existingGroups, existingPanes, existingPaneSplits,
       existingAgents, existingResearchTrees, existingResearchActivity,
@@ -6422,21 +5493,10 @@ function MainApp() {
     setGroups,
     setThinkingAgentIds,
     setTurns,
-    setTranscriptNoticeByAgent,
     setAgentQueuedTurns,
-    shouldRefreshAgentThreadGraph: (agentId: string) =>
-      retainedGraphHistoryAgentIdsRef.current.has(agentId),
-    onAgentThreadGraphDirty: scheduleAgentThreadGraphRefresh,
     shouldRetainAgentTurns: (agentId: string) =>
       retainedTurnHistoryAgentIdsRef.current.has(agentId),
-    // A research run's agent is in a Research-scoped workspace. An agent
-    // whose record is already gone (a settled run's trailing turn events)
-    // is not found here, but it is not bound to a visible terminal pane
-    // either, so shouldRefreshAgentThreadGraph skips it.
-    isResearchAgent: isResearchRunAgent,
     refreshAgentTurnQueue,
-    refreshTranscriptOptions,
-    refreshVisibleTranscriptOptions,
     openBrowserOverlay,
     selectPaneAfterClose: selectPaneAfterCloseWithContext,
     onEventsReady: handleEventsReady,
@@ -6461,20 +5521,7 @@ function MainApp() {
     onUserNotificationRequested: handleUserNotificationRequested,
   });
 
-  /** An agent in a Research-scoped workspace: research workspaces admit only
-   * research runs. */
-  function isResearchRunAgent(agentId: string): boolean {
-    const groupId = agentsRef.current.find((agent) => agent.id === agentId)?.groupId;
-    return Boolean(
-      groupId && groupsRef.current.some((group) => group.id === groupId && group.scope === "research"),
-    );
-  }
-
   function focusPaneTab(paneId: string) {
-    if (document.activeElement instanceof HTMLElement &&
-        document.activeElement.closest(".turn-timeline")) {
-      document.activeElement.blur();
-    }
     setActivePaneId(paneId);
     // Pass intentional so native-terminal keyboard cycles are not gated
     // on webview document focus.
@@ -6630,7 +5677,7 @@ function MainApp() {
         section: "Actions",
         title: "Toggle sidebar",
         hint: LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL,
-        action: () => setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsed),
+        action: () => setLeftSidebarCollapsed(!leftSidebarCollapsed),
       },
       {
         id: "action:settings",
@@ -7200,13 +6247,6 @@ function MainApp() {
     requestClosePaneRef.current = requestClosePane;
     splitPaneBelowRef.current = splitPaneBelow;
     splitPaneRightRef.current = splitPaneRight;
-    canToggleActiveTranscriptExpandedRef.current = Boolean(
-      activeSurfaceRef.current === "pane" &&
-        activePane &&
-        (activePaneCanToggleTurnSidebar ||
-          (splitOverlayTranscriptMode && splitOverlayTurnPaneSurfaces.length > 0)),
-    );
-    toggleActiveTranscriptExpandedRef.current = toggleActiveTranscriptExpanded;
   });
 
   // Keyboard-ownership arbitration between the webview and the native terminal
@@ -7311,17 +6351,10 @@ function MainApp() {
     };
     const bounceStolenFocus = () => {
       const returningToApp = !nativeWindowFocusedRef.current;
-      lastWindowFocusSeqRef.current = ++focusOrderSeqRef.current;
       schedule();
       if (restoreWindowEditable(returningToApp)) {
         return;
       }
-    };
-    // Also stamps the input-vs-window-focus ordering used to tell user-driven
-    // focus from WebKit's own restoration churn (see the refs' declaration).
-    const noteUserIntent = () => {
-      lastUserInputSeqRef.current = ++focusOrderSeqRef.current;
-      schedule();
     };
     window.addEventListener("focusin", handleFocusIn);
     window.addEventListener("focusout", schedule);
@@ -7335,8 +6368,8 @@ function MainApp() {
     // while the native surface doesn't own the keyboard, so re-sampling on
     // them is cheap (rAF-coalesced, no-op state update) and heals any such
     // wedge on the user's next keystroke or click, whatever overlay caused it.
-    window.addEventListener("keydown", noteUserIntent, true);
-    window.addEventListener("pointerdown", noteUserIntent, true);
+    window.addEventListener("keydown", schedule, true);
+    window.addEventListener("pointerdown", schedule, true);
     const appWindow = getCurrentWindow();
     void appWindow
       .onFocusChanged(({ payload: focused }) => {
@@ -7347,7 +6380,6 @@ function MainApp() {
             : null;
           return;
         }
-        lastWindowFocusSeqRef.current = ++focusOrderSeqRef.current;
         if (!restoreWindowEditable(true)) {
           schedule();
         }
@@ -7367,8 +6399,8 @@ function MainApp() {
       window.removeEventListener("focusout", schedule);
       window.removeEventListener("blur", schedule);
       window.removeEventListener("focus", bounceStolenFocus);
-      window.removeEventListener("keydown", noteUserIntent, true);
-      window.removeEventListener("pointerdown", noteUserIntent, true);
+      window.removeEventListener("keydown", schedule, true);
+      window.removeEventListener("pointerdown", schedule, true);
       if (frame !== null) {
         cancelAnimationFrame(frame);
       }
@@ -7429,31 +6461,6 @@ function MainApp() {
     });
     return () => cancelAnimationFrame(frame);
   }, [modalEditorOpen]);
-
-  const mountedTurnPaneCellsKey = visibleRightBarSurfaces
-    .map((surface) => surface.pane.id)
-    .join("\n");
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const restored = document.activeElement;
-      if (
-        !userInputSinceWindowFocus() &&
-        restored instanceof HTMLElement &&
-        isEditableTarget(restored) &&
-        restored.closest(".turn-pane")
-      ) {
-        restored.blur();
-      }
-      setWebEditableFocused(
-        document.hasFocus() && isEditableTarget(document.activeElement),
-      );
-      const paneId = activePaneIdRef.current;
-      if (paneId) {
-
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [mountedTurnPaneCellsKey, userInputSinceWindowFocus]);
 
   // Live snapshot of the app-level overlay state for the Escape dispatcher
   // below, which is registered exactly once. Mirrored every render, read only
@@ -7803,7 +6810,7 @@ function MainApp() {
           });
           return;
         case "toggleLeftSidebar":
-          setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsedRef.current);
+          setLeftSidebarCollapsed(!leftSidebarCollapsedRef.current);
           return;
         case "openSettings":
           setAgentsOpen(false);
@@ -7908,22 +6915,8 @@ function MainApp() {
     focusResearchHome,
   ]);
 
-  useEffect(() => {
-    if (!hasVisibleRightBar) {
-      return;
-    }
-
-    const handleResize = () => {
-      setTurnPaneWidth((current) => clampTurnPaneWidth(current));
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [hasVisibleRightBar]);
-
-  // Keep the sidebar within bounds as the window resizes or the turn pane claims
-  // space (deps refresh the clamp's view of available width).
+  // Keep the sidebar within bounds as the window resizes or the stage's minimum
+  // width changes (deps refresh the clamp's view of available width).
   useEffect(() => {
     const handleResize = () => {
       setSidebarWidth((current) => clampSidebarWidth(current));
@@ -7932,7 +6925,7 @@ function MainApp() {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [hasVisibleRightBar, turnPaneWidth, reservedTerminalStageMinWidth]);
+  }, [reservedTerminalStageMinWidth]);
 
   async function updateShowHideShortcut(accelerator: string | null) {
     const request = ++showHideShortcutRequestRef.current;
@@ -8443,11 +7436,9 @@ function MainApp() {
   return (
     <div
       ref={appRef}
-      className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
-        researchSidebarRail && IS_MAC ? " has-titlebar-rail" : ""
-      }${
-        activeTranscriptVisibleExpanded ? " has-expanded-transcript" : ""
-      }${settings.reduceMotion ? " reduce-motion" : ""}`}
+      className={`app-shell${researchSidebarRail && IS_MAC ? " has-titlebar-rail" : ""}${
+        settings.reduceMotion ? " reduce-motion" : ""
+      }`}
       style={appStyle}
     >
       {!researchSidebarRail ? (
@@ -8471,7 +7462,7 @@ function MainApp() {
           forced={windowNarrowForSidebar}
           reserveTitlebar={IS_MAC}
           expandShortcut={LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL}
-          onExpand={() => setLeftSidebarCollapsedForActivePane(false)}
+          onExpand={() => setLeftSidebarCollapsed(false)}
           onNavigate={openFeedPage}
           onNewFolder={() => openNewResearchFolderDialog()}
           footer={
@@ -8520,7 +7511,7 @@ function MainApp() {
             className="icon-button sidebar-header-button sidebar-collapse-toggle"
             title={`Collapse sidebar to icons (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
             aria-label="Collapse sidebar"
-            onClick={() => setLeftSidebarCollapsedForActivePane(true)}
+            onClick={() => setLeftSidebarCollapsed(true)}
           >
             <PanelLeft size={15} aria-hidden="true" />
           </button>
@@ -9779,9 +8770,8 @@ function MainApp() {
           bodyFontId={settings.bodyFontId}
           size={activeBrowserOverlay.size}
           fullWidth={activeBrowserOverlay.fullWidth ?? false}
-          toggleShortcutLabel={activePaneHasTurnPaneHeader ? null : EXPAND_TOGGLE_SHORTCUT_LABEL}
+          toggleShortcutLabel={EXPAND_TOGGLE_SHORTCUT_LABEL}
           occluded={nativeBrowserOccluded}
-          geometryRevision={nativeBrowserGeometryRevision}
           onNavigate={navigateActiveBrowserOverlay}
           onLocationChange={(url) => setHumanBrowserLocation(activeBrowserOwnerId, url)}
           onRefresh={refreshActiveBrowserOverlay}

@@ -1287,14 +1287,6 @@
   font-size: calc(12px + var(--font-ui-size-offset));
 }
 
-.research-turn-answer {
-  min-width: 0;
-}
-
-.research-turn-answer .turn-markdown {
-  color: var(--text-body-soft);
-}
-
 /* — Run states — */
 .research-turn-run {
   display: flex;

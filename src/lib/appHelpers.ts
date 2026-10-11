@@ -6,7 +6,6 @@ import type {
   SessionEvent,
   QueuedTurn,
   RuntimeConfig,
-  ThreadGraph,
   TranscriptHookEvent,
   Turn,
 } from "../types";
@@ -100,8 +99,8 @@ type PanePopoverPlacement = {
 };
 
 /**
- * Place a fixed popover next to a trigger, clamped inside the right pane (or
- * the viewport). Horizontal `align: "start"` left-aligns to the trigger and
+ * Place a fixed popover next to a trigger, clamped inside the viewport.
+ * Horizontal `align: "start"` left-aligns to the trigger and
  * grows right (toward center for left-edge controls); `"end"` right-aligns and
  * grows left (toward center for right-edge controls). Vertical preference flips
  * when the other side has more room.
@@ -109,7 +108,6 @@ type PanePopoverPlacement = {
 export function placePanePopover(args: {
   triggerRect: DOMRect;
   popoverSize: { width: number; height: number };
-  paneRect?: DOMRect | null;
   align: "start" | "end";
   prefer: "above" | "below";
   margin?: number;
@@ -117,11 +115,10 @@ export function placePanePopover(args: {
 }): PanePopoverPlacement {
   const margin = args.margin ?? 8;
   const gap = args.gap ?? 6;
-  const pane = args.paneRect ?? null;
-  const boundLeft = (pane ? pane.left : 0) + margin;
-  const boundRight = (pane ? pane.right : window.innerWidth) - margin;
-  const boundTop = (pane ? pane.top : 0) + margin;
-  const boundBottom = (pane ? pane.bottom : window.innerHeight) - margin;
+  const boundLeft = margin;
+  const boundRight = window.innerWidth - margin;
+  const boundTop = margin;
+  const boundBottom = window.innerHeight - margin;
   const maxWidth = Math.max(0, boundRight - boundLeft);
   const width = Math.min(args.popoverSize.width, maxWidth);
 
@@ -166,12 +163,6 @@ export function placePanePopover(args: {
     maxHeight,
     maxWidth,
   };
-}
-
-/** Resolve the nearest `.turn-pane` bounds for clamping a right-pane popover. */
-export function turnPaneRectFrom(el: Element | null): DOMRect | null {
-  const pane = el?.closest(".turn-pane");
-  return pane instanceof HTMLElement ? pane.getBoundingClientRect() : null;
 }
 
 export function selectPaneAfterClose(
@@ -387,48 +378,6 @@ export function reconcileReplacedTurns(
     return current;
   }
   return next;
-}
-
-function reconcileThreadGraph(prior: ThreadGraph | undefined, graph: ThreadGraph): ThreadGraph {
-  if (
-    prior &&
-    prior.focusedBranchId === graph.focusedBranchId &&
-    prior.nextCreatedOrder === graph.nextCreatedOrder &&
-    JSON.stringify(prior) === JSON.stringify(graph)
-  ) {
-    return prior;
-  }
-  return graph;
-}
-
-// Merges targeted single-thread refetches into the graph list without touching
-// the other graphs — the streaming path refreshes only the thread whose agent
-// produced turn events, so unrelated graphs keep their identity (and their
-// downstream memoized timelines) untouched by construction. Content-identical
-// updates keep the prior object; a brand-new thread is appended. Returns
-// `previous` itself when nothing changed.
-export function upsertThreadGraphs(
-  previous: ThreadGraph[],
-  updates: ThreadGraph[],
-): ThreadGraph[] {
-  let changed = false;
-  let next = previous;
-  for (const update of updates) {
-    const index = next.findIndex((graph) => graph.threadId === update.threadId);
-    if (index === -1) {
-      next = [...next, update];
-      changed = true;
-      continue;
-    }
-    const reconciled = reconcileThreadGraph(next[index], update);
-    if (reconciled !== next[index]) {
-      const copy = next.slice();
-      copy[index] = reconciled;
-      next = copy;
-      changed = true;
-    }
-  }
-  return changed ? next : previous;
 }
 
 // On macOS the find shortcut is Cmd-F; on other platforms it is Ctrl-F. (Ctrl-F

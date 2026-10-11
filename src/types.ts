@@ -789,78 +789,6 @@ export interface MessageAnchor {
   sourceIndex: number;
 }
 
-export interface ThreadGraph {
-  version: 1;
-  threadId: string;
-  focusedBranchId: string;
-  nextCreatedOrder: number;
-  rootTurnIds: string[];
-  branches: Record<string, ThreadBranch>;
-  nodes: Record<string, ThreadNode>;
-  conversationHistory?: ConversationHistoryRef | null;
-  /** Legacy excerpts saved from assistant messages. Parsed so older graph
-   * files still load; the UI no longer creates or displays them. */
-  annotations?: TranscriptAnnotation[];
-}
-
-export interface ConversationHistoryRef {
-  snapshotId: string;
-}
-
-export interface ConversationHistorySnapshot {
-  id: string;
-  adapter: string;
-  turns: Turn[];
-  previousSnapshotId?: string | null;
-}
-
-export interface TranscriptAnnotation {
-  id: string;
-  sourceTurnId: string;
-  text: string;
-  createdAt: number;
-}
-
-export interface ThreadBranch {
-  id: string;
-  threadId: string;
-  parentBranchId?: string | null;
-  baseTurnId?: string | null;
-  createdFromTurnId?: string | null;
-  headTurnIds: string[];
-  label?: string | null;
-  createdByAgentId?: string | null;
-  createdByActorId?: string | null;
-  createdAt: number;
-  status: "active" | "archived";
-}
-
-export type ThreadNode = TurnNode | HandoffNode | BranchStartNode;
-
-export interface BaseThreadNode {
-  id: string;
-  threadId: string;
-  branchId: string;
-  parentTurnIds: string[];
-  participant: ThreadParticipant;
-  createdAt: number;
-  createdOrder: number;
-  status?: "active" | "superseded" | "interrupted" | "uncertain" | null;
-  statusReason?: "codexRollback" | "interrupted" | "claudePromptBranch" | "unknownBranch" | null;
-  contextStatus?: "rolledBack" | null;
-}
-
-export interface TurnNode extends BaseThreadNode {
-  kind: "turn";
-  turn: {
-    role: string;
-    blocks: TurnBlock[];
-    sourceIndex?: number | null;
-    timestamp?: number | null;
-  };
-  native?: NativeTurnRef | null;
-}
-
 export interface HomeTurnSummary {
   id: string;
   text: string;
@@ -873,64 +801,12 @@ export interface HomeTurnHistoryPage {
   nextBefore: string | null;
 }
 
-export interface HandoffNode extends BaseThreadNode {
-  kind: "handoff";
-  participant: { kind: "session"; actorId: "session"; label: "session" };
-  handoff: HandoffPayload;
-}
-
-export interface BranchStartNode extends BaseThreadNode {
-  kind: "branchStart";
-  participant: { kind: "session"; actorId: "session"; label: "session" };
-  branchStart: {
-    parentBranchId?: string | null;
-    baseTurnId?: string | null;
-    targetBranchId: string;
-  };
-}
-
 export interface ThreadParticipant {
   kind: "user" | "assistant" | "session";
   actorId: string;
   adapter?: string | null;
   agentId?: string | null;
   label?: string | null;
-}
-
-export interface HandoffPayload {
-  sourceAgentId: string;
-  sourceAdapter: string;
-  sourceBranchId: string;
-  sourceTurnId: string;
-  targetAgentId: string;
-  targetAdapter: string;
-  targetBranchId: string;
-  contextPath: string;
-}
-
-export interface NativeTurnRef {
-  adapter: string;
-  agentId: string;
-  sessionId?: string | null;
-  transcriptPath?: string | null;
-  nativeId?: string | null;
-  parentNativeId?: string | null;
-  nativeMessageId?: string | null;
-  sourceIndex: number;
-}
-
-// A selectable past/parallel session for the right pane's transcript picker, used
-// to correct an agent that auto-recovered onto the wrong session file.
-export interface TranscriptOption {
-  path: string;
-  sessionId?: string | null;
-  modifiedMs: number;
-  preview?: string | null;
-  lineCount: number;
-  // The transcript the agent is currently bound to.
-  isActive: boolean;
-  // Another agent is tailing this file; selecting it would collide.
-  boundToOtherAgent: boolean;
 }
 
 // Where a saved prompt lives: "global" is ~/.session/prompts/ (visible from every

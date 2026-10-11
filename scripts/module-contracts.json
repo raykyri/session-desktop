@@ -52,13 +52,8 @@
       "names": [
         "AgentReadiness",
         "ArtifactInfo",
-        "BaseThreadNode",
-        "BranchStartNode",
         "GlobalDraft",
-        "HandoffNode",
-        "HandoffPayload",
         "MoveQueuedAgentTurnResult",
-        "NativeTurnRef",
         "PaneKind",
         "PaneSplitPaneNode",
         "PostReplyAuthor",
@@ -81,7 +76,6 @@
         "ShellAgentJobState",
         "SubmitAgentTurnMode",
         "SubmitAgentTurnResult",
-        "TranscriptAnnotation",
         "TranscriptCopyPayload",
         "UserMessage"
       ]

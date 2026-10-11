@@ -10,13 +10,11 @@ import {
 } from "../src/lib/paneTree";
 import {
   canSplitPaneInTree,
-  canToggleTurnSidebar,
   detachPaneFromSplitMemberships,
   joinPaneSplit,
   normalizePaneSplitsForPanes,
   paneAtStagePoint,
   paneSplitAxis,
-  paneSplitFlagIsEnabled,
   paneSplitIsNested,
   paneSplitLayout,
   paneSplitRootNode,
@@ -24,7 +22,6 @@ import {
   paneSnapshotForPersistedPaneSplits,
   reservedTerminalStageWidth,
   resizeSplitNodeFractions,
-  setPaneSplitFlagEnabled,
   splitAxisForPane,
   splitBranchChildCountForPane,
   splitCalc,
@@ -300,43 +297,6 @@ test("detachPaneFromSplitMemberships keeps the remaining split's axis", () => {
 
   assert.equal(detached[0].axis, "horizontal");
   assert.deepEqual(detached[0].paneIds, ["pane-1", "pane-2"]);
-});
-
-test("split pane flags apply to the whole group and preserve unrelated panes", () => {
-  assert.equal(
-    paneSplitFlagIsEnabled({ "pane-2": true }, ["pane-1", "pane-2", "pane-3"]),
-    true,
-  );
-
-  const flags = { "pane-outside": true };
-  const expanded = setPaneSplitFlagEnabled(flags, ["pane-1", "pane-2", "pane-3"], true);
-
-  assert.deepEqual(expanded, {
-    "pane-outside": true,
-    "pane-1": true,
-    "pane-2": true,
-    "pane-3": true,
-  });
-  assert.equal(paneSplitFlagIsEnabled(expanded, ["pane-1", "pane-2", "pane-3"]), true);
-
-  const collapsed = setPaneSplitFlagEnabled(expanded, ["pane-1", "pane-2", "pane-3"], false);
-  assert.deepEqual(collapsed, { "pane-outside": true });
-  assert.equal(paneSplitFlagIsEnabled(collapsed, ["pane-1", "pane-2", "pane-3"]), false);
-});
-
-test("split pane flag updates preserve state identity when nothing changes", () => {
-  const expanded = { "pane-1": true, "pane-2": true };
-  assert.equal(setPaneSplitFlagEnabled(expanded, ["pane-1", "pane-2"], true), expanded);
-
-  const collapsed = { "pane-outside": true };
-  assert.equal(setPaneSplitFlagEnabled(collapsed, ["pane-1", "pane-2"], false), collapsed);
-});
-
-test("split transcript controls remain available from a shell sibling", () => {
-  assert.equal(canToggleTurnSidebar(false, true, 1), true);
-  assert.equal(canToggleTurnSidebar(false, true, 0), false);
-  assert.equal(canToggleTurnSidebar(false, false, 1), false);
-  assert.equal(canToggleTurnSidebar(true, false, 0), true);
 });
 
 test("normalizePaneSplitsForPanes prunes split intent for missing panes and anchors", () => {

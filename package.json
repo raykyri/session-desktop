@@ -35,7 +35,6 @@
     "test:research-prompt-markdown": "npm run test:node -- tests/researchPromptMarkdown.test.ts",
     "test:tagged-instructions": "npm run test:node -- tests/taggedInstructions.test.ts",
     "test:research-instruction-setting": "npm run test:node -- tests/researchInstructionSetting.test.ts",
-    "test:thread-graph-overlay": "npm run test:node -- tests/threadGraphOverlay.test.ts",
     "test:workspace-scope": "npm run test:node -- tests/workspaceScope.test.ts",
     "test:handoff": "npm run test:node -- tests/handoff.test.ts",
     "tauri": "tauri",

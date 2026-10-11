@@ -21,7 +21,7 @@ import ReactMarkdown from "react-markdown";
 import type { Components, Options } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
-import { placePanePopover, turnPaneRectFrom } from "../lib/appHelpers";
+import { placePanePopover } from "../lib/appHelpers";
 import { writeClipboardText } from "../lib/clipboard";
 import {
   inlineCodeFilePath,
@@ -565,7 +565,6 @@ function MarkdownCodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre
       placePanePopover({
         triggerRect: trigger.getBoundingClientRect(),
         popoverSize: { width: CODE_MENU_PREFERRED_WIDTH, height },
-        paneRect: turnPaneRectFrom(trigger),
         align: "end",
         prefer: "below",
       }),

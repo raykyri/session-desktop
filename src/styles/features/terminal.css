@@ -1,16 +1,4 @@
-.remote-connection-details-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--remote-connection-gap, 6px);
-}
-
-.remote-connection-last-connection {
-  color: var(--text-muted, var(--text-secondary));
-  font-weight: 400;
-  opacity: 0.75;
-}
-
-/* The find bar shared by transcripts and research threads. */
+/* The find bar of research threads (PaneSearchBar). */
 .pane-search {
   position: absolute;
   top: 10px;
@@ -27,19 +15,6 @@
   background: var(--pane-hover-bg);
   padding: 6px 8px;
   box-shadow: var(--shadow-md);
-}
-
-/* In the transcript, drop below the pinned session header (40px tall). */
-.turn-sidebar.has-header .pane-search {
-  top: 50px;
-  --pane-search-right: 16px;
-}
-
-/* Headerless overlays (split cells) keep their floating expand/collapse controls
-   at the top-right corner, so the bar starts to their left. */
-.turn-sidebar:not(.has-header) .pane-search {
-  top: 8px;
-  --pane-search-right: 84px;
 }
 
 .pane-search-input {
@@ -112,9 +87,8 @@
   cursor: default;
 }
 
-/* Rendered-pane search matches, painted via the CSS Custom Highlight API (names
-   registered in lib/transcriptSearch.ts). Colors mirror the terminal's
-   SEARCH_DECORATIONS so find reads the same on both sides of the split. */
+/* Find-bar matches, painted via the CSS Custom Highlight API (names
+   registered in lib/transcriptSearch.ts). */
 ::highlight(transcript-search-match) {
   background-color: var(--attention-badge-bg);
   color: var(--attention-badge-fg);
@@ -123,8 +97,4 @@
 ::highlight(transcript-search-active-match) {
   background-color: var(--attention-badge-bg-strong);
   color: var(--attention-badge-fg-strong);
-}
-
-.remote-connection-detail {
-  white-space: pre-line;
 }

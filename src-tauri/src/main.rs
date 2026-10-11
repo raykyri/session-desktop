@@ -71,10 +71,7 @@ use state::{
     AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
-use transcript::{
-    TranscriptOption, Turn, list_agent_transcripts as list_agent_transcript_options,
-    set_agent_transcript as repoint_agent_transcript,
-};
+use transcript::Turn;
 use turn_queue::{
     AssignGlobalDraftRequest, AssignGlobalDraftResult, MoveQueuedAgentTurnRequest,
     MoveQueuedAgentTurnResult, QueueDeliveryAgentTurnRequest, QueueWaitAgentTurnRequest,
@@ -1492,45 +1489,6 @@ async fn list_home_turn_history(
 }
 
 #[tauri::command]
-async fn list_thread_graphs(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<thread_graph::ThreadGraph>, String> {
-    // Blocking: reads every thread's graph snapshot (disk on a cache miss) and
-    // graphs retain full transcript nodes, so the response serializes the
-    // workspace's whole fork history. As a sync command this ran on the main
-    // thread and each full refresh stalled the UI for the duration.
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.list_thread_graphs())
-        .await
-        .map_err(|err| format!("list_thread_graphs task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn get_thread_graph(
-    state: tauri::State<'_, AppState>,
-    thread_id: String,
-) -> Result<Option<thread_graph::ThreadGraph>, String> {
-    // Blocking for the same reason as list_thread_graphs, scoped to one
-    // thread: a long-running session's graph is still a large disk read and
-    // serialization, and this refetch fires on every streaming turn burst.
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.thread_graph(&thread_id))
-        .await
-        .map_err(|err| format!("get_thread_graph task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn get_conversation_history_snapshot(
-    state: tauri::State<'_, AppState>,
-    snapshot_id: String,
-) -> Result<Option<thread_graph::ConversationHistorySnapshot>, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.conversation_history_snapshot(&snapshot_id))
-        .await
-        .map_err(|err| format!("get_conversation_history_snapshot task failed: {err}"))?
-}
-
-#[tauri::command]
 async fn list_research_trees(
     state: tauri::State<'_, AppState>,
     include_archived: Option<bool>,
@@ -2345,26 +2303,6 @@ fn list_agent_turn_queue(
     agent_id: String,
 ) -> Result<Vec<QueuedTurn>, String> {
     state.agent_queued_turns(&agent_id)
-}
-
-// Async so it runs off the main thread: building the picker reads the head of
-// up to 30 transcript files (and walks the Codex sessions tree), which froze
-// the UI for the duration when run as a synchronous command.
-#[tauri::command(async)]
-fn list_agent_transcripts(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<Vec<TranscriptOption>, String> {
-    list_agent_transcript_options(&state, &agent_id)
-}
-
-#[tauri::command(async)]
-fn set_agent_transcript(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    path: Option<String>,
-) -> Result<AgentInfo, String> {
-    repoint_agent_transcript(&state, &agent_id, path.as_deref())
 }
 
 #[tauri::command]
@@ -3552,9 +3490,6 @@ fn main() {
             list_shell_agent_jobs,
             list_turns,
             list_home_turn_history,
-            list_thread_graphs,
-            get_thread_graph,
-            get_conversation_history_snapshot,
             list_research_trees,
             reorder_research_trees,
             list_research_folders,
@@ -3597,8 +3532,6 @@ fn main() {
             remove_research_tree,
             remove_research_branch,
             list_agent_turn_queue,
-            list_agent_transcripts,
-            set_agent_transcript,
             group_create,
             group_rename,
             group_reorder,

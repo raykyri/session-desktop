@@ -20,7 +20,6 @@ import {
   upsertAgent,
 } from "../lib/appHelpers";
 import { parseAppShortcutCommand, type AppShortcutCommand } from "../lib/appShortcuts";
-import { sessionPickerTopologyChanged } from "../lib/transcriptSessions";
 import type { ExitPreflightRequest } from "../appTypes";
 import type {
   ActiveWorkspace,
@@ -77,30 +76,13 @@ interface UseSessionEventsHandlers {
   // agent restored into a working status never falsely shows it (see below).
   setThinkingAgentIds: Dispatch<SetStateAction<Set<string>>>;
   setTurns: Dispatch<SetStateAction<Turn[]>>;
-  setTranscriptNoticeByAgent: Dispatch<SetStateAction<Record<string, string | null>>>;
   setAgentQueuedTurns: (agentId: string, queuedTurns: QueuedTurn[]) => void;
-  // Thread graphs are demand-loaded by App. Hidden or parked agents still emit
-  // turn events, but those events must not populate an ever-growing graph cache.
-  shouldRefreshAgentThreadGraph?: (agentId: string) => boolean;
-  // App owns graph request sequencing alongside initial hydration. Keeping both
-  // paths behind one coordinator prevents a slow initial read from overwriting a
-  // newer event-driven read of the same thread.
-  onAgentThreadGraphDirty?: (agentId: string) => void;
   // Turn snapshots follow the same surface ownership policy. App can rehydrate
   // the backend's bounded window when a hidden agent becomes visible, so retaining
   // every hidden agent's live window here would only turn the frontend into an
   // app-lifetime cache again.
   shouldRetainAgentTurns?: (agentId: string) => boolean;
-  // True for agents that belong to research runs. The backend deliberately
-  // writes no thread graph for them (research follow-ups branch through the
-  // research tree, not the fork-lineage graph), so a graph refresh can only
-  // miss. Their dense turn-event bursts must skip graph work entirely.
-  isResearchAgent?: (agentId: string) => boolean;
   refreshAgentTurnQueue: (agentId: string) => Promise<void>;
-  refreshTranscriptOptions: (agentId: string) => Promise<void>;
-  // A session binding/removal changes the candidate set and "In use" flags for
-  // sibling agents too, not just the agent named by the event.
-  refreshVisibleTranscriptOptions: () => void;
   // Binds a browser-overlay URL to a pane (the backend emits the fully-formed URL).
   openBrowserOverlay: (
     paneId: string,
@@ -147,15 +129,9 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     setGroups,
     setThinkingAgentIds,
     setTurns,
-    setTranscriptNoticeByAgent,
     setAgentQueuedTurns,
-    shouldRefreshAgentThreadGraph,
-    onAgentThreadGraphDirty,
     shouldRetainAgentTurns,
-    isResearchAgent,
     refreshAgentTurnQueue,
-    refreshTranscriptOptions,
-    refreshVisibleTranscriptOptions,
     openBrowserOverlay,
     selectPaneAfterClose: selectPaneAfterCloseWithContext,
     onEventsReady,
@@ -178,22 +154,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     // Same idea for pane-list refetches (a fork adds a pane backend-side).
     let panesRefreshSeq = 0;
     let groupsRefreshSeq = 0;
-    const refreshThreadGraphs = (agentId?: string | null) => {
-      if (
-        !agentId ||
-        isResearchAgent?.(agentId) ||
-        shouldRefreshAgentThreadGraph?.(agentId) === false
-      ) {
-        // A research run's turn events (its start burst — the initial
-        // transcript reset — and its settle flush are the densest) must not
-        // schedule graph work: no graph will ever exist for it. Hidden agents
-        // likewise stay on the bounded turn fallback until their surface asks
-        // for the graph.
-        return;
-      }
-      onAgentThreadGraphDirty?.(agentId);
-    };
-
     const handleEvent = (event: SessionEvent) => {
       if (event.type === "app.interface_health_probe") {
         const generation = event.payload.generation;
@@ -232,9 +192,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           });
           return nextPanes;
         });
-      }
-      if (sessionPickerTopologyChanged(event.type)) {
-        refreshVisibleTranscriptOptions();
       }
       if (event.type === "pane.focus_requested" && event.paneId) {
         onPaneFocusRequested?.(event.paneId);
@@ -470,7 +427,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
               });
             });
           }
-          refreshThreadGraphs(turn.agentId);
         }
       }
       if (event.type === "turn.updated" && event.payload.reset) {
@@ -488,27 +444,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         if (!agentId || shouldRetainAgentTurns?.(agentId) !== false) {
           setTurns((current) => reconcileReplacedTurns(current, agentId, replacementTurns));
         }
-        refreshThreadGraphs(agentId);
-      }
-      if (
-        event.agentId &&
-        (event.type === "transcript.notice" || event.type === "transcript.error")
-      ) {
-        const agentId = event.agentId;
-        // transcript.error carries `error`; transcript.notice carries `message`
-        // (null/absent means the tail recovered, so the notice is cleared).
-        const message =
-          event.type === "transcript.error"
-            ? typeof event.payload.error === "string"
-              ? event.payload.error
-              : "Failed to load transcript"
-            : typeof event.payload.message === "string"
-              ? event.payload.message
-              : null;
-        setTranscriptNoticeByAgent((current) => ({ ...current, [agentId]: message }));
-        // A notice usually follows a recovery/rotation; refresh the picker so the
-        // active session and any new candidates are reflected.
-        void refreshTranscriptOptions(agentId).catch(() => undefined);
       }
     };
 
