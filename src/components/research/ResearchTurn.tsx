@@ -303,8 +303,6 @@ interface ResearchAnswerPaneProps {
   onRetryNode: (nodeId: string) => void;
   onRemoveQueuedRetry: (nodeId: string) => void;
   onEditQuestion: (nodeId: string) => void;
-  onRootMouseDown: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onRootMouseUp: (event: React.MouseEvent<HTMLDivElement>) => void;
   onRootKeyUp: () => void;
   onRootClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   onRootMouseMove: (event: React.MouseEvent<HTMLDivElement>) => void;
@@ -356,8 +354,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRetryNode,
   onRemoveQueuedRetry,
   onEditQuestion,
-  onRootMouseDown,
-  onRootMouseUp,
   onRootKeyUp,
   onRootClick,
   onRootMouseMove,
@@ -602,8 +598,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
             className={`research-response-content-root${
               pointerOverAnnotation ? " is-highlight-hovered" : ""
             }`}
-            onMouseDown={onRootMouseDown}
-            onMouseUp={onRootMouseUp}
             onKeyUp={onRootKeyUp}
             onClick={onRootClick}
             onMouseMove={onRootMouseMove}

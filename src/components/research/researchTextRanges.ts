@@ -149,7 +149,7 @@ export function applyDirectionalSelectionRange(
 // Exclude tool calls and payloads, Raw disclosures, collapsed thinking, and
 // grouped activity from selections used for highlights or branches. Raw
 // disclosures use `.tool-block` and can be nested inside a message.
-export const NON_TEXT_ROW_SELECTOR =
+const NON_TEXT_ROW_SELECTOR =
   `.tool-block, .thinking-block, .activity-group-block, .research-conversation-activity, ${WIDGET_SELECTOR}`;
 
 /** True when the range starts, ends, or spans across any non-text row. Because
@@ -230,9 +230,9 @@ export function flatOffsetAtPoint(root: HTMLElement, clientX: number, clientY: n
 /** Flat offsets where the enclosing `.research-response-message` changes —
  * every boundary between messages, or between a message and the
  * tool/thinking rows around it. The projection concatenates these with no
- * separating whitespace, so word snapping needs them to avoid fusing a
+ * separating whitespace, so word expansion needs them to avoid fusing a
  * message's last word to its neighbour's first (see
- * `createResearchSelectionSnapper`). */
+ * `createResearchSelectionExpander`). */
 export function messageFlatBoundaries(root: HTMLElement) {
   const boundaries: number[] = [];
   let consumed = 0;

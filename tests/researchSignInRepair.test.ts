@@ -192,8 +192,6 @@ function renderPane(node: ResearchNode, options: { canRetry?: boolean } = {}) {
         onRetryNode: noop,
         onRemoveQueuedRetry: noop,
         onEditQuestion: noop,
-        onRootMouseDown: noop,
-        onRootMouseUp: noop,
         onRootKeyUp: noop,
         onRootClick: noop,
         onRootMouseMove: noop,

@@ -26,8 +26,6 @@ export type ResearchAnswerPaneHandlers = Pick<
   | "onRetryNode"
   | "onRemoveQueuedRetry"
   | "onEditQuestion"
-  | "onRootMouseDown"
-  | "onRootMouseUp"
   | "onRootKeyUp"
   | "onRootClick"
   | "onRootMouseMove"

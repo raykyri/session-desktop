@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createResearchHighlight, removeResearchHighlights } from "../lib/api";
 import { writeClipboardText } from "../lib/clipboard";
 import {
@@ -10,9 +10,8 @@ import {
 import { documentSource, nodeStatus } from "../lib/researchNodeTypes";
 import {
   clipResearchSelectionToParagraph,
-  createResearchSelectionSnapper,
+  createResearchSelectionExpander,
   isLiveResearchSelection,
-  type ResearchSelectionSnapper,
 } from "../lib/researchSelection";
 import { researchBranchBlocker, surrogateSafeSlice } from "../lib/researchThreadView";
 import type {
@@ -23,10 +22,8 @@ import type {
   ResearchTreeDetail,
 } from "../types";
 import {
-  NON_TEXT_ROW_SELECTOR,
   applyDirectionalSelectionRange,
   enclosingMessageFlatBounds,
-  flatOffsetAtPoint,
   flatTextOffsetAt,
   messageFlatBoundaries,
   passageBlockAt,
@@ -59,27 +56,7 @@ export interface ResearchSelectionAction {
   expandAnchor: ResearchHighlightAnchor | null;
 }
 
-// Match the platform's small click-versus-drag tolerance: a click should keep
-// link, annotation, and native double-click behavior, while a deliberate drag
-// switches to live whole-word selection quickly.
-const RESEARCH_SELECTION_DRAG_THRESHOLD = 3;
-
-interface ResearchSelectionDrag {
-  root: HTMLDivElement;
-  anchorOffset: number | null;
-  originX: number;
-  originY: number;
-  lastX: number;
-  lastY: number;
-  active: boolean;
-  snapEligible: boolean;
-  /** Undefined until the drag crosses the click threshold, null when word
-   * segmentation is unavailable, otherwise cached for every live frame. */
-  snapper: ResearchSelectionSnapper | null | undefined;
-  frame: number | null;
-}
-
-/** Manages answer selection, whole-word drag snapping, passage anchors,
+/** Manages answer selection, whole-word expansion, passage anchors,
  * highlight overlap, and the Highlight, Branch, and Copy actions. A `viewKey`
  * change clears captured selection because its offsets may be invalid. */
 export function useResearchTextSelection({
@@ -119,7 +96,6 @@ export function useResearchTextSelection({
 }) {
   const [highlightAction, setHighlightAction] = useState<ResearchSelectionAction | null>(null);
   const [savingHighlight, setSavingHighlight] = useState(false);
-  const selectionDragRef = useRef<ResearchSelectionDrag | null>(null);
 
   // Clear the action bar and selection when the view changes. Transcript
   // visibility and loaded content can invalidate their cached positions.
@@ -128,10 +104,9 @@ export function useResearchTextSelection({
     window.getSelection()?.removeAllRanges();
   }, [viewKey]);
 
-  const captureHighlightSelection = useCallback(() => {
+  const captureResearchSelection = useCallback((expandToWholeWords: boolean) => {
     const selection = window.getSelection();
     if (
-      !researchHighlightApi() ||
       !selection ||
       selection.isCollapsed ||
       selection.rangeCount === 0
@@ -139,7 +114,7 @@ export function useResearchTextSelection({
       setHighlightAction(null);
       return;
     }
-    const range = selection.getRangeAt(0);
+    let range = selection.getRangeAt(0);
     // Find the turn containing the selection. Selections spanning turns cannot
     // produce an anchor.
     const container =
@@ -147,18 +122,38 @@ export function useResearchTextSelection({
         ? range.commonAncestorContainer
         : range.commonAncestorContainer.parentElement;
     const root = container?.closest<HTMLElement>(".research-response-content-root") ?? null;
-    const nodeId = root?.dataset.nodeId ?? null;
+    if (!root || root.closest(".is-leaving") || selectionTouchesNonTextRow(root, range)) {
+      setHighlightAction(null);
+      return;
+    }
+    const projection = researchTextProjection(root);
+    if (expandToWholeWords && selection.anchorNode && selection.focusNode) {
+      const anchorOffset = flatTextOffsetAt(root, selection.anchorNode, selection.anchorOffset);
+      const focusOffset = flatTextOffsetAt(root, selection.focusNode, selection.focusOffset);
+      const expanded =
+        anchorOffset === null || focusOffset === null
+          ? null
+          : createResearchSelectionExpander(
+              projection,
+              document.documentElement.lang || navigator.language,
+              messageFlatBoundaries(root),
+            )?.(anchorOffset, focusOffset) ?? null;
+      const expandedRange = expanded
+        ? rangeForTextOffsets(root, expanded.start, expanded.end)
+        : null;
+      if (expanded && expandedRange) {
+        applyDirectionalSelectionRange(expandedRange, expanded.direction);
+        range = expandedRange;
+      }
+    }
+    const nodeId = root.dataset.nodeId ?? null;
     const segmentContent = nodeId ? contentByNodeRef.current[nodeId] : null;
     const revision = segmentContent?.responseRevision ?? "";
     const node = nodeId ? detailRef.current?.nodes.find((candidate) => candidate.id === nodeId) : null;
     // A streaming answer has no revision to anchor to yet; its selection can
     // still be copied.
     const live = isLiveResearchSelection(revision, node ? nodeStatus(node) : undefined);
-    if (!root || !nodeId || !segmentContent || (!revision && !live) || root.closest(".is-leaving")) {
-      setHighlightAction(null);
-      return;
-    }
-    if (selectionTouchesNonTextRow(root, range)) {
+    if (!researchHighlightApi() || !nodeId || !segmentContent || (!revision && !live)) {
       setHighlightAction(null);
       return;
     }
@@ -167,7 +162,6 @@ export function useResearchTextSelection({
       setHighlightAction(null);
       return;
     }
-    const projection = researchTextProjection(root);
     const copyText = projection.slice(offsets.start, offsets.end);
     // Limit highlight and branch passages to the first selected paragraph.
     const startBlock = passageBlockAt(root, range.startContainer);
@@ -241,170 +235,44 @@ export function useResearchTextSelection({
     });
   }, []);
 
-  /** Replaces the native character-precise drag range with whole-word
-   * endpoints. The raw range is checked first so snapping never makes an
-   * otherwise ineligible selection (one crossing tool/thinking machinery)
-   * eligible for Highlight/Branch. */
-  const applySnappedResearchSelection = useCallback(
-    (drag: ResearchSelectionDrag, clientX: number, clientY: number) => {
-      if (!drag.snapEligible || drag.anchorOffset === null) {
-        return;
-      }
-      const focusOffset = flatOffsetAtPoint(drag.root, clientX, clientY);
-      if (focusOffset === null) {
-        return;
-      }
-      if (focusOffset !== drag.anchorOffset) {
-        const rawRange = rangeForTextOffsets(
-          drag.root,
-          Math.min(drag.anchorOffset, focusOffset),
-          Math.max(drag.anchorOffset, focusOffset),
-        );
-        if (!rawRange || selectionTouchesNonTextRow(drag.root, rawRange)) {
-          if (rawRange) {
-            applyDirectionalSelectionRange(
-              rawRange,
-              focusOffset < drag.anchorOffset ? "backward" : "forward",
-            );
-          }
-          return;
-        }
-      }
-
-      if (drag.snapper === undefined) {
-        drag.snapper = createResearchSelectionSnapper(
-          researchTextProjection(drag.root),
-          document.documentElement.lang || navigator.language,
-          messageFlatBoundaries(drag.root),
-        );
-      }
-      const snapped = drag.snapper?.(drag.anchorOffset, focusOffset) ?? null;
-      if (!snapped) {
-        return;
-      }
-      const range = rangeForTextOffsets(drag.root, snapped.start, snapped.end);
-      if (!range) {
-        return;
-      }
-      // Keep the live focus on the pointer side, so a subsequent keyboard
-      // extension continues from the endpoint most recently moved.
-      applyDirectionalSelectionRange(range, snapped.direction);
-    },
-    [],
+  const captureHighlightSelection = useCallback(
+    () => captureResearchSelection(false),
+    [captureResearchSelection],
   );
 
-  // A mouse selection can begin in the answer and end over other column
-  // chrome, where the response root's mouseup never fires. Remember
-  // answer-originated drags and finish them from a document-level fallback.
-  const beginHighlightSelectionDrag = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (event.button !== 0) {
-        return;
-      }
-      const root = event.currentTarget;
-      const nodeId = root.dataset.nodeId ?? null;
-      const content = nodeId ? contentByNodeRef.current[nodeId] : null;
-      const target = event.target instanceof Element ? event.target : null;
-      const anchorOffset = flatOffsetAtPoint(root, event.clientX, event.clientY);
-      selectionDragRef.current = {
-        root,
-        anchorOffset,
-        originX: event.clientX,
-        originY: event.clientY,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        active: false,
-        // Word units do not cross message boundaries, so snapping moves each
-        // endpoint by at most a partial word within one turn.
-        snapEligible: Boolean(
-          researchHighlightApi() &&
-            nodeId &&
-            content?.responseRevision &&
-            anchorOffset !== null &&
-            !target?.closest(NON_TEXT_ROW_SELECTOR)
-        ),
-        snapper: undefined,
-        frame: null,
-      };
-    },
-    [],
-  );
-  const finishHighlightSelectionDrag = useCallback(
-    (event: { clientX: number; clientY: number }) => {
-      const drag = selectionDragRef.current;
-      if (!drag) {
-        return;
-      }
-      selectionDragRef.current = null;
-      if (drag.frame !== null) {
-        window.cancelAnimationFrame(drag.frame);
-        drag.frame = null;
-      }
-      if (drag.active) {
-        applySnappedResearchSelection(drag, event.clientX, event.clientY);
-      }
-      captureHighlightSelection();
-    },
-    [applySnappedResearchSelection, captureHighlightSelection],
-  );
+  // Let WebKit manage the drag. When a primary-button selection that began in
+  // an answer ends, expand its completed range once to full word boundaries.
   useEffect(() => {
-    const cancelDrag = () => {
-      const drag = selectionDragRef.current;
-      selectionDragRef.current = null;
-      if (drag?.frame !== null && drag?.frame !== undefined) {
-        window.cancelAnimationFrame(drag.frame);
-      }
+    let beganInAnswer = false;
+    const begin = (event: MouseEvent) => {
+      const target =
+        event.target instanceof Element
+          ? event.target
+          : event.target instanceof Node
+            ? event.target.parentElement
+            : null;
+      beganInAnswer =
+        event.button === 0 &&
+        Boolean(target?.closest(".research-response-content-root"));
     };
-    const updateDrag = (event: MouseEvent) => {
-      const drag = selectionDragRef.current;
-      if (!drag) {
-        return;
+    const finish = (event: MouseEvent) => {
+      if (event.button === 0 && beganInAnswer) {
+        captureResearchSelection(true);
       }
-      drag.lastX = event.clientX;
-      drag.lastY = event.clientY;
-      if (
-        !drag.active &&
-        Math.hypot(event.clientX - drag.originX, event.clientY - drag.originY) >=
-          RESEARCH_SELECTION_DRAG_THRESHOLD
-      ) {
-        drag.active = true;
-      }
-      if (!drag.active || !drag.snapEligible || drag.frame !== null) {
-        return;
-      }
-      drag.frame = window.requestAnimationFrame(() => {
-        drag.frame = null;
-        if (selectionDragRef.current === drag) {
-          applySnappedResearchSelection(drag, drag.lastX, drag.lastY);
-        }
-      });
+      beganInAnswer = false;
     };
-    const resnapNativeSelection = () => {
-      const drag = selectionDragRef.current;
-      if (!drag?.active || !drag.snapEligible) {
-        return;
-      }
-      // WebKit updates its native character-level range after mousemove. Fix
-      // that range in the ensuing selectionchange task, before the next
-      // paint, so a slow drag never exposes partial endpoint words.
-      if (drag.frame !== null) {
-        window.cancelAnimationFrame(drag.frame);
-        drag.frame = null;
-      }
-      applySnappedResearchSelection(drag, drag.lastX, drag.lastY);
+    const cancel = () => {
+      beganInAnswer = false;
     };
-    document.addEventListener("mousemove", updateDrag);
-    document.addEventListener("mouseup", finishHighlightSelectionDrag);
-    document.addEventListener("selectionchange", resnapNativeSelection);
-    window.addEventListener("blur", cancelDrag);
+    document.addEventListener("mousedown", begin);
+    document.addEventListener("mouseup", finish);
+    window.addEventListener("blur", cancel);
     return () => {
-      document.removeEventListener("mousemove", updateDrag);
-      document.removeEventListener("mouseup", finishHighlightSelectionDrag);
-      document.removeEventListener("selectionchange", resnapNativeSelection);
-      window.removeEventListener("blur", cancelDrag);
-      cancelDrag();
+      document.removeEventListener("mousedown", begin);
+      document.removeEventListener("mouseup", finish);
+      window.removeEventListener("blur", cancel);
     };
-  }, [applySnappedResearchSelection, finishHighlightSelectionDrag]);
+  }, [captureResearchSelection]);
 
   // Highlight: saves the selection, merging it with every highlight it
   // overlaps (creation first — if removal then fails, the leftover is
@@ -520,8 +388,6 @@ export function useResearchTextSelection({
     /** Why the selection cannot start a branch, or null when it can. */
     selectionBranchBlocker,
     captureHighlightSelection,
-    beginHighlightSelectionDrag,
-    finishHighlightSelectionDrag,
     applyHighlightAction,
     branchFromSelection,
     copySelection,

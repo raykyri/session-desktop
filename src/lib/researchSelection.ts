@@ -1,16 +1,16 @@
 import { isActiveResearchStatus } from "./researchChains";
 import type { ResearchNodeStatus } from "../types";
 
-interface SnappedResearchSelection {
+interface ExpandedResearchSelection {
   start: number;
   end: number;
   direction: "forward" | "backward";
 }
 
-export type ResearchSelectionSnapper = (
+type ResearchSelectionExpander = (
   anchorOffset: number,
   focusOffset: number,
-) => SnappedResearchSelection | null;
+) => ExpandedResearchSelection | null;
 
 interface ResearchSelectionRect {
   left: number;
@@ -109,7 +109,7 @@ function segmenterConstructor() {
  * between them) with no separator, so word segmentation can combine one
  * message's last word with the next one's first: `"…faster"` +
  * `"I rewrote…"` is one unit, and so is `"…faster."` + `"I…"` — a period
- * between letters does not break a word. Snapping to such a unit would drag a
+ * between letters does not break a word. Expanding to such a unit would extend a
  * selection into a neighbouring message, which for a conversation turn means a
  * quote spanning two speakers. Splitting at the boundaries preserves the
  * documented behavior: each endpoint moves by at most a partial word, and the
@@ -155,7 +155,7 @@ function selectionUnits(text: string, locale?: string, boundaries: number[] = []
     }
 
     // Word segmentation deliberately labels emoji as non-word content. Treat
-    // each emoji grapheme as a selectable unit so a snapped drag never splits
+    // each emoji grapheme as a selectable unit so expansion never splits
     // a ZWJ sequence or leaves an emoji-only answer impossible to select.
     if (/\p{Extended_Pictographic}/u.test(text)) {
       for (const part of new Segmenter(locale, { granularity: "grapheme" }).segment(text)) {
@@ -212,7 +212,7 @@ function trailingUnit(units: SelectionUnit[], offset: number) {
   return next?.start === offset ? next : previous ?? null;
 }
 
-/** Includes punctuation attached to the outside of a snapped passage without
+/** Includes punctuation attached to the outside of an expanded passage without
  * swallowing punctuation that joins it to another word. Whitespace and hard
  * projection boundaries define attachment: selecting `“quoted.”` keeps both
  * quotation marks, while selecting `state-of-the` does not pull in the hyphen
@@ -255,19 +255,18 @@ function expandAttachedPunctuation(
   return { start, end };
 }
 
-/** Expands a drag's flat rendered-text offsets to linguistic word boundaries.
+/** Expands a selection's flat rendered-text offsets to linguistic word boundaries.
  * The returned offsets are normalized, while `direction` identifies the focus
- * endpoint. Equal offsets select one whole unit once
- * the caller's pointer-distance threshold has activated the drag.
+ * endpoint. Equal offsets select one whole unit.
  *
  * `boundaries` are flat offsets no unit may cross: the boundaries between the
  * projection's messages and the rows around them, which contain no separating
  * whitespace of their own (see `unitsSplitAtBoundaries`). */
-export function createResearchSelectionSnapper(
+export function createResearchSelectionExpander(
   text: string,
   locale?: string,
   boundaries: number[] = [],
-): ResearchSelectionSnapper | null {
+): ResearchSelectionExpander | null {
   const units = selectionUnits(text, locale, boundaries);
   if (!text || !units || units.length === 0) {
     return null;
@@ -287,8 +286,8 @@ export function createResearchSelectionSnapper(
     const first = leadingUnit(units, rawStart);
     const last = trailingUnit(units, rawEnd);
 
-    // If a short drag ends in whitespace beside its anchor, select the anchor's
-    // whole word instead of producing no range.
+    // If a short selection ends in whitespace beside its anchor, select the
+    // anchor's whole word instead of producing no range.
     if (!first || !last || first.start > last.start) {
       const anchor =
         leadingUnit(units, anchorOffset) ?? trailingUnit(units, anchorOffset);
@@ -307,15 +306,15 @@ export function createResearchSelectionSnapper(
   };
 }
 
-export function snapResearchDragSelection(
+export function expandResearchSelectionToWholeWords(
   text: string,
   anchorOffset: number,
   focusOffset: number,
   locale?: string,
   boundaries: number[] = [],
-): SnappedResearchSelection | null {
+): ExpandedResearchSelection | null {
   return (
-    createResearchSelectionSnapper(text, locale, boundaries)?.(
+    createResearchSelectionExpander(text, locale, boundaries)?.(
       anchorOffset,
       focusOffset,
     ) ?? null
