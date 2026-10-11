@@ -1,301 +1,8 @@
 {
-  "generated": "2026-10-11T07:05:09.673Z",
+  "generated": "2026-10-11T07:16:31.508Z",
   "rounds": {
-    "1": {
-      "macos": {
-        "slug": "macos",
-        "round": 1,
-        "title": "Mac system app",
-        "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings)",
-        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (\u2325\u2318I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field \u2014 ask a question \u2014 with the agent check done in the background.",
-        "nouns": [
-          "Chat",
-          "Branch",
-          "Note",
-          "Highlight",
-          "Folder"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Page + inspector",
-            "summary": "Opens on a chat in Page view with a Mail-style item list and an inspector holding Info, Branches and Links."
-          },
-          {
-            "id": "b",
-            "label": "Column browser",
-            "summary": "Opens in Columns view: folders \u2192 items \u2192 branches and bullets \u2192 Quick Look preview, replacing the column strip."
-          },
-          {
-            "id": "c",
-            "label": "Outline list",
-            "summary": "Opens in Outline view: one disclosure-triangle list of folders, chats, branches and note bullets; Space opens Quick Look."
-          },
-          {
-            "id": "d",
-            "label": "Popover branches",
-            "summary": "No inspector by default; numbered passage markers open branches in popovers, with an opaque, denser sidebar."
-          },
-          {
-            "id": "e",
-            "label": "Map canvas",
-            "summary": "Opens on a canvas map of chats, notes, highlights and links grouped by folder; the inspector follows the selected card."
-          }
-        ],
-        "file": "r1/macos.html",
-        "thumb": "thumbs/r1-macos.jpg"
-      },
-      "inbox": {
-        "slug": "inbox",
-        "round": 1,
-        "title": "Research inbox",
-        "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
-        "nouns": [
-          "Conversation",
-          "Fork",
-          "Note",
-          "Tag",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Triage inbox",
-            "summary": "Three panes: mailboxes, one list per mailbox (Inbox, Waiting, Done), conversation, and a details sidebar with links and forks."
-          },
-          {
-            "id": "b",
-            "label": "Split inbox",
-            "summary": "The Inbox list is split into Ready to read, Waiting and Read sections, so running work is visible without switching mailboxes."
-          },
-          {
-            "id": "c",
-            "label": "Compose-first home",
-            "summary": "Inbox opens on a New conversation pane with suggestions from your notes, and the list has an inline quick-ask box."
-          },
-          {
-            "id": "d",
-            "label": "Notes in sidebar",
-            "summary": "No separate Knowledge view: notes and the outline open in a sidebar tab beside the conversation; the graph opens as an overlay."
-          },
-          {
-            "id": "e",
-            "label": "Compact, keyboard",
-            "summary": "Single-line rows, details sidebar closed by default, and a persistent shortcut bar for j/k, e, s, r, n, f triage."
-          }
-        ],
-        "file": "r1/inbox.html",
-        "thumb": "thumbs/r1-inbox.jpg"
-      },
-      "linear": {
-        "slug": "linear",
-        "round": 1,
-        "title": "Questions & Notes",
-        "influence": "Linear",
-        "summary": "Every investigation is a Question with one visible status (Queued, Running, Ready, Reviewed) and an agent as its assignee; sub-questions replace branches, Notes are outline documents, and Links are typed connections you can list or graph. One dense, keyboard-first list replaces the mixed chat-and-feed Home, so the first action is always the same: press C and ask.",
-        "nouns": [
-          "Question",
-          "Note",
-          "Project",
-          "Link",
-          "Agent"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "List + document",
-            "summary": "Home is a status-grouped list; a question opens as a document with sub-questions and an activity log below the answer."
-          },
-          {
-            "id": "b",
-            "label": "Board home",
-            "summary": "Home is a status board (Queued, Running, Ready, Reviewed) instead of a grouped list; the question page is unchanged."
-          },
-          {
-            "id": "c",
-            "label": "Conversation page",
-            "summary": "The question page is chat-centric: question, answers, follow-ups and run events read as one timeline, with sub-questions inline as events."
-          },
-          {
-            "id": "d",
-            "label": "Peek split",
-            "summary": "Clicking a row opens a docked preview beside the list (triage-style); Enter or double-click opens the full page."
-          },
-          {
-            "id": "e",
-            "label": "Links as graph",
-            "summary": "Links render as a graph: the question sidebar shows a local mini-graph, and the Links view opens on the workspace graph."
-          }
-        ],
-        "file": "r1/linear.html",
-        "thumb": "thumbs/r1-linear.jpg"
-      }
-    },
-    "2": {
-      "macos": {
-        "slug": "macos",
-        "round": 2,
-        "title": "Mac excerpt columns",
-        "influence": "Apple macOS system app idioms (Finder column view, Mail, Messages; Tahoe-era glass sidebar)",
-        "summary": "Session is one Finder-style column browser. The sidebar picks a folder, and each column to the right shows its chats, then the chat's messages as multi-line excerpts. The last column shows the selected message in full, where you can select a passage to branch from it (the branch opens as the next column) or file it into a note. You ask in the field at the top of the first column, follow up at the bottom of a chat's column, and Stop and queue state stay visible in the cells.",
-        "nouns": [
-          "Chat",
-          "Branch",
-          "Note",
-          "Highlight",
-          "Folder"
-        ],
-        "variants": [
-          {
-            "id": "b2",
-            "label": "Excerpt columns",
-            "summary": "Finder-style columns with 4-line message excerpts (role line plus text); the selected cell expands and the last column shows the full message."
-          },
-          {
-            "id": "q",
-            "label": "Quiet columns",
-            "summary": "The same excerpt columns with less weight: muted accent, no dividers or fills, metadata only on the selected or hovered cell, more space between cells, and the sidebar folded to an icon rail that opens on hover."
-          }
-        ],
-        "changes": [
-          "Narrowed the candidate to the excerpt column browser and removed the Page, Outline and Map views, the inspector, the fake menu bar, the toolbar view switch, the compose, note and inspector buttons, the tips, and the sidebar's Chats, Notes, Pinned, Highlights and Archive rows. Secondary actions moved into a \u22ef menu or behind hover.",
-          "Added an always-visible \u201cAsk a question\u201d field at the top of the first column; in round 1 the only way to start a chat was an unlabeled toolbar icon",
-          "The branch composer opens as a popover on the selected passage, and the new branch opens as the next column",
-          "Add to Note lists the outline's sections, and the confirmation has a Show button that opens the note at the new bullet",
-          "Return sends in every field (\u21e7\u2318\u21a9 sends as a branch from the messages column), matching Messages",
-          "Columns show multi-line excerpts instead of one-line rows, with draggable dividers and arrow-key navigation, because one-line rows hid the answers that the current app's column strip shows"
-        ],
-        "decisions": [
-          "Is reading a long answer in the last column comfortable enough, or do people want to widen it to a full page?",
-          "Do people find the follow-up field at the bottom of the messages column, or look for it under the answer?",
-          "Quiet columns: does hiding the agent and model until hover cost people anything when they compare answers?",
-          "With folders only in the sidebar, do people miss a Recents or All view beyond the one row?"
-        ],
-        "file": "r2/macos.html",
-        "thumb": "thumbs/r2-macos.jpg"
-      },
-      "inbox": {
-        "slug": "inbox",
-        "round": 2,
-        "title": "Research inbox",
-        "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
-        "nouns": [
-          "Conversation",
-          "Fork",
-          "Note",
-          "Tag",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Triage inbox",
-            "summary": "Three panes: mailboxes, one list per mailbox (Inbox, Waiting, Done), conversation, and a details sidebar with links and forks."
-          },
-          {
-            "id": "b",
-            "label": "Split inbox",
-            "summary": "The Inbox list is split into Ready to read, Waiting and Read sections, so running work is visible without switching mailboxes."
-          },
-          {
-            "id": "c",
-            "label": "Compose-first home",
-            "summary": "Inbox opens on a New conversation pane with suggestions from your notes, and the list has an inline quick-ask box."
-          },
-          {
-            "id": "d",
-            "label": "Notes in sidebar",
-            "summary": "No separate Knowledge view: notes and the outline open in a sidebar tab beside the conversation; the graph opens as an overlay."
-          },
-          {
-            "id": "e",
-            "label": "Margin threads",
-            "summary": "Forks and highlights anchored to a passage sit in a margin column beside the answer, joined to the passage; the details sidebar starts closed."
-          }
-        ],
-        "changes": [
-          "Added a Get started checklist with coach marks to the sidebar; in round 1 a new user saw a populated inbox and nothing said what to do first.",
-          "Typing [[ in an outline item, a note or a question now opens link suggestions, and Link (L) links any two items; round 1 required typing exact titles.",
-          "Search matches answer text and summaries and shows the matching snippet; in round 1 '11.8 TWh' did not find the CAISO conversation.",
-          "The sidebar map now shows only the open item and its direct links, with labels; round 1 drew the whole graph too small to read. The graph view adds a This note / Whole workspace switch and a Tags toggle.",
-          "Enter sends and Shift-Enter adds a line in every composer, and Stop is also in the composer; round 1 mixed Enter and Cmd-Enter, and the header kept showing Running after a stop.",
-          "First run explains the run lifecycle (Ask, Waiting, Inbox, Fork or file, Knowledge), hides the empty details sidebar and uses per-workspace tags; round 1 showed the Thesis tags in an empty workspace.",
-          "Replaced the Compact variant with Margin threads, which tests where forks appear; Compact only changed row density.",
-          "Agent setup steps, New tag, New workspace and source links now work; in round 1 they only showed a toast."
-        ],
-        "decisions": [
-          "Is Note clear for both an outline document and a comment inside a conversation, or do these need two words?",
-          "Do first-time users expect a finished, read conversation to stay in the Inbox until marked Done, as in email?",
-          "Fork cards under the answer (a) or in the margin beside the passage (e): which do people find without the checklist?",
-          "Is a separate Knowledge view needed, or is the sidebar Notes tab (d) enough for outlining?",
-          "Do tags cover what people used folders, stars and bookmarks for?"
-        ],
-        "file": "r2/inbox.html",
-        "thumb": "thumbs/r2-inbox.jpg"
-      },
-      "linear": {
-        "slug": "linear",
-        "round": 2,
-        "title": "Questions & Notes",
-        "influence": "Linear",
-        "summary": "Every investigation is a Question with one visible status (Queued, Running, Ready, Reviewed) and an agent as its assignee; sub-questions replace branches, Notes are outline documents, and Links are typed connections listed on both items and drawn as a graph grouped by project. One keyboard-first list replaces the mixed chat-and-feed Home, so the first action is always the same: press C and ask; filing an answer into the outline is one menu away from any passage.",
-        "nouns": [
-          "Question",
-          "Note",
-          "Project",
-          "Link",
-          "Agent"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "List + document",
-            "summary": "Home is a status-grouped list; a question opens as a document with sub-questions and an activity log below the answer."
-          },
-          {
-            "id": "b",
-            "label": "Project home",
-            "summary": "Opens on the project outline (sections as milestones, linked questions nested under each line) and lists projects first in the sidebar; the question list is one level down."
-          },
-          {
-            "id": "c",
-            "label": "Conversation page",
-            "summary": "The question page is chat-centric: question, answers, follow-ups and run events read as one timeline, with sub-questions inline as events."
-          },
-          {
-            "id": "d",
-            "label": "Peek split",
-            "summary": "Clicking a row opens a docked preview beside the list (triage-style); Enter or double-click opens the full page."
-          },
-          {
-            "id": "e",
-            "label": "Links as graph",
-            "summary": "Links render as a graph: the question sidebar shows a local graph of its links, and the Links view opens on the workspace graph."
-          }
-        ],
-        "changes": [
-          "Added a real Personal workspace with a single first-run screen (one primary action, agent status inline, four key hints); in round 1 the switcher only showed a toast.",
-          "Add link is now a working picker (link type + search, L); in round 1 its menu items did nothing.",
-          "File in outline lets you pick a Chapter 3 section and highlights the new line in the note; round 1 appended to the end of the note with no placement choice.",
-          "Search matches answer and recap text with a snippet (\"11.8 TWh\" finds CAISO); round 1 matched titles only.",
-          "Graph regrouped into project regions with labels below nodes, legend chips that filter link types, and select-then-open; round 1 was a tangled hub with clipped labels.",
-          "Standing passage hint under each answer names Highlight / Ask sub-question / File in note with keys; round 1 relied on selection or an unlabeled hover icon.",
-          "Replaced the Board-home variant (it duplicated Display \u2192 Board) with Project home, which tests an outline-first start.",
-          "Filter, Move to project, Archive (with Undo) and New project now work; agents recheck sign-in automatically while a question waits."
-        ],
-        "decisions": [
-          "Is Ready vs Reviewed a useful distinction, or should a completed run simply be Done?",
-          "Do first-time users pick Follow-up vs Sub-question correctly from the composer switch?",
-          "Does 'Link' read as a connection between items, or do people expect saved URLs there (those are Notes here)?",
-          "Should home be the question list (A) or the project outline (B) for someone writing a thesis?",
-          "Is filing into a specific outline section worth the extra menu step compared with a single Clippings note?"
-        ],
-        "file": "r2/linear.html",
-        "thumb": "thumbs/r2-linear.jpg"
-      }
-    },
+    "1": {},
+    "2": {},
     "3": {
       "macos": {
         "slug": "macos",
@@ -315,44 +22,24 @@
             "id": "a",
             "label": "Vibrant sidebar",
             "summary": "Translucent source-list sidebar and rail over a blurred wallpaper tint, regular toolbar, plain Mail-style rows."
-          },
-          {
-            "id": "b",
-            "label": "Opaque sidebar",
-            "summary": "The sidebar and rail use the opaque window material, as with Reduce transparency turned on."
-          },
-          {
-            "id": "c",
-            "label": "Compact toolbar",
-            "summary": "Compact 38 pt unified toolbar and small control size: shorter headers and sidebar rows, same layout."
-          },
-          {
-            "id": "d",
-            "label": "Inset grouped feed",
-            "summary": "Feed cards, trays and highlights sit in inset grouped lists (rounded cells on a grouped background), as in Notes and System Settings."
-          },
-          {
-            "id": "e",
-            "label": "Graphite accent",
-            "summary": "System accent set to Graphite: selection, glyphs, toggles and the send button turn neutral gray."
           }
         ],
         "changes": [
-          "Sidebar and rail \u2192 translucent source list (Finder, Mail): vibrancy material, 11 pt section header, accent-tinted line glyphs, rounded selection that turns accent while the sidebar has focus.",
-          "Feed, thread and post headers \u2192 unified toolbar segments (Mail): 52 pt bar aligned to the split-view dividers, back/forward as a toolbar navigation pair, borderless toolbar buttons.",
-          "Feed cards and message rows \u2192 Mail list rows: inset hairline separators, blue unread dot in the leading gutter, accent selection while the list has focus and gray selection otherwise.",
-          "Ask/Post switch \u2192 segmented control with icon segments; model menu \u2192 native menu with agent section headers, checkmarks and an Effort submenu.",
-          "Selection popover, branch-marker tips, \u2026 menus and context menus \u2192 popover and menu material with right-aligned key equivalents (A, H, E).",
-          "Command palette \u2192 Spotlight-style floating panel; Settings and Agent Setup \u2192 System Settings grouped forms with switches, pop-up buttons and toolbar tabs.",
-          "Column dividers \u2192 split-view hairlines with a wider resize hit area and accent highlight while dragging; overlay scrollers in every column.",
-          "Notifications \u2192 Notification Center banners; feed toast \u2192 HUD; light and dark appearances built from semantic colours (label, separator, control accent)."
+          "Sidebar and rail → translucent source list (Finder, Mail): vibrancy material, 11 pt section header, accent-tinted line glyphs, rounded selection that turns accent while the sidebar has focus.",
+          "Feed, thread and post headers → unified toolbar segments (Mail): 52 pt bar aligned to the split-view dividers, back/forward as a toolbar navigation pair, borderless toolbar buttons.",
+          "Feed cards and message rows → Mail list rows: inset hairline separators, blue unread dot in the leading gutter, accent selection while the list has focus and gray selection otherwise.",
+          "Ask/Post switch → segmented control with icon segments; model menu → native menu with agent section headers, checkmarks and an Effort submenu.",
+          "Selection popover, branch-marker tips, … menus and context menus → popover and menu material with right-aligned key equivalents (A, H, E).",
+          "Command palette → Spotlight-style floating panel; Settings and Agent Setup → System Settings grouped forms with switches, pop-up buttons and toolbar tabs.",
+          "Column dividers → split-view hairlines with a wider resize hit area and accent highlight while dragging; overlay scrollers in every column.",
+          "Notifications → Notification Center banners; feed toast → HUD; light and dark appearances built from semantic colours (label, separator, control accent)."
         ],
         "decisions": [
-          "Kept: sidebar \u2192 feed column \u2192 column strip, with the 52 px rail at \u21e7\u2318G or when the window is narrow.",
-          "Kept: every label and empty text (Home, Bookmarks, Highlights, Drafts, Archive, Ask/Post, + Ask, Save draft, Branch \u00b7 N messages, Recap:, Show trace, Stop).",
+          "Kept: sidebar → feed column → column strip, with the 52 px rail at ⇧⌘G or when the window is narrow.",
+          "Kept: every label and empty text (Home, Bookmarks, Highlights, Drafts, Archive, Ask/Post, + Ask, Save draft, Branch · N messages, Recap:, Show trace, Stop).",
           "Kept: cards without a metadata row, status dots top-right, starred child rows under the question, trays after the Unfiled list.",
           "Kept: ask box at the top of each messages column with messages newest first; branch markers in the answer's right margin; branches open as the next pair.",
-          "Kept: all shortcuts (\u2318N, \u2318J, \u2318O, \u2318K, \u2318,, \u21e7\u2318G, \u2318[ \u2318], A/H/E, \u2325\u2191/\u2325\u2193, \u2303Tab).",
+          "Kept: all shortcuts (⌘N, ⌘J, ⌘O, ⌘K, ⌘,, ⇧⌘G, ⌘[ ⌘], A/H/E, ⌥↑/⌥↓, ⌃Tab).",
           "Not adopted: Finder view modes (icon, column, gallery), because the feed is one list with trays and a view switch would add a mode.",
           "Not adopted: an inspector replacing the branch markers and the next pair, because branches stay in the column strip.",
           "Not adopted: Finder tags in place of folders, because folders and workspaces are the current filing model.",
@@ -381,38 +68,18 @@
           {
             "id": "a",
             "label": "Light nav, cards",
-            "summary": "Default: light navigation column, comfortable list rows with avatars, bordered message cards, Post content on a yellow note tint."
-          },
-          {
-            "id": "b",
-            "label": "Compact rows",
-            "summary": "Denser list rows (one-line snippet, small avatars), tighter message cards and nav rows; same regions and controls."
-          },
-          {
-            "id": "c",
-            "label": "Dark nav",
-            "summary": "The dark navigation column of classic shared inboxes, in both themes; the list and thread panes stay as in A."
-          },
-          {
-            "id": "d",
-            "label": "Flat rows, no avatars",
-            "summary": "Message cards become flat rows separated by dividers, and avatars are hidden; author and model stay in the header line."
-          },
-          {
-            "id": "e",
-            "label": "Ruled notes",
-            "summary": "Post content and the Post composer are set off by a yellow left rule and a POST label instead of a tinted background."
+            "summary": "Light navigation column, comfortable list rows, bordered message cards and Post content on a yellow note tint, with avatars removed; author and model stay in each header line."
           }
         ],
         "changes": [
           "Sidebar: dense 29 px rows, uppercase FOLDERS section header and right-aligned counts on the existing rows (from the left mailbox nav of shared inboxes); the selected row is a raised white pill.",
-          "Home feed cards: conversation-list rows with an agent/author avatar, sender line (agent \u00b7 model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
-          "Feed card quick actions: the existing drag grip, Bookmark, Follow and \u2026 menu revealed on hover in a floating action pill that replaces the time (from inbox hover actions).",
+          "Home feed cards: conversation-list rows without avatars: sender line (agent · model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
+          "Feed card quick actions: the existing drag grip, Bookmark, Follow and … menu revealed on hover in a floating action pill that replaces the time (from inbox hover actions).",
           "Trays: sticky uppercase group headers with a count pill and chevron, like grouped sections in an inbox list.",
-          "Thread page: questions and answers as message cards with a header line (avatar, author or agent, model chip, time, status chip); recap as a tinted summary strip; sources as attachment-style chips (from the conversation view).",
+          "Thread page: questions and answers as message cards with a header line (author or agent, model chip, time, status chip); recap as a tinted summary strip; sources as attachment-style chips (from the conversation view).",
           "Post-mode content (posts, the Post composer) styled as internal notes with a yellow tint and a Post label, distinct from Ask messages, like comments versus replies.",
           "Ask box: a reply box with a bottom toolbar; the Ask/Post switch gains text labels and acts as the reply/comment toggle, and the box turns note-yellow in Post mode.",
-          "Menus, command palette and toasts: keycap hints on existing shortcuts (A, D, H, \u2318N, \u21e7\u2318G, \u2318,), a search-bar style palette with a key legend, and a dark floating undo bar."
+          "Menus, command palette and toasts: keycap hints on existing shortcuts (A, D, H, ⌘N, ⇧⌘G, ⌘,), a search-bar style palette with a key legend, and a dark floating undo bar."
         ],
         "decisions": [
           "Kept as-is: the sidebar order, rail, workspace switcher, column strip with the feed column and one messages | answer pair per level, newest-first message rows with the ask box on top, margin markers, the selection popover (Branch A, Highlight H, Copy), menus and every shortcut.",
@@ -432,7 +99,7 @@
         "round": 3,
         "title": "Linear restyle",
         "influence": "Linear",
-        "summary": "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as crisp list rows with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the \u2318K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
+        "summary": "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as bordered cards with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the ⌘K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
         "nouns": [
           "Question",
           "Answer",
@@ -442,52 +109,32 @@
         ],
         "variants": [
           {
-            "id": "a",
-            "label": "Indigo, list rows",
-            "summary": "Default: Home cards as flush list rows with a leading status icon, indigo accent."
-          },
-          {
             "id": "b",
             "label": "Bordered cards",
             "summary": "Home cards as separate bordered cards; the selected card gets an accent outline instead of a fill bar."
-          },
-          {
-            "id": "c",
-            "label": "Compact density",
-            "summary": "Shorter rows, one-line questions in cards, narrower columns and a 13.5 px answer size."
-          },
-          {
-            "id": "d",
-            "label": "Monochrome accent",
-            "summary": "The indigo accent is replaced by the text colour; branch tints and selection use neutral greys."
-          },
-          {
-            "id": "e",
-            "label": "Status as text pills",
-            "summary": "Run states show as text pills (Running, Queued, Failed, Stopped) instead of circular icons."
           }
         ],
         "changes": [
           "Type scale: Inter at 13 px for UI text with 500-weight labels, 12 px muted metadata and a 14.5 px answer body (Linear's UI type scale and weights).",
           "Sidebar: 28 px rows with 16 px line icons, a subtle selected-row fill, a plain 'Folders' section header, and the main area as an inset panel beside it (Linear's sidebar and app chrome).",
-          "Home feed cards: list rows with a leading run-status icon, title, muted question, right-aligned time and agent glyph, and hover-revealed Bookmark, Follow and \u2026 actions; folder trays as sticky group headers (Linear's issue list rows and grouped list headers).",
+          "Home feed cards: list rows with a leading run-status icon, title, muted question, right-aligned time and agent glyph, and hover-revealed Bookmark, Follow and … actions; folder trays as sticky group headers (Linear's issue list rows and grouped list headers).",
           "Run states: circular icons on the existing states (dashed = Queued, half-filled = Running, filled check = complete, filled cross = Failed, grey cross = Stopped) in feed rows, child rows and message rows (Linear's issue status icons).",
           "Palette: layered greys with one indigo accent in dark, and a matching light theme (Linear's dark and light themes).",
-          "Menus, the selection bar, tooltips and branch-marker tips: 9 px radius, hairline border, soft shadow, keycap chips for shortcuts that already exist (A, D, H, \u2318O, \u2318J, \u21e7\u2318G, \u2318,) (Linear's context menus and tooltips).",
-          "\u2318K command palette with a large input, section labels and keycap hints; run activity disclosure as a vertical activity timeline (Linear's command menu and issue activity feed).",
+          "Menus, the selection bar, tooltips and branch-marker tips: 9 px radius, hairline border, soft shadow, keycap chips for shortcuts that already exist (A, D, H, ⌘O, ⌘J, ⇧⌘G, ⌘,) (Linear's context menus and tooltips).",
+          "⌘K command palette with a large input, section labels and keycap hints; run activity disclosure as a vertical activity timeline (Linear's command menu and issue activity feed).",
           "Composers styled as Linear's comment box; feed toasts as elevated toasts with an Undo action (Linear's comment composer and toasts)."
         ],
         "decisions": [
-          "Kept as-is: sidebar order (Home, Bookmarks, Highlights; Folders: Drafts, user folders, Archive), the 52 px rail and \u21e7\u2318G, the workspace switcher and account at the sidebar foot, Home's ask box above the feed and the trays below it.",
+          "Kept as-is: sidebar order (Home, Bookmarks, Highlights; Folders: Drafts, user folders, Archive), the 52 px rail and ⇧⌘G, the workspace switcher and account at the sidebar foot, Home's ask box above the feed and the trays below it.",
           "Kept as-is: the column strip of [messages | answer] pairs with branches as further pairs, the composer at the top of the messages column with rows newest first, branch markers in the answer's right margin, the selection bar (Branch A, Highlight H or E, Copy), every menu's items and letter keys, and all copy.",
           "Kept as-is: Settings (Basic, Remotes) and Agent Setup as separate dialogs opened from the sidebar header, the rail and the palette.",
-          "Small polish only: the Ask segment shows the model name beside the agent glyph; feed rows show the time and agent the card already has; Bookmark and Follow from the \u2026 menu are also revealed on row hover; held-\u2318 shortcut chips use keycap styling.",
+          "Small polish only: the Ask segment shows the model name beside the agent glyph; feed rows show the time and agent the card already has; Bookmark and Follow from the … menu are also revealed on row hover; held-⌘ shortcut chips use keycap styling.",
           "Not adopted: a user-set issue status workflow (Backlog, Todo, In Progress, Done), because run states are set by the run, not by the user.",
           "Not adopted: projects, cycles and triage, because Session's containers are folders and workspaces and it has no planning cadence or inbox.",
           "Not adopted: assignees, priority and labels, because questions have one author and no such fields.",
           "Not adopted: board views and the issue properties sidebar, because the strip already spends horizontal space on branch pairs and nothing in the app maps to properties.",
           "Not adopted: sub-issues in place of branches, because branches are anchored to passages and open as column pairs.",
-          "Not adopted: G-then-X navigation chords and a workspace menu at the top of the sidebar, because the app has neither; \u2318N, \u2318O and the foot switcher stay."
+          "Not adopted: G-then-X navigation chords and a workspace menu at the top of the sidebar, because the app has neither; ⌘N, ⌘O and the foot switcher stay."
         ],
         "file": "r3/linear.html",
         "thumb": "thumbs/r3-linear.jpg"

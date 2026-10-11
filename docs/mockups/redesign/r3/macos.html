@@ -154,12 +154,6 @@ Shortcuts: ⌘N/⌘T Home composer, ⌘J follow-up box, ⌘O workspace menu, ⌘
   --table-stripe: rgba(255,255,255,.035); --code: rgba(255,255,255,.08); --tooltip: rgba(50,50,52,.97);
   --switch-off: rgba(255,255,255,.16); --win-shadow: 0 0 0 .5px rgba(0,0,0,.8);
 }
-/* Variant e: graphite accent (System Settings → Appearance → Accent colour: Graphite) */
-:root[data-variant="e"]{ --accent:#7d7d82; --accent-soft: rgba(125,125,130,.18); --accent-ring: rgba(125,125,130,.55); --anchor: rgba(125,125,130,.2); }
-@media (prefers-color-scheme: dark){ :root[data-variant="e"]:not([data-theme="light"]){ --accent:#8e8e93; --accent-soft: rgba(142,142,147,.26); --anchor: rgba(142,142,147,.26);} }
-:root[data-theme="dark"][data-variant="e"]{ --accent:#8e8e93; --accent-soft: rgba(142,142,147,.26); --anchor: rgba(142,142,147,.26); }
-/* Variant c: compact toolbar and small control size */
-:root[data-variant="c"]{ --tb-h: 38px; --row-h: 24px; --title-fs: 13px; }
 
 *{ box-sizing: border-box; }
 html,body{ height:100%; margin:0; }
@@ -185,8 +179,6 @@ kbd{ font: 12px/1 var(--font); color: var(--label-2); letter-spacing: .02em; }
   background: radial-gradient(60% 40% at 20% 15%, var(--wall-a), transparent 70%), radial-gradient(50% 45% at 90% 70%, var(--wall-b), transparent 70%), radial-gradient(60% 40% at 10% 95%, var(--wall-c), transparent 70%);
   filter: blur(28px); clip-path: inset(40px); }
 .sidebar::after, .rail::after{ content:""; position:absolute; inset:0; z-index:-1; background: var(--sidebar); }
-:root[data-variant="b"] .sidebar::before, :root[data-variant="b"] .rail::before{ display:none; }
-:root[data-variant="b"] .sidebar::after, :root[data-variant="b"] .rail::after{ background: var(--sidebar-opaque); }
 .sb-top{ height: var(--tb-h); flex: 0 0 auto; position: relative; display:flex; align-items:center; justify-content:flex-end; padding: 0 10px 0 0; gap: 2px; }
 .sb-collapse{ position:absolute; left: 82px; top: 50%; transform: translateY(-50%); }
 .tbtn{ height: 28px; min-width: 28px; padding: 0 6px; border-radius: 6px; display:inline-flex; align-items:center; justify-content:center; gap: 4px; color: var(--label-2); }
@@ -195,7 +187,6 @@ kbd{ font: 12px/1 var(--font); color: var(--label-2); letter-spacing: .02em; }
 .tbtn:disabled{ opacity:.35; pointer-events:none; }
 .tbtn.has-label{ padding: 0 8px 0 6px; font-weight: 500; font-size: 12px; color: var(--label-2); }
 .tbtn.has-label svg.i{ width: 14px; height: 14px; }
-:root[data-variant="c"] .tbtn{ height: 24px; min-width: 24px; }
 .sb-body{ flex: 1 1 auto; overflow-y: auto; padding: 2px 10px 10px; scrollbar-width: thin; }
 .nav-row{ position: relative; display: flex; align-items: center; height: var(--row-h); border-radius: 6px; margin: 1px 0; }
 .nav-row .nav-select{ flex: 1 1 auto; display:flex; align-items:center; gap: 7px; height: 100%; padding: 0 8px; border-radius: 6px; min-width: 0; text-align: left; }
@@ -365,16 +356,6 @@ svg.i.child-icon{ width: 12px; height: 12px; color: var(--yellow); fill: var(--y
 .tray-body{ margin: 2px -8px 0; }
 .tray-body .empty{ padding: 6px 24px 8px; }
 .tray.is-drop .tray-head{ box-shadow: inset 0 0 0 2px var(--accent); }
-/* Variant d: grouped inset lists */
-:root[data-variant="d"] .feed-col{ background: var(--grouped); }
-:root[data-variant="d"] .feed-col .list, :root[data-variant="d"] .feed-col .tray-body{ margin: 0 12px; background: var(--cell); border-radius: 10px; box-shadow: 0 0 0 .5px var(--sep); overflow: hidden; padding: 4px 0; }
-:root[data-variant="d"] .feed-col .tray-body{ margin: 4px 4px 0; }
-:root[data-variant="d"] .card, :root[data-variant="d"] .child{ margin: 0 4px; }
-:root[data-variant="d"] .card:last-child::after{ display:none; }
-:root[data-variant="d"] .tray{ margin: 18px 8px 0; }
-:root[data-variant="d"] .tray-head{ padding-left: 14px; }
-:root[data-variant="d"] .hl-group{ background: var(--cell); margin: 0 12px 12px; border-radius: 10px; box-shadow: 0 0 0 .5px var(--sep); padding: 4px 0; }
-:root[data-variant="d"] .feed-col .col-head{ background: var(--grouped); }
 /* Inline folder delete confirm */
 .confirm-bar{ margin: 8px 12px 0; padding: 10px 12px; border-radius: 9px; background: var(--grouped); box-shadow: 0 0 0 .5px var(--sep-strong); font-size: 12.5px; }
 .confirm-bar p{ margin: 0 0 8px; }
@@ -708,11 +689,7 @@ const MOCK = {
   summary: "The current Session layout, vocabulary and keys, drawn with macOS system materials: a translucent source-list sidebar, unified toolbar segments over the column strip, Mail-style list rows with accent selection, native menus and popovers, a Spotlight-style palette and System Settings forms. Nothing moves; someone who uses Session today recognises every screen.",
   nouns: ["Question", "Branch", "Highlight", "Folder", "Workspace"],
   variants: [
-    { id: "a", label: "Vibrant sidebar", summary: "Translucent source-list sidebar and rail over a blurred wallpaper tint, regular toolbar, plain Mail-style rows." },
-    { id: "b", label: "Opaque sidebar", summary: "The sidebar and rail use the opaque window material, as with Reduce transparency turned on." },
-    { id: "c", label: "Compact toolbar", summary: "Compact 38 pt unified toolbar and small control size: shorter headers and sidebar rows, same layout." },
-    { id: "d", label: "Inset grouped feed", summary: "Feed cards, trays and highlights sit in inset grouped lists (rounded cells on a grouped background), as in Notes and System Settings." },
-    { id: "e", label: "Graphite accent", summary: "System accent set to Graphite: selection, glyphs, toggles and the send button turn neutral gray." }
+    { id: "a", label: "Vibrant sidebar", summary: "Translucent source-list sidebar and rail over a blurred wallpaper tint, regular toolbar, plain Mail-style rows." }
   ],
   changes: [
     "Sidebar and rail → translucent source list (Finder, Mail): vibrancy material, 11 pt section header, accent-tinted line glyphs, rounded selection that turns accent while the sidebar has focus.",

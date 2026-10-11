@@ -32,6 +32,7 @@
   --crit: #f2867e; --high: #f0a457; --med: #d9bf5a; --low: #9aa3b4; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text); font: 13.5px/1.45 var(--ui);
@@ -130,7 +131,7 @@ iframe { width: 100%; height: 100%; min-height: 520px; border: 1px solid var(--l
 </style>
 
 <header class="bar">
-  <div class="brand"><h1>Session redesign</h1><span id="brandSub">3 candidates, each with variants</span></div>
+  <div class="brand"><h1>Session redesign</h1><span id="brandSub">Restyles of the current layout</span></div>
   <div class="seg" role="group" aria-label="Round" id="roundSeg">
     <button type="button" data-round="1" aria-pressed="true">Round 1</button>
     <button type="button" data-round="2" aria-pressed="false">Round 2</button>
@@ -199,9 +200,10 @@ function renderRoundSeg() {
   for (const b of $("#roundSeg").children) {
     const r = Number(b.dataset.round);
     b.setAttribute("aria-pressed", String(r === state.round));
-    b.disabled = !roundAvailable(r);
-    b.title = b.disabled ? "Not generated yet" : "";
+    b.hidden = !roundAvailable(r);
   }
+  // With one set left there is nothing to switch between.
+  $("#roundSeg").hidden = [1, 2, 3].filter(roundAvailable).length < 2;
 }
 
 function renderTabs() {
@@ -214,8 +216,8 @@ function renderTabs() {
   tabs.append(mk("overview", "Overview", "all candidates"));
   for (const c of CANDIDATES) {
     const m = meta(state.round, c.slug);
-    // Round 3 holds restyles of the current layout for some candidates only.
-    if (state.round === 3 && !m) continue;
+    // A candidate can be missing from a set (dropped, or only restyled); show only what exists.
+    if (!m) continue;
     tabs.append(mk(c.slug, c.influence, m ? m.title : "pending"));
   }
   tabs.append(mk("issues", "Issues", state.issues ? state.issues.length + " found" : "review", "sep"));
@@ -246,16 +248,16 @@ function renderOverview() {
   wrap.append(el("div", { class: "ov-head" },
     el("h2", {}, r === 1 ? "Round 1 candidates" : r === 2 ? "Round 2 candidates (after self-review)" : "Current layout, restyled"),
     el("p", {}, r === 3
-      ? "These keep the current app's layout, navigation, controls and vocabulary, and adopt one reference app's visual style where it fits. Compare them with the redesigns in rounds 1 and 2."
+      ? "These keep the current app's layout, navigation, controls and vocabulary, and adopt one reference app's visual style where it fits."
       : "Each candidate redesigns Session in the idiom of one reference app, so that it reads clearly on first use and works both for chatting with models and for organizing notes as an outline and a linked knowledge base. Open a candidate to use it and switch its variants.")));
   const grid = el("div", { class: "grid" });
   for (const c of CANDIDATES) {
     const m = meta(r, c.slug);
-    if (r === 3 && !m) continue;
+    if (!m) continue;
     grid.append(el("button", { class: "card", type: "button", onclick: () => go(c.slug) },
       el("div", { class: "thumb" }, m?.thumb ? el("img", { src: m.thumb, alt: "", loading: "lazy" }) : null),
       el("div", { class: "card-body" },
-        el("div", { class: "card-top" }, el("b", {}, m ? m.title : c.influence), el("span", {}, c.influence + (m ? " · " + m.variants.length + " variants" : " · pending"))),
+        el("div", { class: "card-top" }, el("b", {}, m ? m.title : c.influence), el("span", {}, c.influence + (!m ? " · pending" : m.variants.length > 1 ? " · " + m.variants.length + " variants" : ""))),
         el("p", {}, m ? m.summary : "Not generated yet."),
         m?.nouns ? el("div", { class: "nouns" }, m.nouns.map((n) => el("span", { class: "noun" }, n))) : null)));
   }
@@ -280,7 +282,7 @@ function renderCandidate(slug) {
     }, v.label)));
   const src = m.file;
   wrap.append(el("div", { class: "vbar" },
-    el("span", { class: "vlabel" }, "Variant"), chips,
+    m.variants.length > 1 ? el("span", { class: "vlabel" }, "Variant") : null, m.variants.length > 1 ? chips : null,
     el("span", { class: "vsum", id: "vsum" }, vcur.summary),
     el("div", { class: "vtools" },
       el("button", { class: "tool", type: "button", "aria-pressed": String(state.notes), onclick: () => { state.notes = !state.notes; store.set("notes", state.notes); render(); } }, "Notes"),
@@ -295,10 +297,10 @@ function renderCandidate(slug) {
 function renderNotes(slug, m, cur) {
   const other = meta(state.round === 1 ? 2 : 1, slug);
   return el("aside", { class: "notes", "aria-label": "Candidate notes" },
-    el("div", {}, el("h3", {}, `Influence · ${m.influence} · round ${state.round}`), el("h2", {}, m.title)),
+    el("div", {}, el("h3", {}, `Influence · ${m.influence}` + (state.round === 3 ? "" : ` · round ${state.round}`)), el("h2", {}, m.title)),
     el("p", {}, m.summary),
     m.nouns?.length ? el("div", {}, el("h3", {}, "Core nouns"), el("div", { class: "nouns" }, m.nouns.map((n) => el("span", { class: "noun" }, n)))) : null,
-    el("div", {}, el("h3", {}, "Variants"), el("div", { class: "vlist" }, m.variants.map((v) =>
+    m.variants.length < 2 ? null : el("div", {}, el("h3", {}, "Variants"), el("div", { class: "vlist" }, m.variants.map((v) =>
       el("button", { class: "vitem", type: "button", "aria-current": String(v.id === cur), onclick: () => setVariant(slug, v.id, true) },
         el("b", {}, v.label), el("span", {}, v.summary))))),
     m.changes?.length ? el("div", {}, el("h3", {}, state.round === 3 ? "What was restyled" : "Changed since round 1"), el("ul", {}, m.changes.map((x) => el("li", {}, x)))) : null,
@@ -366,7 +368,7 @@ function renderIssues() {
 $("#roundSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b || b.disabled) return;
   state.round = Number(b.dataset.round); store.set("round", state.round);
-  if (state.round === 3 && CANDIDATES.some((c) => c.slug === state.tab) && !meta(3, state.tab)) go("overview");
+  if (CANDIDATES.some((c) => c.slug === state.tab) && !meta(state.round, state.tab)) go("overview");
   else if (state.tab !== "overview" && state.tab !== "issues") go(state.tab); else render();
 });
 $("#themeSeg").addEventListener("click", (e) => {
@@ -387,12 +389,12 @@ async function load() {
   try { const r = await fetch("manifest.json", { cache: "no-store" }); if (r.ok) state.manifest = await r.json(); } catch {}
   try { const r = await fetch("issues.json", { cache: "no-store" }); if (r.ok) state.issues = await r.json(); } catch {}
   // Open on the newest round unless the viewer picked one or the link names one.
-  if (state.round == null || !roundAvailable(state.round)) state.round = roundAvailable(2) ? 2 : 1;
-  if (state.round === 3 && !meta(3, state.tab) && state.tab !== "issues") state.tab = "overview";
-  const n = CANDIDATES.length;
-  const restyles = Object.keys(state.manifest.rounds[3] || {}).length;
-  $("#brandSub").textContent = (roundAvailable(2) ? `${n} candidates · 2 rounds` : `${n} candidates · round 1`) +
-    (restyles ? ` · ${restyles} current-layout restyle${restyles > 1 ? "s" : ""}` : "");
+  if (state.round == null || !roundAvailable(state.round)) state.round = [3, 2, 1].find(roundAvailable) ?? 1;
+  if (CANDIDATES.some((c) => c.slug === state.tab) && !meta(state.round, state.tab)) state.tab = "overview";
+  const n = Object.keys(state.manifest.rounds[state.round] || {}).length;
+  $("#brandSub").textContent = state.round === 3
+    ? `${n} restyles of the current layout`
+    : `${n} candidates · round ${state.round}`;
   render();
 }
 load();

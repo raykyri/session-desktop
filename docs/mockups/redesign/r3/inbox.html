@@ -129,15 +129,6 @@
   --scrim:rgba(0,0,0,.5);
   color-scheme:dark;
 }
-/* Variant C: the dark navigation column of classic shared inboxes, in both themes. */
-:root[data-variant="c"]{
-  --nav-bg:#1c2433; --nav-text:#c8cfdb; --nav-strong:#ffffff; --nav-muted:#8792a6; --nav-hover:rgba(255,255,255,.07);
-  --nav-sel:rgba(255,255,255,.13); --nav-sel-text:#ffffff; --nav-sel-shadow:none; --nav-border:#141a26;
-  --nav-accent:#9dbcff; --nav-count:#8f9ab0;
-}
-@media (prefers-color-scheme: dark){ :root[data-variant="c"]:not([data-theme="light"]){ --nav-bg:#10141c; --nav-border:#0b0e14; } }
-:root[data-theme="dark"][data-variant="c"]{ --nav-bg:#10141c; --nav-border:#0b0e14; }
-
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--app-bg);color:var(--text);font:13px/1.45 var(--font);overflow:hidden;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
@@ -573,51 +564,13 @@ body.show-hints .hint{display:inline-flex}
 .vswitch button{width:26px;height:24px;border-radius:6px;font-size:11.5px;font-weight:650;color:var(--text-2)}
 .vswitch button[aria-pressed="true"]{background:var(--accent);color:#fff}
 
-/* ---------- variants (layout identical) ---------- */
-/* B: compact rows */
-[data-variant="b"] .frow{padding:7px 10px 7px 14px;gap:9px}
-[data-variant="b"] .frow .av{width:22px;height:22px;font-size:9px;border-radius:6px}
-[data-variant="b"] .frow .av.you,[data-variant="b"] .frow .av.tw{border-radius:50%}
-[data-variant="b"] .frow-snip{-webkit-line-clamp:1}
-[data-variant="b"] .frow-chips{margin-top:3px}
-[data-variant="b"] .unread-dot{top:14px}
-[data-variant="b"] .nsel{height:26px}
-[data-variant="b"] .mrow{padding:6px 9px 4px}
-[data-variant="b"] .mrow-head{margin-bottom:2px}
-[data-variant="b"] .mrow-meta{margin-top:3px}
-[data-variant="b"] .mlist{gap:4px}
-[data-variant="b"] .fchild{padding-top:2px;padding-bottom:2px;padding-left:calc(46px + var(--indent,0) * 14px)}
-[data-variant="b"] .fchild::before{left:24px}
-[data-variant="b"] .answer-body{font-size:13.5px;line-height:1.55}
-[data-variant="b"] .tray-head{height:30px}
-/* D: flat rows with dividers, no avatars */
-[data-variant="d"] .av:not(.ws-ic):not(.keep){display:none}
-[data-variant="d"] .frow{padding-left:16px}
-[data-variant="d"] .fchild{padding-left:calc(30px + var(--indent,0) * 14px)}
-[data-variant="d"] .fchild::before{left:20px}
-[data-variant="d"] .unread-dot{left:6px}
-[data-variant="d"] .card,[data-variant="d"] .acard{border-radius:0;box-shadow:none;border-width:0 0 1px 0;background:transparent}
-[data-variant="d"] .mlist{gap:0}
-[data-variant="d"] .msgs-in{padding:0 0 18px;gap:0}
-[data-variant="d"] .msgs-in > .rbox{margin:10px}
-[data-variant="d"] .msgs-in > .source{margin:10px 10px 0;border-radius:6px}
-[data-variant="d"] .mrow.is-sel{box-shadow:inset 3px 0 0 var(--accent)}
-[data-variant="d"] .mrow-hit,[data-variant="d"] .trow-hit{border-radius:0}
-[data-variant="d"] .ans-in{padding:0 0 40px}
-[data-variant="d"] .acard-head{padding:12px 18px}
-[data-variant="d"] .acard-body,[data-variant="d"] .sources{padding-left:18px;padding-right:18px}
-[data-variant="d"] .runline{padding-left:18px}
-[data-variant="d"] .note{background:var(--note-bg)}
-[data-variant="d"] .note .acard-head{border-radius:0}
-/* E: notes set off by a left rule and label instead of a tint */
-[data-variant="e"] .note{background:var(--raise);border-color:var(--border);box-shadow:inset 3px 0 0 var(--note-rule),var(--shadow-sm)}
-[data-variant="e"] .note .acard-head{background:transparent;border-bottom-color:var(--divider)}
-[data-variant="e"] .chip.note{background:transparent;border:1px solid var(--note-rule);color:var(--note-text);text-transform:uppercase;letter-spacing:.06em;font-size:10px;height:17px}
-[data-variant="e"] .rbox.is-post{background:var(--raise);border-color:var(--border-2);box-shadow:inset 3px 0 0 var(--note-rule),var(--shadow-sm)}
-[data-variant="e"] .rbox.is-post .aps{background:var(--app-bg);border-color:var(--border)}
-[data-variant="e"] .frow.is-post{box-shadow:inset 3px 0 0 var(--note-rule)}
-[data-variant="e"] .frow.is-post.is-sel{box-shadow:inset 3px 0 0 var(--accent)}
-[data-variant="a"] .frow.is-post,[data-variant="b"] .frow.is-post,[data-variant="c"] .frow.is-post,[data-variant="d"] .frow.is-post{background:color-mix(in srgb,var(--note-bg) 55%,transparent)}
+/* ---------- avatars hidden; author and model stay in the header line ---------- */
+.av:not(.ws-ic):not(.keep){display:none}
+.frow{padding-left:16px}
+.fchild{padding-left:calc(30px + var(--indent,0) * 14px)}
+.fchild::before{left:20px}
+.unread-dot{left:6px}
+.frow.is-post{background:color-mix(in srgb,var(--note-bg) 55%,transparent)}
 [data-variant] .frow.is-post.is-sel{background:var(--sel)}
 
 /* ---------- narrow window ---------- */
@@ -663,18 +616,14 @@ const MOCK = {
   summary: "The current Session layout, regions, controls, keys and vocabulary, restyled with shared-inbox conventions: a dense left nav with section headers and counts, Home's feed cards as conversation-list rows, questions and answers as message cards with an author/model/time header, Post content set off as internal notes, and a reply-box composer whose Ask/Post switch reads like a reply/comment toggle. Nothing moves, so current users recognise every screen; new users get clearer row anatomy and states.",
   nouns: ["Question", "Branch", "Highlight", "Post", "Folder"],
   variants: [
-    { id: "a", label: "Light nav, cards", summary: "Default: light navigation column, comfortable list rows with avatars, bordered message cards, Post content on a yellow note tint." },
-    { id: "b", label: "Compact rows", summary: "Denser list rows (one-line snippet, small avatars), tighter message cards and nav rows; same regions and controls." },
-    { id: "c", label: "Dark nav", summary: "The dark navigation column of classic shared inboxes, in both themes; the list and thread panes stay as in A." },
-    { id: "d", label: "Flat rows, no avatars", summary: "Message cards become flat rows separated by dividers, and avatars are hidden; author and model stay in the header line." },
-    { id: "e", label: "Ruled notes", summary: "Post content and the Post composer are set off by a yellow left rule and a POST label instead of a tinted background." }
+    { id: "a", label: "Light nav, cards", summary: "Light navigation column, comfortable list rows, bordered message cards and Post content on a yellow note tint, with avatars removed; author and model stay in each header line." }
   ],
   changes: [
     "Sidebar: dense 29 px rows, uppercase FOLDERS section header and right-aligned counts on the existing rows (from the left mailbox nav of shared inboxes); the selected row is a raised white pill.",
-    "Home feed cards: conversation-list rows with an agent/author avatar, sender line (agent · model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
+    "Home feed cards: conversation-list rows without avatars: sender line (agent · model), subject (thread title), two-line snippet (question), time, status pill and an unread dot (from the inbox message list).",
     "Feed card quick actions: the existing drag grip, Bookmark, Follow and … menu revealed on hover in a floating action pill that replaces the time (from inbox hover actions).",
     "Trays: sticky uppercase group headers with a count pill and chevron, like grouped sections in an inbox list.",
-    "Thread page: questions and answers as message cards with a header line (avatar, author or agent, model chip, time, status chip); recap as a tinted summary strip; sources as attachment-style chips (from the conversation view).",
+    "Thread page: questions and answers as message cards with a header line (author or agent, model chip, time, status chip); recap as a tinted summary strip; sources as attachment-style chips (from the conversation view).",
     "Post-mode content (posts, the Post composer) styled as internal notes with a yellow tint and a Post label, distinct from Ask messages, like comments versus replies.",
     "Ask box: a reply box with a bottom toolbar; the Ask/Post switch gains text labels and acts as the reply/comment toggle, and the box turns note-yellow in Post mode.",
     "Menus, command palette and toasts: keycap hints on existing shortcuts (A, D, H, ⌘N, ⇧⌘G, ⌘,), a search-bar style palette with a key legend, and a dark floating undo bar."

@@ -117,11 +117,6 @@
   --tip-bg:#26272b; --tip-text:#e4e5e9; --tip-kbd:rgba(255,255,255,.1);
   --ring:rgba(130,140,245,.65);
 }
-/* Variant d: one neutral accent instead of indigo (both themes, derived from text tokens). */
-:root[data-variant="d"]{
-  --accent:var(--text); --accent-hover:var(--text-2); --accent-text:var(--text); --accent-soft:var(--sel);
-  --on-accent:var(--panel); --done:var(--muted); --br:var(--sel-strong); --br-line:var(--muted); --ring:var(--border-3);
-}
 
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -570,33 +565,7 @@ mark.hl{background:var(--hl);color:inherit;border-radius:2px;padding:0 1px}
 [data-variant="b"] .tray{border-top:0}
 [data-variant="b"] .tray-h{background:var(--panel);border-bottom:0}
 /* c: compact density */
-[data-variant="c"] body,[data-variant="c"]{font-size:12.5px}
-[data-variant="c"] .nrow{height:26px}
-[data-variant="c"] .card{padding:6px 12px 6px 16px}
-[data-variant="c"] .card .q{-webkit-line-clamp:1}
-[data-variant="c"] .card .q.is-body{-webkit-line-clamp:2}
-[data-variant="c"] .child{padding-top:3px;padding-bottom:3px}
-[data-variant="c"] .colhead,[data-variant="c"] .pair-head{height:40px}
-[data-variant="c"] .msg{padding:6px 9px 5px}
-[data-variant="c"] .msg .mmeta{margin-top:3px}
-[data-variant="c"] .answer{font-size:13.5px;line-height:1.6;padding:16px 44px 28px 24px}
-[data-variant="c"] .colm{width:240px}
-[data-variant="c"] .cola{width:clamp(420px,calc(100vw - 228px - 316px - 240px - 34px),600px)}
-[data-variant="c"] .feed{width:316px}
-[data-variant="c"] .tray-h{height:30px}
 /* e: status as text pills */
-[data-variant="e"] .card .lead .st:not(.st-post):not(.st-link):not(.st-draft){display:none}
-[data-variant="e"] .card .lead{width:0}
-[data-variant="e"] .card{grid-template-columns:0 minmax(0,1fr) auto;column-gap:0}
-[data-variant="e"] .card .main-c{padding-left:0}
-[data-variant="e"] .card .lead .st-post,[data-variant="e"] .card .lead .st-link,[data-variant="e"] .card .lead .st-draft{display:none}
-[data-variant="e"] .pill{display:inline-flex}
-[data-variant="e"] .child .cstat .st{display:none}
-[data-variant="e"] .mstat .st{display:none}
-[data-variant="e"] .mstat{height:18px;padding:0 7px;border-radius:999px;border:1px solid var(--border-2);font-size:11px}
-[data-variant="e"] .mstat.s-running{color:var(--run);border-color:color-mix(in srgb,var(--run) 40%,transparent)}
-[data-variant="e"] .mstat.s-failed{border-color:color-mix(in srgb,var(--fail) 40%,transparent)}
-[data-variant="e"] .runline > .st{display:none}
 
 /* ---------- narrow window: rail forced, columns fit the width ---------- */
 @media (max-width: 760px){
@@ -606,9 +575,9 @@ mark.hl{background:var(--hl);color:inherit;border-radius:2px;padding:0 1px}
   .rail .expand{opacity:.4}
   .feed .colhead.is-home h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .main{margin:6px 6px 6px 0}
-  .feed,[data-variant="c"] .feed{width:calc(100vw - 60px)}
-  .colm,[data-variant="c"] .colm{width:calc(100vw - 60px)}
-  .cola,[data-variant="c"] .cola{width:calc(100vw - 60px)}
+  .feed{width:calc(100vw - 60px)}
+  .colm{width:calc(100vw - 60px)}
+  .cola{width:calc(100vw - 60px)}
   .colp,.colt{width:calc(100vw - 60px)}
   .pair-body{overflow-x:auto}
   .answer{padding:18px 40px 28px 18px}
@@ -641,14 +610,10 @@ mark.hl{background:var(--hl);color:inherit;border-radius:2px;padding:0 1px}
 const MOCK = {
   slug: "linear", round: 3, title: "Linear restyle",
   influence: "Linear",
-  summary: "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as crisp list rows with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the ⌘K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
+  summary: "The current Session app with its layout, controls, keys and copy unchanged, restyled in Linear's visual language: a tight Inter type scale, a quiet sidebar beside an inset main panel, Home cards as bordered cards with circular run-status icons, and layered greys with one accent. Menus, the selection bar, the ⌘K palette, run activity and toasts take Linear's popover and keycap styling, so existing shortcuts are visible where they already apply.",
   nouns: ["Question", "Answer", "Branch", "Highlight", "Folder"],
   variants: [
-    { id: "a", label: "Indigo, list rows", summary: "Default: Home cards as flush list rows with a leading status icon, indigo accent." },
-    { id: "b", label: "Bordered cards", summary: "Home cards as separate bordered cards; the selected card gets an accent outline instead of a fill bar." },
-    { id: "c", label: "Compact density", summary: "Shorter rows, one-line questions in cards, narrower columns and a 13.5 px answer size." },
-    { id: "d", label: "Monochrome accent", summary: "The indigo accent is replaced by the text colour; branch tints and selection use neutral greys." },
-    { id: "e", label: "Status as text pills", summary: "Run states show as text pills (Running, Queued, Failed, Stopped) instead of circular icons." }
+    { id: "b", label: "Bordered cards", summary: "Home cards as separate bordered cards; the selected card gets an accent outline instead of a fill bar." }
   ],
   changes: [
     "Type scale: Inter at 13 px for UI text with 500-weight labels, 12 px muted metadata and a 14.5 px answer body (Linear's UI type scale and weights).",
@@ -1931,14 +1896,14 @@ window.addEventListener("resize", () => { renderRail(); placeMarkers(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
 
 /* ======================= boot ======================= */
-document.documentElement.dataset.variant = "a";
+document.documentElement.dataset.variant = "b";
 render();
 startRun("b2", B2_REST, { slow: true });
 if (parent !== window) {
   parent.postMessage({ type: "mock:ready", mock: MOCK }, "*");
 } else {
   const sw = document.createElement("div"); sw.className = "vsw"; sw.setAttribute("role", "group"); sw.setAttribute("aria-label", "Variant");
-  sw.innerHTML = MOCK.variants.map(v => `<button data-v="${v.id}" aria-pressed="${v.id === "a"}" title="${esc(v.summary)}">${v.id.toUpperCase()}<span class="vl"> · ${esc(v.label)}</span></button>`).join("");
+  sw.innerHTML = MOCK.variants.map(v => `<button data-v="${v.id}" aria-pressed="${v.id === "b"}" title="${esc(v.summary)}">${v.id.toUpperCase()}<span class="vl"> · ${esc(v.label)}</span></button>`).join("");
   sw.addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setVariant(b.dataset.v); });
   document.body.appendChild(sw);
 }
