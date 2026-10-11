@@ -1435,6 +1435,12 @@
   padding: 14px 12px 20px;
 }
 
+/* A messages column's ask box lines up with the message rows under it,
+   which are inset 8px. */
+.research-pair-messages .research-composer-wrap {
+  padding-inline: 8px;
+}
+
 /* Above the messages, the box sits closer to the first row. */
 .research-pair-messages .research-composer-wrap + .research-msg-list {
   margin-top: -12px;

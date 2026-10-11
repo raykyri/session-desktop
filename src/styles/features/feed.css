@@ -275,8 +275,10 @@
   margin-bottom: 0;
 }
 
+/* Inset 8px at the sides, as the cards under it, so its border lines up
+   with their outer edges. */
 .new-research-composer {
-  margin: 12px;
+  margin: 12px 8px;
 }
 
 /* The box: the field across its full width, and under it, once focused or
