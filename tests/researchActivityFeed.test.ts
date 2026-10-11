@@ -136,6 +136,31 @@ test("running and failed threads show a status dot; unread threads a dot unless 
   assert.equal(researchFeedStatus(tree, question), null);
 });
 
+test("a row's dot is a direct child of the row, beside its text, which the dot's float sits in", () => {
+  // The stylesheet places the dot's float by `:has(> dot)` on the row: a
+  // loaded card, a card whose root is not loaded (its title as the question),
+  // and a running starred child.
+  const html = renderFeed({
+    items: [{
+      ...question,
+      starred: [{ ...question, nodeId: "deep", parentNodeId: "node", inline: true, prompt: "A running follow-up", branchDepth: 0, status: "running" as const }],
+    }],
+    researchTrees: [
+      { ...tree, hasUnseenUpdate: true },
+      { ...tree, id: "unloaded", rootNodeId: "missing", title: "Not loaded yet", runningCount: 1 },
+    ],
+  });
+  const [loaded, unloaded] = ["Investigate this question", "Not loaded yet"].map(
+    (text) => cards(html).find((card) => card.includes(text)) ?? "",
+  );
+  assert.match(loaded, /^[^>]*>(?:<button[^>]*><\/button>)<span class="research-feed-card-unread"[^>]*><\/span><div class="research-feed-card-content">/);
+  assert.match(unloaded, /<div class="research-feed-card-content"><div class="research-feed-card-question">Not loaded yet<\/div><\/div><span class="research-feed-status is-running"/);
+  assert.match(
+    html,
+    /<span class="research-feed-child-text"><span class="research-feed-child-label">A running follow-up<\/span><\/span>[^]*?<\/button><span class="research-feed-status is-running"/,
+  );
+});
+
 test("starred follow-ups and branches are indented rows under their question", () => {
   const html = renderFeed({
     items: [{
@@ -159,7 +184,7 @@ test("starred follow-ups and branches are indented rows under their question", (
   // A follow-up has no icon; a starred branch is marked with a filled star.
   assert.doesNotMatch(rows[0], /Starred branch: |research-feed-child-icon/);
   assert.match(rows[1], /<svg(?=[^>]*lucide-star)(?=[^>]*fill="currentColor")/);
-  assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text">Branch title</);
+  assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text"><span class="research-feed-child-label">Branch title</);
   // Levels cap at two; running children keep a status dot.
   assert.match(rows[2], /--research-child-indent:2/);
   assert.ok(rows[2].startsWith(" is-group-end"));
@@ -189,7 +214,7 @@ test("starred follow-ups and branches are indented rows under their question", (
     selectedTreeId: "tree",
     selectedChildNodeIds: ["follow", "branch"],
   });
-  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-feed-child-text">A starred follow-up/);
+  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-feed-child-text"><span class="research-feed-child-label">A starred follow-up/);
   assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><svg/);
   assert.match(open, /research-feed-card is-selected/);
   const elsewhere = renderFeed({

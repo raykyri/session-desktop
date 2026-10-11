@@ -102,3 +102,36 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   const cardAttachments = ruleBody(feedCss, ".research-feed-card .research-message-attachments");
   assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
 });
+
+test("a feed row's dot takes a float at the start of its text, so only the first line wraps around it", () => {
+  // The content is block flow: floats take no part in a flex layout.
+  const content = ruleBody(feedCss, ".research-feed-card-content");
+  assert.match(content, /display:\s*flow-root/);
+  assert.doesNotMatch(content, /flex|gap:/);
+  assert.match(ruleBody(feedCss, ".research-feed-card-content > * + *"), /margin-top:\s*2px/);
+
+  const spacer = ruleBody(
+    feedCss,
+    ".research-feed-card:has(> .research-feed-status, > .research-feed-card-unread)\n  .research-feed-card-content::before,\n.research-feed-child:has(> .research-feed-status) .research-feed-child-label::before",
+  );
+  assert.match(spacer, /float:\s*right/);
+  assert.match(spacer, /width:\s*12px/);
+  assert.match(spacer, /height:\s*14px/);
+  assert.match(spacer, /content:\s*""/);
+  // The float is in a block inside the clamped box: WebKit does not float a
+  // -webkit-box's own children.
+  assert.match(ruleBody(feedCss, ".research-feed-child-label"), /display:\s*block/);
+  assert.match(ruleBody(feedCss, ".research-feed-child-text"), /display:\s*-webkit-box/);
+
+  // An embed that opens the card is set beside the float.
+  assert.match(
+    ruleBody(
+      feedCss,
+      ".research-feed-card:has(> .research-feed-status, > .research-feed-card-unread)\n  .research-message-attachments:not(.has-prompt)",
+    ),
+    /display:\s*flow-root/,
+  );
+
+  // No row pads all of its text for the dot.
+  assert.doesNotMatch(feedCss, /:has\(> \.research-feed-status[^{]*\{\s*padding-right/);
+});

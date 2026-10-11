@@ -272,7 +272,9 @@ export default function ResearchFeedCard({
                   <span className="research-visually-hidden">Starred branch: </span>
                 </>
               ) : null}
-              <span className="research-feed-child-text">{child.label}</span>
+              <span className="research-feed-child-text">
+                <span className="research-feed-child-label">{child.label}</span>
+              </span>
               {child.running ? <span className="research-visually-hidden">, Running</span> : null}
             </button>
             {child.running ? (

@@ -730,24 +730,40 @@
   outline: none;
 }
 
+/* Block flow (a flow root, so the dot's float below stays inside it), with
+   2px between its blocks: the title, then the question or the message. */
 .research-feed-card-content {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  display: flow-root;
   pointer-events: none;
 }
 
-/* A row with a status or unread dot keeps its text clear of the dot, which
-   sits at the top-right corner while the controls' pill is hidden. */
-.research-feed-card:has(> .research-feed-status, > .research-feed-card-unread) .research-feed-card-content {
-  padding-right: 12px;
+.research-feed-card-content > * + * {
+  margin-top: 2px;
 }
 
-.research-feed-child:has(> .research-feed-status) {
-  padding-right: 24px;
+/* A row with a status or unread dot keeps its first line clear of the dot,
+   which sits on that line at the top-right corner while the controls' pill is
+   hidden: a 12px by 14px float at the start of the text takes the dot's place
+   (the dot spans 6px to 14px from the text's top; the first line is about
+   20px tall), so the first line wraps before it and every later line uses the
+   full width. */
+.research-feed-card:has(> .research-feed-status, > .research-feed-card-unread)
+  .research-feed-card-content::before,
+.research-feed-child:has(> .research-feed-status) .research-feed-child-label::before {
+  float: right;
+  width: 12px;
+  height: 14px;
+  content: "";
+}
+
+/* An embed that opens the card (a tweet-only post) would run its border under
+   the float, so it is a formatting context of its own and is set beside the
+   float, 12px narrower. A link card is a flex container and does so already. */
+.research-feed-card:has(> .research-feed-status, > .research-feed-card-unread)
+  .research-message-attachments:not(.has-prompt) {
+  display: flow-root;
 }
 
 .research-feed-card-content a,
@@ -944,6 +960,14 @@
   white-space: pre-line;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+}
+
+/* The clamped text's one block. WebKit lays out each child of a -webkit-box
+   as a box of its own and does not float it, so the dot's float goes inside
+   this block rather than directly in the clamped box; the clamp counts the
+   lines inside the block. */
+.research-feed-child-label {
+  display: block;
 }
 
 /* — Drag — */
