@@ -99,7 +99,7 @@ import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMa
 import { ResearchEditorSessionColumn, type EditorSession } from "./ResearchEditorSessionColumn";
 import { ResearchThreadPlaceholder } from "./ResearchColumnChrome";
 import { rangeForTextOffsets } from "./researchTextRanges";
-import { ResearchDeleteBranchDialog, ResearchRenameDialog } from "./ResearchThreadDialogs";
+import { ResearchDeleteBranchDialog, ResearchRenameDialog, ResearchRerunDialog } from "./ResearchThreadDialogs";
 import { ResearchSelectionToolbar } from "./ResearchSelectionToolbar";
 import {
   ResearchChainComposer,
@@ -290,6 +290,7 @@ function ResearchThreadPage({
   // The message whose delete confirmation is open, and the message (or the
   // root) being renamed, with the title the Rename dialog starts from.
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
+  const [rerunNodeId, setRerunNodeId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ nodeId: string; value: string } | null>(null);
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const editorRef = useRef(editor);
@@ -393,6 +394,7 @@ function ResearchThreadPage({
     }
   }, [nodes]);
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const rerunNode = rerunNodeId ? nodeById.get(rerunNodeId) : undefined;
 
   // The open columns: one level per open conversation (its messages and its
   // answer; a post root is its post and its thread), then the unsent
@@ -1325,6 +1327,7 @@ function ResearchThreadPage({
     Boolean(highlightAction) ||
     Boolean(renameTarget) ||
     Boolean(deletingBranchId) ||
+    Boolean(rerunNode) ||
     Boolean(recapDialogNodeId);
   const anyOverlayOpenRef = useRef(anyOverlayOpen);
   anyOverlayOpenRef.current = anyOverlayOpen;
@@ -2272,7 +2275,7 @@ function ResearchThreadPage({
           onToggleStar={toggleStarred}
           onCopyAnswer={handleCopyAnswer}
           onCopyThread={(chainIds) => void copyThread(chainIds)}
-          onRerun={handleRetryNode}
+          onRerun={setRerunNodeId}
           onGenerateRecap={setRecapDialogNodeId}
           onRename={(nodeId, value) => setRenameTarget({ nodeId, value })}
           onDelete={setDeletingBranchId}
@@ -2308,6 +2311,18 @@ function ResearchThreadPage({
           onHighlight={() => void applyHighlightAction()}
           onCopy={() => void copySelection()}
           onDismiss={clearHighlightAction}
+        />
+      ) : null}
+      {rerunNode && !archived ? (
+        <ResearchRerunDialog
+          node={rerunNode}
+          parent={rerunNode.parentNodeId ? nodeById.get(rerunNode.parentNodeId) ?? null : null}
+          pending={retryingNodeId !== null}
+          onConfirm={() => {
+            setRerunNodeId(null);
+            handleRetryNode(rerunNode.id);
+          }}
+          onClose={() => setRerunNodeId(null)}
         />
       ) : null}
       {renameTarget ? (

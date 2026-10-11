@@ -1,12 +1,75 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { researchBranchInfo } from "../../lib/researchBranches";
+import { researchRerunBlocker } from "../../lib/researchChains";
 import { nodePrompt } from "../../lib/researchNodeTypes";
 import { researchDeleteLabel } from "../../lib/researchThreadView";
 import type { ResearchNode } from "../../types";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+export function ResearchRerunDialog({
+  node,
+  parent,
+  pending,
+  onConfirm,
+  onClose,
+}: {
+  node: ResearchNode;
+  parent: ResearchNode | null;
+  pending: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useResearchDialogReturnFocus(true);
+  const blocker = researchRerunBlocker(node, parent);
+  return createPortal(
+    <div
+      className="confirm-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rerun-research-dialog-title"
+        aria-describedby="rerun-research-dialog-description"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          trapResearchDialogTab(event);
+        }}
+      >
+        <h2 id="rerun-research-dialog-title">Rerun</h2>
+        <p id="rerun-research-dialog-description">
+          Rerun will replace the current answer. Continue?
+        </p>
+        {blocker ? <p role="status">{blocker}</p> : null}
+        <div className="confirm-dialog-actions">
+          <button className="control-button" type="button" autoFocus onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="control-button primary"
+            type="button"
+            disabled={pending || blocker !== null}
+            onClick={onConfirm}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /** The thread page's Rename dialog for the research (the root) or a branch.
  * Mounted while it is open; focus returns to the control that opened it. */
