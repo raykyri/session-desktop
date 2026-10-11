@@ -328,7 +328,12 @@ export default function GithubAccountControl() {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={`Signed in to GitHub as ${account.login}`}
-        onClick={() => setMenuOpen((current) => !current)}
+        onClick={(event) => {
+          // WebKit does not focus a clicked button; focus it so a second
+          // click, which closes the menu, leaves focus here.
+          event.currentTarget.focus({ preventScroll: true });
+          setMenuOpen((current) => !current);
+        }}
       >
         <img
           className="sidebar-account-avatar"

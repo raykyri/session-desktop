@@ -298,7 +298,12 @@ export function LauncherSelect({
             aria-expanded={open}
             aria-label={ariaLabel}
             disabled={disabled}
-            onClick={() => setOpen(!open)}
+            onClick={(event) => {
+              // WebKit does not focus a clicked button; focus it so a
+              // second click, which closes the menu, leaves focus here.
+              event.currentTarget.focus({ preventScroll: true });
+              setOpen(!open);
+            }}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown" && !open) {
                 event.preventDefault();

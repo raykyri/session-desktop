@@ -8,6 +8,8 @@ import {
   researchMenuKeyTarget,
   researchMenuPoint,
   researchMenuPosition,
+  researchMenuPressAction,
+  researchMenuPressRegion,
   researchMenuShortcutKey,
 } from "../src/components/research/ResearchMenu";
 import {
@@ -163,6 +165,66 @@ test("Escape and Tab close a menu; Escape during IME composition does not", () =
   assert.equal(researchMenuClosesOn({ key: "Tab" }), true);
   assert.equal(researchMenuClosesOn({ key: "ArrowDown" }), false);
   assert.equal(researchMenuClosesOn({ key: "Enter" }), false);
+});
+
+/** A stand-in for a DOM subtree: contains its own nodes. */
+function subtree(...nodes: string[]) {
+  return { contains: (target: string) => nodes.includes(target) };
+}
+
+test("a press or click is placed in the menu, on its trigger, in a dialog or outside", () => {
+  const where = (
+    target: string | null,
+    trigger: ReturnType<typeof subtree> | null = subtree("trigger", "trigger-icon"),
+  ) =>
+    researchMenuPressRegion(target, {
+      popover: subtree("menu", "item"),
+      trigger,
+      inDialog: (node) => node === "dialog-button",
+    });
+  assert.equal(where("item"), "menu");
+  assert.equal(where("menu"), "menu");
+  // The trigger's icon is part of the trigger.
+  assert.equal(where("trigger"), "trigger");
+  assert.equal(where("trigger-icon"), "trigger");
+  assert.equal(where("dialog-button"), "dialog");
+  assert.equal(where("elsewhere"), "outside");
+  assert.equal(where(null), "outside");
+  // A context menu at the pointer has no trigger: a press on the unit it was
+  // opened from is outside.
+  assert.equal(where("trigger", null), "outside");
+  // A menu opened from a passage has no trigger element; the caller's hit
+  // test places the press on it. A press in the menu stays in the menu.
+  const passage = (target: string) =>
+    researchMenuPressRegion(target, {
+      popover: subtree("menu", "item"),
+      trigger: null,
+      triggerPress: true,
+      inDialog: () => false,
+    });
+  assert.equal(passage("paragraph"), "trigger");
+  assert.equal(passage("item"), "menu");
+});
+
+test("a click on the trigger closes its open menu; a press on it does not", () => {
+  // Pressing the trigger leaves the menu open, so the click that follows
+  // closes it instead of reopening a menu the press had closed.
+  assert.equal(researchMenuPressAction("pointerdown", "trigger"), null);
+  assert.equal(researchMenuPressAction("click", "trigger"), "toggle");
+  assert.equal(researchMenuPressAction("pointerdown", "outside"), "close");
+  assert.equal(researchMenuPressAction("click", "outside"), null);
+  for (const region of ["menu", "dialog"] as const) {
+    assert.equal(researchMenuPressAction("pointerdown", region), null);
+    assert.equal(researchMenuPressAction("click", region), null);
+  }
+  // A keyboard click (no pointerdown before it) on the trigger toggles too.
+  assert.equal(researchMenuPressAction("click", "trigger", null), "toggle");
+  assert.equal(researchMenuPressAction("click", "trigger", "trigger"), "toggle");
+  // A press on the trigger released outside it closes the menu, as a press
+  // outside would have.
+  assert.equal(researchMenuPressAction("click", "outside", "trigger"), "close");
+  assert.equal(researchMenuPressAction("click", "menu", "trigger"), null);
+  assert.equal(researchMenuPressAction("click", "outside", "menu"), null);
 });
 
 function element(isConnected = true) {

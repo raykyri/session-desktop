@@ -140,6 +140,7 @@ export function ResearchSidebarNav({
             className="research-feed-icon-button research-nav-menu"
             aria-label={`Actions for ${entry.label}`}
             aria-haspopup="menu"
+            aria-expanded={menu?.folderId === entry.folderId}
             onClick={(event) => {
               const anchor = event.currentTarget;
               const folderId = entry.folderId as string;

@@ -7769,7 +7769,11 @@ function MainApp() {
                       aria-haspopup="menu"
                       aria-expanded={remoteAddMenuOpen}
                       aria-controls="settings-remote-add-menu"
-                      onClick={() => {
+                      onClick={(event) => {
+                        // WebKit does not focus a clicked button; focus it so
+                        // a second click, which closes the menu (whose item
+                        // has focus), leaves focus here.
+                        event.currentTarget.focus({ preventScroll: true });
                         const opening = !remoteAddMenuOpen;
                         setRemoteAddMenuOpen(opening);
                         if (opening && !sshConfigAliasesLoading) {

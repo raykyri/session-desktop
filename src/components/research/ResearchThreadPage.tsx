@@ -3493,38 +3493,48 @@ function ResearchThreadPage({
     };
   }, [applySnappedResearchSelection, finishHighlightSelectionDrag]);
 
+  // The branches and the highlight at a point in a turn's content root. CSS
+  // highlights have no DOM nodes, so the point is hit-tested against the
+  // turn's resolved flat-offset ranges.
+  const annotationsAtPoint = useCallback((root: HTMLElement, clientX: number, clientY: number) => {
+    const nodeId = root.dataset.nodeId;
+    const offset = nodeId ? flatOffsetAtPoint(root, clientX, clientY) : null;
+    if (!nodeId || offset === null) {
+      return null;
+    }
+    const branchIds = branchRangeOffsetsRef.current
+      .filter(
+        (entry) =>
+          entry.segmentId === nodeId &&
+          entry.id !== PENDING_BRANCH_ID &&
+          offset >= entry.start &&
+          offset < entry.end,
+      )
+      .map((entry) => entry.id);
+    const highlight = (resolvedHighlightsRef.current.get(nodeId) ?? []).find(
+      ({ start, end }) => offset >= start && offset < end,
+    );
+    return { nodeId, branchIds, highlight };
+  }, []);
+
   // A plain click on a tinted passage opens its branch; with several
-  // branches there, or a highlight, it opens a menu instead. CSS highlights
-  // have no DOM nodes, so the click is hit-tested against the turn's
-  // resolved flat-offset ranges.
+  // branches there, or a highlight, it opens a menu instead.
   const openAnnotationAtPoint = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const root = event.currentTarget;
-      const nodeId = root.dataset.nodeId;
       const selection = window.getSelection();
-      if (!root || !nodeId || !selection || !selection.isCollapsed) {
+      if (!root || !selection || !selection.isCollapsed) {
         return;
       }
       // Links keep their own click behavior.
       if (event.target instanceof Element && event.target.closest("a")) {
         return;
       }
-      const offset = flatOffsetAtPoint(root, event.clientX, event.clientY);
-      if (offset === null) {
+      const hit = annotationsAtPoint(root, event.clientX, event.clientY);
+      if (!hit) {
         return;
       }
-      const branchIds = branchRangeOffsetsRef.current
-        .filter(
-          (entry) =>
-            entry.segmentId === nodeId &&
-            entry.id !== PENDING_BRANCH_ID &&
-            offset >= entry.start &&
-            offset < entry.end,
-        )
-        .map((entry) => entry.id);
-      const highlight = (resolvedHighlightsRef.current.get(nodeId) ?? []).find(
-        ({ start, end }) => offset >= start && offset < end,
-      );
+      const { nodeId, branchIds, highlight } = hit;
       if (branchIds.length === 0 && !highlight) {
         return;
       }
@@ -3550,8 +3560,31 @@ function ResearchThreadPage({
         align: "point",
       });
     },
-    [goBranch],
+    [annotationsAtPoint, goBranch],
   );
+
+  /** Whether a press or click lands on the passage whose menu is open: the
+   * same branches and highlight at the same turn. Such a click closes the
+   * menu rather than opening it again. */
+  const pressOnMenuPassage = (
+    event: MouseEvent,
+    passage: { nodeId: string; branchIds: string[]; highlightId: string | null },
+  ) => {
+    const root =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>(".research-response-content-root")
+        : null;
+    if (!root || root.dataset.nodeId !== passage.nodeId) {
+      return false;
+    }
+    const hit = annotationsAtPoint(root, event.clientX, event.clientY);
+    return Boolean(
+      hit &&
+        (hit.highlight?.highlight.id ?? null) === passage.highlightId &&
+        hit.branchIds.length === passage.branchIds.length &&
+        hit.branchIds.every((id) => passage.branchIds.includes(id)),
+    );
+  };
 
   // Passage-side hover: hit-test the pointer against the turn's resolved
   // highlight and branch ranges (rAF-throttled), for the pointer cursor and
@@ -5465,6 +5498,7 @@ function ResearchThreadPage({
           anchor={menu.anchor}
           align={menu.align}
           trigger={menu.trigger}
+          isTriggerPress={(event) => pressOnMenuPassage(event, menu)}
           label="Passage"
           compact
           onClose={() => setMenu(null)}

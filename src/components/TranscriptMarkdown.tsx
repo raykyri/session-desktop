@@ -624,7 +624,12 @@ function MarkdownCodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre
         aria-label="Code block options"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => {
+          // WebKit does not focus a clicked button; focus it so a second
+          // click, which closes the menu, leaves focus here.
+          event.currentTarget.focus({ preventScroll: true });
+          setOpen((current) => !current);
+        }}
       >
         <Ellipsis aria-hidden="true" />
       </button>

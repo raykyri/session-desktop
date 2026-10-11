@@ -119,6 +119,58 @@ export function researchMenuShortcutKey(event: {
   return /^[a-z0-9]$/.test(key) ? key : null;
 }
 
+/** Where a press or click landed, as an open menu sees it:
+ * - "menu": in the menu's popover;
+ * - "trigger": on what opened it (the `trigger` prop, an element anchor, or
+ *   what `isTriggerPress` accepts);
+ * - "dialog": in a dialog, such as one an item opened;
+ * - "outside": anywhere else. */
+type ResearchMenuPressRegion = "menu" | "trigger" | "dialog" | "outside";
+
+/** Classifies a press or click target for an open menu. `triggerPress` is
+ * set when the caller's own test placed the event on what opened the menu;
+ * `inDialog` reports whether the target is inside a dialog. */
+export function researchMenuPressRegion<T>(
+  target: T | null,
+  {
+    popover,
+    trigger,
+    triggerPress = false,
+    inDialog,
+  }: {
+    popover: { contains(target: T): boolean } | null;
+    trigger: { contains(target: T): boolean } | null;
+    triggerPress?: boolean;
+    inDialog: (target: T) => boolean;
+  },
+): ResearchMenuPressRegion {
+  if (target === null) return "outside";
+  if (popover?.contains(target)) return "menu";
+  if (triggerPress || trigger?.contains(target)) return "trigger";
+  return inDialog(target) ? "dialog" : "outside";
+}
+
+/** What an event at `region` does to an open menu. `pressed` is where the
+ * pointerdown before a click landed (null for a click from the keyboard).
+ * - "close": a pointerdown outside, or a click outside that was pressed on
+ *   the trigger (a press that moved off it), closes the menu and leaves
+ *   focus where the pointer put it;
+ * - "toggle": a click on the trigger (a mouse click, or Enter or Space on the
+ *   focused trigger) closes the menu, is cancelled so the trigger's own
+ *   handler does not open it again, and returns focus to the trigger;
+ * - null: nothing. A pointerdown on the trigger is ignored, so the menu is
+ *   still open when the click arrives, rather than closed by the pointerdown
+ *   and opened again by the click. */
+export function researchMenuPressAction(
+  type: "pointerdown" | "click",
+  region: ResearchMenuPressRegion,
+  pressed: ResearchMenuPressRegion | null = null,
+): "close" | "toggle" | null {
+  if (type === "pointerdown") return region === "outside" ? "close" : null;
+  if (region === "trigger") return "toggle";
+  return region === "outside" && pressed === "trigger" ? "close" : null;
+}
+
 function isElementAnchor(anchor: HTMLElement | ResearchMenuRect): anchor is HTMLElement {
   return typeof (anchor as HTMLElement).getBoundingClientRect === "function";
 }
@@ -136,11 +188,15 @@ function enabledItems(menu: HTMLElement | null) {
  * item's action leaves focus nowhere (the item was removed with the menu),
  * focus returns to the trigger, or to `fallbackFocus` when the trigger went
  * too. A press outside, a scroll outside, or a resize closes the menu without
- * moving focus. */
+ * moving focus. A click on the trigger (or Enter or Space on it) closes the
+ * menu and returns focus to the trigger; the click does not reach the
+ * trigger's own handler, so callers need not toggle. A press on the trigger
+ * that is released outside it closes the menu as a press outside does. */
 export function ResearchMenu({
   anchor,
   align = "end",
   trigger,
+  isTriggerPress,
   label,
   describedBy,
   width,
@@ -153,10 +209,14 @@ export function ResearchMenu({
   /** The menu's button, or a viewport rectangle such as the pointer's. */
   anchor: HTMLElement | ResearchMenuRect;
   align?: ResearchMenuAlign;
-  /** The control that opened the menu, when it is not the anchor: presses on
-   * it leave the menu to its own toggle, and Escape returns focus to it.
+  /** The control that opened the menu, when it is not the anchor: a click on
+   * it closes the menu, and Escape returns focus to it.
    * Without either, Escape returns focus to what had it when the menu opened. */
   trigger?: HTMLElement | null;
+  /** For a menu opened from something that is not an element, such as a
+   * highlighted passage: whether a pointerdown or click event lands on it.
+   * Such a click closes the menu, as a click on `trigger` does. */
+  isTriggerPress?: (event: MouseEvent) => boolean;
   label: string;
   /** The id of text in the menu that describes it (not a menu item). */
   describedBy?: string;
@@ -183,8 +243,8 @@ export function ResearchMenu({
     maxHeight?: number;
   } | null>(null);
   const owner = trigger ?? (isElementAnchor(anchor) ? anchor : null);
-  const latestRef = useRef({ owner, onClose, fallbackFocus });
-  latestRef.current = { owner, onClose, fallbackFocus };
+  const latestRef = useRef({ owner, isTriggerPress, onClose, fallbackFocus });
+  latestRef.current = { owner, isTriggerPress, onClose, fallbackFocus };
   const [returnFocus] = useState<HTMLElement | null>(() =>
     owner ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null),
   );
@@ -239,19 +299,46 @@ export function ResearchMenu({
   }, []);
 
   useEffect(() => {
-    const inside = (target: EventTarget | null) =>
-      target instanceof Node &&
-      (Boolean(popoverRef.current?.contains(target)) ||
-        Boolean(latestRef.current.owner?.contains(target)) ||
-        (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]') !== null));
+    const region = (event: MouseEvent) =>
+      researchMenuPressRegion(event.target instanceof Node ? event.target : null, {
+        popover: popoverRef.current,
+        trigger: latestRef.current.owner,
+        triggerPress: latestRef.current.isTriggerPress?.(event) ?? false,
+        inDialog: (node) =>
+          node instanceof Element && node.closest('[role="dialog"], [role="alertdialog"]') !== null,
+      });
+    // Where the last pointerdown landed, for the click that follows it.
+    let pressed: ResearchMenuPressRegion | null = null;
     const closeFromOutside = () => {
       restoreOnCloseRef.current = false;
       latestRef.current.onClose();
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (!inside(event.target)) closeFromOutside();
+      pressed = region(event);
+      if (researchMenuPressAction("pointerdown", pressed) === "close") {
+        closeFromOutside();
+      }
+    };
+    // On the window in the capture phase, so it runs before React's
+    // listeners on the root and the trigger's onClick never receives the
+    // click. Enter or Space on a focused trigger dispatches a click too.
+    const onClick = (event: MouseEvent) => {
+      const action = researchMenuPressAction("click", region(event), pressed);
+      pressed = null;
+      if (action === "close") {
+        closeFromOutside();
+        return;
+      }
+      if (action !== "toggle") return;
+      event.preventDefault();
+      event.stopPropagation();
+      latestRef.current.onClose();
+      // WebKit does not focus a clicked button.
+      const target = latestRef.current.owner ?? returnFocus;
+      if (target?.isConnected && target !== document.body) target.focus({ preventScroll: true });
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      pressed = null;
       const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
       if (dialog && !popoverRef.current?.contains(dialog)) return;
       if (researchMenuClosesOn(event)) {
@@ -279,11 +366,13 @@ export function ResearchMenu({
     };
     const onResize = closeFromOutside;
     window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("click", onClick, true);
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("click", onClick, true);
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
