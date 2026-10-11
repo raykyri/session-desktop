@@ -1,3 +1,5 @@
+import { artifactStateForUrl } from "../lib/sessionArtifactState";
+import { useSessionArtifactState } from "../hooks/useSessionArtifactState";
 import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { useSessionWidgetGuards } from "../hooks/useSessionWidgetGuards";
 import { isStaticWidgetPage, readWidgetExecution, rememberWidgetExecution, subscribeWidgetExecution } from "../lib/sessionWidgetExecution";
@@ -17,6 +19,7 @@ export default function SessionWidgetPreview({ url, frameRef, onLoad }: {
   const staticPage = isStaticWidgetPage(url);
   const stopped = execution === "focus" && !staticPage;
   const blocked = navigated || loads > 1 || stopped;
+  useSessionArtifactState(artifactStateForUrl(url), frameRef, blocked ? null : url, !blocked && loads >= 1);
   useSessionWidgetGuards({
     frameRef, frameUrl: blocked ? null : url, generation,
     pageLoaded: !blocked && loads >= 1,

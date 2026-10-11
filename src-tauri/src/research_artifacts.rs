@@ -335,3 +335,183 @@ mod lineage_tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactRef {
+    pub tree_id: String,
+    pub artifact_id: String,
+    pub revision: String,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactState {
+    pub enabled: bool,
+    pub value: Option<serde_json::Value>,
+}
+
+const MAX_STATE_BYTES: usize = 16 * 1024;
+
+fn state_path(root: &Path, reference: &ArtifactRef) -> Result<std::path::PathBuf, String> {
+    if !history(root, &reference.tree_id, &reference.artifact_id)?
+        .iter()
+        .any(|entry| entry.revision == reference.revision)
+    {
+        return Err("artifact revision is unavailable".into());
+    }
+    Ok(directory(root, &reference.tree_id, &reference.artifact_id)
+        .join("state")
+        .join(format!("{}.json", reference.revision)))
+}
+
+fn read_state(path: &Path) -> Result<ArtifactState, String> {
+    match fs::read(path) {
+        Ok(bytes) => {
+            if bytes.len() > MAX_STATE_BYTES + 128 {
+                return Err("saved inputs exceed the size limit".into());
+            }
+            serde_json::from_slice(&bytes).map_err(|error| error.to_string())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ArtifactState::default()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+pub fn get_state(root: &Path, reference: &ArtifactRef) -> Result<ArtifactState, String> {
+    read_state(&state_path(root, reference)?)
+}
+
+pub fn update_state(
+    root: &Path,
+    reference: &ArtifactRef,
+    action: &str,
+    value: Option<serde_json::Value>,
+) -> Result<ArtifactState, String> {
+    let _lock = STORE_LOCK.lock().map_err(|error| error.to_string())?;
+    let path = state_path(root, reference)?;
+    let mut state = read_state(&path)?;
+    match action {
+        "enable" => state.enabled = true,
+        "disable" => {
+            state.enabled = false;
+            state.value = None;
+        }
+        "reset" => state.value = None,
+        "save" => {
+            if !state.enabled {
+                return Err("remembering inputs is disabled".into());
+            }
+            state.value = value;
+        }
+        "migrate" => {
+            if !state.enabled {
+                return Err("enable remembering inputs before copying parent state".into());
+            }
+            let parent = history(root, &reference.tree_id, &reference.artifact_id)?
+                .into_iter()
+                .find(|entry| entry.revision == reference.revision)
+                .and_then(|entry| entry.parent_revision)
+                .ok_or("this revision has no parent")?;
+            let source = get_state(
+                root,
+                &ArtifactRef {
+                    revision: parent,
+                    ..reference.clone()
+                },
+            )?;
+            if !source.enabled || source.value.is_none() {
+                return Err("the parent has no saved inputs".into());
+            }
+            state.value = source.value;
+        }
+        _ => return Err("unknown artifact state action".into()),
+    }
+    if serde_json::to_vec(&state.value)
+        .map_err(|error| error.to_string())?
+        .len()
+        > MAX_STATE_BYTES
+    {
+        return Err("saved inputs exceed the 16 KiB limit".into());
+    }
+    let bytes = serde_json::to_vec(&state).map_err(|error| error.to_string())?;
+    let dir = path.parent().unwrap();
+    fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    let temporary = path.with_extension("tmp");
+    crate::persistence::write_synced(&temporary, &bytes).map_err(|error| error.to_string())?;
+    fs::rename(&temporary, &path).map_err(|error| error.to_string())?;
+    fs::File::open(dir)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| error.to_string())?;
+    Ok(state)
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+    #[test]
+    fn state_requires_opt_in_and_migration_is_explicit() {
+        let root = std::env::temp_dir().join(format!(
+            "session-artifact-state-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let make = |node: &str, parent| ArtifactInput {
+            tree_id: "t".into(),
+            node_id: node.into(),
+            slot: "0".into(),
+            artifact_id: Some("a".into()),
+            title: None,
+            parent_revision: parent,
+            html: node.into(),
+        };
+        let parent = register(&root, make("n1", None)).unwrap();
+        let child = register(&root, make("n2", Some(parent.revision.clone()))).unwrap();
+        let reference = |revision| ArtifactRef {
+            tree_id: "t".into(),
+            artifact_id: "a".into(),
+            revision,
+        };
+        let p = reference(parent.revision);
+        let c = reference(child.revision);
+        let value = Some(serde_json::json!({"version":1,"rate":4}));
+        assert!(!get_state(&root, &p).unwrap().enabled);
+        assert!(update_state(&root, &p, "save", value.clone()).is_err());
+        update_state(&root, &p, "enable", None).unwrap();
+        update_state(&root, &p, "save", value.clone()).unwrap();
+        assert!(
+            update_state(
+                &root,
+                &p,
+                "save",
+                Some(serde_json::json!("x".repeat(MAX_STATE_BYTES)))
+            )
+            .is_err()
+        );
+        assert_eq!(get_state(&root, &p).unwrap().value, value);
+        update_state(&root, &c, "enable", None).unwrap();
+        assert!(get_state(&root, &c).unwrap().value.is_none());
+        assert_eq!(
+            update_state(&root, &c, "migrate", None).unwrap().value,
+            value
+        );
+        assert!(
+            update_state(&root, &c, "reset", None)
+                .unwrap()
+                .value
+                .is_none()
+        );
+        let off = update_state(&root, &p, "disable", None).unwrap();
+        assert!(!off.enabled && off.value.is_none());
+        assert!(update_state(&root, &c, "migrate", None).is_err());
+        assert_eq!(
+            history(&root, "t", "a").unwrap().len(),
+            2,
+            "state files are not revisions"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+}

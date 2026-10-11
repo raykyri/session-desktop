@@ -859,3 +859,13 @@ export function registerResearchArtifact(input: ResearchArtifactInput) {
 export function researchArtifactHistory(treeId: string, artifactId: string) {
   return invoke<{ revisions: ResearchArtifactRevision[]; unresolved: number }>("research_artifact_history", { treeId, artifactId });
 }
+
+export type ResearchArtifactRef = Pick<ResearchArtifactRevision, "treeId" | "artifactId" | "revision">;
+export interface ResearchArtifactState { enabled: boolean; value: unknown; }
+export type ArtifactStateAction = "enable" | "disable" | "save" | "reset" | "migrate";
+export function getResearchArtifactState(reference: ResearchArtifactRef) {
+  return invoke<ResearchArtifactState>("research_artifact_state_get", { reference });
+}
+export function updateResearchArtifactState(reference: ResearchArtifactRef, action: ArtifactStateAction, value: unknown = null) {
+  return invoke<ResearchArtifactState>("research_artifact_state_update", { reference, action, value });
+}

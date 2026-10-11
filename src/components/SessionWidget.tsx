@@ -1,3 +1,6 @@
+import { useSessionArtifactState } from "../hooks/useSessionArtifactState";
+import { withArtifactState } from "../lib/sessionArtifactState";
+import SessionArtifactStateControls from "./SessionArtifactStateControls";
 import { useResearchArtifact } from "../hooks/useResearchArtifact";
 import SessionArtifactDetails from "./SessionArtifactDetails";
 import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
@@ -141,7 +144,9 @@ export default function SessionWidget({
 
   const pageUrl = sessionWidgetFrameUrl(frame);
   const frameUrl = pageUrl ? withBodyFont(pageUrl) : null;
-  const openUrl = sessionWidgetOpenUrl(frame);
+  const rawOpenUrl = sessionWidgetOpenUrl(frame);
+  const openUrl = rawOpenUrl ? withArtifactState(rawOpenUrl, artifact.revision) : null;
+  const artifactState = useSessionArtifactState(artifact.revision, frameRef, frameUrl, frame.loads >= 1);
   const canRun = frame.phase === "ready" && hasScripts && !frame.running && Boolean(frame.urls?.runUrl);
   const scriptsUnavailable = hasScripts && frame.urls !== null && frame.urls.runUrl === null;
 
@@ -237,6 +242,7 @@ export default function SessionWidget({
           </button>
         ) : null}
       </div>
+      {artifact.revision && hasScripts ? <SessionArtifactStateControls revision={artifact.revision} entry={artifactState} /> : null}
       {actionStatus ? <div className="session-widget-feedback" role="status">{actionStatus}</div> : null}
       {source ? <pre className="session-widget-source"><code>{html}</code></pre> : null}
       <div hidden={source}>

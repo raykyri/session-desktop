@@ -966,6 +966,8 @@ const WIDGET_NAVIGATION_GUARD_SCRIPT: &str = r#"(()=>{const p=parent;addEventLis
 /// turned off (NativeSupportHost.disablePeerConnections), without which the run
 /// page is not served at all. A child frame the widget creates gets fresh
 /// globals that this does not reach; only the web view setting covers those.
+const WIDGET_STATE_SCRIPT: &str = r#"(()=>{const p=parent;let restored=false,value=null;const listeners=new Set();Object.defineProperty(window,'sessionWidgetState',{value:Object.freeze({save:(value)=>p.postMessage({type:'session-widget-state-save',value},'*'),onRestore:(fn)=>{if(typeof fn!=='function')return()=>{};listeners.add(fn);if(restored)fn(value);return()=>listeners.delete(fn)}}),writable:false,configurable:false});addEventListener('message',(e)=>{if(e.source!==p||!e.data||e.data.type!=='session-widget-state-restore')return;value=e.data.value;restored=true;for(const fn of listeners)try{fn(value)}catch{}});p.postMessage({type:'session-widget-state-ready'},'*')})();"#;
+
 const WIDGET_PRELUDE_SCRIPT: &str = r#"(()=>{for(const n of["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceTransport","RTCSctpTransport","RTCDtlsTransport","RTCRtpSender","RTCRtpReceiver","RTCRtpTransceiver","RTCSessionDescription","RTCIceCandidate"])try{Object.defineProperty(window,n,{value:undefined,writable:false,configurable:false})}catch(e){}})();"#;
 
 /// Run page only: shows a generic notice when a widget script throws or a
@@ -1039,7 +1041,7 @@ fn render_widget_page(source: &str, body_font_id: Option<&str>, mode: WidgetMode
         WidgetMode::Static => String::new(),
         WidgetMode::Run => {
             format!(
-                "<script>{WIDGET_PRELUDE_SCRIPT}</script>\n<script>{WIDGET_ERROR_SCRIPT}</script>\n"
+                "<script>{WIDGET_PRELUDE_SCRIPT}</script>\n<script>{WIDGET_STATE_SCRIPT}</script>\n<script>{WIDGET_ERROR_SCRIPT}</script>\n"
             )
         }
     };

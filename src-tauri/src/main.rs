@@ -2570,6 +2570,24 @@ fn research_artifact_history(
     Ok(serde_json::json!({ "revisions": revisions, "unresolved": unresolved }))
 }
 
+#[tauri::command(async)]
+fn research_artifact_state_get(
+    state: tauri::State<'_, AppState>,
+    reference: research_artifacts::ArtifactRef,
+) -> Result<research_artifacts::ArtifactState, String> {
+    research_artifacts::get_state(&state.config().workspace_root, &reference)
+}
+
+#[tauri::command(async)]
+fn research_artifact_state_update(
+    state: tauri::State<'_, AppState>,
+    reference: research_artifacts::ArtifactRef,
+    action: String,
+    value: Option<serde_json::Value>,
+) -> Result<research_artifacts::ArtifactState, String> {
+    research_artifacts::update_state(&state.config().workspace_root, &reference, &action, value)
+}
+
 /// Exports the exact authored HTML only after the reader chooses a destination.
 #[tauri::command(async)]
 fn research_widget_download(app: tauri::AppHandle, html: String) -> Result<bool, String> {
@@ -3732,6 +3750,8 @@ fn main() {
             research_widget_download,
             research_artifact_register,
             research_artifact_history,
+            research_artifact_state_get,
+            research_artifact_state_update,
             worktree_location_get,
             worktree_location_set,
             pane_write,
