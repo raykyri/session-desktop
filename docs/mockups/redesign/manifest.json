@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T07:00:36.250Z",
+  "generated": "2026-10-11T07:02:59.728Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -458,6 +458,73 @@
         ],
         "file": "r3/ulysses.html",
         "thumb": "thumbs/r3-ulysses.jpg"
+      },
+      "macos": {
+        "slug": "macos",
+        "round": 3,
+        "title": "macOS system restyle",
+        "influence": "Apple macOS system apps (HIG; Finder, Mail, Notes, System Settings)",
+        "summary": "The current Session layout, vocabulary and keys, drawn with macOS system materials: a translucent source-list sidebar, unified toolbar segments over the column strip, Mail-style list rows with accent selection, native menus and popovers, a Spotlight-style palette and System Settings forms. Nothing moves; someone who uses Session today recognises every screen.",
+        "nouns": [
+          "Question",
+          "Branch",
+          "Highlight",
+          "Folder",
+          "Workspace"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Vibrant sidebar",
+            "summary": "Translucent source-list sidebar and rail over a blurred wallpaper tint, regular toolbar, plain Mail-style rows."
+          },
+          {
+            "id": "b",
+            "label": "Opaque sidebar",
+            "summary": "The sidebar and rail use the opaque window material, as with Reduce transparency turned on."
+          },
+          {
+            "id": "c",
+            "label": "Compact toolbar",
+            "summary": "Compact 38 pt unified toolbar and small control size: shorter headers and sidebar rows, same layout."
+          },
+          {
+            "id": "d",
+            "label": "Inset grouped feed",
+            "summary": "Feed cards, trays and highlights sit in inset grouped lists (rounded cells on a grouped background), as in Notes and System Settings."
+          },
+          {
+            "id": "e",
+            "label": "Graphite accent",
+            "summary": "System accent set to Graphite: selection, glyphs, toggles and the send button turn neutral gray."
+          }
+        ],
+        "changes": [
+          "Sidebar and rail → translucent source list (Finder, Mail): vibrancy material, 11 pt section header, accent-tinted line glyphs, rounded selection that turns accent while the sidebar has focus.",
+          "Feed, thread and post headers → unified toolbar segments (Mail): 52 pt bar aligned to the split-view dividers, back/forward as a toolbar navigation pair, borderless toolbar buttons.",
+          "Feed cards and message rows → Mail list rows: inset hairline separators, blue unread dot in the leading gutter, accent selection while the list has focus and gray selection otherwise.",
+          "Ask/Post switch → segmented control with icon segments; model menu → native menu with agent section headers, checkmarks and an Effort submenu.",
+          "Selection popover, branch-marker tips, … menus and context menus → popover and menu material with right-aligned key equivalents (A, H).",
+          "Command palette → Spotlight-style floating panel; Settings and Agent Setup → System Settings grouped forms with switches, pop-up buttons and toolbar tabs.",
+          "Column dividers → split-view hairlines with a wider resize hit area and accent highlight while dragging; overlay scrollers in every column.",
+          "Notifications → Notification Center banners; feed toast → HUD; light and dark appearances built from semantic colours (label, separator, control accent)."
+        ],
+        "decisions": [
+          "Kept: sidebar → feed column → column strip, with the 52 px rail at ⇧⌘G or when the window is narrow.",
+          "Kept: every label and empty text (Home, Bookmarks, Highlights, Drafts, Archive, Ask/Post, + Ask, Save draft, Branch · N messages, Recap:, Show trace, Stop).",
+          "Kept: cards without a metadata row, status dots top-right, starred child rows under the question, trays after the Unfiled list.",
+          "Kept: ask box at the top of each messages column with messages newest first; branch markers in the answer's right margin; branches open as the next pair.",
+          "Kept: all shortcuts (⌘N, ⌘J, ⌘O, ⌘K, ⌘,, ⇧⌘G, ⌘[ ⌘], A/H/E, ⌥↑/⌥↓, ⌃Tab).",
+          "Not adopted: Finder view modes (icon, column, gallery), because the feed is one list with trays and a view switch would add a mode.",
+          "Not adopted: an inspector replacing the branch markers and the next pair, because branches stay in the column strip.",
+          "Not adopted: Finder tags in place of folders, because folders and workspaces are the current filing model.",
+          "Not adopted: a Freeform-style canvas or map, because the app has no such view.",
+          "Not adopted: Messages-style chat bubbles for the conversation, because the messages column is a selection list that chooses which answer the answer column shows.",
+          "Not adopted: a date column on feed cards (Mail), because cards carry no metadata row today.",
+          "Not adopted: a separate Settings window, because Settings and Agent Setup open as panels over the main window; only their contents take the System Settings form style."
+        ],
+        "file": "r3/macos.html",
+        "thumb": "thumbs/r3-macos.jpg"
       }
     }
   }
