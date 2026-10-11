@@ -876,13 +876,12 @@ fn map_jsonl_error(flavor: JsonlFlavor, err: String, stderr_log: &PathBuf) -> St
         || lower.contains("not authenticated")
         || lower.contains("authentication required")
     {
-        return format!(
-            "{} is not logged in. Open a terminal tab, run {}, sign in, and retry this research.",
+        return crate::research::sign_in_error_message(
             flavor.label(),
             match flavor {
-                JsonlFlavor::Codex => "codex",
-                JsonlFlavor::Grok => "grok",
-            }
+                JsonlFlavor::Codex => "codex login",
+                JsonlFlavor::Grok => "grok login",
+            },
         );
     }
     let detail = stderr.trim();
@@ -1480,6 +1479,38 @@ impl TurnMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jsonl_sign_in_failures_name_the_login_command_and_no_terminal_tab() {
+        let no_stderr = PathBuf::from("/nonexistent/session-research-stderr.log");
+        let codex = map_jsonl_error(
+            JsonlFlavor::Codex,
+            "Not logged in. Please run codex login".to_string(),
+            &no_stderr,
+        );
+        assert_eq!(
+            codex,
+            "Codex is not signed in. Run `codex login` in Terminal to sign in, then retry this research."
+        );
+        assert_eq!(
+            crate::research::run_error_kind(&codex),
+            Some(crate::research::RunErrorKind::Auth)
+        );
+        let grok = map_jsonl_error(
+            JsonlFlavor::Grok,
+            "authentication required".to_string(),
+            &no_stderr,
+        );
+        assert!(grok.starts_with("Grok is not signed in. Run `grok login` in Terminal"));
+        // Other failures pass through unclassified.
+        let other = map_jsonl_error(
+            JsonlFlavor::Codex,
+            "stream disconnected before completion".to_string(),
+            &no_stderr,
+        );
+        assert_eq!(other, "stream disconnected before completion");
+        assert_eq!(crate::research::run_error_kind(&other), None);
+    }
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };

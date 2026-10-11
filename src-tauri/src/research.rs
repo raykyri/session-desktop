@@ -1029,11 +1029,76 @@ pub struct ExchangeView {
 pub struct RunView {
     #[serde(flatten)]
     pub record: RunRecord,
+    /// What kind of failure `record.error` reports, when Session recognized
+    /// it. Absent for other errors, which keep the plain error and Retry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<RunErrorKind>,
     /// The native session id was recorded, so a follow-up can fork it.
     pub session_ready: bool,
     /// A pane process is still bound to the run and has to be closed, even
     /// after the run settled (a cancel whose kill failed).
     pub holds_process: bool,
+}
+
+/// A run failure Session recognized, so the UI can offer a repair specific to
+/// it rather than only Retry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RunErrorKind {
+    /// The provider CLI is not signed in.
+    Auth,
+}
+
+/// The error a run records when its provider CLI is not signed in. Every
+/// path that recognizes a sign-in failure (the Claude SDK runtime, the
+/// Codex and Grok JSONL runtimes, the launch readiness check) writes this
+/// form, which `run_error_kind` recognizes.
+pub fn sign_in_error_message(agent_label: &str, login_command: &str) -> String {
+    format!(
+        "{agent_label} is not signed in. Run `{login_command}` in Terminal to sign in, then retry this research."
+    )
+}
+
+/// The marker every sign-in failure message carries: the run-time form from
+/// `sign_in_error_message`, and the readiness check's
+/// "<agent> is not signed in. Run `<command>` and check again."
+const SIGN_IN_ERROR_MARKER: &str = " is not signed in. Run `";
+
+/// Recognizes the failures Session itself classified when it recorded the
+/// error, so the classification survives storage as plain error text.
+pub fn run_error_kind(error: &str) -> Option<RunErrorKind> {
+    error
+        .contains(SIGN_IN_ERROR_MARKER)
+        .then_some(RunErrorKind::Auth)
+}
+
+/// The error to show for a stored run error. Sign-in failures recorded by
+/// earlier builds told the user to open a terminal tab, which Session no
+/// longer has; they are shown in the current form instead.
+fn displayed_run_error(adapter: &str, error: &str) -> Option<String> {
+    if !(error.contains(" is not logged in.") && error.contains("Open a terminal tab")) {
+        return None;
+    }
+    // The runtimes' own sign-in messages use the default binary names too.
+    let (label, login_command) = match adapter {
+        "claude" => ("Claude Code", "claude auth login"),
+        "codex" => ("Codex", "codex login"),
+        "grok" => ("Grok", "grok login"),
+        _ => return None,
+    };
+    Some(sign_in_error_message(label, login_command))
+}
+
+fn run_view_record(adapter: &str, record: &RunRecord) -> RunRecord {
+    let mut record = record.clone();
+    if let Some(current) = record
+        .error
+        .as_deref()
+        .and_then(|error| displayed_run_error(adapter, error))
+    {
+        record.error = Some(current);
+    }
+    record
 }
 
 impl ResearchNode {
@@ -1044,10 +1109,14 @@ impl ResearchNode {
             NodeBody::Exchange(exchange) => NodeBodyView::Exchange(ExchangeView {
                 message: exchange.message.clone(),
                 agent: exchange.agent.clone(),
-                run: RunView {
-                    record: exchange.run.clone(),
-                    session_ready: exchange.binding.native_session_id.is_some(),
-                    holds_process: exchange.binding.pane_id.is_some(),
+                run: {
+                    let record = run_view_record(&exchange.agent.adapter, &exchange.run);
+                    RunView {
+                        error_kind: record.error.as_deref().and_then(run_error_kind),
+                        record,
+                        session_ready: exchange.binding.native_session_id.is_some(),
+                        holds_process: exchange.binding.pane_id.is_some(),
+                    }
                 },
                 recap: exchange.recap.clone(),
             }),
@@ -1174,7 +1243,9 @@ impl From<&ResearchNode> for RecentResearchQuery {
             reply_anchor: node.reply_anchor().map(str::to_string),
             reply_anchor_author: None,
             status: node.status(),
-            error: node.run().and_then(|run| run.error.clone()),
+            error: node
+                .run()
+                .and_then(|run| run_view_record(node.adapter(), run).error),
             created_at: node.created_at,
             starred_at: node.starred_at,
             branch_depth: 0,
@@ -4702,6 +4773,65 @@ mod tests {
         assert_eq!(document["type"], "document");
         assert_eq!(document["source"], "transcript");
         assert!(document.get("message").is_none());
+        std::fs::remove_dir_all(folder).ok();
+    }
+
+    #[test]
+    fn run_views_classify_sign_in_failures_and_replace_terminal_tab_copy() {
+        let folder = temp_workspace();
+        let mut node = sample_detached_archive(&folder).nodes.remove(0);
+        let fail = |node: &mut ResearchNode, adapter: &str, error: &str| {
+            node.exchange_mut().unwrap().agent.adapter = adapter.to_string();
+            let run = node.run_mut().unwrap();
+            run.status = ResearchNodeStatus::Failed;
+            run.error = Some(error.to_string());
+            serde_json::to_value(node.view()).unwrap()["run"].clone()
+        };
+
+        // The runtime's sign-in failure is reported as one.
+        let message = sign_in_error_message("Codex", "codex login");
+        let run = fail(&mut node, "codex", &message);
+        assert_eq!(run["errorKind"], "auth");
+        assert_eq!(run["error"], message.as_str());
+
+        // So is the launch readiness check's sign-out message.
+        let run = fail(
+            &mut node,
+            "codex",
+            "Codex is not signed in. Run `codex login` and check again.",
+        );
+        assert_eq!(run["errorKind"], "auth");
+
+        // An error stored by an earlier build no longer sends the user to a
+        // terminal tab.
+        let run = fail(
+            &mut node,
+            "grok",
+            "Grok is not logged in. Open a terminal tab, run grok, sign in, and retry this research.",
+        );
+        assert_eq!(run["errorKind"], "auth");
+        assert_eq!(
+            run["error"],
+            "Grok is not signed in. Run `grok login` in Terminal to sign in, then retry this research."
+        );
+        let run = fail(
+            &mut node,
+            "claude",
+            "Claude Code is not logged in. Open a terminal tab, run claude, and sign in — then retry this research.",
+        );
+        assert_eq!(
+            run["error"],
+            "Claude Code is not signed in. Run `claude auth login` in Terminal to sign in, then retry this research."
+        );
+        assert_eq!(
+            RecentResearchQuery::from(&node).error.as_deref(),
+            run["error"].as_str()
+        );
+
+        // Other failures keep their text and get no repair.
+        let run = fail(&mut node, "codex", "model `gpt-x` is not available");
+        assert!(run.get("errorKind").is_none());
+        assert_eq!(run["error"], "model `gpt-x` is not available");
         std::fs::remove_dir_all(folder).ok();
     }
 

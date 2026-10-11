@@ -1,6 +1,7 @@
-import { memo, useCallback, useId } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  KeyRound,
   LoaderCircle,
   RotateCcw,
   Square,
@@ -23,6 +24,7 @@ import {
   timelineStatusClass,
 } from "../TranscriptActivity";
 import { ResearchElapsedClock } from "./ResearchClock";
+import ResearchSignInRepair from "./ResearchSignInRepair";
 import type { SegmentView } from "../../lib/researchSegmentView";
 import ResearchRecap from "./ResearchRecap";
 import ResearchRowRail from "./ResearchRowRail";
@@ -238,6 +240,7 @@ function sameTurnNode(a: ResearchNode, b: ResearchNode) {
     a.id === b.id &&
     nodeStatus(a) === nodeStatus(b) &&
     nodeRun(a)?.error === nodeRun(b)?.error &&
+    nodeRun(a)?.errorKind === nodeRun(b)?.errorKind &&
     nodeRun(a)?.holdsProcess === nodeRun(b)?.holdsProcess &&
     nodeRun(a)?.sessionReady === nodeRun(b)?.sessionReady &&
     a.parentNodeId === b.parentNodeId &&
@@ -361,6 +364,23 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
     (element: HTMLDivElement | null) => registerSegmentElement(nodeId, "root", element),
     [nodeId, registerSegmentElement],
   );
+  // The sign-in repair panel under a failed run whose agent is not signed
+  // in. Held by node id: the pane shows other messages' answers too.
+  const [repairNodeId, setRepairNodeId] = useState<string | null>(null);
+  const repairButtonRef = useRef<HTMLButtonElement | null>(null);
+  const signInFailure = nodeStatus(node) === "failed" && run?.errorKind === "auth";
+  const repairOpen = signInFailure && canRetry && repairNodeId === nodeId;
+  // After Retry this research, the panel goes away with the failure; focus
+  // moves to the message's row in the messages column rather than the page.
+  const repairRetryNodeIdRef = useRef<string | null>(null);
+  const status = nodeStatus(node);
+  useEffect(() => {
+    if (repairRetryNodeIdRef.current !== nodeId || status === "failed") return;
+    repairRetryNodeIdRef.current = null;
+    document
+      .querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.focus({ preventScroll: true });
+  }, [nodeId, status]);
   const retryButton = (label: string) =>
     canRetry ? (
       <button
@@ -451,8 +471,19 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           </div>
         </div>
         <div className="research-turn-actions">
-          {retryButton("Retry")}
-          {canEditQuestion ? (
+          {signInFailure && canRetry && !repairOpen ? (
+            <button
+              ref={repairButtonRef}
+              className="control-button research-turn-button"
+              type="button"
+              onClick={() => setRepairNodeId(node.id)}
+            >
+              <KeyRound size={13} aria-hidden="true" />
+              <span>Repair sign-in</span>
+            </button>
+          ) : null}
+          {repairOpen ? null : retryButton("Retry")}
+          {canEditQuestion && !repairOpen ? (
             <button
               className="control-button research-turn-button is-ghost"
               type="button"
@@ -462,6 +493,20 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
             </button>
           ) : null}
         </div>
+        {repairOpen ? (
+          <ResearchSignInRepair
+            adapterId={nodeAdapter(node)}
+            retrying={retrying}
+            onRetry={() => {
+              repairRetryNodeIdRef.current = node.id;
+              onRetryNode(node.id);
+            }}
+            onClose={() => {
+              setRepairNodeId(null);
+              window.requestAnimationFrame(() => repairButtonRef.current?.focus());
+            }}
+          />
+        ) : null}
       </>
     ) : null;
   const cancellation =

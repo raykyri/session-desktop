@@ -24,7 +24,6 @@ pub const INTERRUPT_GRACE: Duration = Duration::from_secs(2);
 pub const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 pub const SESSION_INIT_STALL: Duration = Duration::from_secs(30);
 pub const RESULT_AFTER_END_TURN_STALL: Duration = Duration::from_secs(30);
-pub const LOGIN_ERROR_MESSAGE: &str = "Claude Code is not logged in. Open a terminal tab, run claude, and sign in — then retry this research.";
 const MAX_STDOUT_LINE_BYTES: usize = 1024 * 1024;
 const MAX_PENDING_STDOUT_MESSAGES: usize = 256;
 const MAX_STDERR_LOG_BYTES: usize = 4 * 1024 * 1024;
@@ -138,7 +137,10 @@ pub fn login_error_message(text: &str) -> Option<String> {
         || (lower.contains("authentication")
             && (lower.contains("required") || lower.contains("failed") || lower.contains("error")))
     {
-        Some(LOGIN_ERROR_MESSAGE.to_string())
+        Some(crate::research::sign_in_error_message(
+            "Claude Code",
+            "claude auth login",
+        ))
     } else {
         None
     }
@@ -893,7 +895,16 @@ mod tests {
 
     #[test]
     fn login_error_message_maps_cli_copy() {
-        assert!(login_error_message("not logged in").is_some());
+        let message = login_error_message("not logged in").expect("a sign-in failure");
+        assert_eq!(
+            message,
+            "Claude Code is not signed in. Run `claude auth login` in Terminal to sign in, then retry this research."
+        );
+        assert_eq!(
+            crate::research::run_error_kind(&message),
+            Some(crate::research::RunErrorKind::Auth)
+        );
+        assert!(!message.contains("terminal tab"));
         assert!(login_error_message("Please run /login").is_some());
         assert!(login_error_message("authentication failed").is_some());
         assert!(login_error_message("git log output").is_none());

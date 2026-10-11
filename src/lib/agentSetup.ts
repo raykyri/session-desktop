@@ -104,7 +104,7 @@ export function agentSetupStatusLabel(adapter: AgentAdapterMetadata) {
 }
 
 /** Why sign-in could not be verified, for an unverified agent. */
-function agentSignInUnverifiedText(adapter: AgentAdapterMetadata) {
+export function agentSignInUnverifiedText(adapter: AgentAdapterMetadata) {
   const detail = adapter.authDetail?.trim();
   return detail
     ? `Session could not verify sign-in. ${detail}`

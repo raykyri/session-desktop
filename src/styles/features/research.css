@@ -1466,6 +1466,69 @@
   color: var(--research-failed-text);
 }
 
+/* Long provider errors (paths, URLs) wrap inside the alert. */
+.research-turn-alert > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Sign-in repair under a failed run: the agent's sign-in command, the last
+   check's result, and Verify / Retry this research. The command row uses
+   the Agent Setup command recipe (.agent-setup-command). */
+.research-repair {
+  display: flex;
+  max-width: 70ch;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--surface-border-subtle);
+  border-radius: 8px;
+  background: var(--research-feed-field-bg);
+  font-size: calc(13px + var(--font-ui-size-offset));
+  line-height: 1.5;
+}
+
+.research-repair-title {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: calc(13.5px + var(--font-ui-size-offset));
+  font-weight: 600;
+}
+
+.research-repair-title:focus {
+  outline: none;
+}
+
+.research-repair-text,
+.research-repair-result {
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.research-repair-result:empty {
+  display: none;
+}
+
+.research-repair-result.is-verified {
+  color: var(--status-success-fg);
+}
+
+.research-repair-result.is-unverified {
+  color: var(--status-warning-fg);
+}
+
+.research-repair-result.is-signedOut,
+.research-repair-result.is-blocked,
+.research-repair-result.is-checkFailed {
+  color: var(--status-attention-fg);
+}
+
+.research-repair .research-turn-actions {
+  margin-top: 2px;
+}
+
 .research-turn-note {
   margin-top: 6px;
   color: var(--text-muted);

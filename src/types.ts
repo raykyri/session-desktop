@@ -454,6 +454,9 @@ export interface AgentSpec {
 export interface RunState {
   status: ResearchNodeStatus;
   error?: string | null;
+  /** The failure's kind, when Session recognized it: "auth" for an agent
+   * that is not signed in. Absent for other errors. */
+  errorKind?: "auth" | null;
   startedAt?: number | null;
   completedAt?: number | null;
   /** Set when the durable response snapshot lands — the viewer's signal to

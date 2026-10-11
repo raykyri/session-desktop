@@ -49,6 +49,10 @@ import {
 } from "./lib/researchScope";
 import ResearchThreadPage, { type ResearchThreadTreeMenu } from "./components/research/ResearchThreadPage";
 import { ResearchInlineWidgetsContext } from "./components/research/ResearchMessage";
+import {
+  ResearchAgentRepairContext,
+  type ResearchAgentRepair,
+} from "./components/research/ResearchSignInRepair";
 import ResearchDraftView from "./components/research/ResearchDraftView";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
@@ -990,6 +994,21 @@ function MainApp() {
     ],
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
+  // The sign-in repair under a failed run: the probed agents, and an explicit
+  // forced probe as its Verify action.
+  const verifyAgentReadiness = useCallback(
+    () => refreshAdapterReadiness({ force: true }),
+    [refreshAdapterReadiness],
+  );
+  const researchAgentRepair = useMemo<ResearchAgentRepair>(
+    () => ({
+      adapters: configAdapters ?? [],
+      verify: verifyAgentReadiness,
+      onCopied: showAppToast,
+      onError: setError,
+    }),
+    [configAdapters, showAppToast, verifyAgentReadiness],
+  );
   // The shell is a plain container: its sidebar (an aside) and the
   // workspace (the main landmark) sit side by side, not nested.
   return (
@@ -1193,50 +1212,52 @@ function MainApp() {
               // and the follow-up draft before paint. Resetting them in effects
               // would briefly show and refetch the previous tree's node.
               <ResearchInlineWidgetsContext.Provider value={settings.researchInlineWidgets}>
-                <ResearchThreadPage
-                  key={activeResearchTreeId}
-                  detail={activeResearchDetail}
-                  treeTitle={
-                    activeResearchDetail?.tree.title ??
-                    researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
-                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
-                  }
-                  treeType={
-                    (
-                      researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
-                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
-                    )?.type
-                  }
-                  archived={Boolean(activeResearchDetail?.tree.archivedAt)}
-                  recapPendingNodeIds={recapPendingNodeIds}
-                  detailError={activeResearchDetailError}
-                  onRetryDetail={retryActiveResearchDetail}
-                  onFork={createResearchFollowup}
-                  postActions={postActions}
-                  onRemoveBranch={removeResearchBranchFromThread}
-                  onRemoveTree={removeResearchTreeAndSelectFallback}
-                  onRenameTree={renameResearchTreeTitle}
-                  onUpdateDocument={editResearchDocument}
-                  onUpdatePost={editResearchPost}
-                  onAskAsQuestion={askResearchEditorQuestion}
-                  readQuestionModel={readResearchQuestionModel}
-                  onCancel={cancelResearchRun}
-                  onRetryNode={retryResearchRun}
-                  onRerunNode={rerunResearchRun}
-                  linkActions={browser.linkActionsFor(researchBrowserOwnerId(activeResearchTreeId))}
-                  onError={setError}
-                  onToast={handleResearchThreadToast}
-                  shortcutHintsShown={shortcutHintsShown}
-                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  onOpenNodesChange={setOpenResearchNodeIds}
-                  treeMenu={activeResearchTreeMenu}
-                  canGoBack={researchHistoryNav.canGoBack}
-                  canGoForward={researchHistoryNav.canGoForward}
-                  onBack={goResearchBack}
-                  onForward={goResearchForward}
-                  onNavigate={reportResearchNavigation}
-                  onPruneVisits={pruneResearchNodeVisits}
-                />
+                <ResearchAgentRepairContext.Provider value={researchAgentRepair}>
+                  <ResearchThreadPage
+                    key={activeResearchTreeId}
+                    detail={activeResearchDetail}
+                    treeTitle={
+                      activeResearchDetail?.tree.title ??
+                      researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
+                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
+                    }
+                    treeType={
+                      (
+                        researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+                        archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
+                      )?.type
+                    }
+                    archived={Boolean(activeResearchDetail?.tree.archivedAt)}
+                    recapPendingNodeIds={recapPendingNodeIds}
+                    detailError={activeResearchDetailError}
+                    onRetryDetail={retryActiveResearchDetail}
+                    onFork={createResearchFollowup}
+                    postActions={postActions}
+                    onRemoveBranch={removeResearchBranchFromThread}
+                    onRemoveTree={removeResearchTreeAndSelectFallback}
+                    onRenameTree={renameResearchTreeTitle}
+                    onUpdateDocument={editResearchDocument}
+                    onUpdatePost={editResearchPost}
+                    onAskAsQuestion={askResearchEditorQuestion}
+                    readQuestionModel={readResearchQuestionModel}
+                    onCancel={cancelResearchRun}
+                    onRetryNode={retryResearchRun}
+                    onRerunNode={rerunResearchRun}
+                    linkActions={browser.linkActionsFor(researchBrowserOwnerId(activeResearchTreeId))}
+                    onError={setError}
+                    onToast={handleResearchThreadToast}
+                    shortcutHintsShown={shortcutHintsShown}
+                    requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                    onOpenNodesChange={setOpenResearchNodeIds}
+                    treeMenu={activeResearchTreeMenu}
+                    canGoBack={researchHistoryNav.canGoBack}
+                    canGoForward={researchHistoryNav.canGoForward}
+                    onBack={goResearchBack}
+                    onForward={goResearchForward}
+                    onNavigate={reportResearchNavigation}
+                    onPruneVisits={pruneResearchNodeVisits}
+                  />
+                </ResearchAgentRepairContext.Provider>
               </ResearchInlineWidgetsContext.Provider>
             ) : openResearchDraft ? (
               <ResearchDraftView

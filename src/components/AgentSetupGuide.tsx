@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowRight, Check, CircleCheck, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import AgentSetupCommand from "./AgentSetupCommand";
+import { ArrowRight, Check, CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { AgentAdapterMetadata } from "../types";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../lib/adapterIcons";
 import {
@@ -10,7 +11,6 @@ import {
   agentSetupSteps,
 } from "../lib/agentSetup";
 import { openExternalUrl } from "../lib/api";
-import { writeClipboardText } from "../lib/clipboard";
 
 interface AgentSetupGuideProps {
   adapters: readonly AgentAdapterMetadata[];
@@ -28,43 +28,6 @@ interface AgentSetupGuideProps {
    * set, a ready agent offers "Start research with …", and an agent whose
    * sign-in could not be verified offers "Try research with …". */
   onStartResearch?: (adapter: AgentAdapterMetadata) => void;
-}
-
-/** A shell command with a copy button. Long commands wrap. */
-function AgentSetupCommand({
-  command,
-  onCopied,
-  onError,
-}: {
-  command: string;
-  onCopied: (message: string) => void;
-  onError: (message: string) => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="agent-setup-command">
-      <code>{command}</code>
-      <button
-        type="button"
-        className="agent-setup-copy"
-        aria-label="Copy command"
-        title="Copy command"
-        onClick={() => {
-          void writeClipboardText(command)
-            .then(() => {
-              onCopied("Command copied");
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1200);
-            })
-            .catch((err) => {
-              onError(err instanceof Error ? err.message : String(err));
-            });
-        }}
-      >
-        {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-      </button>
-    </div>
-  );
 }
 
 function firstIncompleteInstanceId(adapters: readonly AgentAdapterMetadata[]) {
