@@ -4746,32 +4746,32 @@ function ResearchThreadPage({
             <span className={`research-msg-pill${item.failed || stalled ? " is-error" : " is-plain"}`}>
               {item.failed || stalled ? "Not sent" : "Queued"}
             </span>
+            <button
+              type="button"
+              className="research-msg-meta-button research-queue-remove"
+              onClick={remove}
+            >
+              Remove
+            </button>
           </div>
           {item.failed || stalled ? (
             <p className="research-msg-note" role={item.failed ? "alert" : undefined}>
               {item.failed ?? "The last answer stopped; retry it, or edit this question."}
             </p>
           ) : null}
-          <div className="research-turn-actions research-msg-actions">
-            {item.failed ? (
-              <button type="button" className="control-button research-turn-button" onClick={retry}>
-                <RefreshCw size={13} aria-hidden="true" />
-                <span>Retry</span>
-              </button>
-            ) : null}
-            {stalled || item.failed ? (
+          {item.failed || stalled ? (
+            <div className="research-turn-actions research-msg-actions">
+              {item.failed ? (
+                <button type="button" className="control-button research-turn-button" onClick={retry}>
+                  <RefreshCw size={13} aria-hidden="true" />
+                  <span>Retry</span>
+                </button>
+              ) : null}
               <button type="button" className="control-button research-turn-button is-ghost" onClick={edit}>
                 Edit question
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="control-button research-turn-button is-ghost research-queue-remove"
-              onClick={remove}
-            >
-              Remove
-            </button>
-          </div>
+            </div>
+          ) : null}
         </li>
       );
     });

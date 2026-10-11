@@ -1040,6 +1040,30 @@
   padding-bottom: 4px;
 }
 
+/* A text button in the meta line, at the line's size: Remove beside a
+   queued question's pill. */
+.research-msg-meta-button {
+  min-height: 0;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.research-msg-meta-button:hover {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
+}
+
+.research-msg-meta-button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
 .research-msg-row.is-client-queued .research-msg-content,
 .research-msg-row.is-client-queued .research-msg-meta {
   pointer-events: auto;
