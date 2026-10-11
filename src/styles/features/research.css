@@ -899,8 +899,11 @@
   margin: 0;
 }
 
+/* The same size as a Home feed card's question. */
 .research-msg-prompt .turn-markdown.research-prose,
 .research-msg-plain {
+  --research-body-font-size: calc(var(--research-compact-font-size) + 1px);
+  --research-body-line-height: var(--research-compact-line-height);
   color: var(--text-primary);
   font-size: var(--research-body-font-size);
   line-height: var(--research-body-line-height);

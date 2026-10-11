@@ -810,7 +810,7 @@
 .research-feed-card-title ~ .research-feed-card-question {
   display: -webkit-box;
   overflow: hidden;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }

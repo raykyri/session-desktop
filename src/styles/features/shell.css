@@ -73,7 +73,7 @@
 .sidebar-collapse-toggle {
   position: absolute;
   top: 9px;
-  left: 80px;
+  left: 84px;
   z-index: 2;
 }
 
@@ -196,7 +196,7 @@
 .research-rail-icon.is-beside-titlebar {
   position: absolute;
   top: 9px;
-  left: 80px;
+  left: 84px;
   width: 26px;
   height: 26px;
   border-radius: var(--radius-md);
