@@ -23,11 +23,11 @@ const noop = () => {};
 const header = (props: Partial<Parameters<typeof ResearchPairHeader>[0]> = {}) =>
   renderToStaticMarkup(createElement(ResearchPairHeader, { title: "A thread", ...props }));
 
-test("a pair's header is one drag-region bar with the title and + Ask, and no Answer label or counter", () => {
-  const html = header({ onAsk: noop });
+test("a pair's header is one drag-region bar with the title, and no + Ask, Answer label or counter", () => {
+  const html = header();
   assert.match(html, /class="research-column-bar" data-tauri-drag-region="true"/);
   assert.match(html, /<h2 class="research-column-title"[^>]*title="A thread">A thread<\/h2>/);
-  assert.match(html, /aria-label="Go to the ask box"[^>]*>.*Ask<\/button>/);
+  assert.doesNotMatch(html, /Go to the ask box|<button/);
   assert.doesNotMatch(html, />Answer</);
   assert.doesNotMatch(html, / of \d/);
 });

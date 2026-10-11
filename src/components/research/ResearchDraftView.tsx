@@ -66,13 +66,7 @@ export default function ResearchDraftView({
       {...columnAttributes({ id: "T0", role: "draft", draftId: draft.id })}
       aria-label={`Draft: ${title}`}
     >
-      <ResearchPairHeader
-        title={title}
-        onAsk={() => {
-          composerRef.current?.focus();
-          composerRef.current?.element()?.scrollIntoView({ block: "nearest" });
-        }}
-      />
+      <ResearchPairHeader title={title} />
       <div className="research-column-scroll">
         <div className="research-column-content research-reading-surface">
           <ResearchConversationComposer

@@ -5272,11 +5272,6 @@ function ResearchThreadPage({
               // Provenance: a transcript came from a terminal session.
               imported={level === 0 && rootNode?.type === "document" && rootNode.source === "transcript"}
               archived={level === 0 && archived}
-              onAsk={
-                head && nodeType(head) !== "post"
-                  ? () => requestFocus({ kind: "composer", key: headId }, "reveal")
-                  : undefined
-              }
             />
             <div className="research-column-scroll" data-research-scroll onScroll={onColumnScroll(column)}>
               <div className="research-column-content research-reading-surface">

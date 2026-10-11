@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Ellipsis, Plus, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ellipsis, Terminal } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
 import { columnAttributes } from "../../lib/researchColumns";
 
 /** The header bar of one level's pair. It spans the messages and answer
  * columns: the thread's title (or "Branch · N messages"), clamped to
- * four lines, and "+ Ask" at the right, which jumps to the level's ask box.
- * A post's two columns have a header each ("Post", "Thread · N"). The bar is
+ * four lines. A post's two columns have a header each ("Post", "Thread · N"). The bar is
  * a window drag region; its buttons are not. */
 export function ResearchPairHeader({
   title,
@@ -15,7 +14,6 @@ export function ResearchPairHeader({
   history,
   imported = false,
   archived = false,
-  onAsk,
   menu = null,
 }: {
   title: string;
@@ -30,7 +28,6 @@ export function ResearchPairHeader({
   /** A point-in-time copy of a terminal conversation. */
   imported?: boolean;
   archived?: boolean;
-  onAsk?: () => void;
   /** A … button at the right of the bar that opens the column's menu. */
   menu?: { label: string; open: boolean; onOpen: (trigger: HTMLButtonElement) => void } | null;
 }) {
@@ -67,17 +64,6 @@ export function ResearchPairHeader({
           </span>
         ) : null}
         {archived ? <span className="research-archived-label">Archived</span> : null}
-        {onAsk ? (
-          <button
-            type="button"
-            className="control-button research-head-button"
-            aria-label="Go to the ask box"
-            onClick={onAsk}
-          >
-            <Plus size={13} aria-hidden="true" />
-            Ask
-          </button>
-        ) : null}
         {menu ? (
           <button
             type="button"

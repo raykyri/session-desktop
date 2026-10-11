@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { FilePen, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
+import { FilePen, Pencil, RotateCw, Trash2 } from "lucide-react";
 import type {
   RecentResearchQuery,
   ResearchDraft,
@@ -1208,23 +1208,8 @@ function ResearchActivityFeed({
     researchTrees.length === 0;
 
   // The feed's ask box starts Home. In Bookmarks and a folder it ends the
-  // list, and "+ Ask" in the header brings it into view.
+  // list.
   const composerBlock = composer ? <div className="research-feed-composer">{composer}</div> : null;
-  const askButton = composer ? (
-    <button
-      type="button"
-      className="control-button research-head-button"
-      aria-label="Go to the ask box"
-      onClick={() => {
-        const box = rootRef.current?.querySelector<HTMLElement>(".research-feed-composer");
-        box?.scrollIntoView({ block: "nearest" });
-        box?.querySelector<HTMLElement>("textarea, input")?.focus({ preventScroll: true });
-      }}
-    >
-      <Plus size={13} aria-hidden="true" />
-      Ask
-    </button>
-  ) : null;
   const headerActions =
     userFolder ? (
       <>
@@ -1247,7 +1232,6 @@ function ResearchActivityFeed({
         >
           <Trash2 size={15} aria-hidden="true" />
         </button>
-        {askButton}
       </>
     ) : view.kind === "home" || view.kind === "bookmarks" ? (
       <>
@@ -1267,9 +1251,8 @@ function ResearchActivityFeed({
         {view.kind === "home" && onImportReport ? (
           <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
         ) : null}
-        {view.kind === "home" ? null : askButton}
       </>
-    ) : askButton;
+    ) : null;
 
   return (
     <div ref={rootRef} className="research-feed">

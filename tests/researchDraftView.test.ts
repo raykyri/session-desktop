@@ -20,7 +20,8 @@ test("a draft opens as a messages column: its question as the title, then a full
     }),
   );
   assert.match(html, /<h2 class="research-column-title"[^>]*>An unsent draft<\/h2>/);
-  assert.match(html, /aria-label="Go to the ask box"/);
+  // The header has no + Ask button.
+  assert.doesNotMatch(html, /Go to the ask box/);
   assert.match(html, /research-composer-wrap is-full-width/);
   assert.match(html, /research-composer-mode-label"><b>Draft<\/b>/);
   assert.match(html, /<textarea[^>]*aria-label="Draft question"[^>]*>An unsent draft<\/textarea>/);

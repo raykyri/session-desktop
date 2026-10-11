@@ -61,8 +61,8 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.match(html, /post-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
-  // The ask box starts Home, before the Unfiled list; Home's header has no
-  // + Ask, and its header marks Home for the collapsed sidebar.
+  // The ask box starts Home, before the Unfiled list; the header has no
+  // + Ask, and it marks Home for the collapsed sidebar.
   assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-card"));
   assert.ok(html.indexOf("research-feed-card") < html.indexOf("research-feed-tray"));
   assert.doesNotMatch(html, /aria-label="Go to the ask box"/);
