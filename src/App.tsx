@@ -1423,7 +1423,9 @@ function MainApp() {
   );
   const [shortcutHintsVisible, setShortcutHintsVisible] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(LEFT_SIDEBAR_DEFAULT_WIDTH);
-  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  // The sidebar starts as the icon rail; the expand button, ⌘⇧G and the
+  // command palette expand it for the session.
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
   const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
   leftSidebarCollapsedRef.current = leftSidebarCollapsed;
   // Below 900px of window width the sidebar shows as the icon rail without
