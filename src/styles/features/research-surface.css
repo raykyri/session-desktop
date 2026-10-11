@@ -258,8 +258,7 @@
 /* Shared tweet embed used both as a Home item and as a research-message
    attachment. Home-only menu clearance remains in feed.css. */
 
-.research-pairs .tweet-embed-verified,
-.research-pairs .research-recap-text {
+.research-pairs .tweet-embed-verified {
   display: none;
 }
 
