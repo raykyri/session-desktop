@@ -273,6 +273,11 @@ import {
 } from "./components/research/ResearchFolderDialogs";
 import { ResearchFeedToast } from "./components/research/ResearchFeedChrome";
 import {
+  ResearchTreeDeleteDialog,
+  ResearchTreeDeleteOfferDialog,
+} from "./components/research/ResearchTreeMenu";
+import { researchTreeContents, type ResearchTreeContents } from "./lib/researchTreeContents";
+import {
   ResearchSidebarNav,
   ResearchSidebarRail,
   ResearchRailButton,
@@ -1409,6 +1414,14 @@ function MainApp() {
   const activeResearchPaneIdRef = useRef(activeResearchPaneId);
   activeResearchPaneIdRef.current = activeResearchPaneId;
   const [researchTrees, setResearchTrees] = useState<ResearchTreeSummary[]>([]);
+  // After "Ask as a question": the offer to delete the edited thread, then
+  // the delete confirmation for it.
+  const [researchDeleteOffer, setResearchDeleteOffer] = useState<{
+    treeId: string;
+    newTreeId: string;
+    contents: ResearchTreeContents;
+  } | null>(null);
+  const [researchOfferDeletingTreeId, setResearchOfferDeletingTreeId] = useState<string | null>(null);
   const [archivedResearchTrees, setArchivedResearchTrees] = useState<ResearchTreeSummary[]>([]);
   const activityFeedState = useActivityFeedState();
   const [recentActivityItems, setRecentActivityItems] = useState<RecentResearchQuery[]>([]);
@@ -8266,17 +8279,49 @@ function MainApp() {
   // "Ask as a question" in the editor column: a new thread with the edited
   // text, asked with the Home ask box's selected agent and model (as a draft
   // sent from Drafts is), in the edited thread's folder. It opens selected.
+  // Once the new thread exists, a dialog offers to delete the edited thread
+  // (see ResearchTreeDeleteOfferDialog), counted from its nodes as they were
+  // when the question was asked.
   const askResearchEditorQuestion = useCallback(
     async (prompt: string) => {
       const choice = composerLaunchChoiceRef.current?.();
       if (!choice) {
         throw new Error("No research agent is ready. Review agents in Settings.");
       }
-      const workspaceId = activeResearchDetailRef.current?.tree.workspaceId ?? researchScopeRef.current;
-      await submitNewResearch({ prompt, ...choice, workspaceId });
+      const origin = activeResearchDetailRef.current;
+      const workspaceId = origin?.tree.workspaceId ?? researchScopeRef.current;
+      const newTreeId = await submitNewResearch({ prompt, ...choice, workspaceId });
+      const contents = origin ? researchTreeContents(origin.nodes, origin.tree.rootNodeId) : null;
+      if (origin && contents) {
+        setResearchDeleteOffer({ treeId: origin.tree.id, newTreeId, contents });
+      }
     },
     [submitNewResearch],
   );
+  // The offer and the delete confirmation it opens apply only while the
+  // original thread is listed and not archived; otherwise they are skipped.
+  const researchDeleteOfferTree = researchDeleteOffer
+    ? researchTrees.find((tree) => tree.id === researchDeleteOffer.treeId)
+    : undefined;
+  const researchOfferDeletingTree = researchOfferDeletingTreeId
+    ? researchTrees.find((tree) => tree.id === researchOfferDeletingTreeId)
+    : undefined;
+  useEffect(() => {
+    if (researchDeleteOffer && !researchDeleteOfferTree) setResearchDeleteOffer(null);
+  }, [researchDeleteOffer, researchDeleteOfferTree]);
+  useEffect(() => {
+    if (researchOfferDeletingTreeId && !researchOfferDeletingTree) setResearchOfferDeletingTreeId(null);
+  }, [researchOfferDeletingTree, researchOfferDeletingTreeId]);
+  // Focus after either dialog closes: the new thread's root message row.
+  const researchOfferNewTreeIdRef = useRef<string | null>(null);
+  const askedResearchRow = useCallback(() => {
+    const newTreeId = researchOfferNewTreeIdRef.current;
+    const rootNodeId = researchTreesRef.current.find((tree) => tree.id === newTreeId)?.rootNodeId;
+    return rootNodeId
+      ? document.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(rootNodeId)}"]`)
+      : null;
+  }, []);
+  if (researchDeleteOffer) researchOfferNewTreeIdRef.current = researchDeleteOffer.newTreeId;
   const readResearchQuestionModel = useCallback(() => {
     const choice = composerLaunchChoiceRef.current?.();
     return choice ? formatResearchModelSummary(choice.adapter, choice.model) || choice.adapter : null;
@@ -9834,6 +9879,26 @@ function MainApp() {
         onPause={pauseResearchToast}
         onResume={resumeResearchToast}
       />
+      {researchDeleteOffer && researchDeleteOfferTree ? (
+        <ResearchTreeDeleteOfferDialog
+          tree={researchDeleteOfferTree}
+          contents={researchDeleteOffer.contents}
+          fallbackFocus={askedResearchRow}
+          onKeep={() => setResearchDeleteOffer(null)}
+          onDelete={() => {
+            setResearchDeleteOffer(null);
+            setResearchOfferDeletingTreeId(researchDeleteOfferTree.id);
+          }}
+        />
+      ) : null}
+      {researchOfferDeletingTree ? (
+        <ResearchTreeDeleteDialog
+          tree={researchOfferDeletingTree}
+          fallbackFocus={askedResearchRow}
+          onClose={() => setResearchOfferDeletingTreeId(null)}
+          onRemove={removeResearchTreeFromMenu}
+        />
+      ) : null}
       {researchFolderNameRequest ? (
         <ResearchFolderNameDialog
           request={researchFolderNameRequest}

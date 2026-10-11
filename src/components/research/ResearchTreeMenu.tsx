@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
+import { researchTreeContentsSentence, type ResearchTreeContents } from "../../lib/researchTreeContents";
 import { ResearchMenuItem, ResearchMenuSeparator } from "./ResearchMenu";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
@@ -172,18 +173,105 @@ export function ResearchTreeRenameDialog({
   );
 }
 
+interface ResearchTreeDeleteOfferProps {
+  tree: ResearchTreeSummary;
+  contents: ResearchTreeContents;
+  onKeep: () => void;
+  onDelete: () => void;
+}
+
+/** Shown after "Ask as a question" created a new thread from the text of
+ * `tree`'s root post or document: offers to delete `tree`, stating what
+ * deleting it also deletes. Keep (focused first; also Escape) closes it;
+ * Delete… closes it and hands over to the delete confirmation, which does
+ * the deletion. Delete… is disabled while the thread has active runs. */
+export function ResearchTreeDeleteOfferDialog({
+  fallbackFocus,
+  ...props
+}: ResearchTreeDeleteOfferProps & {
+  /** Where focus goes on Keep when the control focused before the dialog
+   * opened is gone. */
+  fallbackFocus?: () => HTMLElement | null | undefined;
+}) {
+  useResearchDialogReturnFocus(true, fallbackFocus);
+  return createPortal(
+    <div
+      className="confirm-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          props.onKeep();
+        }
+      }}
+    >
+      <ResearchTreeDeleteOfferPanel {...props} />
+    </div>,
+    document.body,
+  );
+}
+
+/** The dialog element of ResearchTreeDeleteOfferDialog, without its
+ * backdrop and portal. */
+export function ResearchTreeDeleteOfferPanel({ tree, contents, onKeep, onDelete }: ResearchTreeDeleteOfferProps) {
+  const running = tree.runningCount > 0;
+  return (
+    <div
+      className="confirm-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-original-research-dialog-title"
+      aria-describedby="delete-original-research-dialog-origin delete-original-research-dialog-contents"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onKeep();
+          return;
+        }
+        trapResearchDialogTab(event);
+      }}
+    >
+      <h2 id="delete-original-research-dialog-title">Delete the original thread?</h2>
+      <p id="delete-original-research-dialog-origin">
+        The question was asked in a new thread. The original thread, “{tree.title}”, is unchanged.
+      </p>
+      <p id="delete-original-research-dialog-contents">{researchTreeContentsSentence(contents)}</p>
+      {running ? (
+        <p>It has active runs, which must finish or be cancelled before it can be deleted.</p>
+      ) : null}
+      <div className="confirm-dialog-actions">
+        <button className="control-button" type="button" autoFocus onClick={onKeep}>
+          Keep
+        </button>
+        <button
+          type="button"
+          className="control-button danger"
+          disabled={running}
+          title={running ? "Research with active runs cannot be deleted" : undefined}
+          onClick={onDelete}
+        >
+          Delete…
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ResearchTreeDeleteDialog({
   tree,
   onClose,
   onRemove,
+  fallbackFocus,
 }: {
   tree: ResearchTreeSummary;
   onClose: () => void;
   onRemove: (treeId: string) => Promise<void>;
+  /** Where focus goes on close when the control focused before the dialog
+   * opened is gone. */
+  fallbackFocus?: () => HTMLElement | null | undefined;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useResearchDialogReturnFocus(true);
+  useResearchDialogReturnFocus(true, fallbackFocus);
   return createPortal(
     <div
       className="confirm-dialog-backdrop"
