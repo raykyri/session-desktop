@@ -223,6 +223,7 @@ export function ResearchMessagesColumn({
   branchOpen,
   queuedRetries,
   answerMenuOpenId,
+  menu,
   isUnread,
   rowActions,
   source,
@@ -246,6 +247,8 @@ export function ResearchMessagesColumn({
   queuedRetries: ReadonlySet<string>;
   /** The message whose answer menu is open from its … button. */
   answerMenuOpenId: string | null;
+  /** Actions for the question that starts this pair. */
+  menu: ComponentProps<typeof ResearchPairHeader>["menu"];
   /** A branch finished while the thread was open and was not opened. */
   isUnread: (branch: ResearchNode) => boolean;
   rowActions: ResearchMessageRowActions;
@@ -268,6 +271,7 @@ export function ResearchMessagesColumn({
         branch={level === 0 ? null : chainIds.length}
         history={history}
         imported={imported}
+        menu={menu}
         archived={level === 0 && archived}
       />
       <div className="research-column-scroll" data-research-scroll onScroll={onScroll}>

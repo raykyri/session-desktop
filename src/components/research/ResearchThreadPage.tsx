@@ -1218,11 +1218,11 @@ function ResearchThreadPage({
   );
 
   const openAnswerMenu = useCallback((trigger: HTMLButtonElement, nodeId: string) => {
-    if (menuRef.current?.kind === "answer" && menuRef.current.nodeId === nodeId) {
+    if (menuRef.current?.kind === "answer" && menuRef.current.nodeId === nodeId && menuRef.current.trigger === trigger) {
       setMenu(null);
       return;
     }
-    // Opens below the button in the row's top-right corner, aligned to its
+    // Opens below the row or header button, aligned to its
     // right edge, as a feed row's menu does.
     setMenu({ kind: "answer", nodeId, anchor: trigger, align: "end", trigger });
   }, []);
@@ -2062,7 +2062,12 @@ function ResearchThreadPage({
             branchesByParent={branchesByParent}
             branchOpen={levelPath.length > level + 1 || activePending?.parentNodeId === column.level.selectedId}
             queuedRetries={queuedRetries}
-            answerMenuOpenId={menu?.kind === "answer" && menu.trigger ? menu.nodeId : null}
+            menu={head ? {
+              label: level === 0 ? "Thread actions" : "Branch actions",
+              open: menu?.kind === "answer" && menu.nodeId === headId && Boolean(menu.trigger?.matches(".research-head-menu")),
+              onOpen: (trigger) => openAnswerMenu(trigger, headId),
+            } : null}
+            answerMenuOpenId={menu?.kind === "answer" && menu.trigger && !menu.trigger.matches(".research-head-menu") ? menu.nodeId : null}
             isUnread={isUnread}
             rowActions={messageRowActions}
             source={level > 0 && head?.parentNodeId ? branchSource(passageAnchor(head), head.parentNodeId, head) : null}

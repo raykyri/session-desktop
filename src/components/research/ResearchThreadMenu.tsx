@@ -177,7 +177,7 @@ export function ResearchThreadMenu({
           <>
             <ResearchMenuItem
               icon={<ResearchBranchIcon size={15} />}
-              label="Branch from highlight"
+              label="Ask about highlight"
               disabled={blocker !== null}
               title={blocker ?? undefined}
               onSelect={() => onBranch(menu.nodeId, highlight.anchor)}
