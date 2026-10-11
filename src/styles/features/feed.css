@@ -802,9 +802,10 @@
   pointer-events: none;
 }
 
+/* Shown at 85% opacity so the text under the pill stays faintly visible. */
 :is(.research-feed-card, .research-feed-child):is(:hover, :focus-within, .has-open-menu)
   > .research-feed-rail {
-  opacity: 1;
+  opacity: 0.85;
 }
 
 .research-feed-card-grip {
