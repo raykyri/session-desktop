@@ -1,0 +1,392 @@
+<title>Session Redesign Candidates</title>
+<meta name="description" content="Interactive redesign candidates for Session, with variants, two rounds, and an issue review.">
+<style>
+/* Layout: a two-row toolbar (rounds, candidates) above one full-height stage; the stage holds the
+   overview grid, a candidate iframe with a notes drawer, or the issue list. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --sunken: #e9ebef;
+  --line: #d9dce3;
+  --text: #1c1f26;
+  --muted: #646b78;
+  --accent: #3a63c9;
+  --accent-ink: #ffffff;
+  --crit: #b3261e;
+  --high: #b55a00;
+  --med: #8a6d00;
+  --low: #5b6577;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171c; --surface: #1d2027; --sunken: #111317; --line: #2d313b; --text: #e6e8ec;
+    --muted: #9298a5; --accent: #7a9cf0; --accent-ink: #0f1420;
+    --crit: #f2867e; --high: #f0a457; --med: #d9bf5a; --low: #9aa3b4; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171c; --surface: #1d2027; --sunken: #111317; --line: #2d313b; --text: #e6e8ec;
+  --muted: #9298a5; --accent: #7a9cf0; --accent-ink: #0f1420;
+  --crit: #f2867e; --high: #f0a457; --med: #d9bf5a; --low: #9aa3b4; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font: 13.5px/1.45 var(--ui);
+  -webkit-font-smoothing: antialiased; display: grid; grid-template-rows: auto auto minmax(0, 1fr);
+  padding-inline: 16px; padding-block: 0 16px;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 12px 8px; min-width: 0; }
+.brand { display: flex; align-items: baseline; gap: 8px; margin-right: auto; min-width: 0; }
+.brand h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.005em; white-space: nowrap; }
+.brand span { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.seg button:disabled { opacity: 0.45; cursor: default; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { border: 0; background: none; padding: 8px 12px 9px; cursor: pointer; color: var(--muted); white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; display: grid; gap: 0; text-align: left; }
+.tab b { font-weight: 600; font-size: 13px; }
+.tab small { font-size: 11px; color: var(--muted); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tab.sep { margin-left: auto; }
+.stage { min-height: 0; display: grid; padding-top: 12px; }
+.view { min-height: 0; }
+
+/* Candidate view */
+.cand { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; height: 100%; }
+.vbar { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.vlabel { font: 600 10.5px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.vsum { color: var(--muted); font-size: 12.5px; flex: 1 1 260px; min-width: 0; }
+.vtools { display: flex; gap: 8px; margin-left: auto; }
+.tool { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 4px 10px; cursor: pointer; font-size: 12.5px; text-decoration: none; color: var(--text); white-space: nowrap; }
+.tool[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.frame-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; min-height: 0; }
+iframe { width: 100%; height: 100%; min-height: 520px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: block; }
+.notes { width: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; align-content: start; }
+.notes h2 { margin: 0; font-size: 16px; font-weight: 650; text-wrap: balance; }
+.notes h3 { margin: 0 0 6px; font: 600 10.5px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.notes p { margin: 0; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.nouns { display: flex; flex-wrap: wrap; gap: 6px; }
+.noun { font: 12px/1 var(--mono); background: var(--sunken); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; }
+.vlist { display: grid; gap: 8px; }
+.vitem { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; background: none; text-align: left; display: grid; gap: 2px; }
+.vitem[aria-current="true"] { border-color: var(--accent); }
+.vitem b { font-size: 12.5px; }
+.vitem span { font-size: 12px; color: var(--muted); }
+.pending { display: grid; place-items: center; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 40px 16px; }
+
+/* Overview */
+.overview { overflow-y: auto; height: 100%; display: grid; gap: 16px; align-content: start; padding-bottom: 8px; }
+.ov-head { display: grid; gap: 4px; max-width: 80ch; }
+.ov-head h2 { margin: 0; font-size: 18px; font-weight: 650; text-wrap: balance; }
+.ov-head p { margin: 0; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; display: grid; grid-template-rows: auto 1fr; cursor: pointer; text-align: left; padding: 0; }
+.card:hover { border-color: var(--accent); }
+.thumb { aspect-ratio: 1400 / 860; max-width: 100%; background: var(--sunken); border-bottom: 1px solid var(--line); overflow: hidden; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
+.card-body { padding: 12px 14px 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.card-top b { font-size: 14px; }
+.card-top span { font: 11px/1 var(--mono); color: var(--muted); }
+.card p { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+/* Issues */
+.issues { overflow-y: auto; height: 100%; display: grid; gap: 14px; align-content: start; padding-bottom: 8px; }
+.counts { display: flex; gap: 8px; flex-wrap: wrap; }
+.count { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+.count b { font-variant-numeric: tabular-nums; font-size: 15px; }
+.count[aria-pressed="true"] { border-color: var(--accent); }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ilist { display: grid; gap: 8px; }
+.issue { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; min-width: 0; }
+.issue-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.issue-h code { font: 11.5px/1 var(--mono); color: var(--muted); }
+.issue-h b { font-size: 13.5px; }
+.sev { font: 600 10.5px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; border: 1px solid currentColor; }
+.sev.critical { color: var(--crit); } .sev.high { color: var(--high); } .sev.medium { color: var(--med); } .sev.low { color: var(--low); }
+.area { font-size: 12px; color: var(--muted); }
+.issue p { margin: 0; max-width: 92ch; }
+.issue .fix { color: var(--muted); }
+.files { display: flex; gap: 6px; flex-wrap: wrap; }
+.files code { font: 11.5px/1.3 var(--mono); background: var(--sunken); border-radius: 4px; padding: 2px 6px; overflow-wrap: anywhere; }
+
+@media (max-width: 860px) {
+  .frame-wrap { grid-template-columns: minmax(0, 1fr); }
+  .notes { width: auto; max-height: 40vh; order: -1; }
+  .brand span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="bar">
+  <div class="brand"><h1>Session redesign</h1><span id="brandSub">8 candidates, each with variants</span></div>
+  <div class="seg" role="group" aria-label="Round" id="roundSeg">
+    <button type="button" data-round="1" aria-pressed="true">Round 1</button>
+    <button type="button" data-round="2" aria-pressed="false">Round 2</button>
+  </div>
+  <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+    <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+    <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+  </div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Views" id="tabs"></nav>
+<main class="stage" id="stage"></main>
+
+<script>
+const CANDIDATES = [
+  { slug: "ulysses", influence: "Ulysses" },
+  { slug: "macos", influence: "macOS" },
+  { slug: "notes", influence: "Apple Notes" },
+  { slug: "obsidian", influence: "Obsidian" },
+  { slug: "notion", influence: "Notion" },
+  { slug: "inbox", influence: "Front" },
+  { slug: "tana", influence: "Tana" },
+  { slug: "linear", influence: "Linear" },
+];
+const SEV_ORDER = ["critical", "high", "medium", "low"];
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("srd:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("srd:" + k, JSON.stringify(v)); } catch {} },
+};
+
+const state = {
+  round: store.get("round", 1),
+  tab: store.get("tab", "overview"),
+  theme: store.get("theme", "system"),
+  notes: store.get("notes", true),
+  variants: store.get("variants", {}),
+  manifest: { rounds: { 1: {}, 2: {} } },
+  issues: null,
+  sevFilter: null,
+  areaFilter: null,
+};
+
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null) n.append(c);
+  return n;
+};
+
+function meta(round, slug) { return state.manifest.rounds[round]?.[slug] || null; }
+function roundAvailable(round) { return Object.keys(state.manifest.rounds[round] || {}).length > 0; }
+function variantKey(slug) { return state.round + ":" + slug; }
+
+function applyTheme() {
+  const root = document.documentElement;
+  if (state.theme === "system") delete root.dataset.theme; else root.dataset.theme = state.theme;
+  for (const b of $("#themeSeg").children) b.setAttribute("aria-pressed", String(b.dataset.themeChoice === state.theme));
+  const f = $("#mockFrame");
+  if (f?.contentWindow) f.contentWindow.postMessage({ type: "mock:theme", theme: state.theme }, "*");
+}
+
+function renderRoundSeg() {
+  for (const b of $("#roundSeg").children) {
+    const r = Number(b.dataset.round);
+    b.setAttribute("aria-pressed", String(r === state.round));
+    b.disabled = !roundAvailable(r);
+    b.title = b.disabled ? "Not generated yet" : "";
+  }
+}
+
+function renderTabs() {
+  const tabs = $("#tabs");
+  tabs.replaceChildren();
+  const mk = (id, label, sub, cls) => el("button", {
+    class: "tab" + (cls ? " " + cls : ""), role: "tab", type: "button",
+    "aria-selected": String(state.tab === id), onclick: () => go(id),
+  }, el("b", {}, label), sub ? el("small", {}, sub) : null);
+  tabs.append(mk("overview", "Overview", "all candidates"));
+  for (const c of CANDIDATES) {
+    const m = meta(state.round, c.slug);
+    tabs.append(mk(c.slug, c.influence, m ? m.title : "pending"));
+  }
+  tabs.append(mk("issues", "Issues", state.issues ? state.issues.length + " found" : "review", "sep"));
+  tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function go(tab) {
+  state.tab = tab; store.set("tab", tab);
+  const hash = tab === "overview" || tab === "issues" ? tab : "r" + state.round + "-" + tab;
+  history.replaceState(null, "", "#" + hash);
+  render();
+}
+
+function render() {
+  renderRoundSeg();
+  renderTabs();
+  const stage = $("#stage");
+  stage.replaceChildren();
+  if (state.tab === "overview") stage.append(renderOverview());
+  else if (state.tab === "issues") stage.append(renderIssues());
+  else stage.append(renderCandidate(state.tab));
+  applyTheme();
+}
+
+function renderOverview() {
+  const wrap = el("section", { class: "overview view" });
+  const r = state.round;
+  wrap.append(el("div", { class: "ov-head" },
+    el("h2", {}, r === 1 ? "Round 1 candidates" : "Round 2 candidates (after self-review)"),
+    el("p", {}, "Each candidate redesigns Session in the idiom of one reference app, so that it reads clearly on first use and works both for chatting with models and for organizing notes as an outline and a linked knowledge base. Open a candidate to use it and switch its variants.")));
+  const grid = el("div", { class: "grid" });
+  for (const c of CANDIDATES) {
+    const m = meta(r, c.slug);
+    grid.append(el("button", { class: "card", type: "button", onclick: () => go(c.slug) },
+      el("div", { class: "thumb" }, m?.thumb ? el("img", { src: m.thumb, alt: "", loading: "lazy" }) : null),
+      el("div", { class: "card-body" },
+        el("div", { class: "card-top" }, el("b", {}, m ? m.title : c.influence), el("span", {}, c.influence + (m ? " · " + m.variants.length + " variants" : " · pending"))),
+        el("p", {}, m ? m.summary : "Not generated yet."),
+        m?.nouns ? el("div", { class: "nouns" }, m.nouns.map((n) => el("span", { class: "noun" }, n))) : null)));
+  }
+  wrap.append(grid);
+  return wrap;
+}
+
+function renderCandidate(slug) {
+  const c = CANDIDATES.find((x) => x.slug === slug);
+  const m = meta(state.round, slug);
+  const wrap = el("section", { class: "cand view" });
+  if (!m) {
+    wrap.append(el("div", { class: "pending" }, `${c.influence}: round ${state.round} is not generated yet.`));
+    return wrap;
+  }
+  const current = state.variants[variantKey(slug)] || m.variants[0]?.id;
+  const vcur = m.variants.find((v) => v.id === current) || m.variants[0];
+  const chips = el("div", { class: "chips", role: "group", "aria-label": "Variants" },
+    m.variants.map((v) => el("button", {
+      class: "chip", type: "button", "aria-pressed": String(v.id === vcur.id), title: v.summary,
+      onclick: () => setVariant(slug, v.id, true),
+    }, v.label)));
+  const src = m.file;
+  wrap.append(el("div", { class: "vbar" },
+    el("span", { class: "vlabel" }, "Variant"), chips,
+    el("span", { class: "vsum", id: "vsum" }, vcur.summary),
+    el("div", { class: "vtools" },
+      el("button", { class: "tool", type: "button", "aria-pressed": String(state.notes), onclick: () => { state.notes = !state.notes; store.set("notes", state.notes); render(); } }, "Notes"),
+      el("a", { class: "tool", href: src, target: "_blank", rel: "noopener" }, "Open alone"))));
+  const frame = el("iframe", { id: "mockFrame", src, title: `${m.title} mock`, loading: "eager" });
+  const fw = el("div", { class: "frame-wrap" }, frame);
+  if (state.notes) fw.append(renderNotes(slug, m, vcur.id));
+  wrap.append(fw);
+  return wrap;
+}
+
+function renderNotes(slug, m, cur) {
+  const other = meta(state.round === 1 ? 2 : 1, slug);
+  return el("aside", { class: "notes", "aria-label": "Candidate notes" },
+    el("div", {}, el("h3", {}, `Influence · ${m.influence} · round ${state.round}`), el("h2", {}, m.title)),
+    el("p", {}, m.summary),
+    m.nouns?.length ? el("div", {}, el("h3", {}, "Core nouns"), el("div", { class: "nouns" }, m.nouns.map((n) => el("span", { class: "noun" }, n)))) : null,
+    el("div", {}, el("h3", {}, "Variants"), el("div", { class: "vlist" }, m.variants.map((v) =>
+      el("button", { class: "vitem", type: "button", "aria-current": String(v.id === cur), onclick: () => setVariant(slug, v.id, true) },
+        el("b", {}, v.label), el("span", {}, v.summary))))),
+    m.changes?.length ? el("div", {}, el("h3", {}, "Changed since round 1"), el("ul", {}, m.changes.map((x) => el("li", {}, x)))) : null,
+    m.decisions?.length ? el("div", {}, el("h3", {}, "Decisions"), el("ul", {}, m.decisions.map((x) => el("li", {}, x)))) : null,
+    other && state.round === 1 ? el("p", { class: "area" }, "A round 2 revision of this candidate is available.") : null);
+}
+
+function setVariant(slug, id, push) {
+  state.variants[variantKey(slug)] = id; store.set("variants", state.variants);
+  const m = meta(state.round, slug);
+  const v = m?.variants.find((x) => x.id === id);
+  document.querySelectorAll(".chip").forEach((b, i) => b.setAttribute("aria-pressed", String(m.variants[i]?.id === id)));
+  document.querySelectorAll(".vitem").forEach((b, i) => b.setAttribute("aria-current", String(m.variants[i]?.id === id)));
+  if (v && $("#vsum")) $("#vsum").textContent = v.summary;
+  const f = $("#mockFrame");
+  if (push && f?.contentWindow) f.contentWindow.postMessage({ type: "mock:set", variant: id }, "*");
+}
+
+window.addEventListener("message", (e) => {
+  const f = $("#mockFrame");
+  if (!f || e.source !== f.contentWindow) return;
+  const d = e.data || {};
+  if (d.type === "mock:ready") {
+    const slug = state.tab;
+    const id = state.variants[variantKey(slug)];
+    if (id) f.contentWindow.postMessage({ type: "mock:set", variant: id }, "*");
+    f.contentWindow.postMessage({ type: "mock:theme", theme: state.theme }, "*");
+  } else if (d.type === "mock:variant" && d.variant) {
+    setVariant(state.tab, d.variant, false);
+  }
+});
+
+function renderIssues() {
+  const wrap = el("section", { class: "issues view" });
+  if (!state.issues) { wrap.append(el("div", { class: "pending" }, "The issue review is not available yet.")); return wrap; }
+  const all = state.issues;
+  const counts = el("div", { class: "counts", role: "group", "aria-label": "Filter by severity" },
+    SEV_ORDER.map((s) => {
+      const n = all.filter((i) => i.severity === s).length;
+      return el("button", { class: "count", type: "button", "aria-pressed": String(state.sevFilter === s),
+        onclick: () => { state.sevFilter = state.sevFilter === s ? null : s; render(); } },
+        el("b", {}, String(n)), el("span", { class: "sev " + s }, s));
+    }));
+  const areas = [...new Set(all.map((i) => i.area))];
+  const filters = el("div", { class: "filters", role: "group", "aria-label": "Filter by area" },
+    el("button", { class: "chip", type: "button", "aria-pressed": String(!state.areaFilter), onclick: () => { state.areaFilter = null; render(); } }, "All areas"),
+    areas.map((a) => el("button", { class: "chip", type: "button", "aria-pressed": String(state.areaFilter === a),
+      onclick: () => { state.areaFilter = state.areaFilter === a ? null : a; render(); } }, a)));
+  const shown = all
+    .filter((i) => !state.sevFilter || i.severity === state.sevFilter)
+    .filter((i) => !state.areaFilter || i.area === state.areaFilter)
+    .sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
+  wrap.append(el("div", { class: "ov-head" }, el("h2", {}, "Issues in the current app"),
+    el("p", {}, `${all.length} issues found by reading the desktop app's source. Each one cites the files it was verified against.`)),
+    counts, filters,
+    el("div", { class: "ilist" }, shown.map((i) => el("article", { class: "issue" },
+      el("div", { class: "issue-h" }, el("code", {}, i.id), el("span", { class: "sev " + i.severity }, i.severity), el("b", {}, i.title), el("span", { class: "area" }, i.area)),
+      el("p", {}, i.detail),
+      el("p", { class: "fix" }, "Fix: " + i.fix),
+      el("div", { class: "files" }, (i.files || []).map((f) => el("code", {}, f)))))));
+  return wrap;
+}
+
+$("#roundSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  state.round = Number(b.dataset.round); store.set("round", state.round);
+  if (state.tab !== "overview" && state.tab !== "issues") go(state.tab); else render();
+});
+$("#themeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.theme = b.dataset.themeChoice; store.set("theme", state.theme); applyTheme();
+});
+
+function readHash() {
+  const h = location.hash.slice(1);
+  if (!h) return;
+  if (h === "overview" || h === "issues") { state.tab = h; return; }
+  const m = /^r([12])-([a-z]+)$/.exec(h);
+  if (m && CANDIDATES.some((c) => c.slug === m[2])) { state.round = Number(m[1]); state.tab = m[2]; }
+}
+
+async function load() {
+  readHash();
+  try { const r = await fetch("manifest.json", { cache: "no-store" }); if (r.ok) state.manifest = await r.json(); } catch {}
+  try { const r = await fetch("issues.json", { cache: "no-store" }); if (r.ok) state.issues = await r.json(); } catch {}
+  if (!roundAvailable(state.round)) state.round = roundAvailable(1) ? 1 : state.round;
+  const n = CANDIDATES.length;
+  $("#brandSub").textContent = roundAvailable(2) ? `${n} candidates · 2 rounds` : `${n} candidates · round 1`;
+  render();
+}
+load();
+</script>
