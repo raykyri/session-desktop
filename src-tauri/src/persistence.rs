@@ -138,7 +138,7 @@ pub struct PersistedState {
     #[serde(default)]
     pub research_nodes: HashMap<String, ResearchNode>,
     /// Client-authored organizational grouping of research trees (folders,
-    /// membership, stars, collapsed). Optional and dropped-if-empty so state
+    /// membership, collapsed). Optional and dropped-if-empty so state
     /// files from builds that predate folders round-trip byte-identically.
     #[serde(default, skip_serializing_if = "ResearchFolderState::is_empty")]
     pub research_folders: ResearchFolderState,

@@ -48,7 +48,6 @@ const question = {
 const folders: ResearchFolderState = {
   folders: [{ id: "f-read", name: "Reading list", workspaceId: "ws" }],
   membership: {},
-  starred: [],
   collapsed: [],
 };
 

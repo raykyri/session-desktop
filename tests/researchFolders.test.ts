@@ -41,7 +41,6 @@ const state: ResearchFolderState = {
     { id: "f-other", name: "Elsewhere", workspaceId: "ws-2" },
   ],
   membership: { a: "f-read", b: RESEARCH_DRAFTS_FOLDER_ID, c: "f-deleted" },
-  starred: [],
   collapsed: [],
 };
 

@@ -13953,7 +13953,6 @@ mod tests {
                     tree.tree.id.clone(),
                     research::RESEARCH_DRAFTS_FOLDER_ID.to_string(),
                 )]),
-                starred: Vec::new(),
                 collapsed: vec![
                     "system:drafts".to_string(),
                     "system:archive".to_string(),

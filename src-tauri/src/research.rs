@@ -50,10 +50,11 @@ pub struct ResearchFolder {
 /// The whole grouping layer for research trees. Persisted in `state.json`
 /// alongside the trees it references — durably and atomically — rather than in
 /// webview localStorage, where a hard-abort mid-write or a transient empty tree
-/// list could silently erase it. Membership/stars/collapsed reference tree and
-/// folder ids; entries for ids that no longer exist are reconciled away at load
-/// and when a tree is actually removed, never against a possibly-incomplete
-/// snapshot on every refresh.
+/// list could silently erase it. Membership and collapsed entries reference
+/// tree and folder ids; entries for ids that no longer exist are reconciled
+/// away at load and when a tree is actually removed, never against a
+/// possibly-incomplete snapshot on every refresh. Earlier builds also stored
+/// a `starred` id list that no UI read; loads ignore it and saves omit it.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchFolderState {
@@ -62,9 +63,6 @@ pub struct ResearchFolderState {
     /// treeId -> folderId
     #[serde(default)]
     pub membership: HashMap<String, String>,
-    /// Starred tree and folder ids, in the starred list's display order.
-    #[serde(default)]
-    pub starred: Vec<String>,
     /// Folder ids whose member rows are hidden in the sidebar.
     #[serde(default)]
     pub collapsed: Vec<String>,
@@ -74,10 +72,7 @@ impl ResearchFolderState {
     /// serde skip guard: an untouched grouping serializes to nothing, so state
     /// files from builds that predate folders round-trip byte-identically.
     pub fn is_empty(&self) -> bool {
-        self.folders.is_empty()
-            && self.membership.is_empty()
-            && self.starred.is_empty()
-            && self.collapsed.is_empty()
+        self.folders.is_empty() && self.membership.is_empty() && self.collapsed.is_empty()
     }
 }
 
@@ -168,8 +163,7 @@ pub fn validate_research_folders(
 /// Structural normalization independent of which trees exist: dedupe folder
 /// ids, drop membership pointing at folders that are not present (the system
 /// Drafts folder excepted), and drop collapsed entries for absent folders
-/// other than the system sections. Stars are only deduped — they may
-/// reference trees this function has no view of.
+/// other than the system sections.
 pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
     let mut seen = HashSet::new();
     state
@@ -183,8 +177,6 @@ pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
     state.membership.retain(|_, folder_id| {
         folder_ids.contains(folder_id) || folder_id == RESEARCH_DRAFTS_FOLDER_ID
     });
-    let mut seen_star = HashSet::new();
-    state.starred.retain(|id| seen_star.insert(id.clone()));
     let mut seen_collapsed = HashSet::new();
     state.collapsed.retain(|id| {
         (folder_ids.contains(id) || is_research_system_folder_id(id))
@@ -211,15 +203,11 @@ pub fn reconcile_research_folder_state(
         .map(|folder| folder.id.clone())
         .collect::<HashSet<_>>();
     state
-        .starred
-        .retain(|id| known_tree_ids.contains(id) || folder_ids.contains(id));
-    state
         .collapsed
         .retain(|id| folder_ids.contains(id) || is_research_system_folder_id(id));
 }
 
-/// Drops the supplied trees out of whatever folder holds them and out of the
-/// starred list. Folder records and their view state survive when left empty.
+/// Drops the supplied trees out of whatever folder holds them. Folder records and their view state survive when left empty.
 /// Mirrors the frontend `removeTreesFromResearchFolders`; used when a tree is
 /// actually removed so the persisted grouping stays clean between loads.
 pub fn remove_trees_from_research_folders(
@@ -229,11 +217,10 @@ pub fn remove_trees_from_research_folders(
     state
         .membership
         .retain(|tree_id, _| !tree_ids.contains(tree_id));
-    state.starred.retain(|id| !tree_ids.contains(id));
 }
 
-/// Removes every folder belonging to a workspace along with the memberships,
-/// stars, and collapsed flags that reference them. Used when a whole research
+/// Removes every folder belonging to a workspace along with the memberships
+/// and collapsed flags that reference them. Used when a whole research
 /// workspace is detached; the workspace's trees are scrubbed separately via
 /// [`remove_trees_from_research_folders`].
 pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, workspace_id: &str) {
@@ -252,7 +239,6 @@ pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, worksp
     state
         .membership
         .retain(|_, folder_id| !removed.contains(folder_id));
-    state.starred.retain(|id| !removed.contains(id));
     state.collapsed.retain(|id| !removed.contains(id));
 }
 
@@ -3778,7 +3764,6 @@ mod tests {
     fn folder_state(
         folders: &[(&str, &str)],
         membership: &[(&str, &str)],
-        starred: &[&str],
         collapsed: &[&str],
     ) -> ResearchFolderState {
         ResearchFolderState {
@@ -3787,7 +3772,6 @@ mod tests {
                 .iter()
                 .map(|(tree, folder)| (tree.to_string(), folder.to_string()))
                 .collect(),
-            starred: starred.iter().map(|id| id.to_string()).collect(),
             collapsed: collapsed.iter().map(|id| id.to_string()).collect(),
         }
     }
@@ -3797,7 +3781,6 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws"), ("f2", "ws")],
             &[("t1", "f1"), ("gone", "f2")],
-            &["t1", "f2", "starred-gone-tree"],
             &["f1", "f2"],
         );
         let known = HashSet::from(["t1".to_string()]);
@@ -3809,41 +3792,59 @@ mod tests {
             state.membership,
             HashMap::from([("t1".to_string(), "f1".to_string())])
         );
-        // Stars survive for live trees and durable folders.
-        assert_eq!(state.starred, vec!["t1".to_string(), "f2".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string(), "f2".to_string()]);
     }
 
     #[test]
+    fn a_stored_starred_list_is_ignored_on_load_and_omitted_on_save() {
+        let stored = concat!(
+            r#"{"folders":[{"id":"f1","name":"f1","workspaceId":"ws"}],"#,
+            r#""membership":{"t1":"f1"},"starred":["t1","f1"],"collapsed":["f1"]}"#
+        );
+        let state: ResearchFolderState = serde_json::from_str(stored).unwrap();
+        assert_eq!(
+            state,
+            folder_state(&[("f1", "ws")], &[("t1", "f1")], &["f1"])
+        );
+        assert_eq!(
+            serde_json::to_string(&state).unwrap(),
+            concat!(
+                r#"{"folders":[{"id":"f1","name":"f1","workspaceId":"ws"}],"#,
+                r#""membership":{"t1":"f1"},"collapsed":["f1"]}"#
+            )
+        );
+        // A grouping that held only stars is empty, so the state omits it.
+        let only_stars: ResearchFolderState =
+            serde_json::from_str(r#"{"starred":["t1"]}"#).unwrap();
+        assert!(only_stars.is_empty());
+    }
+
+    #[test]
     fn reconcile_against_empty_tree_set_preserves_folders() {
-        // Reconciliation may clear stale memberships and tree stars, but never
-        // uses an empty tree snapshot as a reason to delete folders.
-        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1")], &["t1"], &["f1"]);
+        // Reconciliation may clear stale memberships, but never uses an empty
+        // tree snapshot as a reason to delete folders.
+        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1")], &["f1"]);
         reconcile_research_folder_state(&mut state, &HashSet::new());
         assert_eq!(state.folders.len(), 1);
         assert!(state.membership.is_empty());
-        assert!(state.starred.is_empty());
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
     #[test]
-    fn removing_a_tree_drops_its_star_and_preserves_the_emptied_folder() {
-        let mut state = folder_state(
-            &[("f1", "ws")],
-            &[("t1", "f1"), ("t2", "f1")],
-            &["t1", "f1", "t2"],
-            &["f1"],
-        );
+    fn removing_a_tree_drops_its_membership_and_preserves_the_emptied_folder() {
+        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1"), ("t2", "f1")], &["f1"]);
         remove_trees_from_research_folders(&mut state, &HashSet::from(["t1".to_string()]));
-        // f1 still has t2, so it and its star/collapsed survive; t1's star is gone.
+        // f1 still has t2, so it and its collapsed flag survive.
         assert_eq!(state.folders.len(), 1);
-        assert_eq!(state.starred, vec!["f1".to_string(), "t2".to_string()]);
+        assert_eq!(
+            state.membership,
+            HashMap::from([("t2".to_string(), "f1".to_string())])
+        );
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
         // Removing the last member leaves the folder and its view state intact.
         remove_trees_from_research_folders(&mut state, &HashSet::from(["t2".to_string()]));
         assert_eq!(state.folders.len(), 1);
         assert!(state.membership.is_empty());
-        assert_eq!(state.starred, vec!["f1".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
@@ -3853,7 +3854,6 @@ mod tests {
             &[("f1", "ws-a"), ("f2", "ws-b")],
             &[("t1", "f1"), ("t2", "f2")],
             &["f1", "f2"],
-            &["f1", "f2"],
         );
         remove_research_workspace_folders(&mut state, "ws-a");
         assert_eq!(state.folders.len(), 1);
@@ -3862,7 +3862,6 @@ mod tests {
             state.membership,
             HashMap::from([("t2".to_string(), "f2".to_string())])
         );
-        assert_eq!(state.starred, vec!["f2".to_string()]);
         assert_eq!(state.collapsed, vec!["f2".to_string()]);
     }
 
@@ -3871,18 +3870,16 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws"), ("f1", "ws")],
             &[("t1", "f1"), ("t2", "ghost")],
-            &["t1", "t1"],
             &["f1", "ghost", "f1"],
         );
         normalize_research_folder_state(&mut state);
         // Duplicate folder id collapses to one; membership/collapsed for the
-        // absent folder are dropped; stars are deduped.
+        // absent folder are dropped.
         assert_eq!(state.folders.len(), 1);
         assert_eq!(
             state.membership,
             HashMap::from([("t1".to_string(), "f1".to_string())])
         );
-        assert_eq!(state.starred, vec!["t1".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
@@ -3891,7 +3888,6 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws")],
             &[("t1", RESEARCH_DRAFTS_FOLDER_ID), ("t2", "system:archive")],
-            &[],
             &[
                 "system:drafts",
                 "system:archive",

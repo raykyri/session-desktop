@@ -610,7 +610,6 @@ export interface ResearchFolder {
 export interface ResearchFolderState {
   folders: ResearchFolder[];
   membership: Record<string, string>;
-  starred: string[];
   collapsed: string[];
 }
 
