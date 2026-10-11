@@ -5,7 +5,7 @@
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
 
-import { documentSource, followUpLaunch, nodeRun, nodeStatus } from "./researchNodeTypes";
+import { documentSource, followUpLaunch, nodeRun, nodeStatus, nodeType } from "./researchNodeTypes";
 import type { ResearchNode, ResearchNodeStatus } from "../types";
 
 /** The statuses of a run that has been admitted but not settled. One list,
@@ -189,6 +189,45 @@ export function canRetryResearchNode(node: ResearchNode): boolean {
   return (
     (nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled") && !nodeRun(node)?.holdsProcess
   );
+}
+
+/** Whether a settled exchange can be rerun in place: as canRetryResearchNode,
+ * and a complete answer too (the rerun replaces it). */
+export function canRerunResearchNode(node: ResearchNode): boolean {
+  return (
+    nodeType(node) === "exchange" &&
+    !isActiveResearchStatus(nodeStatus(node)) &&
+    !nodeRun(node)?.holdsProcess
+  );
+}
+
+/** Whether a node's answer menu offers Rerun: only an exchange has a run to
+ * relaunch. Archived-tree gating stays the caller's job, matching
+ * canRetryResearchNode. */
+export function researchRerunOffered(node: ResearchNode): boolean {
+  return nodeType(node) === "exchange";
+}
+
+/** Why Rerun is disabled for an exchange, or null when it can run: the run
+ * must have settled (complete, failed or cancelled) with no pane from it
+ * still open, and the answer it follows (its fork point) must be complete.
+ * An inline follow-up whose previous answer is still running is not blocked:
+ * the rerun waits behind it, as a Retry does. */
+export function researchRerunBlocker(node: ResearchNode, parent: ResearchNode | null): string | null {
+  if (isActiveResearchStatus(nodeStatus(node))) {
+    return "Wait for the answer to finish";
+  }
+  if (nodeRun(node)?.holdsProcess) {
+    return "The previous run's terminal is still open";
+  }
+  if (parent && nodeStatus(parent) !== "complete") {
+    if (!node.inline || !isActiveResearchStatus(nodeStatus(parent))) {
+      return isActiveResearchStatus(nodeStatus(parent))
+        ? "Wait for the answer this follows to finish"
+        : "The answer this follows did not complete";
+    }
+  }
+  return null;
 }
 
 /** Whether a level's ask box can continue the chain from this tail node: complete,

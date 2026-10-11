@@ -39,7 +39,7 @@ deletes the WebKit and Tauri workarounds.
 | `ConnectorOverlay` (memo) | `:1485` | SVG paths and endpoint dots per connector |
 | `FollowupComposer` | `renderComposer :4841` | Tail composer and the docked ask composer (same component, `docked` prop); mode menu thread/branch; hints; Cmd-Enter / Shift-Cmd-Enter |
 | `SelectionPopover` | `:5430` | Highlight (H) / Expand-Merge (E) / Ask (A) |
-| `NodeContextMenu` | `:5245` | Copy thread as Markdown, Retry run, Generate summary, Edit document, Delete |
+| `NodeContextMenu` | `:5245` | Copy thread as Markdown, Rerun, Generate summary, Edit document, Delete |
 | `RecapDialog` | `ResearchRecapDialog.tsx` | instructions → candidate → apply (the desktop's adapter/model picker is dropped; recaps run on `gemini-flash`) |
 | `DeleteBranchDialog` | `:5501` | confirm with active-run refusal |
 | `DocumentEditor` | `DocumentComposer.tsx` | edit modal for `document` roots (creation not exposed, as today) |

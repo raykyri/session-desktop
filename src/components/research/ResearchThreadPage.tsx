@@ -93,6 +93,7 @@ import {
 import {
   canContinueChain,
   canFollowUpFrom,
+  canRerunResearchNode,
   canRetryResearchNode,
   chainDisplayOrder,
   inlineChainFor,
@@ -183,6 +184,7 @@ import {
   type ResearchMenuAlign,
   type ResearchMenuRect,
 } from "./ResearchMenu";
+import { ResearchRerunMenuItem } from "./ResearchRerunMenuItem";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
@@ -248,6 +250,9 @@ interface ResearchThreadPageProps {
    * inputs). The refreshed tree detail flows back through the caller's
    * reconciliation, so the turn re-renders as Queued. */
   onRetryNode: (nodeId: string) => Promise<void>;
+  /** Reruns a settled question in place, replacing a complete answer (see
+   * onRetryNode). */
+  onRerunNode: (nodeId: string) => Promise<void>;
   linkActions: LinkActions;
   onError: (message: string) => void;
   onToast: (message: string, tone?: "normal" | "warning") => void;
@@ -1004,6 +1009,7 @@ function ResearchThreadPage({
   readQuestionModel,
   onCancel,
   onRetryNode,
+  onRerunNode,
   linkActions,
   onError,
   onToast,
@@ -3755,6 +3761,8 @@ function ResearchThreadPage({
   onCancelRef.current = onCancel;
   const onRetryNodeRef = useRef(onRetryNode);
   onRetryNodeRef.current = onRetryNode;
+  const onRerunNodeRef = useRef(onRerunNode);
+  onRerunNodeRef.current = onRerunNode;
   const onToastRef = useRef(onToast);
   onToastRef.current = onToast;
   const onErrorRef = useRef(onError);
@@ -3781,15 +3789,18 @@ function ResearchThreadPage({
         setCancelling(false);
       });
   }, []);
-  // Relaunches a settled node in place. Ref-guarded against double entry from
-  // two controls for the same node. While another answer in its conversation
-  // runs, the retry waits behind it (see the queued-retry effect).
+  // Relaunches a settled node in place: a retry for a failed or cancelled
+  // run, a rerun (which replaces the answer) for a complete one. Ref-guarded
+  // against double entry from two controls for the same node. While another
+  // answer in its conversation runs, the relaunch waits behind it (see the
+  // queued-retry effect).
   const retryRequestInFlightRef = useRef(false);
   const handleRetryNode = useCallback((nodeId: string) => {
     if (retryRequestInFlightRef.current) {
       return;
     }
     const nodesNow = nodesRef.current;
+    const target = nodesNow.find((candidate) => candidate.id === nodeId);
     const busy = inlineChainFor(nodesNow, nodeId).some(
       (id) => {
         const node = nodesNow.find((candidate) => candidate.id === id);
@@ -3803,7 +3814,9 @@ function ResearchThreadPage({
     }
     retryRequestInFlightRef.current = true;
     setRetryingNodeId(nodeId);
-    onRetryNodeRef.current(nodeId)
+    const relaunch =
+      target && nodeStatus(target) === "complete" ? onRerunNodeRef.current : onRetryNodeRef.current;
+    relaunch(nodeId)
       .catch((err) => onErrorRef.current(err instanceof Error ? err.message : String(err)))
       .finally(() => {
         retryRequestInFlightRef.current = false;
@@ -4221,15 +4234,15 @@ function ResearchThreadPage({
     }
   });
 
-  // A retry waits while another answer in its conversation runs, and starts
-  // once none does.
+  // A retry or rerun waits while another answer in its conversation runs,
+  // and starts once none does.
   useEffect(() => {
     if (queuedRetries.size === 0) {
       return;
     }
     for (const nodeId of queuedRetries) {
       const node = nodeById.get(nodeId);
-      if (!node || !canRetryResearchNode(node)) {
+      if (!node || !canRerunResearchNode(node)) {
         setQueuedRetries((current) => {
           const next = new Set(current);
           next.delete(nodeId);
@@ -5564,17 +5577,16 @@ function ResearchThreadPage({
             }}
           />
         ) : null}
-        {!archived && canRetryResearchNode(node) ? (
-          <ResearchMenuItem
-            icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Retry run"
-            disabled={retryingNodeId !== null}
-            onSelect={() => {
-              setMenu(null);
-              handleRetryNode(node.id);
-            }}
-          />
-        ) : null}
+        <ResearchRerunMenuItem
+          node={node}
+          parent={nodeById.get(node.parentNodeId ?? "") ?? null}
+          archived={archived}
+          pending={retryingNodeId !== null}
+          onRerun={() => {
+            setMenu(null);
+            handleRetryNode(node.id);
+          }}
+        />
         {canRegenerateRecap ? (
           <ResearchMenuItem
             icon={<RefreshCw size={15} aria-hidden="true" />}

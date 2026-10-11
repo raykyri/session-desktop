@@ -368,6 +368,12 @@ export function retryResearchNode(nodeId: string) {
   return invoke<ResearchTreeDetail>("retry_research_node", { nodeId });
 }
 
+/** Reruns a settled question in place: as retryResearchNode, and a complete
+ * answer is accepted too and replaced by the new run. */
+export function rerunResearchNode(nodeId: string) {
+  return invoke<ResearchTreeDetail>("rerun_research_node", { nodeId });
+}
+
 export function cancelResearchNode(nodeId: string) {
   return invoke<ResearchNode>("cancel_research_node", { nodeId });
 }

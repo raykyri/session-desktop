@@ -68,7 +68,8 @@ use show_hide_shortcut::{
 };
 use sleep::SleepGuard;
 use state::{
-    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ShellAgentJobInfo,
+    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ResearchRelaunch,
+    ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
 use transcript::Turn;
@@ -2104,61 +2105,100 @@ async fn retry_research_node(
 ) -> Result<ResearchTreeDetail, String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        // Same admission guard as create/fork: the node must flip back to
-        // Queued atomically with the workspace checks, or a concurrent folder
-        // removal could invalidate its workspace before the relaunch. The
-        // reset itself refuses anything that is not a settled Failed/Cancelled
-        // run (or that still holds a live pane), so a double-click cannot
-        // relaunch twice.
-        let node = {
-            let _guard = workspace::lock_research_workspace_mutations()?;
-            let node = state.research_node(&node_id)?;
-            validate_launch_workspace(&state, Some(&node.group_id), LaunchOrigin::Research)?;
-            state.reset_research_node_for_retry(&node_id)?
-        };
-        // Failures past this point must settle the re-queued node: leaving it
-        // Queued would pin the tree as an active run nothing ever finishes.
-        let workspace = match state.research_workspace_for_node(&node_id) {
-            Ok(workspace) => workspace,
-            Err(err) => {
-                let _ = state.fail_research_node(&node_id, err.clone());
-                return Err(err);
-            }
-        };
-        let launch = match node.parent_node_id.as_deref() {
-            None => launch_fresh_research_run(
-                &state,
-                &node.id,
-                &workspace,
-                tweets::prompt_with_research_attachments(
-                    node.prompt().to_string(),
-                    node.attachments(),
-                ),
-            ),
-            Some(parent_id) => {
-                let parent = match state.research_node(parent_id) {
-                    Ok(parent) => parent,
-                    Err(err) => {
-                        let _ = state.fail_research_node(&node.id, err.clone());
-                        return Err(err);
-                    }
-                };
-                // The original fork required a completed parent; a parent that
-                // has since been re-run (or whose checkpoint regressed) cannot
-                // anchor the relaunch.
-                if parent.status() != research::ResearchNodeStatus::Complete {
-                    let err = "research follow-ups require a completed parent response".to_string();
-                    let _ = state.fail_research_node(&node.id, err.clone());
-                    return Err(err);
-                }
-                launch_research_child_run(&state, &parent, &workspace, &node)
-            }
-        };
-        launch?;
-        state.research_tree(&node.tree_id)
+        relaunch_research_node(&state, &node_id, ResearchRelaunch::Retry)
     })
     .await
     .map_err(|err| format!("retry_research_node task failed: {err}"))?
+}
+
+/// Reruns a settled exchange in place: as `retry_research_node`, but a
+/// Complete answer is accepted too and replaced by the new run. Follow-ups
+/// already sent from it keep their answers.
+#[tauri::command]
+async fn rerun_research_node(
+    state: tauri::State<'_, AppState>,
+    node_id: String,
+) -> Result<ResearchTreeDetail, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        relaunch_research_node(&state, &node_id, ResearchRelaunch::Rerun)
+    })
+    .await
+    .map_err(|err| format!("rerun_research_node task failed: {err}"))?
+}
+
+fn relaunch_research_node(
+    state: &AppState,
+    node_id: &str,
+    relaunch: ResearchRelaunch,
+) -> Result<ResearchTreeDetail, String> {
+    // Same admission guard as create/fork: the node must flip back to Queued
+    // atomically with the workspace checks, or a concurrent folder removal
+    // could invalidate its workspace before the relaunch. The reset itself
+    // refuses anything that is not a settled run of the kind `relaunch`
+    // accepts (or that still holds a live pane), so a double-click cannot
+    // relaunch twice.
+    let node = {
+        let _guard = workspace::lock_research_workspace_mutations()?;
+        let node = state.research_node(node_id)?;
+        validate_launch_workspace(state, Some(&node.group_id), LaunchOrigin::Research)?;
+        match relaunch {
+            ResearchRelaunch::Retry => state.reset_research_node_for_retry(node_id)?,
+            ResearchRelaunch::Rerun => {
+                // A rerun replaces an answer that may be Complete: refuse
+                // before the reset when the parent cannot anchor the
+                // relaunch, rather than settle the node as Failed below.
+                if let Some(parent_id) = node.parent_node_id.as_deref() {
+                    if state.research_node(parent_id)?.status()
+                        != research::ResearchNodeStatus::Complete
+                    {
+                        return Err(
+                            "the answer this question follows must complete before it can be rerun"
+                                .to_string(),
+                        );
+                    }
+                }
+                state.reset_research_node_for_rerun(node_id)?
+            }
+        }
+    };
+    // Failures past this point must settle the re-queued node: leaving it
+    // Queued would pin the tree as an active run nothing ever finishes.
+    let workspace = match state.research_workspace_for_node(node_id) {
+        Ok(workspace) => workspace,
+        Err(err) => {
+            let _ = state.fail_research_node(node_id, err.clone());
+            return Err(err);
+        }
+    };
+    let launch = match node.parent_node_id.as_deref() {
+        None => launch_fresh_research_run(
+            state,
+            &node.id,
+            &workspace,
+            tweets::prompt_with_research_attachments(node.prompt().to_string(), node.attachments()),
+        ),
+        Some(parent_id) => {
+            let parent = match state.research_node(parent_id) {
+                Ok(parent) => parent,
+                Err(err) => {
+                    let _ = state.fail_research_node(&node.id, err.clone());
+                    return Err(err);
+                }
+            };
+            // The original fork required a completed parent; a parent that
+            // has since been re-run (or whose checkpoint regressed) cannot
+            // anchor the relaunch.
+            if parent.status() != research::ResearchNodeStatus::Complete {
+                let err = "research follow-ups require a completed parent response".to_string();
+                let _ = state.fail_research_node(&node.id, err.clone());
+                return Err(err);
+            }
+            launch_research_child_run(state, &parent, &workspace, &node)
+        }
+    };
+    launch?;
+    state.research_tree(&node.tree_id)
 }
 
 #[tauri::command]
@@ -3508,6 +3548,7 @@ fn main() {
             get_research_node_content,
             fork_research_node,
             retry_research_node,
+            rerun_research_node,
             cancel_research_node,
             rename_research_tree,
             set_research_tree_bookmarked,

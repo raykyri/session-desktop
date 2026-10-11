@@ -88,6 +88,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.createTree` | M | `{ prompt, title?, model, workspaceId, documentIds? }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
 | `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline?, documentIds? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
+| `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |

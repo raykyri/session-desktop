@@ -317,6 +317,7 @@ import {
   removeResearchBranch,
   restoreResearchTree,
   retryResearchNode,
+  rerunResearchNode,
   setOpenRouterKey,
   openRouterChatCompletion,
   getShowHideShortcut,
@@ -5426,6 +5427,13 @@ function MainApp() {
     },
     [],
   );
+  // As retryResearchRun, for a rerun that may replace a complete answer.
+  const rerunResearchRun = useCallback(async (nodeId: string) => {
+    const detail = await rerunResearchNode(nodeId);
+    if (activeResearchTreeIdRef.current === detail.tree.id) {
+      setActiveResearchDetail((current) => reconcileResearchTreeDetail(current, detail));
+    }
+  }, []);
   // Follow-ups and retries under notes, in a note's follow-ups column. The
   // resulting node events update the feed and the open thread, so nothing is
   // patched here.
@@ -8693,6 +8701,7 @@ function MainApp() {
                   readQuestionModel={readResearchQuestionModel}
                   onCancel={cancelResearchRun}
                   onRetryNode={retryResearchRun}
+                  onRerunNode={rerunResearchRun}
                   linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
                   onError={setError}
                   onToast={handleResearchThreadToast}
