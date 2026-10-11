@@ -7,16 +7,12 @@ import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
-import { shortWhen } from "../../lib/shortTime";
-import type { PostCorrection } from "../../types";
 
 interface ResearchEditorColumnProps {
   column: EditorColumn;
   current: boolean;
-  /** What is edited: a document's Markdown, or a post's text. A post with
-   * replies or follow-ups is corrected (`correction`) instead. */
+  /** What is edited: a document's Markdown, or a post's text. */
   kind: "document" | "post";
-  correction: boolean;
   value: string;
   onChange: (value: string) => void;
   /** Documents: the title field. */
@@ -49,7 +45,6 @@ export function ResearchEditorColumn({
   column,
   current,
   kind,
-  correction,
   value,
   onChange,
   title,
@@ -79,8 +74,8 @@ export function ResearchEditorColumn({
       ? "No research agent is ready"
       : null;
   const questionNote = questionBlocker ?? `Asks ${questionModel}`;
-  const heading = kind === "document" ? "Edit document" : correction ? "Correct post" : "Edit post";
-  const saveLabel = saving ? "Saving…" : correction ? "Add correction" : "Save";
+  const heading = kind === "document" ? "Edit document" : "Edit post";
+  const saveLabel = saving ? "Saving…" : "Save";
 
   const setField = (element: HTMLTextAreaElement | null) => {
     fieldRef.current = element;
@@ -143,7 +138,7 @@ export function ResearchEditorColumn({
             className={`research-editor-field${kind === "document" ? " is-source" : ""}`}
             value={value}
             spellCheck={kind === "post"}
-            aria-label={kind === "document" ? "Document Markdown" : correction ? "Correction" : "Post text"}
+            aria-label={kind === "document" ? "Document Markdown" : "Post text"}
             onChange={(event) => {
               setConfirmingDiscard(false);
               onChange(event.currentTarget.value);
@@ -222,16 +217,13 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
   next,
   imported = false,
   label,
-  marksChanges = true,
 }: {
   original: string;
   next: string;
   /** An imported report: citation handles are hidden, as in the answer. */
   imported?: boolean;
-  /** Names what is previewed: "Preview", "Correction preview". */
+  /** Names what is previewed. */
   label: string;
-  /** Marks and counts the blocks not in `original`; off for new text. */
-  marksChanges?: boolean;
 }) {
   const blocks = useMemo(() => {
     const seen = new Map<string, number>();
@@ -247,10 +239,7 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
       <p className="research-edit-preview-bar">
         <Eye size={13} aria-hidden="true" />
         <span>
-          {label}
-          {marksChanges
-            ? ` · ${changed === 0 ? "no paragraphs changed" : changed === 1 ? "1 paragraph changed" : `${changed} paragraphs changed`}`
-            : null}
+          {`${label} · ${changed === 0 ? "no paragraphs changed" : changed === 1 ? "1 paragraph changed" : `${changed} paragraphs changed`}`}
         </span>
       </p>
       {blocks.map((block) => (
@@ -259,7 +248,7 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
           // rendered Markdown while another block is typed in or inserted.
           key={block.key}
           text={imported ? stripImportedReportCitations(block.text) : block.text}
-          changed={marksChanges && block.changed}
+          changed={block.changed}
         />
       ))}
     </div>
@@ -274,37 +263,3 @@ const PreviewBlock = memo(function PreviewBlock({ text, changed }: { text: strin
     </div>
   );
 });
-
-/** A post's corrections under the post, oldest first. */
-export function ResearchPostCorrections({
-  corrections,
-  now,
-}: {
-  corrections: readonly PostCorrection[];
-  now: number;
-}) {
-  if (corrections.length === 0) {
-    return null;
-  }
-  return (
-    <ol className="research-post-corrections" aria-label="Corrections">
-      {[...corrections]
-        .sort((left, right) => left.createdAt - right.createdAt)
-        .map((correction) => (
-          <li key={correction.id} className="research-post-correction">
-            <div className="research-post-correction-meta">
-              <span className="research-post-correction-label">Correction</span>
-              <span aria-hidden="true">·</span>
-              <time
-                dateTime={new Date(correction.createdAt).toISOString()}
-                title={new Date(correction.createdAt).toLocaleString()}
-              >
-                {shortWhen(correction.createdAt, now)}
-              </time>
-            </div>
-            <ResearchMarkdown text={correction.body} />
-          </li>
-        ))}
-    </ol>
-  );
-}

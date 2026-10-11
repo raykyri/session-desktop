@@ -4727,14 +4727,12 @@ impl AppState {
         Ok(node)
     }
 
-    /// Edits a root post. A post with no replies and no follow-ups gets the
-    /// new text, its highlights move to their quote in it (research_anchors),
-    /// and it is marked edited; the tree title follows the text when it was
-    /// still the title derived from the old text. A post with replies or
-    /// follow-ups keeps its text, which they refer to, and the new text is
-    /// appended as a correction. `request.correction` states which of the
-    /// two the editor showed; a post that changed state in the meantime is
-    /// refused.
+    /// Edits a root post: it gets the new text, its highlights move to their
+    /// quote in it (research_anchors), its format follows the text, and it
+    /// is marked edited; the tree title follows the text when it was still
+    /// the title derived from the old text. Replies and follow-ups are kept
+    /// as they are. A post whose text changed since the editor opened
+    /// (`request.expected_text`) is refused.
     pub fn update_research_post(
         &self,
         request: research::UpdateResearchPostRequest,
@@ -4750,7 +4748,6 @@ impl AppState {
             ));
         }
         let now = now_millis();
-        let correction_id = request.correction.then(|| self.next_id("post-correction"));
         let (tree, node, removed_highlight_count, title_changed) = {
             let mut model = self
                 .inner
@@ -4782,72 +4779,45 @@ impl AppState {
                         .to_string(),
                 );
             }
-            let has_replies = current
-                .delivery()
-                .is_some_and(|delivery| !delivery.replies.is_empty())
-                || model.research_nodes.values().any(|node| {
-                    node.parent_node_id.as_deref() == Some(current.id.as_str())
-                        && node.node_type() != ResearchNodeType::Document
-                });
-            if has_replies != request.correction {
-                return Err(if has_replies {
-                    "the post has a reply or follow-up now, so it can only be corrected; reopen the editor and try again"
-                } else {
-                    "the post has no replies or follow-ups now, so its text can be edited; reopen the editor and try again"
-                }
-                .to_string());
-            }
             if text == current.prompt().trim() {
-                return Err(if request.correction {
-                    "the correction repeats the post's text".to_string()
-                } else {
-                    "the post's text is unchanged".to_string()
-                });
+                return Err("the post's text is unchanged".to_string());
             }
             let mut node = current.clone();
-            let mut removed = 0usize;
-            let mut title = tree.title.clone();
-            if let Some(correction_id) = correction_id {
-                let post = node.post_mut().expect("the node is a post");
-                post.corrections.push(research::PostCorrection {
-                    id: correction_id,
-                    body: text,
-                    created_at: research::body_millis(now),
-                });
-                research::validate_post_corrections(&post.corrections)?;
-            } else {
-                // A saved link stays a link, and an attached post keeps the
-                // link it was captured from.
-                if node.delivery().is_none() && !research::post_body_is_single_url(&text) {
-                    return Err("a saved link must stay a single link".to_string());
-                }
-                if let Some(url) = node.attachments().iter().find_map(|attachment| {
-                    let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } =
-                        attachment;
-                    (!text.contains(source_url.as_str())).then(|| source_url.clone())
-                }) {
-                    return Err(format!(
-                        "keep the link {url} in the text: the attached post was captured from it"
-                    ));
-                }
-                let (kept, count) = crate::research_anchors::reanchor_highlights(
-                    &node.highlights,
-                    current.prompt(),
-                    &text,
-                    None,
-                );
-                node.highlights = kept;
-                removed = count;
-                if tree.title == research::post_default_title(current.prompt()) {
-                    title = research::post_default_title(&text);
-                }
-                // The format follows the text, as it did when the feed
-                // derived it from the text.
-                let post = node.post_mut().expect("the node is a post");
-                post.format = research::PostFormat::of(&text);
-                post.message.text = text;
-                post.edited_at = Some(research::body_millis(now));
+            // A saved link stays a link, and an attached post keeps the link
+            // it was captured from. A post saved without delivery holds a
+            // single link unless its text came from a correction (see
+            // research::migrate_post_corrections_to_text); that text can be
+            // edited freely.
+            let saved_link =
+                node.delivery().is_none() && research::post_body_is_single_url(current.prompt());
+            if saved_link && !research::post_body_is_single_url(&text) {
+                return Err("a saved link must stay a single link".to_string());
             }
+            if let Some(url) = node.attachments().iter().find_map(|attachment| {
+                let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } = attachment;
+                (!text.contains(source_url.as_str())).then(|| source_url.clone())
+            }) {
+                return Err(format!(
+                    "keep the link {url} in the text: the attached post was captured from it"
+                ));
+            }
+            let (kept, removed) = crate::research_anchors::reanchor_highlights(
+                &node.highlights,
+                current.prompt(),
+                &text,
+                None,
+            );
+            node.highlights = kept;
+            let mut title = tree.title.clone();
+            if tree.title == research::post_default_title(current.prompt()) {
+                title = research::post_default_title(&text);
+            }
+            // The format follows the text, as it did when the feed derived it
+            // from the text.
+            let post = node.post_mut().expect("the node is a post");
+            post.format = research::PostFormat::of(&text);
+            post.message.text = text;
+            post.edited_at = Some(research::body_millis(now));
             model.research_nodes.insert(node.id.clone(), node.clone());
             let stored_tree = model
                 .research_trees
@@ -4904,13 +4874,7 @@ impl AppState {
             parent.attachments(),
         );
         Ok(research::post_followup_prompt(
-            &post_body,
-            parent
-                .post()
-                .map_or(&[][..], |post| post.corrections.as_slice()),
-            replies,
-            anchored,
-            question,
+            &post_body, replies, anchored, question,
         ))
     }
 
@@ -13254,17 +13218,11 @@ mod tests {
         );
     }
 
-    fn post_edit(
-        node_id: &str,
-        text: &str,
-        expected: &str,
-        correction: bool,
-    ) -> research::UpdateResearchPostRequest {
+    fn post_edit(node_id: &str, text: &str, expected: &str) -> research::UpdateResearchPostRequest {
         research::UpdateResearchPostRequest {
             node_id: node_id.to_string(),
             text: text.to_string(),
             expected_text: expected.to_string(),
-            correction,
         }
     }
 
@@ -13279,19 +13237,13 @@ mod tests {
         // The editor's expected state must match the post's.
         assert!(
             state
-                .update_research_post(post_edit(&post_id, "New", "Old text", false))
+                .update_research_post(post_edit(&post_id, "New", "Old text"))
                 .unwrap_err()
                 .contains("changed while you were editing")
         );
         assert!(
             state
-                .update_research_post(post_edit(&post_id, "New", "Who has tried this?", true))
-                .unwrap_err()
-                .contains("can be edited")
-        );
-        assert!(
-            state
-                .update_research_post(post_edit(&post_id, "  ", "Who has tried this?", false))
+                .update_research_post(post_edit(&post_id, "  ", "Who has tried this?"))
                 .is_err()
         );
         let edited = state
@@ -13299,12 +13251,10 @@ mod tests {
                 &post_id,
                 " Who has tried this tool? ",
                 "Who has tried this?",
-                false,
             ))
             .unwrap();
         assert_eq!(edited.node.prompt(), "Who has tried this tool?");
         assert!(edited.node.post().unwrap().edited_at.is_some());
-        assert!(edited.node.post().unwrap().corrections.is_empty());
         // The title was derived from the text, so it follows the text.
         assert_eq!(edited.tree.title, "Who has tried this tool?");
         assert_eq!(
@@ -13320,14 +13270,13 @@ mod tests {
                 &post_id,
                 "Who has tried this tool before?",
                 "Who has tried this tool?",
-                false,
             ))
             .unwrap();
         assert_eq!(again.tree.title, "Tools");
     }
 
     #[test]
-    fn a_post_with_replies_or_follow_ups_gets_corrections() {
+    fn a_post_with_replies_or_follow_ups_takes_new_text() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
@@ -13335,34 +13284,6 @@ mod tests {
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
         add_member_reply(&state, &post_id, "Ana", "I will be there.");
-        let text = "The meeting is on Monday.";
-        assert!(
-            state
-                .update_research_post(post_edit(&post_id, "Tuesday", text, false))
-                .unwrap_err()
-                .contains("can only be corrected")
-        );
-        assert!(
-            state
-                .update_research_post(post_edit(&post_id, text, text, true))
-                .is_err()
-        );
-        let corrected = state
-            .update_research_post(post_edit(
-                &post_id,
-                "The meeting is on Tuesday.",
-                text,
-                true,
-            ))
-            .unwrap();
-        assert_eq!(corrected.node.prompt(), text);
-        assert!(corrected.node.post().unwrap().edited_at.is_none());
-        assert_eq!(corrected.node.post().unwrap().corrections.len(), 1);
-        assert_eq!(
-            corrected.node.post().unwrap().corrections[0].body,
-            "The meeting is on Tuesday."
-        );
-        // Follow-ups read the corrections after the post.
         let child = state
             .create_research_child_with_attachments(
                 &post_id,
@@ -13372,14 +13293,37 @@ mod tests {
                 Vec::new(),
             )
             .unwrap();
+        let text = "The meeting is on Monday.";
+        assert!(
+            state
+                .update_research_post(post_edit(&post_id, text, text))
+                .unwrap_err()
+                .contains("unchanged")
+        );
+        let edited = state
+            .update_research_post(post_edit(&post_id, "The meeting is on Tuesday.", text))
+            .unwrap();
+        assert_eq!(edited.node.prompt(), "The meeting is on Tuesday.");
+        assert!(edited.node.post().unwrap().edited_at.is_some());
+        assert_eq!(edited.tree.title, "The meeting is on Tuesday.");
+        // Replies and follow-ups are kept.
+        assert_eq!(edited.node.delivery().unwrap().replies.len(), 1);
+        assert!(state.research_node(&child.id).is_ok());
+        // Follow-ups read the current text.
         let prompt = state
             .research_post_followup_prompt(&post_id, &child, "Which day?")
             .unwrap();
-        assert!(prompt.contains(
-            "</post>\n<corrections>\n<correction>\nThe meeting is on Tuesday.\n</correction>\n</corrections>"
-        ));
+        assert!(prompt.contains("<post>\nThe meeting is on Tuesday.\n</post>\n<replies>"));
+        assert!(!prompt.contains("Monday"));
+        // A stale editor is still refused.
+        assert!(
+            state
+                .update_research_post(post_edit(&post_id, "Wednesday", text))
+                .unwrap_err()
+                .contains("changed while you were editing")
+        );
 
-        // An AI follow-up alone also makes the post correctable.
+        // An AI follow-up alone does not stop an edit either.
         let quiet = state
             .create_research_post(post_request("Draft plan", true), Vec::new())
             .unwrap();
@@ -13393,16 +13337,10 @@ mod tests {
                 Vec::new(),
             )
             .unwrap();
-        assert!(
-            state
-                .update_research_post(post_edit(&quiet_id, "Final plan", "Draft plan", false))
-                .is_err()
-        );
-        assert!(
-            state
-                .update_research_post(post_edit(&quiet_id, "Final plan", "Draft plan", true))
-                .is_ok()
-        );
+        let quiet_edit = state
+            .update_research_post(post_edit(&quiet_id, "Final plan", "Draft plan"))
+            .unwrap();
+        assert_eq!(quiet_edit.node.prompt(), "Final plan");
     }
 
     #[test]
@@ -13419,7 +13357,6 @@ mod tests {
                     &link_id,
                     "A comment and https://example.com/a",
                     "https://example.com/a",
-                    false,
                 ))
                 .unwrap_err()
                 .contains("single link")
@@ -13429,10 +13366,31 @@ mod tests {
                 &link_id,
                 "https://example.com/b",
                 "https://example.com/a",
-                false,
             ))
             .unwrap();
         assert_eq!(edited.node.prompt(), "https://example.com/b");
+        // A saved post whose text came from a correction (see
+        // research::migrate_post_corrections_to_text) is no longer a single
+        // link, so its text is edited like any other.
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let post = model
+                .research_nodes
+                .get_mut(&link_id)
+                .unwrap()
+                .post_mut()
+                .unwrap();
+            post.message.text = "It moved: https://example.com/b".to_string();
+            post.format = research::PostFormat::Text;
+        }
+        let edited = state
+            .update_research_post(post_edit(
+                &link_id,
+                "It moved to https://example.com/c",
+                "It moved: https://example.com/b",
+            ))
+            .unwrap();
+        assert_eq!(edited.node.prompt(), "It moved to https://example.com/c");
     }
 
     #[test]
@@ -17095,11 +17053,7 @@ mod tests {
                 flat.insert("kind".into(), serde_json::json!("post"));
                 flat.insert("status".into(), serde_json::json!("complete"));
                 flat.insert("worktreeDir".into(), serde_json::json!(""));
-                copy(
-                    &mut flat,
-                    Some(&body),
-                    &["format", "delivery", "corrections", "editedAt"],
-                );
+                copy(&mut flat, Some(&body), &["format", "delivery", "editedAt"]);
             }
             _ => {
                 let (kind, origin) = match body["source"].as_str().unwrap() {
@@ -17482,22 +17436,18 @@ mod tests {
         let link = state
             .create_research_post(post_request("https://example.com/a", false), Vec::new())
             .unwrap();
-        // A corrected, edited post keeps both through the migration.
-        {
-            let mut model = state.inner.model.lock().unwrap();
-            let link = model
-                .research_nodes
-                .get_mut(&link.tree.root_node_id)
-                .unwrap()
-                .post_mut()
-                .unwrap();
-            link.edited_at = Some(5);
-            link.corrections.push(research::PostCorrection {
-                id: "correction-1".into(),
-                body: "The link moved.".into(),
-                created_at: 6,
-            });
-        }
+        // An edited post keeps its edit time through the migration.
+        state
+            .inner
+            .model
+            .lock()
+            .unwrap()
+            .research_nodes
+            .get_mut(&link.tree.root_node_id)
+            .unwrap()
+            .post_mut()
+            .unwrap()
+            .edited_at = Some(5);
         let run = state
             .create_research_tree(research_root_request("Root"))
             .unwrap();
@@ -18035,6 +17985,58 @@ mod tests {
             .filter(|name| name.ends_with(".bak"))
             .collect::<Vec<_>>();
         assert!(backups.is_empty(), "{backups:?}");
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    /// Builds before this one stored edits of a post with replies or
+    /// follow-ups as `corrections` in the post body. A version-10 state with
+    /// one loads with the latest correction as the post's text, is saved
+    /// without the key at the same version, and needs no backup: builds at
+    /// version 10 read `corrections` as optional.
+    #[test]
+    fn version_ten_state_with_post_corrections_loads_them_as_the_text() {
+        let workspace = temp_workspace();
+        let state = state_with_posts_and_anchors(&workspace);
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(raw["version"], 10);
+        let post_id = raw["researchNodes"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .find(|(_, node)| node["body"]["message"]["text"] == "Who has tried X?")
+            .map(|(id, _)| id.clone())
+            .unwrap();
+        raw["researchNodes"][&post_id]["body"]["corrections"] = serde_json::json!([
+            {"id": "post-correction-2", "body": "Who has tried X and Y?", "createdAt": 9},
+            {"id": "post-correction-1", "body": "Who has tried X lately?", "createdAt": 8},
+        ]);
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        let post = restored.research_node(&post_id).unwrap();
+        assert_eq!(post.prompt(), "Who has tried X and Y?");
+        assert_eq!(post.post().unwrap().edited_at, Some(9));
+        assert_eq!(post.delivery().unwrap().replies.len(), 1);
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["version"], 10);
+        assert!(
+            saved["researchNodes"][&post_id]["body"]
+                .get("corrections")
+                .is_none()
+        );
+        assert_eq!(
+            saved["researchNodes"][&post_id]["body"]["message"]["text"],
+            "Who has tried X and Y?"
+        );
+        assert!(backup_names(&workspace).is_empty());
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

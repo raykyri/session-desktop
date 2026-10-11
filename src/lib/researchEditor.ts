@@ -1,10 +1,7 @@
 // Rules for the editor column (ResearchEditorColumn): which blocks of an
-// edited text changed, whether a post's edit replaces its text or adds a
-// correction, and whether the text can be asked as a question.
+// edited text changed, and whether the text can be asked as a question.
 
 import { closesFence, markerRunAtLineStart, type MarkdownFence } from "./markdownMathDelimiters";
-import { nodeDelivery, nodeType } from "./researchNodeTypes";
-import type { ResearchNode } from "../types";
 
 /** The longest text, in characters after trimming, that "Ask as a question"
  * sends as a question. */
@@ -76,11 +73,3 @@ export function editedMarkdownBlocks(original: string, next: string): EditedBloc
   });
 }
 
-/** Whether a post has replies or follow-ups, so that an edit appends a
- * correction instead of replacing its text. Mirrors update_research_post. */
-export function researchPostHasReplies(nodes: readonly ResearchNode[], post: ResearchNode): boolean {
-  return (
-    (nodeDelivery(post)?.replies?.length ?? 0) > 0 ||
-    nodes.some((node) => node.parentNodeId === post.id && nodeType(node) !== "document")
-  );
-}

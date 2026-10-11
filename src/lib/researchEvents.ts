@@ -256,7 +256,6 @@ function isResearchNode(value: unknown): value is ResearchNode {
         (value.format === "text" || value.format === "link") &&
         isAgentSpec(value.followUpAgent) &&
         (value.delivery == null || isRecord(value.delivery)) &&
-        (value.corrections === undefined || Array.isArray(value.corrections)) &&
         isOptionalFiniteNumber(value.editedAt)
       );
     case "exchange":

@@ -493,9 +493,6 @@ export interface ResearchPostNode extends ResearchNodeBase {
   delivery?: PostDelivery | null;
   /** Default agent for AI follow-ups; not provenance. */
   followUpAgent: AgentSpec;
-  /** Corrections the author appended to a post that already had replies or
-   * follow-ups, oldest first. Omitted when empty. */
-  corrections?: PostCorrection[];
   /** When the text was last replaced by an edit. */
   editedAt?: number | null;
 }
@@ -526,12 +523,6 @@ export interface ResearchDocumentNode extends ResearchNodeBase {
 
 /** A research node as commands and events send it (`ResearchNodeView`). */
 export type ResearchNode = ResearchPostNode | ResearchExchangeNode | ResearchDocumentNode;
-
-export interface PostCorrection {
-  id: string;
-  body: string;
-  createdAt: number;
-}
 
 export interface ResearchRecap {
   id?: string | null;

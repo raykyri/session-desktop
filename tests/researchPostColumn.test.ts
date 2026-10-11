@@ -86,3 +86,24 @@ test("a post renders by its stored format, not by parsing its text", () => {
   assert.doesNotMatch(render([asked]), /post-link-card/);
 });
 
+
+test("an edited post shows its text in place and Edited after its time", () => {
+  const edited = researchNode({
+    ...postFields,
+    prompt: "Who ships wit-bindgen plugins?",
+    editedAt: 200,
+    delivery: {
+      status: "posted", postedAt: 100,
+      replies: [{
+        id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
+        body: "We do.", createdAt: 110,
+      }],
+    },
+  });
+  const html = render([edited]);
+  assert.match(html, /Who ships wit-bindgen plugins\?/);
+  assert.match(html, /<div class="research-turn-meta"><time [^>]*>[^<]+<\/time><span aria-hidden="true">·<\/span><span title="[^"]+">Edited [^<]+<\/span><\/div>/);
+  assert.doesNotMatch(html, /[Cc]orrection/);
+  // An unedited post has no Edited mark.
+  assert.doesNotMatch(render([post]), /Edited/);
+});

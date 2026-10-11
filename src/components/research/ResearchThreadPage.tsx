@@ -103,7 +103,6 @@ import {
   researchDocumentEditGate,
 } from "../../lib/researchDocuments";
 import { countUnmatchedResearchAnchors } from "../../lib/researchAnchors";
-import { researchPostHasReplies } from "../../lib/researchEditor";
 import {
   expandedResearchHighlightOffsets,
   RESEARCH_HIGHLIGHT_CONTEXT_LENGTH,
@@ -151,7 +150,7 @@ import type {
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
-import { ResearchEditorColumn, ResearchEditPreview, ResearchPostCorrections } from "./ResearchEditorColumn";
+import { ResearchEditorColumn, ResearchEditPreview } from "./ResearchEditorColumn";
 import { ResearchThreadPlaceholder, ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import {
@@ -226,13 +225,11 @@ interface ResearchThreadPageProps {
     expectedTitle: string;
     expectedHighlightIds: string[];
   }) => Promise<UpdateResearchDocumentResult>;
-  /** Replaces a post's text, or appends a correction to a post with replies
-   * or follow-ups (update_research_post). */
+  /** Replaces a post's text and marks it edited (update_research_post). */
   onUpdatePost: (input: {
     nodeId: string;
     text: string;
     expectedText: string;
-    correction: boolean;
   }) => Promise<UpdateResearchPostResult>;
   /** "Ask as a question" in the editor: starts a new thread with `prompt`
    * using the Home ask box's model, and opens it. */
@@ -328,8 +325,6 @@ interface EditorSession {
   /** Highlights and branch anchors the edit may leave without a match. */
   highlightAnchors: ResearchHighlightAnchor[];
   branchAnchors: ResearchHighlightAnchor[];
-  /** Posts: the post has replies or follow-ups, so Save adds a correction. */
-  correction: boolean;
   imported: boolean;
   /** Where focus returns when the column closes. */
   returnFocus: HTMLElement | null;
@@ -1079,22 +1074,19 @@ function ResearchThreadPage({
         overWordLimit = true;
       }
     }
-    const replaces = editor.kind === "document" || !editor.correction;
     return {
       wordCount,
       overWordLimit,
       overByteLimit:
         editor.kind === "document" && new TextEncoder().encode(editorText).length > RESEARCH_DOCUMENT_BYTE_LIMIT,
-      removedHighlights: replaces
-        ? countUnmatchedResearchAnchors(editor.highlightAnchors, editor.initialText, editorText)
-        : 0,
+      removedHighlights: countUnmatchedResearchAnchors(editor.highlightAnchors, editor.initialText, editorText),
       unmatchedBranches: editor.kind === "document"
         ? countUnmatchedResearchAnchors(editor.branchAnchors, editor.initialText, editorText)
         : 0,
     };
     // Only the text and the session's fixed inputs count; the title does not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor?.nodeId, editor?.kind, editor?.correction, editor?.initialText, editorText]);
+  }, [editor?.nodeId, editor?.kind, editor?.initialText, editorText]);
   const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
   // Per-node reading state: which answers show their full item window
   // (persisted per tree) and which show the full transcript (per visit).
@@ -4233,12 +4225,10 @@ function ResearchThreadPage({
           const anchor = child.parentNodeId === nodeId ? passageAnchor(child) : null;
           return anchor ? [anchor] : [];
         }),
-        correction: false,
         imported: documentSource(node) === "imported",
         returnFocus,
       };
     } else if (nodeType(node) === "post") {
-      const correction = researchPostHasReplies(nodes, node);
       session = {
         nodeId,
         kind: "post",
@@ -4250,7 +4240,6 @@ function ResearchThreadPage({
         highlightIds: [],
         highlightAnchors: node.highlights.map((highlight) => highlight.anchor),
         branchAnchors: [],
-        correction,
         imported: false,
         returnFocus,
       };
@@ -4342,15 +4331,12 @@ function ResearchThreadPage({
           nodeId: session.nodeId,
           text: session.text,
           expectedText: session.initialText,
-          correction: session.correction,
         });
         const removed = result.removedHighlightCount;
         onToast(
-          session.correction
-            ? "Correction added"
-            : removed > 0
-              ? `Post saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
-              : "Post saved",
+          removed > 0
+            ? `Post saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
+            : "Post saved",
         );
       }
       closeEditor();
@@ -4967,14 +4953,6 @@ function ResearchThreadPage({
           </p>,
         );
       }
-    } else {
-      notices.push(
-        <p key="mode" className={`research-editor-note${session.correction ? " is-warning" : ""}`}>
-          {session.correction
-            ? "This post has replies or follow-ups, which refer to its current text. Saving adds this text as a correction under the post; the original text stays."
-            : "This post has no replies or follow-ups. Saving replaces its text and marks it Edited."}
-        </p>,
-      );
     }
     const removed = session.text !== session.initialText ? (stats?.removedHighlights ?? 0) : 0;
     if (removed > 0) {
@@ -5002,7 +4980,6 @@ function ResearchThreadPage({
         column={column}
         current={currentLevel === column.levelIndex}
         kind={session.kind}
-        correction={session.correction}
         value={session.text}
         onChange={(text) => update({ text })}
         title={
@@ -5099,18 +5076,11 @@ function ResearchThreadPage({
             />
             <div className="research-column-scroll" tabIndex={postEditing ? 0 : -1} {...postMenuProps}>
               <div className="research-column-content research-reading-surface">
-                {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
+                {postEditing && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
                 ) : (
                   <ResearchPostColumn detail={detail} post={post} onSelectNode={(nodeId) => navigate(nodeId)} />
                 )}
-                <ResearchPostCorrections
-                  corrections={post.type === "post" ? (post.corrections ?? []) : []}
-                  now={minuteNow}
-                />
-                {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
-                  <ResearchEditPreview original="" next={editorText} label="Correction preview" marksChanges={false} />
-                ) : null}
               </div>
             </div>
             <ResearchColumnResizer kind="answer" label="Resize post column" />
@@ -5296,7 +5266,6 @@ function ResearchThreadPage({
     }
     if (menu.kind === "post") {
       const post = menuNode;
-      const correction = researchPostHasReplies(nodes, post);
       return (
         <ResearchMenu
           anchor={menu.anchor}
@@ -5307,7 +5276,7 @@ function ResearchThreadPage({
         >
           <ResearchMenuItem
             icon={<Pencil size={15} aria-hidden="true" />}
-            label={correction ? "Correct post" : "Edit post"}
+            label="Edit post"
             disabled={archived}
             title={archived ? "Move this post out of Archive to edit it" : undefined}
             onSelect={() => {

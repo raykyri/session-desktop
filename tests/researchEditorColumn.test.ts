@@ -7,25 +7,8 @@ import {
   QUESTION_CHARACTER_LIMIT,
   editedMarkdownBlocks,
   markdownBlocks,
-  researchPostHasReplies,
   researchQuestionLength,
 } from "../src/lib/researchEditor";
-import type { ResearchNode } from "../src/types";
-import { researchNode, type NodeFixture } from "./researchNodeFixture";
-
-function node(id: string, overrides: NodeFixture = {}): ResearchNode {
-  return researchNode({
-    id,
-    treeId: "tree",
-    prompt: id,
-    adapter: "claude",
-    groupId: "ws",
-    status: "complete",
-    createdAt: 0,
-    highlights: [],
-    ...overrides,
-  });
-}
 
 function editor(value: string, overrides: Partial<Parameters<typeof ResearchEditorColumn>[0]> = {}) {
   return renderToStaticMarkup(
@@ -33,7 +16,6 @@ function editor(value: string, overrides: Partial<Parameters<typeof ResearchEdit
       column: { id: "E0", role: "editor", levelIndex: 0, nodeId: "post" },
       current: true,
       kind: "post",
-      correction: false,
       value,
       onChange: () => {},
       dirty: false,
@@ -79,25 +61,12 @@ test("over the limit, Ask as a question stays visible but disabled with the coun
   assert.match(html, new RegExp(`id="${describedBy}"[^>]*>612 / 500 characters<`));
 });
 
-test("a post with replies is corrected: the button reads Add correction", () => {
-  const html = editor("Corrected text", { correction: true });
-  assert.match(html, /aria-label="Correct post"/);
-  assert.match(html, /Add correction/);
-});
-
-test("a post has replies when it has reply items or follow-ups", () => {
-  const post = node("post", { type: "post", delivery: { status: "posted", postedAt: 1 } });
-  assert.equal(researchPostHasReplies([post], post), false);
-  const replied = {
-    ...post,
-    delivery: {
-      status: "posted" as const,
-      postedAt: 1,
-      replies: [{ id: "r", author: { kind: "author" as const }, body: "hi", createdAt: 2 }],
-    },
-  };
-  assert.equal(researchPostHasReplies([replied], replied), true);
-  assert.equal(researchPostHasReplies([post, node("run", { parentNodeId: "post" })], post), true);
+test("the post editor is titled Edit post, saves with Save and has no correction mode", () => {
+  const html = editor("New text", { dirty: true, canSave: true });
+  assert.match(html, /aria-label="Edit post"/);
+  assert.match(html, /aria-label="Post text"/);
+  assert.match(html, /<span>Save<\/span>/);
+  assert.doesNotMatch(html, /[Cc]orrect/);
 });
 
 test("Markdown splits into blocks at blank lines outside code fences", () => {

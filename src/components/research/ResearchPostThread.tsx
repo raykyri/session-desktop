@@ -1,13 +1,12 @@
 import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
-import { Globe, Pencil, Sparkles } from "lucide-react";
-import type { PostCorrection, PostReply, ResearchNode } from "../../types";
+import { Globe, Sparkles } from "lucide-react";
+import type { PostReply, ResearchNode } from "../../types";
 import { nodeAdapter, nodeAgent, nodeDelivery, nodePrompt, nodeStatus, nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
-import { ResearchMarkdown } from "./ResearchMessage";
 import {
   PostFollowUpField,
   PostFollowUpStatus,
@@ -18,11 +17,10 @@ import {
 } from "./ResearchPost";
 
 /** One row of a post's thread column: a top-level reply (with the author's
- * responses to it), a follow-up, or a correction the author appended. */
+ * responses to it) or a follow-up. */
 type PostThreadEntry =
   | { kind: "reply"; key: string; at: number; reply: PostReply }
-  | { kind: "follow-up"; key: string; at: number; node: ResearchNode }
-  | { kind: "correction"; key: string; at: number; correction: PostCorrection };
+  | { kind: "follow-up"; key: string; at: number; node: ResearchNode };
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is
@@ -33,8 +31,7 @@ export interface ResearchPostThreadHandle {
 }
 
 /** The rows of a post's thread, oldest first: its top-level network replies,
- * its follow-ups (child nodes other than documents) and its corrections,
- * merged by time. A follow-up row's key is its node id. */
+ * and its follow-ups (child nodes other than documents), merged by time. A follow-up row's key is its node id. */
 export function postThreadEntries(nodes: readonly ResearchNode[], post: ResearchNode): PostThreadEntry[] {
   const followUps = nodes
     .filter((node) => node.parentNodeId === post.id && nodeType(node) !== "document")
@@ -43,14 +40,6 @@ export function postThreadEntries(nodes: readonly ResearchNode[], post: Research
   return [
     ...replies.map((reply): PostThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
     ...followUps.map((node): PostThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
-    ...(post.type === "post" ? (post.corrections ?? []) : []).map(
-      (correction): PostThreadEntry => ({
-        kind: "correction",
-        key: `correction:${correction.id}`,
-        at: correction.createdAt,
-        correction,
-      }),
-    ),
   ].sort((left, right) => left.at - right.at);
 }
 
@@ -148,16 +137,7 @@ export default function ResearchPostThread({
       {entries.length > 0 ? (
         <ol className="post-thread-list post-thread-rows" aria-label="Replies and follow-ups">
           {entries.map((entry) =>
-            entry.kind === "correction" ? (
-              <PostCorrectionRow
-                key={entry.key}
-                threadKey={entry.key}
-                correction={entry.correction}
-                tabbable={tabKey === entry.key}
-                marked={markedRowKey === entry.key}
-                onFocus={() => focusRow(entry.key)}
-              />
-            ) : entry.kind === "reply" ? (
+            entry.kind === "reply" ? (
               <PostReplyItem
                 key={entry.key}
                 nodeId={post.id}
@@ -277,55 +257,6 @@ function PostFollowUpRow({
           {nodePrompt(child)}
         </div>
         {state}
-      </div>
-    </li>
-  );
-}
-
-/** A correction the author appended to the post, as a row in its thread. */
-function PostCorrectionRow({
-  threadKey,
-  correction,
-  tabbable,
-  marked,
-  onFocus,
-}: {
-  threadKey: string;
-  correction: PostCorrection;
-  tabbable: boolean;
-  marked: boolean;
-  onFocus: () => void;
-}) {
-  return (
-    <li
-      className="post-thread-item post-thread-correction"
-      data-type="correction"
-      data-current={marked ? "" : undefined}
-      data-research-thread-row=""
-      data-thread-key={threadKey}
-      tabIndex={tabbable ? 0 : -1}
-      onFocus={(event) => {
-        if (event.target === event.currentTarget) onFocus();
-      }}
-    >
-      <div className="post-thread-gutter">
-        <span className="post-glyph" aria-hidden="true">
-          <Pencil size={10} />
-        </span>
-      </div>
-      <div className="post-thread-body">
-        <div className="post-reply-head">
-          <span className="post-reply-author">You</span>
-          <span className="post-correction-label">Correction</span>
-          <span aria-hidden="true">·</span>
-          <time
-            dateTime={new Date(correction.createdAt).toISOString()}
-            title={new Date(correction.createdAt).toLocaleString()}
-          >
-            {shortWhen(correction.createdAt)}
-          </time>
-        </div>
-        <ResearchMarkdown className="post-reply-text" text={correction.body} variant="compact" />
       </div>
     </li>
   );
