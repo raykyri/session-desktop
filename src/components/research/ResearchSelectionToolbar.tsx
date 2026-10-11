@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Highlighter } from "lucide-react";
+import { ArrowUpRight, Copy, Highlighter } from "lucide-react";
 import type { ResearchSelectionAction } from "../../hooks/useResearchTextSelection";
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
 import {
@@ -9,7 +9,6 @@ import {
   isResearchHighlightActionShortcut,
 } from "../../lib/researchHighlights";
 import { researchSelectionActionPlacement } from "../../lib/researchSelection";
-import { ResearchBranchIcon } from "./ResearchIcons";
 
 // The selection actions' size before they have rendered once (three inline
 // items, plus the note line when one shows).
@@ -47,7 +46,7 @@ function secondaryPressOnSelection(event: MouseEvent) {
 
 type Placement = ReturnType<typeof highlightActionPlacement>;
 
-/** The Branch / Highlight / Copy bar over a text selection in an answer.
+/** The Branch to right / Highlight / Copy bar over a text selection in an answer.
  * It owns its placement: it is measured and centred over the selection when
  * the selection changes, and follows it across scrolls and resizes, so only
  * the bar re-renders while the selection moves. A press outside the bar, Esc,
@@ -187,12 +186,12 @@ export function ResearchSelectionToolbar({
           className="control-button research-menu-item is-inline"
           disabled={saving || branchBlocker !== null}
           aria-keyshortcuts="A"
-          title={branchBlocker ?? "Branch (A)"}
+          title={branchBlocker ?? "Branch to right (A)"}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onBranch}
         >
-          <ResearchBranchIcon size={14} />
-          <span>Branch</span>
+          <ArrowUpRight size={14} aria-hidden="true" />
+          <span>Branch to right</span>
         </button>
         <button
           type="button"
