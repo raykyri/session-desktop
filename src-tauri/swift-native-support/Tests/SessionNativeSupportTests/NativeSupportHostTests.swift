@@ -30,7 +30,9 @@ final class NativeSupportHostTests: XCTestCase {
         XCTAssertTrue(host.setBrowserBackground(red: 0.1, green: 0.2, blue: 0.3))
         XCTAssertTrue(host.setHumanBrowserLoadingBackground(webView, active: true))
         let color = webView.underPageBackgroundColor.usingColorSpace(.sRGB)
-        XCTAssertEqual(color?.redComponent ?? -1, 0.1, accuracy: 0.001)
+        // WebKit stores the colour with 8 bits per component (0.1 reads back
+        // as 26/255 ≈ 0.10196), so allow one step of that quantisation.
+        XCTAssertEqual(color?.redComponent ?? -1, 0.1, accuracy: 1.0 / 255)
         XCTAssertTrue(host.setHumanBrowserLoadingBackground(webView, active: false))
     }
 
