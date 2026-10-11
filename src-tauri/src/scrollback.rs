@@ -1063,7 +1063,26 @@ mod tests {
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-    fn temp_workspace() -> PathBuf {
+    /// A test's workspace directory under the system temp dir. It is removed
+    /// when the value is dropped at the end of the test, including when the
+    /// test panics, so test runs do not leave scrollback files behind.
+    struct TempWorkspace(PathBuf);
+
+    impl std::ops::Deref for TempWorkspace {
+        type Target = Path;
+
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempWorkspace {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn temp_workspace() -> TempWorkspace {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
@@ -1071,7 +1090,7 @@ mod tests {
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("session-scrollback-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
-        dir
+        TempWorkspace(dir)
     }
 
     #[test]
@@ -1123,7 +1142,7 @@ mod tests {
         let panes = MAX_CONCURRENT_TRIMS * 2;
         let handles: Vec<_> = (0..panes)
             .map(|i| {
-                let workspace = workspace.clone();
+                let workspace = workspace.to_path_buf();
                 std::thread::spawn(move || {
                     let pane = format!("pane-{i}");
                     let mut data = vec![b'a'; SCROLLBACK_TRIM_TRIGGER as usize];
