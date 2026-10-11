@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:52:29.252Z",
+  "generated": "2026-10-11T07:00:36.250Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -238,9 +238,9 @@
       "macos": {
         "slug": "macos",
         "round": 2,
-        "title": "Mac system app",
-        "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings, TipKit)",
-        "summary": "Session as a standard Mac document app: a glass sidebar of folders, an always-visible “Ask a question” field at the top of the item list, and one toolbar switch (Page, Outline, Columns, Map) over the same library. Chats read like Messages, notes are outlines with [[links]], and three short tips walk a new user from first question to branch to links; agents are detected in the background and never block writing notes.",
+        "title": "Mac excerpt columns",
+        "influence": "Apple macOS system app idioms (Finder column view, Mail, Messages; Tahoe-era glass sidebar)",
+        "summary": "Session is one Finder-style column browser. The sidebar picks a folder, and each column to the right shows its chats, then the chat's messages as multi-line excerpts. The last column shows the selected message in full, where you can select a passage to branch from it (the branch opens as the next column) or file it into a note. You ask in the field at the top of the first column, follow up at the bottom of a chat's column, and Stop and queue state stay visible in the cells.",
         "nouns": [
           "Chat",
           "Branch",
@@ -250,58 +250,29 @@
         ],
         "variants": [
           {
-            "id": "a",
-            "label": "Page + inspector",
-            "summary": "Mail-style list with a docked Ask field, the chat page, and an inspector (⌥⌘I) with Info, Branches and Links; first-run tips are shown."
-          },
-          {
-            "id": "b",
-            "label": "Column browser",
-            "summary": "Opens in Columns view: folders → items → branches and bullets → a Quick Look preview with the passage actions, replacing the column strip."
-          },
-          {
             "id": "b2",
             "label": "Excerpt columns",
-            "summary": "Column browser where each chat, branch and message cell shows a role line and a 4-line excerpt; the selected cell expands and the last column shows the full message."
+            "summary": "Finder-style columns with 4-line message excerpts (role line plus text); the selected cell expands and the last column shows the full message."
           },
           {
-            "id": "b3",
-            "label": "Full-message columns",
-            "summary": "Column strip of whole conversations at reading width: each chat or branch column scrolls on its own, and branching from a passage opens the branch as the next column."
-          },
-          {
-            "id": "c",
-            "label": "Outline list",
-            "summary": "Opens in Outline view: one disclosure-triangle list of folders, chats, branches and note bullets; Space opens Quick Look, drag reorders or files."
-          },
-          {
-            "id": "d",
-            "label": "Messages threads",
-            "summary": "Answers sit in incoming bubbles and branches appear as reply threads under the answer, Messages-style; no inspector by default."
-          },
-          {
-            "id": "e",
-            "label": "Map canvas",
-            "summary": "Opens on a Freeform-style map of chats, notes, highlights and links grouped by folder; the inspector follows the selected card."
+            "id": "q",
+            "label": "Quiet columns",
+            "summary": "The same excerpt columns with less weight: muted accent, no dividers or fills, metadata only on the selected or hovered cell, more space between cells, and the sidebar folded to an icon rail that opens on hover."
           }
         ],
         "changes": [
-          "Added a docked “Ask a question” field above every item list; in round 1 the only way to start a chat was an unlabeled toolbar icon",
-          "Added three TipKit-style tips (ask → branch → links) with Next and dismiss; round 1 had no guidance outside the empty Personal workspace",
-          "Branch composer now opens as a popover on the passage in every variant; in round 1 it opened in the inspector, far from the selected text",
-          "Add to Note lists the outline's sections and the confirmation has a Show button that opens the note at the new bullet; round 1 appended silently to the end",
-          "Added Link to… in the Links inspector, so any two chats or notes can be linked without writing a note; links appear in both items and on the map",
-          "First-run workspace now shows only the welcome page (no empty list or empty inspector) and checks agents live, re-checking when the window becomes active",
-          "Return sends in every composer (⌥↩ new line, ⇧⌘↩ branch), matching Messages; round 1 required ⌘↩ and the hint was easy to miss",
-          "Added two column-browser variants (b2 Excerpt columns, b3 Full-message columns) with multi-line or full message cells, draggable column dividers and arrow-key navigation, because one-line Finder rows hid the answers that the current app's column strip shows",
-          "Replaced the weak “Popover branches” variant with “Messages threads”; fixed narrow-width navigation (no way back to the list), flat-list bolding, “1 items”, and passage keys ignored while the search field had focus"
+          "Narrowed the candidate to the excerpt column browser and removed the Page, Outline and Map views, the inspector, the fake menu bar, the toolbar view switch, the compose, note and inspector buttons, the tips, and the sidebar's Chats, Notes, Pinned, Highlights and Archive rows. Secondary actions moved into a ⋯ menu or behind hover.",
+          "Added an always-visible “Ask a question” field at the top of the first column; in round 1 the only way to start a chat was an unlabeled toolbar icon",
+          "The branch composer opens as a popover on the selected passage, and the new branch opens as the next column",
+          "Add to Note lists the outline's sections, and the confirmation has a Show button that opens the note at the new bullet",
+          "Return sends in every field (⇧⌘↩ sends as a branch from the messages column), matching Messages",
+          "Columns show multi-line excerpts instead of one-line rows, with draggable dividers and arrow-key navigation, because one-line rows hid the answers that the current app's column strip shows"
         ],
         "decisions": [
-          "Is the docked Ask field in the list pane found before the toolbar compose button, and does Return-to-send surprise people writing long questions?",
-          "Do people understand that Page, Outline, Columns and Map show the same items, or do they expect four separate places?",
-          "Branch as inspector cards (a) or as reply threads under the answer (d): which do first-time users find and reopen faster?",
-          "Is “Link to…” in the inspector used, or do people only link by typing [[ in notes?",
-          "Do three sequential tips help, or are they dismissed unread?"
+          "Is reading a long answer in the last column comfortable enough, or do people want to widen it to a full page?",
+          "Do people find the follow-up field at the bottom of the messages column, or look for it under the answer?",
+          "Quiet columns: does hiding the agent and model until hover cost people anything when they compare answers?",
+          "With folders only in the sidebar, do people miss a Recents or All view beyond the one row?"
         ],
         "file": "r2/macos.html",
         "thumb": "thumbs/r2-macos.jpg"
