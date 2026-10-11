@@ -301,3 +301,9 @@
 .post-thread-follow-up.is-selected .post-thread-question {
   color: var(--text-heading);
 }
+
+/* The note's time line sits 4px further below the note than an answer's
+   meta line sits below the answer. */
+.research-turn-meta.research-post-meta {
+  margin-top: 8px;
+}

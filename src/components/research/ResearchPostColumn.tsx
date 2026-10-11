@@ -50,7 +50,7 @@ export default function ResearchPostColumn({
               attachments={nodeAttachments(post)}
             />
           </ResearchUserMessage>
-          <div className="research-turn-meta">
+          <div className="research-turn-meta research-post-meta">
             <time
               dateTime={new Date(post.createdAt).toISOString()}
               title={new Date(post.createdAt).toLocaleString()}
