@@ -4,7 +4,8 @@ import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchFeedCard from "./ResearchFeedCard";
 import { researchPlaceEmptyText } from "./ResearchFeedTray";
-import { ResearchMenu, researchMenuPoint } from "./ResearchMenu";
+import { ResearchMenu } from "./ResearchMenu";
+import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { ResearchTreeDeleteDialog, ResearchTreeMenuItems } from "./ResearchTreeMenu";
 
 export interface ResearchArchivedFeedProps {
@@ -21,7 +22,7 @@ export interface ResearchArchivedFeedProps {
   onDragStart?: ResearchCardDragStart;
 }
 
-type ArchivedMenu = { treeId: string; x: number; y: number };
+type ArchivedMenu = { treeId: string; placement: ResearchUnitMenuPlacement };
 
 function archivedTooltip(archivedAt: number | null | undefined): string | undefined {
   if (archivedAt == null) return undefined;
@@ -73,7 +74,7 @@ function ResearchArchivedFeed({
           menuOpen={tree.id === menuTreeId}
           onOpen={() => onOpen(tree.id)}
           onMenu={onMenu ? (anchor) => onMenu(tree.id, anchor) : undefined}
-          onContextMenu={(x, y) => setMenu({ treeId: tree.id, x, y })}
+          onContextMenu={(placement) => setMenu({ treeId: tree.id, placement })}
           onDragStart={onDragStart}
         />
       ))}
@@ -84,8 +85,8 @@ function ResearchArchivedFeed({
       ) : null}
       {menu && menuTree ? (
         <ResearchMenu
-          anchor={researchMenuPoint(menu.x, menu.y)}
-          align="point"
+          anchor={menu.placement.anchor}
+          align={menu.placement.align}
           label={`Actions for ${menuTree.title}`}
           onClose={() => setMenu(null)}
         >

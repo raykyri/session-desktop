@@ -59,8 +59,9 @@ import ResearchFeedCard, {
 } from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
-import { ResearchMenu, ResearchMenuItem, researchMenuPoint } from "./ResearchMenu";
+import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 import ResearchMoveMenu from "./ResearchMoveMenu";
+import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import {
   ResearchMessageBody,
@@ -312,16 +313,24 @@ function feedViewTitle(view: ResearchFeedView, folders: ResearchFolder[]): strin
   }
 }
 
+/** An open feed menu. `anchor` is the … button that opened a row's menu, or
+ * for a context menu (`placement` set) the row's open button; `placement`
+ * places a context menu, which returns focus to what had it on its own. */
 type FeedMenu =
-  | { kind: "move"; treeId: string; anchor: HTMLElement; child?: ResearchFeedChild }
-  | { kind: "draft"; draftId: string; anchor: HTMLElement }
+  | {
+      kind: "move";
+      treeId: string;
+      anchor: HTMLElement;
+      placement?: ResearchUnitMenuPlacement;
+      child?: ResearchFeedChild;
+    }
+  | { kind: "draft"; draftId: string; anchor: HTMLElement; placement?: ResearchUnitMenuPlacement }
   | {
       kind: "tree";
       treeId: string;
       queryNodeId?: string;
       archived: boolean;
-      x: number;
-      y: number;
+      placement: ResearchUnitMenuPlacement;
     };
 
 function ResearchActivityFeed({
@@ -745,7 +754,7 @@ function ResearchActivityFeed({
   const closeMenu = useCallback((restoreFocus = false) => {
     const current = menuStateRef.current;
     setMenu(null);
-    if (restoreFocus && current && current.kind !== "tree") {
+    if (restoreFocus && current && current.kind !== "tree" && !current.placement) {
       current.anchor.focus({ preventScroll: true });
     }
   }, []);
@@ -776,11 +785,10 @@ function ResearchActivityFeed({
 
   function openTreeContextMenu(
     tree: ResearchTreeSummary,
-    x: number,
-    y: number,
+    placement: ResearchUnitMenuPlacement,
     queryNodeId?: string,
   ) {
-    setMenu({ kind: "tree", treeId: tree.id, queryNodeId, archived: Boolean(tree.archivedAt), x, y });
+    setMenu({ kind: "tree", treeId: tree.id, queryNodeId, archived: Boolean(tree.archivedAt), placement });
   }
 
   function openRecapDialog(nodeId: string) {
@@ -789,8 +797,10 @@ function ResearchActivityFeed({
       .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)));
   }
 
-  const menuTreeId = menu?.kind === "move" && !menu.child ? menu.treeId : null;
-  const menuChildNodeId = menu?.kind === "move" ? (menu.child?.nodeId ?? null) : null;
+  // The row whose … button opened the open menu (aria-expanded).
+  const menuTreeId = menu?.kind === "move" && !menu.child && !menu.placement ? menu.treeId : null;
+  const menuChildNodeId =
+    menu?.kind === "move" && !menu.placement ? (menu.child?.nodeId ?? null) : null;
   // A second click on the … button that opened a menu closes it.
   const openMoveMenu = (treeId: string, anchor: HTMLElement, child?: ResearchFeedChild) =>
     setMenu((current) =>
@@ -872,8 +882,13 @@ function ResearchActivityFeed({
         onChildMenu={
           tree && onMoveTree ? (child, anchor) => openMoveMenu(tree.id, anchor, child) : undefined
         }
-        onContextMenu={
-          tree ? (clientX, clientY) => openTreeContextMenu(tree, clientX, clientY, query?.nodeId) : undefined
+        onContextMenu={tree ? (placement) => openTreeContextMenu(tree, placement, query?.nodeId) : undefined}
+        // A child row's context menu is its … menu.
+        onChildContextMenu={
+          tree && onMoveTree
+            ? (child, placement, control) =>
+                setMenu({ kind: "move", treeId: tree.id, anchor: control, placement, child })
+            : undefined
         }
         onDragStart={tree ? onDragStart : undefined}
       />
@@ -891,10 +906,14 @@ function ResearchActivityFeed({
         label={`Draft: ${draft.prompt.trim()}`}
         renderBody={(asQuestion) => asQuestion(draft.prompt.trim())}
         selected={draft.id === selectedDraftId}
-        menuOpen={menu?.kind === "draft" && menu.draftId === draft.id}
+        menuOpen={menu?.kind === "draft" && menu.draftId === draft.id && !menu.placement}
         menuLabel="Draft actions"
         onOpen={() => onOpenDraft?.(draft)}
         onMenu={(anchor) => openDraftMenu(draft.id, anchor)}
+        // A draft's context menu is its … menu.
+        onContextMenu={(placement, control) =>
+          setMenu({ kind: "draft", draftId: draft.id, anchor: control, placement })
+        }
         onDragStart={onDragStart}
       />
     );
@@ -1417,7 +1436,8 @@ function ResearchActivityFeed({
       <ResearchFeedScrollThumb scrollRef={scrollRef} />
       {menu?.kind === "move" && moveTree ? (
         <ResearchMoveMenu
-          anchor={menu.anchor}
+          anchor={menu.placement?.anchor ?? menu.anchor}
+          align={menu.placement?.align}
           onRemoveStar={
             menu.child && onUnstarChild
               ? () => {
@@ -1459,7 +1479,8 @@ function ResearchActivityFeed({
       ) : null}
       {menu?.kind === "draft" && menuDraft ? (
         <ResearchMenu
-          anchor={menu.anchor}
+          anchor={menu.placement?.anchor ?? menu.anchor}
+          align={menu.placement?.align}
           label="Draft actions"
           width={180}
           onClose={() => closeMenu()}
@@ -1484,8 +1505,8 @@ function ResearchActivityFeed({
       ) : null}
       {menu?.kind === "tree" && contextTree ? (
         <ResearchMenu
-          anchor={researchMenuPoint(menu.x, menu.y)}
-          align="point"
+          anchor={menu.placement.anchor}
+          align={menu.placement.align}
           label={`Actions for ${contextTree.title}`}
           onClose={() => closeMenu()}
         >

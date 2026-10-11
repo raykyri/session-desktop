@@ -25,6 +25,7 @@ import {
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
+import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
 
 // The backend caps snapshots at 64MB, which is still far beyond what markdown
@@ -650,7 +651,9 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   onToggleStarred: (nodeId: string) => void;
   onShowBranches: (nodeId: string, level: number) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
-  onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
+  /** Opens the answer's menu at `placement`: a right-click on the row, or
+   * Shift+F10 or the ContextMenu key with focus in it. */
+  onOpenContextMenu: (nodeId: string, placement: ResearchUnitMenuPlacement) => void;
 }) {
   const labelId = useId();
   const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
@@ -658,6 +661,15 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   const pill = researchMessagePill(nodeStatus(node), retryQueued);
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
+  // The row's context menu is its … menu, so a row without the … button (a
+  // queued question) keeps the webview's menu.
+  const hasMenu = nodeStatus(node) !== "queued" && !retryQueued;
+  const unitMenuProps = hasMenu
+    ? researchUnitMenuProps(
+        (placement) => onOpenContextMenu(node.id, placement),
+        (row) => ({ element: row.querySelector<HTMLElement>(".research-turn-more"), align: "start" }),
+      )
+    : null;
   let prompt: ReactNode = <span className="research-msg-plain">{label}</span>;
   if (showPrompt) {
     prompt = (
@@ -671,14 +683,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
       className={`research-msg-row is-status-${retryQueued ? "queued" : nodeStatus(node)}${selected ? " is-selected" : ""}`}
       data-segment-anchor={node.id}
-      onContextMenu={(event) => {
-        // Links and other nested controls may own a more specific context
-        // menu. Everywhere else in the row opens its answer menu.
-        if (event.defaultPrevented) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenContextMenu(node.id, event.clientX, event.clientY);
-      }}
+      {...unitMenuProps}
     >
       <button
         type="button"
@@ -736,7 +741,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
             {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
           </button>
         ) : null}
-        {nodeStatus(node) !== "queued" && !retryQueued ? (
+        {hasMenu ? (
           <button
             type="button"
             className="control-button research-msg-button research-turn-more"

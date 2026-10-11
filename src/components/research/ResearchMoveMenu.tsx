@@ -11,6 +11,8 @@ import {
   ResearchMenuItem,
   ResearchMenuSeparator,
   ResearchMenuTitle,
+  type ResearchMenuAlign,
+  type ResearchMenuRect,
 } from "./ResearchMenu";
 
 const MENU_WIDTH = 220;
@@ -125,11 +127,15 @@ export function ResearchTreeMenuItems({
  * starts with Remove star, then its question's actions. */
 export default function ResearchMoveMenu({
   anchor,
+  align,
   onRemoveStar,
   onClose,
   ...items
 }: ResearchTreeMenuProps & {
-  anchor: HTMLElement;
+  /** The row's … button, or for a context menu the pointer or the button's
+   * rectangle. */
+  anchor: HTMLElement | ResearchMenuRect;
+  align?: ResearchMenuAlign;
   /** Given for a starred child row: unstars the follow-up or branch. */
   onRemoveStar?: () => void;
   onClose: () => void;
@@ -137,6 +143,7 @@ export default function ResearchMoveMenu({
   return (
     <ResearchMenu
       anchor={anchor}
+      align={align}
       label={onRemoveStar ? "Starred item actions" : "Bookmark, follow or move"}
       width={MENU_WIDTH}
       onClose={onClose}
