@@ -1646,6 +1646,11 @@ span.launcher-select-icon {
   white-space: nowrap;
 }
 
+/* The submenu row's chosen value (Effort) reads at the row label's size. */
+.launcher-select-submenu-trigger .launcher-select-item-detail {
+  font-size: inherit;
+}
+
 .launcher-select-item:disabled .launcher-select-item-detail {
   color: var(--status-attention-fg);
 }
