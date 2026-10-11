@@ -589,6 +589,21 @@
   --research-feed-popover-bg: #1a1b1e;
   --research-feed-switch-raised-bg: #26272b;
   --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+
+  /* Info states (including Home's unseen-update dot) and saved passages
+     follow this palette: Linear's indigo, and an amber strong enough to read on
+     its neutrals. */
+  --status-info-fg: #7380ea;
+  --status-info-bg: rgba(115, 128, 234, 0.08);
+  --status-info-bg-hover: rgba(115, 128, 234, 0.14);
+  --status-info-border: rgba(115, 128, 234, 0.25);
+  --status-info-border-strong: rgba(115, 128, 234, 0.5);
+  --wait-target-preview-border: rgba(115, 128, 234, 0.7);
+  --status-info-fg-soft: #c3c8fa;
+  --status-info-fg-link: #9aa2f6;
+  --status-info-bg-strong: rgba(115, 128, 234, 0.16);
+  --research-highlight-bg: rgba(240, 191, 0, 0.26);
+  --research-highlight-bg-hover: rgba(240, 191, 0, 0.42);
 }
 
 /* ------------------------------------------------------------------ */
@@ -900,4 +915,19 @@
   --research-feed-popover-bg: #ffffff;
   --research-feed-switch-raised-bg: var(--research-feed-field-bg);
   --research-feed-switch-raised-shadow: 0 1px 2px rgba(15, 15, 20, 0.12);
+
+  /* Info states (including Home's unseen-update dot) and saved passages
+     follow this palette: Linear's indigo, and an amber strong enough to read on
+     its neutrals. */
+  --status-info-fg: #5e6ad2;
+  --status-info-bg: rgba(94, 106, 210, 0.08);
+  --status-info-bg-hover: rgba(94, 106, 210, 0.14);
+  --status-info-border: rgba(94, 106, 210, 0.25);
+  --status-info-border-strong: rgba(94, 106, 210, 0.5);
+  --wait-target-preview-border: rgba(94, 106, 210, 0.7);
+  --status-info-fg-soft: #3d46a8;
+  --status-info-fg-link: #4a54bd;
+  --status-info-bg-strong: rgba(94, 106, 210, 0.12);
+  --research-highlight-bg: rgba(245, 183, 49, 0.3);
+  --research-highlight-bg-hover: rgba(245, 183, 49, 0.5);
 }

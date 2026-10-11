@@ -550,6 +550,44 @@
   background: #a9cbf2; /* highlight-pseudo-literal */
 }
 
+/* orange-blob, dark: branch passages, the pending branch and selected highlights in
+   the theme's accent instead of the default sky blue. */
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-branch-passages) {
+  background: rgba(115, 128, 234, 0.17); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-branch-hover) {
+  background: rgba(115, 128, 234, 0.3); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-pending-branch) {
+  text-decoration: underline dashed 1.5px rgba(150, 160, 245, 0.65); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-selected-highlights) {
+  color: #0b0c10; /* highlight-pseudo-literal */
+  background: #9aa2f6; /* highlight-pseudo-literal */
+}
+
+/* orange-blob, light: branch passages, the pending branch and selected highlights in
+   the theme's accent instead of the default sky blue. */
+:root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-branch-passages) {
+  background: rgba(94, 106, 210, 0.12); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-branch-hover) {
+  background: rgba(94, 106, 210, 0.22); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-pending-branch) {
+  text-decoration: underline dashed 1.5px rgba(94, 106, 210, 0.6); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-selected-highlights) {
+  color: inherit; /* highlight-pseudo-literal */
+  background: #c5caf3; /* highlight-pseudo-literal */
+}
+
 /* — Column pairs: one [messages | answer] pair per level — */
 
 /* The pairs are flex items of the column strip (research-surface.css):
