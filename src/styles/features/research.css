@@ -1740,6 +1740,14 @@
   font-size: var(--fs-xs);
 }
 
+/* A workspace's path wraps in full rather than ending in an ellipsis. */
+.research-menu-item.has-detail .research-menu-detail {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .research-menu-check {
   margin-left: auto;
   color: var(--accent-color);
