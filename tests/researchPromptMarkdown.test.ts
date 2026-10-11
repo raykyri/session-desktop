@@ -286,3 +286,19 @@ test("imported reports hide ChatGPT citation handles and preserve Markdown sourc
   assert.match(html, /<p>Another finding\.<\/p>/);
   assert.doesNotMatch(html, /turn25view0|turn22view1|turn19search24|[\uE200-\uE202]/);
 });
+
+test("a running answer's trace opens its root-level activities; a settled one keeps them closed", () => {
+  const item = {
+    type: "message" as const, key: "trace", role: "assistant" as const, blocks: [],
+    activities: [
+      { type: "tool" as const, key: "tool-1", name: "Read", input: { path: "notes.md" }, isError: false },
+      { type: "thinking" as const, key: "thinking-1", values: ["Comparing the two sources."] },
+    ],
+    sourceTurnIds: ["turn"], blockSourceTurnIds: [],
+  };
+  const running = renderToStaticMarkup(createElement(ResearchTimelineItem, { item, expandActivities: true }));
+  assert.equal(running.match(/<details open=""/g)?.length, 2);
+  assert.match(running, /Comparing the two sources\./);
+  const settled = renderToStaticMarkup(createElement(ResearchTimelineItem, { item }));
+  assert.doesNotMatch(settled, /<details open/);
+});

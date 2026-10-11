@@ -81,6 +81,7 @@ export function TranscriptActivityItem({
   maxPayloadCharacters,
   deferPayloads = false,
   showResultTokenCount = true,
+  defaultOpen = false,
 }: {
   item: ActivityItem;
   className?: string;
@@ -88,6 +89,9 @@ export function TranscriptActivityItem({
   maxPayloadCharacters?: number;
   deferPayloads?: boolean;
   showResultTokenCount?: boolean;
+  /** Starts the disclosure open. Read on mount only; afterwards it opens and
+   * closes only when the reader toggles it. */
+  defaultOpen?: boolean;
 }) {
   switch (item.type) {
     case "tool":
@@ -98,6 +102,7 @@ export function TranscriptActivityItem({
           showChevron={!isRootActivity}
           maxPayloadCharacters={maxPayloadCharacters}
           showResultTokenCount={showResultTokenCount}
+          defaultOpen={defaultOpen}
         />
       );
     case "thinking":
@@ -108,6 +113,7 @@ export function TranscriptActivityItem({
           showChevron={!isRootActivity}
           maxPayloadCharacters={maxPayloadCharacters}
           deferPayloads={deferPayloads}
+          defaultOpen={defaultOpen}
         />
       );
     case "activityGroup":
@@ -119,6 +125,7 @@ export function TranscriptActivityItem({
           maxPayloadCharacters={maxPayloadCharacters}
           deferPayloads={deferPayloads}
           showResultTokenCount={showResultTokenCount}
+          defaultOpen={defaultOpen}
         />
       );
   }
@@ -131,6 +138,7 @@ function ActivityGroupView({
   maxPayloadCharacters,
   deferPayloads,
   showResultTokenCount,
+  defaultOpen,
 }: {
   group: ActivityGroupItem;
   className?: string;
@@ -138,9 +146,12 @@ function ActivityGroupView({
   maxPayloadCharacters?: number;
   deferPayloads: boolean;
   showResultTokenCount: boolean;
+  defaultOpen: boolean;
 }) {
+  const [initiallyOpen] = useState(defaultOpen);
   return (
     <details
+      open={initiallyOpen || undefined}
       className={`activity-group-block${className ? ` ${className}` : ""}${showChevron ? "" : " is-root-activity"}${timelineStatusClass(
         group.status,
       )}`}
@@ -276,19 +287,23 @@ function ToolEntryView({
   showChevron,
   maxPayloadCharacters,
   showResultTokenCount,
+  defaultOpen,
 }: {
   entry: ToolEntry;
   className?: string;
   showChevron: boolean;
   maxPayloadCharacters?: number;
   showResultTokenCount: boolean;
+  defaultOpen: boolean;
 }) {
   const summaryArgument = toolSummaryArgument(entry);
   const toolNameLabel = showChevron ? entry.name : `Called ${entry.name}`;
   const summaryLabel = summaryArgument ? `${toolNameLabel} ${summaryArgument}` : toolNameLabel;
-  const [expanded, setExpanded] = useState(false);
+  const [initiallyOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(initiallyOpen);
   return (
     <details
+      open={initiallyOpen || undefined}
       className={`tool-block tool-pair${className ? ` ${className}` : ""}${entry.isError ? " is-error" : ""}${
         showChevron ? "" : " is-root-activity"
       }${timelineStatusClass(entry.status)}`}
@@ -380,16 +395,20 @@ function ThinkingView({
   showChevron,
   maxPayloadCharacters,
   deferPayloads,
+  defaultOpen,
 }: {
   item: ThinkingItem;
   className?: string;
   showChevron: boolean;
   maxPayloadCharacters?: number;
   deferPayloads: boolean;
+  defaultOpen: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [initiallyOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(initiallyOpen);
   return (
     <details
+      open={initiallyOpen || undefined}
       className={`thinking-block${className ? ` ${className}` : ""}${showChevron ? "" : " is-root-activity"}${timelineStatusClass(
         item.status,
       )}`}

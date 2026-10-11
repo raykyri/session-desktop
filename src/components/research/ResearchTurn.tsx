@@ -125,10 +125,14 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
   item,
   conversation = false,
   imported = false,
+  expandActivities = false,
 }: {
   item: MessageItem;
   conversation?: boolean;
   imported?: boolean;
+  /** Opens the item's root-level activities (tool calls, thinking) when they
+   * mount: a running answer's trace shows them expanded. */
+  expandActivities?: boolean;
 }) {
   if (conversation) {
     return (
@@ -181,6 +185,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
                 maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
                 deferPayloads
                 showResultTokenCount={false}
+                defaultOpen={expandActivities}
               />
             );
           }
@@ -233,6 +238,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
           maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
           deferPayloads
           showResultTokenCount={false}
+          defaultOpen={expandActivities}
         />
       ))}
     </section>
@@ -568,6 +574,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
                 conversation={view.isConversation}
                 // Provenance: the document source records it.
                 imported={documentSource(node) === "imported"}
+                expandActivities={active}
               />
             ))}
           </div>
