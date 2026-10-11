@@ -347,6 +347,9 @@ interface EditorSession {
   imported: boolean;
   /** Where focus returns when the column closes. */
   returnFocus: HTMLElement | null;
+  /** Notes: the note column's scroll offset when the editor took its place,
+   * restored when the note column returns. */
+  noteScrollTop: number;
 }
 
 
@@ -367,7 +370,10 @@ type FocusRequest = {
     | { kind: "answer"; level: number }
     | { kind: "marker"; level: number; key: string }
     | { kind: "composer"; key: string }
-    | { kind: "editor" };
+    | { kind: "editor" }
+    /** The root note's column (N0): its … button with `menu`, else its
+     * scroll area. */
+    | { kind: "note"; menu: boolean };
   strip: "reveal" | "settle" | "none";
   /** Only when focus was lost (it sat in a column that went away). */
   onlyIfLost: boolean;
@@ -1082,6 +1088,16 @@ function ResearchThreadPage({
   const [editorAsking, setEditorAsking] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const editorFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  // The root note column's scroll offset from before its editor took its
+  // place, applied once when the note column mounts again.
+  const noteScrollRestoreRef = useRef<number | null>(null);
+  const restoreNoteScroll = useCallback((element: HTMLDivElement | null) => {
+    const top = noteScrollRestoreRef.current;
+    if (element && top !== null) {
+      noteScrollRestoreRef.current = null;
+      element.scrollTop = top;
+    }
+  }, []);
   // Counting and matching scan the whole text (up to the 10 MB document
   // cap), so they follow the field at a lower priority than typing.
   const editorText = useDeferredValue(editor?.text ?? "");
@@ -1531,6 +1547,14 @@ function ResearchThreadPage({
           return composerRefs.current.get(target.key)?.element()?.querySelector("textarea") ?? null;
         case "editor":
           return editorFieldRef.current?.isConnected ? editorFieldRef.current : null;
+        case "note": {
+          const column = workspaceRef.current?.querySelector<HTMLElement>(columnSelector("N0")) ?? null;
+          return (
+            (target.menu ? column?.querySelector<HTMLElement>(".research-head-menu") : null) ??
+            column?.querySelector<HTMLElement>(":scope > .research-column-scroll") ??
+            null
+          );
+        }
       }
     },
     [pairColumn, selectedRow],
@@ -1555,7 +1579,7 @@ function ResearchThreadPage({
     }
     focusRequestRef.current = null;
     element.focus({ preventScroll: true });
-    if (request.target.kind !== "answer" && request.target.kind !== "editor") {
+    if (request.target.kind !== "answer" && request.target.kind !== "editor" && request.target.kind !== "note") {
       scrollIntoColumn(element, request.target.kind === "composer" ? researchScrollBehavior() : "auto");
     }
     const row = columnsLayoutRef.current?.row ?? null;
@@ -2121,6 +2145,10 @@ function ResearchThreadPage({
         if (scroller) {
           scroller.focus({ preventScroll: true });
           revealResearchColumns(columnsLayoutRef.current?.row ?? null, post);
+        } else if (level === 0 && editorRef.current?.kind === "post") {
+          // The root note is being edited: its editor is in the note
+          // column's place.
+          requestFocus({ kind: "editor" }, "reveal");
         }
       }
       return;
@@ -2228,7 +2256,7 @@ function ResearchThreadPage({
       }
       if (key === "ArrowRight") {
         event.preventDefault();
-        // The editor column sits right of the root's answer.
+        // A document's editor column sits right of the root's answer.
         if (level === 0 && editorRef.current) {
           requestFocus({ kind: "editor" }, "settle");
         } else {
@@ -4391,9 +4419,12 @@ function ResearchThreadPage({
     }
   }
 
-  /** Opens the editor column for the root's document or post. The strip
-   * closes any branch level and shows the root, so the editor is the last
-   * column; focus moves into the field. */
+  /** Opens the editor column for the root's document or post; focus moves
+   * into the field. A document's editor follows the root level's columns, so
+   * the strip closes any branch level and the editor is the last column. A
+   * note's editor takes the note column's place, and an open follow-up stays
+   * open, so editing a note changes no selection and adds no history
+   * visit. */
   function startEditing(nodeId: string, returnFocus: HTMLElement | null) {
     const node = nodeById.get(nodeId);
     if (!node || nodeId !== rootNodeId || archived) {
@@ -4424,6 +4455,7 @@ function ResearchThreadPage({
         }),
         imported: documentSource(node) === "imported",
         returnFocus,
+        noteScrollTop: 0,
       };
     } else if (nodeType(node) === "post") {
       session = {
@@ -4439,6 +4471,9 @@ function ResearchThreadPage({
         branchAnchors: [],
         imported: false,
         returnFocus,
+        noteScrollTop:
+          workspaceRef.current?.querySelector<HTMLElement>(`${columnSelector("N0")} > .research-column-scroll`)
+            ?.scrollTop ?? 0,
       };
     } else {
       return;
@@ -4447,20 +4482,31 @@ function ResearchThreadPage({
     setMenu(null);
     setEditorError(null);
     setEditor(session);
-    if (levelPathRef.current.length !== 1 || levelPathRef.current[0] !== nodeId) {
+    const path = levelPathRef.current;
+    if (path[0] !== nodeId || (session.kind === "document" && path.length !== 1)) {
       navigate(nodeId);
     }
     requestFocus({ kind: "editor" }, "settle");
   }
 
   /** Closes the editor column; focus returns to the control that opened it,
-   * else to the root's row (a document) or the post's column. */
+   * else to the root's row (a document) or the note's column. The note
+   * column returns in the editor's place as a new element, so the … button
+   * that opened a note's editor is gone: focus goes to the new column's …
+   * button, and the column gets back its scroll offset. */
   function closeEditor() {
     const session = editorRef.current;
     setEditor(null);
     setEditorError(null);
     setEditorSaving(false);
     const target = session?.returnFocus;
+    if (session?.kind === "post") {
+      noteScrollRestoreRef.current = session.noteScrollTop;
+      if (!target?.isConnected) {
+        requestFocus({ kind: "note", menu: Boolean(target?.matches(".research-head-menu")) }, "settle");
+        return;
+      }
+    }
     window.requestAnimationFrame(() => {
       if (target?.isConnected) {
         target.focus({ preventScroll: true });
@@ -5213,6 +5259,7 @@ function ResearchThreadPage({
         onCancel={closeEditor}
         onSave={() => void saveEditor()}
         onAskAsQuestion={() => void askEditorAsQuestion()}
+        history={session.kind === "post" ? historyNav : null}
       />
     );
   };
@@ -5228,7 +5275,6 @@ function ResearchThreadPage({
         if (!post) {
           return null;
         }
-        const postEditing = editor?.kind === "post" && editor.nodeId === post.id ? editor : null;
         // Only the thread's root post has a … menu (in the column header);
         // the column's context menu is the same menu.
         const hasPostMenu = level === 0 && post.id === rootNodeId;
@@ -5266,13 +5312,14 @@ function ResearchThreadPage({
                   : null
               }
             />
-            <div className="research-column-scroll" tabIndex={postEditing ? 0 : -1} {...postMenuProps}>
+            <div
+              ref={level === 0 ? restoreNoteScroll : undefined}
+              className="research-column-scroll"
+              tabIndex={-1}
+              {...postMenuProps}
+            >
               <div className="research-column-content research-reading-surface">
-                {postEditing && postEditing.text !== postEditing.initialText ? (
-                  <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
-                ) : (
-                  <ResearchPostColumn detail={detail} post={post} onSelectNode={(nodeId) => navigate(nodeId)} />
-                )}
+                <ResearchPostColumn detail={detail} post={post} onSelectNode={(nodeId) => navigate(nodeId)} />
               </div>
             </div>
             <ResearchColumnResizer kind="answer" label="Resize note column" />

@@ -1,8 +1,9 @@
 import { memo, useId, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode, Ref } from "react";
+import type { ComponentProps, KeyboardEvent, ReactNode, Ref } from "react";
 import { Eye, MessageSquarePlus } from "lucide-react";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
+import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
@@ -34,13 +35,17 @@ interface ResearchEditorColumnProps {
   onCancel: () => void;
   onSave: () => void;
   onAskAsQuestion: () => void;
+  /** Back and forward: a note's editor takes the note column's place, the
+   * root level's first column, whose header carries them. */
+  history?: ComponentProps<typeof ResearchPairHeader>["history"];
 }
 
 /** The editor column (E0): the Markdown source of a document, or a post's
  * text, in a plain field, with Cancel, Save and "Ask as a question" in its
- * footer. The column to its left previews the text. ⌘↵ (Ctrl↵) saves; Esc
- * closes the column when nothing changed, and otherwise asks in the footer
- * whether to discard the changes. */
+ * footer. A document's editor follows its answer column, which previews the
+ * text; a note's editor is shown in place of the note column. ⌘↵ (Ctrl↵)
+ * saves; Esc closes the column when nothing changed, and otherwise asks in
+ * the footer whether to discard the changes. */
 export function ResearchEditorColumn({
   column,
   current,
@@ -60,6 +65,7 @@ export function ResearchEditorColumn({
   onCancel,
   onSave,
   onAskAsQuestion,
+  history = null,
 }: ResearchEditorColumnProps) {
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const keepEditingRef = useRef<HTMLButtonElement | null>(null);
@@ -120,7 +126,7 @@ export function ResearchEditorColumn({
       aria-label={heading}
       onKeyDown={onKeyDown}
     >
-      <ResearchPairHeader title={heading} />
+      <ResearchPairHeader title={heading} history={history} />
       <div className="research-column-scroll">
         <div className="research-editor">
           {title ? (
@@ -205,13 +211,14 @@ export function ResearchEditorColumn({
           </p>
         ) : null}
       </footer>
+      <ResearchColumnResizer kind="answer" label="Resize editor column" />
     </section>
   );
 }
 
-/** The column to the editor's left while the text differs from the saved
- * one: the new text rendered block by block, each block not in the saved
- * text marked as changed. */
+/** A document's answer column, left of the editor, while the text differs
+ * from the saved one: the new text rendered block by block, each block not
+ * in the saved text marked as changed. */
 export const ResearchEditPreview = memo(function ResearchEditPreview({
   original,
   next,

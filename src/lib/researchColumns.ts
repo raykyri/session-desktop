@@ -5,8 +5,9 @@
 // level whose head is a post, shown as a note (a note root, or a follow-up
 // note), which renders as the note column and its follow-ups column
 // (follow-ups and the follow-up composer). An unsent branch adds a pending
-// column after the level it was asked from, and editing the root's document
-// or note adds an editor column after the root level's columns.
+// column after the level it was asked from. Editing the root's document adds
+// an editor column after the root level's columns; editing the root note
+// shows the editor column in place of the note column.
 //
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
@@ -47,7 +48,7 @@ export interface ResearchLevel {
 /** `Tn`: level n's messages column (a note's follow-ups column); `An`: its
  * answer column; `Nn`: a note's own column, left of its follow-ups; `Pn`: an
  * unsent branch asked from level n - 1; `En`: the editor of the document or
- * note that level n shows. */
+ * note that level n shows (a note's editor replaces `Nn`). */
 export type ResearchColumnId =
   | "feed"
   | "placeholder"
@@ -98,8 +99,9 @@ interface ResearchPendingBranch {
  * and the unsent branch. A selection that is not in `nodes` yields an empty
  * strip. The pending branch opens a column only after the level that shows
  * its parent selected. `editingNodeId`, the root being edited, adds the
- * editor column right after the root level's columns, before any branch
- * level. */
+ * editor column: for a document, right after the root level's columns,
+ * before any branch level; for a note, in place of the note column, so the
+ * root level is the editor and the follow-ups column. */
 export function researchStrip(
   nodes: readonly ResearchNode[],
   selectedNodeId: string | null,
@@ -125,15 +127,19 @@ export function researchStrip(
   });
   const columns: ResearchColumn[] = [];
   for (const level of levels) {
+    const editor: ResearchColumn | null =
+      level.index === 0 && editingNodeId !== null && level.headId === editingNodeId
+        ? { id: "E0", role: "editor", levelIndex: 0, nodeId: editingNodeId }
+        : null;
     if (level.kind === "post") {
-      columns.push({ id: `N${level.index}`, role: "post", level });
+      columns.push(editor ?? { id: `N${level.index}`, role: "post", level });
       columns.push({ id: `T${level.index}`, role: "thread", level });
     } else {
       columns.push({ id: `T${level.index}`, role: "messages", level });
       columns.push({ id: `A${level.index}`, role: "answer", level, nodeId: level.selectedId });
-    }
-    if (level.index === 0 && editingNodeId !== null && level.headId === editingNodeId) {
-      columns.push({ id: "E0", role: "editor", levelIndex: 0, nodeId: editingNodeId });
+      if (editor) {
+        columns.push(editor);
+      }
     }
   }
   if (pending && path.length > 0 && path[path.length - 1] === pending.parentNodeId) {

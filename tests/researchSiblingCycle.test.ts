@@ -103,10 +103,11 @@ test("a post's own column and an empty thread fall back to the feed", () => {
   const strip = researchStrip(nodes, "post", null, "post");
   assert.deepEqual(
     strip.columns.map((column) => column.id),
-    ["N0", "T0", "E0"],
+    ["E0", "T0"],
   );
-  // The follow-ups column has rows: the editor and the follow-ups column
-  // cycle it; the note is left of it.
+  // The follow-ups column has rows: the editor (in the note column's place)
+  // and the follow-ups column cycle it, so ⌃Tab in the editor keeps the
+  // thread open; the note is left of it and cycles the feed.
   assert.equal(researchCycleColumn(["T0"], "E0"), "T0");
   assert.equal(researchCycleColumn(["T0"], "T0"), "T0");
   assert.equal(researchCycleColumn(["T0"], "N0"), "feed");

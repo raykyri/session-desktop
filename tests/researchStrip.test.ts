@@ -259,7 +259,7 @@ test("a draft is the T0 messages column, and every column has one selector", () 
   assert.equal(isMessagesColumnId("feed"), false);
 });
 
-test("editing the root adds the editor column after the root level's columns", () => {
+test("editing a document root adds the editor column after the root level's columns", () => {
   const doc = [
     node("doc", { type: "document" }),
     node("b1", { parentNodeId: "doc", createdAt: 1 }),
@@ -284,8 +284,27 @@ test("editing the root adds the editor column after the root level's columns", (
   assert.deepEqual(ids(researchStrip(doc, "b1", null, "b1")), ["T0", "A0", "T1", "A1"]);
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null, "doc")), true);
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
+});
 
-  // A post's editor follows its thread column.
-  const post = [node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
-  assert.deepEqual(ids(researchStrip(post, "post", null, "post")), ["N0", "T0", "E0"]);
+test("editing the root note shows the editor column in place of the note column", () => {
+  const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
+  const nodes = [
+    node("post", { type: "post", delivery }),
+    node("run", { parentNodeId: "post", createdAt: 1 }),
+    node("net", { type: "post", parentNodeId: "post", createdAt: 2, delivery }),
+  ];
+  const editing = researchStrip(nodes, "post", null, "post");
+  assert.deepEqual(ids(editing), ["E0", "T0"]);
+  assert.deepEqual(editing.columns[0], { id: "E0", role: "editor", levelIndex: 0, nodeId: "post" });
+  assert.deepEqual(editing.columns.map((column) => column.role), ["editor", "thread"]);
+  // The note column returns when editing ends; the swap changes the strip.
+  const closed = researchStrip(nodes, "post", null);
+  assert.deepEqual(ids(closed), ["N0", "T0"]);
+  assert.equal(sameResearchStrip(editing, closed), false);
+  assert.equal(sameResearchStrip(editing, researchStrip(nodes, "post", null, "post")), true);
+  // An open follow-up stays open beside the editor.
+  assert.deepEqual(ids(researchStrip(nodes, "run", null, "post")), ["E0", "T0", "T1", "A1"]);
+  assert.deepEqual(ids(researchStrip(nodes, "net", null, "post")), ["E0", "T0", "N1", "T1"]);
+  // Only the root note is edited: a follow-up note keeps its note column.
+  assert.deepEqual(ids(researchStrip(nodes, "net", null, "net")), ["N0", "T0", "N1", "T1"]);
 });

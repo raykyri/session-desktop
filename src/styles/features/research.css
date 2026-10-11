@@ -2084,9 +2084,9 @@
   background: var(--control-bg);
 }
 
-/* — Editor column (E0): the root document's Markdown or the post's text,
-   right of the root level's columns. The column to its left previews the
-   text. — */
+/* — Editor column (E0): the root document's Markdown, right of the root
+   level's columns, where the answer column to its left previews the text;
+   or the root note's text, in the note column's place and at its width. — */
 .research-pair-editor {
   position: relative;
   display: flex;
@@ -2252,8 +2252,8 @@
   line-height: 1.4;
 }
 
-/* The preview in the column left of the editor: changed blocks carry a rule
-   in the left gutter. */
+/* The preview in a document's answer column, left of the editor: changed
+   blocks carry a rule in the left gutter. */
 .research-edit-preview-bar {
   display: flex;
   align-items: center;
@@ -2295,11 +2295,6 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-/* In the note column, the preview takes the note's (a turn's) insets. */
-.research-pair-post .research-edit-preview {
-  padding: 18px 26px 14px 24px;
 }
 
 .research-head-menu {

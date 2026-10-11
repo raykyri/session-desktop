@@ -53,8 +53,10 @@ export function cycleIndex(count: number, index: number, direction: ResearchCycl
 
 /** A column's position in the strip, left to right: Nn, Tn, An, En for level
  * n. An unsent branch's Pn takes the slot level n's note column would have,
- * after level n - 1's columns. Null for the feed, the placeholder and
- * unknown ids. */
+ * after level n - 1's columns. A note's editor (E0) is shown in the note
+ * column's place but ranks after the follow-ups column, so ⌃Tab in it cycles
+ * the follow-ups rather than the feed, which would switch threads while the
+ * note is being edited. Null for the feed, the placeholder and unknown ids. */
 function stripRank(id: string): number | null {
   const match = /^([NPTAE])(\d+)$/.exec(id);
   if (!match) {
