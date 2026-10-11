@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Redesigns (dev)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="shell.css">
+<style>body{margin:0}</style>
+</head><body>
+<header class="sx-top" id="sx-top"></header>
+<div class="sx-body"><nav class="sx-rail" id="sx-rail" aria-label="Candidates"></nav><main class="sx-stage" id="sx-stage"></main></div>
+<script src="data.js"></script>
+<script src="shell.js"></script>
+<script>
+// Usage: dev.html?load=ulysses/r1.js,notes/r1.js#ulysses.r1.a   (paths relative to ../candidates/)
+(function () {
+  const p = new URLSearchParams(location.search).get("load") || "";
+  const files = p.split(",").filter(Boolean);
+  let left = files.length;
+  if (!left) { SessionMocks.start(); return; }
+  for (const f of files) {
+    const s = document.createElement("script");
+    s.async = false; s.src = "../candidates/" + f;
+    s.onload = s.onerror = (e) => { if (e.type === "error") console.error("failed to load " + f); if (--left === 0) SessionMocks.start(); };
+    document.body.append(s);
+  }
+})();
+</script>
+</body></html>

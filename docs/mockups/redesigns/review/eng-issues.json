@@ -1,0 +1,547 @@
+[
+  {
+    "id": "ENG-01",
+    "title": "44 registered Tauri commands have no frontend caller, including PTY write, shell spawn, and launch-arbitrary-path",
+    "severity": "P1",
+    "category": "security",
+    "evidence": [
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 3490,
+        "note": "generate_handler! registers 174 commands. 44 of them appear nowhere in src/ as a command string: agent_submit_turn, agent_*_queued_turn (6), agent_unpause, agent_clear_working_status, artifact_list/remove/restore/open_external/reveal/file_url, pane_write, pane_resize, pane_reconnect, pane_reorder, pane_set_layout, pane_move_to_group, pane_restore_last_closed, pane_reset_terminal_modes, group_create, group_reorder, worktree_remove, prompt_library_list/save/delete/reveal, save_pasted_image, read_transcript_image, set_agent_transcript, list/create/update/delete/assign_global_draft, browser_open_terminal_path, list_thread_graphs, list_shell_agent_jobs, list_research_workspaces, get_conversation_history_snapshot."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 2509,
+        "note": "pane_write(pane_id, data, paste, submit) writes arbitrary bytes into a pane's PTY, which is command execution in that shell."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1087,
+        "note": "artifact_restore accepts a full ArtifactInfo from the renderer; normalize_artifact_target (state.rs:674) accepts any non-empty path."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1098,
+        "note": "artifact_open_external then runs `open <path>` (main.rs:1170), which launches .app bundles and mounts disk images. The doc comment says the target 'comes from Session state by id, never from arbitrary frontend input', but artifact_restore is how arbitrary input enters that state."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 2407,
+        "note": "spawn_shell is referenced by the frontend only from splitTerminal (App.tsx:4377), which is unreachable (see ENG-04)."
+      },
+      {
+        "file": "src-tauri/build.rs",
+        "line": 14,
+        "note": "Plain tauri_build::build() with no app manifest, so there is no per-command permission set: every registered command is callable by any script that runs in the main webview."
+      },
+      {
+        "file": "src-tauri/capabilities/default.json",
+        "line": 1,
+        "note": "The capability file scopes only core and plugin permissions. App commands are not listed, so it cannot narrow them."
+      },
+      {
+        "file": "README.md",
+        "line": 1,
+        "note": "README says the module reachability check 'does not audit Rust command registration', so nothing flags this."
+      }
+    ],
+    "scenario": "Getting script to run in the main webview would require a renderer bug: a sanitizer bypass in the Mermaid/Graphviz SVG path (DiagramBlock.tsx), a dependency compromise, or a future rehype-raw. Such a script can call invoke('artifact_restore', {artifact:{id:'x', path:'/Applications/Calculator.app', ...}}) and then invoke('artifact_open_external', {artifactId:'x'}) to launch any local app or file. It can also call pane_write against any live pane id. No UI in the shipping product uses any of these commands.",
+    "recommendation": "Remove the 44 unused commands from generate_handler! (and spawn_shell, once the dead split path is deleted). Change artifact_restore to restore by id from a backend-held undo buffer rather than from a renderer-supplied struct. Add a test that compares the generate_handler! list against the command strings in src/lib/api.ts, so registration drift fails CI. Longer term, define an app permission manifest (tauri_build::Attributes::app_manifest) and grant the main webview only the commands it uses."
+  },
+  {
+    "id": "ENG-02",
+    "title": "No React error boundary anywhere: one render exception blanks the whole window, and the restored selection can repeat it on every launch",
+    "severity": "P1",
+    "category": "correctness",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 9857,
+        "note": "App() returns <MainApp /> directly, with no boundary."
+      },
+      {
+        "file": "src/main.tsx",
+        "line": 9,
+        "note": "createRoot(...).render(<App />) with no boundary, and there is no window.onerror or unhandledrejection handler anywhere in src/."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 4663,
+        "note": "Startup reads ACTIVE_RESEARCH_TREE_KEY from localStorage and reopens that tree (setActiveResearchTreeId at 4699-4701)."
+      },
+      {
+        "file": "src/components/research/ResearchThreadPage.tsx",
+        "line": 1720,
+        "note": "The thread page also restores the saved selected node from navigation persistence on mount."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 3016,
+        "note": "The interface health probe runs only after wake, suspension, or display transitions (doc comment at 3011-3014). It is not a crash-recovery path."
+      }
+    ],
+    "scenario": "An unexpected node shape throws during render of ResearchThreadPage, ResearchTurn, or TranscriptMarkdown. Examples: a body variant written by a newer build, a null in agent-authored data, a markdown plugin edge case. React 19 unmounts the entire tree, so the window is blank: no sidebar, no Settings, no way to navigate away. On relaunch, the startup code restores the same tree and node from localStorage, and the window goes blank again on every launch until the user clears WebKit storage by hand.",
+    "recommendation": "Add an app-level error boundary that renders a recovery screen with 'Go to Home' and a reload button, and that clears ACTIVE_RESEARCH_TREE_KEY and ACTIVE_RESEARCH_PANE_KEY when the error happens during the first render after restore. Add finer-grained boundaries around ResearchThreadPage, each feed card, and each TranscriptMarkdown block, so a bad node degrades to an inline error. Log caught errors to the backend's stderr so they reach diagnostics."
+  },
+  {
+    "id": "ENG-03",
+    "title": "MainApp is one 8,690-line component that owns nearly all application state and logic",
+    "severity": "P1",
+    "category": "architecture",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 1167,
+        "note": "function MainApp() runs from 1167 to 9855. In the file: 96 useState, 127 useRef, 69 useEffect, 7 useLayoutEffect, 97 useCallback, 29 useMemo, 29 addEventListener."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 1167,
+        "note": "472 component-level declarations, classified by name: ~138 research, feed, folder, draft, highlight, and tree; ~95 pane, terminal, split, and attach; ~84 agent, turn, queue, transcript, and thread graph; ~33 browser overlay and link handling; ~31 settings, remotes, shortcuts, and appearance; ~19 tab-title generation and OpenRouter."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 5702,
+        "note": "The research event reducer (handleResearchEvent, about 320 lines, 5702-6019) is a closure over about 20 refs and setters, so it cannot be unit-tested."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 8398,
+        "note": "About 1,450 lines of JSX (8398-9855) include the Settings dialog (two tabs, with remote editor, OpenRouter, and shortcut capture), the Agent Setup dialog, three confirm dialogs, the sidebar, the browser overlay wiring, and the link context menu."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 1446,
+        "note": "Render-phase side effects run in the component body, for example refilling researchNodeEventCacheRef and the many `xRef.current = x` mirrors."
+      }
+    ],
+    "scenario": "Cost to maintainers: any state change re-runs the whole 8.7k-line function body (hundreds of hook calls) once per 16 ms event batch. Correctness depends on hand-maintained ref mirrors and dependency arrays that are not linted (ENG-09). The event reducer and the selection and restore logic have no tests because they cannot be imported. Merge conflicts concentrate in a single file. The dead terminal surface (ENG-04) has stayed hidden because nobody can reason about the file as a whole.",
+    "recommendation": "First delete the dead pane-surface code (ENG-04), which removes roughly a quarter of the declarations. Then extract in this order: (1) handleResearchEvent and its snapshot patches into a pure reducer in src/lib/ (inputs are state plus event, outputs are next state plus effects), with tests; (2) research navigation and selection (selectResearchTree, focusResearchHome, restore, page history) into a useResearchSelection hook; (3) the Settings and Agent Setup dialogs into components that own their own state (remote drafts, probe state, OpenRouter test); (4) browser-overlay state and link handling into a useBrowserOverlays hook; (5) agent, turn, and queue state into a store, such as useSyncExternalStore over a small module, so that event handling does not re-render MainApp. Put the composed providers in App.tsx."
+  },
+  {
+    "id": "ENG-04",
+    "title": "The terminal-pane surface is unreachable: activeSurface can never become \"pane\", and the split and terminal-map code is dead",
+    "severity": "P2",
+    "category": "dead-code",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 1457,
+        "note": "useState<'pane' | 'research'>('research'). The only setter call is setActiveSurfaceState('research') at 1462, and activeSurfaceRef.current is only ever assigned 'research'."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 1862,
+        "note": "researchSurfaceActive = activeSurface === 'research' is therefore always true. Every branch on activeSurface === 'pane' is dead (for example 1868, 2127, 2146, 3758, 7191, 7370, 7839, 9591)."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 1207,
+        "note": "splitPaneBelowRef and splitPaneRightRef, along with requestClosePaneRef, canToggleActiveTranscriptExpandedRef, and toggleActiveTranscriptExpandedRef, are assigned at 7187-7196 and never read. splitPaneBelow and splitPaneRight are reachable only through these refs, so splitTerminal (4357) and its spawnShell call (4377) are dead."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 4397,
+        "note": "splitTerminal schedules an empty requestAnimationFrame(() => {}) callback, left over from a removed focus handoff."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 1581,
+        "note": "terminalMapOpen is only ever set to false (6562). terminalMapOpenRef is write-only, and the terminalMapOpen ? sidebarPanes : ... branch at 2417 is dead."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 585,
+        "note": "Terminal layout constants (TERMINAL_MIN_WIDTH, TERMINAL_SPLIT_*, TURN_PANE_*, DEFAULT_INITIAL_COLS/ROWS) still feed reservedTerminalStageWidth and the split math."
+      },
+      {
+        "file": "README.md",
+        "line": 1,
+        "note": "The README says Session 'intentionally has no terminal surface, terminal tabs, transcript side pane, terminal map, shell launcher'."
+      }
+    ],
+    "scenario": "TypeScript's noUnusedLocals does not catch values that are written but never read through ref.current, or branches guarded by a state value that never changes, so the code compiles. About 95 pane, terminal, and split declarations, src/lib/paneSplits.ts (1,343 lines), and the related effects still run or allocate on every render (for example the visibleTerminalPanes and activePaneSplit memos). Maintainers edit and review code that cannot execute.",
+    "recommendation": "Delete the pane-surface branch from MainApp: activeSurface state, the split, terminal-map, and pane-chrome refs, splitTerminal, and the turn-pane width logic. Then delete the frontend modules that are reachable only from that code. Keep the backend PTY and process infrastructure that research runs use (per AGENTS.md), but remove its IPC entry points that only the deleted code called (ENG-01). Extend scripts/check-unused-modules.mjs or add a lint rule (for example no-unused-private-class-members is not enough; use a small custom check for refs that are written but never read)."
+  },
+  {
+    "id": "ENG-05",
+    "title": "Settings shows a Remotes tab that configures SSH hosts no reachable feature uses",
+    "severity": "P2",
+    "category": "dead-code",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 8636,
+        "note": "The Remotes tab is always rendered in the Settings tablist, with an editor, probe, and delete flow for saved SSH remotes (upsert_remote, probe_remote, delete_remote, list_ssh_config_aliases)."
+      },
+      {
+        "file": "src/lib/api.ts",
+        "line": 468,
+        "note": "remoteId reaches the backend only through spawnShell(...), whose only caller is the dead splitTerminal (ENG-04)."
+      },
+      {
+        "file": "src/lib/api.ts",
+        "line": 156,
+        "note": "Research workspaces are created by research_workspace_create_pick (a local folder picker)."
+      },
+      {
+        "file": "src-tauri/src/research_runtime.rs",
+        "line": 116,
+        "note": "launch_claude and launch_jsonl run with cwd = workspace.dir locally. PrepareAgentWorkspaceRequest has no remote field, and `remote:` appears in research_runtime.rs only in test fixtures (remote: None)."
+      }
+    ],
+    "scenario": "A user opens Settings \u2192 Remotes, adds a host, and the probe succeeds. Nothing in Home, the composer, or the workspace menu ever offers that remote, so the configuration has no effect. The tab also keeps about 250 lines of settings UI plus remoteStartup and remoteConnection state in MainApp.",
+    "recommendation": "Hide the Remotes tab, or remove it together with the frontend remote-startup tracking, until research runs support remote workspaces. If remote research is planned, track it explicitly and gate the tab behind that capability."
+  },
+  {
+    "id": "ENG-06",
+    "title": "Synchronous Tauri commands take the model lock and do file I/O on the macOS main thread, contrary to the file's own stated rule",
+    "severity": "P2",
+    "category": "performance",
+    "evidence": [
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1344,
+        "note": "A comment explains that list and refetch commands are async because sync commands run on the macOS main thread and park it on the model mutex while the persister or research settle holds it, which caused 'a visible stall'."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1613,
+        "note": "list_research_highlights is sync. state.rs:4068 locks the model and walks every research node and highlight."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1569,
+        "note": "list_research_drafts and list_research_folders (also sync) are called on every research.drafts.changed and research.folders.changed event."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 2330,
+        "note": "remove_research_tree is sync. state.rs:6925 takes research_document_lock and the model lock, then deletes one response snapshot file per node (7018-7023) and thread-graph files (7026-7036) on the main thread."
+      },
+      {
+        "file": "src-tauri/src/state.rs",
+        "line": 2897,
+        "note": "persist_snapshot_locked clones the entire model (all research nodes, threads, artifacts, and queues) under the model lock every 200 ms while changes are happening (PERSIST_DEBOUNCE, state.rs:244)."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 2314,
+        "note": "archive_research_tree, restore_research_tree, remove_research_branch, rename_research_*, set_research_*, save_research_draft, and reorder_* are also sync. In total, 52 sync commands are used by the frontend."
+      }
+    ],
+    "scenario": "While a research run streams, the persister holds the model lock while it clones the model. The user opens the Highlights feed or deletes a large tree. The main thread blocks first on the lock and then on N unlink calls, so AppKit cannot pump events and the window stops responding to input and paint for the duration. The cost grows with the number of nodes, because both the scan and the clone are O(N).",
+    "recommendation": "Mark every command that locks the model or touches the filesystem as #[tauri::command(async)], or as async with spawn_blocking. Leave sync only the commands that must run on the main thread for AppKit. Move remove_research_tree's file deletion to a background thread after the event is emitted. Add a source-level test that fails if a #[tauri::command] fn (not async) calls .model.lock() or std::fs."
+  },
+  {
+    "id": "ENG-07",
+    "title": "Backend event batches are handled without per-event isolation, so one throwing handler silently drops the rest of the batch",
+    "severity": "P2",
+    "category": "correctness",
+    "evidence": [
+      {
+        "file": "src/hooks/useSessionEvents.ts",
+        "line": 517,
+        "note": "flushPendingEvents splices the whole pending queue (pendingEvents.splice(0, length)) and then loops `for (const event of batch) handleEvent(event)` with no try/catch."
+      },
+      {
+        "file": "src/hooks/useSessionEvents.ts",
+        "line": 213,
+        "note": "handleEvent calls onResearchChanged, which is App's handleResearchEvent: about 320 lines of snapshot patching that index nested optional data."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 5702,
+        "note": "handleResearchEvent has no try/catch. Parse failures route to scheduleResearchRefresh, but exceptions thrown inside patch helpers do not."
+      }
+    ],
+    "scenario": "A burst of 30 events arrives inside one 16 ms window. Event 3 throws, for example in a patchResearchSummaryForNode path receiving an unexpected previous node. Events 4-30 have already been removed from the queue and are never applied. These can include research.node.updated with a completion, agent status changes, or a pane removal. The UI shows a run as still running, or a stale tree list, until some unrelated event triggers a full refresh. The exception surfaces only as an uncaught error in a setTimeout callback.",
+    "recommendation": "Wrap each handleEvent(event) call in try/catch, log the event type and error, and schedule the existing full recovery path (scheduleResearchRefresh, plus a panes and agents refetch) when any handler throws. Add a unit test that feeds a batch with a throwing handler and asserts that later events are still applied."
+  },
+  {
+    "id": "ENG-08",
+    "title": "State persistence failures are written only to stderr; the user keeps working on changes that will be lost",
+    "severity": "P2",
+    "category": "error-handling",
+    "evidence": [
+      {
+        "file": "src-tauri/src/state.rs",
+        "line": 2888,
+        "note": "persist_now: `if let Err(err) = self.persist_snapshot_locked() { eprintln!(...) }`. No event is emitted and no failure state is kept."
+      },
+      {
+        "file": "src-tauri/src/state.rs",
+        "line": 3005,
+        "note": "finalize_persistence_for_exit handles the final snapshot the same way, logging to stderr only."
+      },
+      {
+        "file": "src-tauri/src/persistence.rs",
+        "line": 1149,
+        "note": "save can fail on create_dir_all, write, fsync, or rename, for example from a full disk, a permission change on the workspace root, or a read-only external volume."
+      }
+    ],
+    "scenario": "The workspace root is on an external volume that becomes read-only, or the disk fills up. Every debounced save fails while the UI continues to accept new research trees, drafts, highlights, and folder moves. On restart, everything since the first failure is gone. Shipping macOS builds have no visible stderr, so the user gets no signal at all.",
+    "recommendation": "Record the last persist error and its time in AppState, emit a session event (for example app.persistence.failed with the message) on the transition into failure and back out of it, and show a persistent banner in the frontend. Retry with backoff. On exit, if the final snapshot fails, block quit with a dialog that offers to retry."
+  },
+  {
+    "id": "ENG-09",
+    "title": "React hooks rules are not enforced: no ESLint in the desktop package, although the code relies on eslint-disable comments",
+    "severity": "P2",
+    "category": "maintainability",
+    "evidence": [
+      {
+        "file": "package.json",
+        "line": 64,
+        "note": "devDependencies has no eslint or eslint-plugin-react-hooks, and no lint script. ESLint is configured only for web/."
+      },
+      {
+        "file": "src/hooks/useSessionEvents.ts",
+        "line": 557,
+        "note": "`// eslint-disable-next-line react-hooks/exhaustive-deps` on the single global event subscription, which captures the handlers from the first render. Similar comments appear at App.tsx:4160, ResearchThreadPage.tsx:1095, and GithubAccountControl.tsx:184."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 6019,
+        "note": "handleResearchEvent's dependency list omits refreshResearchDrafts, refreshResearchFolders, and invalidateResearchHighlights. They happen to be stable today, and useSessionEvents keeps the first-render instance forever."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 2644,
+        "note": "showAppToast is a plain function in the deps of the feedSetupGuide useMemo (8316-8328), so the memo recomputes on every render and passes a new AgentSetupGuide element to the memoized ResearchActivityFeed while the setup guide is shown."
+      }
+    ],
+    "scenario": "Running eslint-plugin-react-hooks 5.2.0 on a copy of src/ reported 48 exhaustive-deps warnings (23 in App.tsx, 8 in ResearchThreadPage.tsx) and 0 rules-of-hooks violations. Most are deliberate and refs are used to compensate, but nothing distinguishes deliberate omissions from accidental ones. A future refactor that makes scheduleResearchRefresh or focusResearchHome depend on changing state would silently leave the global event subscription calling a stale closure.",
+    "recommendation": "Add eslint plus eslint-plugin-react-hooks (and @typescript-eslint/parser) to the desktop package, wire it into `npm run check`, and turn each deliberate omission into an explicit disable with a reason. Wrap showAppToast in useCallback. For useSessionEvents, pass handlers through a ref that is updated each render (the 'latest ref' pattern) so the subscription is set up once and always calls current handlers."
+  },
+  {
+    "id": "ENG-10",
+    "title": "Test suite does not reach App.tsx, the hooks, the event coalescer, or the SVG sanitizer",
+    "severity": "P2",
+    "category": "testing",
+    "evidence": [
+      {
+        "file": "tests/",
+        "line": 1,
+        "note": "88 test files and 762 passing tests. None import src/App.tsx, src/hooks/useSessionEvents.ts, useResearchDrafts, useResearchFiling, useAppStartup (only src/lib/appStartup is tested), useResearchCardDrag, src/lib/sessionDrafts.ts, src/lib/api.ts, BrowserOverlay.tsx, or ResearchThreadPage.tsx."
+      },
+      {
+        "file": "src/components/DiagramBlock.tsx",
+        "line": 117,
+        "note": "diagramSanitizerHook and sanitizeSvg are the boundary for agent-authored SVG injected with dangerouslySetInnerHTML into the privileged webview. No test covers them (tests/diagramLightbox.test.ts reads source text only)."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 5702,
+        "note": "The research event reducer: researchEvents.test.ts covers parseResearchEvent and patch helpers, but not the orchestration, which includes the cache, version counters, removed-tree tombstones, and recovery scheduling."
+      },
+      {
+        "file": "src/hooks/useSessionEvents.ts",
+        "line": 517,
+        "note": "The 16 ms coalescing, ordering, and dispose-before-listen paths have no tests."
+      }
+    ],
+    "scenario": "A DOMPurify upgrade or a change to the hook (for example href handling for xlink:href on <use>) could reopen an injection path into the main webview, which holds the IPC surface in ENG-01, and no test would fail. Regressions in event ordering or recovery, which are the bugs that show up as stale run status, can only be caught manually.",
+    "recommendation": "Add jsdom-based tests for sanitizeSvg with a corpus of payloads: <script>, on* handlers, foreignObject, javascript: and data: hrefs on <a> and <use>, external xlink:href, and <style> with url(). After extracting the reducer (ENG-03), table-test it with event sequences: create, update, remove, recovery, and out-of-order responses. Test useSessionEvents' batching with fake timers and a stub listenToEvents."
+  },
+  {
+    "id": "ENG-11",
+    "title": "read_research_report reads any .md path supplied by the renderer, with no size limit",
+    "severity": "P3",
+    "category": "security",
+    "evidence": [
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1729,
+        "note": "The only checks are that the extension is .md and that std::fs::read_to_string(path) succeeds. There is no root confinement, no check that the path came from a drop or picker, and no size cap."
+      },
+      {
+        "file": "src/components/research/ResearchReportImport.tsx",
+        "line": 77,
+        "note": "The legitimate caller passes a path from a Tauri drag-drop event."
+      }
+    ],
+    "scenario": "A script in the webview (see ENG-01 for the precondition) can read any Markdown file the user owns, such as notes or credential runbooks under ~/, and exfiltrate the contents through a later network-capable command. Separately, dropping a multi-gigabyte .md file loads all of it into the backend's memory and then serializes it over IPC into the webview before the import cap applies.",
+    "recommendation": "Capture drag-drop paths in Rust (WindowEvent::DragDrop) and let read_research_report accept only a path dropped within the last few seconds, or switch to the dialog plugin's picker. Check metadata().len() against the import character cap before reading."
+  },
+  {
+    "id": "ENG-12",
+    "title": "Settings and Agent Setup dialogs declare aria-modal but do not move, trap, or restore focus; the Settings tabs are only partly wired",
+    "severity": "P3",
+    "category": "accessibility",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 8605,
+        "note": "Settings panel: role=dialog, aria-modal=true, aria-labelledby. No ref, no initial focus, no Tab trap, and no focus restore on close. The only autoFocus inside is in the remote-add form (8697)."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 8562,
+        "note": "Agent Setup panel has the same pattern."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 8623,
+        "note": "role=tablist with role=tab buttons that have aria-selected but no id or aria-controls. The tabpanels (8648, 8860) have no aria-labelledby. There is no arrow-key navigation, and every tab is a Tab stop."
+      },
+      {
+        "file": "src/components/research/ResearchFolderDialogs.tsx",
+        "line": 85,
+        "note": "For comparison: the folder dialog implements trapFocus and initial focus correctly."
+      }
+    ],
+    "scenario": "A keyboard or VoiceOver user presses Cmd-, and focus stays on the element behind the dialog. Tab moves through the obscured sidebar, and Escape closes the dialog without returning focus to the Settings button. aria-modal tells assistive technology that the background is inert when it is not.",
+    "recommendation": "Extract a shared Modal component, based on the folder dialog's trapFocus, that focuses the first control or the heading on open, traps Tab, and restores focus to the opener on close. Use it for Settings, Agent Setup, and the three confirm dialogs. Give tabs and panels ids with aria-controls and aria-labelledby, and implement roving tabindex with arrow-key navigation."
+  },
+  {
+    "id": "ENG-13",
+    "title": "Drafts tray turns any load failure into an empty list without reporting it",
+    "severity": "P3",
+    "category": "error-handling",
+    "evidence": [
+      {
+        "file": "src/hooks/useResearchDrafts.ts",
+        "line": 37,
+        "note": "refresh(): catch { if (current request) setDrafts([]) }. The comment says this is intended for 'an older backend'. onError is not called."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 5713,
+        "note": "refresh runs on every research.drafts.changed event, so a single failed reload clears a tray that was already populated."
+      }
+    ],
+    "scenario": "A transient IPC failure during a drafts reload, for example while the backend is busy (see ENG-06, since list_research_drafts is sync), replaces the user's visible drafts with an empty tray and shows no error. The drafts are still on disk, but the user may believe they were deleted, or may start a new draft in place of the existing one.",
+    "recommendation": "On failure, keep the previous list and report the error through onError, or mark the tray stale and show a retry control. Treat only a known 'unsupported command' error as empty."
+  },
+  {
+    "id": "ENG-14",
+    "title": "OpenRouter key is saved over IPC on every keystroke with errors discarded, and lives in renderer state despite the proxy's stated goal",
+    "severity": "P3",
+    "category": "security",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 7599,
+        "note": "useEffect on settings.openRouterKey calls `void setOpenRouterKey(...).catch(() => undefined)` on each change. Every keystroke rewrites preferences.json, including fsync and rename (persistence.rs:367-399), and failures are dropped."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 643,
+        "note": "The doc comment says the proxy keeps 'the API key never leaves ... the Rust process' and out of 'the renderer heap'. However, openrouter_key_get returns the key to the renderer at startup (App.tsx:4602-4629), where it is stored in settings state."
+      }
+    ],
+    "scenario": "When a save fails, for example because preferences.json is not writable, the field still shows the key but it is not stored, so title generation fails after restart with no explanation. Typing a 70-character key causes about 70 synchronous file replacements. The security property described in the comment does not hold, because the key is present in the renderer.",
+    "recommendation": "Save on blur or explicit confirm, or debounce by about 500 ms, and surface errors next to the field. Have openrouter_key_get return only whether a key is set and a masked suffix, and keep the full key in Rust. That matches the proxy's design."
+  },
+  {
+    "id": "ENG-15",
+    "title": "External-open calls discard rejections, so refusals and failures are invisible",
+    "severity": "P3",
+    "category": "error-handling",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 9753,
+        "note": "BrowserOverlay onOpenExternal: `void openExternalUrl(currentUrl)` without catch. The backend rejects non-http(s) URLs and file-server URLs (main.rs:863-876)."
+      },
+      {
+        "file": "src/components/research/TweetEmbed.tsx",
+        "line": 15,
+        "note": "There are further uncaught calls at TweetEmbed.tsx:362, 374, 427, 437, ResearchPost.tsx:88, GithubAccountControl.tsx:242, 283, 355, and App.tsx:3527."
+      },
+      {
+        "file": "src/main.tsx",
+        "line": 1,
+        "note": "There is no global unhandledrejection handler."
+      }
+    ],
+    "scenario": "The user clicks 'Open in external browser' on an overlay showing about:blank or another non-http page, or `open` fails to spawn. Nothing happens and no message is shown. The rejection is visible only in the WebKit inspector.",
+    "recommendation": "Route every openExternalUrl call through one helper that catches and reports through setError or a toast, and add a dev-mode unhandledrejection logger."
+  },
+  {
+    "id": "ENG-16",
+    "title": "useComposerPopOpen leaks one window listener per pointer press",
+    "severity": "P3",
+    "category": "performance",
+    "evidence": [
+      {
+        "file": "src/hooks/useComposerPopOpen.ts",
+        "line": 62,
+        "note": "onPointerDownCapture adds `pointerup` and `pointercancel` listeners, both with {once:true}. Only one of the two fires, and the other stays attached to window."
+      }
+    ],
+    "scenario": "Each click inside a composer leaves one pointercancel listener attached, because pointercancel rarely fires. After a long session there are hundreds of closures on window. When a pointercancel finally fires, for example from a trackpad gesture, all of them run and each schedules a setTimeout.",
+    "recommendation": "Register a single handler for both events and remove both inside it, or use an AbortController signal shared by the two listeners."
+  },
+  {
+    "id": "ENG-17",
+    "title": "Folder membership of a removed tree is written back by the next folder save",
+    "severity": "P3",
+    "category": "correctness",
+    "evidence": [
+      {
+        "file": "src-tauri/src/state.rs",
+        "line": 6989,
+        "note": "remove_research_tree drops the tree's folder membership ('The grouping must not outlive the tree') but emits only research.tree.removed, not research.folders.changed."
+      },
+      {
+        "file": "src/App.tsx",
+        "line": 5977,
+        "note": "The frontend's research.tree.removed handler does not refresh the folder store."
+      },
+      {
+        "file": "src/lib/researchFolderStore.ts",
+        "line": 61,
+        "note": "commit() saves the entire ResearchFolderState, including the stale membership, through set_research_folders."
+      },
+      {
+        "file": "src-tauri/src/research.rs",
+        "line": 119,
+        "note": "validate_research_folders checks folder names and ids only and accepts membership keys for tree ids that do not exist."
+      }
+    ],
+    "scenario": "The user files tree A into folder F, deletes A, and then moves tree B into a folder. The commit sends a membership map that still contains A\u2192F, and the backend persists it. Dangling membership entries accumulate in state.json, which the removal path was written to prevent.",
+    "recommendation": "In set_research_folders, drop membership keys that are not in model.research_trees. Also emit research.folders.changed from remove_research_tree and remove_research_workspace so the frontend store reloads."
+  },
+  {
+    "id": "ENG-18",
+    "title": "File-server token-leak guard in open_external_url uses a string prefix match",
+    "severity": "P3",
+    "category": "security",
+    "evidence": [
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 1308,
+        "note": "is_file_server_url checks starts_with('http://127.0.0.1:{port}/') or 'http://localhost:{port}/'."
+      },
+      {
+        "file": "src-tauri/src/main.rs",
+        "line": 878,
+        "note": "validated_preview_url in the same file parses the URL and compares scheme, host, and port, which is the correct approach."
+      }
+    ],
+    "scenario": "A URL with the same token spelled as http://LOCALHOST:{port}/..., http://localhost.:{port}/..., or http://127.1:{port}/... passes the guard. macOS `open` then normalizes it and the token-bearing URL lands in the external browser's history, which is what the guard exists to prevent. Exploitation requires the caller to already have the token, so this is defense in depth.",
+    "recommendation": "Parse with url::Url, lowercase the host and strip any trailing dot, treat any loopback IP (127.0.0.0/8, ::1) and 'localhost' as loopback, and compare port_or_known_default(). Reuse the same helper in validated_preview_url."
+  },
+  {
+    "id": "ENG-19",
+    "title": "MainApp refills the research node cache from all activity and detail nodes on every render",
+    "severity": "P3",
+    "category": "performance",
+    "evidence": [
+      {
+        "file": "src/App.tsx",
+        "line": 1446,
+        "note": "The component body loops over researchActivity and activeResearchDetail.nodes and calls Map.set for each node on every render of MainApp."
+      },
+      {
+        "file": "src/hooks/useSessionEvents.ts",
+        "line": 51,
+        "note": "MainApp re-renders once per 16 ms event batch whenever any agent is active."
+      }
+    ],
+    "scenario": "With a few thousand activity nodes, every event batch performs thousands of Map writes before any JSX work. The loop also overwrites the cache, which handleResearchEvent updates synchronously, with whatever the last committed state holds. That is correct today only because every event path also updates state with the same node.",
+    "recommendation": "Update the cache only where researchActivity and activeResearchDetail are set (the event handler, recovery, and refresh paths), or derive a Map with useMemo keyed on those arrays. Move the cache into the extracted reducer (ENG-03)."
+  }
+]
