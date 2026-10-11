@@ -17,24 +17,24 @@ function ResearchRecapLine({
     <p
       className={
         className
-          ? `research-summary-text research-recap ${className}`
-          : "research-summary-text research-recap"
+          ? `research-recap-text research-recap ${className}`
+          : "research-recap-text research-recap"
       }
     >
-      Summary: {trimmed}
+      Recap: {trimmed}
     </p>
   );
 }
 
-/** Placeholder in the recap's own slot while a background summary job runs, so
- * the summary lands where the spinner sat rather than shifting the answer. */
+/** Placeholder in the recap's own slot while a background recap job runs, so
+ * the recap lands where the spinner sat rather than shifting the answer. */
 function ResearchRecapPendingLine() {
   return (
     <p
-      className="research-summary-text research-recap research-recap-pending"
+      className="research-recap-text research-recap research-recap-pending"
       role="status"
-      aria-label="Generating summary"
-      title="Generating summary"
+      aria-label="Generating recap"
+      title="Generating recap"
     >
       <LoaderCircle className="research-spinner" size={13} aria-hidden="true" />
     </p>
@@ -48,7 +48,7 @@ export default function ResearchRecap({
   pending = false,
 }: {
   content: ResearchNodeContent;
-  /** A background summary job is in flight for this node. */
+  /** A background recap job is in flight for this node. */
   pending?: boolean;
 }) {
   const { node, responseRevision } = content;

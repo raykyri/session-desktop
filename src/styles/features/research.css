@@ -2236,12 +2236,12 @@
   margin: 0 0 28px;
 }
 
-/* Holds the recap's slot while the summary generates, so the text lands in
+/* Holds the recap's slot while the recap generates, so the text lands in
    place instead of pushing the answer down when it arrives. */
 .research-recap-pending {
   display: flex;
   align-items: center;
-  min-height: calc(var(--research-summary-font-size) * var(--research-summary-line-height));
+  min-height: calc(var(--research-recap-font-size) * var(--research-recap-line-height));
   color: var(--accent-color);
 }
 

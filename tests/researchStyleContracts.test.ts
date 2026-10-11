@@ -46,10 +46,10 @@ test("DM Sans adds one optical half-pixel to UI type but not monospace text", ()
   assert.doesNotMatch(code, /font-ui-size-offset/);
 });
 
-test("research summaries get typography only from the shared surface recipe", () => {
-  const summary = ruleBody(surfaceCss, ".research-summary-text");
-  assert.match(summary, /font-size:\s*var\(--research-summary-font-size\)/);
-  assert.match(summary, /line-height:\s*var\(--research-summary-line-height\)/);
+test("research recaps get typography only from the shared surface recipe", () => {
+  const recap = ruleBody(surfaceCss, ".research-recap-text");
+  assert.match(recap, /font-size:\s*var\(--research-recap-font-size\)/);
+  assert.match(recap, /line-height:\s*var\(--research-recap-line-height\)/);
 
   // Feed questions use the compact line height and a font size 1px larger.
   const cardQuestion = ruleBody(feedCss, ".research-feed-card-question");

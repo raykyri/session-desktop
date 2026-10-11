@@ -9384,24 +9384,24 @@ impl AppState {
                 .get(&tree_id)
                 .is_some_and(|tree| tree.archived_at.is_some())
             {
-                return Err("restore archived research before replacing its summary".to_string());
+                return Err("restore archived research before replacing its recap".to_string());
             }
             let node = model
                 .research_nodes
                 .get_mut(&request.node_id)
                 .ok_or_else(|| format!("research node {} was not found", request.node_id))?;
             if !node.recap_eligible() || node.status() != ResearchNodeStatus::Complete {
-                return Err("only completed research runs can replace a summary".to_string());
+                return Err("only completed research runs can replace a recap".to_string());
             }
             if node.recap().and_then(|recap| recap.id.clone()) != request.expected_current_recap_id
             {
                 return Err(
-                    "the summary changed while the preview was open; review the latest summary and try again"
+                    "the recap changed while the preview was open; review the latest recap and try again"
                         .to_string(),
                 );
             }
             if request.candidate.response_revision != request.expected_response_revision {
-                return Err("the summary candidate belongs to a different answer".to_string());
+                return Err("the recap candidate belongs to a different answer".to_string());
             }
             let snapshot = research::read_response_snapshot_with_revision(
                 &self.inner.config.workspace_root,
@@ -9411,12 +9411,12 @@ impl AppState {
                 .is_some_and(|snapshot| snapshot.revision == request.expected_response_revision)
             {
                 return Err(
-                    "the answer changed while the preview was open; generate a new summary"
+                    "the answer changed while the preview was open; generate a new recap"
                         .to_string(),
                 );
             }
             let text = crate::research_recap::normalize_recap(&request.candidate.text)
-                .ok_or_else(|| "the summary candidate is invalid".to_string())?;
+                .ok_or_else(|| "the recap candidate is invalid".to_string())?;
             let instructions =
                 crate::research_recap::validate_instructions(&request.candidate.instructions)?
                     .to_string();
@@ -9430,7 +9430,7 @@ impl AppState {
                 instructions: Some(instructions),
             };
             let Some(slot) = node.recap_mut() else {
-                return Err("the research node has no summary".to_string());
+                return Err("the research node has no recap".to_string());
             };
             *slot = Some(recap);
             node.clone()
@@ -19023,7 +19023,7 @@ mod tests {
                     ..candidate.clone()
                 },
             });
-        assert!(stale_summary.unwrap_err().contains("summary changed"));
+        assert!(stale_summary.unwrap_err().contains("recap changed"));
 
         answer.blocks = vec![crate::transcript::TurnBlock::Text {
             text: "Changed answer".into(),

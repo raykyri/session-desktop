@@ -19,7 +19,7 @@ const render = (value: ResearchNodeContent) => renderToStaticMarkup(createElemen
 
 test("recaps reserve no space until generated and belonging to the displayed answer", () => {
   const value = content();
-  assert.match(render(value), /Summary: The result is ready\./);
+  assert.match(render(value), /Recap: The result is ready\./);
   value.responseRevision = "different";
   assert.equal(render(value), "");
   assert.equal(render(content({ status: "running" })), "");
@@ -29,26 +29,26 @@ test("recaps reserve no space until generated and belonging to the displayed ans
 test("imported reports show their recap; other documents and posts do not", () => {
   assert.match(
     render(content({ type: "document", source: "imported" })),
-    /Summary: The result is ready\./,
+    /Recap: The result is ready\./,
   );
   assert.equal(render(content({ type: "document" })), "");
   assert.equal(render(content({ type: "document", source: "transcript" })), "");
   assert.equal(render(content({ type: "post" })), "");
 });
 
-test("a pending summary job holds the recap slot with a spinner", () => {
+test("a pending recap job holds the recap slot with a spinner", () => {
   const pending = (input: ResearchNodeContent) =>
     renderToStaticMarkup(createElement(ResearchRecap, { content: input, pending: true }));
   // A current recap always wins over the placeholder.
-  assert.match(pending(content()), /Summary: The result is ready\./);
+  assert.match(pending(content()), /Recap: The result is ready\./);
   const missing = content({ recap: null });
-  assert.match(pending(missing), /Generating summary/);
+  assert.match(pending(missing), /Generating recap/);
   assert.equal(render(missing), "");
   // A stale recap generates again, so its slot shows the spinner, not the text.
   const stale = content({ recap: { text: "Stale.", responseRevision: "older" } });
-  assert.match(pending(stale), /Generating summary/);
+  assert.match(pending(stale), /Generating recap/);
   assert.doesNotMatch(pending(stale), /Stale\./);
-  // Nothing to summarize yet on a run that has not settled.
+  // Nothing to recap yet on a run that has not settled.
   assert.equal(pending(content({ status: "running", recap: null })), "");
 });
 
@@ -63,8 +63,8 @@ test("recaps render as text, with no Markdown or HTML interpretation", () => {
 
 test("current recaps render without an inline regeneration control", () => {
   const html = render(content());
-  assert.match(html, /Summary: The result is ready\./);
-  assert.doesNotMatch(html, /Generate summary/);
+  assert.match(html, /Recap: The result is ready\./);
+  assert.doesNotMatch(html, /Generate recap/);
   assert.doesNotMatch(html, /<button/);
 });
 
@@ -76,8 +76,8 @@ test("candidate dialog presents the current recap before generation", () => {
       onApplied: () => undefined,
     }),
   );
-  assert.match(html, /Generate summary/);
-  assert.doesNotMatch(html, /The current summary stays unchanged until you apply a candidate/);
+  assert.match(html, /Generate recap/);
+  assert.doesNotMatch(html, /The current recap stays unchanged until you apply a candidate/);
   assert.match(html, /The result is ready\./);
   assert.match(html, /Generate candidate/);
   assert.ok(html.indexOf(">Candidate<") < html.indexOf(">Current<"));
@@ -86,6 +86,6 @@ test("candidate dialog presents the current recap before generation", () => {
   assert.match(html, /settings-input research-recap-control/);
   assert.doesNotMatch(html, /<datalist/);
   assert.match(html, /<hr class="research-recap-comparison-divider"/);
-  assert.match(html, /Generate a new summary first\./);
+  assert.match(html, /Generate a new recap first\./);
   assert.ok(html.indexOf("Generate candidate") < html.indexOf(">Candidate<"));
 });

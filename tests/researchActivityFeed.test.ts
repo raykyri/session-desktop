@@ -80,12 +80,12 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("cards have no metadata row: no time, counts, summary, Follow or Bookmark", () => {
+test("cards have no metadata row: no time, counts, recap, Follow or Bookmark", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
     researchTrees: [{ ...tree, followed: true, bookmarked: true }],
   });
-  assert.doesNotMatch(html, /<time|research-thread-actions|Summary: |follow-up<\/button>/);
+  assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
   // Direct follow-ups are not rows of their own unless starred.
   assert.doesNotMatch(html, /Follow up question here/);
   // Bookmarking and moving live in the card's … menu.

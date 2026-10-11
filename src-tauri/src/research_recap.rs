@@ -184,11 +184,11 @@ pub fn normalize_recap(raw: &str) -> Option<String> {
 pub fn validate_instructions(value: &str) -> Result<&str, String> {
     let value = value.trim();
     if value.is_empty() {
-        return Err("summary instructions cannot be empty".to_string());
+        return Err("recap instructions cannot be empty".to_string());
     }
     if value.chars().count() > MAX_RECAP_INSTRUCTIONS_CHARS {
         return Err(format!(
-            "summary instructions cannot exceed {MAX_RECAP_INSTRUCTIONS_CHARS} characters"
+            "recap instructions cannot exceed {MAX_RECAP_INSTRUCTIONS_CHARS} characters"
         ));
     }
     Ok(value)

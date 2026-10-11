@@ -3164,19 +3164,19 @@ async fn generate_research_recap_candidate(
         if model
             .is_some_and(|value| value.chars().count() > 256 || value.chars().any(char::is_control))
         {
-            return Err("summary model name is invalid".to_string());
+            return Err("recap model name is invalid".to_string());
         }
         let adapter =
             adapters::ensure_adapter_ready_for_research(state.config(), request.adapter.trim())?;
         if !adapter.supports_recap_generation {
             return Err(format!(
-                "{} does not support summary generation",
+                "{} does not support recap generation",
                 adapter.label
             ));
         }
         let node = state.research_node(&request.node_id)?;
         if !node.recap_eligible() || node.status() != research::ResearchNodeStatus::Complete {
-            return Err("only completed research runs can generate summaries".to_string());
+            return Err("only completed research runs can generate recaps".to_string());
         }
         let snapshot = research::read_response_snapshot_with_revision(
             &state.config().workspace_root,
@@ -3184,10 +3184,10 @@ async fn generate_research_recap_candidate(
         )?
         .ok_or_else(|| "the completed research answer is unavailable".to_string())?;
         if snapshot.revision != request.expected_response_revision {
-            return Err("the answer changed; reopen summary generation and try again".to_string());
+            return Err("the answer changed; reopen recap generation and try again".to_string());
         }
         let answer = research_recap::recap_source_for_node(&node, &snapshot.turns)
-            .ok_or_else(|| "the answer is not eligible for summary generation".to_string())?;
+            .ok_or_else(|| "the answer is not eligible for recap generation".to_string())?;
         let workspace = state.research_workspace_for_node(&node.id)?;
         let text = title_generation::generate_research_recap_with(
             state.config(),
@@ -3209,7 +3209,7 @@ async fn generate_research_recap_candidate(
         })
     })
     .await
-    .map_err(|err| format!("summary generation task failed: {err}"))?
+    .map_err(|err| format!("recap generation task failed: {err}"))?
 }
 
 #[tauri::command(async)]

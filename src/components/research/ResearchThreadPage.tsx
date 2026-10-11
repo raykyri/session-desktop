@@ -252,8 +252,8 @@ interface ResearchThreadPageProps {
   shortcutHintsShown: boolean;
   /** The "Require ⌘↵ to send" setting, for every composer in the thread. */
   requireCmdEnterToSend: boolean;
-  /** Runs whose background summary job is in flight; each renders a spinner in
-   * its recap slot until the summary arrives. */
+  /** Runs whose background recap job is in flight; each renders a spinner in
+   * its recap slot until the recap arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
   /** Page-level back/forward (the feed ↔ threads). Used when
    * this tree's own visit stack has nowhere left to go. */
@@ -5422,7 +5422,7 @@ function ResearchThreadPage({
         {canRegenerateRecap ? (
           <ResearchMenuItem
             icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Generate summary"
+            label="Generate recap"
             onSelect={() => {
               setMenu(null);
               setRecapDialogNodeId(node.id);
@@ -5737,7 +5737,7 @@ function ResearchThreadPage({
                     ? { ...current, [updatedNode.id]: { ...content, node: updatedNode } }
                     : current;
                 });
-                onToast("Summary updated");
+                onToast("Recap updated");
               }}
             />,
             document.body,

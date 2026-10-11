@@ -205,8 +205,8 @@
 .research-reading-surface {
   --research-body-font-size: calc(var(--fs-input) - 0.5px);
   --research-body-line-height: 1.5;
-  --research-summary-font-size: var(--research-body-font-size);
-  --research-summary-line-height: var(--research-body-line-height);
+  --research-recap-font-size: var(--research-body-font-size);
+  --research-recap-line-height: var(--research-body-line-height);
   --research-meta-font-size: calc(var(--fs-input) - 2px);
   --research-meta-line-height: 1.35;
   --research-compact-font-size: var(--research-meta-font-size);
@@ -248,12 +248,12 @@
   line-height: var(--research-compact-line-height);
 }
 
-.research-summary-text {
+.research-recap-text {
   color: var(--text-muted);
-  font-size: var(--research-summary-font-size);
+  font-size: var(--research-recap-font-size);
   font-style: italic;
   font-weight: 400;
-  line-height: var(--research-summary-line-height);
+  line-height: var(--research-recap-line-height);
   white-space: normal;
 }
 
@@ -268,7 +268,7 @@
    attachment. Home-only menu clearance remains in feed.css. */
 
 .research-pairs .tweet-embed-verified,
-.research-pairs .research-summary-text {
+.research-pairs .research-recap-text {
   display: none;
 }
 

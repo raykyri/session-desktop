@@ -1505,7 +1505,7 @@ function ResearchActivityFeed({
               setMenu(null);
               setDeletingTree(tree);
             }}
-            onRegenerateSummary={
+            onRegenerateRecap={
               contextQuery &&
               !menu.archived &&
               contextQuery.status === "complete" &&
