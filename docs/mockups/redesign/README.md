@@ -1,10 +1,10 @@
 # Session redesign candidates
 
-Four interactive redesign mocks, each in the idiom of one reference app (Ulysses, macOS
-system apps, Front, Linear), in two rounds. Each mock has five or more
-variants. Round 2 is each candidate's revision after a self-review against a first-use task
-script and the issues in `issues.json`. Obsidian, Notion, Tana and Apple Notes candidates were dropped; they are
-in the git history.
+Three interactive redesign mocks, each in the idiom of one reference app (macOS system apps,
+Front, Linear), in two rounds, each with switchable variants. Round 2 is each candidate's
+revision after a self-review against a first-use task script and the issues in `issues.json`;
+the macOS round 2 candidate was later narrowed to two excerpt-column variants. Obsidian, Notion,
+Tana, Apple Notes and Ulysses candidates were dropped; they are in the git history.
 
 - `index.html`: the compilation (candidate tabs, round and variant switches, notes, issues).
   It reads `manifest.json` and `issues.json` with `fetch`, so serve the directory over HTTP:
