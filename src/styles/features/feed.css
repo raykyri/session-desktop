@@ -667,6 +667,20 @@
   border-radius: 8px;
 }
 
+/* Folder tray rows are 2px shorter at the top and bottom than Home rows. */
+.research-feed-tray-body > .research-feed-card,
+.research-feed-tray-body > .research-feed-unit > .research-feed-card {
+  padding-block: 8px;
+}
+
+.research-feed-tray-body .research-feed-card > .research-feed-status {
+  top: 14px;
+}
+
+.research-feed-tray-body .research-feed-card > .research-feed-card-unread {
+  top: 14.5px;
+}
+
 .research-feed-card {
   padding: 10px 12px 10px calc(var(--research-row-text) - var(--research-row-inset));
   cursor: pointer;
