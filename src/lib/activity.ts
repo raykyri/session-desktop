@@ -1,38 +1,11 @@
-import { nodeAdapter, nodeAgent, nodeAttachments, nodeDelivery, nodePrompt, nodeRecap, nodeRun, nodeStatus, nodeType, passageAnchor, replyAnchorId } from "./researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeAttachments, nodeDelivery, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor, replyAnchorId } from "./researchNodeTypes";
 import type {
   PostDelivery,
   PostReply,
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchNode,
-  ResearchNodeStatus,
-  ResearchTreeSummary,
 } from "../types";
-
-/**
- * Shared activity grammar. Surfaces render these semantic slots rather than
- * hand-building slightly different metadata sentences for each source.
- */
-interface ActivityEvent<TSource = unknown> {
-  id: string;
-  actor: { kind: "user" | "agent" | "system"; label: string };
-  action: { kind: "saved" | "asked" | "posted" | "created" | "completed"; label: string };
-  object: {
-    kind: "link" | "post" | "network-post" | "research-query" | "artifact" | "task";
-    id: string;
-    label: string;
-  };
-  context?: { kind: "research" | "source" | "workspace"; label: string };
-  relationship?: { kind: "top-level" | "follow-up"; label: string };
-  execution?: { adapter: string; model?: string | null; origin?: string | null };
-  state?: { kind: ResearchNodeStatus | "ready"; label: string };
-  occurredAt: number;
-  source: TSource;
-}
-
-type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
-
-export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 
 /** One page of Home's feed: research roots (runs and posts), newest first. */
 export interface RecentActivityPage {
@@ -211,78 +184,6 @@ export function patchRecentActivityStarred(
   return { items: changed ? next : items, stale };
 }
 
-export function activityEventFromResearchQuery(
-  query: RecentResearchQuery,
-  tree?: ResearchTreeSummary,
-): RecentActivityEvent {
-  const followUp = Boolean(query.parentNodeId);
-  const isPost = nodeType(query) === "post";
-  const object: RecentActivityEvent["object"] = isPost
-    ? { kind: postObjectKind(query), id: query.nodeId, label: "Post" }
-    : { kind: "research-query", id: query.nodeId, label: "Research" };
-  const action: RecentActivityEvent["action"] = !isPost
-    ? { kind: "asked", label: "asked" }
-    : query.delivery
-      ? { kind: "posted", label: "Posted to network" }
-      : { kind: "saved", label: object.kind === "post" ? "Saved post" : "Saved link" };
-  const sourceLabel = isPost && !query.delivery ? savedSourceLabel(query) : null;
-  return {
-    id: `research:${query.nodeId}`,
-    actor: { kind: "user", label: "You" },
-    action,
-    object,
-    context: sourceLabel
-      ? { kind: "source", label: sourceLabel }
-      : { kind: "research", label: tree?.title ?? "Research" },
-    relationship: {
-      kind: followUp ? "follow-up" : "top-level",
-      label: followUp ? "Follow-up" : "Top-level",
-    },
-    execution: {
-      adapter: query.adapter,
-      model: query.model,
-      ...(query.source === "imported" ? { origin: "imported" } : {}),
-    },
-    state: visibleResearchState(query.status),
-    occurredAt: query.createdAt,
-    source: { kind: "research-query", query },
-  };
-}
-
-/** A post with no delivery is a saved URL: an X post when it resolved to a
- * tweet, otherwise a link. */
-function postObjectKind(query: RecentResearchQuery): "network-post" | "post" | "link" {
-  if (query.delivery) return "network-post";
-  return query.attachments?.some((attachment) => attachment.kind === "tweet") ? "post" : "link";
-}
-
-function savedSourceLabel(query: RecentResearchQuery): string | null {
-  const tweet = query.attachments?.find((attachment) => attachment.kind === "tweet")?.tweet;
-  if (tweet?.author.handle) return `@${tweet.author.handle}`;
-  try {
-    return new URL(query.prompt.trim()).hostname;
-  } catch {
-    return null;
-  }
-}
-
-function visibleResearchState(status: ResearchNodeStatus): ActivityEvent["state"] {
-  switch (status) {
-    case "queued":
-      return { kind: status, label: "Queued" };
-    case "starting":
-      return { kind: status, label: "Starting" };
-    case "running":
-      return { kind: status, label: "Running" };
-    case "failed":
-      return { kind: status, label: "Failed" };
-    case "cancelled":
-      return { kind: status, label: "Cancelled" };
-    case "complete":
-      return undefined;
-  }
-}
-
 export function upsertRecentActivityItem(
   items: RecentResearchQuery[],
   item: RecentResearchQuery,
@@ -322,15 +223,4 @@ export function reconcileRecentActivityHead(
     activityCursorIsBefore(recentActivityCursor(item), nextCursor),
   );
   return mergeRecentActivityItems(olderTail, head);
-}
-
-export function buildRecentActivityFromItems(
-  items: RecentResearchQuery[],
-  trees: ResearchTreeSummary[],
-): RecentActivityEvent[] {
-  const treeById = new Map(trees.map((tree) => [tree.id, tree]));
-  return items
-    .filter((item) => treeById.get(item.treeId)?.archivedAt == null)
-    .map((item) => activityEventFromResearchQuery(item, treeById.get(item.treeId)))
-    .sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
 }

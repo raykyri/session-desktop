@@ -27,8 +27,8 @@ export function researchComposerEnterAction(
   return isComposerSubmitShortcut(event, requireCmdEnter) ? "send" : null;
 }
 
-/** The ask box at the end of a messages column. It scrolls with the
- * messages (nothing is docked or sticky). The send shortcut follows the
+/** The ask box at the top of a messages column, above its messages. It
+ * scrolls with them (nothing is docked or sticky). The send shortcut follows the
  * "Require ⌘↵ to send" setting, and ⇧⌘↵ starts a branch from the column's
  * last finished answer instead of continuing the conversation. A mode label
  * ("Draft", "New branch", "Editing …") sits above the field, with a × that

@@ -46,7 +46,16 @@ test("a root alone is one messages column and its answer", () => {
   const strip = researchStrip(nodes, "root", null);
   assert.deepEqual(ids(strip), ["T0", "A0"]);
   assert.deepEqual(strip.levels, [
-    { index: 0, headId: "root", chainIds: ["root"], selectedId: "root", sourceId: null, anchor: null, kind: "root" },
+    {
+      index: 0,
+      headId: "root",
+      chainIds: ["root"],
+      displayIds: ["root"],
+      selectedId: "root",
+      sourceId: null,
+      anchor: null,
+      kind: "root",
+    },
   ]);
   assert.equal(strip.endsWithAnswer, true);
   assert.deepEqual(strip.openNodeIds, ["root"]);
@@ -110,6 +119,34 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
   // Selecting the root closes the branches.
   assert.deepEqual(ids(researchStrip(nodes, "root", null)), ["T0", "A0"]);
   assert.deepEqual(researchStrip(nodes, "root", null).levels[0].chainIds, ["root", "c2"]);
+});
+
+test("a level lists its messages newest first, or in its head's stored order", () => {
+  const nodes = [
+    node("root", { createdAt: 0 }),
+    node("c1", { parentNodeId: "root", inline: true, createdAt: 1 }),
+    node("c2", { parentNodeId: "c1", inline: true, createdAt: 2 }),
+    node("b1", { parentNodeId: "c1", createdAt: 3 }),
+  ];
+  const fresh = researchStrip(nodes, "c2", null);
+  assert.deepEqual(fresh.levels[0].chainIds, ["root", "c1", "c2"]);
+  assert.deepEqual(fresh.levels[0].displayIds, ["c2", "c1", "root"]);
+  // A stored order; a follow-up added after it lists first.
+  const ordered = nodes.map((candidate) =>
+    candidate.id === "root" ? { ...candidate, chainOrder: ["c1", "root"] } : candidate,
+  );
+  const strip = researchStrip(ordered, "c2", null);
+  assert.deepEqual(strip.levels[0].chainIds, ["root", "c1", "c2"]);
+  assert.deepEqual(strip.levels[0].displayIds, ["c2", "c1", "root"]);
+  const reordered = ordered.map((candidate) =>
+    candidate.id === "root" ? { ...candidate, chainOrder: ["c1", "root", "c2"] } : candidate,
+  );
+  assert.deepEqual(researchStrip(reordered, "c2", null).levels[0].displayIds, ["c1", "root", "c2"]);
+  // A new order alone is a different strip.
+  assert.equal(sameResearchStrip(strip, researchStrip(reordered, "c2", null)), false);
+  assert.equal(sameResearchStrip(strip, researchStrip(ordered, "c2", null)), true);
+  // A branch is a chain of one.
+  assert.deepEqual(researchStrip(nodes, "b1", null).levels[1].displayIds, ["b1"]);
 });
 
 test("a pending branch adds its column after the level that shows its parent", () => {

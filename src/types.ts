@@ -483,6 +483,10 @@ interface ResearchNodeBase {
    * under its question in the feed. Never set on a root node. */
   starredAt?: number | null;
   highlights: ResearchHighlight[];
+  /** On the first node of an inline chain: the order its messages column
+   * lists the chain in, set by reordering the column. Display only; see
+   * `chainDisplayOrder`. Absent: newest first. */
+  chainOrder?: string[];
 }
 
 export interface ResearchPostNode extends ResearchNodeBase {

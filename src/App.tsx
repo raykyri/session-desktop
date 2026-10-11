@@ -260,6 +260,7 @@ import {
   RESEARCH_DRAFTS_FOLDER_ID,
   researchTreePlace,
   treesWithWorkspaceOrder,
+  type ResearchDropPosition,
   type ResearchFeedChild,
 } from "./lib/researchFolders";
 import { useResearchToast } from "./hooks/useResearchToast";
@@ -355,6 +356,7 @@ import {
   listPanes,
   listResearchActivity,
   listRecentActivity,
+  listRecentActivityForTrees,
   listResearchTrees,
   getResearchTree,
   createResearchPost,
@@ -397,7 +399,6 @@ import type {
   SessionEvent,
   QueuedTurn,
   RecentResearchQuery,
-  RecentResearchQueryCursor,
   NodeAnchor,
   ResearchDraft,
   ResearchHighlightFeedItem,
@@ -1392,7 +1393,9 @@ function MainApp() {
   const researchDetailRequestSeqRef = useRef(0);
   const researchNavRefreshSeqRef = useRef(0);
   const researchNavRefreshInFlightRef = useRef(0);
-  const recentActivityPageRequestSeqRef = useRef(0);
+  // Bumped by refreshes and events; a feed-root load that started before
+  // one is fetched again.
+  const recentActivityRootRequestSeqRef = useRef(0);
   const recentActivityHeadRequestSeqRef = useRef(0);
   const researchViewAckInFlightRef = useRef(new Set<string>());
   const researchViewAckPendingRef = useRef(new Set<string>());
@@ -1411,11 +1414,6 @@ function MainApp() {
   const [recentActivityItems, setRecentActivityItems] = useState<RecentResearchQuery[]>([]);
   const recentActivityItemsRef = useRef(recentActivityItems);
   recentActivityItemsRef.current = recentActivityItems;
-  const [recentActivityCursor, setRecentActivityCursor] =
-    useState<RecentResearchQueryCursor | null>(null);
-  const [loadingOlderActivity, setLoadingOlderActivity] = useState(false);
-  const loadingOlderActivityRef = useRef(false);
-  const [olderActivityError, setOlderActivityError] = useState<string | null>(null);
   const {
     feedOpen,
     setFeedOpen,
@@ -4662,7 +4660,6 @@ function MainApp() {
       setResearchActivity(existingResearchActivity);
       recentActivityItemsRef.current = existingRecentActivity.items;
       setRecentActivityItems(existingRecentActivity.items);
-      setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
       const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
       const restoredResearchScope = resolveResearchScope(
         localStorage.getItem(RESEARCH_WORKSPACE_SCOPE_KEY),
@@ -4972,10 +4969,7 @@ function MainApp() {
     researchNavRefreshSeqRef.current = requestSeq;
     const activityRequestSeq = recentActivityHeadRequestSeqRef.current + 1;
     recentActivityHeadRequestSeqRef.current = activityRequestSeq;
-    recentActivityPageRequestSeqRef.current += 1;
-    loadingOlderActivityRef.current = false;
-    setLoadingOlderActivity(false);
-    setOlderActivityError(null);
+    recentActivityRootRequestSeqRef.current += 1;
     researchNavRefreshInFlightRef.current += 1;
     try {
       const [trees, activity, recentActivity] = await Promise.all([
@@ -4997,8 +4991,8 @@ function MainApp() {
       if (recentActivityHeadRequestSeqRef.current === activityRequestSeq) {
         const headCursor = recentActivity.nextCursor ?? null;
         // Archived trees are omitted from activity queries. Restoring a tree
-        // only refetches the head, so drop the tail to allow older pagination
-        // to re-fetch items that fell within the tail.
+        // only refetches the head, so drop the tail; the feed loads the
+        // roots of listed cards that are no longer loaded.
         const preserveLoadedTail =
           !options.resetLoadedTail &&
           headCursor !== null &&
@@ -5014,9 +5008,6 @@ function MainApp() {
           recentActivityItemsRef.current = next;
           return next;
         });
-        if (!preserveLoadedTail) {
-          setRecentActivityCursor(headCursor);
-        }
       }
       // The backend can remove the selected tree out from under the UI (a root
       // launch that failed removes its never-launched tree). Left selected, the
@@ -5215,35 +5206,22 @@ function MainApp() {
       return next;
     });
   }, []);
-  const loadOlderActivity = useCallback(() => {
-    if (!recentActivityCursor || loadingOlderActivityRef.current) return;
-    const requestSeq = recentActivityPageRequestSeqRef.current + 1;
-    recentActivityPageRequestSeqRef.current = requestSeq;
-    loadingOlderActivityRef.current = true;
-    setLoadingOlderActivity(true);
-    setOlderActivityError(null);
-    void listRecentActivity(50, recentActivityCursor)
-      .then((page) => {
-        if (recentActivityPageRequestSeqRef.current !== requestSeq) return;
-        setRecentActivityItems((current) => {
-          const next = mergeRecentActivityItems(current, page.items);
-          recentActivityItemsRef.current = next;
-          return next;
-        });
-        setRecentActivityCursor(page.nextCursor ?? null);
-      })
-      .catch((err) => {
-        if (recentActivityPageRequestSeqRef.current === requestSeq) {
-          setOlderActivityError(err instanceof Error ? err.message : String(err));
-        }
-      })
-      .finally(() => {
-        if (recentActivityPageRequestSeqRef.current === requestSeq) {
-          loadingOlderActivityRef.current = false;
-          setLoadingOlderActivity(false);
-        }
+  /** Loads the feed roots of trees listed in Home or Bookmarks whose root is
+   * not loaded. A response that an event or refresh made stale is fetched
+   * again. */
+  const loadActivityForTrees = useCallback(async (treeIds: string[]) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requestSeq = recentActivityRootRequestSeqRef.current;
+      const roots = await listRecentActivityForTrees(treeIds);
+      if (recentActivityRootRequestSeqRef.current !== requestSeq) continue;
+      setRecentActivityItems((current) => {
+        const next = mergeRecentActivityItems(current, roots);
+        recentActivityItemsRef.current = next;
+        return next;
       });
-  }, [recentActivityCursor]);
+      return;
+    }
+  }, []);
   const retryActiveResearchDetail = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
     if (treeId) {
@@ -5350,7 +5328,7 @@ function MainApp() {
     [setResearchTrayCollapsed],
   );
   const startResearchCardDrag = useResearchCardDrag({
-    onMoveTree: (treeId, place, beforeId) => void moveResearchTree(treeId, place, beforeId),
+    onMoveTree: (treeId, place, position) => void moveResearchTree(treeId, place, position),
     onMoveDraft: (draftId, beforeId) => void moveResearchDraft(draftId, beforeId),
     onSpringOpen: (place) => setResearchTrayCollapsed(place, false),
   });
@@ -5763,9 +5741,7 @@ function MainApp() {
           researchNavRefreshInFlightRef.current > 0 ||
           researchNavigationRecoveryTimerRef.current !== null;
         researchNavRefreshSeqRef.current += 1;
-        recentActivityPageRequestSeqRef.current += 1;
-        loadingOlderActivityRef.current = false;
-        setLoadingOlderActivity(false);
+        recentActivityRootRequestSeqRef.current += 1;
         if (needsRecovery) {
           // An event invalidated a pre-event collection snapshot. Retry once
           // after the event stream goes quiet; resetting this timer prevents a
@@ -8089,6 +8065,15 @@ function MainApp() {
     (treeId: string, place: string) => void moveResearchTree(treeId, place),
     [moveResearchTree],
   );
+  const reorderResearchTreeFromFeed = useCallback(
+    (treeId: string, place: string, position: ResearchDropPosition) =>
+      void moveResearchTree(treeId, place, position),
+    [moveResearchTree],
+  );
+  const moveResearchDraftFromFeed = useCallback(
+    (draftId: string, beforeId: string | null) => void moveResearchDraft(draftId, beforeId),
+    [moveResearchDraft],
+  );
   // The open conversation's open nodes (the message selected in its root
   // pair and each open branch's head), whose starred child rows the feed
   // shows selected. Node ids are unique across trees, so ids left from
@@ -9640,9 +9625,7 @@ function MainApp() {
                       folders={researchFolders}
                       folderState={researchFolderState}
                       drafts={researchDrafts}
-                      nextCursor={recentActivityCursor}
-                      loadingOlder={loadingOlderActivity}
-                      olderError={olderActivityError}
+                      onLoadTrees={loadActivityForTrees}
                       onOpenResearchQuery={openRecentResearchQuery}
                       onOpenDraft={openResearchDraftInColumn}
                       onOpenTree={openFeedResearchTree}
@@ -9655,6 +9638,8 @@ function MainApp() {
                       onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
                       onSetResearchFollowed={followResearchTreeFromFeed}
                       onMoveTree={moveResearchTreeFromFeed}
+                      onReorderTree={reorderResearchTreeFromFeed}
+                      onReorderDraft={moveResearchDraftFromFeed}
                       onUnstarChild={unstarResearchFeedChild}
                       onNewFolder={openNewResearchFolderDialog}
                       onRenameFolder={openRenameResearchFolderDialog}
@@ -9665,7 +9650,6 @@ function MainApp() {
                       onToggleTray={toggleResearchTray}
                       onDeleteDraft={deleteResearchDraftFromFeed}
                       onDragStart={startResearchCardDrag}
-                      onLoadOlder={loadOlderActivity}
                       onRefresh={refreshFeed}
                       // Use feed history when no thread is open; otherwise use
                       // the open thread's history.

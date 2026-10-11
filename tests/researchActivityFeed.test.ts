@@ -22,14 +22,13 @@ const savedLink = {
 function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
   return renderToStaticMarkup(createElement(ResearchActivityFeed, {
     composer: createElement("div", null, "Query composer"),
-    items: [], researchTrees: [], nextCursor: null, loadingOlder: false, olderError: null,
+    items: [], researchTrees: [],
     onOpenResearchQuery: noop,
     onResearchRecapApplied: noop, onError: noop,
     onRenameResearch: asyncNoop,
     onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,
     onSetResearchBookmarked: noop,
     onMoveTree: noop,
-    onLoadOlder: noop,
     onRefresh: noop, onBack: noop, onForward: noop,
     ...overrides,
   }));
@@ -302,7 +301,7 @@ test("Home with only drafts says Unfiled is empty instead of the first-run text"
     setupGuide: createElement("div", null, "Agent setup guide"),
   });
   assert.match(html, /Nothing unfiled\. New questions land here\./);
-  assert.doesNotMatch(html, /Agent setup guide|appear here, newest first/);
+  assert.doesNotMatch(html, /Agent setup guide|appear here\. New ones start at the top/);
 });
 
 test("a transcript (an exported conversation) lists as a titled card", () => {
@@ -326,7 +325,7 @@ test("an imported report lists as a titled card with its question, in Home and i
   assert.match(html, /research-feed-card-title">Survey report</);
   assert.match(html, /What did the survey find\?/);
   // An imported document prevents Home from showing the first-run text.
-  assert.doesNotMatch(html, /appear here, newest first/);
+  assert.doesNotMatch(html, /appear here\. New ones start at the top/);
   const archived = renderFeed({
     view: { kind: "archive" },
     researchTrees: [{ ...importedTree, archivedAt: 300 }],
@@ -404,13 +403,24 @@ test("the Bookmarks view lists only bookmarked threads, archived ones last", () 
   assert.ok(ordered.indexOf("Older but first") < ordered.indexOf("Newer but second"));
 });
 
-test("feed pagination errors remain visible", () => {
+test("Home lists Unfiled trees in the tree order; a card whose root is not loaded shows its title", () => {
   const html = renderFeed({
-    nextCursor: { createdAt: 100, nodeId: "link" },
-    olderError: "Temporarily unavailable",
+    items: [
+      { ...question, nodeId: "n-old", treeId: "older", prompt: "Older question", createdAt: 50 },
+      { ...question, nodeId: "n-new", treeId: "newer", prompt: "Newer question", createdAt: 500 },
+    ],
+    researchTrees: [
+      { ...tree, id: "older", rootNodeId: "n-old" },
+      { ...tree, id: "unloaded", rootNodeId: "n-unloaded", title: "Paged-out thread" },
+      { ...tree, id: "newer", rootNodeId: "n-new" },
+    ],
   });
-  assert.match(html, /Retry older activity/);
-  assert.match(html, /Temporarily unavailable/);
+  const order = ["Older question", "Paged-out thread", "Newer question"].map((text) => html.indexOf(text));
+  assert.ok(order.every((index) => index > 0), String(order));
+  assert.deepEqual([...order].sort((left, right) => left - right), order);
+  // Unfiled cards are a virtualized list, and each card names its place.
+  assert.match(html, /data-research-card="older"[^>]*data-research-place="system:unfiled"[^>]*data-research-card-virtual=""/);
+  assert.doesNotMatch(html, /Load older activity/);
 });
 
 test("the agent setup guide appears only when the Home feed is empty", () => {
@@ -418,8 +428,8 @@ test("the agent setup guide appears only when the Home feed is empty", () => {
 
   const emptyWithGuide = renderFeed({ setupGuide });
   assert.match(emptyWithGuide, /Agent setup guide/);
-  assert.doesNotMatch(emptyWithGuide, /appear here, newest first/);
-  assert.match(renderFeed({}), /appear here, newest first/);
+  assert.doesNotMatch(emptyWithGuide, /appear here\. New ones start at the top/);
+  assert.match(renderFeed({}), /appear here\. New ones start at the top/);
   assert.doesNotMatch(renderFeed({ setupGuide, items: [savedLink] }), /Agent setup guide/);
 });
 

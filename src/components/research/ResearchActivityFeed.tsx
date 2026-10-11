@@ -12,14 +12,9 @@ import {
 } from "react";
 import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePen, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
-import {
-  buildRecentActivityFromItems,
-  type RecentActivityEvent,
-} from "../../lib/activity";
+import { FilePen, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import type {
   RecentResearchQuery,
-  RecentResearchQueryCursor,
   ResearchDraft,
   ResearchFolder,
   ResearchFolderState,
@@ -35,8 +30,11 @@ import {
   RESEARCH_UNFILED_FOLDER_ID,
   researchCardTitle,
   researchFeedChildren,
+  researchPlaceIsReorderable,
   researchPlaceName,
   researchTreePlace,
+  stepReorderTarget,
+  type ResearchDropPosition,
   type ResearchFeedChild,
 } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchChains";
@@ -133,7 +131,9 @@ export interface ResearchActivityFeedProps {
   /** Read once, when the feed mounts. */
   initialScrollAnchor?: RecentActivityScrollAnchor | null;
   onScrollAnchorChange?: (anchor: RecentActivityScrollAnchor | null) => void;
-  /** Feed roots, newest first, paginated. */
+  /** Loaded feed roots: the newest page, and roots loaded for cards
+   * (`onLoadTrees`). Home and Bookmarks list trees in the tree order; a
+   * card whose root is not loaded shows its title until it is. */
   items: RecentResearchQuery[];
   /** Active trees in their flat order, then archived trees. */
   researchTrees: ResearchTreeSummary[];
@@ -141,9 +141,8 @@ export interface ResearchActivityFeedProps {
   folders?: ResearchFolder[];
   folderState?: ResearchFolderState;
   drafts?: ResearchDraft[];
-  nextCursor: RecentResearchQueryCursor | null;
-  loadingOlder: boolean;
-  olderError: string | null;
+  /** Loads the roots of listed cards that `items` lacks. */
+  onLoadTrees?: (treeIds: string[]) => Promise<void>;
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
   /** Opens a draft in the content column; the feed keeps its view. */
   onOpenDraft?: (draft: ResearchDraft) => void;
@@ -158,6 +157,9 @@ export interface ResearchActivityFeedProps {
   onSetResearchBookmarked: (treeId: string, bookmarked: boolean) => void;
   onSetResearchFollowed?: (treeId: string, followed: boolean) => void;
   onMoveTree?: (treeId: string, place: string) => void;
+  /** Moves a card within its place (⌥↑ and ⌥↓). */
+  onReorderTree?: (treeId: string, place: string, position: ResearchDropPosition) => void;
+  onReorderDraft?: (draftId: string, beforeId: string | null) => void;
   /** Remove star on a child row: unstars the follow-up or branch. */
   onUnstarChild?: (child: ResearchFeedChild) => void;
   /** New folder…; with a tree id the tree moves into the new folder. Focus
@@ -172,7 +174,6 @@ export interface ResearchActivityFeedProps {
   onToggleTray?: (place: string) => void;
   onDeleteDraft?: (draft: ResearchDraft) => void;
   onDragStart?: ResearchCardDragStart;
-  onLoadOlder: () => void;
   onRefresh?: () => void;
   /** The thread open in the content column beside the feed. */
   selectedTreeId?: string | null;
@@ -185,30 +186,54 @@ export interface ResearchActivityFeedProps {
   onForward?: () => void;
 }
 
-type VirtualActivityRow = {
-  kind: "event";
+/** A card of Home's or Bookmarks' virtualized list: a tree, and its root
+ * when loaded. `treeId` keys the row. */
+interface ResearchFeedRow {
   key: string;
-  event: RecentActivityEvent;
+  treeId: string;
+  tree?: ResearchTreeSummary;
+  query?: RecentResearchQuery;
+  /** 1-based, for aria-posinset. */
   position: number;
-};
+}
 
-export function buildRecentActivityVirtualRows(
-  feed: RecentActivityEvent[],
-): VirtualActivityRow[] {
-  return feed.map((event, index) => ({
-    kind: "event",
-    key: event.id,
-    event,
+/** The cards of Home (Unfiled trees) or Bookmarks (bookmarked active
+ * trees), in the tree order of `trees`. A loaded root whose tree is not in
+ * `trees` yet (just created) lists first on Home, newest first. `roots` has
+ * one root per tree. */
+export function researchFeedRows(
+  view: "home" | "bookmarks",
+  roots: ReadonlyMap<string, RecentResearchQuery>,
+  trees: readonly ResearchTreeSummary[],
+  placeOf: (tree: ResearchTreeSummary) => string,
+): ResearchFeedRow[] {
+  const known = new Set(trees.map((tree) => tree.id));
+  const unknown =
+    view === "home"
+      ? [...roots.values()]
+          .filter((query) => !known.has(query.treeId))
+          .sort((left, right) => right.createdAt - left.createdAt)
+          .map((query) => ({ treeId: query.treeId, query, tree: undefined }))
+      : [];
+  const listed = trees
+    .filter((tree) =>
+      tree.archivedAt == null &&
+      (view === "bookmarks" ? Boolean(tree.bookmarked) : placeOf(tree) === RESEARCH_UNFILED_FOLDER_ID),
+    )
+    .map((tree) => ({ treeId: tree.id, tree, query: roots.get(tree.id) }));
+  return [...unknown, ...listed].map((row, index) => ({
+    key: `tree:${row.treeId}`,
+    ...row,
     position: index + 1,
   }));
 }
 
-function estimatedActivityRowHeight(row: VirtualActivityRow): number {
-  const query = row.event.source.query;
-  const hasTweet = query.attachments?.some(
+function estimatedActivityRowHeight(row: ResearchFeedRow): number {
+  const query = row.query;
+  const hasTweet = query?.attachments?.some(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
-  return hasTweet ? 400 : 92 + (query.starred?.length ?? 0) * 48;
+  return hasTweet ? 400 : 92 + (query?.starred?.length ?? 0) * 48;
 }
 
 interface VirtualActivityRange {
@@ -345,9 +370,7 @@ function ResearchActivityFeed({
   folders = [],
   folderState,
   drafts = EMPTY_DRAFTS,
-  nextCursor,
-  loadingOlder,
-  olderError,
+  onLoadTrees,
   onOpenResearchQuery,
   onOpenDraft,
   onOpenTree,
@@ -360,6 +383,8 @@ function ResearchActivityFeed({
   onSetResearchBookmarked,
   onSetResearchFollowed,
   onMoveTree,
+  onReorderTree,
+  onReorderDraft,
   onUnstarChild,
   onNewFolder,
   onRenameFolder,
@@ -370,7 +395,6 @@ function ResearchActivityFeed({
   onToggleTray,
   onDeleteDraft,
   onDragStart,
-  onLoadOlder,
   onRefresh,
   selectedTreeId = null,
   selectedChildNodeIds = EMPTY_NODE_IDS,
@@ -379,6 +403,10 @@ function ResearchActivityFeed({
   onForward,
 }: ResearchActivityFeedProps) {
   const [menu, setMenu] = useState<FeedMenu | null>(null);
+  // Read by screen readers after a keyboard move.
+  const [announcement, setAnnouncement] = useState("");
+  const announce = (message: string) =>
+    setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
@@ -392,7 +420,6 @@ function ResearchActivityFeed({
   const onScrollAnchorChangeRef = useRef(onScrollAnchorChange);
   onScrollAnchorChangeRef.current = onScrollAnchorChange;
   const virtualCanvasRef = useRef<HTMLDivElement | null>(null);
-  const loadSentinelRef = useRef<HTMLDivElement | null>(null);
   const onBackRef = useRef(onBack);
   const onForwardRef = useRef(onForward);
   onBackRef.current = onBack;
@@ -457,41 +484,21 @@ function ResearchActivityFeed({
     [folderState],
   );
 
-  // The virtualized list: Unfiled on Home, every bookmarked thread in Bookmarks.
-  const listedItems = useMemo(() => {
-    const roots = [...queryByTree.values()];
-    if (view.kind === "bookmarks") {
-      return roots.filter((item) => treeById.get(item.treeId)?.bookmarked);
-    }
-    if (view.kind !== "home") return [];
-    return roots.filter(
-      (item) => placeOf(treeById.get(item.treeId)) === RESEARCH_UNFILED_FOLDER_ID,
-    );
-  }, [placeOf, queryByTree, treeById, view.kind]);
-  // Bookmarks follow the folders' order (the flat tree order), not recency.
-  const feed = useMemo(() => {
-    const events = buildRecentActivityFromItems(listedItems, researchTrees);
-    if (view.kind !== "bookmarks") return events;
-    const position = new Map(researchTrees.map((tree, index) => [tree.id, index]));
-    const at = (event: RecentActivityEvent) =>
-      position.get(event.source.query.treeId) ?? Number.MAX_SAFE_INTEGER;
-    return [...events].sort((left, right) => at(left) - at(right));
-  }, [listedItems, researchTrees, view.kind]);
-  const viewTitle = feedViewTitle(view, folders);
-  const [dayBoundaryVersion, setDayBoundaryVersion] = useState(0);
-  useEffect(() => {
-    const nextMidnight = new Date();
-    nextMidnight.setHours(24, 0, 0, 25);
-    const timer = window.setTimeout(
-      () => setDayBoundaryVersion((version) => version + 1),
-      nextMidnight.getTime() - Date.now(),
-    );
-    return () => window.clearTimeout(timer);
-  }, [dayBoundaryVersion]);
-  const rows = useMemo(
-    () => buildRecentActivityVirtualRows(feed),
-    [dayBoundaryVersion, feed],
+  // The virtualized list: Unfiled on Home, every bookmarked thread in
+  // Bookmarks, both in the tree order.
+  const listed = view.kind === "home" || view.kind === "bookmarks";
+  const activeTrees = useMemo(
+    () => researchTrees.filter((tree) => tree.archivedAt == null),
+    [researchTrees],
   );
+  const rows = useMemo(
+    () =>
+      view.kind === "home" || view.kind === "bookmarks"
+        ? researchFeedRows(view.kind, queryByTree, activeTrees, placeOf)
+        : [],
+    [activeTrees, placeOf, queryByTree, view.kind],
+  );
+  const viewTitle = feedViewTitle(view, folders);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   const measuredHeightsRef = useRef(new Map<string, number>());
@@ -714,30 +721,32 @@ function ResearchActivityFeed({
     }
   }, [rows]);
 
-  const paginated = view.kind === "home" || view.kind === "bookmarks";
+  // Cards in and near the viewport whose root is not loaded ask for it, in
+  // one request per render. An id is asked once while it stays unloaded; a
+  // failed request is asked again by Retry.
+  const requestedRootsRef = useRef(new Set<string>());
+  const [rootLoadError, setRootLoadError] = useState<string | null>(null);
+  const [rootLoadAttempt, setRootLoadAttempt] = useState(0);
+  const missingRootIds = visibleRowEntries
+    .filter(({ row }) => row.tree && !row.query)
+    .map(({ row }) => row.treeId);
+  const missingRootKey = missingRootIds.join(",");
   useEffect(() => {
-    const sentinel = loadSentinelRef.current;
-    const scroller = scrollRef.current;
-    if (
-      !paginated ||
-      !sentinel ||
-      !scroller ||
-      !nextCursor ||
-      loadingOlder ||
-      olderError ||
-      typeof IntersectionObserver === "undefined"
-    ) {
-      return;
+    const requested = requestedRootsRef.current;
+    for (const id of requested) {
+      if (queryByTree.has(id)) requested.delete(id);
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) onLoadOlder();
+    const ids = missingRootKey ? missingRootKey.split(",").filter((id) => !requested.has(id)) : [];
+    if (!onLoadTrees || ids.length === 0) return;
+    for (const id of ids) requested.add(id);
+    onLoadTrees(ids).then(
+      () => setRootLoadError(null),
+      (err: unknown) => {
+        for (const id of ids) requested.delete(id);
+        setRootLoadError(err instanceof Error ? err.message : String(err));
       },
-      { root: scroller, rootMargin: "700px 0px" },
     );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [loadingOlder, nextCursor, olderError, onLoadOlder, paginated]);
+  }, [missingRootKey, onLoadTrees, queryByTree, rootLoadAttempt]);
 
   const contextTree = menu?.kind === "tree" ? (treeById.get(menu.treeId) ?? null) : null;
   const contextQuery =
@@ -758,6 +767,31 @@ function ResearchActivityFeed({
       current.anchor.focus({ preventScroll: true });
     }
   }, []);
+
+  // A card moved by ⌥↑/⌥↓ keeps focus and stays in view while the new order
+  // renders (the move applies after the folder store's write settles),
+  // unless focus went elsewhere.
+  const movedCardRef = useRef<{ cardId: string; until: number; revealed: boolean } | null>(null);
+  const keepCardFocus = (cardId: string) => {
+    movedCardRef.current = { cardId, until: performance.now() + 2000, revealed: false };
+  };
+  useLayoutEffect(() => {
+    const moved = movedCardRef.current;
+    if (!moved) return;
+    if (performance.now() > moved.until) {
+      movedCardRef.current = null;
+      return;
+    }
+    const hit = researchFeedCardControl(moved.cardId, "open");
+    const active = document.activeElement;
+    if (!hit || (active !== hit && active !== null && active !== document.body)) return;
+    // Scrolls only when the card regains focus or first renders moved, so
+    // a later scroll by the reader is not undone.
+    if (active === hit && moved.revealed) return;
+    moved.revealed = true;
+    if (active !== hit) hit.focus({ preventScroll: true });
+    hit.closest(".research-feed-card")?.scrollIntoView({ block: "nearest" });
+  });
 
   // A card moved to another place re-mounts there: focus waits on its old …
   // button, then moves to the … button in the new place (see
@@ -822,8 +856,13 @@ function ResearchActivityFeed({
     else onOpenTree?.(tree?.id ?? query?.treeId ?? "");
   }
 
-  /** A thread's card: its root question when loaded, else its title. */
-  function renderTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
+  /** A thread's card: its root question when loaded, else its title.
+   * `virtual`: a card of the virtualized list. */
+  function renderTreeCard(
+    tree: ResearchTreeSummary | undefined,
+    query: RecentResearchQuery | undefined,
+    { virtual = false }: { virtual?: boolean } = {},
+  ) {
     const treeId = tree?.id ?? query?.treeId ?? "";
     const isPost = query ? nodeType(query) === "post" : false;
     const question = query?.prompt ?? tree?.title ?? "";
@@ -891,6 +930,7 @@ function ResearchActivityFeed({
             : undefined
         }
         onDragStart={tree ? onDragStart : undefined}
+        virtual={virtual}
       />
     );
   }
@@ -1040,12 +1080,9 @@ function ResearchActivityFeed({
       ];
     };
     const lists: FeedRowEntry[][] = [];
-    if (paginated) {
+    if (listed) {
       lists.push([
-        ...rows.map((row, index) => {
-          const query = row.event.source.query;
-          return treeEntry(treeById.get(query.treeId), query, index);
-        }),
+        ...rows.map((row, index) => treeEntry(row.tree, row.query, index)),
         ...archivedBookmarks.map((tree) => treeEntry(tree, undefined)),
       ]);
     }
@@ -1130,7 +1167,38 @@ function ResearchActivityFeed({
     requestAnimationFrame(attempt);
   }
 
-  const listEmpty = feed.length === 0;
+  /** ⌥↑/⌥↓ on a card: moves it one step in the list it is shown in, when
+   * that list is its place and the place keeps an order (Bookmarks lists
+   * cards from several places, and Archive keeps archive time). The card
+   * keeps focus and the new position is announced. */
+  function moveFocusedCard(control: HTMLElement, step: -1 | 1) {
+    const card = control.closest<HTMLElement>(".research-feed-card");
+    const cardId = card?.dataset.researchCard;
+    const place = card?.dataset.researchPlace;
+    const zonePlace = card?.closest<HTMLElement>("[data-research-drop]")?.dataset.researchDrop;
+    if (!card || !cardId || !place || place !== zonePlace || !researchPlaceIsReorderable(place)) {
+      return;
+    }
+    const kind = card.dataset.researchCardKind === "draft" ? "draft" : "tree";
+    const ids =
+      kind === "draft"
+        ? drafts.map((draft) => draft.id)
+        : place === RESEARCH_UNFILED_FOLDER_ID
+          ? rows.flatMap((row) => (row.tree ? [row.treeId] : []))
+          : treesIn(place).map((tree) => tree.id);
+    const target = stepReorderTarget(ids, cardId, step);
+    if (!target) {
+      announce(step < 0 ? "Already first." : "Already last.");
+      return;
+    }
+    if (kind === "draft") onReorderDraft?.(cardId, target.beforeId);
+    else onReorderTree?.(cardId, place, target);
+    const index = ids.indexOf(cardId) + step;
+    announce(`Moved to position ${index + 1} of ${ids.length}.`);
+    keepCardFocus(cardId);
+  }
+
+  const listEmpty = rows.length === 0;
   // The first-run text (or setup guide) shows only while nothing exists yet:
   // no questions anywhere and no drafts.
   const homeHasNothing =
@@ -1265,6 +1333,16 @@ function ResearchActivityFeed({
             columns?.focusOpenedThread(target.matches(".research-feed-child-open"));
             return;
           }
+          // ⌥↑ and ⌥↓ move the focused card up or down its list.
+          if (
+            (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+            event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey &&
+            target.matches(".research-feed-card-hit")
+          ) {
+            event.preventDefault();
+            moveFocusedCard(target, event.key === "ArrowUp" ? -1 : 1);
+            return;
+          }
           // ↑ and ↓ move between the rows, child rows included.
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
@@ -1279,7 +1357,7 @@ function ResearchActivityFeed({
       >
         <div className="research-feed-column-body research-reading-surface">
           {view.kind === "home" ? composerBlock : null}
-          {newActivityCount > 0 && paginated ? (
+          {newActivityCount > 0 && listed ? (
             <div className="recent-activity-new-status" role="status" aria-live="polite">
               <button
                 className="control-button recent-activity-new"
@@ -1299,7 +1377,7 @@ function ResearchActivityFeed({
               </button>
             </div>
           ) : null}
-          {paginated ? (
+          {listed ? (
             <section
               className="research-feed-list"
               aria-label={view.kind === "home" ? "Unfiled" : "Bookmarks"}
@@ -1309,7 +1387,6 @@ function ResearchActivityFeed({
                 className="research-feed-rows"
                 role="feed"
                 aria-label={view.kind === "home" ? "Recent activity" : "Bookmarked research"}
-                aria-busy={loadingOlder}
               >
                 <div
                   ref={virtualCanvasRef}
@@ -1317,7 +1394,6 @@ function ResearchActivityFeed({
                   style={{ height: metrics.totalSize }}
                 >
                   {visibleRowEntries.map(({ row, index }) => {
-                    const query = row.event.source.query;
                     return (
                       <MeasuredActivityRow
                         key={row.key}
@@ -1335,9 +1411,9 @@ function ResearchActivityFeed({
                           className="research-feed-unit"
                           role="article"
                           aria-posinset={row.position}
-                          aria-setsize={nextCursor ? -1 : feed.length}
+                          aria-setsize={rows.length}
                         >
-                          {renderTreeCard(treeById.get(query.treeId), query)}
+                          {renderTreeCard(row.tree, row.query, { virtual: true })}
                         </div>
                       </MeasuredActivityRow>
                     );
@@ -1357,7 +1433,7 @@ function ResearchActivityFeed({
                     <div className="feed-setup-guide">{setupGuide}</div>
                   ) : homeHasNothing ? (
                     <div className="research-feed-empty">
-                      Research, posts, and saved links appear here, newest first.
+                      Research, posts, and saved links appear here. New ones start at the top.
                     </div>
                   ) : (
                     <div className="research-feed-empty">
@@ -1365,39 +1441,25 @@ function ResearchActivityFeed({
                     </div>
                   )
                 ) : null}
-                <div
-                  ref={loadSentinelRef}
-                  className="recent-activity-load-boundary"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  {nextCursor ? (
+                {rootLoadError ? (
+                  <div className="recent-activity-load-boundary">
+                    <p className="recent-activity-load-error" role="alert">
+                      Couldn’t load some questions. {rootLoadError}
+                    </p>
                     <button
                       className="control-button recent-activity-load-older"
                       type="button"
-                      disabled={loadingOlder}
-                      onClick={onLoadOlder}
+                      onClick={() => setRootLoadAttempt((attempt) => attempt + 1)}
                     >
-                      <ChevronDown size={13} aria-hidden="true" />
-                      <span>
-                        {loadingOlder
-                          ? "Loading…"
-                          : olderError
-                            ? "Retry older activity"
-                            : "Load older activity"}
-                      </span>
+                      <RotateCw size={13} aria-hidden="true" />
+                      <span>Retry</span>
                     </button>
-                  ) : null}
-                  {olderError ? (
-                    <p className="recent-activity-load-error" role="alert">
-                      Couldn’t load older activity. {olderError}
-                    </p>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
-          {paginated && view.kind !== "home" ? composerBlock : null}
+          {listed && view.kind !== "home" ? composerBlock : null}
           {view.kind === "home"
             ? trayPlaces.map((place) => (
                 <ResearchFeedTray
@@ -1434,6 +1496,9 @@ function ResearchActivityFeed({
         </div>
       </div>
       <ResearchFeedScrollThumb scrollRef={scrollRef} />
+      <div className="research-visually-hidden" role="status" aria-live="polite">
+        {announcement}
+      </div>
       {menu?.kind === "move" && moveTree ? (
         <ResearchMoveMenu
           anchor={menu.placement?.anchor ?? menu.anchor}

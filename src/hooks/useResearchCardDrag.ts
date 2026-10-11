@@ -3,11 +3,13 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   RESEARCH_DRAFTS_FOLDER_ID,
   researchPlaceIsReorderable,
+  type ResearchDropPosition,
 } from "../lib/researchFolders";
 
-/** What a drag carries: a tree card (any place) or a draft card (Drafts only). */
+/** What a drag carries: a tree card (any place), a draft card (Drafts only)
+ * or a message row (its own messages column only). */
 interface ResearchDragItem {
-  kind: "tree" | "draft";
+  kind: "tree" | "draft" | "message";
   id: string;
   place: string;
 }
@@ -22,10 +24,12 @@ export type ResearchCardDragStart = (
 ) => void;
 
 interface ResearchCardDragOptions {
-  onMoveTree: (treeId: string, place: string, beforeId: string | null) => void;
-  onMoveDraft: (draftId: string, beforeId: string | null) => void;
+  /** `position` is null for a drop on a place rather than between cards. */
+  onMoveTree?: (treeId: string, place: string, position: ResearchDropPosition | null) => void;
+  onMoveDraft?: (draftId: string, beforeId: string | null) => void;
+  onMoveMessage?: (nodeId: string, place: string, beforeId: string | null) => void;
   /** A collapsed tray held under the pointer opens after SPRING_MS. */
-  onSpringOpen: (place: string) => void;
+  onSpringOpen?: (place: string) => void;
 }
 
 const DRAG_THRESHOLD_PX = 5;
@@ -46,13 +50,27 @@ function swallowNextClick() {
   window.setTimeout(() => window.removeEventListener("click", swallowClick, true), 0);
 }
 
+/** Whether a drop zone takes the dragged item. A zone with
+ * `data-research-drop-kinds` takes only those kinds, and a message only in
+ * its own column; any other zone takes trees, and Drafts also drafts. */
+function zoneAccepts(zone: HTMLElement, place: string, item: ResearchDragItem): boolean {
+  const kinds = zone.dataset.researchDropKinds;
+  if (kinds !== undefined) {
+    return kinds.split(" ").includes(item.kind) && (item.kind !== "message" || place === item.place);
+  }
+  return item.kind === "tree" || (item.kind === "draft" && place === RESEARCH_DRAFTS_FOLDER_ID);
+}
+
 /**
- * Pointer-driven card dragging shared by the feed, the sidebar, and the rail.
- * Drop zones carry `data-research-drop="<place>"`; cards carry
- * `data-research-card="<id>"` and `data-research-card-kind`. Marks are set on
- * the DOM directly so a drag re-renders nothing until it ends. Pointer events
- * are used instead of HTML drag and drop, which the native window's file-drop
- * handling can intercept.
+ * Pointer-driven card dragging shared by the feed, the sidebar, the rail and
+ * the messages columns. Drop zones carry `data-research-drop="<place>"`;
+ * cards carry `data-research-card="<id>"` and `data-research-card-kind`.
+ * Over a card in a zone that keeps an order, an insertion line shows where
+ * the item goes; a zone of another place is highlighted as a whole. A drop
+ * in the item's own place needs a position (a reorder); elsewhere it moves
+ * the item. Marks are set on the DOM directly so a drag re-renders nothing
+ * until it ends. Pointer events are used instead of HTML drag and drop,
+ * which the native window's file-drop handling can intercept.
  */
 export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchCardDragStart {
   const optionsRef = useRef(options);
@@ -74,7 +92,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
     let ghost: HTMLElement | null = null;
     let lastX = startX;
     let lastY = startY;
-    let drop: { place: string; beforeId: string | null } | null = null;
+    let drop: { place: string; position: ResearchDropPosition | null } | null = null;
     let springPlace: string | null = null;
     let springTimer = 0;
     let frame = 0;
@@ -102,7 +120,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       const hit = document.elementFromPoint(lastX, lastY);
       const zone = hit?.closest<HTMLElement>("[data-research-drop]") ?? null;
       const place = zone?.dataset.researchDrop ?? null;
-      if (!zone || !place || (item.kind === "draft" && place !== RESEARCH_DRAFTS_FOLDER_ID)) {
+      if (!zone || !place || !zoneAccepts(zone, place, item)) {
         resetSpring();
         root.classList.add("is-research-drop-none");
         return;
@@ -113,7 +131,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
           springPlace = place;
           springTimer = window.setTimeout(() => {
             springPlace = null;
-            optionsRef.current.onSpringOpen(place);
+            optionsRef.current.onSpringOpen?.(place);
             // The opened tray re-renders without the marks; mark it again
             // once it has, without waiting for the pointer to move.
             requestAnimationFrame(() => requestAnimationFrame(evaluate));
@@ -122,30 +140,39 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       } else {
         resetSpring();
       }
-      let beforeId: string | null = null;
-      let positioned = false;
+      let position: ResearchDropPosition | null = null;
       if (researchPlaceIsReorderable(place)) {
         const selector = `[data-research-card-kind="${item.kind}"]`;
         const over = hit?.closest<HTMLElement>(selector) ?? null;
-        if (over && zone.contains(over) && over.dataset.researchCard !== item.id) {
+        const overId = over?.dataset.researchCard;
+        if (over && overId && zone.contains(over) && overId !== item.id) {
           const rect = over.getBoundingClientRect();
           const after = lastY > rect.top + rect.height / 2;
           mark(over, after ? "is-insert-after" : "is-insert-before");
-          positioned = true;
           if (after) {
             const cards = [...zone.querySelectorAll<HTMLElement>(selector)].filter(
               (candidate) => candidate.dataset.researchCard !== item.id,
             );
-            beforeId = cards[cards.indexOf(over) + 1]?.dataset.researchCard ?? null;
+            const following = cards[cards.indexOf(over) + 1]?.dataset.researchCard;
+            // A virtualized list may not render the card after the last
+            // rendered one; the consumer finds it in its own list.
+            position = following
+              ? { beforeId: following }
+              : over.hasAttribute("data-research-card-virtual")
+                ? { afterId: overId }
+                : { beforeId: null };
           } else {
-            beforeId = over.dataset.researchCard ?? null;
+            position = { beforeId: overId };
           }
         }
       }
-      const same = place === item.place && !positioned;
-      mark(zone, same ? "is-drop-same" : "is-drop-target");
-      root.classList.toggle("is-research-drop-none", same);
-      if (!same) drop = { place, beforeId };
+      // In the item's own place only a positioned drop (a reorder) does
+      // anything, and the place is not highlighted: the line shows it.
+      const own = place === item.place;
+      mark(zone, own ? "is-drop-same" : "is-drop-target");
+      const none = own && !position;
+      root.classList.toggle("is-research-drop-none", none);
+      if (!none) drop = { place, position };
     };
 
     const autoScroll = () => {
@@ -177,7 +204,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       const text = document.createElement("span");
       text.className = "research-drag-ghost-text";
       text.textContent = (
-        card.querySelector(".research-feed-card-title, .research-feed-card-question")
+        card.querySelector("[data-research-drag-label], .research-feed-card-title, .research-feed-card-question")
           ?.textContent ?? ""
       ).trim();
       ghost.appendChild(text);
@@ -223,10 +250,13 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       if (!wasDragging) return;
       swallowNextClick();
       if (!result) return;
+      const beforeId = result.position && "beforeId" in result.position ? result.position.beforeId : null;
       if (item.kind === "tree") {
-        optionsRef.current.onMoveTree(item.id, result.place, result.beforeId);
+        optionsRef.current.onMoveTree?.(item.id, result.place, result.position);
+      } else if (item.kind === "draft") {
+        optionsRef.current.onMoveDraft?.(item.id, beforeId);
       } else {
-        optionsRef.current.onMoveDraft(item.id, result.beforeId);
+        optionsRef.current.onMoveMessage?.(item.id, result.place, beforeId);
       }
     }
 
