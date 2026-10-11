@@ -15,6 +15,9 @@ import { writeClipboardText } from "../lib/clipboard";
 
 interface AgentSetupGuideProps {
   adapters: readonly AgentAdapterMetadata[];
+  /** The agent instance selected when the guide mounts. Null, or an id no
+   * longer in `adapters`, selects the first agent whose setup is incomplete. */
+  initialInstanceId?: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
@@ -60,6 +63,7 @@ function CommandLine({
 
 export default function AgentSetupGuide({
   adapters,
+  initialInstanceId = null,
   loading,
   error,
   onRefresh,
@@ -67,7 +71,7 @@ export default function AgentSetupGuide({
   onError,
 }: AgentSetupGuideProps) {
   const tabsId = useId();
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(initialInstanceId);
   const intro = agentSetupIntro(adapters);
   const selected =
     adapters.find((adapter) => adapter.instanceId === selectedInstanceId) ??

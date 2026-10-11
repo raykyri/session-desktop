@@ -24,7 +24,6 @@ import type {
 import {
   Check,
   ChevronDown,
-  Bot,
   Eye,
   EyeOff,
   Globe,
@@ -75,6 +74,7 @@ import {
 } from "./components/UserNotificationStack";
 import type { LinkActions } from "./components/TranscriptMarkdown";
 import ResearchWorkspaceSwitcher from "./components/research/ResearchWorkspaceSwitcher";
+import ResearchAgentsSwitcher from "./components/research/ResearchAgentsSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
 import { formatResearchModelSummary } from "./lib/researchModelSummary";
 import {
@@ -1443,6 +1443,14 @@ function MainApp() {
   settingsRef.current = settings;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentsOpen, setAgentsOpen] = useState(false);
+  // The agent instance the Agent Setup dialog opens on; null selects the first
+  // agent whose setup is incomplete.
+  const [agentSetupInstanceId, setAgentSetupInstanceId] = useState<string | null>(null);
+  const openAgentSetup = useCallback((instanceId: string | null = null) => {
+    setSettingsOpen(false);
+    setAgentSetupInstanceId(instanceId);
+    setAgentsOpen(true);
+  }, []);
   const [terminalMapOpen, setTerminalMapOpen] = useState(false);
   const terminalMapOpenRef = useRef(terminalMapOpen);
   terminalMapOpenRef.current = terminalMapOpen;
@@ -5678,10 +5686,7 @@ function MainApp() {
         id: "action:agents",
         section: "Actions",
         title: "Open Agents",
-        action: () => {
-          setSettingsOpen(false);
-          setAgentsOpen(true);
-        },
+        action: () => openAgentSetup(),
       },
     );
     return commands;
@@ -7301,10 +7306,7 @@ function MainApp() {
             composerFolderName ? `Ask a question in ${composerFolderName}` : "Ask a question"
           }
           launchChoiceRef={composerLaunchChoiceRef}
-          onOpenAgentSettings={() => {
-            setSettingsOpen(false);
-            setAgentsOpen(true);
-          }}
+          onOpenAgentSettings={() => openAgentSetup()}
           onCreate={submitFeedResearch}
           onPost={submitFeedPost}
           onSaveDraft={saveComposerDraft}
@@ -7313,6 +7315,7 @@ function MainApp() {
     [
       configAdapters,
       composerFolderName,
+      openAgentSetup,
       settings.requireCmdEnterToSend,
       researchScope,
       saveComposerDraft,
@@ -7336,9 +7339,11 @@ function MainApp() {
     [configAdapters, adapterProbeLoading, adapterProbeError, refreshAdapterReadiness, showAppToast],
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
-  // The workspace switcher sits at the bottom of the full sidebar; in the
-  // rail it is an icon whose menu opens as a popover, with the account
-  // control inside, so both (and ⌘O) stay reachable below 900px.
+  // The workspace switcher, the Agents module and the account control sit at
+  // the bottom of the full sidebar, in that order. In the rail the workspace
+  // switcher is an icon whose menu opens as a popover with the account control
+  // inside, so both (and ⌘O) stay reachable below 900px; the Agents icon
+  // follows it.
   const renderResearchWorkspaceSwitcher = (
     variant: "sidebar" | "rail",
     footer?: ReactNode,
@@ -7399,6 +7404,16 @@ function MainApp() {
       }}
     />
   );
+  const renderResearchAgentsSwitcher = (variant: "sidebar" | "rail") => (
+    <ResearchAgentsSwitcher
+      variant={variant}
+      adapters={config?.adapters ?? null}
+      loading={adapterProbeLoading}
+      error={adapterProbeError}
+      onOpenSetup={openAgentSetup}
+      onRefresh={() => void refreshAdapterReadiness({ force: true }).catch(() => undefined)}
+    />
+  );
 
 
   // The shell is a plain container: its sidebar (an aside) and the
@@ -7438,16 +7453,7 @@ function MainApp() {
           footer={
             <>
               {renderResearchWorkspaceSwitcher("rail", <GithubAccountControl />)}
-              <ResearchRailButton
-                label="Agents"
-                selected={agentsOpen}
-                onClick={() => {
-                  setSettingsOpen(false);
-                  setAgentsOpen(true);
-                }}
-              >
-                <Bot size={16} aria-hidden="true" />
-              </ResearchRailButton>
+              {renderResearchAgentsSwitcher("rail")}
               <ResearchRailButton
                 label={settings.appearance === "light" ? "Dark mode" : "Light mode"}
                 onClick={toggleAppearance}
@@ -7501,19 +7507,6 @@ function MainApp() {
             </button>
             <button
               type="button"
-              className={`icon-button sidebar-header-button${agentsOpen ? " is-active" : ""}`}
-              aria-label="Agents"
-              title="Agents"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => {
-                setSettingsOpen(false);
-                setAgentsOpen(true);
-              }}
-            >
-              <Bot size={15} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               className="icon-button sidebar-header-button"
               aria-label={
                 settings.appearance === "light" ? "Switch to dark mode" : "Switch to light mode"
@@ -7544,6 +7537,7 @@ function MainApp() {
             />
           </div>
           {renderResearchWorkspaceSwitcher("sidebar")}
+          {renderResearchAgentsSwitcher("sidebar")}
           <GithubAccountControl />
         </aside>
       )}
@@ -7584,6 +7578,7 @@ function MainApp() {
             <div className="settings-content">
               <AgentSetupGuide
                 adapters={config?.adapters ?? []}
+                initialInstanceId={agentSetupInstanceId}
                 loading={adapterProbeLoading}
                 error={adapterProbeError}
                 onRefresh={() =>

@@ -1,6 +1,6 @@
 /* Research sidebar: Home, Bookmarks, Highlights, then the Folders section
-   (Drafts, user folders, Archive), with the workspace switcher and account at
-   the bottom. Rows carry no counts. */
+   (Drafts, user folders, Archive), with the workspace switcher, the Agents
+   module and the account control at the bottom. Rows carry no counts. */
 .sidebar.is-research-mode {
   gap: 0;
 }
@@ -321,7 +321,53 @@
   color: var(--status-failed-fg);
 }
 
-/* GitHub account control: sits beneath the folder switcher and shares its
+/* Agents module: between the workspace switcher and the account control,
+   with the same trigger geometry. Its second line is a status dot and a
+   readiness summary; its menu (a ResearchMenu) lists each agent instance. */
+.sidebar-agents:not(.is-rail) {
+  position: relative;
+  flex: none;
+  margin: 6px 0 0;
+}
+
+.sidebar-agents-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sidebar-agents-status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-agents-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.sidebar-agents-dot.is-ready {
+  background: var(--status-success-fg);
+}
+
+.sidebar-agents-dot.is-attention {
+  background: var(--status-warning-fg);
+}
+
+.sidebar-agents-dot.is-failed {
+  background: var(--status-failed-fg);
+}
+
+/* In a menu row the dot sits at the trailing edge, like a workspace count. */
+.research-menu-item .sidebar-agents-dot {
+  margin-left: auto;
+}
+
+/* GitHub account control: sits beneath the Agents module and shares its
    trigger geometry. Signed out it is one centered action; signed in it shows
    the avatar with the display name over the login, and opens the same
    upward menu style for the profile/log-out actions. */

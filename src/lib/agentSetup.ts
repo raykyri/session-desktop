@@ -102,3 +102,51 @@ export function agentSetupIntro(adapters: readonly AgentAdapterMetadata[]) {
         : "Set up agents to make them available for research.",
   };
 }
+
+type AgentSetupSummaryTone = "ready" | "attention" | "failed" | "neutral";
+
+/** The one-line readiness summary under "Agents" in the sidebar module.
+ * `adapters` is null until the runtime config has loaded, and `probeError` is
+ * the last readiness probe's error. Every probe sets checkedAt on the agents it
+ * reports, so agents with none set are still waiting for the first probe.
+ * Readiness counts use adapterSetupIsComplete, as the Agent Setup dialog's
+ * heading does, so the sidebar and the dialog agree. */
+export function agentSetupSummary(
+  adapters: readonly AgentAdapterMetadata[] | null,
+  probeError: string | null,
+): { text: string; tone: AgentSetupSummaryTone } {
+  if (!adapters) {
+    return { text: "Loading…", tone: "neutral" };
+  }
+  if (adapters.length === 0) {
+    return { text: "None configured", tone: "neutral" };
+  }
+  if (probeError) {
+    return { text: "Status check failed", tone: "failed" };
+  }
+  if (!adapters.some(adapterStatusChecked)) {
+    return { text: "Checking…", tone: "neutral" };
+  }
+  const total = adapters.length;
+  const readyCount = adapters.filter(adapterSetupIsComplete).length;
+  const updateCount = adapters.filter(adapterNeedsUpdate).length;
+  if (readyCount === 0) {
+    return { text: "Set up an agent", tone: "attention" };
+  }
+  if (readyCount === total) {
+    return { text: total === 1 ? "Ready" : `All ${total} ready`, tone: "ready" };
+  }
+  const updates =
+    updateCount === 0 ? "" : ` · ${updateCount} ${updateCount === 1 ? "needs" : "need"} update`;
+  return {
+    text: `${readyCount} of ${total}${updates}`,
+    tone: updateCount === 0 ? "ready" : "attention",
+  };
+}
+
+/** An agent's status line in the sidebar menu, naming the host for an agent
+ * on a remote target, since local and remote instances share a label. */
+export function agentSetupMenuDetail(adapter: AgentAdapterMetadata) {
+  const status = agentSetupStatusLabel(adapter);
+  return adapter.target.kind === "remote" ? `${status} · ${adapter.target.label}` : status;
+}

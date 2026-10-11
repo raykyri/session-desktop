@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   adapterSetupIsComplete,
   agentSetupIntro,
+  agentSetupMenuDetail,
   agentSetupStatusLabel,
   agentSetupSteps,
+  agentSetupSummary,
 } from "../src/lib/agentSetup";
 import type { AgentAdapterMetadata } from "../src/types";
 
@@ -105,4 +107,69 @@ test("an installed agent is not signed in until a probe has checked it", () => {
     agentSetupIntro([checked]).body,
     "Set up agents to make them available for research.",
   );
+});
+
+function checked(id: string, readiness: AgentAdapterMetadata["readiness"]): AgentAdapterMetadata {
+  return { ...adapter(id, readiness), checkedAt: 1_700_000_000_000, auth: "authenticated" };
+}
+
+
+test("the sidebar summary reports loading, empty, checking and failed probes", () => {
+  assert.deepEqual(agentSetupSummary(null, null), { text: "Loading…", tone: "neutral" });
+  assert.deepEqual(agentSetupSummary([], null), { text: "None configured", tone: "neutral" });
+  // No agent has been probed yet.
+  assert.deepEqual(
+    agentSetupSummary([adapter("claude", "ready"), adapter("codex", "missing")], null),
+    { text: "Checking…", tone: "neutral" },
+  );
+  assert.deepEqual(agentSetupSummary([checked("claude", "ready")], "probe failed"), {
+    text: "Status check failed",
+    tone: "failed",
+  });
+});
+
+test("the sidebar summary counts agents the way the setup dialog does", () => {
+  const ready = checked("claude", "ready");
+  const missing = checked("codex", "missing");
+  const outdated = checked("grok", "unsupportedVersion");
+
+  assert.deepEqual(agentSetupSummary([missing, outdated], null), {
+    text: "Set up an agent",
+    tone: "attention",
+  });
+  assert.deepEqual(agentSetupSummary([ready, missing, outdated], null), {
+    text: "1 of 3 · 1 needs update",
+    tone: "attention",
+  });
+  assert.deepEqual(agentSetupSummary([ready, { ...ready, instanceId: "local:b" }, missing], null), {
+    text: "2 of 3",
+    tone: "ready",
+  });
+  const outdatedPair = [
+    { ...outdated, instanceId: "a" },
+    { ...outdated, instanceId: "b" },
+  ];
+  assert.equal(agentSetupSummary([ready, ...outdatedPair], null).text, "1 of 3 · 2 need update");
+  assert.deepEqual(
+    agentSetupSummary([ready, { ...ready, instanceId: "b" }, { ...ready, instanceId: "c" }], null),
+    { text: "All 3 ready", tone: "ready" },
+  );
+  assert.deepEqual(agentSetupSummary([ready], null), { text: "Ready", tone: "ready" });
+  // An installed agent that no probe has checked is not counted as ready.
+  assert.equal(
+    agentSetupSummary([adapter("claude", "ready"), missing], null).text,
+    "Set up an agent",
+  );
+});
+
+test("a remote agent's menu detail names its host", () => {
+  const local = checked("claude", "ready");
+  const remote: AgentAdapterMetadata = {
+    ...local,
+    instanceId: "remote:devbox:claude",
+    target: { kind: "remote", id: "devbox", label: "devbox" },
+  };
+
+  assert.equal(agentSetupMenuDetail(local), "Signed in");
+  assert.equal(agentSetupMenuDetail(remote), "Signed in · devbox");
 });
