@@ -1259,7 +1259,6 @@
 }
 
 .research-answer-foot-meta {
-  max-width: 70ch;
   padding-top: 10px;
   border-top: 1px solid var(--surface-divider);
   color: var(--text-faint);
@@ -1390,7 +1389,7 @@
 
 .research-turn-prompt .turn-markdown.research-prose {
   color: var(--text-heading);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .research-turn-meta {
