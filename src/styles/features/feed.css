@@ -795,6 +795,20 @@
   white-space: pre-line;
 }
 
+/* Under a title, the question's text is a tint weaker, as the starred child
+   rows' text is, and shows at most two lines. The clamp is on the text's own
+   block, so link cards and embeds after it are not clamped and keep their
+   colors. The status dot's float sits beside the title's first line and does
+   not reach this block. */
+.research-feed-card-title ~ * .research-feed-card-question,
+.research-feed-card-title ~ .research-feed-card-question {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .research-feed-card .research-message-attachments {
   margin-top: 6px;
 }
