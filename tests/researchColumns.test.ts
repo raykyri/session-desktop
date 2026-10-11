@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { researchColumnWidths } from "../src/lib/researchColumnWidths";
-import { ResearchPairHeader } from "../src/components/research/ResearchColumnChrome";
+import { ResearchPairHeader, ResearchThreadPlaceholder } from "../src/components/research/ResearchColumnChrome";
 
 test("columns are sized from the strip's width: feed 21%, messages 18%, answer 44%, each clamped", () => {
   // The strip at 1440px with the full sidebar, and at 1100px.
@@ -52,3 +52,25 @@ test("only the root conversation's header carries back and forward", () => {
   assert.equal(html.match(/aria-label="Back"/g)?.length, 1);
   assert.doesNotMatch(header({ branch: 1 }), /research-history-nav/);
 });
+
+test("a loading thread's header keeps back and forward in place", () => {
+  const noop = () => {};
+  const html = renderToStaticMarkup(
+    createElement(ResearchThreadPlaceholder, {
+      title: "Post",
+      children: createElement("p", null, "Loading research…"),
+      history: {
+        canGoBack: true,
+        canGoForward: false,
+        backTitle: "Back",
+        forwardTitle: "Forward",
+        onBack: noop,
+        onForward: noop,
+      },
+    }),
+  );
+  assert.ok(html.indexOf('aria-label="Research history"') < html.indexOf(">Post</h2>"));
+  assert.match(html, /aria-label="Back"/);
+  assert.match(html, /disabled=""[^>]*aria-label="Forward"/);
+});
+

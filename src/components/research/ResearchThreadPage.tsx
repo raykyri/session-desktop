@@ -4575,6 +4575,17 @@ function ResearchThreadPage({
     }
   }
 
+  // Back and forward, in the root level's header and in the loading
+  // placeholder's, so they stay in place while a thread loads.
+  const historyNav = {
+    canGoBack,
+    canGoForward,
+    backTitle: `Back (${IS_MAC ? "⌘[" : "Ctrl+["})`,
+    forwardTitle: `Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`,
+    onBack: goBack,
+    onForward: goForward,
+  };
+
   if (!detail || !rootNodeId || !selectedNodeId || levelPath.length === 0) {
     // A failed *tree* fetch retries through the app shell — without detail
     // there is no node to load, so no in-page retry can recover.
@@ -4585,7 +4596,7 @@ function ResearchThreadPage({
     const headerTitle =
       rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
-      <ResearchThreadPlaceholder title={headerTitle}>
+      <ResearchThreadPlaceholder title={headerTitle} history={historyNav}>
         <div className="research-placeholder">
           {placeholderError ? null : (
             <LoaderCircle className="research-spinner" size={24} aria-hidden="true" />
@@ -5144,15 +5155,6 @@ function ResearchThreadPage({
         onAskAsQuestion={() => void askEditorAsQuestion()}
       />
     );
-  };
-
-  const historyNav = {
-    canGoBack,
-    canGoForward,
-    backTitle: `Back (${IS_MAC ? "⌘[" : "Ctrl+["})`,
-    forwardTitle: `Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`,
-    onBack: goBack,
-    onForward: goForward,
   };
 
   /** One column of the strip. A post root is its post column and its thread

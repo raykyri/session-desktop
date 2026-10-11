@@ -127,12 +127,17 @@ function ResearchHistoryNav({
 }
 
 /** A thread that is loading or failed to load: a pair-wide column with the
- * header bar, with the title when there is one, over the given body. */
+ * header bar (back and forward, then the title when there is one) over the
+ * given body. */
 export function ResearchThreadPlaceholder({
   title = "",
+  history = null,
   children,
 }: {
   title?: string;
+  /** Back and forward, as in the loaded thread's root header, so they do
+   * not disappear while the thread loads. */
+  history?: ResearchHistoryNavProps | null;
   children: ReactNode;
 }) {
   return (
@@ -142,6 +147,7 @@ export function ResearchThreadPlaceholder({
     >
       <header className="research-column-header">
         <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
+          {history ? <ResearchHistoryNav {...history} /> : null}
           {title ? (
             <h2 className="research-column-title" title={title}>
               {title}
