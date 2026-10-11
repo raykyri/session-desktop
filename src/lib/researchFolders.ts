@@ -4,7 +4,12 @@ import type {
   ResearchFolderState,
   ResearchTreeSummary,
 } from "../types";
-import { isActiveResearchStatus } from "./researchChains";
+import {
+  researchRowKind,
+  researchRowState,
+  type ResearchRowKind,
+  type ResearchRowState,
+} from "./researchRowGlyph";
 
 // Places a research tree can be filed in. Unfiled and Archive are derived
 // (no membership, and `archivedAt`); Drafts is a membership value with no
@@ -253,7 +258,9 @@ export interface ResearchFeedChild {
   /** Indent: 1 under the question; 2 for a branch under another
    * child (a branch of a branch, or a branch from a starred follow-up). */
   indent: 1 | 2;
-  running: boolean;
+  /** The child's own kind and run state, for its row's glyph. */
+  kind: ResearchRowKind;
+  state: ResearchRowState;
   query: RecentResearchQuery;
 }
 
@@ -276,7 +283,8 @@ export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChi
       label: (child.inline ? child.prompt : (child.title?.trim() || child.prompt)).trim(),
       branch: !child.inline,
       indent: underChild ? 2 : 1,
-      running: isActiveResearchStatus(child.status),
+      kind: researchRowKind(child),
+      state: researchRowState(child.status),
       query: child,
     };
   });

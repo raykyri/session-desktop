@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ResearchActivityFeed, {
   recentActivityAnchorOffset,
   recentActivityAnchorScrollTop,
-  researchFeedStatus,
   type ResearchActivityFeedProps,
 } from "../src/components/research/ResearchActivityFeed";
 import type { ResearchFolderState } from "../src/types";
@@ -67,10 +66,10 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.ok(html.indexOf("research-feed-card") < html.indexOf("research-feed-tray"));
   assert.doesNotMatch(html, /aria-label="Go to the ask box"/);
   assert.match(html, /class="research-feed-header is-home"/);
-  assert.ok(html.indexOf("research-feed-card-title\">Collective memory<") > 0);
+  assert.ok(html.indexOf("Collective memory<") > 0);
   assert.ok(
-    html.indexOf("research-feed-card-title\">Collective memory<") <
-      html.indexOf("research-feed-card-question\">Investigate this question<"),
+    html.indexOf("Collective memory<") <
+      html.indexOf("Investigate this question<"),
   );
   assert.match(html, /aria-label="Refresh Home"/);
   // Unfiled is a drop target for moving questions back from any folder.
@@ -97,43 +96,99 @@ test("cards have no metadata row: no time, counts, recap or Bookmark", () => {
   assert.doesNotMatch(echoed, /research-feed-card-title/);
 });
 
-test("running and failed threads show a status dot; unread threads a dot unless open", () => {
+/** The glyph a card or row starts with: its shape class, and its name when
+ * it has one. */
+const glyphOf = (html: string) =>
+  html.match(/<span (?:id="[^"]*" )?class="research-row-glyph is-([a-z]+)[^"]*"(?: role="img" aria-label="([^"]+)")?/)?.slice(1, 3) ?? [];
+
+test("a card's glyph shows the thread's state; unread threads show the unread glyph unless open", () => {
   const html = renderFeed({
     items: [
       { ...question, status: "running" as const },
       { ...question, nodeId: "failed-node", treeId: "failed", prompt: "Failed question" },
       { ...question, nodeId: "other-node", treeId: "other", prompt: "Other question" },
+      { ...question, nodeId: "queued-node", treeId: "queued", prompt: "Queued question", status: "queued" as const },
+      { ...question, nodeId: "stopped-node", treeId: "stopped", prompt: "Stopped question", status: "cancelled" as const },
+      { ...question, nodeId: "read-node", treeId: "read", prompt: "Read question" },
     ],
     researchTrees: [
       { ...tree, hasUnseenUpdate: true },
       { ...tree, id: "failed", rootNodeId: "failed-node", hasUnseenFailure: true },
       { ...tree, id: "other", rootNodeId: "other-node", hasUnseenUpdate: true },
+      { ...tree, id: "queued", rootNodeId: "queued-node" },
+      { ...tree, id: "stopped", rootNodeId: "stopped-node" },
+      { ...tree, id: "read", rootNodeId: "read-node" },
     ],
     selectedTreeId: "tree",
   });
-  const [running, failed, other] = ["Investigate this question", "Failed question", "Other question"].map(
-    (text) => cards(html).find((card) => card.includes(text)) ?? "",
-  );
-  assert.match(running, /research-feed-status is-running/);
-  assert.match(running, /aria-label="Collective memory\. Investigate this question, Running"/);
+  const card = (text: string) => cards(html).find((entry) => entry.includes(text)) ?? "";
+  const running = card("Investigate this question");
+  assert.deepEqual(glyphOf(running), ["running", "Running"]);
   assert.ok(running.startsWith(" is-selected"));
-  // Selecting a thread reads it, so only the other card keeps its dot.
-  assert.doesNotMatch(running, /research-feed-card-unread/);
-  assert.match(other, /research-feed-card-unread/);
-  assert.match(failed, /research-feed-status is-failed/);
-  assert.match(failed, /aria-label="Collective memory\. Failed question, Failed since last viewed"/);
+  // The state names the glyph, which describes the open button.
+  const glyphId = running.match(/<span id="([^"]+)" class="research-row-glyph/)?.[1];
+  assert.ok(glyphId);
+  assert.match(running, new RegExp(`aria-label="Collective memory\\. Investigate this question" aria-describedby="${glyphId}"`));
+  // Selecting a thread reads it, so only the other card shows as unread.
+  assert.deepEqual(glyphOf(card("Other question")), ["unread", "Updated"]);
+  assert.deepEqual(glyphOf(card("Failed question")), ["failed", "Failed since last viewed"]);
+  assert.deepEqual(glyphOf(card("Queued question")), ["queued", "Queued"]);
+  assert.deepEqual(glyphOf(card("Stopped question")), ["stopped", "Stopped"]);
+  // An answered, read thread has a check and nothing to announce.
+  const read = card("Read question");
+  assert.deepEqual(glyphOf(read), ["answered", undefined]);
+  assert.match(read, /class="research-row-glyph is-answered" aria-hidden="true"/);
+  assert.doesNotMatch(read, /aria-describedby/);
+  // No corner dot, unread dot or float spacer is left.
+  assert.doesNotMatch(html, /research-feed-status|research-feed-card-unread/);
 
-  // A failure dot replaces the unread dot rather than joining it.
+  // A failure replaces the unread state rather than joining it.
   const both = renderFeed({
     items: [{ ...question, prompt: "Failed question" }],
     researchTrees: [{ ...tree, hasUnseenUpdate: true, hasUnseenFailure: true }],
   });
-  assert.match(both, /research-feed-status is-failed/);
-  assert.doesNotMatch(both, /research-feed-card-unread/);
+  assert.deepEqual(glyphOf(both), ["failed", "Failed since last viewed"]);
+});
 
-  assert.equal(researchFeedStatus({ ...tree, runningCount: 1 }, question), "running");
-  assert.equal(researchFeedStatus(tree, { ...question, status: "failed" }), "failed");
-  assert.equal(researchFeedStatus(tree, question), null);
+test("the glyph occupies its own column beside titled, untitled, link and tweet bodies", () => {
+  const tweetUrl = "https://x.com/example/status/1";
+  const tweet = {
+    kind: "tweet" as const, schemaVersion: 1 as const, sourceUrl: tweetUrl, tweetId: "1", placement: "trailing" as const,
+    provider: "xSyndication" as const, status: "resolved" as const, attemptedAt: 1, fetchedAt: 1,
+    tweet: {
+      id: "1", url: tweetUrl, runs: [{ kind: "text" as const, text: "Tweet text" }], partial: false,
+      createdAt: "2025-02-02T23:17:00.000Z", author: { name: "Example", handle: "example" }, media: [],
+    },
+  };
+  const html = renderFeed({
+    items: [
+      question,
+      { ...question, nodeId: "untitled-node", treeId: "untitled", prompt: "Untitled question" },
+      savedLink,
+      { ...savedLink, nodeId: "note", treeId: "note-tree", prompt: "A note", format: "text" as const },
+      { ...savedLink, nodeId: "x", treeId: "x-tree", prompt: tweetUrl, attachments: [tweet] },
+    ],
+    researchTrees: [
+      tree,
+      { ...tree, id: "untitled", rootNodeId: "untitled-node", title: "Untitled question" },
+      { ...tree, id: "link-tree", rootNodeId: "link", type: "post" as const },
+      { ...tree, id: "note-tree", rootNodeId: "note", type: "post" as const },
+      { ...tree, id: "x-tree", rootNodeId: "x", type: "post" as const },
+      { ...tree, id: "unloaded", rootNodeId: "missing", title: "Not loaded yet", runningCount: 1 },
+    ],
+  });
+  const card = (text: string) => cards(html).find((entry) => entry.includes(text)) ?? "";
+  const glyph = '<span (?:id="[^"]*" )?class="research-row-glyph[^"]*"[^>]*><svg[^]*?</svg></span>';
+  for (const text of ["Investigate this question", "Untitled question", "Not loaded yet", "example.com/finding", "A note", "Tweet text"]) {
+    const entry = card(text);
+    assert.match(entry, new RegExp(`<div class="research-feed-card-layout(?: has-title)?">${glyph}<div class="research-feed-card-content">`));
+    assert.equal((entry.match(/research-row-glyph /g) ?? []).length, 1);
+  }
+  assert.match(card("Investigate this question"), /<span class="research-feed-card-title">Collective memory<\/span>/);
+  assert.deepEqual(glyphOf(card("Not loaded yet")), ["running", "Running"]);
+  assert.deepEqual(glyphOf(card("example.com/finding")), ["link", undefined]);
+  assert.deepEqual(glyphOf(card("A note")), ["note", undefined]);
+  assert.deepEqual(glyphOf(card("Tweet text")), ["xpost", undefined]);
 });
 
 test("starred follow-ups and branches are indented rows under their question", () => {
@@ -156,14 +211,26 @@ test("starred follow-ups and branches are indented rows under their question", (
   assert.equal(rows.length, 3);
   assert.ok(rows[0].startsWith(" is-group-start"));
   assert.match(rows[0], /--research-child-indent:1/);
-  // A follow-up has no icon; a starred branch is marked with a filled star.
-  assert.doesNotMatch(rows[0], /Starred branch: |research-feed-child-icon/);
-  assert.match(rows[1], /<svg(?=[^>]*lucide-star)(?=[^>]*fill="currentColor")/);
-  assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text">Branch title</);
-  // Levels cap at two; running children keep a status dot.
+  // Each child starts its label with a glyph for its own state; branch and
+  // follow-up differ only in the visually hidden prefix, not in a star.
+  assert.doesNotMatch(html, /lucide-star|research-feed-child-icon/);
+  assert.doesNotMatch(rows[0], /Starred branch: /);
+  assert.match(
+    rows[0],
+    /<span class="research-row-glyph is-answered" aria-hidden="true"><svg[^]*?<\/svg><\/span><span class="research-feed-child-text"><span class="research-feed-child-label">A starred follow-up</,
+  );
+  assert.match(
+    rows[1],
+    /Starred branch: <\/span><span class="research-row-glyph is-answered"[^]*?<\/span><span class="research-feed-child-text"><span class="research-feed-child-label">Branch title</,
+  );
+  // Levels cap at two; a running child's glyph names its state inside the
+  // open button.
   assert.match(rows[2], /--research-child-indent:2/);
   assert.ok(rows[2].startsWith(" is-group-end"));
-  assert.match(rows[2], /research-feed-status is-running/);
+  assert.match(
+    rows[2],
+    /<button[^>]*class="research-feed-child-open"[^]*?<span class="research-row-glyph is-running is-tone-running" role="img" aria-label="Running" title="Running">[^]*?<\/button>/,
+  );
   // Each child row has its open target and, in the right-hand margin, the
   // drag handle above a … menu.
   for (const row of rows) {
@@ -189,8 +256,8 @@ test("starred follow-ups and branches are indented rows under their question", (
     selectedTreeId: "tree",
     selectedChildNodeIds: ["follow", "branch"],
   });
-  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-feed-child-text">A starred follow-up/);
-  assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><svg/);
+  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-row-glyph[^]*?<\/span><span class="research-feed-child-text"><span class="research-feed-child-label">A starred follow-up/);
+  assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><span class="research-visually-hidden">Starred branch: /);
   assert.match(open, /research-feed-card is-selected/);
   const elsewhere = renderFeed({
     items: [{ ...question, starred }],
@@ -311,7 +378,7 @@ test("a transcript (an exported conversation) lists as a titled card", () => {
     researchTrees: [{ ...tree, type: "document" as const, title: "Terminal session" }],
   });
   assert.equal(cards(html).length, 1);
-  assert.match(html, /research-feed-card-title">Terminal session</);
+  assert.match(html, /research-row-glyph is-transcript"[^]*?research-feed-card-title">Terminal session</);
   assert.match(html, /First user message/);
 });
 
@@ -323,7 +390,7 @@ test("an imported report lists as a titled card with its question, in Home and i
   const importedTree = { ...tree, type: "document" as const, title: "Survey report" };
   const html = renderFeed({ items: [imported], researchTrees: [importedTree] });
   assert.equal(cards(html).length, 1);
-  assert.match(html, /research-feed-card-title">Survey report</);
+  assert.match(html, /research-row-glyph is-imported"[^]*?research-feed-card-title">Survey report</);
   assert.match(html, /What did the survey find\?/);
   // An imported document prevents Home from showing the first-run text.
   assert.doesNotMatch(html, /appear here\. New ones start at the top/);

@@ -38,7 +38,7 @@ import {
   type ResearchDropPosition,
   type ResearchFeedChild,
 } from "../../lib/researchFolders";
-import { isActiveResearchStatus } from "../../lib/researchChains";
+import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
 import {
   feedCycleStep,
   type FeedCycleEntry,
@@ -54,7 +54,6 @@ import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrom
 import ResearchFeedCard, {
   researchCardRefocus,
   researchFeedCardControl,
-  type ResearchFeedCardStatus,
 } from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
@@ -269,19 +268,6 @@ export function virtualActivityRange(
     else high = middle;
   }
   return { start, end: low };
-}
-
-/** Running status takes precedence over failure status. Show a failure when
- * it is unseen or the question itself failed. */
-export function researchFeedStatus(
-  tree: ResearchTreeSummary | undefined,
-  query: RecentResearchQuery | undefined,
-): ResearchFeedCardStatus | null {
-  if ((tree?.runningCount ?? 0) > 0 || (query && isActiveResearchStatus(query.status))) {
-    return "running";
-  }
-  if (tree?.hasUnseenFailure || query?.status === "failed") return "failed";
-  return null;
 }
 
 function MeasuredActivityRow({
@@ -866,7 +852,7 @@ function ResearchActivityFeed({
     const question = query?.prompt ?? tree?.title ?? "";
     const title = isPost ? null : researchCardTitle(tree?.title ?? query?.title, question);
     const selected = treeId === selectedTreeId;
-    const status = researchFeedStatus(tree, query);
+    const state = researchThreadState(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
     // The card shows the question as plain text, URLs in the link color; its
     // Markdown renders in the conversation. Link cards and tweet embeds still
@@ -905,13 +891,14 @@ function ResearchActivityFeed({
             asQuestion(feedText(question))
           )
         }
-        status={status}
+        kind={researchThreadKind(tree, query)}
+        state={state}
         statusLabel={
-          status === "failed" && tree?.hasUnseenFailure ? "Failed since last viewed" : undefined
+          state === "failed" && tree?.hasUnseenFailure ? "Failed since last viewed" : undefined
         }
         selected={selected}
-        // A failure dot already says the thread changed.
-        unread={Boolean(tree?.hasUnseenUpdate) && !selected && status !== "failed"}
+        // Unread shows on an answered card only (researchRowGlyph).
+        unread={Boolean(tree?.hasUnseenUpdate) && !selected}
         childRows={childRows}
         selectedChildNodeIds={selected ? selectedChildNodeIds : EMPTY_NODE_IDS}
         childMenuNodeId={menuChildNodeId}
@@ -947,6 +934,7 @@ function ResearchActivityFeed({
         dragKind="draft"
         place={RESEARCH_DRAFTS_FOLDER_ID}
         label={`Draft: ${draft.prompt.trim()}`}
+        kind="draft"
         renderBody={(asQuestion) => asQuestion(feedText(draft.prompt.trim()))}
         selected={draft.id === selectedDraftId}
         menuOpen={menu?.kind === "draft" && menu.draftId === draft.id && !menu.placement}

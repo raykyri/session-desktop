@@ -29,18 +29,22 @@ function stopForInteractive(event: MouseEvent) {
 
 /** A post's own content, by its stored format. A link post renders as a
  * link card, or as its tweet embed once the tweet resolved (through the
- * shared message body, which then hides the URL); a text post as Markdown. */
+ * shared message body, which then hides the URL); a text post as Markdown.
+ * `lead` (a row glyph) starts the first line: the link card's URL, or as in
+ * ResearchMessageBody. */
 export function PostContent({
   prompt,
   format,
   attachments = [],
   variant = "body",
+  lead,
   renderPrompt,
 }: {
   prompt: string;
   format: PostFormat;
   attachments?: ResearchMessageAttachment[];
   variant?: ResearchProseVariant;
+  lead?: ReactNode;
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const resolvedTweet = attachments.some(
@@ -64,7 +68,10 @@ export function PostContent({
           void openExternalUrl(url);
         }}
       >
-        <span className="post-link-card-url">{url}</span>
+        <span className="post-link-card-url">
+          {lead}
+          {url}
+        </span>
         <span className="post-link-card-host">
           <ExternalLink size={11} aria-hidden="true" />
           {host}
@@ -77,6 +84,7 @@ export function PostContent({
       prompt={prompt}
       attachments={attachments}
       variant={variant}
+      lead={lead}
       renderPrompt={renderPrompt}
     />
   );

@@ -4,7 +4,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   ResearchMessageRow,
-  researchMessagePill,
+  researchMessageState,
+  researchMessageStateWord,
   runStatusText,
 } from "../src/components/research/ResearchTurn";
 import type { ResearchNode } from "../src/types";
@@ -99,13 +100,64 @@ test("the answer menu is hidden for queued runs and retries and shown for runnin
   assert.match(row({ status: "running" }), /Answer actions/);
 });
 
-test("a message's state shows as a pill: Running, Queued, Failed, Stopped", () => {
-  assert.deepEqual(researchMessagePill("running"), { label: "Running", tone: "run" });
-  assert.deepEqual(researchMessagePill("queued"), { label: "Queued", tone: "plain" });
-  assert.deepEqual(researchMessagePill("failed"), { label: "Failed", tone: "error" });
-  assert.deepEqual(researchMessagePill("failed", true), { label: "Queued", tone: "plain" });
-  assert.deepEqual(researchMessagePill("cancelled"), { label: "Stopped", tone: "plain" });
-  assert.equal(researchMessagePill("complete"), null);
+test("a message's state: a queued Retry is queued; Queued and Stopped are also words", () => {
+  assert.equal(researchMessageState("running"), "running");
+  assert.equal(researchMessageState("starting"), "running");
+  assert.equal(researchMessageState("failed"), "failed");
+  assert.equal(researchMessageState("cancelled"), "stopped");
+  assert.equal(researchMessageState("complete"), "answered");
+  // A queued Retry of a failed message shows as queued, not as the failure.
+  assert.equal(researchMessageState("failed", true), "queued");
+
+  assert.equal(researchMessageStateWord("queued"), "Queued");
+  assert.equal(researchMessageStateWord("stopped"), "Stopped");
+  for (const state of ["running", "failed", "answered"] as const) {
+    assert.equal(researchMessageStateWord(state), null);
+  }
+});
+
+test("a message row starts its text with a glyph unless it is an answered exchange", () => {
+  for (const [status, retry, shape, label] of [
+    ["running", false, "running", "Running"],
+    ["starting", false, "running", "Running"],
+    ["failed", false, "failed", "Failed"],
+    ["queued", false, "queued", "Queued"],
+    ["failed", true, "queued", "Queued"],
+    ["cancelled", false, "stopped", "Stopped"],
+  ] as const) {
+    const html = row({ status }, retry);
+    const glyph = new RegExp(
+      `<span class="research-row-glyph is-${shape}[^"]*" role="img" aria-label="${label}" title="${label}"><svg`,
+    );
+    const match = html.match(glyph);
+    assert.ok(match, html);
+    // The glyph is the first thing in the labelled text, before the
+    // Markdown, so the row's button name starts with the state.
+    const labelledBy = html.match(/class="research-msg-hit"[^>]*aria-labelledby="([^"]+)"/)?.[1] ?? "";
+    assert.doesNotMatch(labelledBy, / /);
+    const content = html.indexOf(`<div id="${labelledBy}" class="research-msg-content"`);
+    assert.ok(content >= 0 && content < match.index!);
+    assert.ok(match.index! < html.indexOf("turn-markdown"));
+    assert.doesNotMatch(html, /research-msg-pill|research-feed-status/);
+  }
+  // Queued and Stopped keep their word as plain meta text, with no pill.
+  assert.match(row({ status: "failed" }, true), /<span class="research-msg-state">Queued<\/span>/);
+  assert.match(row({ status: "cancelled" }), /<span class="research-msg-state">Stopped<\/span>/);
+  // An answered exchange shows no glyph.
+  assert.doesNotMatch(row(), /research-row-glyph/);
+});
+
+test("a note, link, X post or document row shows its kind's glyph in the messages column", () => {
+  const kinds: [NodeFixture, string][] = [
+    [{ type: "post", prompt: "A note" }, "note"],
+    [{ type: "post", format: "link", prompt: "https://example.com/a" }, "link"],
+    [{ type: "document", source: "imported" }, "imported"],
+    [{ type: "document", source: "transcript" }, "transcript"],
+  ];
+  for (const [overrides, shape] of kinds) {
+    const html = row(overrides);
+    assert.match(html, new RegExp(`<span class="research-row-glyph is-${shape}" aria-hidden="true">`), shape);
+  }
 });
 
 test("the running status line adds the latest activity when there is one", () => {

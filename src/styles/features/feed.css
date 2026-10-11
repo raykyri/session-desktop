@@ -673,14 +673,6 @@
   padding-block: 8px;
 }
 
-.research-feed-tray-body .research-feed-card > .research-feed-status {
-  top: 14px;
-}
-
-.research-feed-tray-body .research-feed-card > .research-feed-card-unread {
-  top: 14.5px;
-}
-
 .research-feed-card {
   padding: 10px 12px 10px calc(var(--research-row-text) - var(--research-row-inset));
   cursor: pointer;
@@ -749,24 +741,102 @@
   outline: none;
 }
 
+/* Keep every line and embedded body beside the status column. Match the
+   glyph's line height to the title, or the untitled question. */
+.research-feed-card-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: calc(var(--research-compact-font-size) + 1px);
+  line-height: var(--research-compact-line-height);
+  pointer-events: none;
+}
+
+.research-feed-card-layout.has-title {
+  font-size: calc(var(--fs-base) + 0.5px);
+  line-height: 1.4;
+}
+
+.research-feed-card-layout > .research-row-glyph,
+.research-feed-child-open > .research-row-glyph {
+  float: none;
+  flex: 0 0 14px;
+  margin-right: 0;
+}
+
+/* Two pixels between the title and body. */
 .research-feed-card-content {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
   pointer-events: none;
 }
 
-/* A row with a status or unread dot keeps its text clear of the dot, which
-   sits at the top-right corner while the controls' pill is hidden. */
-.research-feed-card:has(> .research-feed-status, > .research-feed-card-unread) .research-feed-card-content {
-  padding-right: 12px;
+.research-feed-card-content > * + * {
+  margin-top: 2px;
 }
 
-.research-feed-child:has(> .research-feed-status) {
-  padding-right: 24px;
+/* — Row glyphs (ResearchRowGlyph) — */
+
+/* A 14px float at the start of the row's first line: the title when there is
+   one, else the question, a link card's URL or a tweet's header. It is
+   shorter than one line box, so the first line's text starts 6px after it
+   and every later line uses the full width. It is centered on the line by
+   its own line height (1lh), which it inherits from that line; 3px where
+   `lh` is not supported. A first word that does not fit beside the float
+   breaks there (overflow-wrap: anywhere on the row's text) rather than moving
+   below it; URLs, which have no other break points, break anywhere. */
+.research-row-glyph {
+  float: left;
+  display: flex;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  margin-top: calc((1lh - 14px) / 2);
+  margin-right: 6px;
+  color: var(--research-row-glyph-color, var(--text-faint));
+}
+
+.research-row-glyph > svg {
+  display: block;
+  flex: none;
+  stroke-width: 1.5px;
+}
+
+:is(.research-feed-card, .research-feed-child, .research-msg-row).is-selected {
+  --research-row-glyph-color: var(--text-muted);
+}
+
+.research-row-glyph.is-tone-unread {
+  color: var(--text-secondary);
+}
+
+.research-row-glyph.is-tone-running {
+  color: var(--status-active-fg);
+}
+
+.research-row-glyph.is-tone-failed {
+  color: var(--status-failed-fg);
+}
+
+/* The running pie pulses (1.4s, to 30% opacity); a row of another kind
+   whose thread is running pulses its whole shape. reduced-motion.css stops
+   both. */
+.research-row-glyph-pulse {
+  animation: research-feed-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes research-feed-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* In a tweet's header, a flex row with its own 6px gap. */
+.tweet-embed-head > .research-row-glyph {
+  float: none;
+  margin: 0;
 }
 
 .research-feed-card-content a,
@@ -797,12 +867,13 @@
 /* Under a title, the question's text is a tint weaker, as the starred child
    rows' text is, and shows at most two lines. The clamp is on the text's own
    block, so link cards and embeds after it are not clamped and keep their
-   colors. The status dot's float sits beside the title's first line and does
-   not reach this block. */
+   colors. */
 /* URLs in a card's text take the link color; the whole card is one open
-   button, so they are not links. */
+   button, so they are not links. A URL breaks anywhere, so one that starts
+   the question stays on the glyph's line. */
 .research-feed-url {
   color: var(--accent-color);
+  word-break: break-all;
 }
 
 .research-feed-card-title ~ * .research-feed-card-question,
@@ -819,9 +890,8 @@
 }
 
 /* The row's controls: the drag handle and the … button in one pill inside
-   the row's top-right corner, over the status or unread dot. The pill shows
-   on hover and focus and replaces the dot; the text runs under it, so no
-   margin is reserved for it. The handle is not a target of its own: a press
+   the row's top-right corner. The pill shows on hover and focus; the text
+   runs under it, so no margin is reserved for it. The handle is not a target of its own: a press
    on it reaches the row, which starts the drag. */
 .research-feed-rail {
   position: absolute;
@@ -858,68 +928,11 @@
   pointer-events: auto;
 }
 
-/* Where the status dot sits (a row is never both), under the pill. */
-.research-feed-card-unread {
-  position: absolute;
-  top: 16.5px;
-  right: 10.5px;
-  z-index: 1;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--status-info-fg);
-}
-
-.research-feed-card:is(:hover, :focus-within, .has-open-menu) .research-feed-card-unread {
-  opacity: 0;
-}
-
 .research-feed-icon-button.research-feed-card-menu {
   width: 22px;
   height: 20px;
   border-radius: 5px;
   pointer-events: auto;
-}
-
-/* Running and failed threads show a corner dot, replaced by the controls
-   on hover or focus. The running dot pulses. */
-.research-feed-status {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.research-feed-status.is-running {
-  background: var(--status-active-fg);
-  animation: research-feed-pulse 1.4s ease-in-out infinite;
-}
-
-.research-feed-status.is-failed {
-  background: var(--status-failed-fg);
-}
-
-.research-feed-card > .research-feed-status,
-.research-feed-child > .research-feed-status {
-  position: absolute;
-  top: 16px;
-  right: 10px;
-}
-
-.research-feed-child > .research-feed-status {
-  top: 17px;
-}
-
-:is(.research-feed-card, .research-feed-child):is(:hover, :focus-within, .has-open-menu)
-  > .research-feed-status {
-  opacity: 0;
-}
-
-@keyframes research-feed-pulse {
-  50% {
-    opacity: 0.3;
-  }
 }
 
 /* — Starred children — */
@@ -944,7 +957,9 @@
   display: flex;
   flex: 1;
   align-items: flex-start;
-  gap: 7px;
+  gap: 6px;
+  font-size: calc(var(--research-compact-font-size) + 1px);
+  line-height: var(--research-compact-line-height);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -967,12 +982,6 @@
   outline: none;
 }
 
-.research-feed-child-icon {
-  flex: none;
-  margin-top: 4px;
-  color: var(--text-subtle);
-}
-
 .research-feed-child-text {
   display: -webkit-box;
   min-width: 0;
@@ -984,6 +993,11 @@
   white-space: pre-line;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+}
+
+/* Keep the clamped child label in a single block. */
+.research-feed-child-label {
+  display: block;
 }
 
 /* — Drag — */

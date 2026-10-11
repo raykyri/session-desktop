@@ -325,19 +325,31 @@ export function TweetEmbed({
   tweet,
   compact = false,
   openable = true,
+  lead,
 }: {
   tweet: TweetSnapshot;
   compact?: boolean;
   openable?: boolean;
+  /** A row glyph at the start of the header, when the tweet is the row's
+   * first line. */
+  lead?: ReactNode;
 }) {
   return (
     <TweetLinksOpen.Provider value={openable}>
-      <TweetEmbedBody tweet={tweet} compact={compact} />
+      <TweetEmbedBody tweet={tweet} compact={compact} lead={lead} />
     </TweetLinksOpen.Provider>
   );
 }
 
-function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boolean }) {
+function TweetEmbedBody({
+  tweet,
+  compact,
+  lead,
+}: {
+  tweet: TweetSnapshot;
+  compact: boolean;
+  lead?: ReactNode;
+}) {
   const openable = useContext(TweetLinksOpen);
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
@@ -378,6 +390,7 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
     >
       <div className="tweet-embed-main">
         <div className="tweet-embed-head">
+          {lead}
           <TweetLink url={authorUrl} className="tweet-embed-avatar-link" hidden>
             <TweetAvatar
               name={tweet.author.name}

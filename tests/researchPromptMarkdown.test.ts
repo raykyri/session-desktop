@@ -132,8 +132,11 @@ test("a settled row with nothing to show has no meta line; the starred mark show
     branchCount: 2,
   });
   assert.doesNotMatch(running, /<time/);
-  assert.match(running, /research-msg-pill is-run"/);
-  assert.match(running, />Running</);
+  // The running state is the row's glyph, not a pill, so the meta line has
+  // nothing to show.
+  assert.match(running, /class="research-row-glyph is-running is-tone-running" role="img" aria-label="Running"/);
+  assert.doesNotMatch(running, /research-msg-pill|>Running</);
+  assert.doesNotMatch(running, /research-msg-meta/);
   // Branches appear once the answer has finished.
   assert.doesNotMatch(running, /research-msg-branches/);
 });
@@ -149,7 +152,10 @@ test("documents and conversations show their title in place of a question", () =
     showPrompt: false,
   });
   assert.doesNotMatch(html, /research-prompt/);
-  assert.match(html, /research-msg-plain">Imported report</);
+  assert.match(
+    html,
+    /research-msg-plain"><span class="research-row-glyph is-imported" aria-hidden="true"><svg[^]*?<\/svg><\/span>Imported report</,
+  );
   assert.match(html, /research-msg-meta"><span class="research-msg-provenance"[^>]*>Imported<\/span><\/div>/);
 });
 

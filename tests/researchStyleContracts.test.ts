@@ -9,6 +9,8 @@ const surfaceCss = readFileSync(join(stylesDirectory, "research-surface.css"), "
 const researchCss = readFileSync(join(stylesDirectory, "research.css"), "utf8");
 const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
 const transcriptCss = readFileSync(join(stylesDirectory, "transcript.css"), "utf8");
+const postsCss = readFileSync(join(stylesDirectory, "posts.css"), "utf8");
+const reducedMotionCss = readFileSync(join(stylesDirectory, "..", "reduced-motion.css"), "utf8");
 
 function ruleBody(css: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -97,4 +99,89 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   // Feed cards set attachment spacing; shared styles set attachment sizes.
   const cardAttachments = ruleBody(feedCss, ".research-feed-card .research-message-attachments");
   assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
+});
+
+test("a row's glyph is a 14px float at the start of its first line, centered on it, 6px before the text", () => {
+  const glyph = ruleBody(feedCss, ".research-row-glyph");
+  assert.match(glyph, /float:\s*left/);
+  assert.match(glyph, /width:\s*14px;\s*height:\s*14px/);
+  // Centered on the line it inherits its line height from, with a fallback
+  // where `lh` is not supported.
+  assert.match(glyph, /margin-top:\s*3px;\s*margin-top:\s*calc\(\(1lh - 14px\) \/ 2\)/);
+  assert.match(glyph, /margin-right:\s*6px/);
+  assert.match(glyph, /color:\s*var\(--research-row-glyph-color, var\(--text-faint\)\)/);
+  assert.match(ruleBody(feedCss, ".research-row-glyph > svg"), /stroke-width:\s*1\.5px/);
+  assert.match(
+    ruleBody(feedCss, ":is(.research-feed-card, .research-feed-child, .research-msg-row).is-selected"),
+    /--research-row-glyph-color:\s*var\(--text-muted\)/,
+  );
+  assert.match(ruleBody(feedCss, ".research-row-glyph.is-tone-running"), /color:\s*var\(--status-active-fg\)/);
+  assert.match(ruleBody(feedCss, ".research-row-glyph.is-tone-failed"), /color:\s*var\(--status-failed-fg\)/);
+  assert.match(ruleBody(feedCss, ".research-row-glyph.is-tone-unread"), /color:\s*var\(--text-secondary\)/);
+  // In a tweet's header (a flex row with its own gap) it is not floated.
+  assert.match(ruleBody(feedCss, ".tweet-embed-head > .research-row-glyph"), /float:\s*none;\s*margin:\s*0/);
+
+  // The texts that hold it are flow roots, so the float stays inside them.
+  const content = ruleBody(feedCss, ".research-feed-card-content");
+  assert.match(content, /display:\s*flow-root/);
+  assert.doesNotMatch(content, /flex|gap:/);
+  assert.match(ruleBody(feedCss, ".research-feed-card-content > * + *"), /margin-top:\s*2px/);
+  assert.match(ruleBody(researchCss, ".research-msg-content"), /display:\s*flow-root;\s*padding:\s*10px 12px 2px;/);
+  // A message's Markdown sets its own type, which the glyph before it takes.
+  assert.match(
+    ruleBody(researchCss, ".research-msg-prompt > .research-row-glyph"),
+    /font-size:\s*calc\(var\(--research-compact-font-size\) \+ 1px\);\s*line-height:\s*var\(--research-compact-line-height\)/,
+  );
+  // A child row's float is in a block inside the clamped box: WebKit does not
+  // float a -webkit-box's own children.
+  assert.match(ruleBody(feedCss, ".research-feed-child-label"), /display:\s*block/);
+  assert.match(ruleBody(feedCss, ".research-feed-child-text"), /display:\s*-webkit-box/);
+
+  // Nothing sits in the top-right corner under the controls' pill any more:
+  // no status dot, unread dot, or float reserving room for them.
+  for (const css of [feedCss, researchCss]) {
+    assert.doesNotMatch(css, /research-feed-status|research-feed-card-unread|research-feed-child-icon/);
+    assert.doesNotMatch(css, /float:\s*right/);
+  }
+  // The Queued and Stopped words are plain meta text; Not sent keeps its
+  // error pill.
+  assert.match(ruleBody(researchCss, ".research-msg-provenance,\n.research-msg-state"), /margin-right:\s*4\.5px/);
+  assert.doesNotMatch(researchCss, /\.research-msg-pill\.is-(run|plain)/);
+  assert.match(ruleBody(researchCss, ".research-msg-pill.is-error"), /background:/);
+});
+
+test("the running glyph pulses as the status dot did, except with reduced motion", () => {
+  assert.match(
+    ruleBody(feedCss, ".research-row-glyph-pulse"),
+    /animation:\s*research-feed-pulse 1\.4s ease-in-out infinite/,
+  );
+  assert.match(ruleBody(feedCss, "@keyframes research-feed-pulse"), /50% \{\s*opacity:\s*0\.3;?/);
+  assert.match(
+    ruleBody(reducedMotionCss, ".app-shell.reduce-motion .research-row-glyph-pulse,\n.app-shell.reduce-motion .research-pulse"),
+    /animation:\s*none/,
+  );
+  assert.match(
+    ruleBody(reducedMotionCss, "  .research-row-glyph-pulse,\n  .research-pulse"),
+    /animation:\s*none/,
+  );
+});
+
+test("a saved link's URL and a card's URLs break anywhere, so they start on the glyph's line", () => {
+  // The glyph is a float: a first word too long for the rest of the line
+  // breaks beside it (overflow-wrap) instead of moving below it, and a URL,
+  // which has no break points of its own, breaks between any characters.
+  const url = ruleBody(postsCss, ".post-link-card-url");
+  assert.match(url, /overflow-wrap:\s*anywhere/);
+  assert.match(url, /word-break:\s*break-all/);
+  assert.match(ruleBody(feedCss, ".research-feed-url"), /word-break:\s*break-all/);
+  for (const selector of [".research-feed-card-title", ".research-feed-card-question", ".research-feed-child-text"]) {
+    assert.match(ruleBody(feedCss, selector), /overflow-wrap:\s*anywhere/, selector);
+  }
+  assert.match(
+    ruleBody(researchCss, ".research-msg-prompt .turn-markdown.research-prose,\n.research-msg-plain"),
+    /overflow-wrap:\s*anywhere/,
+  );
+  // Not an inline box, whose line break after it would let the URL drop
+  // below it.
+  assert.doesNotMatch(ruleBody(feedCss, ".research-row-glyph"), /display:\s*inline/);
 });

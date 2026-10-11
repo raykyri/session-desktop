@@ -1,16 +1,14 @@
-import { useRef, type CSSProperties, type ReactNode } from "react";
-import { Star } from "lucide-react";
+import { useId, useRef, type CSSProperties, type ReactNode } from "react";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
+import {
+  researchRowGlyph,
+  type ResearchRowKind,
+  type ResearchRowState,
+} from "../../lib/researchRowGlyph";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
+import ResearchRowGlyph from "./ResearchRowGlyph";
 import ResearchRowRail from "./ResearchRowRail";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
-
-export type ResearchFeedCardStatus = "running" | "failed";
-
-const STATUS_LABELS: Record<ResearchFeedCardStatus, string> = {
-  running: "Running",
-  failed: "Failed",
-};
 
 interface ResearchFeedCardProps {
   /** Tree id, or draft id for a draft card. */
@@ -22,14 +20,18 @@ interface ResearchFeedCardProps {
   title?: string | null;
   /** Renders the question or post body. The body passes its prompt text
    * through `asQuestion`, which sets it as the card's question; the question
-   * and anything rendered outside it (link cards, embeds) show in full. */
+   * and anything rendered outside it (link cards, embeds) show in full.
+   * The card keeps its glyph in a separate column beside the entire body. */
   renderBody: (asQuestion: (content: ReactNode) => ReactNode) => ReactNode;
   /** The accessible name of the card's open button. */
   label: string;
   /** The open button's tooltip (an archived card's archive time). */
   tooltip?: string;
-  status?: ResearchFeedCardStatus | null;
-  /** Replaces the status's name, such as "Failed since last viewed". */
+  /** The root's kind, which the glyph's shape shows. */
+  kind?: ResearchRowKind;
+  /** The thread's run state, which an exchange's glyph shows. */
+  state?: ResearchRowState;
+  /** Replaces the state's name, such as "Failed since last viewed". */
   statusLabel?: string;
   selected?: boolean;
   /** The thread changed since it was last viewed. */
@@ -107,11 +109,13 @@ export function researchCardRefocus(
  * document): the thread title (when it differs) and the root's message, with
  * no metadata row. Rows are bubbles: no fill at rest, an inset
  * rounded fill on hover and selection, and a faint ring on the focused row.
- * Running and failed threads show a status dot in the top-right corner,
- * which the drag handle and … button replace on hover and focus. The whole
- * card opens the thread; links and embeds inside it stay their own targets.
- * Starred children follow as indented rows of their own, each with the same
- * margin controls; dragging one drags its question. */
+ * A separate column holds the row's glyph (ResearchRowGlyph): the root's
+ * kind and the thread's state. The drag handle and … button show in a pill
+ * in the top-right corner on hover and focus. The whole card opens the
+ * thread; links and embeds inside it stay their own targets. Starred
+ * children follow as indented rows of their own, each with a glyph for its
+ * own state and the same margin controls; dragging one drags its
+ * question. */
 export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",
@@ -120,8 +124,9 @@ export default function ResearchFeedCard({
   renderBody,
   label,
   tooltip,
-  status = null,
-  statusLabel: statusLabelOverride,
+  kind = "exchange",
+  state = "answered",
+  statusLabel,
   selected = false,
   unread = false,
   childRows = [],
@@ -138,8 +143,13 @@ export default function ResearchFeedCard({
   onDragStart,
   virtual = false,
 }: ResearchFeedCardProps) {
-  const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const glyphId = useId();
+  // The glyph's state name describes the open button.
+  const glyphNamed = researchRowGlyph({ kind, state, unread }).label !== null;
+  const glyph = (
+    <ResearchRowGlyph kind={kind} state={state} unread={unread} label={statusLabel} id={glyphId} />
+  );
   return (
     <>
       <div
@@ -162,27 +172,21 @@ export default function ResearchFeedCard({
         <button
           type="button"
           className="research-feed-card-hit"
-          aria-label={statusLabel ? `${label}, ${statusLabel}` : label}
+          aria-label={label}
+          aria-describedby={glyphNamed ? glyphId : undefined}
           aria-current={selected ? "true" : undefined}
           title={tooltip}
           onClick={onOpen}
         />
-        {unread ? (
-          <span className="research-feed-card-unread" role="img" aria-label="Updated" />
-        ) : null}
-        <div className="research-feed-card-content">
-          {title ? <span className="research-feed-card-title">{title}</span> : null}
-          {renderBody((content) => (
-            <div className="research-feed-card-question">{content}</div>
-          ))}
+        <div className={`research-feed-card-layout${title ? " has-title" : ""}`}>
+          {glyph}
+          <div className="research-feed-card-content">
+            {title ? <span className="research-feed-card-title">{title}</span> : null}
+            {renderBody((content) => (
+              <div className="research-feed-card-question">{content}</div>
+            ))}
+          </div>
         </div>
-        {status ? (
-          <span
-            className={`research-feed-status is-${status}`}
-            title={statusLabel ?? undefined}
-            aria-hidden="true"
-          />
-        ) : null}
         <ResearchRowRail
           grip={Boolean(onDragStart)}
           menuLabel={menuLabel}
@@ -222,22 +226,15 @@ export default function ResearchFeedCard({
               onClick={() => onOpenChild?.(child)}
             >
               {child.branch ? (
-                <>
-                  <Star
-                    className="research-feed-child-icon"
-                    size={13}
-                    fill="currentColor"
-                    aria-hidden="true"
-                  />
-                  <span className="research-visually-hidden">Starred branch: </span>
-                </>
+                <span className="research-visually-hidden">Starred branch: </span>
               ) : null}
-              <span className="research-feed-child-text">{child.label}</span>
-              {child.running ? <span className="research-visually-hidden">, Running</span> : null}
+              <ResearchRowGlyph kind={child.kind} state={child.state} />
+              <span className="research-feed-child-text">
+                <span className="research-feed-child-label">
+                  {child.label}
+                </span>
+              </span>
             </button>
-            {child.running ? (
-              <span className="research-feed-status is-running" title="Running" aria-hidden="true" />
-            ) : null}
             <ResearchRowRail
               grip={Boolean(onDragStart)}
               menuLabel="Remove the star, bookmark, follow or move"

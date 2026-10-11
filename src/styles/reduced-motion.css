@@ -10,9 +10,9 @@
   transition-duration: 0.01ms !important;
 }
 
-/* Opacity is left to the component: the feed status dot hides on card
-   hover, which a forced opacity here would override. */
-.app-shell.reduce-motion .research-feed-status.is-running,
+/* Opacity is left to the component, which a forced opacity here would
+   override. */
+.app-shell.reduce-motion .research-row-glyph-pulse,
 .app-shell.reduce-motion .research-pulse {
   animation: none;
 }
@@ -33,7 +33,7 @@
     transition-duration: 0.01ms !important;
   }
 
-  .research-feed-status.is-running,
+  .research-row-glyph-pulse,
   .research-pulse {
     animation: none;
   }

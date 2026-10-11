@@ -130,9 +130,12 @@
   text-decoration: none;
 }
 
+/* A URL has no break points of its own, so it breaks anywhere: a feed
+   card's glyph (feed.css) and the URL's start share the first line. */
 .post-link-card-url {
   font-size: var(--research-body-font-size);
   overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .post-link-card:hover .post-link-card-url {

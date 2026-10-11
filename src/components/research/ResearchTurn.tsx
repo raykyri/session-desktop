@@ -24,10 +24,17 @@ import {
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
 import ResearchRowRail from "./ResearchRowRail";
+import ResearchRowGlyph from "./ResearchRowGlyph";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
+import {
+  researchMessageRowHasGlyph,
+  researchRowKind,
+  researchRowState,
+  type ResearchRowState,
+} from "../../lib/researchRowGlyph";
 
 // The backend caps snapshots at 64MB, which is still far beyond what markdown
 // parsing and eager React element creation can absorb without freezing the
@@ -596,23 +603,32 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   );
 }, propsEqualExceptNode);
 
-/** A message's state as a small pill in its row's meta line. */
-export function researchMessagePill(
+/** A message's run state for its row's glyph: a Retry queued behind the
+ * running answer shows as queued. */
+export function researchMessageState(
   status: ResearchNodeStatus,
   retryQueued = false,
-): { label: string; tone: "run" | "error" | "plain" } | null {
-  if (retryQueued || status === "queued") return { label: "Queued", tone: "plain" };
-  if (status === "running" || status === "starting") return { label: "Running", tone: "run" };
-  if (status === "failed") return { label: "Failed", tone: "error" };
-  if (status === "cancelled") return { label: "Stopped", tone: "plain" };
+): ResearchRowState {
+  return retryQueued ? "queued" : researchRowState(status);
+}
+
+/** The states the row's meta line also names in words: Queued (a queued run
+ * or Retry, whose text is muted) and Stopped (the answer is incomplete). */
+export function researchMessageStateWord(state: ResearchRowState): string | null {
+  if (state === "queued") return "Queued";
+  if (state === "stopped") return "Stopped";
   return null;
 }
 
 /** One message in a level's messages column: the user's message in full,
- * then a meta line, shown only when it has something to show: the state
- * pill, "Imported" for an imported report, a filled star when the message is
- * starred, and the branch count (only once the answer has branches). The
- * row's time is not shown; the answer's footer has it. The row is a bubble:
+ * then a meta line, shown only when it has something to show: "Imported"
+ * for an imported report, the word Queued or Stopped, a filled star when the
+ * message is starred, and the branch count (only once the answer has
+ * branches). The first line starts with the row's glyph (ResearchRowGlyph)
+ * unless the row is an answered exchange, the common case: a note, link, X
+ * post or document shows its kind, and a queued, running, failed or stopped
+ * question its state. The row's time is not shown; the answer's footer has
+ * it. The row is a bubble:
  * one button under its content selects the message; links in the message
  * and the meta line's buttons stay their own targets. Only the selected row
  * is in the tab order (the column's keys move between rows). The answer's …
@@ -674,7 +690,19 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   const starred = starrable && status !== "queued" && Boolean(node.starredAt);
   // Provenance: the document source records it.
   const imported = documentSource(node) === "imported";
-  const pill = researchMessagePill(status, retryQueued);
+  const state = researchMessageState(status, retryQueued);
+  const stateWord = researchMessageStateWord(state);
+  const kind = researchRowKind({
+    type: node.type,
+    source: documentSource(node),
+    format: node.type === "post" ? node.format : null,
+    attachments: nodeAttachments(node),
+  });
+  // The glyph's state name is part of the row's name: it is inside the
+  // labelled content.
+  const glyph = researchMessageRowHasGlyph(kind, state) ? (
+    <ResearchRowGlyph kind={kind} state={state} />
+  ) : null;
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
   const showBranches = settled && branchCount > 0;
@@ -687,11 +715,16 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         (row) => ({ element: row.querySelector<HTMLElement>(".research-feed-card-menu"), align: "end" }),
       )
     : null;
-  let prompt: ReactNode = <span className="research-msg-plain">{label}</span>;
+  let prompt: ReactNode = (
+    <span className="research-msg-plain">
+      {glyph}
+      {label}
+    </span>
+  );
   if (showPrompt) {
     prompt = (
       <ResearchUserMessage className="research-prompt research-msg-prompt">
-        <ResearchMessageBody prompt={nodePrompt(node)} attachments={nodeAttachments(node)} />
+        <ResearchMessageBody prompt={nodePrompt(node)} attachments={nodeAttachments(node)} lead={glyph} />
       </ResearchUserMessage>
     );
   }
@@ -724,19 +757,14 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       <div id={labelId} className="research-msg-content" data-research-drag-label="">
         {prompt}
       </div>
-      {pill || imported || starred || showBranches ? (
+      {stateWord || imported || starred || showBranches ? (
         <div className="research-msg-meta">
           {imported ? (
             <span className="research-msg-provenance" title={new Date(node.createdAt).toLocaleString()}>
               Imported
             </span>
           ) : null}
-          {pill ? (
-            <span className={`research-msg-pill is-${pill.tone}`}>
-              {pill.tone === "run" ? <span className="research-pulse" aria-hidden="true" /> : null}
-              {pill.label}
-            </span>
-          ) : null}
+          {stateWord ? <span className="research-msg-state">{stateWord}</span> : null}
           {starred ? (
             <span className="research-msg-starred" role="img" aria-label="Starred" title="Starred">
               <Star size={13} aria-hidden="true" fill="currentColor" />

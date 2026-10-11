@@ -1,8 +1,8 @@
 import { Ellipsis, GripVertical } from "lucide-react";
 
 /** A row's controls: the drag handle and the … button in one pill in the
- * row's top-right corner. Used by feed rows (where the pill covers the
- * status dot) and by a thread's message rows. The pill shows on hover, on
+ * row's top-right corner. Used by feed rows and by a thread's message rows,
+ * over the end of the row's text. The pill shows on hover, on
  * focus within the row and while the row has the `has-open-menu` class. The
  * handle is decoration: a press anywhere on the row starts a drag, except on
  * the … button. */

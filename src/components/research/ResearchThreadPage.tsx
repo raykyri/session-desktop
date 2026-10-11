@@ -151,6 +151,7 @@ import type {
 } from "../../types";
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
+import ResearchRowGlyph from "./ResearchRowGlyph";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import { ResearchEditorColumn, ResearchEditPreview } from "./ResearchEditorColumn";
 import { ResearchThreadPlaceholder, ResearchPairHeader } from "./ResearchColumnChrome";
@@ -4846,12 +4847,17 @@ function ResearchThreadPage({
       return (
         <li key={item.id} className="research-msg-row is-status-queued is-client-queued">
           <div className="research-msg-content">
-            <div className="research-msg-plain is-typed">{item.prompt}</div>
+            <div className="research-msg-plain is-typed">
+              <ResearchRowGlyph kind="exchange" state="queued" />
+              {item.prompt}
+            </div>
           </div>
           <div className="research-msg-meta">
-            <span className={`research-msg-pill${item.failed || stalled ? " is-error" : " is-plain"}`}>
-              {item.failed || stalled ? "Not sent" : "Queued"}
-            </span>
+            {item.failed || stalled ? (
+              <span className="research-msg-pill is-error">Not sent</span>
+            ) : (
+              <span className="research-msg-state">Queued</span>
+            )}
             <button
               type="button"
               className="research-msg-meta-button research-queue-remove"

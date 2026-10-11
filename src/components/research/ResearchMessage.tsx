@@ -86,12 +86,17 @@ export function ResearchMessageBody({
   prompt,
   attachments = [],
   variant = "body",
+  lead,
   renderPrompt,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
   /** Compact for previews such as Home posts; body where the message is read. */
   variant?: ResearchProseVariant;
+  /** A row glyph for the start of the first line: before the prompt's
+   * Markdown, or in the first tweet's header when no prompt shows. With
+   * `renderPrompt`, the prompt's renderer places it instead. */
+  lead?: ReactNode;
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
@@ -101,9 +106,14 @@ export function ResearchMessageBody({
   return (
     <>
       {visiblePrompt ? (
-        renderPrompt
-          ? renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
-          : <ResearchMarkdown text={visiblePrompt} variant={variant} />
+        renderPrompt ? (
+          renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
+        ) : (
+          <>
+            {lead}
+            <ResearchMarkdown text={visiblePrompt} variant={variant} />
+          </>
+        )
       ) : null}
       {tweets.length > 0 ? (
         <div
@@ -120,6 +130,7 @@ export function ResearchMessageBody({
                 tweet={tweet}
                 compact={variant === "compact"}
                 openable={variant !== "compact"}
+                lead={visiblePrompt || index > 0 ? undefined : lead}
               />
             </div>
           ))}

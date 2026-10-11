@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import type { ResearchTreeSummary } from "../../types";
 import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
+import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchFeedCard from "./ResearchFeedCard";
 import { researchPlaceEmptyText } from "./ResearchFeedTray";
@@ -64,7 +65,11 @@ function ResearchArchivedFeed({
           renderBody={(asQuestion) => asQuestion(tree.title)}
           label={tree.title}
           tooltip={archivedTooltip(tree.archivedAt)}
+          kind={researchThreadKind(tree, undefined)}
+          state={researchThreadState(tree, undefined)}
+          statusLabel={tree.hasUnseenFailure ? "Failed since last viewed" : undefined}
           selected={tree.id === selectedTreeId}
+          unread={tree.hasUnseenUpdate && tree.id !== selectedTreeId}
           menuOpen={tree.id === menuTreeId}
           onOpen={() => onOpen(tree.id)}
           onMenu={onMenu ? (anchor) => onMenu(tree.id, anchor) : undefined}

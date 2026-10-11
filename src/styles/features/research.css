@@ -913,10 +913,12 @@
   outline: none;
 }
 
+/* A flow root, so the glyph's float (feed.css) stays inside it. */
 .research-msg-content {
   position: relative;
   z-index: 1;
-  padding: 10px 6px 2px 12px;
+  display: flow-root;
+  padding: 10px 12px 2px;
   pointer-events: none;
 }
 
@@ -947,6 +949,13 @@
   overflow-wrap: anywhere;
 }
 
+/* The glyph before a message's Markdown is set in the Markdown's type, so
+   its 1lh centers it on the first line (feed.css). */
+.research-msg-prompt > .research-row-glyph {
+  font-size: calc(var(--research-compact-font-size) + 1px);
+  line-height: var(--research-compact-line-height);
+}
+
 .research-msg-plain {
   display: block;
   white-space: pre-wrap;
@@ -960,9 +969,10 @@
   color: var(--text-muted);
 }
 
-/* Provenance, pill, starred mark and branch count with even gaps: the 22px
-   button insets its 13px icon by 4.5px, and the labels and the mark take
-   the same margin. */
+/* Provenance, the word Queued or Stopped, starred mark and branch count
+   with even gaps: the 22px button insets its 13px icon by 4.5px, and the
+   labels and the mark take the same margin. The row's glyph (feed.css)
+   shows the run state. */
 .research-msg-meta {
   position: relative;
   z-index: 1;
@@ -971,7 +981,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 2px 4px 6px 12px;
+  padding: 2px 12px 6px;
   color: var(--text-faint);
   font-size: calc(12px + var(--font-ui-size-offset));
   pointer-events: none;
@@ -981,7 +991,8 @@
   pointer-events: auto;
 }
 
-.research-msg-provenance {
+.research-msg-provenance,
+.research-msg-state {
   margin-right: 4.5px;
 }
 
@@ -1058,11 +1069,6 @@
   font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
-}
-
-.research-msg-pill.is-run {
-  color: var(--status-active-fg);
-  background: color-mix(in srgb, var(--status-active-fg) 12%, transparent);
 }
 
 /* Mixed 20% toward the strongest text so the label reaches 4.5:1 on its
