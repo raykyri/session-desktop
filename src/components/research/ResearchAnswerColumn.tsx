@@ -7,6 +7,7 @@ import { columnAttributes, type ResearchColumn } from "../../lib/researchColumns
 import { nodeEditedAt, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
 import type { SegmentView } from "../../lib/researchSegmentView";
 import { researchMarkerLabel } from "../../lib/researchThreadView";
+import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
 import type { ResearchNode } from "../../types";
 import { ResearchRelativeTime } from "./ResearchClock";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
@@ -130,7 +131,6 @@ function ResearchBranchMarkerButton({
 export function ResearchAnswerColumn({
   column,
   node,
-  parent,
   view,
   label,
   current,
@@ -152,7 +152,6 @@ export function ResearchAnswerColumn({
 }: {
   column: Extract<ResearchColumn, { role: "answer" }>;
   node: ResearchNode;
-  parent: ResearchNode | undefined;
   view: SegmentView;
   /** The message's label, for the column's accessible name. */
   label: string;
@@ -227,9 +226,6 @@ export function ResearchAnswerColumn({
               contentError={contentError}
               cancelling={cancelling}
               elapsedSince={active && startedAt ? startedAt : null}
-              waitsForParent={
-                nodeStatus(node) === "queued" && Boolean(parent) && isActiveResearchStatus(nodeStatus(parent!))
-              }
               recapPending={recapPending}
               pointerOverAnnotation={pointerOverAnnotation}
               canRetry={!archived && canRetryResearchNode(node)}
@@ -279,6 +275,48 @@ export function ResearchAnswerColumn({
               ) : null}
             </div>
           ) : null}
+        </article>
+      </div>
+      <ResearchColumnResizer kind="answer" label="Resize answer column" />
+    </section>
+  );
+}
+
+/** A level's answer column (A{level}) while a queued message of its column
+ * is selected: the question, its state, and Cancel queued message, which
+ * removes it from the queue (the message queued after it moves up). */
+export function ResearchQueuedAnswerColumn({
+  column,
+  item,
+  current,
+  onCancel,
+}: {
+  column: Extract<ResearchColumn, { role: "answer" }>;
+  item: QueuedResearchFollowup;
+  current: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <section
+      className={`research-pair-answer${current ? " is-current" : ""}`}
+      {...columnAttributes(column)}
+      aria-label={`Queued message: ${researchPairLabel(item.prompt)}`}
+    >
+      <header className="research-column-header is-spanned">
+        <div className="research-column-bar" data-tauri-drag-region />
+      </header>
+      <div className="research-column-scroll" tabIndex={-1}>
+        <article className="research-answer research-reading-surface">
+          <section className="research-response" aria-label="Queued message">
+            <div className="research-turn-note is-state" role="status">
+              {item.failed ? `Not sent: ${item.failed}` : "Queued"}
+            </div>
+            <div className="research-turn-actions">
+              <button className="control-button research-turn-button" type="button" onClick={onCancel}>
+                Cancel queued message
+              </button>
+            </div>
+          </section>
         </article>
       </div>
       <ResearchColumnResizer kind="answer" label="Resize answer column" />

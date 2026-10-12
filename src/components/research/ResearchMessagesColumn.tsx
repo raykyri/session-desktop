@@ -160,9 +160,14 @@ export function ResearchChainComposer({
 }
 
 /** The chain's client-side queue, listed below its messages in the order it
- * sends (the next to send is first). */
+ * sends (the next to send is first). A queued message can be selected: its
+ * column's answer column then shows it, with Cancel queued message. */
 export interface ResearchQueueProps {
   items: readonly QueuedResearchFollowup[];
+  /** The selected queued message, if any. */
+  selectedId: string | null;
+  /** Selects a queued message. */
+  onSelect: (item: QueuedResearchFollowup) => void;
   /** The chain's last answer stopped, so the first item cannot send. */
   tailStalled: boolean;
   onRemove: (item: QueuedResearchFollowup) => void;
@@ -171,14 +176,35 @@ export interface ResearchQueueProps {
   onEdit: (item: QueuedResearchFollowup) => void;
 }
 
-function ResearchQueuedFollowups({ items, tailStalled, onRemove, onRetry, onEdit }: ResearchQueueProps) {
+function ResearchQueuedFollowups({
+  items,
+  selectedId,
+  tailStalled,
+  onSelect,
+  onRemove,
+  onRetry,
+  onEdit,
+}: ResearchQueueProps) {
   return (
     <>
       {items.map((item, index) => {
         const stalled = index === 0 && !item.failed && tailStalled;
+        const selected = item.id === selectedId;
+        const labelId = `research-queued-${item.id}`;
         return (
-          <li key={item.id} className="research-msg-row is-status-queued is-client-queued">
-            <div className="research-msg-content">
+          <li
+            key={item.id}
+            className={`research-msg-row is-status-queued is-client-queued${selected ? " is-selected" : ""}`}
+          >
+            <button
+              type="button"
+              className="research-msg-hit"
+              aria-current={selected ? "true" : undefined}
+              aria-labelledby={labelId}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => onSelect(item)}
+            />
+            <div id={labelId} className="research-msg-content">
               <div className="research-msg-plain is-typed">
                 <ResearchRowGlyph kind="exchange" state="queued" />
                 {item.prompt}
@@ -193,9 +219,10 @@ function ResearchQueuedFollowups({ items, tailStalled, onRemove, onRetry, onEdit
               <button
                 type="button"
                 className="research-msg-meta-button research-queue-remove"
+                aria-label="Cancel this queued message"
                 onClick={() => onRemove(item)}
               >
-                Remove
+                Cancel
               </button>
             </div>
             {item.failed || stalled ? (
@@ -289,6 +316,8 @@ function ResearchChainRows({
   } = shared;
   const head = nodeById.get(headId);
   const dragPlace = !archived && displayIds.length > 1 ? chainDropPlace(headId) : null;
+  // A selected queued message takes the selection's place in the list.
+  const selectedRowId = queue.selectedId === null ? selectedId : null;
   return (
     <ul className="research-msg-list" data-research-drop={chainDropPlace(headId)} data-research-drop-kinds="message">
       {displayIds.map((id, index) => {
@@ -297,7 +326,7 @@ function ResearchChainRows({
           return null;
         }
         const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
-        const selected = selectedId === id;
+        const selected = selectedRowId === id;
         return (
           <ResearchMessageRow
             key={id}

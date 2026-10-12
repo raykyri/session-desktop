@@ -302,8 +302,6 @@ interface ResearchAnswerPaneProps {
   /** When an active run started: the pane shows its elapsed clock ("1:08"),
    * which ticks in its own leaf (ResearchElapsedClock). */
   elapsedSince: number | null;
-  /** A queued run whose parent's answer is still running. */
-  waitsForParent: boolean;
   recapPending: boolean;
   pointerOverAnnotation: boolean;
   canRetry: boolean;
@@ -327,18 +325,14 @@ interface ResearchAnswerPaneProps {
 
 /** The status line of an active run: "Working", with the run's latest tool
  * activity when it has one ("Working · reading lesswrong.com"). */
-export function runStatusText(
-  status: ResearchNodeStatus,
-  waitsForParent: boolean,
-  activity: string | null = null,
-) {
+export function runStatusText(status: ResearchNodeStatus, activity: string | null = null) {
   if (status === "running") {
     return activity ? `Working · ${activity}` : "Working";
   }
   if (status === "starting") {
     return "Starting…";
   }
-  return waitsForParent ? "Queued. Starts when the running answer finishes." : "Queued";
+  return "Queued";
 }
 
 const QUEUED_RETRY_TEXT = "Queued. Starts when the running answer in this conversation finishes.";
@@ -355,7 +349,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   contentError,
   cancelling,
   elapsedSince,
-  waitsForParent,
   recapPending,
   pointerOverAnnotation,
   canRetry,
@@ -439,7 +432,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
     return (
       <section className="research-response" aria-label="Research response">
         <div className="research-turn-note is-state" role="status">
-          {retryQueued ? QUEUED_RETRY_TEXT : runStatusText(nodeStatus(node), waitsForParent)}
+          {retryQueued ? QUEUED_RETRY_TEXT : runStatusText(nodeStatus(node))}
         </div>
         <div className="research-turn-actions">
           <button
@@ -461,7 +454,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
         {active ? (
           <div className="research-turn-run" role="status">
             <span className="research-pulse" aria-hidden="true" />
-            <span>{runStatusText(nodeStatus(node), waitsForParent)}</span>
+            <span>{runStatusText(nodeStatus(node))}</span>
             {elapsedSince !== null ? <ResearchElapsedClock since={elapsedSince} /> : null}
             {stopButton("Stop")}
           </div>
@@ -575,7 +568,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           <span role="status">
             {runStatusText(
               nodeStatus(node),
-              waitsForParent,
               nodeStatus(node) === "running" ? latestToolActivityLabel(view.timelineItems) : null,
             )}
           </span>

@@ -151,6 +151,15 @@ export function researchQueueAction(
   return { kind: "send", item: queue[0], tailId: tail.id };
 }
 
+/** A chain's queue after cancelling the queued message `itemId`: the
+ * messages queued after it move up, so the next one sends in its place. */
+export function researchQueueWithout(
+  queue: readonly QueuedResearchFollowup[],
+  itemId: string,
+): QueuedResearchFollowup[] {
+  return queue.filter((entry) => entry.id !== itemId);
+}
+
 /** The fork that sends an edited question in place of a failed (or stopped)
  * one: same parent, anchor (passage or reply) and inline slot, naming the failed node as
  * the one it replaces. The backend admits the new node before it removes the

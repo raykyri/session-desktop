@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ResearchQueuedAnswerColumn } from "../src/components/research/ResearchAnswerColumn";
 import {
   ResearchBranchesColumn,
   type ResearchBranchSourceProps,
@@ -109,7 +110,15 @@ function render(
       sourceOf,
       composerOf: (group) =>
         createElement("div", { className: "test-composer" }, group.kind === "branch" ? `ask ${group.headId}` : "ask new"),
-      queueOf: () => ({ items: [], tailStalled: false, onRemove: noop, onRetry: noop, onEdit: noop }),
+      queueOf: () => ({
+        items: [],
+        selectedId: null,
+        tailStalled: false,
+        onSelect: noop,
+        onRemove: noop,
+        onRetry: noop,
+        onEdit: noop,
+      }),
       onClear: noop,
       onScroll: undefined,
     }),
@@ -208,7 +217,15 @@ test("a row with branches shows an indicator: accent when one is selected in the
         from: "Survey",
       }),
       composerOf: () => null,
-      queueOf: () => ({ items: [], tailStalled: false, onRemove: noop, onRetry: noop, onEdit: noop }),
+      queueOf: () => ({
+        items: [],
+        selectedId: null,
+        tailStalled: false,
+        onSelect: noop,
+        onRemove: noop,
+        onRetry: noop,
+        onEdit: noop,
+      }),
       onClear: noop,
       onScroll: undefined,
     }),
@@ -227,4 +244,72 @@ test("an unsent branch is a group at its source's position, with its first quest
   assert.match(html, /class="research-branch-group is-pending" data-research-branch-group="pending:doc" aria-label="New branch"/);
   assert.match(html, /<i>“thresholds”<\/i>/);
   assert.deepEqual([...html.matchAll(/class="test-composer">([^<]+)</g)].map((match) => match[1]), ["ask new"]);
+});
+
+test("a queued message is selectable, with Cancel in its row and Cancel queued message in its answer column", () => {
+  const strip = researchStrip(nodes, ["ans", "a1f"], null);
+  const column = strip.columns.find((candidate): candidate is BranchesColumn => candidate.id === "T1");
+  assert.ok(column);
+  const item = { id: "q1", prompt: "And who audits them?", createdAt: 0 };
+  const html = renderToStaticMarkup(
+    createElement(ResearchBranchesColumn, {
+      column,
+      current: true,
+      shared: {
+        archived: false,
+        treeTitle: "Survey",
+        nodeById,
+        branchesByParent: researchBranchesByParent(nodes),
+        queuedRetries: new Set<string>(),
+        answerMenuOpenId: null,
+        isUnread: () => false,
+        branchStateOf: () => null,
+        rowActions: {
+          registerSegmentElement: noop,
+          onSelect: noop,
+          onToggleBranches: noop,
+          onOpenAnswerMenu: noop,
+          onOpenContextMenu: noop,
+          onDragStart: noop,
+        },
+      },
+      openSourceId: null,
+      sourceOf: (group) => ({
+        anchor: group.anchor,
+        parent: undefined,
+        created: true,
+        resolves: true,
+        parentLoaded: true,
+        from: "Survey",
+      }),
+      composerOf: () => null,
+      queueOf: (headId) => ({
+        items: headId === "a1" ? [item] : [],
+        selectedId: headId === "a1" ? "q1" : null,
+        tailStalled: false,
+        onSelect: noop,
+        onRemove: noop,
+        onRetry: noop,
+        onEdit: noop,
+      }),
+      onClear: noop,
+      onScroll: undefined,
+    }),
+  );
+  // The queued row holds the column's selection in place of a1f.
+  assert.match(html, /research-msg-row is-status-queued is-client-queued is-selected"><button type="button" class="research-msg-hit" aria-current="true"/);
+  assert.doesNotMatch(html, /data-node-id="a1f" aria-current/);
+  // Its meta line: the state and Cancel; no caption about when it runs.
+  assert.match(html, /<span class="research-msg-state">Queued<\/span><button type="button" class="research-msg-meta-button research-queue-remove" aria-label="Cancel this queued message">Cancel<\/button>/);
+  assert.doesNotMatch(html, /Runs after|Starts when/);
+
+  const answer = strip.columns.find((candidate) => candidate.id === "A1");
+  assert.equal(answer?.role, "answer");
+  if (answer?.role !== "answer") return;
+  const pane = renderToStaticMarkup(
+    createElement(ResearchQueuedAnswerColumn, { column: answer, item, current: true, onCancel: noop }),
+  );
+  assert.match(pane, /data-research-column="A1"/);
+  assert.match(pane, />Queued<\/div>/);
+  assert.match(pane, /<button class="control-button research-turn-button" type="button">Cancel queued message<\/button>/);
 });

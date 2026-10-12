@@ -179,7 +179,6 @@ function renderPane(node: ResearchNode, options: { canRetry?: boolean } = {}) {
         contentError: null,
         cancelling: false,
         elapsedSince: null,
-        waitsForParent: false,
         recapPending: false,
         pointerOverAnnotation: false,
         canRetry: options.canRetry ?? true,

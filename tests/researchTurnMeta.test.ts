@@ -164,8 +164,9 @@ test("a note, link, X post or document row shows its kind's glyph in the message
 });
 
 test("the running status line adds the latest activity when there is one", () => {
-  assert.equal(runStatusText("running", false, "reading lesswrong.com"), "Working · reading lesswrong.com");
-  assert.equal(runStatusText("running", false, null), "Working");
-  assert.equal(runStatusText("starting", false, "ignored"), "Starting…");
-  assert.equal(runStatusText("queued", true), "Queued. Starts when the running answer finishes.");
+  assert.equal(runStatusText("running", "reading lesswrong.com"), "Working · reading lesswrong.com");
+  assert.equal(runStatusText("running", null), "Working");
+  assert.equal(runStatusText("starting", "ignored"), "Starting…");
+  // A queued run's line is the state alone.
+  assert.equal(runStatusText("queued"), "Queued");
 });

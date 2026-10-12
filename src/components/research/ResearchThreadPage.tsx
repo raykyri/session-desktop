@@ -63,6 +63,7 @@ import {
   researchEditedQuestionFork,
   researchLevelPath,
   researchQueueStep,
+  researchQueueWithout,
   researchSurvivingAncestor,
 } from "../../lib/researchBranchView";
 import {
@@ -123,6 +124,7 @@ import { ResearchFollowUpsColumn, ResearchNoteColumn } from "./ResearchNoteColum
 import {
   ResearchAnswerColumn,
   ResearchMarkerTip,
+  ResearchQueuedAnswerColumn,
   type ResearchAnswerPaneHandlers,
   type ResearchMarkerActions,
 } from "./ResearchAnswerColumn";
@@ -304,6 +306,9 @@ function ResearchThreadPage({
   // which makes the deepest level current.
   const [focusedColumnId, setFocusedColumnId] = useState<ResearchColumnId | null>(null);
   const [composerText, setComposerText] = useState<Record<string, string>>({});
+  // The selected queued message (an item of a chain's client-side queue):
+  // its column's answer column shows it. Any other selection clears it.
+  const [queuedView, setQueuedView] = useState<{ headId: string; itemId: string } | null>(null);
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   // Per chain head: the failed node whose question the composer is editing.
   const [editingByHead, setEditingByHead] = useState<Record<string, string>>({});
@@ -625,6 +630,7 @@ function ResearchThreadPage({
       }
       setSelection(target);
       persistSelection(target);
+      setQueuedView(null);
       // Leaving a new branch unsent discards it, as Esc does: its stored text
       // must not reopen it (and close these levels) on the next mount.
       const dropped = pendingRef.current;
@@ -2078,11 +2084,18 @@ function ResearchThreadPage({
     const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
     return {
       items: queues[headId] ?? EMPTY_QUEUE,
+      selectedId: queuedView?.headId === headId ? queuedView.itemId : null,
       tailStalled: researchQueueStep(tail) === "stalled",
-      onRemove: (item) => {
-        updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
-        window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+      // The chain's last message becomes its column's selection, so the
+      // column's answer column shows the queued message in its place.
+      onSelect: (item) => {
+        if (!tail) return;
+        const path = selectionWith(tail.id);
+        navigate(path);
+        setQueuedView({ headId, itemId: item.id });
+        requestFocus({ kind: "row", level: Math.max(0, path.indexOf(tail.id)) }, "reveal");
       },
+      onRemove: (item) => cancelQueued(headId, item.id),
       // Retry removes the Retry button: focus moves to the item's Remove
       // button, and to the ask box once the question has been sent (see
       // useResearchChainQueue).
@@ -2105,6 +2118,16 @@ function ResearchThreadPage({
         window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
       },
     };
+  };
+
+  /** Cancels a queued message: it leaves the queue, and the message queued
+   * after it moves up. Focus goes to the chain's ask box. */
+  const cancelQueued = (headId: string, itemId: string) => {
+    updateQueue(headId, (queue) => researchQueueWithout(queue, itemId));
+    if (queuedView?.itemId === itemId) {
+      setQueuedView(null);
+    }
+    window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
   };
 
   // The rows of every messages and branches column.
@@ -2312,6 +2335,21 @@ function ResearchThreadPage({
         );
       }
       case "answer": {
+        const queuedHead = queuedView && column.level.headId === queuedView.headId ? queuedView.headId : null;
+        const queuedItem = queuedHead
+          ? (queues[queuedHead] ?? EMPTY_QUEUE).find((item) => item.id === queuedView?.itemId)
+          : undefined;
+        if (queuedHead && queuedItem) {
+          return (
+            <ResearchQueuedAnswerColumn
+              key={`${column.id}:queued:${queuedItem.id}`}
+              column={column}
+              item={queuedItem}
+              current={currentLevel === column.level.index}
+              onCancel={() => cancelQueued(queuedHead, queuedItem.id)}
+            />
+          );
+        }
         const node = nodeById.get(column.nodeId);
         const view = segmentViews.get(column.nodeId);
         if (!node || !view) {
@@ -2323,7 +2361,6 @@ function ResearchThreadPage({
             key={columnKey(column)}
             column={column}
             node={node}
-            parent={node.parentNodeId ? nodeById.get(node.parentNodeId) : undefined}
             view={view}
             label={researchNodeLabel(node, treeTitleText)}
             current={currentLevel === column.level.index}

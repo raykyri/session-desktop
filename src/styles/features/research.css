@@ -1170,11 +1170,6 @@
 }
 
 
-.research-msg-row.is-client-queued .research-msg-content,
-.research-msg-row.is-client-queued .research-msg-meta {
-  pointer-events: auto;
-}
-
 .research-msg-note {
   margin: 0;
   padding: 0 8px 0 12px;

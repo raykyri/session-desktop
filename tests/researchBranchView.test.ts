@@ -7,6 +7,7 @@ import {
   researchEditedQuestionFork,
   researchLevelPath,
   researchQueueAction,
+  researchQueueWithout,
   researchSurvivingAncestor,
   researchQueueStep,
   researchPairLabel,
@@ -98,6 +99,20 @@ test("a queue sends its first question from the chain's tail once it completes",
     tailId: "t",
   });
   assert.deepEqual(researchQueueAction(done, "h", [], undefined), { kind: "wait" });
+});
+
+test("cancelling a queued message moves the messages queued after it up", () => {
+  const done = [node("h"), node("t", { parentNodeId: "h", inline: true })];
+  const queue = [queued("q1"), queued("q2"), queued("q3")];
+  assert.deepEqual(researchQueueWithout(queue, "q1"), [queued("q2"), queued("q3")]);
+  assert.deepEqual(researchQueueWithout(queue, "q2"), [queued("q1"), queued("q3")]);
+  assert.deepEqual(researchQueueWithout(queue, "missing"), queue);
+  // The next question sent is the one queued after the cancelled one.
+  assert.deepEqual(researchQueueAction(done, "h", researchQueueWithout(queue, "q1"), undefined), {
+    kind: "send",
+    item: queued("q2"),
+    tailId: "t",
+  });
 });
 
 test("after a send the queue waits until the new child is in the tree, then follows it", () => {
