@@ -198,7 +198,12 @@ export default function SettingsDialog({
             ) : (
               <div className="settings-content" role="tabpanel">
                 <label className="settings-row settings-toggle">
-                  <span className="settings-label">Require ⌘↵ to send</span>
+                  <span className="settings-label-stack">
+                    <span className="settings-label">Require ⌘↵ to send</span>
+                    <span className="settings-hint settings-hint-weak">
+                      Ask boxes in a thread's columns always send with ⌘↵. This applies to the other boxes.
+                    </span>
+                  </span>
                   <input
                     type="checkbox"
                     className="settings-checkbox"
