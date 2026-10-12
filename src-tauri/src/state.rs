@@ -581,7 +581,7 @@ struct Model {
     active_tab_id: Option<String>,
     /// Undo stack for explicitly closed tabs, most-recent last. Transient: closed tabs
     /// can be restored during the current app run (repeated undo reopens successive
-    /// closes), but they are not resurrected after restart. Bounded by
+    /// closes), but they are not restored after restart. Bounded by
     /// `MAX_CLOSED_PANE_UNDO`.
     closed_pane_stack: Vec<ClosedPaneSnapshot>,
 }
@@ -1001,7 +1001,7 @@ fn queued_turn_wait_is_resolved_locked(model: &Model, wait_for: &QueuedTurnWait)
     let Some(target) = model.agents.get(&wait_for.agent_id) else {
         // The target agent is gone entirely (e.g. its pane closed and the agent was
         // pruned). There is nothing left to wait on, so release the waiter rather than
-        // block it on a ghost forever.
+        // wait indefinitely for a removed agent.
         return true;
     };
     // A Failed target keeps its waiters blocked, on purpose: "run this after X
@@ -1009,7 +1009,7 @@ fn queued_turn_wait_is_resolved_locked(model: &Model, wait_for: &QueuedTurnWait)
     // Likewise an agent parked awaiting input or a permission prompt has not finished
     // its work, so its waiters stay blocked until it actually goes idle/done. These are
     // checked before the pane fallbacks below so a Failed target blocks even if its pane
-    // binding was cleared — only the agent genuinely going away (above) releases a wait
+    // binding was cleared — only the agent being removed (above) releases a wait
     // on a failed target.
     if matches!(
         target.status,
@@ -2288,7 +2288,7 @@ impl AppState {
     /// fresh PTYs. Returns the recoverable pane infos in a stable order.
     /// Checks the persisted state file is readable before `restore_session`
     /// hydrates and enables saving. Returns `Err` with a user-facing message when
-    /// the file exists but cannot be read, so startup can abort loudly instead of
+    /// the file exists but cannot be read, so startup can report the error and stop instead of
     /// overwriting an intact session with an empty one. See
     /// [`persistence::preflight_state`].
     pub fn preflight_persisted_state(&self) -> Result<(), String> {
@@ -5498,7 +5498,7 @@ impl AppState {
             // path gets here. That teardown's research detach found nothing
             // bound — this bind hadn't happened — so binding the inactive pane id
             // now would create a run nothing ever settles or unbinds: a
-            // phantom "active" node that pins its tree (blocking
+            // incorrectly active node that pins its tree (blocking
             // archive/remove and folder changes) until the user cancels it by
             // hand or restarts. Checked under the same model lock remove_pane
             // takes, so either the pane is still present (and its later detach
@@ -15991,7 +15991,7 @@ mod tests {
         let node = restored.research_node(&detail.tree.root_node_id).unwrap();
         assert_eq!(node.status(), ResearchNodeStatus::Failed);
         // A settled node no longer counts as an active run, so the tree stays
-        // removable instead of being pinned by a phantom launch.
+        // removable instead of being pinned by a launch that did not occur.
         restored.remove_research_tree(&detail.tree.id).unwrap();
     }
 
@@ -16936,7 +16936,7 @@ mod tests {
         kept.sort_unstable();
         assert_eq!(kept, ["child-a", "root-a"]);
         // The dangling pane binding is cleared, so the tree is removable
-        // instead of being pinned by a phantom active run.
+        // instead of being pinned by an incorrectly active run.
         assert!(
             restored
                 .research_node("root-a")
@@ -17140,7 +17140,7 @@ mod tests {
         assert_eq!(detail.nodes[0].group_id, research_workspace.id);
         // The migrated run cannot resume across the restart: its pane is
         // dropped from recovery (research panes never respawn) and the node
-        // settles Failed instead of resurrecting as a live run.
+        // settles Failed instead of being restored as a live run.
         assert!(
             recovered_panes
                 .iter()
@@ -19861,7 +19861,7 @@ mod tests {
         // including its research detach, which found nothing bound — before
         // the launch path could bind. The bind must not reactivate the exited
         // pane id: nothing would ever settle or unbind the node again, and
-        // the phantom "active" run would pin the tree until a manual cancel
+        // the incorrectly active run would pin the tree until a manual cancel
         // or restart.
         let mut agent = sample_agent("research-agent");
         agent.status = AgentStatus::Running;

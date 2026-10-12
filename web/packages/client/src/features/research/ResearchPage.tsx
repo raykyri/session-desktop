@@ -1116,9 +1116,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     [copyThread, me, requestRetry, openEditSession],
   );
 
-  // One node's rows, as the string the memo below is keyed on. Encoding is the
-  // whole point: this is the only thing the rows are built from, so a delta
-  // that leaves all seven answers alone leaves the rows' identity alone too.
+  // Encode the node's row inputs as the memo key. Deltas that leave all seven
+  // inputs unchanged preserve the rows' identity.
   const encodeNodeMenu = useCallback(
     (nodeId: string): string | null => {
       const node = nodesById.get(nodeId);

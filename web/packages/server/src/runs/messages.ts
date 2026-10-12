@@ -28,8 +28,8 @@ import { extractionKind } from "../uploads/limits.js";
 import type { RunToolContext } from "./tools/context.js";
 import { chunkDocumentText, documentPlainText } from "./tools/documentRead.js";
 
-/** `04-agent-runtime.md` §4. Deliberately below every model's real window:
- * the budget is what keeps a long thread cheap, not only what keeps it legal. */
+/** `04-agent-runtime.md` §4. Below each model's context window to limit
+ * the cost of long threads. */
 export const CONTEXT_BUDGET_TOKENS = 200_000;
 
 /** Number of trailing nodes that retain complete tool results. */

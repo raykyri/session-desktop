@@ -336,7 +336,7 @@ fn start_transcript_tail_inner(
                         return;
                     }
                     // A single miss is normal while Claude is mid-write; a file that
-                    // stays unreadable means the timeline has quietly stalled, so
+                    // stays unreadable means the timeline has stalled without notification, so
                     // surface that once (cleared above when reads recover).
                     read_failures = read_failures.saturating_add(1);
                     if read_failures == READ_FAILURE_NOTICE_THRESHOLD && !notice_active {

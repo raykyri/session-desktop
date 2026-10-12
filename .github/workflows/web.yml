@@ -74,7 +74,7 @@ jobs:
 
   # The image is built on every run so a Dockerfile change cannot break a
   # deploy unnoticed; it is never pushed. `flyctl deploy --remote-only` builds
-  # it again on Fly's builder, which is the one that matters.
+  # it again on Fly's builder, used for deployment.
   docker:
     runs-on: ubuntu-latest
     steps:

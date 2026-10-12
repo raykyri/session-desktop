@@ -1081,14 +1081,14 @@ impl CodexAdapter {
         }
         // Status/paused writes go straight to the store without touching this
         // local snapshot, so re-read the agent before attaching it — otherwise
-        // the event ships a stale copy and the surgical upsert below hides the
+        // the event ships a stale copy and the per-agent upsert below hides the
         // change from the UI.
         let agent = match agent {
             Some(agent) => state.agent(&agent.id)?.or(Some(agent)),
             None => None,
         };
         // Carry the updated agent so the frontend can apply this status change
-        // surgically instead of refetching the entire agent list on every hook
+        // directly instead of refetching the entire agent list on every hook
         // event (which also avoids out-of-order refetches clobbering newer state).
         if let (Value::Object(payload), Some(agent)) = (&mut event_payload, agent.as_ref()) {
             payload.insert(
@@ -1293,7 +1293,7 @@ fn build_codex_fork_args(
         // Delimit the prompt with `--` so a fork prompt that happens to start with
         // `-` (e.g. a forged `agent.fork` payload of "--dangerously-bypass-...") is
         // parsed as the positional prompt, not as a Codex flag that could weaken the
-        // sandbox/approval posture. Mirrors the initial-launch path (`prompt_tail_args`).
+        // sandbox and approval settings. Mirrors the initial-launch path (`prompt_tail_args`).
         tail_args.push("--".to_string());
         tail_args.push(prompt.to_string());
     }
@@ -2040,7 +2040,7 @@ fn start_codex_transcript_binding(
     {
         // No usable session id and no explicit transcript path, so directory
         // discovery can't run. An already-bound pane may receive such a hook from
-        // a transient side conversation; keep its canonical binding quietly.
+        // a transient side conversation; keep its canonical binding without a notice.
         emit_codex_transcript_failure_if_unbound(
             &state,
             &agent_id,

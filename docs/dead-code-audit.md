@@ -41,7 +41,7 @@ that a registered backend command or persisted field can safely be removed.
   static analysis. `scripts/module-contracts.json` names each retained test-only
   module and compatibility export with a reason. New exceptions require an
   explicit entry; stale exceptions fail. The four independently tested process
-  contracts and backend/persisted DTO mirrors remain retained deliberately.
+  contracts and backend/persisted DTO mirrors are retained.
 - **Consistent JSX execution:** test commands and website development share
   `tsconfig.runtime.json`. The website no longer needs an otherwise unused React
   import to compensate for a different test transform.

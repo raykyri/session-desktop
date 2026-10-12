@@ -3546,7 +3546,7 @@ fn main() {
                 }
                 // Refuse to continue if the saved session exists but can't be read:
                 // starting empty here would let the first save overwrite it with
-                // nothing and no backup. Abort loudly (terminal + GUI) so a relaunch
+                // nothing and no backup. Report the error in the terminal and GUI so a relaunch
                 // after fixing the transient cause restores the session intact.
                 if let Err(err) = state.preflight_persisted_state() {
                     eprintln!("\nsession: {err}\n");

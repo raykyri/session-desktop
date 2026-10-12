@@ -1521,7 +1521,7 @@ fn support_file_relative(file: &SupportFile) -> Result<PathBuf, String> {
 /// `SupportFile` contract. Uses the pruning and O_EXCL semantics of the
 /// inline writers this replaced, and tightens their directory handling: every
 /// level from the shared root down to the file's parent is owner-only from the
-/// moment it exists, and a descriptor whose path does not genuinely resolve
+/// moment it exists, and a descriptor whose path does not resolve
 /// below its declared root is refused rather than written.
 pub(crate) fn materialize_support_files(files: &[SupportFile]) -> Result<(), String> {
     for file in files {
@@ -3577,7 +3577,7 @@ fn agent_needs_explicit_resize_signal(adapter_id: Option<&str>) -> bool {
 
 pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, String> {
     // Validate the pane id against the model before inspecting the child handle. Process
-    // inspection below is best-effort, but a genuinely missing pane is still a caller error.
+    // inspection below is best-effort, but a missing pane is still a caller error.
     if !state.list_panes()?.iter().any(|pane| pane.id == pane_id) {
         return Err(format!("pane {pane_id} was not found"));
     }

@@ -336,7 +336,7 @@ pub fn submit_agent_turn(
                 // — so the agent may have gone idle in between (its Stop hook marking it
                 // Done with the queue momentarily empty), leaving this lone turn with
                 // nothing to drain it. Attempt the same guarded drain the other enqueue
-                // sites use; it is a no-op unless the agent is genuinely idle-and-ready.
+                // sites use; it is a no-op unless the agent is idle and ready.
                 if has_pending_queue {
                     return Ok(result);
                 }
@@ -599,7 +599,7 @@ pub fn reorder_queued_agent_turn(
 /// itself, the queue empties or blocks, or a pause is requested. Returns whether the agent is
 /// now running a turn of its own — delivery turns dispatched along the way go to
 /// new panes and leave it idle, so they don't count, keeping callers'
-/// `agent.running` emissions and `sent` flags truthful.
+/// `agent.running` emissions and `sent` flags accurate.
 pub fn drain_agent_turn_queue(state: &AppState, agent_id: &str) -> Result<bool, String> {
     let result = drain_agent_turn_queue_inner(state, agent_id)?;
     if result.completed_idle_delivery {
@@ -895,7 +895,7 @@ fn advance_after_settlement(
     // prompt-submit echo, another idle signal belongs to the previous turn and must
     // not consume the next queue entry. Report `Drained` because the agent is already
     // running the newly sent turn. Expired advisory records are pruned by the query,
-    // so a genuinely missing echo cannot block the queue indefinitely.
+    // so a missing echo cannot block the queue indefinitely.
     //
     // TUI command turns (`!` shell escapes and `/` slash commands) run hooklessly: they
     // never receive a prompt-submit echo, so the record can only be stale by the next
@@ -982,7 +982,7 @@ fn advance_after_settlement(
                     }
                     Err(err) => {
                         if is_delivery {
-                            // A failed delivery leaves this agent genuinely idle;
+                            // A failed delivery leaves this agent idle;
                             // settle it and release its waiters so the error
                             // (surfaced as a queue error by the caller) doesn't
                             // strand the tab in a stale Running status that no
@@ -1358,7 +1358,7 @@ fn queue_agent_turn_with_admission(
 /// send the head of the queue now rather than leaving it blocked until the next
 /// trigger. Mirrors the post-enqueue drain in `queue_wait_agent_turn`.
 ///
-/// `drain_agent_turn_queue` claims under the model lock and only sends a genuinely
+/// `drain_agent_turn_queue` claims under the model lock and only sends a
 /// ready turn, so this is a safe no-op when the agent is really still busy.
 fn drain_after_enqueue(
     state: &AppState,
@@ -1370,7 +1370,7 @@ fn drain_after_enqueue(
         return Ok(queued_result);
     };
     let policy = agent_composer_policy(state, &agent)?;
-    // Send only if the agent is genuinely idle-and-ready now (not paused, not
+    // Send only if the agent is idle and ready now (not paused, not
     // mid-typing, in a can-send status). drain_agent_turn_queue claims under the
     // model lock, so this is a safe no-op if it is really still busy.
     let _source_ran = !agent.paused

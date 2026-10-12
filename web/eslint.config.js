@@ -87,11 +87,10 @@ export default tseslint.config(
       // 08 §2: every themeable value is a token consumed through `var()`, so a
       // hex or `rgb()` written into a class name or a `style` prop is a color
       // that stops tracking `data-appearance` / `data-color-theme`. The two
-      // sanctioned exceptions (appearance-invariant scrims, `::highlight()`
-      // pseudos) live in `styles/prose.css` and `styles/tweet.css`, which this
-      // rule does not see. Matching on the literal's text rather than on the
-      // enclosing line is the point: a color inside a multi-line `cn(…)` call
-      // is exactly what a line-based grep misses.
+      // exceptions (appearance-invariant scrims, `::highlight()` pseudos) live
+      // in `styles/prose.css` and `styles/tweet.css`, outside this rule's scope.
+      // Matching literal text catches colors inside multi-line `cn(…)` calls
+      // that a line-based search would miss.
       "no-restricted-syntax": [
         "error",
         {
@@ -114,8 +113,8 @@ export default tseslint.config(
     },
   },
   ...boundaries,
-  // The one sanctioned crossing of the client ──► server boundary: the tRPC
-  // client is typed by the router, and `verbatimModuleSyntax` erases an
+  // The tRPC client imports the server router's type. `verbatimModuleSyntax`
+  // erases an
   // `import type` at emit, so the bundle has no edge (ADR-1,
   // `07-client-architecture.md` §1). It is scoped to this file and to the
   // `/router` subpath, and `@session/db` stays forbidden, so the exception

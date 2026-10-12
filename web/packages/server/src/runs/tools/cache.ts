@@ -20,9 +20,8 @@ export interface CacheOptions {
   now?: () => number;
 }
 
-/** Least-recently-used with an expiry, which `Map`'s insertion order gives
- * for free: re-inserting on read moves a key to the end, so the first key is
- * always the coldest. */
+/** Least-recently-used cache with expiry. Re-inserting on read moves a key
+ * to the end of the `Map`, leaving the least recently used key first. */
 export class ToolCache<T> {
   readonly #entries = new Map<string, Entry<T>>();
   readonly #maxEntries: number;

@@ -76,7 +76,7 @@ cli_lock_version="$(read_cargo_lock_version session-cli)"
 proto_lock_version="$(read_cargo_lock_version session-proto)"
 
 # The updater manifest, DMG filename, and Info.plist each read a different one
-# of these files, so a release with drifted versions half-works at best.
+# of these files, so mismatched versions can break release and update handling.
 if [[ -z "$version" || -z "$npm_version" || -z "$npm_lock_version" ||
   -z "$cargo_version" || -z "$cli_version" || -z "$proto_version" ||
   -z "$cargo_lock_version" || -z "$cli_lock_version" || -z "$proto_lock_version" ]]; then

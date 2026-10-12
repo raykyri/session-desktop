@@ -95,9 +95,9 @@ export function getState(
 }
 
 /**
- * Replaces the workspace's folder state and returns what was stored, which the
- * client adopts. Entries naming a tree or folder outside this workspace are
- * dropped, so the returned value is the truth rather than an echo.
+ * Replaces the workspace's folder state and returns the stored value for the
+ * client to adopt. Entries naming a tree or folder outside this workspace are
+ * removed before storage.
  */
 export function setState(
   db: SessionDatabase,

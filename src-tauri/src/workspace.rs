@@ -1120,7 +1120,7 @@ fn prepare_agent_workspace_locked(
         dir.display().to_string()
     } else {
         // Default: no worktree — the agent runs directly in the base repo / cwd.
-        // base_repo is always Some by construction above; the tail is belt-and-braces.
+        // base_repo is always Some by construction above; the fallback handles an unexpected None.
         base_repo.unwrap_or_else(|| state.default_open_dir().display().to_string())
     };
 
@@ -2428,7 +2428,7 @@ fn local_git_path(cwd: &Path, args: &[&str]) -> Option<PathBuf> {
     fs::canonicalize(path).ok()
 }
 
-/// Applies an adapter observation only for local agents and emits a surgical
+/// Applies an adapter observation only for local agents and emits a per-agent
 /// update when the normalized workspace actually changes. The launch workspace
 /// remains authoritative for lifecycle operations.
 pub fn record_agent_active_workspace(
@@ -2638,7 +2638,7 @@ mod tests {
         }
     }
 
-    // The group-aware path helpers are the chokepoint keeping local stats away
+    // The group-aware path helpers are the shared check keeping local stat calls away
     // from remote paths: a remote group's directory must pass through
     // unstatted, while local groups keep the strict canonicalize/exists
     // behavior. A silent local fallback here is the failure mode the whole

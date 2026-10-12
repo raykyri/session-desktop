@@ -8,10 +8,9 @@
 // submits rather than as a tab strip above the field: ⌘↵ sends in the selected
 // mode (which is what the button says), ⇧⌘↵ always branches.
 //
-// This is deliberately *not* the Home composer (`ResearchQueryComposer`). The
-// two share `@session/shared` helpers and the `ui/` primitives and nothing
-// else: Home launches a new tree from an empty page, this one continues a
-// thread whose targeting depends on which node is complete.
+// This composer and the Home composer (`ResearchQueryComposer`) share
+// `@session/shared` helpers and `ui/` primitives. Home launches a new tree;
+// this composer continues a thread at a completed node.
 
 import { composerTextareaHeight, findModel, launcherTabAction } from "@session/shared";
 import type { ModelInfo } from "@session/shared";

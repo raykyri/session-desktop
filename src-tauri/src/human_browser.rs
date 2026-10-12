@@ -88,7 +88,7 @@ struct HumanBrowserInner {
     latest_surface_revision: u64,
     /// Lifecycle ordering is per owner. A destroy for pane A must not be
     /// discarded merely because a newer geometry update for pane B arrived
-    /// first, while a genuinely stale destroy must not remove a reopened A.
+    /// first, while a stale destroy must not remove a reopened A.
     owner_revisions: HashMap<String, u64>,
     generation: u64,
 }

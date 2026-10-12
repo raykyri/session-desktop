@@ -24,7 +24,7 @@ The first candidate gaps were completion of onboarding, uncertainty hidden by re
 
 ## Round two validation with subagents
 
-Three independent subagents examined desktop setup, hosted lifecycle, and fork feasibility. Their findings were reconciled against the source rather than appended as unverified feature requests.
+Three independent subagents examined desktop setup, hosted lifecycle, and fork feasibility. Their findings were checked against the source.
 
 | Review | Confirmed or added | Correction to the initial interpretation |
 | --- | --- | --- |
@@ -66,7 +66,7 @@ There is a second mismatch: remote probing can report general readiness while de
 
 **Done when:** authentication and version failures offer the relevant provider's setup action, retain the question and failed research node, refresh its status, then offer Retry. Instructions name the correct login command and external application when needed. No terminal renderer or general shell surface is restored.
 
-### G4 Update the installation that Session actually uses
+### G4 Update the installation that Session uses
 
 **P1. Desktop maintenance defect and missing lifecycle coordination.**
 
@@ -90,7 +90,7 @@ Session [metadata](../src/types.ts) already includes configured/resolved binary,
 
 Desktop [model presets](../src/lib/launcherModels.ts) and [effort options](../src/adapters/codex.tsx) are code-defined, with an option to enter a custom model. Research capability flags exist, but installation/authentication alone do not prove the selected model supports every research operation or effort setting.
 
-T3 separates provider capability policy and maintains a [model manifest](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/ModelManifest.ts). Its default remote metadata comes from upstream `main`, with cached/bundled fallbacks. A fork must deliberately own or pin that policy.
+T3 separates provider capability policy and maintains a [model manifest](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/ModelManifest.ts). Its default remote metadata comes from upstream `main`, with cached/bundled fallbacks. A fork must maintain its own policy or pin the upstream version.
 
 **Done when:** Session defines supported research functions per runtime/version and explains unsupported choices before launch where evidence exists. Retired models and stale metadata have a recoverable path. Custom models remain possible with clearly stated uncertainty. A capability refresh cannot silently change the identity or context of an existing investigation.
 

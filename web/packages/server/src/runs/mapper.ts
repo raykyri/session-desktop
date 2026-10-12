@@ -8,9 +8,8 @@
 // holding the results — the shape the CLIs produced, so the renderer needs no
 // second case.
 //
-// Reasoning is the one thing deliberately dropped: the desktop never displayed
-// it, so persisting it would put text into the answer's revision hash that
-// nothing renders. It becomes a "thinking" indicator instead.
+// Reasoning produces a "thinking" indicator without storing its text, so
+// undisplayed content does not affect the answer's revision hash.
 
 import type { Turn, TurnBlock } from "@session/shared";
 import type { TextStreamPart, ToolSet } from "ai";
