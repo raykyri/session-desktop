@@ -567,6 +567,22 @@ test("selecting a node keeps the other columns' selections", () => {
   assert.deepEqual(researchSelectionWith(nodes, ["c2"], "b2"), ["root", "b1f", "b2"]);
 });
 
+test("selecting a node that no open column lists falls back to the levels it was asked from", () => {
+  const nodes = selectionNodes();
+  // Nothing is open.
+  assert.deepEqual(researchSelectionWith(nodes, [], "y2"), ["c2", "x1", "y2"]);
+  // A selection that names a removed message is cut first; y2 is then not
+  // listed by any column it leaves open.
+  assert.deepEqual(researchSelectionWith(nodes, ["missing", "b1f"], "y2"), ["c2", "x1", "y2"]);
+  // A node the next column lists is selected there, keeping the columns
+  // before it; column 2 lists the branches of every group of column 1, so
+  // y2 (a branch of x1) replaces b2 while column 1 keeps b1f.
+  assert.deepEqual(researchSelectionWith(nodes, ["root", "b1f"], "b2"), ["root", "b1f", "b2"]);
+  assert.deepEqual(researchSelectionWith(nodes, ["c2", "b1f", "b2"], "y2"), ["c2", "b1f", "y2"]);
+  // A node the tree does not hold opens nothing.
+  assert.deepEqual(researchSelectionWith(nodes, ["c2"], "missing"), []);
+});
+
 test("a removed selection falls back to the message it followed or was asked from", () => {
   const nodes = selectionNodes();
   const parents = new Map(nodes.map((candidate) => [candidate.id, candidate.parentNodeId ?? null]));

@@ -273,3 +273,41 @@ test("a message's branch state is failed, else running, from anywhere in its bra
   assert.equal(ofBranch("c1"), null);
   assert.equal(ofBranch("missing"), null);
 });
+
+test("a branch's state is failed over running, however deep the failed message is", () => {
+  const nodes = [
+    node("root"),
+    node("b1", { parentNodeId: "root", status: "running" }),
+    node("b1f", { parentNodeId: "b1", inline: true }),
+    node("c1", { parentNodeId: "b1f" }),
+    node("c1f", { parentNodeId: "c1", inline: true }),
+    node("d1", { parentNodeId: "c1f", status: "failed" }),
+    node("b2", { parentNodeId: "root", status: "queued" }),
+  ];
+  const { ofMessage, ofBranch } = researchBranchStates(nodes, researchBranchesByParent(nodes));
+  // b1 runs, and a message three levels below it failed.
+  assert.equal(ofBranch("b1"), "failed");
+  assert.equal(ofBranch("c1"), "failed");
+  assert.equal(ofBranch("d1"), "failed");
+  // A queued branch counts as running.
+  assert.equal(ofBranch("b2"), "running");
+  assert.equal(ofMessage.get("root"), "failed");
+  assert.equal(ofMessage.get("b1f"), "failed");
+  assert.equal(ofMessage.get("c1f"), "failed");
+});
+
+test("a branch's state ends at a malformed parent cycle", () => {
+  // a and b name each other as parent; neither is reached from the root.
+  const nodes = [
+    node("root"),
+    node("a", { parentNodeId: "b", status: "running" }),
+    node("b", { parentNodeId: "a" }),
+    node("c", { parentNodeId: "b", status: "failed" }),
+  ];
+  const { ofMessage, ofBranch } = researchBranchStates(nodes, researchBranchesByParent(nodes));
+  assert.equal(ofBranch("a"), "failed");
+  assert.equal(ofBranch("b"), "failed");
+  assert.equal(ofMessage.get("a"), "failed");
+  assert.equal(ofMessage.get("b"), "failed");
+  assert.equal(ofBranch("root"), null);
+});
