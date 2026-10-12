@@ -140,6 +140,68 @@ export function researchSubtreeBusy(nodes: readonly ResearchNode[], headId: stri
   return false;
 }
 
+/** The state a branch control shows: "failed" when a message in the
+ * branches, or in a branch below them, failed; else "running" when one is
+ * running or queued; else null. `ofMessage` holds it for each message with
+ * branches whose state is not null; `ofBranch` gives it for one branch (its
+ * head, its follow-ups and everything below). */
+export function researchBranchStates(
+  nodes: readonly ResearchNode[],
+  branchesByParent: ReadonlyMap<string, readonly ResearchNode[]>,
+): {
+  ofMessage: Map<string, "running" | "failed">;
+  ofBranch: (branchId: string) => "running" | "failed" | null;
+} {
+  const children = new Map<string, ResearchNode[]>();
+  for (const node of nodes) {
+    if (node.parentNodeId) {
+      const list = children.get(node.parentNodeId);
+      if (list) list.push(node);
+      else children.set(node.parentNodeId, [node]);
+    }
+  }
+  // Each subtree's state, computed once; `seen` guards a malformed cycle.
+  const subtree = new Map<string, "running" | "failed" | null>();
+  const seen = new Set<string>();
+  const stateOf = (node: ResearchNode): "running" | "failed" | null => {
+    const known = subtree.get(node.id);
+    if (known !== undefined) return known;
+    if (seen.has(node.id)) return null;
+    seen.add(node.id);
+    const status = nodeStatus(node);
+    let state: "running" | "failed" | null =
+      status === "failed" ? "failed" : isActiveResearchStatus(status) ? "running" : null;
+    for (const child of children.get(node.id) ?? []) {
+      if (state === "failed") break;
+      const below = stateOf(child);
+      if (below === "failed" || (below === "running" && state === null)) state = below;
+    }
+    subtree.set(node.id, state);
+    return state;
+  };
+  const states = new Map<string, "running" | "failed">();
+  for (const [parentId, branches] of branchesByParent) {
+    let state: "running" | "failed" | null = null;
+    for (const branch of branches) {
+      const below = stateOf(branch);
+      if (below === "failed") {
+        state = "failed";
+        break;
+      }
+      if (below === "running") state = "running";
+    }
+    if (state) states.set(parentId, state);
+  }
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return {
+    ofMessage: states,
+    ofBranch: (branchId) => {
+      const branch = byId.get(branchId);
+      return branch ? stateOf(branch) : null;
+    },
+  };
+}
+
 /** The delete action's label for a message: the whole research for the
  * root, else what the deletion takes with it. */
 export function researchDeleteLabel(isRoot: boolean, inline: boolean | undefined, descendantCount: number) {

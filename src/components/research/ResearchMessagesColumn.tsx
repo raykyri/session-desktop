@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode, Ref, UIEvent } from "react";
-import { CornerDownRight, Ellipsis, RefreshCw } from "lucide-react";
+import { CornerDownRight, RefreshCw } from "lucide-react";
 import { researchMessageStarrable } from "../../lib/researchChains";
 import {
   columnAttributes,
@@ -26,8 +26,8 @@ type HistoryNav = ComponentProps<typeof ResearchPairHeader>["history"];
 const chainDropPlace = (headId: string) => `chain:${headId}`;
 
 /** What a branch was asked about, a muted block at the top of its first
- * column: the passage of the parent's answer, the whole answer, or, for a
- * follow-up of a note, the note's text. */
+ * column or its group: the passage of the parent's answer, the whole
+ * answer, or, for a follow-up of a note, the note's text. */
 export interface ResearchBranchSourceProps {
   anchor: ResearchHighlightAnchor | null;
   parent: ResearchNode | undefined;
@@ -39,7 +39,7 @@ export interface ResearchBranchSourceProps {
   parentLoaded: boolean;
   /** In a branches column: the name of the message the branch was asked
    * from (a document's title, or the question of an answer), above the
-   * passage. */
+   * passage. A whole-answer branch's source is this name alone. */
   from?: string | null;
 }
 
@@ -72,7 +72,7 @@ function ResearchBranchSource({
             <i>“{quote}”</i>
           ) : quote ? (
             `The whole answer (was “${quote}”, before the answer was rerun)`
-          ) : (
+          ) : from !== null ? null : (
             "The whole answer"
           )}
         </span>
@@ -230,7 +230,7 @@ function ResearchQueuedFollowups({ items, tailStalled, onRemove, onRetry, onEdit
 /** The message rows' callbacks, the same for every messages column. */
 export type ResearchMessageRowActions = Pick<
   ComponentProps<typeof ResearchMessageRow>,
-  "registerSegmentElement" | "onSelect" | "onShowBranches" | "onOpenAnswerMenu" | "onOpenContextMenu" | "onDragStart"
+  "registerSegmentElement" | "onSelect" | "onToggleBranches" | "onOpenAnswerMenu" | "onOpenContextMenu" | "onDragStart"
 >;
 
 /** What every list of a chain's messages shares: the tree, the rows'
@@ -246,6 +246,9 @@ export interface ResearchChainRowsShared {
   answerMenuOpenId: string | null;
   /** A branch finished while the thread was open and was not opened. */
   isUnread: (branch: ResearchNode) => boolean;
+  /** Running or failed, when a message in a message's branches (or below
+   * them) is; failed first. */
+  branchStateOf: (nodeId: string) => "running" | "failed" | null;
   rowActions: ResearchMessageRowActions;
 }
 
@@ -257,7 +260,7 @@ function ResearchChainRows({
   headId,
   displayIds,
   selectedId,
-  branchOpen,
+  openSourceId,
   firstFocusable,
   queue,
 }: {
@@ -267,14 +270,23 @@ function ResearchChainRows({
   headId: string;
   displayIds: readonly string[];
   selectedId: string | null;
-  /** A branch of the selected message is open as the next level. */
-  branchOpen: boolean;
+  /** The message the branch selected in the next column was asked from. */
+  openSourceId: string | null;
   /** The first row is in the tab order (no row of the column is selected). */
   firstFocusable: boolean;
   queue: ResearchQueueProps;
 }) {
-  const { archived, treeTitle, nodeById, branchesByParent, queuedRetries, answerMenuOpenId, isUnread, rowActions } =
-    shared;
+  const {
+    archived,
+    treeTitle,
+    nodeById,
+    branchesByParent,
+    queuedRetries,
+    answerMenuOpenId,
+    isUnread,
+    branchStateOf,
+    rowActions,
+  } = shared;
   const head = nodeById.get(headId);
   const dragPlace = !archived && displayIds.length > 1 ? chainDropPlace(headId) : null;
   return (
@@ -300,7 +312,8 @@ function ResearchChainRows({
             starrable={researchMessageStarrable(node, head)}
             retryQueued={queuedRetries.has(id)}
             branchCount={branches.length}
-            branchOpen={selected && branchOpen}
+            branchOpen={openSourceId === id}
+            branchState={branches.length > 0 ? branchStateOf(id) : null}
             branchUnread={branches.some(isUnread)}
             answerMenuOpen={answerMenuOpenId === id}
             dragPlace={dragPlace}
@@ -314,7 +327,8 @@ function ResearchChainRows({
 }
 
 /** A level's messages column (T{level}): what a branch was asked about, the
- * ask box, the chain's messages in display order, and its queue. */
+ * chain's messages in display order, its queue, and the ask box after
+ * them. */
 export function ResearchMessagesColumn({
   column,
   current,
@@ -322,7 +336,7 @@ export function ResearchMessagesColumn({
   history,
   imported,
   shared,
-  branchOpen,
+  openSourceId,
   menu,
   source,
   composer,
@@ -336,8 +350,8 @@ export function ResearchMessagesColumn({
   /** Provenance: the root is a transcript from a terminal session. */
   imported: boolean;
   shared: ResearchChainRowsShared;
-  /** A branch of the selected message is open as the next level. */
-  branchOpen: boolean;
+  /** The message the branch selected in the next column was asked from. */
+  openSourceId: string | null;
   /** Actions for the question that starts this pair. */
   menu: ComponentProps<typeof ResearchPairHeader>["menu"];
   source: ResearchBranchSourceProps | null;
@@ -363,17 +377,17 @@ export function ResearchMessagesColumn({
       <div className="research-column-scroll" data-research-scroll onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">
           {source ? <ResearchBranchSource {...source} /> : null}
-          {composer}
           <ResearchChainRows
             shared={shared}
             level={level}
             headId={headId}
             displayIds={displayIds}
             selectedId={selectedId}
-            branchOpen={branchOpen}
+            openSourceId={openSourceId}
             firstFocusable={false}
             queue={queue}
           />
+          {composer}
         </div>
       </div>
       <ResearchColumnResizer kind="messages" label="Resize messages column" belowHeader />
@@ -425,35 +439,36 @@ export function ResearchNewBranchComposer({
 }
 
 /** The branches column (T{level}) after a level: every branch asked from
- * the level's messages, stacked in reading order, each as a group with its
- * source (the message it was asked from and the passage), its … menu, its
- * messages, its queue and its ask box. The unsent branch is a group with
- * its source and the ask box for its first question. When one of the
- * branches is open as the next level, its selected message is the column's
- * selected row and the level's answer column follows. */
+ * a message the level's column lists, stacked in reading order, each as a
+ * group with its source (the message it was asked from and the passage),
+ * its messages and its queue. The group that holds the column's selection
+ * ends with the ask box; a column with no selection has none. The unsent
+ * branch is a group with its source and the ask box for its first
+ * question. The header's × clears the column's selection. */
 export function ResearchBranchesColumn({
   column,
   current,
   shared,
-  branchOpen,
+  openSourceId,
   sourceOf,
-  menuOf,
   composerOf,
   queueOf,
+  onClear,
   onScroll,
 }: {
   column: ResearchBranchesColumnData;
   current: boolean;
   shared: ResearchChainRowsShared;
-  /** A branch of the selected message is open as the level after this one. */
-  branchOpen: boolean;
+  /** The message the branch selected in the column after this one was
+   * asked from. */
+  openSourceId: string | null;
   /** What a group's branch was asked about. */
   sourceOf: (group: ResearchStackGroup) => ResearchBranchSourceProps;
-  /** The … menu of a created branch, by its head. */
-  menuOf: (headId: string) => { label: string; open: boolean; onOpen: (trigger: HTMLButtonElement) => void };
-  /** A group's ask box. */
+  /** The ask box of the selected group, or of the unsent branch's. */
   composerOf: (group: ResearchStackGroup) => ReactNode;
   queueOf: (headId: string) => ResearchQueueProps;
+  /** Clears the column's selection. */
+  onClear: () => void;
   onScroll: ((event: UIEvent<HTMLElement>) => void) | undefined;
 }) {
   const { levelIndex: level, groups } = column;
@@ -467,7 +482,12 @@ export function ResearchBranchesColumn({
       data-research-pending-only={branchCount === 0 ? "" : undefined}
       aria-label="Branches"
     >
-      <ResearchPairHeader title="Branches" count={branchCount} />
+      <ResearchPairHeader
+        title="Branches"
+        count={branchCount}
+        branchIcon
+        clear={column.level ? { label: "Clear the selection in this column", onClear } : null}
+      />
       <div className="research-column-scroll" data-research-scroll onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">
           {groups.map((group) => {
@@ -484,40 +504,27 @@ export function ResearchBranchesColumn({
                 </section>
               );
             }
-            const menu = menuOf(group.headId);
             const head = shared.nodeById.get(group.headId);
+            const selected = group.selectedId !== null;
             return (
               <section
                 key={group.headId}
-                className={`research-branch-group${group.selectedId !== null ? " is-open" : ""}`}
+                className={`research-branch-group${selected ? " is-open" : ""}`}
                 data-research-branch-group={group.headId}
                 aria-label={`Branch: ${researchNodeLabel(head, "Branch")}`}
               >
-                <ResearchBranchSource {...sourceOf(group)}>
-                  <button
-                    type="button"
-                    className="control-button research-head-button research-head-menu research-branch-group-menu"
-                    aria-label={menu.label}
-                    title={menu.label}
-                    aria-haspopup="menu"
-                    aria-expanded={menu.open}
-                    tabIndex={group.selectedId !== null ? 0 : -1}
-                    onClick={(event) => menu.onOpen(event.currentTarget)}
-                  >
-                    <Ellipsis size={15} aria-hidden="true" />
-                  </button>
-                </ResearchBranchSource>
+                <ResearchBranchSource {...sourceOf(group)} />
                 <ResearchChainRows
                   shared={shared}
                   level={level}
                   headId={group.headId}
                   displayIds={group.displayIds}
                   selectedId={group.selectedId}
-                  branchOpen={branchOpen}
+                  openSourceId={openSourceId}
                   firstFocusable={!anySelected && group === firstBranch}
                   queue={queueOf(group.headId)}
                 />
-                {composerOf(group)}
+                {selected ? composerOf(group) : null}
               </section>
             );
           })}

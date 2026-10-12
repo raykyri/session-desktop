@@ -9,7 +9,7 @@ import {
   Star,
   Wrench,
 } from "lucide-react";
-import { ResearchBranchIcon } from "./ResearchIcons";
+import { ResearchBranchOpenGlyph } from "./ResearchIcons";
 import {
   conversationActivityToolCalls,
   conversationToolCallLabel,
@@ -671,8 +671,8 @@ export function researchMessageStateWord(state: ResearchRowState): string | null
 /** One message in a level's messages column: the user's message in full,
  * then a meta line, shown only when it has something to show: "Imported"
  * for an imported report, the word Queued or Stopped, a filled star when the
- * message is starred, and the branch count (only once the answer has
- * branches). The first line starts with the row's glyph (ResearchRowGlyph)
+ * message is starred. A message whose answer has branches shows the branch
+ * indicator at the right end of its first line. The first line starts with the row's glyph (ResearchRowGlyph)
  * unless the row is an answered exchange, the common case: a note, link, X
  * post or document shows its kind, and a queued, running, failed or stopped
  * question its state. The row's time is not shown; the answer's footer has
@@ -695,11 +695,12 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   retryQueued = false,
   branchCount,
   branchOpen,
+  branchState = null,
   branchUnread,
   answerMenuOpen,
   registerSegmentElement,
   onSelect,
-  onShowBranches,
+  onToggleBranches,
   onOpenAnswerMenu,
   onOpenContextMenu,
   dragPlace = null,
@@ -720,14 +721,19 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   starrable: boolean;
   retryQueued?: boolean;
   branchCount: number;
-  /** One of the answer's branches is open as the next level. */
+  /** One of the answer's branches is selected in the next column. */
   branchOpen: boolean;
+  /** A message in the answer's branches (or below them) is running or has
+   * failed: the indicator shows that state's glyph. */
+  branchState?: "running" | "failed" | null;
   branchUnread: boolean;
   /** The answer's menu is open from this row's … button. */
   answerMenuOpen: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
-  onShowBranches: (nodeId: string, level: number) => void;
+  /** The branch indicator: selects the answer's first branch in the next
+   * column, or clears that column when one of its branches is selected. */
+  onToggleBranches: (nodeId: string, level: number) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   /** Opens the answer's menu at `placement`: a right-click on the row, or
    * Shift+F10 or the ContextMenu key with focus in it. */
@@ -785,7 +791,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
       className={`research-msg-row is-status-${retryQueued ? "queued" : status}${selected ? " is-selected" : ""}${
         answerMenuOpen ? " has-open-menu" : ""
-      }`}
+      }${showBranches ? " has-branches" : ""}`}
       data-segment-anchor={node.id}
       data-research-card={draggable ? node.id : undefined}
       data-research-card-kind={draggable ? "message" : undefined}
@@ -809,7 +815,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       <div id={labelId} className="research-msg-content" data-research-drag-label="">
         {prompt}
       </div>
-      {stateWord || imported || starred || showBranches ? (
+      {stateWord || imported || starred ? (
         <div className="research-msg-meta">
           {imported ? (
             <span className="research-msg-provenance" title={new Date(node.createdAt).toLocaleString()}>
@@ -822,23 +828,30 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
               <Star size={13} aria-hidden="true" fill="currentColor" />
             </span>
           ) : null}
-          {showBranches ? (
-            <button
-              type="button"
-              className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}`}
-              data-research-no-drag=""
-              aria-label={`${branchLabel} from this answer${branchUnread ? ", one with a new answer" : ""}`}
-              title={`${branchLabel}: marked in the answer's right margin`}
-              data-research-branch-trigger={node.id}
-              tabIndex={tabIndex}
-              onClick={() => onShowBranches(node.id, level)}
-            >
-              <ResearchBranchIcon size={13} />
-              <span className="research-tnum">{branchCount}</span>
-              {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
-            </button>
-          ) : null}
         </div>
+      ) : null}
+      {showBranches ? (
+        <button
+          type="button"
+          className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}${
+            branchState ? ` is-${branchState}` : ""
+          }`}
+          data-research-no-drag=""
+          aria-label={`${branchLabel} from this answer${branchOpen ? ", one selected in the next column" : ""}${
+            branchState ? `, ${branchState}` : ""
+          }${branchUnread ? ", one with a new answer" : ""}`}
+          title={
+            branchOpen
+              ? "Clear the branch selected in the next column"
+              : `${branchLabel}: select the first in the next column`
+          }
+          data-research-branch-trigger={node.id}
+          tabIndex={tabIndex}
+          onClick={() => onToggleBranches(node.id, level)}
+        >
+          <ResearchBranchOpenGlyph state={branchState} />
+          {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
+        </button>
       ) : null}
       <ResearchRowRail
         grip={draggable}

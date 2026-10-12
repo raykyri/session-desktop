@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   researchBranchBlocker,
+  researchBranchStates,
   researchChainComposerState,
   researchDeleteLabel,
   researchEditorCanSave,
@@ -16,6 +17,7 @@ import {
   surrogateSafeSlice,
   withoutKeys,
 } from "../src/lib/researchThreadView";
+import { researchBranchesByParent } from "../src/lib/researchBranchView";
 import { buildSegmentView, TIMELINE_ITEM_RENDER_WINDOW } from "../src/lib/researchSegmentView";
 import { RESEARCH_DOCUMENT_WORD_LIMIT } from "../src/lib/researchDocuments";
 import type { ResearchHighlightAnchor, ResearchNode, Turn } from "../src/types";
@@ -241,4 +243,29 @@ test("researchMarkerLabel names the branches and what a click does", () => {
     researchMarkerLabel({ count: 1, whole: true, open: false, running: true, targetPrompt: "q".repeat(100) }),
     `1 branch from the whole answer, running. Opens: ${"q".repeat(80)}`,
   );
+});
+
+test("a message's branch state is failed, else running, from anywhere in its branches", () => {
+  const nodes = [
+    node("root"),
+    node("next", { parentNodeId: "root", inline: true, status: "running" }),
+    node("b1", { parentNodeId: "root" }),
+    node("b1f", { parentNodeId: "b1", inline: true }),
+    node("deep", { parentNodeId: "b1f", status: "running" }),
+    node("b2", { parentNodeId: "root", status: "failed" }),
+    node("c1", { parentNodeId: "b1f" }),
+    node("settled", { parentNodeId: "c1" }),
+  ];
+  const { ofMessage: states, ofBranch } = researchBranchStates(nodes, researchBranchesByParent(nodes));
+  // root's branches hold a failed message (b2) and a running one (deep).
+  assert.equal(states.get("root"), "failed");
+  // b1f's branches: deep runs.
+  assert.equal(states.get("b1f"), "running");
+  // c1's only branch is settled; the inline follow-up of root is not a branch.
+  assert.equal(states.has("c1"), false);
+  assert.equal(states.has("next"), false);
+  // One branch: b1 (with b1f and the branches below it) runs.
+  assert.equal(ofBranch("b1"), "running");
+  assert.equal(ofBranch("c1"), null);
+  assert.equal(ofBranch("missing"), null);
 });

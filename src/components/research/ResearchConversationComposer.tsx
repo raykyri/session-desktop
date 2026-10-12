@@ -27,9 +27,10 @@ export function researchComposerEnterAction(
   return isComposerSubmitShortcut(event, requireCmdEnter) ? "send" : null;
 }
 
-/** The ask box at the top of a messages column, above its messages. It
- * scrolls with them (nothing is docked or sticky). The send shortcut follows the
- * "Require ⌘↵ to send" setting, and ⇧⌘↵ starts a branch from the column's
+/** A column's ask box, after the messages of its selected run (or a
+ * draft's, or an unsent branch's). It scrolls with them (nothing is docked
+ * or sticky). The send shortcut is the one `requireCmdEnter` names (a
+ * thread's columns always ask for ⌘↵), and ⇧⌘↵ starts a branch from the column's
  * last finished answer instead of continuing the conversation. A mode label
  * ("Draft", "New branch", "Editing …") sits above the field, with a × that
  * Esc also triggers; a draft gives the text the full width, with Send on its

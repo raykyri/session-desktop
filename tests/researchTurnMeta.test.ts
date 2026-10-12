@@ -44,18 +44,21 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onShowBranches: noop,
+      onToggleBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
     }),
   );
 
-test("the answer's … menu button appears in the row's corner pill after the meta line", () => {
+test("the answer's … menu button appears in the row's corner pill after the branch indicator", () => {
   const html = row();
-  const meta = html.indexOf('class="research-msg-meta"');
+  // The indicator alone is no meta line: it sits at the row's right end.
+  assert.doesNotMatch(html, /class="research-msg-meta"/);
+  assert.match(html, /class="research-msg-row is-status-complete is-selected has-branches"/);
+  const content = html.indexOf('class="research-msg-content"');
   const branch = html.indexOf('aria-label="2 branches from this answer"');
   const rail = html.indexOf('class="research-feed-rail"');
-  assert.ok(meta >= 0 && branch > meta && rail > branch);
+  assert.ok(content >= 0 && branch > content && rail > branch);
   const pill = html.slice(rail);
   assert.match(
     pill,
@@ -80,7 +83,7 @@ test("a row whose menu is open keeps its pill shown", () => {
       answerMenuOpen: true,
       registerSegmentElement: noop,
       onSelect: noop,
-      onShowBranches: noop,
+      onToggleBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
       dragPlace: "chain:n1",

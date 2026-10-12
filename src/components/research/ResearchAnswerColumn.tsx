@@ -11,7 +11,7 @@ import type { ResearchNode } from "../../types";
 import { ResearchRelativeTime } from "./ResearchClock";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchEditPreview } from "./ResearchEditorColumn";
-import { ResearchBranchIcon } from "./ResearchIcons";
+import { ResearchBranchOpenGlyph } from "./ResearchIcons";
 import { ResearchAnswerPane } from "./ResearchTurn";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
@@ -35,8 +35,8 @@ export type ResearchAnswerPaneHandlers = Pick<
 /** What the margin markers of an answer column act on. */
 export interface ResearchMarkerActions {
   nodeById: ReadonlyMap<string, ResearchNode>;
-  /** Whether a branch, or a branch below it, is running or queued. */
-  branchBusy: (branchId: string) => boolean;
+  /** Running or failed, when a message in a branch (or below it) is. */
+  branchState: (branchId: string) => "running" | "failed" | null;
   /** Shows the tip for a marker's branches, or hides it (null). */
   onTip: (tip: { element: HTMLElement; branchIds: string[]; level: number } | null) => void;
   /** A click on the marker of the open branch: closes the levels after
@@ -55,10 +55,12 @@ function answerMenuButton(nodeId: string) {
   );
 }
 
-/** A margin marker beside an answer: the branches from one paragraph (at
- * its height), or from the whole answer (in the foot). A click opens the
- * open branch's next sibling or the first branch, or, on the open branch's
- * marker, closes it. */
+/** A margin marker beside an answer, styled as a link: an up-right arrow and
+ * the number of branches from one paragraph (at its height), or from the
+ * whole answer (in the foot, after the last paragraph). The arrow is the
+ * running or failed glyph while a message in those branches runs or has
+ * failed. A click selects the first branch in the next column, or, when one
+ * of the marker's branches is selected there, clears that column. */
 function ResearchBranchMarkerButton({
   level,
   marker,
@@ -74,7 +76,9 @@ function ResearchBranchMarkerButton({
   const openIndex = openHeadId ? marker.branchIds.indexOf(openHeadId) : -1;
   const target = marker.branchIds[openIndex < 0 ? 0 : openIndex];
   const count = marker.branchIds.length;
-  const running = marker.branchIds.some(actions.branchBusy);
+  const states = marker.branchIds.map(actions.branchState);
+  const state = states.includes("failed") ? "failed" : states.includes("running") ? "running" : null;
+  const running = state === "running";
   const whole = marker.top === null;
   const targetNode = actions.nodeById.get(target);
   const label = researchMarkerLabel({
@@ -89,7 +93,7 @@ function ResearchBranchMarkerButton({
   return (
     <button
       type="button"
-      className={`research-marker${openIndex >= 0 ? " is-open" : ""}${running ? " is-running" : ""}${
+      className={`research-marker${openIndex >= 0 ? " is-open" : ""}${state ? ` is-${state}` : ""}${
         whole ? " is-end" : ""
       }`}
       style={whole ? undefined : { top: marker.top ?? 0 }}
@@ -113,8 +117,8 @@ function ResearchBranchMarkerButton({
         }
       }}
     >
-      <ResearchBranchIcon size={13} />
-      {count > 1 ? <span className="research-tnum">{count}</span> : null}
+      <ResearchBranchOpenGlyph state={state} size={12} />
+      <span className="research-tnum">{count}</span>
     </button>
   );
 }

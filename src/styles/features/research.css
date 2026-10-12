@@ -1070,13 +1070,37 @@
   background: var(--surface-fill-medium);
 }
 
-.research-msg-branches .research-tnum {
-  font-size: calc(12px + var(--font-ui-size-offset));
-  font-weight: 500;
+/* The branch indicator sits at the right end of the row's first line: an
+   up-right arrow, accent while one of the message's branches is selected in
+   the next column, or the running or failed glyph. The row's text keeps
+   clear of it, and the corner pill (… and grip) sits to its left. */
+.research-msg-row > .research-msg-branches {
+  position: absolute;
+  top: 10px;
+  right: 6px;
+  z-index: 1;
+  color: var(--text-faint);
+}
+
+.research-msg-row.has-branches > .research-msg-content {
+  padding-right: 32px;
+}
+
+.research-msg-row.has-branches > .research-feed-rail {
+  right: 32px;
 }
 
 .research-msg-branches.is-open {
   color: var(--accent-color);
+}
+
+.research-branch-open-glyph {
+  display: inline-flex;
+}
+
+.research-branch-open-glyph > .research-row-glyph {
+  float: none;
+  margin: 0;
 }
 
 .research-turn-unread {
@@ -1145,6 +1169,7 @@
   outline-offset: 1px;
 }
 
+
 .research-msg-row.is-client-queued .research-msg-content,
 .research-msg-row.is-client-queued .research-msg-meta {
   pointer-events: auto;
@@ -1208,29 +1233,46 @@
   margin: -3px -6px -3px 0;
 }
 
-/* A branches column stacks one group per branch: its source block, messages
-   and ask box. A rule separates the groups. */
+/* A branches column stacks one group per branch: its source block and
+   messages, and, in the group that holds the column's selection, the ask
+   box. A hairline separates the groups. The source block is quiet: the
+   message the branch was asked from on one line, the passage in italics. */
 .research-branch-group + .research-branch-group {
-  border-top: 1px solid var(--surface-border-strong);
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-branch-group > .research-branch-source {
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: calc(12px + var(--font-ui-size-offset));
 }
 
 .research-branch-group > .research-msg-list {
-  padding-top: 10px;
+  padding-top: 4px;
 }
 
 .research-branch-group > .research-msg-list + .research-composer-wrap {
-  padding-top: 8px;
+  padding-top: 2px;
   padding-bottom: 14px;
 }
 
-.research-branch-group.is-open > .research-branch-source,
-.research-branch-group.is-pending > .research-branch-source {
-  color: var(--text-secondary);
+.research-branch-group > .research-branch-source + .research-composer-wrap {
+  padding-top: 8px;
 }
 
 .research-branch-source-quote i {
-  color: var(--text-secondary);
-  font-style: normal;
+  color: var(--text-muted);
+}
+
+.research-branch-group .research-branch-source-quote:empty {
+  display: none;
+}
+
+.research-branch-group .research-branch-source-quote:has(> i) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* — The answer column: the selected message's answer in full, with a
@@ -1249,7 +1291,10 @@
   max-width: 70ch;
 }
 
-/* A margin marker, level with the first line of its paragraph. */
+/* A margin marker, level with the first line of its paragraph: a link, the
+   arrow (or a running or failed glyph) and the count as text, underlined on
+   hover, and accent and underlined while one of its branches is selected
+   in the next column. */
 .research-marker {
   position: absolute;
   right: 6px;
@@ -1259,37 +1304,37 @@
   min-height: 0;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 0 5px;
+  gap: 3px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--text-faint);
   background: none;
   font-size: calc(11.5px + var(--font-ui-size-offset));
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   -webkit-user-select: none;
   user-select: none;
 }
 
 .research-marker:hover {
-  color: var(--text-primary);
+  color: var(--text-heading);
+  text-decoration: underline;
+  text-decoration-color: var(--surface-border-strong);
+  text-underline-offset: 3px;
 }
 
 .research-marker.is-open {
   color: var(--accent-color);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-color);
+  text-underline-offset: 3px;
 }
 
-.research-marker.is-running::after {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--status-active-fg);
-  animation: research-pulse 1.4s ease-in-out infinite;
-  content: "";
+.research-marker:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
 }
 
 /* The answer's time under a rule; whole-answer branches' marker sits level
@@ -1625,20 +1670,20 @@
   background: var(--surface-fill-hover);
 }
 
-/* — The ask box at the top of each messages column — */
+/* — The ask box after a column's selected run of messages — */
 .research-composer-wrap {
   padding: 14px 12px 20px;
 }
 
-/* A messages column's ask box lines up with the message rows under it,
+/* A messages column's ask box lines up with the message rows above it,
    which are inset 8px. */
 .research-pair-messages .research-composer-wrap {
   padding-inline: 8px;
 }
 
-/* Above the messages, the box sits closer to the first row. */
-.research-pair-messages .research-composer-wrap + .research-msg-list {
-  margin-top: -12px;
+/* After the messages, the box sits close to the last row. */
+.research-pair-messages .research-msg-list + .research-composer-wrap {
+  padding-top: 2px;
 }
 
 .research-composer-mode {
@@ -2447,6 +2492,20 @@
 
 .research-head-menu {
   padding: 3px 6px;
+}
+
+/* The branches column's ×, beside its title. */
+.research-pair-messages.is-branches .research-column-title {
+  flex: 0 1 auto;
+}
+
+.research-head-clear {
+  padding: 4px;
+  color: var(--text-faint);
+}
+
+.research-column-title + .research-head-clear {
+  margin-left: 6px;
 }
 
 .research-column-title + .research-head-menu {

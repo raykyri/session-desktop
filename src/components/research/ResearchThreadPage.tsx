@@ -59,6 +59,7 @@ import {
 import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 import {
   researchBranchesByParent,
+  researchBranchesInReadingOrder,
   researchEditedQuestionFork,
   researchLevelPath,
   researchQueueStep,
@@ -80,6 +81,7 @@ import {
   researchQuoteText,
   researchSubtreeBusy,
   researchSubtreeIds,
+  researchBranchStates,
   sameIds,
   withoutKeys,
 } from "../../lib/researchThreadView";
@@ -200,7 +202,8 @@ interface ResearchThreadPageProps {
   onToast: (message: string, tone?: "normal" | "warning") => void;
   /** Show held-⌘ shortcut badges (the ⌘J composer hint). */
   shortcutHintsShown: boolean;
-  /** The "Require ⌘↵ to send" setting, for every composer in the thread. */
+  /** The "Require ⌘↵ to send" setting, for a note's follow-up box. The ask
+   * boxes of messages and branches columns always send with ⌘↵. */
   requireCmdEnterToSend: boolean;
   /** Runs whose background recap job is in flight; each renders a spinner in
    * its recap slot until the recap arrives. */
@@ -486,6 +489,9 @@ function ResearchThreadPage({
   const branchesByParent = useMemo(() => researchBranchesByParent(nodes), [nodes]);
   const branchesByParentRef = useRef(branchesByParent);
   branchesByParentRef.current = branchesByParent;
+  // Per message with branches: failed when a message in its branches (or
+  // below them) failed, else running when one runs.
+  const branchStates = useMemo(() => researchBranchStates(nodes, branchesByParent), [branchesByParent, nodes]);
 
   // Columns of the open pairs, found by level.
   const pairColumn = useCallback(
@@ -1153,8 +1159,10 @@ function ResearchThreadPage({
     onError,
   });
 
-  // A plain click on a tinted passage opens its branch; with several
-  // branches there, or a highlight, it opens a menu instead.
+  // A plain click on a tinted passage selects its branch in the next
+  // column, or clears that column when the branch is the one selected
+  // there; with several branches there, or a highlight, it opens a menu
+  // instead.
   const openAnnotationAtPoint = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const root = event.currentTarget;
@@ -1176,7 +1184,9 @@ function ResearchThreadPage({
       }
       if (branchIds.length === 1 && !highlight) {
         const level = levelPathRef.current.indexOf(nodeId);
-        if (level >= 0) {
+        if (level >= 0 && stripRef.current.levels[level + 1]?.headId === branchIds[0]) {
+          closeAfter(level);
+        } else if (level >= 0) {
           goBranch(level, branchIds[0]);
         }
         return;
@@ -1196,7 +1206,7 @@ function ResearchThreadPage({
         align: "point",
       });
     },
-    [annotationsAtPoint, clearHighlightAction, goBranch],
+    [annotationsAtPoint, clearHighlightAction, closeAfter, goBranch],
   );
 
   /** Whether a press or click targets the passage whose menu is open: the
@@ -1449,22 +1459,37 @@ function ResearchThreadPage({
     moveFocusedMessage,
   });
 
-  // The branch count beside a message: selects the message and moves focus to
-  // its answer's margin markers (the open one, else the first).
-  const showBranches = useCallback(
+  /** A row's branch indicator: selects the message's first branch (in
+   * reading order) in the branches column after its column, which also
+   * selects the message when its column has no selection; when one of the
+   * message's branches is selected there, clears that column instead. */
+  const toggleBranches = useCallback(
     (nodeId: string, level: number) => {
-      selectMessage(level, nodeId);
-      window.requestAnimationFrame(() => {
-        const column = pairColumn("answer", level);
-        const marker =
-          column?.querySelector<HTMLElement>(".research-marker.is-open") ??
-          column?.querySelector<HTMLElement>(".research-marker");
-        if (marker) {
-          requestFocus({ kind: "marker", level, key: marker.dataset.researchMarker ?? "" }, "reveal");
-        }
-      });
+      const strip = stripRef.current;
+      if (strip.levels[level + 1]?.sourceId === nodeId) {
+        closeAfter(level);
+        return;
+      }
+      const column = strip.columns.find(
+        (candidate) => candidate.role === "branches" && candidate.levelIndex === level + 1,
+      );
+      const listed =
+        column?.role === "branches"
+          ? column.groups.find((group) => group.kind === "branch" && group.sourceId === nodeId)
+          : undefined;
+      const children = branchesByParentRef.current.get(nodeId) ?? [];
+      const headId =
+        listed?.kind === "branch"
+          ? listed.headId
+          : researchBranchesInReadingOrder(children, (branchId) => {
+              const branch = children.find((child) => child.id === branchId);
+              return branch ? (passageAnchor(branch)?.start ?? null) : null;
+            })[0]?.id;
+      if (headId) {
+        goBranch(level, headId);
+      }
     },
-    [pairColumn, requestFocus, selectMessage],
+    [closeAfter, goBranch],
   );
 
   /** Shows a newly forked node until the refreshed tree detail includes it. */
@@ -1942,17 +1967,17 @@ function ResearchThreadPage({
     () => ({
       registerSegmentElement,
       onSelect: selectRow,
-      onShowBranches: showBranches,
+      onToggleBranches: toggleBranches,
       onOpenAnswerMenu: openAnswerMenu,
       onOpenContextMenu: openContextMenu,
       onDragStart: startMessageDrag,
     }),
-    [openAnswerMenu, openContextMenu, registerSegmentElement, selectRow, showBranches, startMessageDrag],
+    [openAnswerMenu, openContextMenu, registerSegmentElement, selectRow, startMessageDrag, toggleBranches],
   );
   const markerActions = useMemo<ResearchMarkerActions>(
     () => ({
       nodeById,
-      branchBusy,
+      branchState: branchStates.ofBranch,
       onTip: setMarkerTip,
       onCloseBranch: (level, markerKey) => {
         closeAfter(level);
@@ -1960,7 +1985,7 @@ function ResearchThreadPage({
       },
       onOpenBranch: goBranch,
     }),
-    [branchBusy, closeAfter, goBranch, nodeById, requestFocus],
+    [branchStates, closeAfter, goBranch, nodeById, requestFocus],
   );
 
   // Back and forward, in the root level's header and in the loading
@@ -2092,11 +2117,11 @@ function ResearchThreadPage({
     answerMenuOpenId:
       menu?.kind === "answer" && menu.trigger && !menu.trigger.matches(".research-head-menu") ? menu.nodeId : null,
     isUnread,
+    branchStateOf: (nodeId) => branchStates.ofMessage.get(nodeId) ?? null,
     rowActions: messageRowActions,
   };
 
-  /** The … menu of the chain headed by `headId`, in a column header or a
-   * branch group's source block. */
+  /** The … menu of the chain headed by `headId`, in a column header. */
   const headMenu = (headId: string, label: string) => ({
     label,
     open:
@@ -2130,7 +2155,9 @@ function ResearchThreadPage({
         value={composerText[headId] ?? ""}
         submitting={submittingKey === headId}
         shortcutHint={shortcutHintsShown && hinted ? "⌘J" : null}
-        requireCmdEnter={requireCmdEnterToSend}
+        // A column's ask box sends with ⌘↵ (Ctrl+↵ outside macOS); ↵ adds
+        // a line.
+        requireCmdEnter
         composerRef={registerComposer(headId)}
         onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
         onSubmit={() => void submitComposer(headId)}
@@ -2140,11 +2167,11 @@ function ResearchThreadPage({
     );
   };
 
-  /** A branches column group's ask box: the branch's, or the unsent
-   * branch's first question. ⌘J goes to the open (or unsent) branch's. */
+  /** The ask box in a branches column: the selected group's, or the
+   * unsent branch's first question. ⌘J goes to it. */
   const groupComposer = (group: ResearchStackGroup, level: number, columnCurrent: boolean) => {
     if (group.kind === "branch") {
-      return chainComposer(group.headId, level, columnCurrent && group.selectedId !== null);
+      return chainComposer(group.headId, level, columnCurrent);
     }
     const pendingKey = `pending:${group.parentNodeId}`;
     return (
@@ -2154,7 +2181,9 @@ function ResearchThreadPage({
         value={composerText[pendingKey] ?? ""}
         submitting={submittingKey === pendingKey}
         shortcutHint={shortcutHintsShown && columnCurrent ? "⌘J" : null}
-        requireCmdEnter={requireCmdEnterToSend}
+        // A column's ask box sends with ⌘↵ (Ctrl+↵ outside macOS); ↵ adds
+        // a line.
+        requireCmdEnter
         composerRef={registerComposer(pendingKey)}
         onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
         onSubmit={() => void submitPendingBranch()}
@@ -2244,7 +2273,7 @@ function ResearchThreadPage({
             // Provenance: a transcript came from a terminal session.
             imported={level === 0 && rootNode?.type === "document" && rootNode.source === "transcript"}
             shared={rowsShared}
-            branchOpen={levelPath.length > level + 1 || activePending?.parentNodeId === column.level.selectedId}
+            openSourceId={levels[level + 1]?.sourceId ?? null}
             menu={head ? headMenu(headId, level === 0 ? "Thread actions" : "Branch actions") : null}
             source={level > 0 && head?.parentNodeId ? branchSource(passageAnchor(head), head.parentNodeId, head) : null}
             composer={chainComposer(headId, level, currentLevel === level)}
@@ -2262,10 +2291,7 @@ function ResearchThreadPage({
             column={column}
             current={columnCurrent}
             shared={rowsShared}
-            branchOpen={
-              levelPath.length > level + 1 ||
-              (column.level !== null && activePending?.parentNodeId === column.level.selectedId)
-            }
+            openSourceId={levels[level + 1]?.sourceId ?? null}
             sourceOf={(group) => ({
               ...(group.kind === "branch"
                 ? branchSource(group.anchor, group.sourceId, nodeById.get(group.headId) ?? null)
@@ -2275,9 +2301,12 @@ function ResearchThreadPage({
                 treeTitleText,
               ),
             })}
-            menuOf={(headId) => headMenu(headId, "Branch actions")}
             composerOf={(group) => groupComposer(group, level, columnCurrent)}
             queueOf={chainQueue}
+            onClear={() => {
+              closeAfter(level - 1);
+              requestFocus({ kind: "branches", level }, "settle");
+            }}
             onScroll={onColumnScroll(column)}
           />
         );

@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   Copy,
   Files,
   Pencil,
@@ -167,7 +168,7 @@ export function ResearchThreadMenu({
         {menu.branchIds.map((branchId) => (
           <ResearchMenuItem
             key={branchId}
-            icon={<ResearchBranchIcon size={15} />}
+            icon={<ArrowUpRight size={15} aria-hidden="true" />}
             label={researchNodeLabel(nodeById.get(branchId), "Branch")}
             current={openBranchIds.has(branchId)}
             onSelect={() => {

@@ -77,7 +77,7 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onShowBranches: noop,
+      onToggleBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
       ...overrides,
@@ -108,7 +108,13 @@ test("a message row's meta line shows the starred mark and branch count, with no
   assert.match(html, /research-msg-meta"><span class="research-msg-starred" role="img" aria-label="Starred"/);
   assert.match(html, /research-msg-branches is-open"/);
   // The unread dot is announced as part of the button's name.
-  assert.match(html, /aria-label="3 branches from this answer, one with a new answer"/);
+  assert.match(
+    html,
+    /aria-label="3 branches from this answer, one selected in the next column, one with a new answer"/,
+  );
+  // The indicator is an up-right arrow, with no count.
+  assert.match(html, /research-msg-branches is-open"[^>]*>(?:(?!<\/button>).)*lucide-arrow-up-right/);
+  assert.doesNotMatch(html, /research-tnum/);
   assert.match(html, /research-turn-unread" aria-hidden="true"/);
   const starred = html.indexOf("research-msg-starred");
   const branches = html.indexOf("research-msg-branches");

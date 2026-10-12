@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Ellipsis, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ellipsis, Terminal, X } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
 import { columnAttributes } from "../../lib/researchColumns";
 
@@ -10,6 +10,8 @@ export function ResearchPairHeader({
   title,
   branch = null,
   count = null,
+  branchIcon = false,
+  clear = null,
   history,
   imported = false,
   archived = false,
@@ -22,6 +24,11 @@ export function ResearchPairHeader({
   /** A count after the title, set at the branch header's size
    * ("Follow-ups · 3"); 0 shows the title alone. */
   count?: number | null;
+  /** The branch icon before the title (a branches column's "Branches"). */
+  branchIcon?: boolean;
+  /** A × button at the right of the bar that clears the column's
+   * selection. */
+  clear?: { label: string; onClear: () => void } | null;
   /** Back and forward, in the root level's header. */
   history?: ResearchHistoryNavProps | null;
   /** A point-in-time copy of a terminal conversation. */
@@ -48,6 +55,7 @@ export function ResearchPairHeader({
             </>
           ) : (
             <>
+              {branchIcon ? <ResearchBranchIcon size={13} className="research-column-title-icon" /> : null}
               {title}
               {count ? <span className="research-column-count"> · {count}</span> : null}
             </>
@@ -74,6 +82,17 @@ export function ResearchPairHeader({
             onClick={(event) => menu.onOpen(event.currentTarget)}
           >
             <Ellipsis size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+        {clear ? (
+          <button
+            type="button"
+            className="control-button research-head-button research-head-clear"
+            aria-label={clear.label}
+            title={clear.label}
+            onClick={clear.onClear}
+          >
+            <X size={14} aria-hidden="true" />
           </button>
         ) : null}
       </div>
