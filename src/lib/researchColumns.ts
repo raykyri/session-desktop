@@ -649,21 +649,6 @@ export function columnMessageIds(column: ResearchColumn): string[] {
   }
 }
 
-/** The chain whose ask box a messages-side column shows: a messages
- * column's own chain, the selected group's in a branches column, and none in
- * a branches column with no selection (an unsent branch's group has its own
- * ask box). */
-export function columnComposerHeadId(column: ResearchColumn): string | null {
-  switch (column.role) {
-    case "messages":
-      return column.level.headId;
-    case "branches":
-      return column.level?.headId ?? null;
-    default:
-      return null;
-  }
-}
-
 /** The branch group that lists `nodeId` in a branches column. */
 export function branchGroupOf(column: ResearchBranchesColumn, nodeId: string): ResearchBranchGroup | null {
   return (

@@ -50,8 +50,7 @@ function ResearchBranchSource({
   resolves,
   parentLoaded,
   from = null,
-  children,
-}: ResearchBranchSourceProps & { children?: ReactNode }) {
+}: ResearchBranchSourceProps) {
   const postExcerpt = parent && created ? postFollowUpSourceExcerpt(parent) : null;
   const quote = anchor ? researchQuoteText(anchor.exact) : null;
   return (
@@ -77,7 +76,6 @@ function ResearchBranchSource({
           )}
         </span>
       </span>
-      {children}
     </div>
   );
 }

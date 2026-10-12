@@ -1236,11 +1236,6 @@
   white-space: nowrap;
 }
 
-.research-branch-source > .research-branch-group-menu {
-  flex: none;
-  margin: -3px -6px -3px 0;
-}
-
 /* A branches column stacks one group per branch: its source block and
    messages, and, in the group that holds the column's selection, the ask
    box. A hairline separates the groups. The source block is quiet: the

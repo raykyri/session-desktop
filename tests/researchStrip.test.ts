@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   branchGroupOf,
   columnAttributes,
-  columnComposerHeadId,
   columnKey,
   columnLevelIndex,
   columnMessageIds,
@@ -590,14 +589,3 @@ test("a removed selection falls back to the message it followed or was asked fro
   assert.deepEqual(researchSelectionAfterRemoval(withoutX1, ["c2", "x1", "y2"], survivor(withoutX1)), ["c2"]);
 });
 
-test("the ask box goes with the column's own chain, or the selected group's", () => {
-  const nodes = selectionNodes();
-  const strip = researchStrip(nodes, ["c2", "x1"], null);
-  assert.equal(columnComposerHeadId(strip.columns[0]), "root");
-  assert.equal(columnComposerHeadId(strip.columns[2]), "x1");
-  // A branches column with no selection has no ask box.
-  const closed = researchStrip(nodes, ["c2", "x1"], null).columns.find((column) => column.id === "T2");
-  assert.equal(closed?.role, "branches");
-  assert.equal(columnComposerHeadId(closed!), null);
-  assert.equal(columnComposerHeadId(strip.columns[1]), null);
-});
