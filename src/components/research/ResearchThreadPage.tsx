@@ -678,7 +678,9 @@ function ResearchThreadPage({
       }
       setMenu(null);
       const path = typeof shown === "string" ? researchLevelPath(nodesNow, shown) : shown;
-      markOpened([nodeId]);
+      // Every column's selection is on screen: each selected message and
+      // the branch it belongs to has been read.
+      markOpened([nodeId, ...path.map((id) => inlineChainFor(nodesNow, id)[0] ?? id)]);
       return { nodeId, path: path.length > 0 ? path : undefined };
     },
     [markOpened, navigationPersistence, persistSelection],
