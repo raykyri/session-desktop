@@ -60,7 +60,7 @@ import {
 import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 import {
   researchBranchesByParent,
-  researchBranchesInReadingOrder,
+  researchBranchesInPassageOrder,
   researchEditedQuestionFork,
   researchLevelPath,
   researchQueueStep,
@@ -1562,7 +1562,6 @@ function ResearchThreadPage({
     stripRef,
     levelPathRef,
     branchesByParentRef,
-    branchRangeOffsetsRef,
     pendingRef,
     editorRef,
     currentLevelRef,
@@ -1601,10 +1600,7 @@ function ResearchThreadPage({
       const headId =
         listed?.kind === "branch"
           ? listed.headId
-          : researchBranchesInReadingOrder(children, (branchId) => {
-              const branch = children.find((child) => child.id === branchId);
-              return branch ? (passageAnchor(branch)?.start ?? null) : null;
-            })[0]?.id;
+          : researchBranchesInPassageOrder(children)[0]?.id;
       if (headId) {
         goBranch(level, headId);
       }

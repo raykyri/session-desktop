@@ -8,7 +8,7 @@ import {
 } from "../components/research/ResearchColumns";
 import type { ResearchPostThreadHandle } from "../components/research/ResearchPostThread";
 import { isEditableTarget } from "../lib/appHelpers";
-import { researchBranchesInReadingOrder } from "../lib/researchBranchView";
+import { researchBranchesInPassageOrder } from "../lib/researchBranchView";
 import {
   COLUMN_ROW_SELECTOR,
   columnIdOf,
@@ -40,7 +40,6 @@ export function useResearchPairsKeyboard({
   stripRef,
   levelPathRef,
   branchesByParentRef,
-  branchRangeOffsetsRef,
   pendingRef,
   editorRef,
   currentLevelRef,
@@ -63,8 +62,6 @@ export function useResearchPairsKeyboard({
   /** The selected message of each open level, root level first. */
   levelPathRef: Ref<readonly string[]>;
   branchesByParentRef: Ref<ReadonlyMap<string, ResearchNode[]>>;
-  /** The branch passages that resolved in their answers. */
-  branchRangeOffsetsRef: Ref<{ segmentId: string; id: string; start: number; end: number }[]>;
   pendingRef: Ref<{ parentNodeId: string } | null>;
   editorRef: Ref<{ kind: "document" | "post" } | null>;
   /** The level ⌘J focuses the ask box of. */
@@ -152,16 +149,13 @@ export function useResearchPairsKeyboard({
     };
   }, [closeAfter, goBack, goForward, requestFocus]);
 
-  /** The branches of `level`'s selected answer, in reading order. */
+  /** The branches of `level`'s selected answer, in the order the branches
+   * column lists them. */
   const siblingsAt = useCallback((level: ResearchLevel | undefined) => {
     const parentId = level?.selectedId;
-    const branches = parentId ? branchesByParentRef.current.get(parentId) ?? EMPTY_BRANCHES : EMPTY_BRANCHES;
-    return researchBranchesInReadingOrder(branches, (branchId) => {
-      const entry = branchRangeOffsetsRef.current.find(
-        (candidate) => candidate.id === branchId && candidate.segmentId === parentId,
-      );
-      return entry ? entry.start : null;
-    });
+    return researchBranchesInPassageOrder(
+      parentId ? branchesByParentRef.current.get(parentId) ?? EMPTY_BRANCHES : EMPTY_BRANCHES,
+    );
   }, []);
 
   /** → from level `level`: an unsent branch's ask box; the selected row of
@@ -344,10 +338,7 @@ export function useResearchPairsKeyboard({
         // branches column's selection; with none there, selecting the
         // message and its first branch is one visit, in one render; with no
         // branches, only the selection.
-        const branches = researchBranchesInReadingOrder(
-          branchesByParentRef.current.get(nodeId) ?? EMPTY_BRANCHES,
-          () => null,
-        );
+        const branches = researchBranchesInPassageOrder(branchesByParentRef.current.get(nodeId) ?? EMPTY_BRANCHES);
         if (levels[level + 1]) {
           selectMessage(level, nodeId);
           requestFocus({ kind: "row", level: level + 1 }, "settle");

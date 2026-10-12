@@ -6,7 +6,7 @@
 import { canContinueChain, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchChains";
 import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchNode } from "../types";
-import { nodeStatus } from "./researchNodeTypes";
+import { nodeStatus, passageAnchor } from "./researchNodeTypes";
 
 function byCreation(left: ResearchNode, right: ResearchNode) {
   return left.createdAt - right.createdAt || left.id.localeCompare(right.id);
@@ -98,6 +98,15 @@ export function researchBranchesInReadingOrder(
     }
     return byCreation(left, right);
   });
+}
+
+/** Branches of one answer in the order a branches column lists them: by
+ * where the passage each was asked about starts in the answer, then
+ * whole-answer branches, each group oldest first. The branch indicator, →
+ * and the keys that move between sibling branches use this order too. */
+export function researchBranchesInPassageOrder(branches: readonly ResearchNode[]): ResearchNode[] {
+  const start = new Map(branches.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]));
+  return researchBranchesInReadingOrder(branches, (branchId) => start.get(branchId) ?? null);
 }
 
 /** What a chain's client-side follow-up queue does next, given the chain's

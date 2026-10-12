@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   researchBranchesByParent,
+  researchBranchesInPassageOrder,
   researchBranchesInReadingOrder,
   researchBranchesOf,
   researchEditedQuestionFork,
@@ -12,7 +13,7 @@ import {
   researchQueueStep,
   researchPairLabel,
 } from "../src/lib/researchBranchView";
-import type { ResearchNode } from "../src/types";
+import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode, withRun, type NodeFixture } from "./researchNodeFixture";
 
 function node(id: string, overrides: NodeFixture = {}): ResearchNode {
@@ -74,6 +75,35 @@ test("an answer's branches read in passage order, then whole-answer branches, ol
     ["b4", "b3"],
   );
   assert.deepEqual(researchBranchesInReadingOrder(branches, () => null).map((item) => item.id), ["b3", "b4"]);
+});
+
+test("branches in passage order follow where their passages start, then whole-answer branches", () => {
+  const passage = (start: number) =>
+    ({
+      kind: "passage",
+      anchor: {
+        version: 1,
+        projection: "answer-v1",
+        responseRevision: "rev",
+        start,
+        end: start + 4,
+        exact: "text",
+        prefix: "",
+        suffix: "",
+      } as ResearchHighlightAnchor,
+    }) as const;
+  const branches = [
+    node("whole", { parentNodeId: "p", createdAt: 1 }),
+    node("late", { parentNodeId: "p", anchor: passage(40), createdAt: 2 }),
+    node("early", { parentNodeId: "p", anchor: passage(10), createdAt: 3 }),
+    node("early-newer", { parentNodeId: "p", anchor: passage(10), createdAt: 4 }),
+  ];
+  // Creation order would pick "whole" first; the branches column lists
+  // "early" first, and so do → and the branch indicator.
+  assert.deepEqual(
+    researchBranchesInPassageOrder(branches).map((item) => item.id),
+    ["early", "early-newer", "late", "whole"],
+  );
 });
 
 test("a queued follow-up waits for the running tail, then sends or stalls", () => {

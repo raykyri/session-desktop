@@ -32,7 +32,7 @@
 // columnSelector.
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";
-import { researchBranchesByParent, researchBranchesInReadingOrder, researchLevelPath } from "./researchBranchView";
+import { researchBranchesByParent, researchBranchesInPassageOrder, researchLevelPath } from "./researchBranchView";
 import { chainDisplayOrder, inlineChainFor, inlineChainsFromHeads } from "./researchChains";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
 
@@ -170,7 +170,7 @@ function branchGroups(
   for (const messageId of listed) {
     const children = level.kind === "post" ? [] : (branchesByParent.get(messageId) ?? []);
     const startOf = new Map(children.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]));
-    const branches = researchBranchesInReadingOrder(children, (branchId) => startOf.get(branchId) ?? null);
+    const branches = researchBranchesInPassageOrder(children);
     const unsent = pending?.parentNodeId === messageId ? pending : null;
     let unsentAt = -1;
     if (unsent) {
