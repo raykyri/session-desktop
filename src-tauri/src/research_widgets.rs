@@ -302,6 +302,21 @@ fn constant_time_eq(left: &str, right: &str) -> bool {
 /// also process automatic refreshes) and no other pragma applies. Attribute
 /// names are not entity-decoded, so the literal spelling is the only form; a
 /// mention of the word in text changes the same way but does not affect behavior.
+/// Content-Security-Policy of a downloaded widget file: the static widget
+/// page's policy without Session's script hashes, sandbox or file-server font
+/// origin (a `<meta>` policy cannot sandbox). Mirrors
+/// `SESSION_WIDGET_DOWNLOAD_POLICY` in web/packages/shared.
+pub const DOWNLOAD_POLICY: &str = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+
+/// A downloaded widget file: the widget HTML, with `http-equiv` neutralised
+/// as on the served pages, after a `<meta>` CSP carrying [`DOWNLOAD_POLICY`].
+pub fn download_document(html: &str) -> String {
+    format!(
+        "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta http-equiv=\"Content-Security-Policy\" content=\"{DOWNLOAD_POLICY}\">\n</head>\n<body>\n{}\n</body>\n</html>\n",
+        neutralize_http_equiv(html)
+    )
+}
+
 pub fn neutralize_http_equiv(html: &str) -> Cow<'_, str> {
     const NAME: &[u8] = b"http-equiv";
     let bytes = html.as_bytes();
@@ -528,6 +543,28 @@ mod tests {
         );
         // A different language with the same prefix is not a widget.
         assert!(strip_widget_blocks("```session-htmlx\nkeep\n```").contains("keep"));
+    }
+
+    #[test]
+    fn downloads_carry_the_static_policy_ahead_of_the_widget() {
+        let file = download_document(
+            "<meta HTTP-EQUIV=\"refresh\" content=\"0;url=https://bad.invalid\"><p>x</p>",
+        );
+        let policy =
+            format!("<meta http-equiv=\"Content-Security-Policy\" content=\"{DOWNLOAD_POLICY}\">");
+        assert!(file.find(&policy).unwrap() < file.find("<p>x</p>").unwrap());
+        for directive in [
+            "script-src 'none'",
+            "connect-src 'none'",
+            "default-src 'none'",
+        ] {
+            assert!(DOWNLOAD_POLICY.contains(directive));
+        }
+        assert!(
+            !file
+                .to_ascii_lowercase()
+                .contains("<meta http-equiv=\"refresh\"")
+        );
     }
 
     #[test]

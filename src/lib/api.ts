@@ -842,6 +842,11 @@ export interface ResearchArtifactRevision {
   contentHash: string;
   parentRevision: string | null;
   html: string;
+  /** Milliseconds since the Unix epoch when the revision was first stored. */
+  createdAt: number;
+  /** The declared parent is malformed or not stored for this artifact; the
+   * revision is shown and handled as a root. */
+  unresolvedParent: boolean;
 }
 interface ResearchArtifactInput {
   treeId: string;

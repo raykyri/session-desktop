@@ -2595,6 +2595,11 @@ impl AppState {
             ) {
                 eprintln!("session: {err}");
             }
+            crate::research_artifacts::prune(
+                &self.inner.config.workspace_root,
+                &surviving_research_node_ids,
+                crate::research_artifacts::MAX_STORE_BYTES,
+            );
         }
         migration_warnings.extend(migrate_thread_records_to_global(
             &self.inner.config.workspace_root,
@@ -6982,6 +6987,7 @@ impl AppState {
         if !removed {
             return Err(format!("research tree {tree_id} was not found"));
         }
+        crate::research_artifacts::remove_tree(&self.inner.config.workspace_root, tree_id);
         self.persist();
         self.emit(SessionEvent::new(
             "research.tree.removed",

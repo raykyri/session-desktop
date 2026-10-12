@@ -2884,6 +2884,24 @@ fn read_snapshot_file(path: &Path) -> Result<Option<ResponseSnapshot>, String> {
     }))
 }
 
+/// Length and modification time of a node's response snapshot file, current
+/// location first; None when it has none. Changes whenever the snapshot is
+/// rewritten.
+pub fn response_snapshot_stamp(
+    workspace_root: &Path,
+    node_id: &str,
+) -> Option<(u64, std::time::SystemTime)> {
+    [
+        response_snapshot_path(workspace_root, node_id).ok()?,
+        legacy_response_snapshot_path(workspace_root, node_id).ok()?,
+    ]
+    .iter()
+    .find_map(|path| {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some((metadata.len(), metadata.modified().ok()?))
+    })
+}
+
 pub fn read_response_snapshot_with_revision(
     workspace_root: &Path,
     node_id: &str,

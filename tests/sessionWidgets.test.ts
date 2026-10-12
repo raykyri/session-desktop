@@ -419,8 +419,15 @@ test("artifact metadata is optional, bounded, and carried through the fence", as
   const { sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
   assert.deepEqual(sessionWidgetMetadata('id="chart" title="Growth chart" parent="' + 'a'.repeat(64) + '"'), { artifactId: 'chart', title: 'Growth chart', parentRevision: 'a'.repeat(64) });
   assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').artifactId, undefined);
-  assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').parentRevision, undefined);
+  // A malformed parent is passed on as declared; the store records it as an
+  // unresolved parent and treats the revision as a root, like the Rust indexer.
+  assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').parentRevision, 'latest');
   assert.equal(sessionWidgetMetadata('').artifactId, undefined);
+  // Titles are one line of at most 120 characters, as in research_artifacts.rs.
+  const title = sessionWidgetMetadata('title=' + JSON.stringify('Settings\n\u0007 Saved ' + 'x'.repeat(200))).title!;
+  assert.match(title, /^Settings Saved x+$/);
+  assert.equal([...title].length, 120);
+  assert.equal(sessionWidgetMetadata('title="  "').title, undefined);
 });
 
 test("quoted artifact titles round-trip in revision prompts", async () => {

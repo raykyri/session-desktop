@@ -125,7 +125,32 @@ export function remarkSessionWidgetFences() {
   };
 }
 
-/** Optional metadata does not change the legacy fence format. */
+/** Longest widget title, in characters. Mirrors `MAX_TITLE_CHARS` in
+ * src-tauri/src/research_artifacts.rs. */
+export const MAX_SESSION_WIDGET_TITLE_CHARS = 120;
+
+/** One line of at most 120 characters: control characters and line breaks
+ * become spaces and runs of whitespace collapse, so an agent-written title
+ * cannot lay itself out as several rows of app chrome. Same rule as
+ * `normalize_title` in src-tauri/src/research_artifacts.rs. */
+export function sessionWidgetTitle(title: string): string {
+  return [
+    ...title
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ")
+      .split(/\s+/u)
+      .filter(Boolean)
+      .join(" "),
+  ]
+    .slice(0, MAX_SESSION_WIDGET_TITLE_CHARS)
+    .join("");
+}
+
+/** Optional metadata does not change the legacy fence format. `parentRevision`
+ * is the declared `parent=` as written: the desktop store records a value that
+ * is not a revision hash, or names a revision it does not hold, as an
+ * unresolved parent and treats the revision as a root
+ * (src-tauri/src/research_artifacts.rs). */
 export function sessionWidgetMetadata(meta: string): {
   artifactId?: string | undefined;
   title?: string | undefined;
@@ -143,7 +168,7 @@ export function sessionWidgetMetadata(meta: string): {
     artifactId: /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/u.test(fields.id ?? "")
       ? fields.id
       : undefined,
-    title: fields.title?.slice(0, 120),
-    parentRevision: /^[a-f0-9]{64}$/u.test(fields.parent ?? "") ? fields.parent : undefined,
+    title: fields.title === undefined ? undefined : sessionWidgetTitle(fields.title) || undefined,
+    parentRevision: fields.parent?.slice(0, 128),
   };
 }

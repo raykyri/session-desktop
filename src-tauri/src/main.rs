@@ -2506,58 +2506,60 @@ fn research_inline_widgets_set(
     })
 }
 
-// Read saved sources before registering/listing revisions so folding an answer
-// or turning widgets off cannot remove it from a named artifact's history.
+/// Stores every named revision of `artifact_id` found in the tree's settled
+/// answers, so folding an answer or turning widgets off cannot remove it from
+/// the artifact's history. Each answer is read again only when its node
+/// record or response snapshot changed since the last index of this tree.
+/// Returns the number of sources that could not be stored.
 fn index_research_artifact(
     state: &AppState,
     tree_id: &str,
     artifact_id: &str,
 ) -> Result<usize, String> {
+    use std::hash::{Hash, Hasher};
+    let root = state.config().workspace_root.clone();
     let tree = state.research_tree(tree_id)?;
-    let mut pending = Vec::new();
-    for node in tree.nodes {
-        if node.status().is_active() {
-            continue;
-        }
-        let content = load_research_node_content(state, &node.id)?;
-        for turn in content.turns.iter().filter(|turn| turn.role == "assistant") {
-            for block in &turn.blocks {
-                if let transcript::TurnBlock::Text { text } = block {
-                    pending.extend(research_artifacts::named_sources(
-                        tree_id,
-                        &node.id,
-                        text,
-                        artifact_id,
-                    ));
-                }
-            }
-        }
-    }
-    // Parents may sort after their children in the tree. Only resolvable
-    // sources enter durable history; malformed/dangling metadata stays source.
-    loop {
-        let before = pending.len();
-        pending.retain(|input| {
-            research_artifacts::register(&state.config().workspace_root, input.clone()).is_err()
-        });
-        if pending.is_empty() || pending.len() == before {
-            break;
-        }
-    }
-    Ok(pending.len())
+    let nodes = tree
+        .nodes
+        .iter()
+        .filter(|node| !node.status().is_active())
+        .map(|node| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            serde_json::to_string(node)
+                .unwrap_or_default()
+                .hash(&mut hasher);
+            research::response_snapshot_stamp(&root, &node.id).hash(&mut hasher);
+            (node.id.clone(), hasher.finish())
+        })
+        .collect::<Vec<_>>();
+    research_artifacts::index_tree(&root, tree_id, artifact_id, &nodes, |node_id| {
+        let content = load_research_node_content(state, node_id)?;
+        Ok(content
+            .turns
+            .iter()
+            .filter(|turn| turn.role == "assistant")
+            .flat_map(|turn| &turn.blocks)
+            .filter_map(|block| match block {
+                transcript::TurnBlock::Text { text } => Some(text.clone()),
+                _ => None,
+            })
+            .collect())
+    })
 }
 
+/// Stores the revision of a displayed widget. Only this source is read: a
+/// declared parent that is not stored yet leaves the revision a root
+/// (`unresolvedParent`) until the parent is stored, by its own display or by
+/// opening the artifact's history.
 #[tauri::command(async)]
 fn research_artifact_register(
     state: tauri::State<'_, AppState>,
     input: research_artifacts::ArtifactInput,
 ) -> Result<research_artifacts::ArtifactRevision, String> {
-    if let Some(id) = &input.artifact_id {
-        index_research_artifact(&state, &input.tree_id, id)?;
-    }
     research_artifacts::register(&state.config().workspace_root, input)
 }
 
+/// Lists an artifact's revisions after indexing the whole tree.
 #[tauri::command(async)]
 fn research_artifact_history(
     state: tauri::State<'_, AppState>,
@@ -2588,7 +2590,10 @@ fn research_artifact_state_update(
     research_artifacts::update_state(&state.config().workspace_root, &reference, &action, value)
 }
 
-/// Exports the exact authored HTML only after the reader chooses a destination.
+/// Exports the authored HTML only after the reader chooses a destination,
+/// wrapped by `research_widgets::download_document` in the static page's
+/// policy (no scripts, no network), since the file opens outside Session's
+/// sandbox.
 #[tauri::command(async)]
 fn research_widget_download(app: tauri::AppHandle, html: String) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
@@ -2608,7 +2613,8 @@ fn research_widget_download(app: tauri::AppHandle, html: String) -> Result<bool,
         return Ok(false);
     };
     let path = path.into_path().map_err(|err| err.to_string())?;
-    std::fs::write(path, html).map_err(|err| format!("could not save widget: {err}"))?;
+    std::fs::write(path, research_widgets::download_document(&html))
+        .map_err(|err| format!("could not save widget: {err}"))?;
     Ok(true)
 }
 
