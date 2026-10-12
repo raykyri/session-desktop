@@ -10,7 +10,6 @@ import {
   researchMarkerLabel,
   researchNodeLabel,
   researchQuoteText,
-  researchSubtreeBusy,
   researchSubtreeIds,
   sameIds,
   sameNumberRecord,
@@ -83,7 +82,7 @@ test("surrogateSafeSlice clamps and never splits a surrogate pair", () => {
   assert.equal(surrogateSafeSlice("plain", 1, 3), "la");
 });
 
-test("researchSubtreeIds and researchSubtreeBusy visit every descendant", () => {
+test("researchSubtreeIds and a branch's state cover every descendant", () => {
   const nodes = [
     node("root"),
     node("a", { parentNodeId: "root" }),
@@ -93,9 +92,10 @@ test("researchSubtreeIds and researchSubtreeBusy visit every descendant", () => 
   ];
   assert.deepEqual([...researchSubtreeIds(nodes, "a")].sort(), ["a", "a1", "a2"]);
   assert.deepEqual([...researchSubtreeIds(nodes, "b")], ["b"]);
-  assert.equal(researchSubtreeBusy(nodes, "a"), true);
-  assert.equal(researchSubtreeBusy(nodes, "b"), false);
-  assert.equal(researchSubtreeBusy(nodes, "missing"), false);
+  const { ofBranch } = researchBranchStates(nodes, researchBranchesByParent(nodes));
+  assert.equal(ofBranch("a"), "running");
+  assert.equal(ofBranch("b"), null);
+  assert.equal(ofBranch("missing"), null);
 });
 
 test("researchDeleteLabel names what the deletion takes", () => {

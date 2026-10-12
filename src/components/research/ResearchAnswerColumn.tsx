@@ -332,7 +332,16 @@ export function ResearchMarkerTip({
   onDismiss,
 }: {
   anchor: HTMLElement;
-  items: { id: string; question: string; source: string; messages: number; state: "open" | "running" | null }[];
+  /** `state`: the branch is open in the next column; else running or
+   * failed when a message in it, or in a branch below it, is (failed
+   * first). */
+  items: {
+    id: string;
+    question: string;
+    source: string;
+    messages: number;
+    state: "open" | "running" | "failed" | null;
+  }[];
   /** One of the marker's branches is open: a click opens the next one. */
   opensNext: boolean;
   onDismiss: () => void;
@@ -392,6 +401,7 @@ export function ResearchMarkerTip({
             </span>
             {item.state === "open" ? <span className="is-open">Open</span> : null}
             {item.state === "running" ? <span className="is-running">Running</span> : null}
+            {item.state === "failed" ? <span className="is-failed">Failed</span> : null}
           </span>
         </div>
       ))}

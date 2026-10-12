@@ -81,7 +81,6 @@ import {
   researchEditorStats,
   researchNodeLabel,
   researchQuoteText,
-  researchSubtreeBusy,
   researchSubtreeIds,
   researchBranchStates,
   sameIds,
@@ -2090,7 +2089,6 @@ function ResearchThreadPage({
       trackAnnotationUnderPointer,
     ],
   );
-  const branchBusy = useCallback((headId: string) => researchSubtreeBusy(nodes, headId), [nodes]);
   // Callbacks every messages column's rows share.
   const messageRowActions = useMemo<ResearchMessageRowActions>(
     () => ({
@@ -2679,7 +2677,7 @@ function ResearchThreadPage({
                 question: nodePrompt(branch),
                 source: passageAnchor(branch) ? `“${researchQuoteText(passageAnchor(branch)!.exact)}”` : "Whole answer",
                 messages: chain.length,
-                state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchBusy(branchId) ? ("running" as const) : null,
+                state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchStates.ofBranch(branchId),
               },
             ];
           })}

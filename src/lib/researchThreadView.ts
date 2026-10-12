@@ -117,29 +117,6 @@ export function researchSubtreeIds(nodes: readonly ResearchNode[], rootId: strin
   return subtree;
 }
 
-/** Whether any node in the branch headed by `headId`, or in a branch below
- * it, is running or queued. */
-export function researchSubtreeBusy(nodes: readonly ResearchNode[], headId: string) {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const stack = [headId];
-  const seen = new Set<string>();
-  while (stack.length > 0) {
-    const id = stack.pop() as string;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const node = byId.get(id);
-    if (node && isActiveResearchStatus(nodeStatus(node))) {
-      return true;
-    }
-    for (const candidate of nodes) {
-      if (candidate.parentNodeId === id) {
-        stack.push(candidate.id);
-      }
-    }
-  }
-  return false;
-}
-
 /** The state a branch control shows: "failed" when a message in the
  * branches, or in a branch below them, failed; else "running" when one is
  * running or queued; else null. `ofMessage` holds it for each message with

@@ -1420,6 +1420,10 @@
   color: var(--status-active-fg);
 }
 
+.research-marker-tip-meta > .is-failed {
+  color: var(--research-failed-text);
+}
+
 /* The content column with no thread open: a header bar with back and
    forward over the filler. */
 .research-empty-content {
