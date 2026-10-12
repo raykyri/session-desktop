@@ -880,16 +880,19 @@ function ResearchThreadPage({
       setMenu(null);
       const path = levelPathRef.current;
       if (path[path.length - 1] !== parentNodeId) {
-        // The unsent branch is shown after the deepest selection: the
-        // columns after its parent's close.
-        const next = path.includes(parentNodeId) ? path.slice(0, path.indexOf(parentNodeId) + 1) : parentNodeId;
+        // The unsent branch is shown after the deepest selection: its
+        // parent is selected in the column that lists it, the columns
+        // before keep their selections, and the columns after close.
+        const withParent = path.includes(parentNodeId) ? path : selectionWith(parentNodeId);
+        const at = withParent.indexOf(parentNodeId);
+        const next = at >= 0 ? withParent.slice(0, at + 1) : parentNodeId;
         setSelection(next);
         persistSelection(next);
       }
       setPending({ parentNodeId, anchor });
       requestFocus({ kind: "composer", key: `pending:${parentNodeId}` }, "settle");
     },
-    [archived, navigationPersistence, persistSelection, requestFocus],
+    [archived, navigationPersistence, persistSelection, requestFocus, selectionWith],
   );
 
   /** Discards the new branch being written; focus returns to the answer it
