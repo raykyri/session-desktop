@@ -118,3 +118,51 @@ test('identical input can be retried after a failed optimistic save', async () =
     assert.equal(readArtifactState(reference).error, '');
   });
 });
+
+test('saves are never echoed back as restores; control actions and reloads restore', async () => {
+  await withWidgetDom(async (window) => {
+    const reference = { treeId: 'echo-tree', artifactId: 'chart', revision: 'echo' };
+    let stored = { enabled: false, value: null as unknown };
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args: { action?: string; value?: unknown }) => {
+      if (command === 'research_artifact_state_update') {
+        switch (args.action) {
+          case 'enable': stored = { ...stored, enabled: true }; break;
+          case 'save': await new Promise((resolve) => setTimeout(resolve, 50)); stored = { ...stored, value: args.value }; break;
+          case 'reset': stored = { ...stored, value: null }; break;
+        }
+      }
+      return { ...stored };
+    } } });
+    function Harness() {
+      const ref = useRef<HTMLIFrameElement | null>(null);
+      useSessionArtifactState(reference, ref, 'http://127.0.0.1/widget', true);
+      return createElement('iframe', { ref });
+    }
+    const container = document.createElement('div'); document.body.append(container);
+    const root = createRoot(container);
+    const restores: unknown[] = [];
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    try {
+      await act(async () => root.render(createElement(Harness)));
+      const frame = container.querySelector('iframe')!.contentWindow!;
+      frame.addEventListener('message', (event) => { if ((event as MessageEvent).data?.type === 'session-widget-state-restore') restores.push((event as MessageEvent).data.value); });
+      const send = (data: unknown) => window.dispatchEvent(new window.MessageEvent('message', { source: frame as unknown as Window, data }));
+      await act(async () => { await wait(10); });
+      restores.length = 0;
+      await act(async () => changeArtifactState(reference, 'enable'));
+      await act(async () => { await wait(10); });
+      assert.deepEqual(restores, [null], 'enabling restores');
+      restores.length = 0;
+      await act(async () => { send({ type: 'session-widget-state-save', value: { v: '1' } }); });
+      await act(async () => { send({ type: 'session-widget-state-save', value: { v: '12' } }); });
+      await act(async () => { await wait(400); });
+      assert.deepEqual(restores, [], 'typing is never answered with a restore');
+      assert.deepEqual(stored.value, { v: '12' });
+      await act(async () => { send({ type: 'session-widget-state-ready' }); await wait(10); });
+      assert.deepEqual(restores, [{ v: '12' }], 'a reloaded page receives the saved inputs');
+      await act(async () => changeArtifactState(reference, 'reset'));
+      await act(async () => { await wait(10); });
+      assert.deepEqual(restores, [{ v: '12' }, null], 'Reset restores');
+    } finally { await act(async () => root.unmount()); }
+  });
+});

@@ -1,7 +1,12 @@
 import { getResearchArtifactState, updateResearchArtifactState, type ArtifactStateAction, type ResearchArtifactRef, type ResearchArtifactState } from "./api";
 
-export interface ArtifactStateEntry { config: ResearchArtifactState | null; error: string; pending: number; epoch: number; controlPending: number; sequence: number; }
-const EMPTY: ArtifactStateEntry = { config: null, error: "", pending: 0, epoch: 0, controlPending: 0, sequence: 0 };
+/** `restore` counts the times the stored inputs replaced what the widget
+ * shows: the first load and every completed Remember/Forget, Reset and Copy
+ * parent inputs. Saves of the widget's own input never change it, so the
+ * widget is not sent its own (possibly older) value back while the reader
+ * types. */
+export interface ArtifactStateEntry { config: ResearchArtifactState | null; error: string; pending: number; epoch: number; controlPending: number; sequence: number; restore: number; }
+const EMPTY: ArtifactStateEntry = { config: null, error: "", pending: 0, epoch: 0, controlPending: 0, sequence: 0, restore: 0 };
 const entries = new Map<string, ArtifactStateEntry>();
 const loading = new Map<string, Promise<void>>();
 const staged = new Map<string, { timer: ReturnType<typeof setTimeout>; value: unknown; epoch: number; sequence: number }>();
@@ -22,7 +27,7 @@ export function loadArtifactState(reference: ResearchArtifactRef): Promise<void>
   const existing = loading.get(key);
   if (existing) return existing;
   const work = getResearchArtifactState(reference).then(
-    (config) => patch(reference, { config, error: "" }),
+    (config) => patch(reference, { config, error: "", restore: readArtifactState(reference).restore + 1 }),
     () => patch(reference, { error: "Saved inputs unavailable. Retry to load them." }),
   ).finally(() => loading.delete(key));
   loading.set(key, work);
@@ -39,7 +44,7 @@ export function changeArtifactState(reference: ResearchArtifactRef, action: Arti
     try {
       const config = await updateResearchArtifactState(reference, action, value);
       const current = readArtifactState(reference);
-      if (current.epoch === epoch && current.sequence === sequence) patch(reference, { config, error: "" });
+      if (current.epoch === epoch && current.sequence === sequence) patch(reference, { config, error: "", restore: current.restore + (action === "save" ? 0 : 1) });
     }
     catch { patch(reference, { error: action === "migrate" ? "The parent has no saved inputs, or they could not be copied." : "Inputs could not be saved. Try again." }); }
     finally { patch(reference, { pending: readArtifactState(reference).pending - 1, controlPending: readArtifactState(reference).controlPending - (action === "save" ? 0 : 1) }); }

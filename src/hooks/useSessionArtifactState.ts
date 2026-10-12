@@ -28,9 +28,15 @@ export function useSessionArtifactState(reference: ResearchArtifactRef | null, f
       flushArtifactInputs(reference);
     };
   }, [key, frameUrl, frameRef]);
+  // Restore when the frame's page loads and after a control action or the
+  // first load replaced the stored inputs (`entry.restore`), never after the
+  // widget's own saves: echoing a save back would reset inputs mid-typing.
+  const hasConfig = entry.config !== null;
   useEffect(() => {
-    if (!loaded || !entry.config) return;
-    frameRef.current?.contentWindow?.postMessage({ type: "session-widget-state-restore", value: entry.config.enabled ? entry.config.value : null }, "*");
-  }, [loaded, frameUrl, frameRef, entry.config]);
+    if (!loaded || !reference) return;
+    const config = readArtifactState(reference).config;
+    if (!config) return;
+    frameRef.current?.contentWindow?.postMessage({ type: "session-widget-state-restore", value: config.enabled ? config.value : null }, "*");
+  }, [loaded, frameUrl, frameRef, key, hasConfig, entry.restore]);
   return entry;
 }
