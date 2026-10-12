@@ -1459,18 +1459,29 @@ function ResearchThreadPage({
     setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   }, []);
 
-  /** Moves `nodeId` before `beforeId` (the end for null) in the column whose
-   * chain starts at `headId`, and stores the new order. Display only: the
-   * next follow-up still continues the chain's last message. Returns the
-   * new order, or null when nothing changed. */
+  /** The messages of the chain headed by `headId` in the order its column
+   * or branch group lists them; empty when `headId` heads no chain. */
+  const chainDisplayIds = useCallback((headId: string): readonly string[] => {
+    const nodesNow = nodesRef.current;
+    const chain = inlineChainFor(nodesNow, headId);
+    return chain[0] === headId
+      ? chainDisplayOrder(chain, nodesNow.find((node) => node.id === headId)?.chainOrder)
+      : [];
+  }, []);
+
+  /** Moves `nodeId` before `beforeId` (the end for null) in the chain that
+   * starts at `headId` (a messages column, or any group of a branches
+   * column), and stores the new order. Display only: the next follow-up
+   * still continues the chain's last message. Returns the new order, or
+   * null when nothing changed. */
   const reorderChain = useCallback(
     (headId: string, nodeId: string, beforeId: string | null): string[] | null => {
-      const level = stripRef.current.levels.find((candidate) => candidate.headId === headId);
-      if (!level || archived || !level.displayIds.includes(nodeId)) {
+      const displayIds = chainDisplayIds(headId);
+      if (archived || !displayIds.includes(nodeId)) {
         return null;
       }
-      const next = reorderedIds([...level.displayIds], nodeId, beforeId);
-      if (sameIds(next, level.displayIds)) {
+      const next = reorderedIds([...displayIds], nodeId, beforeId);
+      if (sameIds(next, displayIds)) {
         return null;
       }
       setPendingChainOrders((current) => ({ ...current, [headId]: next }));
@@ -1480,7 +1491,7 @@ function ResearchThreadPage({
       });
       return next;
     },
-    [archived],
+    [archived, chainDisplayIds],
   );
   const startMessageDrag = useResearchCardDrag({
     onMoveMessage: (nodeId, place, beforeId) => {
@@ -1490,22 +1501,23 @@ function ResearchThreadPage({
     },
   });
 
-  /** ⌥↑/⌥↓ on a message row: moves it one row up or down its column; the
-   * row keeps focus and the new position is announced. */
+  /** ⌥↑/⌥↓ on a message row: moves it one row up or down its chain (its
+   * column, or its group of a branches column); the row keeps focus and the
+   * new position is announced. */
   const moveFocusedMessage = useCallback(
     (row: HTMLElement, level: number, step: -1 | 1) => {
-      const levelNow = stripRef.current.levels[level];
       const nodeId = row.dataset.nodeId;
-      if (!levelNow || !nodeId || archived) {
+      if (!nodeId || archived) {
         return;
       }
-      const ids = levelNow.displayIds;
+      const headId = inlineChainFor(nodesRef.current, nodeId)[0] ?? nodeId;
+      const ids = chainDisplayIds(headId);
       const target = stepReorderTarget(ids, nodeId, step);
       if (!target) {
         announce(ids.length > 1 ? (step < 0 ? "Already first." : "Already last.") : "Only message.");
         return;
       }
-      if (!reorderChain(levelNow.headId, nodeId, target.beforeId)) {
+      if (!reorderChain(headId, nodeId, target.beforeId)) {
         return;
       }
       announce(`Moved to position ${ids.indexOf(nodeId) + step + 1} of ${ids.length}.`);
@@ -1528,7 +1540,7 @@ function ResearchThreadPage({
       };
       window.requestAnimationFrame(refocus);
     },
-    [announce, archived, pairColumn, reorderChain],
+    [announce, archived, chainDisplayIds, pairColumn, reorderChain],
   );
 
   const anyOverlayOpen =
