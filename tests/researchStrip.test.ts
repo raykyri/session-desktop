@@ -3,12 +3,16 @@ import test from "node:test";
 import {
   branchGroupOf,
   columnAttributes,
+  columnComposerHeadId,
   columnKey,
   columnLevelIndex,
   columnMessageIds,
   columnScrollKey,
   columnSelector,
   isMessagesColumnId,
+  researchSelectionAfterRemoval,
+  researchSelectionPath,
+  researchSelectionWith,
   researchStrip,
   researchStripSettleLeft,
   sameResearchStrip,
@@ -127,9 +131,10 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
     "branches",
     "answer",
   ]);
-  assert.deepEqual(columnScrollKey(strip.columns[2]), { kind: "branches", key: "root" });
+  // A branches column's offset is kept under its first branch.
+  assert.deepEqual(columnScrollKey(strip.columns[2]), { kind: "branches", key: "b1" });
   assert.deepEqual(columnScrollKey(strip.columns[3]), { kind: "answer", key: "b1f" });
-  assert.deepEqual(columnScrollKey(strip.columns[4]), { kind: "branches", key: "b1" });
+  assert.deepEqual(columnScrollKey(strip.columns[4]), { kind: "branches", key: "b2" });
   // Selecting the root closes the branch levels; the branches column stays,
   // with no branch open.
   const closed = researchStrip(nodes, "root", null);
@@ -146,7 +151,7 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
   }
   // The column keeps its element whichever branch is open.
   assert.equal(columnKey(branches), columnKey(strip.columns[2]));
-  assert.equal(columnKey(branches), "T1:branches:root");
+  assert.equal(columnKey(branches), "T1:branches");
 });
 
 test("a branches column stacks the document's and the answers' branches in reading order", () => {
@@ -301,7 +306,7 @@ test("a pending branch adds the branches column after the level that shows its p
     "data-research-level": "2",
   });
   assert.deepEqual(columnScrollKey(column), { kind: "branches", key: "b1" });
-  assert.equal(columnKey(column), "T2:branches:b1");
+  assert.equal(columnKey(column), "T2:branches");
   // The open nodes do not include the unsent branch.
   assert.deepEqual(strip.openNodeIds, ["root", "b1"]);
   // A pending branch asked from a message that is not the deepest selection
@@ -480,4 +485,109 @@ test("settling the strip aligns the final column, or the column before a branche
   assert.equal(researchStripSettleLeft(columns, 700, "feed", true), 0);
   assert.equal(researchStripSettleLeft(columns, 700, "T1", true), 600);
   assert.equal(researchStripSettleLeft([], 700, null), null);
+});
+
+// root → c2 (inline). b1 branches from root and continues with b1f; x1
+// branches from c2. b2 branches from b1f, y2 from x1.
+const selectionNodes = () => [
+  node("root", { createdAt: 0 }),
+  node("c2", { parentNodeId: "root", inline: true, createdAt: 1 }),
+  node("b1", { parentNodeId: "root", anchor: { kind: "passage", anchor }, createdAt: 2 }),
+  node("b1f", { parentNodeId: "b1", inline: true, createdAt: 3 }),
+  node("x1", { parentNodeId: "c2", createdAt: 4 }),
+  node("b2", { parentNodeId: "b1f", createdAt: 5 }),
+  node("y2", { parentNodeId: "x1", createdAt: 6 }),
+];
+
+const groupHeads = (column: ReturnType<typeof researchStrip>["columns"][number] | undefined) =>
+  column?.role === "branches" ? column.groups.map((group) => (group.kind === "branch" ? group.headId : "pending")) : [];
+
+test("each column keeps its own selection, and a branches column lists the branches of every message of the column before it", () => {
+  const nodes = selectionNodes();
+  // Column 0 selects c2 while column 1 selects b1f, a branch of root.
+  const strip = researchStrip(nodes, ["c2", "b1f", "y2"], null);
+  assert.deepEqual(ids(strip), ["T0", "A0", "T1", "A1", "T2", "A2"]);
+  assert.deepEqual(strip.levels.map((level) => [level.headId, level.selectedId, level.sourceId]), [
+    ["root", "c2", null],
+    ["b1", "b1f", "root"],
+    ["y2", "y2", "x1"],
+  ]);
+  // Column 1: the branches of root, then of c2, as column 0 lists them.
+  assert.deepEqual(groupHeads(strip.columns[2]), ["b1", "x1"]);
+  // Column 2: the branches of every message column 1 lists, in all of its
+  // groups, not only the selected one.
+  assert.deepEqual(groupHeads(strip.columns[4]), ["b2", "y2"]);
+  assert.deepEqual(columnMessageIds(strip.columns[2]), ["b1", "b1f", "x1"]);
+  // The answer columns show each column's selection.
+  assert.deepEqual(
+    strip.columns.flatMap((column) => (column.role === "answer" ? [column.nodeId] : [])),
+    ["c2", "b1f", "y2"],
+  );
+  assert.deepEqual(strip.openNodeIds, ["c2", "b1", "y2"]);
+  // Changing a column's selection leaves the listing of the columns after it
+  // unchanged.
+  const other = researchStrip(nodes, ["root", "x1", "y2"], null);
+  assert.deepEqual(groupHeads(other.columns[2]), ["b1", "x1"]);
+  assert.deepEqual(groupHeads(other.columns[4]), ["b2", "y2"]);
+  assert.equal(columnKey(other.columns[2]), columnKey(strip.columns[2]));
+  // A single id opens the levels it was asked from.
+  assert.deepEqual(researchStrip(nodes, "b2", null).levels.map((level) => level.selectedId), ["root", "b1f", "b2"]);
+});
+
+test("a selection is cut at the first message its column does not list", () => {
+  const nodes = selectionNodes();
+  assert.deepEqual(researchSelectionPath(nodes, ["c2", "b1f", "y2"]), ["c2", "b1f", "y2"]);
+  // b2 is a branch of a column 2 message, not of column 1's.
+  assert.deepEqual(researchSelectionPath(nodes, ["root", "b2"]), ["root"]);
+  // Column 0 lists only the root's chain.
+  assert.deepEqual(researchSelectionPath(nodes, ["b1", "b2"]), []);
+  assert.deepEqual(researchSelectionPath(nodes, ["root", "missing", "b2"]), ["root"]);
+  assert.deepEqual(researchStrip(nodes, ["root", "b2"], null).levels.length, 1);
+});
+
+test("selecting a node keeps the other columns' selections", () => {
+  const nodes = selectionNodes();
+  // A message of column 0: column 1 and 2 keep theirs.
+  assert.deepEqual(researchSelectionWith(nodes, ["c2", "b1f", "y2"], "root"), ["root", "b1f", "y2"]);
+  // A message of another group in column 1.
+  assert.deepEqual(researchSelectionWith(nodes, ["c2", "b1f", "y2"], "x1"), ["c2", "x1", "y2"]);
+  // A message of the first column without a selection.
+  assert.deepEqual(researchSelectionWith(nodes, ["c2"], "b1"), ["c2", "b1"]);
+  // A node no open column lists opens the levels it was asked from.
+  assert.deepEqual(researchSelectionWith(nodes, ["c2"], "b2"), ["root", "b1f", "b2"]);
+});
+
+test("a removed selection falls back to the message it followed or was asked from", () => {
+  const nodes = selectionNodes();
+  const parents = new Map(nodes.map((candidate) => [candidate.id, candidate.parentNodeId ?? null]));
+  const survivor = (remaining: ResearchNode[]) => (nodeId: string) => {
+    const ids = new Set(remaining.map((candidate) => candidate.id));
+    for (let current = parents.get(nodeId) ?? null; current; current = parents.get(current) ?? null) {
+      if (ids.has(current)) return current;
+    }
+    return null;
+  };
+  // b1f removed: column 1 selects b1, and column 2 keeps y2 (a branch of x1).
+  const withoutB1f = nodes.filter((candidate) => candidate.id !== "b1f" && candidate.id !== "b2");
+  assert.deepEqual(researchSelectionAfterRemoval(withoutB1f, ["c2", "b1f", "y2"], survivor(withoutB1f)), [
+    "c2",
+    "b1",
+    "y2",
+  ]);
+  // x1 removed with y2: column 1's selection falls back to c2, which column
+  // 1 does not list, so column 1 and the columns after it close.
+  const withoutX1 = nodes.filter((candidate) => candidate.id !== "x1" && candidate.id !== "y2");
+  assert.deepEqual(researchSelectionAfterRemoval(withoutX1, ["c2", "x1", "y2"], survivor(withoutX1)), ["c2"]);
+});
+
+test("the ask box goes with the column's own chain, or the selected group's", () => {
+  const nodes = selectionNodes();
+  const strip = researchStrip(nodes, ["c2", "x1"], null);
+  assert.equal(columnComposerHeadId(strip.columns[0]), "root");
+  assert.equal(columnComposerHeadId(strip.columns[2]), "x1");
+  // A branches column with no selection has no ask box.
+  const closed = researchStrip(nodes, ["c2", "x1"], null).columns.find((column) => column.id === "T2");
+  assert.equal(closed?.role, "branches");
+  assert.equal(columnComposerHeadId(closed!), null);
+  assert.equal(columnComposerHeadId(strip.columns[1]), null);
 });

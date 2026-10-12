@@ -7,6 +7,7 @@ import {
   recordResearchScrollPosition,
   RESEARCH_SCROLL_POSITION_TTL_MS,
   restoreResearchScrollPosition,
+  savedResearchSelection,
   type SavedResearchNavigation,
 } from "../src/lib/researchNavigation";
 import { researchBranchInfo } from "../src/lib/researchBranches";
@@ -142,6 +143,19 @@ test("research scroll positions expire at 15 minutes", () => {
     ),
     0,
   );
+});
+
+test("a saved selection restores every column's selection when it ends with the selected message", () => {
+  assert.equal(savedResearchSelection(undefined), null);
+  assert.equal(savedResearchSelection({ scrollByNode: {} }), null);
+  assert.equal(savedResearchSelection({ scrollByNode: {}, selectedNodeId: "b" }), "b");
+  assert.deepEqual(
+    savedResearchSelection({ scrollByNode: {}, selectedNodeId: "b", selectionPath: ["a", "b"] }),
+    ["a", "b"],
+  );
+  // A node opened from elsewhere replaced the selected message: the stale
+  // path is ignored.
+  assert.equal(savedResearchSelection({ scrollByNode: {}, selectedNodeId: "c", selectionPath: ["a", "b"] }), "c");
 });
 
 test("research follow-up drafts retain text until cleared", () => {

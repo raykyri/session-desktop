@@ -99,6 +99,22 @@ test("navigating to the visit on screen does not add a step", () => {
   assert.equal(pushResearchVisit(history, at("A", "a2")).entries.length, 2);
 });
 
+test("visits with the same deepest message differ by the other columns' selections", () => {
+  const first: ResearchVisit = { kind: "node", treeId: "t", nodeId: "b", path: ["a", "b"] };
+  const second: ResearchVisit = { kind: "node", treeId: "t", nodeId: "b", path: ["c", "b"] };
+  let history = pushAll(EMPTY_RESEARCH_VISITS, [first, second]);
+  assert.equal(history.entries.length, 2);
+  assert.deepEqual(researchVisitBack(history)?.visit, first);
+  // The same selection again adds no step.
+  assert.equal(pushResearchVisit(history, { ...second, path: ["c", "b"] }), history);
+  // A visit without a path matches one with it, and takes the path.
+  history = pushAll(EMPTY_RESEARCH_VISITS, [at("t", "b"), first]);
+  assert.equal(history.entries.length, 1);
+  assert.deepEqual(currentResearchVisit(history), first);
+  // Replacing with another path changes the visit on screen.
+  assert.deepEqual(currentResearchVisit(replaceResearchVisit(history, second)), second);
+});
+
 test("a thread visit without a message takes the message named next", () => {
   // Opening B records it before it loads; its page then names the message.
   const opened = pushResearchVisit(initResearchVisits(at("A", "a0")), at("B", null));

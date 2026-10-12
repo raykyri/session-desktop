@@ -8,8 +8,7 @@ import {
 } from "../components/research/ResearchColumns";
 import type { ResearchPostThreadHandle } from "../components/research/ResearchPostThread";
 import { isEditableTarget } from "../lib/appHelpers";
-import { researchBranchesInReadingOrder, researchLevelPath } from "../lib/researchBranchView";
-import { inlineChainFor } from "../lib/researchChains";
+import { researchBranchesInReadingOrder } from "../lib/researchBranchView";
 import {
   COLUMN_ROW_SELECTOR,
   columnIdOf,
@@ -40,10 +39,8 @@ export function useResearchPairsKeyboard({
   workspaceRef,
   stripRef,
   levelPathRef,
-  nodesRef,
   branchesByParentRef,
   branchRangeOffsetsRef,
-  levelMemoryRef,
   pendingRef,
   editorRef,
   currentLevelRef,
@@ -65,12 +62,9 @@ export function useResearchPairsKeyboard({
   stripRef: Ref<ReturnType<typeof researchStrip>>;
   /** The selected message of each open level, root level first. */
   levelPathRef: Ref<readonly string[]>;
-  nodesRef: Ref<ResearchNode[]>;
   branchesByParentRef: Ref<ReadonlyMap<string, ResearchNode[]>>;
   /** The branch passages that resolved in their answers. */
   branchRangeOffsetsRef: Ref<{ segmentId: string; id: string; start: number; end: number }[]>;
-  /** Per message: the deepest node open while it was on the path. */
-  levelMemoryRef: Ref<Map<string, string>>;
   pendingRef: Ref<{ parentNodeId: string } | null>;
   editorRef: Ref<{ kind: "document" | "post" } | null>;
   /** The level ⌘J focuses the ask box of. */
@@ -84,7 +78,7 @@ export function useResearchPairsKeyboard({
   closeAfter: (level: number) => void;
   requestFocus: (target: ResearchFocusTarget, strip?: ResearchStripFollow, onlyIfLost?: boolean) => void;
   selectMessage: (level: number, nodeId: string) => void;
-  openBranch: (level: number, headId: string, end?: "first" | "last") => void;
+  openBranch: (level: number, headId: string, end?: "first" | "last", selectParent?: boolean) => void;
   goBranch: (level: number, headId: string, end?: "first" | "last") => void;
   selectedRow: (level: number) => HTMLElement | null;
   moveFocusedMessage: (row: HTMLElement, level: number, step: -1 | 1) => void;
@@ -170,10 +164,11 @@ export function useResearchPairsKeyboard({
     });
   }, []);
 
-  /** → from level `level`: into the open (or first) branch of its answer;
-   * an unsent branch's ask box; with no branches of the selected message,
-   * the first row of the level's branches column, which selects nothing;
-   * with no branches at all, the message keeps focus. */
+  /** → from level `level`: an unsent branch's ask box; the selected row of
+   * the branches column after it; with no selection there, the first branch
+   * of the selected answer (which selects it); with no branches of the
+   * selected message, the first row of the branches column, which selects
+   * nothing; with no branches at all, the message keeps focus. */
   const rightFrom = useCallback(
     (level: number) => {
       const strip = stripRef.current;
@@ -181,6 +176,10 @@ export function useResearchPairsKeyboard({
       const siblings = siblingsAt(levels[level]);
       if (strip.pending?.levelIndex === level + 1) {
         requestFocus({ kind: "composer", key: `pending:${strip.pending.parentNodeId}` }, "settle");
+        return;
+      }
+      if (levels[level + 1]) {
+        requestFocus({ kind: "row", level: level + 1 }, "settle");
         return;
       }
       if (siblings.length === 0) {
@@ -193,11 +192,7 @@ export function useResearchPairsKeyboard({
         requestFocus({ kind: "row", level }, "settle");
         return;
       }
-      const open = levels[level + 1]?.selectedId;
-      const current = open
-        ? siblings.find((branch) => inlineChainFor(nodesRef.current, branch.id).includes(open))
-        : undefined;
-      goBranch(level, (current ?? siblings[0]).id);
+      goBranch(level, siblings[0].id);
     },
     [goBranch, requestFocus, siblingsAt],
   );
@@ -345,18 +340,19 @@ export function useResearchPairsKeyboard({
           rightFrom(level);
           return;
         }
-        // An unselected message: selecting it and opening its branch (the
-        // one remembered under it, else the first) is one visit, in one
-        // render; with no branches, only the selection.
+        // An unselected message: it is selected, and focus moves to the
+        // branches column's selection; with none there, selecting the
+        // message and its first branch is one visit, in one render; with no
+        // branches, only the selection.
         const branches = researchBranchesInReadingOrder(
           branchesByParentRef.current.get(nodeId) ?? EMPTY_BRANCHES,
           () => null,
         );
-        if (branches.length > 0) {
-          const remembered = levelMemoryRef.current.get(nodeId);
-          const rememberedPath = remembered ? researchLevelPath(nodesRef.current, remembered) : [];
-          const head = branches.find((branch) => rememberedPath.includes(branch.id)) ?? branches[0];
-          openBranch(level, head.id);
+        if (levels[level + 1]) {
+          selectMessage(level, nodeId);
+          requestFocus({ kind: "row", level: level + 1 }, "settle");
+        } else if (branches.length > 0) {
+          openBranch(level, branches[0].id, undefined, true);
           requestFocus({ kind: "row", level: level + 1 }, "settle");
         } else {
           // No branches: the message's pair is the last one. Its answer

@@ -44,6 +44,9 @@ interface ResearchOpenNodeRequest {
   /** False when back/forward replays a recorded visit: the thread page shows
    * the node without reporting a new visit. */
   record: boolean;
+  /** Each column's selected message, ending with `nodeId` (a recorded
+   * visit's); without it the levels `nodeId` was asked from open. */
+  path?: readonly string[];
 }
 
 /** Asks the mounted thread page for `treeId` to show `nodeId`: its level, and
@@ -55,9 +58,9 @@ interface ResearchOpenNodeRequest {
 export function requestResearchNodeOpen(
   treeId: string,
   nodeId: string,
-  { record = true }: { record?: boolean } = {},
+  { record = true, path }: { record?: boolean; path?: readonly string[] } = {},
 ): boolean {
-  const detail = { treeId, nodeId, record, handled: false };
+  const detail = { treeId, nodeId, record, path, handled: false };
   window.dispatchEvent(new CustomEvent(OPEN_NODE_EVENT, { detail }));
   return detail.handled;
 }
@@ -70,7 +73,8 @@ export function listenToResearchNodeOpen(
   const handler = (event: Event) => {
     const detail = (event as CustomEvent<ResearchOpenNodeRequest & { handled?: boolean }>).detail;
     if (detail && typeof detail.treeId === "string" && typeof detail.nodeId === "string") {
-      if (onOpen({ treeId: detail.treeId, nodeId: detail.nodeId, record: detail.record !== false })) {
+      const path = Array.isArray(detail.path) ? detail.path : undefined;
+      if (onOpen({ treeId: detail.treeId, nodeId: detail.nodeId, record: detail.record !== false, path })) {
         detail.handled = true;
       }
     }

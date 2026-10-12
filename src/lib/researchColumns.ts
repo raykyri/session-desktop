@@ -1,31 +1,34 @@
 // The column strip of an open research thread, as data. A thread shows one
-// level per open chain: level 0 is the root's inline chain, and each
-// later level is a branch asked from a message of the previous level.
-// Each level renders as a messages column and an answer column, except a
-// level whose head is a post, shown as a note (a note root, or a follow-up
-// note), which renders as the note column and its follow-ups column
-// (follow-ups and the follow-up composer).
+// level per column that has a selection: level 0 is the root's inline
+// chain, and level n + 1 is the branch selected in the branches column after
+// level n. Each level renders as a messages column and an answer column,
+// except a level whose head is a post, shown as a note (a note root, or a
+// follow-up note), which renders as the note column and its follow-ups
+// column (follow-ups and the follow-up composer).
 //
-// The branches of a level's messages (passages of a document and of each AI
-// answer, or whole answers) are listed together in one branches column after
-// the level's answer column: one group per branch, in the reading order of
-// their sources (the level's messages as listed, and each message's
-// passages from the top), each with its source, its messages and its ask
-// box. The branch whose message is selected is the next level: the branches
-// column is that level's messages column, and the level's answer column
-// follows it. An unsent branch is a group in the branches column of the
-// level that shows its parent selected, at its source's position. A note's
-// follow-ups are listed in its follow-ups column instead, so a note level's
-// branches column holds only an unsent branch. Editing the root's document
-// adds an editor column after the root level's answer column; editing a
-// note (the root note or a follow-up note) shows the editor column in place
-// of its note column.
+// The branches column after a level lists every branch whose parent message
+// is listed in the level's messages column (for a branch level, that is
+// every group of its branches column): one group per branch, in the order
+// the parent messages are listed, and each message's branches in reading
+// order (passages from the top, then whole-answer branches). Each group has
+// its source, its messages and its queue; the group that holds the column's
+// selection also has the ask box. Which messages a column lists does not
+// depend on what any column selects, so each column keeps its own selection:
+// selecting a message in one column leaves the columns after it as they
+// are. Clearing a column's selection removes the columns after it. An unsent
+// branch is a group in the branches column after the deepest level, when
+// that level's selected message is its parent. A note's follow-ups are
+// listed in its follow-ups column instead, so a note level's branches
+// column holds only an unsent branch. Editing the root's document adds an
+// editor column after the root level's answer column; editing a note (the
+// root note or a follow-up note) shows the editor column in place of its
+// note column.
 //
-// The strip is a pure function of the tree's nodes, the deepest selection and
-// the unsent branch, so it is computed once per render and every consumer
-// (rendering, keyboard, focus, scroll persistence, the feed's selection)
-// reads the same columns. `columnAttributes` stores each column's identity in
-// the DOM, and code that has to find a column element uses
+// The strip is a pure function of the tree's nodes, the selection of each
+// column and the unsent branch, so it is computed once per render and every
+// consumer (rendering, keyboard, focus, scroll persistence, the feed's
+// selection) reads the same columns. `columnAttributes` stores each column's
+// identity in the DOM, and code that has to find a column element uses
 // columnSelector.
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";
@@ -148,22 +151,23 @@ const pendingGroup = (level: ResearchLevel, pending: ResearchPendingBranch): Res
   anchor: pending.anchor,
 });
 
-/** The groups of a level's branches column: the branches of each of the
- * level's messages, in the order the messages are listed, and each
- * message's branches in reading order (by where their passage starts, then
- * the whole-answer ones, each oldest first). The unsent branch `pending`
- * goes before its parent's first branch whose passage starts after its
- * own; an unsent whole-answer branch goes after its parent's branches. A
- * note level lists no branches: its follow-ups column does. */
+/** The groups of a branches column: the branches of each message `listed`
+ * in the column before it, in that order, and each message's branches in
+ * reading order (by where their passage starts, then the whole-answer ones,
+ * each oldest first). The unsent branch `pending` goes before its parent's
+ * first branch whose passage starts after its own; an unsent whole-answer
+ * branch goes after its parent's branches. A note level lists no branches:
+ * its follow-ups column does. */
 function branchGroups(
   level: ResearchLevel,
+  listed: readonly string[],
   next: ResearchLevel | null,
   branchesByParent: ReadonlyMap<string, ResearchNode[]>,
   chainOf: (headId: string) => string[],
   pending: ResearchPendingBranch | null,
 ): ResearchStackGroup[] {
   const groups: ResearchStackGroup[] = [];
-  for (const messageId of level.displayIds) {
+  for (const messageId of listed) {
     const children = level.kind === "post" ? [] : (branchesByParent.get(messageId) ?? []);
     const startOf = new Map(children.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]));
     const branches = researchBranchesInReadingOrder(children, (branchId) => startOf.get(branchId) ?? null);
@@ -202,47 +206,165 @@ function branchGroups(
   return groups;
 }
 
-/** The columns for `selectedNodeId` (the deepest level's selected message)
- * and the unsent branch. A selection that is not in `nodes` yields an empty
- * strip. A level whose messages have branches is followed by its branches
- * column, and the open branch's level by its answer column. The unsent
- * branch is shown only when its parent is the deepest selection, in that
- * level's branches column. `editingNodeId`, the root document or a note
- * being edited, adds the editor column: for a document, right after the
- * root level's answer column, before its branches column; for a note (the
- * root note or a follow-up note), in place of that level's note column, so
- * the level is the editor and the follow-ups column. */
-export function researchStrip(
+/** The messages of every branch group, top to bottom. */
+const groupMessageIds = (groups: readonly ResearchStackGroup[]) =>
+  groups.flatMap((group) => (group.kind === "branch" ? group.displayIds : []));
+
+/** A level, and the messages its messages-side column lists. */
+interface OpenedLevel {
+  level: ResearchLevel;
+  listed: readonly string[];
+}
+
+/** The levels a selection opens, one per column with a selection, before
+ * the strip lays out their columns. `selection` holds each column's
+ * selected message, root column first; it is cut at the first entry that
+ * its column does not list. Column 0 lists the root's chain. After a level
+ * whose head is a post, the next column lists the chain of the post's
+ * follow-up selected in it; after any other level, the branches column
+ * lists every branch of every message the level's column lists. */
+function researchSelectionLevels(
   nodes: readonly ResearchNode[],
-  selectedNodeId: string | null,
-  pending: ResearchPendingBranch | null,
-  editingNodeId: string | null = null,
-): ResearchStrip {
+  selection: readonly string[],
+  branchesByParent: ReadonlyMap<string, ResearchNode[]>,
+  chainOf: (headId: string) => string[],
+): OpenedLevel[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  const path = selectedNodeId && byId.has(selectedNodeId) ? researchLevelPath(nodes, selectedNodeId) : [];
-  const levels = path.map((selectedId, index): ResearchLevel => {
+  const opened: OpenedLevel[] = [];
+  for (const selectedId of selection) {
+    if (!byId.has(selectedId)) {
+      break;
+    }
+    const index = opened.length;
     const chainIds = inlineChainFor(nodes, selectedId);
     const headId = chainIds[0] ?? selectedId;
     const head = byId.get(headId);
-    return {
+    const parentId = head?.parentNodeId ?? null;
+    const previous = index > 0 ? opened[index - 1] : null;
+    if (previous === null ? parentId !== null : parentId === null) {
+      break;
+    }
+    if (
+      previous &&
+      parentId !== null &&
+      !(previous.level.kind === "post" ? parentId === previous.level.selectedId : previous.listed.includes(parentId))
+    ) {
+      break;
+    }
+    const displayIds = chainDisplayOrder(chainIds, head?.chainOrder);
+    const level: ResearchLevel = {
       index,
       headId,
       chainIds,
-      displayIds: chainDisplayOrder(chainIds, head?.chainOrder),
+      displayIds,
       selectedId,
-      sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
+      sourceId: index === 0 ? null : parentId,
       anchor: index === 0 || !head ? null : passageAnchor(head),
       kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "root",
     };
-  });
-  const branchesByParent = levels.length > 0 ? researchBranchesByParent(nodes) : new Map<string, ResearchNode[]>();
+    // A branch level's column is the branches column after the level
+    // before it, which lists every group; a level opened from a note lists
+    // only its own chain.
+    const listed =
+      previous === null || previous.level.kind === "post"
+        ? displayIds
+        : groupMessageIds(branchGroups(previous.level, previous.listed, null, branchesByParent, chainOf, null));
+    opened.push({ level, listed });
+  }
+  return opened;
+}
+
+/** `selection` cut to the part the tree shows: each column's selected
+ * message, root column first, up to the first one its column does not
+ * list (see researchStrip). */
+export function researchSelectionPath(nodes: readonly ResearchNode[], selection: readonly string[]): string[] {
+  return researchSelectionLevels(nodes, selection, researchBranchesByParent(nodes), inlineChainsFromHeads(nodes)).map(
+    ({ level }) => level.selectedId,
+  );
+}
+
+/** `selection` with `nodeId` selected in the column that lists it. The
+ * columns before that one keep their selection, and so do the columns after
+ * it, which list the same messages whatever it selects. A node that no
+ * open column lists opens the levels it was asked from instead (see
+ * researchLevelPath). */
+export function researchSelectionWith(
+  nodes: readonly ResearchNode[],
+  selection: readonly string[],
+  nodeId: string,
+): string[] {
+  const path = researchSelectionPath(nodes, selection);
+  for (let index = 0; index <= path.length; index += 1) {
+    const candidate = [...path.slice(0, index), nodeId, ...path.slice(index + 1)];
+    const valid = researchSelectionPath(nodes, candidate);
+    if (valid[index] === nodeId) {
+      return valid;
+    }
+  }
+  return researchLevelPath(nodes, nodeId);
+}
+
+/** `selection` after messages were removed from the tree (`nodes` is what
+ * remains): a removed selection becomes `survivor` of it (the nearest
+ * remaining message it was asked from or followed), and the selection is
+ * then cut where a column does not list its entry. A column whose selected
+ * branch was removed, with the message it was asked from, closes with the
+ * columns after it. */
+export function researchSelectionAfterRemoval(
+  nodes: readonly ResearchNode[],
+  selection: readonly string[],
+  survivor: (nodeId: string) => string | null,
+): string[] {
+  const present = new Set(nodes.map((node) => node.id));
+  const replaced: string[] = [];
+  for (const nodeId of selection) {
+    const kept = present.has(nodeId) ? nodeId : survivor(nodeId);
+    if (!kept) {
+      break;
+    }
+    replaced.push(kept);
+  }
+  return researchSelectionPath(nodes, replaced);
+}
+
+/** The columns for `selection` (each column's selected message, root
+ * column first; a single id opens the levels it was asked from, see
+ * researchLevelPath) and the unsent branch. A selection whose first message
+ * is not in `nodes` yields an empty strip. A level whose column lists
+ * messages with branches is followed by its branches column, and the
+ * level selected there by its answer column. The unsent branch is shown
+ * only when its parent is the deepest selection, in the branches column
+ * after that level. `editingNodeId`, the root document or a note being
+ * edited, adds the editor column: for a document, right after the root
+ * level's answer column, before its branches column; for a note (the root
+ * note or a follow-up note), in place of that level's note column, so the
+ * level is the editor and the follow-ups column. */
+export function researchStrip(
+  nodes: readonly ResearchNode[],
+  selection: string | readonly string[] | null,
+  pending: ResearchPendingBranch | null,
+  editingNodeId: string | null = null,
+): ResearchStrip {
+  const requested =
+    selection === null
+      ? []
+      : typeof selection === "string"
+        ? nodes.some((node) => node.id === selection)
+          ? researchLevelPath(nodes, selection)
+          : []
+        : selection;
+  const branchesByParent =
+    requested.length > 0 ? researchBranchesByParent(nodes) : new Map<string, ResearchNode[]>();
   const chainOf = inlineChainsFromHeads(nodes);
-  const shownPending = pending && path.length > 0 && path[path.length - 1] === pending.parentNodeId ? pending : null;
+  const opened = researchSelectionLevels(nodes, requested, branchesByParent, chainOf);
+  const levels = opened.map(({ level }) => level);
+  const deepest = levels[levels.length - 1]?.selectedId ?? null;
+  const shownPending = pending && deepest !== null && deepest === pending.parentNodeId ? pending : null;
   const columns: ResearchColumn[] = [];
   let pendingShown: ResearchPendingGroup | null = null;
   // The level's messages column is the previous level's branches column.
   let inBranches = false;
-  for (const level of levels) {
+  for (const { level, listed } of opened) {
     // A document is edited only as the root; a note (the root note or a
     // follow-up note) at the level that shows it.
     const editor: ResearchColumn | null =
@@ -263,8 +385,8 @@ export function researchStrip(
     }
     inBranches = false;
     const next = levels[level.index + 1] ?? null;
-    const groups = branchGroups(level, next, branchesByParent, chainOf, next ? null : shownPending);
-    // The open level is one of the groups, unless it opens from a note's
+    const groups = branchGroups(level, listed, next, branchesByParent, chainOf, next ? null : shownPending);
+    // The next level is one of the groups, unless it opens from a note's
     // follow-ups column (or is a follow-up note): then it shows its own
     // columns, and the branches column is left out.
     const open = next && groups.some((group) => group.kind === "branch" && group.headId === next.headId) ? next : null;
@@ -464,8 +586,8 @@ export function columnSelector(id?: ResearchColumnId): string {
 
 /** The React key of a column: its id and the node it shows, so a column
  * keeps its element (and focus) while its level shows the same chain or
- * message. A branches column keeps its element while it lists the branches
- * of the same level, whichever of them is open. */
+ * message. A branches column keeps its element while it is shown: the
+ * messages it lists do not depend on any column's selection. */
 export function columnKey(column: ResearchColumn): string {
   switch (column.role) {
     case "messages":
@@ -473,7 +595,7 @@ export function columnKey(column: ResearchColumn): string {
     case "thread":
       return `${column.id}:${column.level.headId}`;
     case "branches":
-      return `${column.id}:branches:${column.source.headId}`;
+      return `${column.id}:branches`;
     case "answer":
     case "editor":
       return `${column.id}:${column.nodeId}`;
@@ -487,7 +609,8 @@ export function columnKey(column: ResearchColumn): string {
 
 /** Which saved scroll offsets a column uses: an answer column's are keyed by
  * its message, a messages column's by its chain head, and a branches
- * column's by the head of the level the branches were asked from. */
+ * column's by the head of its first branch (the unsent branch's parent when
+ * it lists only that). */
 export type ResearchScrollKind = "answer" | "messages" | "branches";
 
 /** The scroll persistence key of a column, or null for a column whose scroll
@@ -499,7 +622,10 @@ export function columnScrollKey(column: ResearchColumn): { kind: ResearchScrollK
     case "messages":
       return { kind: "messages", key: column.level.headId };
     case "branches":
-      return { kind: "branches", key: column.source.headId };
+      return {
+        kind: "branches",
+        key: column.groups.map((group) => (group.kind === "branch" ? group.headId : group.parentNodeId))[0] ?? "",
+      };
     default:
       return null;
   }
@@ -516,6 +642,21 @@ export function columnMessageIds(column: ResearchColumn): string[] {
       return column.groups.flatMap((group) => (group.kind === "branch" ? group.displayIds : []));
     default:
       return [];
+  }
+}
+
+/** The chain whose ask box a messages-side column shows: a messages
+ * column's own chain, the selected group's in a branches column, and none in
+ * a branches column with no selection (an unsent branch's group has its own
+ * ask box). */
+export function columnComposerHeadId(column: ResearchColumn): string | null {
+  switch (column.role) {
+    case "messages":
+      return column.level.headId;
+    case "branches":
+      return column.level?.headId ?? null;
+    default:
+      return null;
   }
 }
 

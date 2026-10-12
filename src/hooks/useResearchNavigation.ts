@@ -386,6 +386,7 @@ export function useResearchNavigation(
       const navigationStore = researchNavigationStore();
       const navigation = navigationStore[treeId] ?? { scrollByNode: {} };
       navigation.selectedNodeId = nodeId;
+      delete navigation.selectionPath;
       navigationStore[treeId] = navigation;
       saveResearchNavigation();
       if (researchThreadShown(treeId) && requestResearchNodeOpen(treeId, nodeId)) {
@@ -476,10 +477,18 @@ export function useResearchNavigation(
         const navigationStore = researchNavigationStore();
         const navigation = (navigationStore[visit.treeId] ??= { scrollByNode: {} });
         navigation.selectedNodeId = visit.nodeId;
+        if (visit.path) {
+          navigation.selectionPath = [...visit.path];
+        } else {
+          delete navigation.selectionPath;
+        }
         saveResearchNavigation();
       }
       if (action === "in-place") {
-        if (!visit.nodeId || requestResearchNodeOpen(visit.treeId, visit.nodeId, { record: false })) {
+        if (
+          !visit.nodeId ||
+          requestResearchNodeOpen(visit.treeId, visit.nodeId, { record: false, path: visit.path })
+        ) {
           return;
         }
       }
@@ -507,8 +516,8 @@ export function useResearchNavigation(
   // (the message restored on opening)
   // replaces the visit on screen when that is a visit to this thread.
   const reportResearchNavigation = useCallback(
-    (treeId: string, nodeId: string, mode: "push" | "replace") => {
-      const visit: ResearchVisit = { kind: "node", treeId, nodeId };
+    (treeId: string, nodeId: string, mode: "push" | "replace", path?: readonly string[]) => {
+      const visit: ResearchVisit = path ? { kind: "node", treeId, nodeId, path } : { kind: "node", treeId, nodeId };
       updateResearchVisits((current) => {
         const shown = currentResearchVisit(current);
         return mode === "replace" && shown?.kind === "node" && shown.treeId === treeId
@@ -521,12 +530,16 @@ export function useResearchNavigation(
   // Removed messages: their visits go; `selection` is the message the
   // thread page moved to.
   const pruneResearchNodeVisits = useCallback(
-    (treeId: string, keepNode: (nodeId: string) => boolean, selection: string | null) => {
+    (treeId: string, keepNode: (nodeId: string) => boolean, selection: string | null, path?: readonly string[]) => {
       const keep = (visit: ResearchVisit) =>
         visit.kind === "home" || visit.treeId !== treeId || visit.nodeId === null || keepNode(visit.nodeId);
       updateResearchVisits((current) =>
         selection
-          ? researchVisitsAfterRemoval(current, keep, { kind: "node", treeId, nodeId: selection })
+          ? researchVisitsAfterRemoval(
+              current,
+              keep,
+              path ? { kind: "node", treeId, nodeId: selection, path } : { kind: "node", treeId, nodeId: selection },
+            )
           : pruneResearchVisits(current, keep),
       );
     },

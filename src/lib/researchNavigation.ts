@@ -41,10 +41,14 @@ export interface QueuedResearchFollowup {
 }
 
 export interface SavedResearchNavigation {
-  /** The deepest open level's selected message. The levels before it (which
-   * branch is open at each level, and which message is selected in it)
-   * follow from the tree, so this one id restores the whole open path. */
+  /** The deepest open level's selected message. Without `selectionPath`,
+   * the levels before it are the ones it was asked from, each with the
+   * message its branch was asked from selected. */
   selectedNodeId?: string;
+  /** Each column's selected message, root column first, when it ends with
+   * `selectedNodeId`. A column's selection need not be the message the next
+   * column's branch was asked from. */
+  selectionPath?: string[];
   scrollByNode: Record<string, SavedResearchScrollPosition>;
   /** Nodes whose "Show earlier" window the user expanded. Restore this with
    * the scroll offset because expanded and collapsed lists use different offsets. */
@@ -64,8 +68,8 @@ export interface SavedResearchNavigation {
    * columns', keyed by the message.) The stored field keeps the column's
    * earlier name, "turns". */
   turnsScrollByHead?: Record<string, SavedResearchScrollPosition>;
-  /** Each branches column's scroll offset, keyed by the head node of the
-   * level its branches were asked from. */
+  /** Each branches column's scroll offset, keyed by the head node of its
+   * first branch. */
   branchesScrollBySource?: Record<string, SavedResearchScrollPosition>;
 }
 
@@ -220,9 +224,16 @@ function load(): Record<string, SavedResearchNavigation> {
             return queue.length > 0 ? [[headId, queue]] : [];
           }),
         );
+        const selectionPath =
+          Array.isArray(candidate.selectionPath) &&
+          candidate.selectionPath.length > 0 &&
+          candidate.selectionPath.every((id: unknown) => typeof id === "string")
+            ? [...candidate.selectionPath]
+            : undefined;
         return [[treeId, {
           selectedNodeId:
             typeof candidate.selectedNodeId === "string" ? candidate.selectedNodeId : undefined,
+          ...(selectionPath ? { selectionPath } : {}),
           scrollByNode,
           ...(Object.keys(expandedByNode).length > 0 ? { expandedByNode } : {}),
           ...(Object.keys(askByNode).length > 0 ? { askByNode } : {}),
@@ -320,6 +331,18 @@ export function pruneResearchNavigation(validTreeIds: Iterable<string>): void {
   }
 }
 
+/** The selection a tree's saved navigation restores: `selectionPath` when
+ * it ends with `selectedNodeId`, else `selectedNodeId` alone (the levels it
+ * was asked from open with it), else null. */
+export function savedResearchSelection(navigation: SavedResearchNavigation | undefined): string | string[] | null {
+  const nodeId = navigation?.selectedNodeId;
+  if (!nodeId) {
+    return null;
+  }
+  const path = navigation.selectionPath;
+  return path && path[path.length - 1] === nodeId ? [...path] : nodeId;
+}
+
 /** Drops per-node state (scroll offsets, selection) for deleted nodes of a tree. */
 export function pruneResearchNavigationNodes(treeId: string, validNodeIds: Iterable<string>): void {
   const navigation = researchNavigationStore()[treeId];
@@ -366,6 +389,10 @@ export function pruneResearchNavigationNodes(treeId: string, validNodeIds: Itera
   }
   if (navigation.selectedNodeId && !valid.has(navigation.selectedNodeId)) {
     delete navigation.selectedNodeId;
+    changed = true;
+  }
+  if (navigation.selectionPath?.some((nodeId) => !valid.has(nodeId))) {
+    delete navigation.selectionPath;
     changed = true;
   }
   if (changed) {

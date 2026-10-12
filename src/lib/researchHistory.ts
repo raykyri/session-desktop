@@ -4,10 +4,15 @@
 /** One step of research navigation. `home`: no thread open (the feed column
  * beside an empty content column). `node`: a thread with `nodeId` as its
  * deepest selected message; null until the thread page reports the message
- * it restored on opening. */
+ * it restored on opening. `path`, when given, is each column's selected
+ * message, root column first, ending with `nodeId`; without it the levels
+ * `nodeId` was asked from open with it. */
 export type ResearchVisit =
   | { kind: "home" }
-  | { kind: "node"; treeId: string; nodeId: string | null };
+  | { kind: "node"; treeId: string; nodeId: string | null; path?: readonly string[] };
+
+const samePath = (left: readonly string[] | undefined, right: readonly string[] | undefined) =>
+  !left || !right || (left.length === right.length && left.every((id, index) => id === right[index]));
 
 export interface ResearchVisitHistory {
   /** Visits, oldest first. */
@@ -74,13 +79,19 @@ function sameResearchVisit(left: ResearchVisit, right: ResearchVisit): boolean {
   }
   return (
     left.treeId === right.treeId &&
-    (left.nodeId === null || right.nodeId === null || left.nodeId === right.nodeId)
+    (left.nodeId === null ||
+      right.nodeId === null ||
+      (left.nodeId === right.nodeId && samePath(left.path, right.path)))
   );
 }
 
-/** Of two matching visits, the one that names a node. */
+/** Of two matching visits, the one that names a node, then the one that
+ * names every column's selection. */
 function moreSpecificVisit(left: ResearchVisit, right: ResearchVisit): ResearchVisit {
-  return left.kind === "node" && left.nodeId === null ? right : left;
+  if (left.kind !== "node" || right.kind !== "node") {
+    return left;
+  }
+  return left.nodeId === null || (!left.path && right.path && right.nodeId !== null) ? right : left;
 }
 
 /** The visit on screen, or null for an empty history. */
@@ -121,7 +132,11 @@ export function replaceResearchVisit(
   if (
     current.kind === visit.kind &&
     (current.kind === "home" ||
-      (visit.kind === "node" && current.treeId === visit.treeId && current.nodeId === visit.nodeId))
+      (visit.kind === "node" &&
+        current.treeId === visit.treeId &&
+        current.nodeId === visit.nodeId &&
+        samePath(current.path, visit.path) &&
+        Boolean(current.path) === Boolean(visit.path)))
   ) {
     return history;
   }
