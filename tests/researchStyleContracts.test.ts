@@ -12,9 +12,12 @@ const transcriptCss = readFileSync(join(stylesDirectory, "transcript.css"), "utf
 const postsCss = readFileSync(join(stylesDirectory, "posts.css"), "utf8");
 const reducedMotionCss = readFileSync(join(stylesDirectory, "..", "reduced-motion.css"), "utf8");
 
+// Returns the body of the rule whose selector list is, or ends with, `selector`.
+// The selector must start the file or a line, or follow a `}`, so
+// `.a` does not match the end of `.b > .a` or `.b .a`.
 function ruleBody(css: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`));
+  const match = css.match(new RegExp(`(?:^|[}\\n])[ \\t]*${escaped}\\s*\\{([^}]*)\\}`));
   assert.ok(match, `missing CSS rule for ${selector}`);
   return match[1];
 }
@@ -101,7 +104,7 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
 });
 
-test("a row's glyph is a 14px float at the start of its first line, centered on it, 6px before the text", () => {
+test("a message row's glyph floats beside its first line; feed cards and child rows put it in a flex column", () => {
   const glyph = ruleBody(feedCss, ".research-row-glyph");
   assert.match(glyph, /float:\s*left/);
   assert.match(glyph, /width:\s*14px;\s*height:\s*14px/);
@@ -121,21 +124,42 @@ test("a row's glyph is a 14px float at the start of its first line, centered on 
   // In a tweet's header (a flex row with its own gap) it is not floated.
   assert.match(ruleBody(feedCss, ".tweet-embed-head > .research-row-glyph"), /float:\s*none;\s*margin:\s*0/);
 
-  // The texts that hold it are flow roots, so the float stays inside them.
-  const content = ruleBody(feedCss, ".research-feed-card-content");
-  assert.match(content, /display:\s*flow-root/);
-  assert.doesNotMatch(content, /flex|gap:/);
-  assert.match(ruleBody(feedCss, ".research-feed-card-content > * + *"), /margin-top:\s*2px/);
-  assert.match(ruleBody(researchCss, ".research-msg-content"), /display:\s*flow-root;\s*padding:\s*10px 12px 2px;/);
-  // A message's Markdown sets its own type, which the glyph before it takes.
+  // Feed cards and child rows: the glyph is a fixed 14px flex item, the
+  // container's 6px gap replaces its right margin, and the text column beside
+  // it shrinks to fit.
+  for (const container of [".research-feed-card-layout", ".research-feed-child-open"]) {
+    const layout = ruleBody(feedCss, container);
+    assert.match(layout, /display:\s*flex/);
+    assert.match(layout, /align-items:\s*flex-start/);
+    assert.match(layout, /gap:\s*6px/);
+  }
   assert.match(
-    ruleBody(researchCss, ".research-msg-prompt > .research-row-glyph"),
-    /font-size:\s*calc\(var\(--research-compact-font-size\) \+ 1px\);\s*line-height:\s*var\(--research-compact-line-height\)/,
+    feedCss,
+    /\.research-feed-card-layout > \.research-row-glyph,\n\.research-feed-child-open > \.research-row-glyph\s*\{/,
   );
-  // A child row's float is in a block inside the clamped box: WebKit does not
-  // float a -webkit-box's own children.
+  const flexGlyph = ruleBody(feedCss, ".research-feed-child-open > .research-row-glyph");
+  assert.match(flexGlyph, /float:\s*none/);
+  assert.match(flexGlyph, /flex:\s*0 0 14px/);
+  assert.match(flexGlyph, /margin-right:\s*0/);
+  const content = ruleBody(feedCss, ".research-feed-card-content");
+  assert.match(content, /flex:\s*1/);
+  assert.match(content, /min-width:\s*0/);
+  assert.doesNotMatch(content, /flow-root/);
+  assert.match(ruleBody(feedCss, ".research-feed-card-content > * + *"), /margin-top:\s*2px/);
+  // A child row clamps its text, not the glyph beside it.
   assert.match(ruleBody(feedCss, ".research-feed-child-label"), /display:\s*block/);
   assert.match(ruleBody(feedCss, ".research-feed-child-text"), /display:\s*-webkit-box/);
+
+  // Message rows keep the float: the content is a flow root, so the float
+  // stays inside it, and later lines use the full width.
+  assert.match(ruleBody(researchCss, ".research-msg-content"), /display:\s*flow-root;\s*padding:\s*10px 12px 2px;/);
+  // A message's Markdown sets its own type, which the glyph before it takes.
+  const messageGlyph = ruleBody(researchCss, ".research-msg-prompt > .research-row-glyph");
+  assert.match(
+    messageGlyph,
+    /font-size:\s*calc\(var\(--research-compact-font-size\) \+ 1px\);\s*line-height:\s*var\(--research-compact-line-height\)/,
+  );
+  assert.doesNotMatch(messageGlyph, /float/);
 
   // Nothing sits in the top-right corner under the controls' pill any more:
   // no status dot, unread dot, or float reserving room for them.

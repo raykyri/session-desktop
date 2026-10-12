@@ -779,9 +779,10 @@
 
 /* — Row glyphs (ResearchRowGlyph) — */
 
-/* Float the 14px glyph beside the first line and allow later lines to use the
-   full width. The `1lh` margin centers it within the inherited line height;
-   3px is the fallback. Text and URLs may break beside the float. */
+/* In a message row, the 14px glyph floats beside the first line and later
+   lines use the full width. Feed cards and child rows override the float and
+   place the glyph in its own flex column (above). The `1lh` margin centers it
+   within the inherited line height; 3px is the fallback. */
 .research-row-glyph {
   float: left;
   display: flex;
@@ -858,18 +859,18 @@
   white-space: pre-line;
 }
 
-/* Under a title, the question uses a lower-contrast color, as the starred child
-   rows' text is, and shows at most two lines. The clamp is on the text's own
-   block, so link cards and embeds after it are not clamped and keep their
-   colors. */
 /* URLs in a card's text take the link color; the whole card is one open
-   button, so they are not links. A URL breaks anywhere, so one that starts
-   the question stays on the glyph's line. */
+   button, so they are not links. A URL breaks anywhere, so a long one wraps
+   inside the text column beside the glyph instead of widening it. */
 .research-feed-url {
   color: var(--accent-color);
   word-break: break-all;
 }
 
+/* Under a title, the question uses a lower-contrast color, as the starred child
+   rows' text is, and shows at most two lines. The clamp is on the text's own
+   block, so link cards and embeds after it are not clamped and keep their
+   colors. */
 .research-feed-card-title ~ * .research-feed-card-question,
 .research-feed-card-title ~ .research-feed-card-question {
   display: -webkit-box;
