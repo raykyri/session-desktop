@@ -703,6 +703,9 @@ function ResearchThreadPage({
     (level: number, nodeId: string) => {
       const path = levelPathRef.current;
       if (path[level] === nodeId) {
+        // Selecting the message again (a click, or Enter) shows its own
+        // answer in place of a selected queued message.
+        setQueuedView(null);
         return;
       }
       const next =
