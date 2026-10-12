@@ -1081,6 +1081,9 @@ function ResearchThreadPage({
     navigationPersistence,
     columns: strip.columns,
     levelPath,
+    queuedAnswerId: shownQueued
+      ? (levels.find((level) => level.headId === shownQueued.headId)?.selectedId ?? null)
+      : null,
     contentByNode,
     contentErrorByNode,
     pairColumn,

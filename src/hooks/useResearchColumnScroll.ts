@@ -32,6 +32,7 @@ export function useResearchColumnScroll({
   navigationPersistence,
   columns,
   levelPath,
+  queuedAnswerId,
   contentByNode,
   contentErrorByNode,
   pairColumn,
@@ -43,6 +44,9 @@ export function useResearchColumnScroll({
   columns: readonly ResearchColumn[];
   /** The selected message of each open level. */
   levelPath: readonly string[];
+  /** A selected message whose answer column shows a selected queued
+   * message in its place: its answer is not on screen. */
+  queuedAnswerId: string | null;
   contentByNode: Record<string, ResearchNodeContent>;
   contentErrorByNode: Record<string, string>;
   pairColumn: (kind: "messages" | "answer", level: number) => HTMLElement | null;
@@ -87,13 +91,21 @@ export function useResearchColumnScroll({
     if (!treeId) {
       return;
     }
+    // An answer that leaves the screen (its message is no longer selected,
+    // or a queued message is shown in its place) has its offset restored
+    // again when its column mounts again.
+    const shown = (nodeId: string) => levelPath.includes(nodeId) && nodeId !== queuedAnswerId;
     for (const nodeId of [...restoredAnswerScrollRef.current]) {
-      if (!levelPath.includes(nodeId)) {
+      if (!shown(nodeId)) {
         restoredAnswerScrollRef.current.delete(nodeId);
       }
     }
     for (const nodeId of levelPath) {
-      if (restoredAnswerScrollRef.current.has(nodeId) || !(contentByNode[nodeId] || contentErrorByNode[nodeId])) {
+      if (
+        !shown(nodeId) ||
+        restoredAnswerScrollRef.current.has(nodeId) ||
+        !(contentByNode[nodeId] || contentErrorByNode[nodeId])
+      ) {
         continue;
       }
       const level = levelPath.indexOf(nodeId);
@@ -106,7 +118,7 @@ export function useResearchColumnScroll({
         answerScrollRef.current.get(nodeId) ??
         restoreResearchScrollPosition(navigationPersistence.store[treeId], nodeId);
     }
-  }, [contentByNode, contentErrorByNode, levelPath, navigationPersistence, pairColumn, treeId]);
+  }, [contentByNode, contentErrorByNode, levelPath, navigationPersistence, pairColumn, queuedAnswerId, treeId]);
 
   // Each messages and branches column, as it mounts: its scroll offset comes
   // back (from this visit, else the persisted store), then its selected
