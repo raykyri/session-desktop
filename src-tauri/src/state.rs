@@ -3788,7 +3788,6 @@ impl AppState {
                     cancelled_count,
                     updated_at: tree.updated_at,
                     archived_at: tree.archived_at,
-                    bookmarked: tree.bookmarked,
                     has_unseen_update: unseen(latest_settlement),
                     // Viewing the tree acknowledges the failure; the lifetime
                     // failed_count stays for detail displays but must not brand
@@ -4252,7 +4251,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4326,7 +4324,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4395,7 +4392,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4827,7 +4823,6 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(now),
         };
         // The report is a document; its message is the question it answers.
@@ -6319,59 +6314,6 @@ impl AppState {
             None,
             json!({ "tree": tree }),
         ));
-        Ok(tree)
-    }
-
-    /// Toggles Home's Bookmark control for a thread. The flag is persisted
-    /// on the tree and broadcast as a tree update so open feeds and documents
-    /// converge without a refetch.
-    pub fn set_research_tree_bookmarked(
-        &self,
-        tree_id: &str,
-        bookmarked: bool,
-    ) -> Result<ResearchTree, String> {
-        self.update_research_tree_flag(tree_id, |tree| {
-            let changed = tree.bookmarked != bookmarked;
-            tree.bookmarked = bookmarked;
-            changed
-        })
-    }
-
-    /// Applies a per-thread preference flag. Flags do not touch `updated_at`,
-    /// so sidebar recency ordering is unaffected; a no-op change still
-    /// returns the tree but persists and emits nothing.
-    fn update_research_tree_flag(
-        &self,
-        tree_id: &str,
-        apply: impl FnOnce(&mut ResearchTree) -> bool,
-    ) -> Result<ResearchTree, String> {
-        let _document_guard = self
-            .inner
-            .research_document_lock
-            .lock()
-            .map_err(|_| "research document lock poisoned".to_string())?;
-        let (tree, changed) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let tree = model
-                .research_trees
-                .get_mut(tree_id)
-                .ok_or_else(|| format!("research tree {tree_id} was not found"))?;
-            let changed = apply(tree);
-            (tree.clone(), changed)
-        };
-        if changed {
-            self.persist();
-            self.emit(SessionEvent::new(
-                "research.tree.updated",
-                None,
-                None,
-                json!({ "tree": tree }),
-            ));
-        }
         Ok(tree)
     }
 
@@ -15920,7 +15862,6 @@ mod tests {
             created_at: now,
             updated_at: now,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode {
@@ -16150,53 +16091,7 @@ mod tests {
     }
 
     #[test]
-    fn bookmark_flag_persists_on_the_tree_and_its_summary() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-        let state = AppState::new(config.clone());
-        state.restore_session();
-        state.insert_group_after(sample_group(), None).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        assert!(!detail.tree.bookmarked);
-        let updated_at = detail.tree.updated_at;
-
-        let bookmarked = state
-            .set_research_tree_bookmarked(&detail.tree.id, true)
-            .unwrap();
-        assert!(bookmarked.bookmarked);
-        // Preference flags must not reorder the sidebar by recency.
-        assert_eq!(bookmarked.updated_at, updated_at);
-        let summary = &state.list_research_trees().unwrap()[0];
-        assert!(summary.bookmarked);
-        assert!(
-            state
-                .set_research_tree_bookmarked("missing", true)
-                .unwrap_err()
-                .contains("not found")
-        );
-
-        let restored_state = AppState::new(config);
-        restored_state.restore_session();
-        let restored = restored_state.research_tree(&detail.tree.id).unwrap().tree;
-        assert!(restored.bookmarked);
-        let cleared = restored_state
-            .set_research_tree_bookmarked(&detail.tree.id, false)
-            .unwrap();
-        assert!(!cleared.bookmarked);
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    fn a_stored_tree_with_the_removed_followed_flag_still_loads() {
+    fn a_stored_tree_with_removed_flags_still_loads() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
         state.restore_session();
@@ -16211,39 +16106,36 @@ mod tests {
                 group_id: "group-1".to_string(),
             })
             .unwrap();
-        state
-            .set_research_tree_bookmarked(&detail.tree.id, true)
-            .unwrap();
         state.finalize_persistence_for_exit();
         drop(state);
 
-        // Builds before Follow was removed stored the flag on the tree.
+        // Builds before Follow and Bookmarks were removed stored their flags
+        // on the tree.
         let path = persistence::state_path(&workspace);
         let mut raw: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         let version = raw["version"].clone();
         raw["researchTrees"][&detail.tree.id]["followed"] = serde_json::json!(true);
+        raw["researchTrees"][&detail.tree.id]["bookmarked"] = serde_json::json!(true);
         std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
 
         let restored = AppState::new(test_config(workspace.clone()));
         restored.restore_session();
         let tree = restored.research_tree(&detail.tree.id).unwrap().tree;
         assert_eq!(tree.root_node_id, detail.tree.root_node_id);
-        assert!(tree.bookmarked);
         assert_eq!(restored.list_research_trees().unwrap().len(), 1);
-        // The next save drops the field at the same state version.
+        // The next save drops both fields at the same state version.
         restored
-            .set_research_tree_bookmarked(&detail.tree.id, false)
+            .rename_research_tree(&detail.tree.id, "Renamed".to_string())
             .unwrap();
         restored.finalize_persistence_for_exit();
         let saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(saved["version"], version);
-        assert!(
-            saved["researchTrees"][&detail.tree.id]
-                .get("followed")
-                .is_none()
-        );
+        let saved_tree = &saved["researchTrees"][&detail.tree.id];
+        assert_eq!(saved_tree["title"], "Renamed");
+        assert!(saved_tree.get("followed").is_none());
+        assert!(saved_tree.get("bookmarked").is_none());
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -16958,7 +16850,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: None,
         };
 
@@ -17033,7 +16924,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17138,7 +17028,6 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17253,7 +17142,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17343,7 +17231,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17439,7 +17326,6 @@ mod tests {
                     created_at: 1,
                     updated_at: 2,
                     archived_at: None,
-                    bookmarked: false,
                     last_viewed_at: None,
                 },
             );
@@ -18439,7 +18325,6 @@ mod tests {
                 created_at: now,
                 updated_at: now,
                 archived_at: None,
-                bookmarked: false,
                 last_viewed_at: Some(now),
             };
             let mut node = ResearchNode::new(

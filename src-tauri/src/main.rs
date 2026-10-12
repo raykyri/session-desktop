@@ -2242,15 +2242,6 @@ fn rename_research_tree(
 }
 
 #[tauri::command]
-fn set_research_tree_bookmarked(
-    state: tauri::State<'_, AppState>,
-    tree_id: String,
-    bookmarked: bool,
-) -> Result<ResearchTree, String> {
-    state.set_research_tree_bookmarked(&tree_id, bookmarked)
-}
-
-#[tauri::command]
 fn rename_research_node(
     state: tauri::State<'_, AppState>,
     node_id: String,
@@ -3730,7 +3721,6 @@ fn main() {
             rerun_research_node,
             cancel_research_node,
             rename_research_tree,
-            set_research_tree_bookmarked,
             rename_research_node,
             set_research_node_starred,
             set_research_chain_order,

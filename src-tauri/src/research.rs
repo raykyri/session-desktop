@@ -96,14 +96,8 @@ const RESEARCH_SYSTEM_FOLDER_IDS: [&str; 3] = [
 const RESEARCH_SYSTEM_FOLDER_ID_PREFIX: &str = "system:";
 /// Names of the sidebar's built-in sections, lowercase. Mirrors
 /// `RESERVED_FOLDER_NAMES` in src/lib/researchFolders.ts.
-const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 6] = [
-    "home",
-    "unfiled",
-    "drafts",
-    "archive",
-    "bookmarks",
-    "highlights",
-];
+const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 5] =
+    ["home", "unfiled", "drafts", "archive", "highlights"];
 /// Mirrors `RESEARCH_FOLDER_NAME_MAX_LENGTH` in src/lib/researchFolders.ts.
 const RESEARCH_FOLDER_NAME_MAX_CHARS: usize = 40;
 
@@ -294,6 +288,8 @@ pub struct DetachedResearchBundle {
     pub pending: bool,
 }
 
+/// Builds before Follow and Bookmarks were removed stored `followed` and
+/// `bookmarked` flags on each tree; loads ignore them and saves omit them.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchTree {
@@ -309,9 +305,6 @@ pub struct ResearchTree {
     pub archived_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_viewed_at: Option<u128>,
-    /// The user bookmarked this thread from Home; persisted with the tree.
-    #[serde(default)]
-    pub bookmarked: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -2123,7 +2116,6 @@ pub struct ResearchTreeSummary {
     pub cancelled_count: usize,
     pub updated_at: u128,
     pub archived_at: Option<u128>,
-    pub bookmarked: bool,
     pub has_unseen_update: bool,
     /// A failure settled after the tree was last viewed. Unlike `failed_count`
     /// (a lifetime total that can never be cleared without deleting the tree),
@@ -4191,14 +4183,7 @@ mod tests {
             validate_research_folders(&mut duplicate, &current).unwrap_err(),
             "A folder named \"Écoles\" already exists."
         );
-        for reserved in [
-            "home",
-            "UNFILED",
-            " Drafts ",
-            "archive",
-            "Bookmarks",
-            "HIGHLIGHTS",
-        ] {
+        for reserved in ["home", "UNFILED", " Drafts ", "archive", "HIGHLIGHTS"] {
             let mut state = named(&[("f1", reserved, "ws-a")]);
             assert_eq!(
                 validate_research_folders(&mut state, &current).unwrap_err(),
@@ -4304,7 +4289,6 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
-            bookmarked: false,
             last_viewed_at: Some(2),
         };
         let node = ResearchNode {
@@ -4571,16 +4555,18 @@ mod tests {
     }
 
     #[test]
-    fn detached_archive_with_the_removed_followed_flag_still_reads() {
+    fn detached_archive_with_removed_tree_flags_still_reads() {
         let folder = temp_workspace();
         let archive = sample_detached_archive(&folder);
         let responses = HashMap::from([(archive.nodes[0].id.clone(), vec![sample_turn("turn-1")])]);
         write_detached_research_pending(&folder, &archive, &responses).unwrap();
-        // Builds before Follow was removed stored the flag on each tree.
+        // Builds before Follow and Bookmarks were removed stored their flags
+        // on each tree.
         let manifest_path = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
         let mut manifest: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
         manifest["trees"][0]["followed"] = serde_json::json!(true);
+        manifest["trees"][0]["bookmarked"] = serde_json::json!(true);
         crate::persistence::write_synced(&manifest_path, &serde_json::to_vec(&manifest).unwrap())
             .unwrap();
 
