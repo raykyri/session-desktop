@@ -297,7 +297,7 @@ test("a queued message is selectable, with Cancel in its row and Cancel queued m
     }),
   );
   // The queued row holds the column's selection in place of a1f.
-  assert.match(html, /research-msg-row is-status-queued is-client-queued is-selected"><button type="button" class="research-msg-hit" aria-current="true"/);
+  assert.match(html, /research-msg-row is-status-queued is-client-queued is-selected" data-research-queued="[^"]+"><button type="button" class="research-msg-hit" aria-current="true"/);
   assert.doesNotMatch(html, /data-node-id="a1f" aria-current/);
   // Its meta line: the state and Cancel; no caption about when it runs.
   assert.match(html, /<span class="research-msg-state">Queued<\/span><button type="button" class="research-msg-meta-button research-queue-remove" aria-label="Cancel this queued message">Cancel<\/button>/);

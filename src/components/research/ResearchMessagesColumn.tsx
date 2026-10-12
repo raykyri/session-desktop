@@ -193,6 +193,7 @@ function ResearchQueuedFollowups({
           <li
             key={item.id}
             className={`research-msg-row is-status-queued is-client-queued${selected ? " is-selected" : ""}`}
+            data-research-queued={item.id}
           >
             <button
               type="button"
@@ -493,7 +494,8 @@ export function ResearchBranchesColumn({
   sourceOf: (group: ResearchStackGroup) => ResearchBranchSourceProps;
   /** The ask box of the selected group, or of the unsent branch's. */
   composerOf: (group: ResearchStackGroup) => ReactNode;
-  queueOf: (headId: string) => ResearchQueueProps;
+  /** The queue of the chain headed by `headId` (its messages `chainIds`). */
+  queueOf: (headId: string, chainIds: readonly string[]) => ResearchQueueProps;
   /** Clears the column's selection. */
   onClear: () => void;
   onScroll: ((event: UIEvent<HTMLElement>) => void) | undefined;
@@ -549,7 +551,7 @@ export function ResearchBranchesColumn({
                   selectedId={group.selectedId}
                   openSourceId={openSourceId}
                   firstFocusable={!anySelected && group === firstBranch}
-                  queue={queueOf(group.headId)}
+                  queue={queueOf(group.headId, group.chainIds)}
                 />
                 {selected ? composerOf(group) : null}
               </section>

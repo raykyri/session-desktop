@@ -592,7 +592,52 @@ function ResearchThreadPage({
 
   // ---- queued follow-ups ----------------------------------------------------
 
-  const focusComposer = useCallback((headId: string) => composerRefs.current.get(headId)?.focus(), []);
+  /** Focus after a queued message of the chain headed by `headId` left the
+   * queue (its row, which may have held focus, is gone). The first of these
+   * that is shown takes focus: with `rowId`, that message's row; the chain's
+   * ask box (only the selected group of a branches column has one); the
+   * queued message `nextItemId`; the chain's last listed row; else the
+   * column's selected or first row. With `onlyIfLost`, focus that is still
+   * on an element stays there. */
+  const focusAfterQueued = useCallback(
+    (
+      headId: string,
+      { rowId, nextItemId, onlyIfLost = false }: { rowId?: string; nextItemId?: string; onlyIfLost?: boolean } = {},
+    ) => {
+      window.requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (onlyIfLost && active && active !== document.body && active.isConnected) {
+          return;
+        }
+        const list =
+          workspaceRef.current
+            ?.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(headId)}"]`)
+            ?.closest<HTMLElement>(".research-msg-list") ?? null;
+        const rowOf = (id: string | undefined) =>
+          id ? (list?.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(id)}"]`) ?? null) : null;
+        const rows = [...(list?.querySelectorAll<HTMLElement>("[data-research-row]") ?? [])];
+        const target =
+          rowOf(rowId) ??
+          composerField(headId) ??
+          (nextItemId
+            ? list?.querySelector<HTMLElement>(`[data-research-queued="${CSS.escape(nextItemId)}"] > .research-msg-hit`)
+            : null) ??
+          rows[rows.length - 1] ??
+          null;
+        if (target) {
+          target.focus({ preventScroll: true });
+          scrollIntoColumn(target);
+          return;
+        }
+        const level = columnLevelIndex(columnIdOf(list));
+        if (level !== null) {
+          requestFocus({ kind: "branches", level }, "none");
+        }
+      });
+    },
+    [composerField, requestFocus],
+  );
+  const focusComposer = useCallback((headId: string) => focusAfterQueued(headId), [focusAfterQueued]);
   const { queues, queuesRef, restoreQueues, updateQueue, retryQueued, awaitChainChild, chainSendInFlight } =
     useResearchChainQueue({ treeId, navigationPersistence, detail, archived, nodeById, onFork, focusComposer });
   // The selected queued message while it is still queued. Once it leaves
@@ -602,6 +647,18 @@ function ResearchThreadPage({
     queuedView && (queues[queuedView.headId] ?? EMPTY_QUEUE).some((item) => item.id === queuedView.itemId)
       ? queuedView
       : null;
+  // A selected queued message that left the queue without an action here
+  // (the queue sent it): its row and the answer column showing it are gone,
+  // so focus that was on them moves to the chain's last message (the
+  // column's selection), else its ask box.
+  useEffect(() => {
+    if (!queuedView || shownQueued) {
+      return;
+    }
+    setQueuedView(null);
+    const chain = inlineChainFor(nodesRef.current, queuedView.headId);
+    focusAfterQueued(queuedView.headId, { rowId: chain[chain.length - 1], onlyIfLost: true });
+  }, [focusAfterQueued, queuedView, shownQueued]);
 
   // ---- levels --------------------------------------------------------------
 
@@ -2133,10 +2190,10 @@ function ResearchThreadPage({
     parentLoaded: Boolean(contentByNode[parentId]) && levelPath.includes(parentId),
   });
 
-  /** The queue of the chain headed by `headId` and its items' actions. */
-  const chainQueue = (headId: string): ResearchQueueProps => {
-    const chain = inlineChainFor(nodes, headId);
-    const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
+  /** The queue of the chain headed by `headId` (its messages `chainIds`,
+   * oldest first) and its items' actions. */
+  const chainQueue = (headId: string, chainIds: readonly string[]): ResearchQueueProps => {
+    const tail = nodeById.get(chainIds[chainIds.length - 1] ?? "") ?? null;
     return {
       items: queues[headId] ?? EMPTY_QUEUE,
       selectedId: shownQueued?.headId === headId ? shownQueued.itemId : null,
@@ -2163,26 +2220,40 @@ function ResearchThreadPage({
         });
       },
       // Editing moves the question into the ask box only when it is empty.
+      // A branches column shows the ask box only in its selected group, so a
+      // chain in another group is selected first (its last message).
       onEdit: (item) => {
         if ((composerTextRef.current[headId] ?? "").trim()) {
           onToast("Clear the ask box to edit this question.");
           return;
         }
         updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+        if (queuedView?.itemId === item.id) {
+          setQueuedView(null);
+        }
         setComposerText((current) => ({ ...current, [headId]: item.prompt }));
-        window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+        const shown = Boolean(composerField(headId));
+        if (!shown && tail) {
+          navigate(selectionWith(tail.id));
+        }
+        requestFocus({ kind: "composer", key: headId }, shown ? "none" : "reveal");
       },
     };
   };
 
   /** Cancels a queued message: it leaves the queue, and the message queued
-   * after it moves up. Focus goes to the chain's ask box. */
+   * after it moves up. Focus goes to the chain's ask box, or, in a group
+   * without one, to the queued message now in its place (or the one before
+   * it), else the group's last row (see focusAfterQueued). */
   const cancelQueued = (headId: string, itemId: string) => {
-    updateQueue(headId, (queue) => researchQueueWithout(queue, itemId));
+    const queue = queuesRef.current[headId] ?? EMPTY_QUEUE;
+    const at = queue.findIndex((item) => item.id === itemId);
+    const next = queue[at + 1] ?? queue[at - 1];
+    updateQueue(headId, (current) => researchQueueWithout(current, itemId));
     if (queuedView?.itemId === itemId) {
       setQueuedView(null);
     }
-    window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+    focusAfterQueued(headId, { nextItemId: next?.id });
   };
 
   // The rows of every messages and branches column.
@@ -2355,7 +2426,7 @@ function ResearchThreadPage({
             menu={head ? headMenu(headId, level === 0 ? "Thread actions" : "Branch actions") : null}
             source={level > 0 && head?.parentNodeId ? branchSource(passageAnchor(head), head.parentNodeId, head) : null}
             composer={chainComposer(headId, level, currentLevel === level)}
-            queue={chainQueue(headId)}
+            queue={chainQueue(headId, column.level.chainIds)}
             onScroll={onColumnScroll(column)}
           />
         );
