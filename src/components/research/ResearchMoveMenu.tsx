@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bookmark, Check, House, Plus, Star } from "lucide-react";
+import { Check, House, Plus, Star } from "lucide-react";
 import type { ResearchFolder } from "../../types";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -31,8 +31,6 @@ export function researchMoveTargets(folders: ResearchFolder[]) {
 export interface ResearchTreeMenuProps {
   currentPlace: string;
   folders: ResearchFolder[];
-  bookmarked?: boolean;
-  onToggleBookmark?: () => void;
   /** Shows A on the available Archive target and enables it as a menu shortcut. */
   archiveShortcut?: boolean;
   /** Given with `onNewFolder`: adds Move to and New folder…. */
@@ -40,45 +38,29 @@ export interface ResearchTreeMenuProps {
   onNewFolder?: () => void;
 }
 
-/** The actions on a whole question: Bookmark when given, then
- * Move to with every folder (the current one disabled and checked), then New
- * folder…, which creates a folder and moves the question into it. A feed
+/** The actions on a whole question: Move to with every folder (the current
+ * one disabled and checked), then New folder…, which creates a folder and
+ * moves the question into it. Renders nothing without `onMove` and
+ * `onNewFolder`. A feed
  * card's menu follows them with the thread's own actions (Generate recap,
  * Rename, Archive, Delete); the root answer's menu adds them below its own
  * actions. */
 export function ResearchTreeMenuItems({
   currentPlace,
   folders,
-  bookmarked,
-  onToggleBookmark,
   archiveShortcut = false,
   onMove,
   onNewFolder,
 }: ResearchTreeMenuProps) {
-  const move = onMove && onNewFolder ? { onMove, onNewFolder } : null;
+  if (!onMove || !onNewFolder) return null;
   return (
-    <>
-      {onToggleBookmark ? (
-        <>
-          <ResearchMenuItem
-            icon={
-              <Bookmark size={15} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
-            }
-            label={bookmarked ? "Remove bookmark" : "Bookmark"}
-            onSelect={onToggleBookmark}
-          />
-          {move ? <ResearchMenuSeparator /> : null}
-        </>
-      ) : null}
-      {move ? (
-        <ResearchMoveItems
-          currentPlace={currentPlace}
-          folders={folders}
-          archiveShortcut={archiveShortcut}
-          {...move}
-        />
-      ) : null}
-    </>
+    <ResearchMoveItems
+      currentPlace={currentPlace}
+      folders={folders}
+      archiveShortcut={archiveShortcut}
+      onMove={onMove}
+      onNewFolder={onNewFolder}
+    />
   );
 }
 
@@ -145,26 +127,30 @@ interface ResearchFeedRowMenuItemsProps extends ResearchTreeMenuProps {
 }
 
 /** A feed row's menu items. A card's menu holds its question's actions
- * (Bookmark, Move to), then after a separator the thread's actions
- * passed as `children` (Generate recap, Rename, Archive, Delete). A starred
- * child row's menu starts with Remove star, then its question's actions. */
+ * (Move to), then after a separator the thread's actions passed as
+ * `children` (Generate recap, Rename, Archive, Delete). A starred child
+ * row's menu starts with Remove star, then its question's actions.
+ * Separators go only between groups that render. */
 export function ResearchFeedRowMenuItems({ onRemoveStar, children, ...items }: ResearchFeedRowMenuItemsProps) {
+  const hasTreeItems = Boolean(items.onMove && items.onNewFolder);
   return (
     <>
       {onRemoveStar ? (
+        <ResearchMenuItem
+          icon={<Star size={15} aria-hidden="true" />}
+          label="Remove star"
+          onSelect={onRemoveStar}
+        />
+      ) : null}
+      {hasTreeItems ? (
         <>
-          <ResearchMenuItem
-            icon={<Star size={15} aria-hidden="true" />}
-            label="Remove star"
-            onSelect={onRemoveStar}
-          />
-          <ResearchMenuSeparator />
+          {onRemoveStar ? <ResearchMenuSeparator /> : null}
+          <ResearchTreeMenuItems {...items} />
         </>
       ) : null}
-      <ResearchTreeMenuItems {...items} />
       {children ? (
         <>
-          <ResearchMenuSeparator />
+          {onRemoveStar || hasTreeItems ? <ResearchMenuSeparator /> : null}
           {children}
         </>
       ) : null}

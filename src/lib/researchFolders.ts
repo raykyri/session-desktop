@@ -20,7 +20,7 @@ export const RESEARCH_ARCHIVE_FOLDER_ID = "system:archive";
 export const RESEARCH_UNFILED_FOLDER_ID = "system:unfiled";
 
 const RESEARCH_FOLDER_NAME_MAX_LENGTH = 40;
-const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "bookmarks", "highlights"];
+const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "highlights"];
 
 export function emptyResearchFolderState(): ResearchFolderState {
   return { folders: [], membership: {}, collapsed: [] };

@@ -128,7 +128,6 @@ import {
 import { researchTreeContents, type ResearchTreeContents } from "./lib/researchTreeContents";
 import {
   setResearchNodeStarred,
-  setResearchTreeBookmarked,
   activatePane,
 } from "./lib/api";
 import type {
@@ -421,7 +420,7 @@ function MainApp() {
     onError: (err) => setError(err instanceof Error ? err.message : String(err)),
   });
 
-  // Which list the feed column shows: Home, Bookmarks, Highlights, Drafts,
+  // Which list the feed column shows: Home, Highlights, Drafts,
   // Archive, or a user folder. Switching lists keeps the open thread.
   const [feedPage, setFeedPage] = useState<ResearchFeedPage>({ kind: "home" });
   const openFeedPage = useCallback((view: ResearchFeedPage) => {
@@ -704,17 +703,8 @@ function MainApp() {
     },
     [showResearchToast],
   );
-  const bookmarkResearchTreeFromFeed = useCallback(
-    (treeId: string, bookmarked: boolean) => {
-      void setResearchTreeBookmarked(treeId, bookmarked).then(
-        () => showResearchToast(bookmarked ? "Bookmarked." : "Bookmark removed."),
-        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
-      );
-    },
-    [showResearchToast],
-  );
-  // The open question's Bookmark and Move to, listed in its root
-  // answer menus with the same state as its feed row's menu.
+  // The open question's Move to, listed in its root answer menus with the
+  // same state as its feed row's menu.
   const activeResearchTreeSummary = useMemo(
     () =>
       activeResearchTreeId
@@ -734,8 +724,6 @@ function MainApp() {
     return {
       currentPlace: researchTreePlace(tree, researchFolderState),
       folders: researchFolders,
-      bookmarked: Boolean(tree.bookmarked),
-      onSetBookmarked: (bookmarked) => bookmarkResearchTreeFromFeed(tree.id, bookmarked),
       onMove: (place) => moveResearchTreeFromFeed(tree.id, place),
       onNewFolder: (trigger) => openNewResearchFolderDialog(tree.id, trigger),
     };
@@ -743,7 +731,6 @@ function MainApp() {
     activeResearchTreeState,
     researchFolderState,
     researchFolders,
-    bookmarkResearchTreeFromFeed,
     moveResearchTreeFromFeed,
     openNewResearchFolderDialog,
   ]);
@@ -1174,7 +1161,6 @@ function MainApp() {
                     onRenameResearch={renameResearchTreeTitle}
                     onRestoreResearch={restoreResearchTreeFromMenu}
                     onRemoveResearch={removeResearchTreeFromMenu}
-                    onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
                     onMoveTree={moveResearchTreeFromFeed}
                     onReorderTree={reorderResearchTreeFromFeed}
                     onReorderDraft={moveResearchDraftFromFeed}

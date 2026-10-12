@@ -38,12 +38,10 @@ import {
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import { ResearchRerunMenuItem } from "./ResearchRerunMenuItem";
 
-/** The whole question's Bookmark and Move to actions, which the root
- * level's answer menus and the root note's menu list below their own. */
+/** The whole question's Move to actions, which the root level's answer
+ * menus and the root note's menu list below their own. */
 export interface ResearchThreadTreeMenu
-  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onMove" | "onNewFolder"> {
-  bookmarked: boolean;
-  onSetBookmarked: (bookmarked: boolean) => void;
+  extends Omit<ResearchTreeMenuProps, "onMove" | "onNewFolder"> {
   onMove: (place: string) => void;
   /** `trigger` is where focus returns when the folder dialog closes. */
   onNewFolder: (trigger: HTMLElement | undefined) => void;
@@ -201,8 +199,8 @@ export function ResearchThreadMenu({
   }
   if (menu.kind === "post") {
     const post = menuNode;
-    // The root note stands for the thread: it has the thread's Bookmark and
-    // Move to, and is deleted with the thread. A follow-up note is starred
+    // The root note stands for the thread: it has the thread's Move to, and
+    // is deleted with the thread. A follow-up note is starred
     // and deleted on its own.
     const isRoot = post.id === rootNodeId;
     const info = isRoot ? null : researchBranchInfo(treeNodes, post.id);
@@ -272,11 +270,6 @@ export function ResearchThreadMenu({
             <ResearchTreeMenuItems
               currentPlace={treeMenu.currentPlace}
               folders={treeMenu.folders}
-              bookmarked={treeMenu.bookmarked}
-              onToggleBookmark={() => {
-                onClose();
-                treeMenu.onSetBookmarked(!treeMenu.bookmarked);
-              }}
               onMove={(place) => {
                 onClose();
                 treeMenu.onMove(place);
@@ -491,11 +484,6 @@ export function ResearchThreadMenu({
           <ResearchTreeMenuItems
             currentPlace={treeMenu.currentPlace}
             folders={treeMenu.folders}
-            bookmarked={treeMenu.bookmarked}
-            onToggleBookmark={() => {
-              onClose();
-              treeMenu.onSetBookmarked(!treeMenu.bookmarked);
-            }}
             onMove={(place) => {
               onClose();
               treeMenu.onMove(place);

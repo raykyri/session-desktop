@@ -1,4 +1,4 @@
-/* Research sidebar: Home, Bookmarks, Highlights, then the Folders section
+/* Research sidebar: Home, Highlights, then the Folders section
    (Drafts, user folders, Archive), with the workspace switcher, the Agents
    module and the account control at the bottom. Rows carry no counts. */
 .sidebar.is-research-mode {

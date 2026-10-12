@@ -61,13 +61,12 @@ test("Home lists Unfiled trees in the tree order, a just-created root first", ()
   });
   const trees = ["a", "b", "filed", "archived", "c"].map((id) => ({
     ...tree, id, rootNodeId: `${id}-root`, archivedAt: id === "archived" ? 300 : null,
-    bookmarked: id === "b" || id === "filed",
   }));
   const roots = new Map(
     [root("a", 100), root("c", 300), root("new", 400), root("filed", 200)].map((item) => [item.treeId, item]),
   );
   const placeOf = (candidate: ResearchTreeSummary) => (candidate.id === "filed" ? "f-read" : "system:unfiled");
-  const home = researchFeedRows("home", roots, trees.filter((candidate) => !candidate.archivedAt), placeOf);
+  const home = researchFeedRows(roots, trees.filter((candidate) => !candidate.archivedAt), placeOf);
   // Not by creation time: "a" before "c". An unloaded root ("b") still lists.
   assert.deepEqual(home.map((row) => row.treeId), ["new", "a", "b", "c"]);
   assert.deepEqual(home.map((row) => row.key), ["tree:new", "tree:a", "tree:b", "tree:c"]);
@@ -75,10 +74,10 @@ test("Home lists Unfiled trees in the tree order, a just-created root first", ()
   assert.equal(home[0].tree, undefined);
   assert.equal(home[2].query, undefined);
   assert.equal(home[3].query?.nodeId, "c-root");
-  // Bookmarks: bookmarked active trees in the tree order, from any place.
+  // Archived trees are not listed, even when the caller passes them.
   assert.deepEqual(
-    researchFeedRows("bookmarks", roots, trees, placeOf).map((row) => row.treeId),
-    ["b", "filed"],
+    researchFeedRows(roots, trees, placeOf).map((row) => row.treeId),
+    ["new", "a", "b", "c"],
   );
 });
 

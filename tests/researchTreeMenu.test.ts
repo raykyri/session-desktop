@@ -114,7 +114,6 @@ function feedCardMenu(
         currentPlace: archived ? "system:archive" : "system:unfiled",
         folders,
         archiveShortcut: overrides.archiveShortcut ?? true,
-        onToggleBookmark: noop,
         onMove: noop,
         onNewFolder: noop,
       },
@@ -133,8 +132,6 @@ function feedCardMenu(
 
 test("a feed card's one menu lists the question's actions, then the thread's, Delete last; Archive is under Move to", () => {
   assert.deepEqual(menuOutline(feedCardMenu()), [
-    "Bookmark",
-    "|",
     "Move to",
     "Unfiled",
     "Drafts",
@@ -149,7 +146,7 @@ test("a feed card's one menu lists the question's actions, then the thread's, De
     "Delete",
   ]);
   // Without a recap, Rename alone precedes the separator.
-  assert.deepEqual(menuOutline(feedCardMenu({ recap: false })).slice(9), [
+  assert.deepEqual(menuOutline(feedCardMenu({ recap: false })).slice(7), [
     "|",
     "Rename",
     "|",
@@ -170,8 +167,6 @@ test("the Archive shortcut is limited to available Archive targets in Home", () 
 test("an archived card's menu ends with Unarchive and Delete", () => {
   const html = feedCardMenu({ archived: true });
   assert.deepEqual(menuOutline(html), [
-    "Bookmark",
-    "|",
     "Move to",
     "Unfiled",
     "Drafts",
@@ -185,21 +180,36 @@ test("an archived card's menu ends with Unarchive and Delete", () => {
   ]);
 });
 
+test("a feed card's menu without Move to starts with the thread's actions", () => {
+  const html = renderToStaticMarkup(
+    createElement(
+      ResearchFeedRowMenuItems,
+      { currentPlace: "system:unfiled", folders },
+      createElement(ResearchTreeLifecycleItems, {
+        tree,
+        archived: false,
+        onClose: noop,
+        onRename: noop,
+        onRestore: noop,
+        onDelete: noop,
+      }),
+    ),
+  );
+  assert.deepEqual(menuOutline(html), ["Rename", "|", "Delete"]);
+});
+
 test("a starred child row's menu has Remove star and the question's actions, no thread actions", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchFeedRowMenuItems, {
       currentPlace: "system:unfiled",
       folders,
       onRemoveStar: noop,
-      onToggleBookmark: noop,
       onMove: noop,
       onNewFolder: noop,
     }),
   );
   assert.deepEqual(menuOutline(html), [
     "Remove star",
-    "|",
-    "Bookmark",
     "|",
     "Move to",
     "Unfiled",

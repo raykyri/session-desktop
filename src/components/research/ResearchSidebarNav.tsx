@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode, Ref } from "react";
 import {
-  Bookmark,
   Ellipsis,
   Highlighter,
   House,
@@ -49,7 +48,6 @@ function primaryEntries(): NavEntry[] {
       icon: <House size={16} aria-hidden="true" />,
       drop: RESEARCH_UNFILED_FOLDER_ID,
     },
-    { view: { kind: "bookmarks" }, label: "Bookmarks", icon: <Bookmark size={16} aria-hidden="true" /> },
     {
       view: { kind: "highlights" },
       label: "Highlights",
@@ -92,10 +90,10 @@ interface ResearchSidebarNavProps {
   homeShortcutHint?: string | null;
 }
 
-/** The full sidebar's rows: Home, Bookmarks, Highlights, then the Folders
- * section (Drafts, user folders, Archive). Rows carry no counts. Every row
- * but Bookmarks and Highlights is a drop target; user folders have a …
- * menu with Rename and Delete. */
+/** The full sidebar's rows: Home, Highlights, then the Folders section
+ * (Drafts, user folders, Archive). Rows carry no counts. Every row but
+ * Highlights is a drop target; user folders have a … menu with Rename and
+ * Delete. */
 export function ResearchSidebarNav({
   current,
   folders,
@@ -293,8 +291,8 @@ export function ResearchRailButton({
   );
 }
 
-/** The collapsed sidebar: a 52px column of icons. Home, Bookmarks, and
- * Highlights, then one icon per folder (user folders as their first letter,
+/** The collapsed sidebar: a 52px column of icons. Home and Highlights,
+ * then one icon per folder (user folders as their first letter,
  * named in the tooltip), then New folder. Folder icons and Home accept drops. */
 export function ResearchSidebarRail({
   current,

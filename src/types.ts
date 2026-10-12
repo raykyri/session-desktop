@@ -428,8 +428,6 @@ export interface ResearchTree {
   updatedAt: number;
   archivedAt?: number | null;
   lastViewedAt?: number | null;
-  /** Home's Bookmark control; persisted on the thread. */
-  bookmarked?: boolean;
 }
 
 /** What a person wrote: a post's text, an exchange's question, or the
@@ -678,7 +676,6 @@ export interface ResearchTreeSummary {
   cancelledCount: number;
   updatedAt: number;
   archivedAt?: number | null;
-  bookmarked?: boolean;
   hasUnseenUpdate: boolean;
   /** A failure settled after the tree was last viewed. Attention flag —
    * viewing the tree acknowledges it — unlike failedCount, a lifetime total. */

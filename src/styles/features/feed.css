@@ -264,7 +264,7 @@
 
 /* — Composer — */
 
-/* The ask box starts Home; in Bookmarks and a folder it ends the list. */
+/* The ask box starts Home; in a folder it ends the list. */
 .research-feed-composer {
   flex: none;
   margin-bottom: 10px;

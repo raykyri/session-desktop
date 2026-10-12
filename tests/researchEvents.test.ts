@@ -188,7 +188,6 @@ test("researchSummaryFromDetail derives run counts, the root type, and unseen at
     cancelledCount: 1,
     updatedAt: 10,
     archivedAt: null,
-    bookmarked: false,
     hasUnseenUpdate: true,
     hasUnseenFailure: true,
   });
@@ -380,11 +379,4 @@ test("tree summary patch adopts authoritative metadata and preserves derived fie
   assert.equal(patched.failedCount, summary.failedCount);
   assert.equal(patched.hasUnseenFailure, summary.hasUnseenFailure);
   assert.equal(patchResearchSummaryTree(patched, archived), patched);
-
-  // The Bookmark flag rides the same tree event without touching recency.
-  assert.equal(summary.bookmarked, false);
-  const bookmarked = patchResearchSummaryTree(patched, { ...archived, bookmarked: true });
-  assert.equal(bookmarked.bookmarked, true);
-  assert.equal(bookmarked.updatedAt, 45);
-  assert.equal(patchResearchSummaryTree(bookmarked, { ...archived, bookmarked: true }), bookmarked);
 });

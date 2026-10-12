@@ -120,8 +120,8 @@ test("a message row's meta line shows the starred mark and branch count, with no
   const branches = html.indexOf("research-msg-branches");
   const more = html.indexOf('aria-label="Answer actions"');
   assert.ok(starred >= 0 && branches > starred && more > branches);
-  // Bookmark and Move are in the feed row's … menu, not here.
-  assert.doesNotMatch(html, /Bookmark/);
+  // Move to is in the feed row's … menu, not here.
+  assert.doesNotMatch(html, /Move to/);
 });
 
 test("a settled row with nothing to show has no meta line; the starred mark shows only where offered", () => {

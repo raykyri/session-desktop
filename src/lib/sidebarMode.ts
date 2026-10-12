@@ -2,7 +2,6 @@
  * a folder, Drafts, or Archive lists only that place. */
 export type ResearchFeedView =
   | { kind: "home" }
-  | { kind: "bookmarks" }
   | { kind: "drafts" }
   | { kind: "archive" }
   | { kind: "folder"; folderId: string };

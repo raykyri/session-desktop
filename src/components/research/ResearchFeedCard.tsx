@@ -228,7 +228,7 @@ export default function ResearchFeedCard({
             </button>
             <ResearchRowRail
               grip={Boolean(onDragStart)}
-              menuLabel="Remove the star, bookmark, follow or move"
+              menuLabel="Remove the star or move"
               menuOpen={childMenuOpen}
               onMenu={onChildMenu ? (anchor) => onChildMenu(child, anchor) : undefined}
             />

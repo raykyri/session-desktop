@@ -353,9 +353,6 @@ export function listResearchHighlights() {
   return invoke<ResearchHighlightFeedItem[]>("list_research_highlights");
 }
 
-export function setResearchTreeBookmarked(treeId: string, bookmarked: boolean) {
-  return invoke<ResearchTree>("set_research_tree_bookmarked", { treeId, bookmarked });
-}
 
 export function renameResearchNode(nodeId: string, title: string) {
   return invoke<ResearchNode>("rename_research_node", { nodeId, title });

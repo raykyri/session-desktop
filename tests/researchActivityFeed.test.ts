@@ -26,7 +26,6 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
     onResearchRecapApplied: noop, onError: noop,
     onRenameResearch: asyncNoop,
     onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,
-    onSetResearchBookmarked: noop,
     onMoveTree: noop,
     onRefresh: noop, onBack: noop, onForward: noop,
     ...overrides,
@@ -77,15 +76,15 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("cards have no metadata row: no time, counts, recap or Bookmark", () => {
+test("cards have no metadata row: no time, counts or recap", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
-    researchTrees: [{ ...tree, bookmarked: true }],
+    researchTrees: [tree],
   });
   assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
   // Direct follow-ups are not rows of their own unless starred.
   assert.doesNotMatch(html, /Follow up question here/);
-  // Bookmarking, moving and the thread's actions live in the card's … menu,
+  // Moving and the thread's actions live in the card's … menu,
   // which its context menu also opens.
   assert.match(html, /title="Thread actions" aria-label="Thread actions" aria-haspopup="menu"/);
   // A title that only repeats the question is not shown above it.
@@ -237,7 +236,7 @@ test("starred follow-ups and branches are indented rows under their question", (
     assert.equal((row.match(/<button/g) ?? []).length, 2);
     assert.match(
       row,
-      /class="research-feed-rail"><span class="research-feed-card-grip"[^]*class="research-feed-icon-button research-feed-card-menu" title="Remove the star, bookmark, follow or move"/,
+      /class="research-feed-rail"><span class="research-feed-card-grip"[^]*class="research-feed-icon-button research-feed-card-menu" title="Remove the star or move"/,
     );
   }
   assert.equal((html.match(/class="research-feed-child-open"/g) ?? []).length, 3);
@@ -425,52 +424,6 @@ test("cards show the question as plain text, URLs in the link color but not as l
   );
 });
 
-test("the Bookmarks view lists only bookmarked threads, archived ones last", () => {
-  const query = { nodeId: "node", treeId: "tree", parentNodeId: null, inline: false, prompt: "Bookmarked question", adapter: "codex", status: "complete" as const, createdAt: 100 };
-  const other = { ...query, nodeId: "other-node", treeId: "other", prompt: "Unbookmarked question" };
-  const bookmarked = { ...tree, bookmarked: true };
-  const items = [
-    { ...savedLink, prompt: "https://example.com/saved", createdAt: 300 },
-    other,
-    query,
-  ];
-  const html = renderFeed({
-    view: { kind: "bookmarks" },
-    items,
-    researchTrees: [
-      bookmarked,
-      { ...tree, id: "other", rootNodeId: "other-node", bookmarked: false },
-      { ...bookmarked, id: "archived", title: "Archived bookmark", archivedAt: 9 },
-    ],
-    setupGuide: createElement("div", null, "Setup guide"),
-  });
-  assert.match(html, /research-feed-header-title[^>]*>Bookmarks</);
-  assert.match(html, /aria-label="Refresh Bookmarks"/);
-  assert.match(html, /Bookmarked question/);
-  assert.ok(html.indexOf("Bookmarked question") > 0);
-  assert.ok(html.indexOf("Bookmarked question") < html.indexOf("Archived bookmark"));
-  assert.doesNotMatch(html, /Unbookmarked question/);
-  assert.doesNotMatch(html, /example.com\/saved/);
-  assert.doesNotMatch(html, /Setup guide/);
-
-  const empty = renderFeed({ view: { kind: "bookmarks" }, items, researchTrees: [tree] });
-  assert.match(empty, /No bookmarks\. Choose Bookmark in a question&#x27;s … menu to keep it here\./);
-
-  const home = renderFeed({ items, researchTrees: [bookmarked] });
-  assert.match(home, /Unbookmarked question/);
-
-  // Bookmarks follow the folders' (flat tree) order, not recency.
-  const ordered = renderFeed({
-    view: { kind: "bookmarks" },
-    items: [
-      { ...query, treeId: "tree", prompt: "Older but first", createdAt: 100 },
-      { ...query, nodeId: "n2", treeId: "second", prompt: "Newer but second", createdAt: 500 },
-    ],
-    researchTrees: [bookmarked, { ...bookmarked, id: "second", rootNodeId: "n2" }],
-  });
-  assert.ok(ordered.indexOf("Older but first") < ordered.indexOf("Newer but second"));
-});
-
 test("Home lists Unfiled trees in the tree order; a card whose root is not loaded shows its title", () => {
   const html = renderFeed({
     items: [
@@ -527,7 +480,7 @@ test("Home offers report import", () => {
   assert.match(html, /aria-label="Import \.md report"/);
   assert.ok(html.indexOf('aria-label="Refresh Home"') < html.indexOf('aria-label="Import .md report"'));
   assert.match(html, /accept=".md,text\/markdown"/);
-  assert.doesNotMatch(renderFeed({ view: { kind: "bookmarks" }, onImportReport: asyncNoop }), /Import \.md report/);
+  assert.doesNotMatch(renderFeed({ view: { kind: "drafts" }, onImportReport: asyncNoop }), /Import \.md report/);
 });
 
 test("a network post is an untitled card showing its body", () => {
@@ -547,8 +500,7 @@ test("a network post is an untitled card showing its body", () => {
   assert.doesNotMatch(html, /We moved in March\.|7 replies/);
 });
 
-test("Bookmarks and Archive have no ask box; Home keeps it", () => {
+test("Archive has no ask box; Home keeps it", () => {
   assert.doesNotMatch(renderFeed({ view: { kind: "archive" } }), /Query composer/);
-  assert.doesNotMatch(renderFeed({ view: { kind: "bookmarks" } }), /Query composer/);
   assert.match(renderFeed({}), /Query composer/);
 });

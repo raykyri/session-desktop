@@ -234,8 +234,8 @@ interface ResearchThreadPageProps {
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
-  /** The whole question's Bookmark and Move to actions, which the
-   * root level's answer menus list below their own actions. */
+  /** The whole question's Move to actions, which the root level's answer
+   * menus list below their own actions. */
   treeMenu?: ResearchThreadTreeMenu;
 }
 

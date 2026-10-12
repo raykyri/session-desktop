@@ -423,8 +423,8 @@ export function useResearchNavigation(
       return next;
     });
   }, [recentActivityItemsRef, setActiveResearchDetail, setRecentActivityItems, setResearchActivity]);
-  /** Loads the feed roots of trees listed in Home or Bookmarks whose root is
-   * not loaded. A response that an event or refresh made stale is fetched
+  /** Loads the feed roots of trees listed in Home whose root is not
+   * loaded. A response that an event or refresh made stale is fetched
    * again. */
   const loadActivityForTrees = useCallback(async (treeIds: string[]) => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
