@@ -122,6 +122,12 @@ test("messages columns keep their own scroll offsets, keyed by the level's head 
   assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000), 480);
   assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "messages"), 90);
   assert.equal(restoreResearchScrollPosition(navigation, "branch-head", 2_000, "messages"), 0);
+  // A branches column's offset is keyed by the head of the level its
+  // branches come from, apart from that level's messages column.
+  recordResearchScrollPosition(navigation, "root-node", 260, 1_000, "branches");
+  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "branches"), 260);
+  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "messages"), 90);
+  assert.deepEqual(navigation.branchesScrollBySource, { "root-node": { top: 260, updatedAt: 1_000 } });
 });
 
 test("research scroll positions expire at 15 minutes", () => {

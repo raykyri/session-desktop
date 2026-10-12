@@ -78,8 +78,8 @@ export function revealResearchColumns(
 
 /** Align the final column to the right after a level changes, then adjust the
  * position to keep `focusId` visible. `skipPending` aligns the column before
- * a pending branch instead, leaving that branch's column off screen when it
- * does not fit (see researchStripSettleLeft). */
+ * a branches column that holds only an unsent branch instead, leaving that
+ * column off screen when it does not fit (see researchStripSettleLeft). */
 export function settleResearchStrip(
   row: HTMLElement | null,
   focusId: ResearchColumnId | null,
@@ -91,6 +91,7 @@ export function settleResearchStrip(
     id: element.dataset.researchColumn ?? "",
     left: element.offsetLeft,
     width: element.offsetWidth,
+    pendingOnly: element.hasAttribute("data-research-pending-only"),
   }));
   const left = researchStripSettleLeft(columns, row.clientWidth, focusId, skipPending);
   if (left === null) return;
@@ -343,12 +344,14 @@ export default function ResearchColumns({
       focusOpenedThread: (deepest) => {
         const started = performance.now();
         const attempt = () => {
-          // The messages-side columns (a level's messages or thread column,
-          // or a draft), left to right. A new branch restored with the
-          // thread is not focused.
+          // The messages-side columns (a level's messages, thread or
+          // branches column, or a draft), left to right. A branches column
+          // with no open branch has no selected row and is passed over, so a
+          // new branch restored with the thread is not focused.
           const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter(
             (element) =>
-              isMessagesColumnId(element.dataset.researchColumn) && !element.dataset.researchColumn?.startsWith("P"),
+              isMessagesColumnId(element.dataset.researchColumn) &&
+              !(element.classList.contains("is-branches") && !element.querySelector(COLUMN_ROW_SELECTOR)),
           );
           const column = deepest ? columns[columns.length - 1] : columns[0];
           const target = column?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR);

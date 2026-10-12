@@ -14,6 +14,9 @@ const FOCUS_REQUEST_TTL_MS = 2_000;
 export type ResearchFocusTarget =
   | { kind: "row"; level: number }
   | { kind: "answer"; level: number }
+  /** The branches column T{level}: its selected message's row, else its
+   * first row. */
+  | { kind: "branches"; level: number }
   | { kind: "marker"; level: number; key: string }
   | { kind: "composer"; key: string }
   | { kind: "editor" }
@@ -75,6 +78,15 @@ export function useResearchFocusRequests({
       switch (target.kind) {
         case "row":
           return selectedRow(target.level);
+        case "branches": {
+          const column = pairColumn("messages", target.level);
+          return (
+            selectedRow(target.level) ??
+            column?.querySelector<HTMLElement>("[data-research-row][tabindex='0']") ??
+            column?.querySelector<HTMLElement>("[data-research-row]") ??
+            null
+          );
+        }
         case "answer":
           return (
             pairColumn("answer", target.level)?.querySelector<HTMLElement>(":scope > .research-column-scroll") ??
@@ -124,7 +136,12 @@ export function useResearchFocusRequests({
     focusRequestRef.current = null;
     element.focus({ preventScroll: true });
     if (request.target.kind !== "answer" && request.target.kind !== "editor" && request.target.kind !== "note") {
-      scrollIntoColumn(element, request.target.kind === "composer" ? researchScrollBehavior() : "auto");
+      // A row of a branches column brings its whole group into view (its
+      // source first) when the group fits; otherwise the row.
+      const group = request.target.kind === "row" ? element.closest<HTMLElement>(".research-branch-group") : null;
+      const scroller = group?.closest<HTMLElement>(".research-column-scroll");
+      const fits = Boolean(group && scroller && group.offsetHeight <= scroller.clientHeight);
+      scrollIntoColumn(fits && group ? group : element, request.target.kind === "composer" ? researchScrollBehavior() : "auto");
     }
     const strip = columnsLayoutRef.current?.row ?? null;
     const columnId = columnIdOf(element);

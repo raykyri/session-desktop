@@ -6,7 +6,7 @@ import {
   researchCycleColumn,
   researchCycleDirection,
 } from "../src/lib/researchSiblingCycle";
-import { researchStrip, type ResearchColumnId } from "../src/lib/researchColumns";
+import { columnMessageIds, researchStrip, type ResearchColumnId } from "../src/lib/researchColumns";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
@@ -65,7 +65,16 @@ test("the cycled column is the one last interacted with when it has rows", () =>
   assert.equal(researchCycleColumn(candidates, "placeholder"), "feed");
 });
 
-test("an answer column cycles its level's messages column", () => {
+/** The columns ⌃Tab can cycle, as useResearchPairsKeyboard lists them
+ * (without follow-ups columns, which these strips do not have). */
+const cycleCandidates = (strip: ReturnType<typeof researchStrip>) =>
+  strip.columns.flatMap((column) =>
+    column.role === "messages" || (column.role === "branches" && columnMessageIds(column).length > 0)
+      ? [column.id]
+      : [],
+  );
+
+test("an answer column cycles its level's messages column, and a branch's answer the branches column", () => {
   // A root with an inline follow-up, and a branch from the follow-up.
   const nodes = [
     node("root"),
@@ -77,7 +86,8 @@ test("an answer column cycles its level's messages column", () => {
     strip.columns.map((column) => column.id),
     ["T0", "A0", "T1", "A1"],
   );
-  const candidates = strip.columns.filter((column) => column.role === "messages").map((column) => column.id);
+  assert.deepEqual(strip.columns.map((column) => column.role), ["messages", "answer", "branches", "answer"]);
+  const candidates = cycleCandidates(strip);
   assert.equal(researchCycleColumn(candidates, "A0"), "T0");
   assert.equal(researchCycleColumn(candidates, "A1"), "T1");
 });
@@ -88,11 +98,13 @@ test("a column without rows falls back to the nearest column with rows to its le
   const pending = researchStrip(nodes, "branch", { parentNodeId: "branch", anchor: null }, "root");
   assert.deepEqual(
     pending.columns.map((column) => column.id),
-    ["T0", "A0", "E0", "T1", "A1", "P2"],
+    ["T0", "A0", "E0", "T1", "A1", "T2"],
   );
-  const candidates = pending.columns.filter((column) => column.role === "messages").map((column) => column.id);
+  // T2 holds only the unsent branch: it has no rows to cycle.
+  const candidates = cycleCandidates(pending);
+  assert.deepEqual(candidates, ["T0", "T1"]);
   assert.equal(researchCycleColumn(candidates, "E0"), "T0");
-  assert.equal(researchCycleColumn(candidates, "P2"), "T1");
+  assert.equal(researchCycleColumn(candidates, "T2"), "T1");
   // A level that closed since: the nearest remaining column to its left.
   assert.equal(researchCycleColumn(candidates, "T4"), "T1");
   assert.equal(researchCycleColumn(candidates, "A3"), "T1");

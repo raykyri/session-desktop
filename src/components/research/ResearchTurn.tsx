@@ -690,6 +690,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   label,
   showPrompt,
   selected,
+  focusable = false,
   starrable,
   retryQueued = false,
   branchCount,
@@ -711,6 +712,9 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** Documents and conversations carry no question: the row shows `label`. */
   showPrompt: boolean;
   selected: boolean;
+  /** In the tab order although not selected: the first row of a branches
+   * column with no selected message. */
+  focusable?: boolean;
   /** The message can be starred (root follow-ups and a branch's first
    * message); a starred one shows a filled star in its meta line. */
   starrable: boolean;
@@ -751,7 +755,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   const glyph = researchMessageRowHasGlyph(kind, state) ? (
     <ResearchRowGlyph kind={kind} state={state} />
   ) : null;
-  const tabIndex = selected ? 0 : -1;
+  const tabIndex = selected || focusable ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
   const showBranches = settled && branchCount > 0;
   // The row's context menu is its … menu, so a row without the … button (a

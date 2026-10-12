@@ -51,7 +51,7 @@ import {
   sameResearchStrip,
   type ResearchColumn,
   type ResearchColumnId,
-  type ResearchPendingColumn,
+  type ResearchStackGroup,
 } from "../../lib/researchColumns";
 import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 import {
@@ -104,10 +104,12 @@ import { rangeForTextOffsets } from "./researchTextRanges";
 import { ResearchDeleteBranchDialog, ResearchRenameDialog, ResearchRerunDialog } from "./ResearchThreadDialogs";
 import { ResearchSelectionToolbar } from "./ResearchSelectionToolbar";
 import {
+  ResearchBranchesColumn,
   ResearchChainComposer,
   ResearchMessagesColumn,
-  ResearchNewBranchColumn,
+  ResearchNewBranchComposer,
   type ResearchBranchSourceProps,
+  type ResearchChainRowsShared,
   type ResearchMessageRowActions,
   type ResearchQueueProps,
 } from "./ResearchMessagesColumn";
@@ -221,8 +223,8 @@ interface ResearchThreadPageProps {
 
 export type { ResearchThreadTreeMenu };
 
-/** A new branch being written: the pair after its parent's level shows the
- * passage and an ask box; the branch is created when its first question is
+/** A new branch being written: a group in the branches column after its
+ * parent's level shows the passage and an ask box; the branch is created when its first question is
  * sent. `anchor` is null for a branch from the whole answer. */
 interface PendingBranch {
   parentNodeId: string;
@@ -425,10 +427,9 @@ function ResearchThreadPage({
   const levelPathRef = useRef(levelPath);
   levelPathRef.current = levelPath;
   const deepestSelection = useMemo(() => levelPath.slice(-1), [levelPath]);
-  // A pending branch belongs after the level that shows its parent selected.
-  const pendingColumn =
-    strip.columns.find((column): column is ResearchPendingColumn => column.role === "pending") ?? null;
-  const activePending = pendingColumn ? pending : null;
+  // A pending branch is shown after the level that shows its parent selected.
+  const pendingGroup = strip.pending;
+  const activePending = pendingGroup ? pending : null;
 
   // Answers on screen: each level's selected message, plus the message whose
   // … menu is open (its details need the answer).
@@ -788,7 +789,7 @@ function ResearchThreadPage({
   }, [createdNodes, detail, persistSelection, requestFocus, selectedNodeId, treeId]);
 
   /** Opens a new branch on `anchor` (a passage) or on the whole answer of
-   * `parentNodeId`, as the pair after the parent's level. Its ask box takes
+   * `parentNodeId`, as a group in the branches column after the parent's level. Its ask box takes
    * focus. */
   const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null) => {
@@ -906,12 +907,12 @@ function ResearchThreadPage({
   const { restoredAnswerScrollRef, onColumnScroll, captureScroll } = useResearchColumnScroll({
     treeId,
     navigationPersistence,
-    levels,
+    columns: strip.columns,
     levelPath,
     contentByNode,
     contentErrorByNode,
     pairColumn,
-    selectedRow,
+    workspaceRef,
   });
   captureScrollRef.current = captureScroll;
 
@@ -1930,7 +1931,7 @@ function ResearchThreadPage({
 
   const rootNode = nodeById.get(rootNodeId) ?? null;
   const treeTitleText = detail.tree.title;
-  const lastLevel = pendingColumn?.levelIndex ?? levelPath.length - 1;
+  const lastLevel = pendingGroup?.levelIndex ?? levelPath.length - 1;
   // The feed holding focus leaves no level current.
   const focusedLevel = focusedColumnId === "feed" ? -1 : columnLevelIndex(focusedColumnId);
   const currentLevel =
@@ -1965,7 +1966,9 @@ function ResearchThreadPage({
     resolves: branch
       ? branchRangeOffsetsRef.current.some((entry) => entry.id === branch.id)
       : Boolean(anchor),
-    parentLoaded: Boolean(contentByNode[parentId]),
+    // Passages resolve only in answers on screen: a branches column lists
+    // branches of messages whose answer is not shown.
+    parentLoaded: Boolean(contentByNode[parentId]) && levelPath.includes(parentId),
   });
 
   /** The queue of the chain headed by `headId` and its items' actions. */
@@ -2003,9 +2006,90 @@ function ResearchThreadPage({
     };
   };
 
+  // The rows of every messages and branches column.
+  const rowsShared: ResearchChainRowsShared = {
+    archived,
+    treeTitle: treeTitleText,
+    nodeById,
+    branchesByParent,
+    queuedRetries,
+    answerMenuOpenId:
+      menu?.kind === "answer" && menu.trigger && !menu.trigger.matches(".research-head-menu") ? menu.nodeId : null,
+    isUnread,
+    rowActions: messageRowActions,
+  };
+
+  /** The … menu of the chain headed by `headId`, in a column header or a
+   * branch group's source block. */
+  const headMenu = (headId: string, label: string) => ({
+    label,
+    open:
+      menu?.kind === "answer" && menu.nodeId === headId && Boolean(menu.trigger?.matches(".research-head-menu")),
+    onOpen: (trigger: HTMLButtonElement) => openAnswerMenu(trigger, headId),
+  });
+
+  /** The ask box of the chain headed by `headId` (none for a note's chain);
+   * `hinted` shows its ⌘J hint. */
+  const chainComposer = (headId: string, level: number, hinted: boolean) => {
+    const chain = inlineChainFor(nodes, headId)
+      .map((id) => nodeById.get(id))
+      .filter((node): node is ResearchNode => Boolean(node));
+    if (chain.length === 0 || nodeType(chain[0]) === "post") {
+      return null;
+    }
+    const editingId = editingByHead[headId];
+    const cancelEditing = () => {
+      setEditingByHead((current) => withoutKeys(current, [headId]));
+      setComposerText((current) => ({ ...current, [headId]: "" }));
+      requestFocus({ kind: "composer", key: headId }, "none");
+    };
+    return (
+      <ResearchChainComposer
+        nodes={nodes}
+        chain={chain}
+        level={level}
+        editing={Boolean(editingId)}
+        queued={(queues[headId] ?? EMPTY_QUEUE).length > 0}
+        archived={archived}
+        value={composerText[headId] ?? ""}
+        submitting={submittingKey === headId}
+        shortcutHint={shortcutHintsShown && hinted ? "⌘J" : null}
+        requireCmdEnter={requireCmdEnterToSend}
+        composerRef={registerComposer(headId)}
+        onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
+        onSubmit={() => void submitComposer(headId)}
+        onSubmitBranch={() => void submitComposer(headId, { branch: true })}
+        onCancelEditing={cancelEditing}
+      />
+    );
+  };
+
+  /** A branches column group's ask box: the branch's, or the unsent
+   * branch's first question. ⌘J goes to the open (or unsent) branch's. */
+  const groupComposer = (group: ResearchStackGroup, level: number, columnCurrent: boolean) => {
+    if (group.kind === "branch") {
+      return chainComposer(group.headId, level, columnCurrent && group.selectedId !== null);
+    }
+    const pendingKey = `pending:${group.parentNodeId}`;
+    return (
+      <ResearchNewBranchComposer
+        group={group}
+        archived={archived}
+        value={composerText[pendingKey] ?? ""}
+        submitting={submittingKey === pendingKey}
+        shortcutHint={shortcutHintsShown && columnCurrent ? "⌘J" : null}
+        requireCmdEnter={requireCmdEnterToSend}
+        composerRef={registerComposer(pendingKey)}
+        onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
+        onSubmit={() => void submitPendingBranch()}
+        onCancel={cancelPending}
+      />
+    );
+  };
+
   /** One column of the strip. A post root (a note) is its note column and
-   * its follow-ups column; a level's messages and answer are two; the unsent
-   * branch is the pending column. */
+   * its follow-ups column; a level's messages and answer are two; the branches
+   * column after a level stacks its branches and the unsent branch. */
   const renderColumn = (column: ResearchColumn) => {
     switch (column.role) {
       case "post": {
@@ -2072,17 +2156,8 @@ function ResearchThreadPage({
         );
       }
       case "messages": {
-        const { index: level, chainIds, headId } = column.level;
+        const { index: level, headId } = column.level;
         const head = nodeById.get(headId);
-        const chain = chainIds
-          .map((id) => nodeById.get(id))
-          .filter((node): node is ResearchNode => Boolean(node));
-        const editingId = editingByHead[headId];
-        const cancelEditing = () => {
-          setEditingByHead((current) => withoutKeys(current, [headId]));
-          setComposerText((current) => ({ ...current, [headId]: "" }));
-          requestFocus({ kind: "composer", key: headId }, "none");
-        };
         return (
           <ResearchMessagesColumn
             key={columnKey(column)}
@@ -2092,43 +2167,41 @@ function ResearchThreadPage({
             history={level === 0 ? historyNav : null}
             // Provenance: a transcript came from a terminal session.
             imported={level === 0 && rootNode?.type === "document" && rootNode.source === "transcript"}
-            archived={archived}
-            treeTitle={treeTitleText}
-            nodeById={nodeById}
-            branchesByParent={branchesByParent}
+            shared={rowsShared}
             branchOpen={levelPath.length > level + 1 || activePending?.parentNodeId === column.level.selectedId}
-            queuedRetries={queuedRetries}
-            menu={head ? {
-              label: level === 0 ? "Thread actions" : "Branch actions",
-              open: menu?.kind === "answer" && menu.nodeId === headId && Boolean(menu.trigger?.matches(".research-head-menu")),
-              onOpen: (trigger) => openAnswerMenu(trigger, headId),
-            } : null}
-            answerMenuOpenId={menu?.kind === "answer" && menu.trigger && !menu.trigger.matches(".research-head-menu") ? menu.nodeId : null}
-            isUnread={isUnread}
-            rowActions={messageRowActions}
+            menu={head ? headMenu(headId, level === 0 ? "Thread actions" : "Branch actions") : null}
             source={level > 0 && head?.parentNodeId ? branchSource(passageAnchor(head), head.parentNodeId, head) : null}
-            composer={
-              chain.length > 0 && nodeType(chain[0]) !== "post" ? (
-                <ResearchChainComposer
-                  nodes={nodes}
-                  chain={chain}
-                  level={level}
-                  editing={Boolean(editingId)}
-                  queued={(queues[headId] ?? EMPTY_QUEUE).length > 0}
-                  archived={archived}
-                  value={composerText[headId] ?? ""}
-                  submitting={submittingKey === headId}
-                  shortcutHint={shortcutHintsShown && currentLevel === level ? "⌘J" : null}
-                  requireCmdEnter={requireCmdEnterToSend}
-                  composerRef={registerComposer(headId)}
-                  onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
-                  onSubmit={() => void submitComposer(headId)}
-                  onSubmitBranch={() => void submitComposer(headId, { branch: true })}
-                  onCancelEditing={cancelEditing}
-                />
-              ) : null
-            }
+            composer={chainComposer(headId, level, currentLevel === level)}
             queue={chainQueue(headId)}
+            onScroll={onColumnScroll(column)}
+          />
+        );
+      }
+      case "branches": {
+        const level = column.levelIndex;
+        const columnCurrent = currentLevel === level;
+        return (
+          <ResearchBranchesColumn
+            key={columnKey(column)}
+            column={column}
+            current={columnCurrent}
+            shared={rowsShared}
+            branchOpen={
+              levelPath.length > level + 1 ||
+              (column.level !== null && activePending?.parentNodeId === column.level.selectedId)
+            }
+            sourceOf={(group) => ({
+              ...(group.kind === "branch"
+                ? branchSource(group.anchor, group.sourceId, nodeById.get(group.headId) ?? null)
+                : branchSource(group.anchor, group.parentNodeId, null)),
+              from: researchNodeLabel(
+                nodeById.get(group.kind === "branch" ? group.sourceId : group.parentNodeId),
+                treeTitleText,
+              ),
+            })}
+            menuOf={(headId) => headMenu(headId, "Branch actions")}
+            composerOf={(group) => groupComposer(group, level, columnCurrent)}
+            queueOf={chainQueue}
             onScroll={onColumnScroll(column)}
           />
         );
@@ -2195,26 +2268,6 @@ function ResearchThreadPage({
             onCancel={closeEditor}
             onSave={() => void saveEditor()}
             onAskAsQuestion={() => void askEditorAsQuestion()}
-          />
-        );
-      }
-      case "pending": {
-        const pendingKey = `pending:${column.parentNodeId}`;
-        return (
-          <ResearchNewBranchColumn
-            key={columnKey(column)}
-            column={column}
-            current={currentLevel === column.levelIndex}
-            archived={archived}
-            source={branchSource(column.anchor, column.parentNodeId, null)}
-            value={composerText[pendingKey] ?? ""}
-            submitting={submittingKey === pendingKey}
-            shortcutHint={shortcutHintsShown && currentLevel === column.levelIndex ? "⌘J" : null}
-            requireCmdEnter={requireCmdEnterToSend}
-            composerRef={registerComposer(pendingKey)}
-            onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
-            onSubmit={() => void submitPendingBranch()}
-            onCancel={cancelPending}
           />
         );
       }

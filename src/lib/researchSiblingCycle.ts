@@ -52,26 +52,27 @@ export function cycleIndex(count: number, index: number, direction: ResearchCycl
 }
 
 /** A column's position in the strip, left to right: Nn, Tn, An, En for level
- * n. An unsent branch's Pn takes the slot level n's note column would have,
- * after level n - 1's columns. A note's editor (E0) is shown in the note
+ * n (a branches column after level n - 1 is Tn, so it ranks after En - 1).
  * column's place but ranks after the follow-ups column, so ⌃Tab in it cycles
  * the follow-ups rather than the feed, which would switch threads while the
  * note is being edited. Null for the feed, the placeholder and unknown ids. */
 function stripRank(id: string): number | null {
-  const match = /^([NPTAE])(\d+)$/.exec(id);
+  const match = /^([NTAE])(\d+)$/.exec(id);
   if (!match) {
     return null;
   }
-  const slot = { N: 0, P: 0, T: 1, A: 2, E: 3 }[match[1] as "N" | "P" | "T" | "A" | "E"];
+  const slot = { N: 0, T: 1, A: 2, E: 3 }[match[1] as "N" | "T" | "A" | "E"];
   return Number(match[2]) * 4 + slot;
 }
 
 /** The column whose rows ⌃Tab cycles. `candidates` are the strip's columns
- * that have rows (messages columns, and follow-ups columns with at least one
- * row). The column last interacted with is used when it is one; an answer
- * column cycles its level's messages column, and any other column without
- * rows (a post, an editor, a pending branch, a draft) falls back to the
- * nearest candidate to its left. A column with no candidate to its left, the
+ * that have rows (messages columns, branches columns with at least one
+ * created branch, and follow-ups columns with at least one row). The column
+ * last interacted with is used when it is one; an answer column cycles its
+ * level's messages (or branches) column, and any other column without rows
+ * (a post, an editor, a branches column holding only an unsent branch, a
+ * draft) falls back to the nearest candidate to its left. A column with no
+ * candidate to its left, the
  * feed, the placeholder, or no column at all, cycles the feed. */
 export function researchCycleColumn(
   candidates: readonly ResearchColumnId[],

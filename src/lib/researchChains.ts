@@ -89,6 +89,23 @@ function inlineChildByParent(nodes: readonly ResearchNode[]): Map<string, Resear
   return byParent;
 }
 
+/** The chains headed by many branch heads, from one index of the inline
+ * children: the returned function lists a head and the inline follow-ups
+ * after it, oldest first. A branch head is not inline, so its chain starts
+ * at it; the walk is cycle-guarded like inlineChainFor. */
+export function inlineChainsFromHeads(nodes: readonly ResearchNode[]): (headId: string) => string[] {
+  const childByParent = inlineChildByParent(nodes);
+  return (headId) => {
+    const chain = [headId];
+    const seen = new Set(chain);
+    for (let next = childByParent.get(headId); next && !seen.has(next.id); next = childByParent.get(next.id)) {
+      seen.add(next.id);
+      chain.push(next.id);
+    }
+    return chain;
+  };
+}
+
 /** Ordered node ids of the inline chain containing nodeId: walk up parent
  * links while the current node is inline, then down through inline children.
  * Every node is a chain of at least itself. Cycle-guarded with visited sets

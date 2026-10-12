@@ -14,6 +14,7 @@ import {
   COLUMN_ROW_SELECTOR,
   columnIdOf,
   columnLevelIndex,
+  columnMessageIds,
   columnSelector,
   type ResearchColumnId,
   type ResearchLevel,
@@ -170,14 +171,25 @@ export function useResearchPairsKeyboard({
   }, []);
 
   /** → from level `level`: into the open (or first) branch of its answer;
-   * with no branches, into the answer. */
+   * an unsent branch's ask box; with no branches of the selected message,
+   * the first row of the level's branches column, which selects nothing;
+   * with no branches at all, the message keeps focus. */
   const rightFrom = useCallback(
     (level: number) => {
-      const levels = stripRef.current.levels;
+      const strip = stripRef.current;
+      const levels = strip.levels;
       const siblings = siblingsAt(levels[level]);
-      // The last pair: the answer is already beside the message, so focus
-      // stays on the message and ↑/↓ keep moving between messages.
+      if (strip.pending?.levelIndex === level + 1) {
+        requestFocus({ kind: "composer", key: `pending:${strip.pending.parentNodeId}` }, "settle");
+        return;
+      }
       if (siblings.length === 0) {
+        if (strip.columns.some((column) => column.role === "branches" && column.levelIndex === level + 1)) {
+          requestFocus({ kind: "branches", level: level + 1 }, "settle");
+          return;
+        }
+        // The last pair: the answer is already beside the message, so focus
+        // stays on the message and ↑/↓ keep moving between messages.
         requestFocus({ kind: "row", level }, "settle");
         return;
       }
@@ -190,10 +202,10 @@ export function useResearchPairsKeyboard({
     [goBranch, requestFocus, siblingsAt],
   );
 
-  /** Keys in the pairs: ↑/↓ move between messages (and, at a branch
-   * column's first or last message, to the previous or next branch of the
-   * same answer), Enter opens a message's answer, → selects a row in the
-   * branch column (or, in the last pair, selects the message and keeps focus
+  /** Keys in the pairs: ↑/↓ move between messages (across the groups of a
+   * branches column; at a note follow-up's first or last message, to the
+   * previous or next follow-up), Enter opens a message's answer, → selects a
+   * row in the branches column (or, in the last pair, selects the message and keeps focus
    * on it), ← goes to the parent message (or the feed). */
   const onPairsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
@@ -287,14 +299,24 @@ export function useResearchPairsKeyboard({
     if (target.matches("[data-research-row]")) {
       const nodeId = target.dataset.nodeId ?? "";
       const levels = stripRef.current.levels;
-      const level = columnLevelIndex(columnIdOf(target)) ?? -1;
-      if (!levels[level]) {
+      const columnId = columnIdOf(target);
+      const level = columnLevelIndex(columnId) ?? -1;
+      const stripColumn = stripRef.current.columns.find((candidate) => candidate.id === columnId);
+      if (!stripColumn || (stripColumn.role !== "messages" && stripColumn.role !== "branches")) {
         return;
       }
       const column = target.closest<HTMLElement>(columnSelector());
+      // A branches column's rows are every group's, top to bottom.
       const rows = [...(column?.querySelectorAll<HTMLElement>("[data-research-row]") ?? [])];
       const index = rows.indexOf(target);
-      if ((key === "ArrowDown" || key === "ArrowUp") && level > 0 && (key === "ArrowUp" ? index === 0 : index === rows.length - 1)) {
+      // A note's follow-up: at its first or last message, ↑/↓ go to the
+      // note's previous or next follow-up.
+      if (
+        stripColumn.role === "messages" &&
+        (key === "ArrowDown" || key === "ArrowUp") &&
+        level > 0 &&
+        (key === "ArrowUp" ? index === 0 : index === rows.length - 1)
+      ) {
         const siblings = siblingsAt(levels[level - 1]);
         const head = levels[level].headId;
         const at = siblings.findIndex((branch) => branch.id === head);
@@ -423,6 +445,7 @@ export function useResearchPairsKeyboard({
       const strip = stripRef.current;
       const candidates = strip.columns.flatMap((column) =>
         column.role === "messages" ||
+        (column.role === "branches" && columnMessageIds(column).length > 0) ||
         (column.role === "thread" && columnElement(column.id)?.querySelector("[data-research-thread-row]"))
           ? [column.id]
           : [],
@@ -430,17 +453,20 @@ export function useResearchPairsKeyboard({
       const targetId = researchCycleColumn(candidates, request.column);
       const column = strip.columns.find((candidate) => candidate.id === targetId);
       const element = targetId === "feed" ? null : columnElement(targetId);
-      if (!column || !element || (column.role !== "messages" && column.role !== "thread")) {
+      if (!column || !element || (column.role !== "messages" && column.role !== "thread" && column.role !== "branches")) {
         return false;
       }
-      const level = column.level.index;
+      const level = column.role === "branches" ? column.levelIndex : column.level.index;
       const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const stripRow = columnsLayoutRef.current?.row ?? null;
-      if (column.role === "messages") {
-        const ids = column.level.displayIds;
+      if (column.role === "messages" || column.role === "branches") {
+        // A branches column cycles through every group's messages, top to
+        // bottom; selecting one opens its branch.
+        const ids = columnMessageIds(column);
+        const selectedId = column.role === "messages" ? column.level.selectedId : (column.level?.selectedId ?? "");
         const focusedId =
           active?.matches("[data-research-row]") && element.contains(active) ? active.dataset.nodeId : undefined;
-        const nextId = ids[cycleIndex(ids.length, ids.indexOf(focusedId ?? column.level.selectedId), request.direction)];
+        const nextId = ids[cycleIndex(ids.length, ids.indexOf(focusedId ?? selectedId), request.direction)];
         if (!nextId) {
           return true;
         }

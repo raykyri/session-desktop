@@ -713,7 +713,7 @@
    column's right border) so the answer column's right border stays
    visible. The answer's own header takes the same fill, so where that
    border is transparent (another pair follows) the 1px left over matches. */
-.research-pair-messages:not(.is-pending, .research-draft-view) > .research-column-header {
+.research-pair-messages:not(.is-closed, .research-draft-view) > .research-column-header {
   z-index: 1;
   width: calc(var(--research-messages-width) + var(--research-answer-width) - 2px);
   background: var(--research-feed-bg);
@@ -1181,9 +1181,51 @@
   color: var(--text-faint);
 }
 
+.research-branch-source-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .research-branch-source-quote {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* In a branches column: the name of the message the branch was asked from,
+   on one line above the passage. */
+.research-branch-source-from {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: calc(11.5px + var(--font-ui-size-offset));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-branch-source > .research-branch-group-menu {
+  flex: none;
+  margin: -3px -6px -3px 0;
+}
+
+/* A branches column stacks one group per branch: its source block, messages
+   and ask box. A rule separates the groups. */
+.research-branch-group + .research-branch-group {
+  border-top: 1px solid var(--surface-border-strong);
+}
+
+.research-branch-group > .research-msg-list {
+  padding-top: 10px;
+}
+
+.research-branch-group > .research-msg-list + .research-composer-wrap {
+  padding-top: 8px;
+  padding-bottom: 14px;
+}
+
+.research-branch-group.is-open > .research-branch-source,
+.research-branch-group.is-pending > .research-branch-source {
+  color: var(--text-secondary);
 }
 
 .research-branch-source-quote i {
