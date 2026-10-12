@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -129,11 +130,67 @@ test("inline previews drop widget HTML entirely", () => {
   assert.ok(render("Use `npm test`.", true, true).includes("npm test"));
 });
 
-test("the frame chrome adds no text to the answer's text projection", () => {
-  const html = render(WIDGET);
-  assert.match(html, /data-research-widget=""/);
-  // Projection excludes the entire widget subtree, including its actions.
-  // DOM range behavior is covered in widgetAnnotations.test.ts.
+test("widget chrome stays out of the projection, find and copy, and labels the agent's title", async () => {
+  const { withWidgetDom } = await import("./widgetDom");
+  const { act } = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const { WidgetAnswerContext } = await import("../src/lib/sessionWidgetActions");
+  const { isSearchableText } = await import("../src/lib/transcriptSearch");
+  const { researchTextProjection } = await import("../src/components/research/researchTextRanges");
+  await withWidgetDom(async (window) => {
+    const agentTitle = "Settings\nSaved ✓ Your session expired, sign in again";
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args: { input?: { title?: string } }) => {
+      if (command === "research_widget_prepare") return { staticUrl: "http://127.0.0.1:1234/w", runUrl: "http://127.0.0.1:1234/r" };
+      if (command === "research_artifact_register") return {
+        artifactId: "chart", title: "Settings Saved ✓ Your session expired, sign in again", treeId: "t", nodeId: "n", slot: "s",
+        revision: "a".repeat(64), contentHash: "b".repeat(64), parentRevision: null, html: "", createdAt: 1, unresolvedParent: false,
+        echoed: args.input?.title,
+      };
+      if (command === "research_artifact_state_get") return { enabled: false, value: null };
+      throw new Error(`unexpected ${command}`);
+    } } });
+    const markdown = `Before.\n\n\`\`\`session-html id=chart title=${JSON.stringify(agentTitle)}\n${WIDGET.split("\n").slice(1, -1).join("\n")}\n\`\`\`\n\nAfter.`;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(WidgetAnswerContext.Provider, { value: { nodeId: "n", treeId: "t", messageKey: "m", answer: markdown } },
+        createElement(TranscriptMarkdown, { text: markdown, widgets: true }))));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+      const figure = container.querySelector(".session-widget")!;
+      const heading = figure.querySelector(".session-artifact-title")!;
+      assert.equal(heading.textContent, "Widget: Settings Saved ✓ Your session expired, sign in again");
+      assert.equal(heading.querySelector(".session-artifact-label")?.textContent, "Widget:");
+      // Every text node of the widget is chrome; the answer's prose is not.
+      const walker = document.createTreeWalker(figure, NodeFilter.SHOW_TEXT);
+      const texts: Text[] = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
+      assert.ok(texts.some((node) => node.data.includes("Pinned")) && texts.some((node) => node.data === "Preview"));
+      for (const node of texts) {
+        assert.ok(node.parentElement!.closest("[data-widget-chrome]"), `chrome text ${JSON.stringify(node.data)}`);
+        assert.equal(isSearchableText(node), false, node.data);
+      }
+      const prose = [...container.querySelectorAll("p")].find((p) => p.textContent === "After.")!.firstChild!;
+      assert.equal(isSearchableText(prose), true);
+      assert.equal(researchTextProjection(container).includes("Pinned"), false);
+      // The Source view is answer content (searchable) but joins a copied
+      // selection only when the selection starts inside it.
+      const sourceButton = [...figure.querySelectorAll("button")].find((button) => button.textContent === "Source")!;
+      await act(async () => sourceButton.click());
+      const source = figure.querySelector<HTMLElement>(".session-widget-source")!;
+      assert.equal(isSearchableText(source.querySelector("code")!.firstChild!), true);
+      assert.equal(source.dataset.selectable, undefined);
+      await act(async () => { source.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true })); });
+      assert.equal(source.dataset.selectable, "");
+      await act(async () => { document.body.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true })); });
+      assert.equal(source.dataset.selectable, undefined);
+      const css = readFileSync(new URL("../src/styles/features/transcript.css", import.meta.url), "utf8");
+      assert.match(css, /\.session-widget \[data-widget-chrome\] \{[^}]*user-select: none/);
+      assert.match(css, /\.session-widget-source:not\(\[data-selectable\]\) \{[^}]*user-select: none/);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
 });
 
 test("ResearchMarkdown shows widgets only for opted-in body text with the setting on", () => {

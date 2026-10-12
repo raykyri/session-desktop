@@ -1,5 +1,5 @@
 import { researchBranchBlocker } from "../../lib/researchThreadView";
-import { memo, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import { memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   KeyRound,
@@ -69,6 +69,21 @@ function unexpectedRoleLabel(role: string) {
   return `${role || "Unknown"} content`;
 }
 
+/** The widget owner for one timeline item. Memoized on its primitive inputs:
+ * a value built inline would be a new object on every streaming tick and
+ * re-render every widget of the answer. */
+function WidgetAnswerScope({ nodeId, treeId, messageKey, blocked, answer, children }: {
+  nodeId: string;
+  treeId: string;
+  messageKey: string;
+  blocked: string | null;
+  answer: string;
+  children: ReactNode;
+}) {
+  const value = useMemo(() => ({ nodeId, treeId, messageKey, blocked, answer }), [nodeId, treeId, messageKey, blocked, answer]);
+  return <WidgetAnswerContext.Provider value={value}>{children}</WidgetAnswerContext.Provider>;
+}
+
 function ResearchMessageBlock({
   block,
   blockIndex,
@@ -83,6 +98,7 @@ function ResearchMessageBlock({
   imported?: boolean;
 }) {
   const owner = useContext(WidgetAnswerContext);
+  const blockOwner = useMemo(() => owner ? { ...owner, messageKey: `${owner.messageKey}:${blockIndex}` } : null, [owner, blockIndex]);
   if (block.type === "text") {
     // In a transcript document every turn is included as content: user
     // messages render as markdown prompts, not as unexpected-content
@@ -90,7 +106,7 @@ function ResearchMessageBlock({
     // user turn signals leakage).
     if (role === "assistant" || conversation) {
       return (
-        <WidgetAnswerContext.Provider value={owner ? { ...owner, messageKey: `${owner.messageKey}:${blockIndex}` } : null}>
+        <WidgetAnswerContext.Provider value={blockOwner}>
         <ResearchMarkdown
           text={imported ? stripImportedReportCitations(block.text) : block.text}
           oversizedContent={imported ? undefined : OVERSIZED_MARKDOWN_POLICY}
@@ -605,7 +621,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           >
             <SessionWidgetStreamingContext.Provider value={active}>
               {view.visibleTimelineItems.map((item) => (
-                <WidgetAnswerContext.Provider key={item.key} value={{ nodeId: node.id, treeId: node.treeId, messageKey: item.key, blocked: researchBranchBlocker(node, false), answer: item.blocks.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n\n") }}>
+                <WidgetAnswerScope key={item.key} nodeId={node.id} treeId={node.treeId} messageKey={item.key} blocked={researchBranchBlocker(node, false)} answer={item.blocks.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n\n")}>
                 <ResearchTimelineItem
                   item={item}
                   conversation={view.isConversation}
@@ -613,7 +629,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
                   imported={documentSource(node) === "imported"}
                   expandActivities={active}
                 />
-                </WidgetAnswerContext.Provider>
+                </WidgetAnswerScope>
               ))}
             </SessionWidgetStreamingContext.Provider>
           </div>

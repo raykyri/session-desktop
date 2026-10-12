@@ -3,7 +3,7 @@ import { withArtifactState } from "../lib/sessionArtifactState";
 import SessionArtifactStateControls from "./SessionArtifactStateControls";
 import { useResearchArtifact } from "../hooks/useResearchArtifact";
 import SessionArtifactDetails from "./SessionArtifactDetails";
-import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { Copy, Download, MessageSquare, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { downloadResearchWidget, prepareResearchWidget, type ResearchWidgetUrls } from "../lib/api";
 import { writeClipboardText } from "../lib/clipboard";
@@ -175,8 +175,8 @@ export default function SessionWidget({
       aria-label="Answer widget"
     >
       {artifact.revision ? <SessionArtifactDetails key={`${artifact.revision.artifactId}:${artifact.revision.revision}`} revision={artifact.revision} onOpen={onOpen} /> : null}
-      {artifact.error ? <div className="session-widget-feedback" role="status">{artifact.error} <button type="button" onClick={artifact.retry}>Retry saving revision</button></div> : null}
-      <div className="session-widget-bar">
+      {artifact.error ? <div className="session-widget-feedback" data-widget-chrome="" role="status">{artifact.error} <button type="button" onClick={artifact.retry}>Retry saving revision</button></div> : null}
+      <div className="session-widget-bar" data-widget-chrome="">
         <button type="button" className="session-widget-run" aria-pressed={!source} onClick={() => setSource(false)}>Preview</button>
         <button type="button" className="session-widget-run" aria-pressed={source} onClick={() => setSource(true)}>Source</button>
         <button type="button" className="icon-button session-widget-action" title="Copy HTML" aria-label="Copy widget HTML" onClick={() => void action(() => writeClipboardText(html), "HTML copied")}><Copy /></button>
@@ -238,8 +238,8 @@ export default function SessionWidget({
         ) : null}
       </div>
       {artifact.revision && hasScripts ? <SessionArtifactStateControls revision={artifact.revision} entry={artifactState} /> : null}
-      {actionStatus ? <div className="session-widget-feedback" role="status">{actionStatus}</div> : null}
-      {source ? <pre className="session-widget-source"><code>{html}</code></pre> : null}
+      {actionStatus ? <div className="session-widget-feedback" data-widget-chrome="" role="status">{actionStatus}</div> : null}
+      {source ? <pre className="session-widget-source" onPointerDown={allowSourceSelection}><code>{html}</code></pre> : null}
       <div hidden={source}>
       {frameUrl ? (
         <iframe
@@ -280,6 +280,22 @@ export default function SessionWidget({
       </div>
     </figure>
   );
+}
+
+/** The Source view is `user-select: none` (transcript.css) so a selection
+ * that starts in the answer's prose does not copy the widget's source. A
+ * selection that starts inside the Source view may select it: the press marks
+ * it selectable until the next press elsewhere. */
+function allowSourceSelection(event: ReactPointerEvent<HTMLPreElement>) {
+  const pre = event.currentTarget;
+  if (pre.dataset.selectable !== undefined) return;
+  pre.dataset.selectable = "";
+  const release = (next: PointerEvent) => {
+    if (next.target instanceof Node && pre.contains(next.target)) return;
+    delete pre.dataset.selectable;
+    document.removeEventListener("pointerdown", release, true);
+  };
+  document.addEventListener("pointerdown", release, true);
 }
 
 /** Placeholder for an incomplete widget block in a streaming answer. */

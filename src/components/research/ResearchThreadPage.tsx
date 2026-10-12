@@ -2262,7 +2262,7 @@ function ResearchThreadPage({
       if (researchBranchBlocker(detail.nodes.find((node) => node.id === answer.nodeId), archived)) return;
       openPendingBranch(answer.nodeId, null);
       const key = `pending:${answer.nodeId}`;
-      setComposerText((current) => ({ ...current, [key]: [current[key], widgetChangePrompt(answer, html)].filter(Boolean).join("\n\n") }));
+      setComposerText((current) => ({ ...current, [key]: widgetChangePrompt(answer, html, current[key] ?? "") }));
     }}>
     <TranscriptLinkActionsProvider actions={linkActions}>
       <div

@@ -106,6 +106,13 @@ function buildSearchPattern(term: string, options: TranscriptSearchOptions): Reg
   }
 }
 
+/** Widget chrome (labels, controls, the agent-written title, status lines)
+ * is Session interface around an answer's widget, not answer text, so find
+ * skips it. A widget's Source view is answer content and stays searchable. */
+export function isSearchableText(node: Node): boolean {
+  return !node.parentElement?.closest("[data-widget-chrome]");
+}
+
 // Collects a Range per match, in document order. Matches stay within a single
 // text node (like the terminal's per-line search). Matches with no client rects
 // are omitted because unrendered content (such as a collapsed <details>) cannot
@@ -119,7 +126,10 @@ export function collectSearchRanges(
   if (!pattern) {
     return [];
   }
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      isSearchableText(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+  });
   const ranges: Range[] = [];
   collect: for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node.nodeValue;
