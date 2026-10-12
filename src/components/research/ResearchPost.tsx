@@ -155,7 +155,7 @@ export function postFollowUpCopy(
   askLabel: string,
 ): { placeholder: string; sendName: string; sendTitle: string } {
   return asNote
-    ? { placeholder: "Add a note", sendName: "Add note", sendTitle: "Add note" }
+    ? { placeholder: "Add a note (not visible to agent)", sendName: "Add note", sendTitle: "Add note" }
     : { placeholder: askPlaceholder, sendName: "Ask", sendTitle: askLabel };
 }
 
