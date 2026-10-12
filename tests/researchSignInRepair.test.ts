@@ -127,7 +127,7 @@ test("the repair panel names the sign-in command and verification, nothing else"
   assert.match(html, /Run this command in Terminal, finish signing in, then verify here\./);
   assert.match(html, /<code>&#x27;codex&#x27; login<\/code>/);
   assert.match(html, /Verify sign-in/);
-  assert.doesNotMatch(html, /Retry this research/);
+  assert.doesNotMatch(html, /Retry this question/);
   // No removed terminal surface, and no credential-ownership explanation.
   assert.doesNotMatch(html, /terminal tab/i);
   assert.doesNotMatch(html, /keeps ownership|credentials/i);
@@ -143,18 +143,20 @@ test("a failed verification leaves the panel open and hides Retry", () => {
   });
   assert.match(html, /is-signedOut"[^>]*>Codex is still not signed in/);
   assert.match(html, /Check again/);
-  assert.doesNotMatch(html, /Retry this research/);
+  assert.doesNotMatch(html, /Retry this question/);
 });
 
-test("a verified sign-in shows one Retry this research action", () => {
+test("a verified sign-in shows one Retry this question action", () => {
   const verified = signInRepairOutcome("Codex", agent("codex"), null);
   const ready = renderView({ outcome: verified });
-  assert.match(ready, /<button class="control-button research-turn-button" type="button">.*Retry this research/);
+  assert.match(ready, /<button class="control-button research-turn-button" type="button">.*<span>Retry this question<\/span>/);
+  // The message names the same action as the button.
+  assert.match(ready, /Codex is signed in\. Retry this question with Codex\./);
   // While the retry request is pending the button reports it and ignores
   // further clicks (the thread's retry control also blocks duplicate requests).
   const pending = renderView({ outcome: verified, retrying: true });
   assert.match(pending, /aria-disabled="true"[^>]*>.*Retrying…/);
-  assert.doesNotMatch(pending, /Retry this research/);
+  assert.doesNotMatch(pending, /<span>Retry this question<\/span>/);
 });
 
 function renderPane(node: ResearchNode, options: { canRetry?: boolean } = {}) {

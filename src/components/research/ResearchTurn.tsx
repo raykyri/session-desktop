@@ -374,7 +374,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   const repairButtonRef = useRef<HTMLButtonElement | null>(null);
   const signInFailure = nodeStatus(node) === "failed" && run?.errorKind === "auth";
   const repairOpen = signInFailure && canRetry && repairNodeId === nodeId;
-  // After Retry this research, the panel goes away with the failure; focus
+  // After Retry this question, the panel goes away with the failure; focus
   // moves to the message's row in the messages column rather than the page.
   const repairRetryNodeIdRef = useRef<string | null>(null);
   const status = nodeStatus(node);

@@ -41,7 +41,7 @@ export function changeArtifactState(reference: ResearchArtifactRef, action: Arti
       const current = readArtifactState(reference);
       if (current.epoch === epoch && current.sequence === sequence) patch(reference, { config, error: "" });
     }
-    catch { patch(reference, { error: action === "migrate" ? "The parent has no saved inputs, or they could not be copied." : "Inputs could not be saved. Please try again." }); }
+    catch { patch(reference, { error: action === "migrate" ? "The parent has no saved inputs, or they could not be copied." : "Inputs could not be saved. Try again." }); }
     finally { patch(reference, { pending: readArtifactState(reference).pending - 1, controlPending: readArtifactState(reference).controlPending - (action === "save" ? 0 : 1) }); }
   });
   queues.set(key, work);

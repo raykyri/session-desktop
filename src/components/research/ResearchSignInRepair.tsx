@@ -182,7 +182,7 @@ export function SignInRepairView({
             ) : (
               <RotateCcw size={13} aria-hidden="true" />
             )}
-            <span>{retrying ? "Retrying…" : "Retry this research"}</span>
+            <span>{retrying ? "Retrying…" : "Retry this question"}</span>
           </button>
         ) : null}
         <button className="control-button research-turn-button is-ghost" type="button" onClick={onClose}>
@@ -195,7 +195,7 @@ export function SignInRepairView({
 
 /** Repairs the sign-in of the agent a failed run used, inline under the
  * run's error: the agent's sign-in command, an explicit verification (a
- * forced readiness probe), and then Retry this research, which uses the
+ * forced readiness probe), and then Retry this question, which uses the
  * thread's ordinary retry of the same node. Nothing retries on its own. */
 export default function ResearchSignInRepair({
   adapterId,
