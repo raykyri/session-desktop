@@ -232,16 +232,20 @@ test("researchChainComposerState continues, queues, or explains a stalled chain"
 
 test("researchMarkerLabel names the branches and what a click does", () => {
   assert.equal(
-    researchMarkerLabel({ count: 1, whole: false, open: false, running: false, targetPrompt: "Why\n  this?" }),
+    researchMarkerLabel({ count: 1, whole: false, open: false, state: null, targetPrompt: "Why\n  this?" }),
     "1 branch from this paragraph. Opens: Why this?",
   );
   assert.equal(
-    researchMarkerLabel({ count: 3, whole: true, open: true, running: true, targetPrompt: "x" }),
+    researchMarkerLabel({ count: 3, whole: true, open: true, state: "running", targetPrompt: "x" }),
     "3 branches from the whole answer, one is open, running. Closes it.",
   );
   assert.equal(
-    researchMarkerLabel({ count: 1, whole: true, open: false, running: true, targetPrompt: "q".repeat(100) }),
+    researchMarkerLabel({ count: 1, whole: true, open: false, state: "running", targetPrompt: "q".repeat(100) }),
     `1 branch from the whole answer, running. Opens: ${"q".repeat(80)}`,
+  );
+  assert.equal(
+    researchMarkerLabel({ count: 2, whole: false, open: false, state: "failed", targetPrompt: "y" }),
+    "2 branches from this paragraph, failed. Opens: y",
   );
 });
 

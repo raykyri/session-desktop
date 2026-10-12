@@ -328,20 +328,20 @@ export function researchChainComposerState({
 }
 
 /** A margin marker's accessible label: how many branches it stands for and
- * from where, whether one is open (a click closes it) or running, and the
- * question a click opens. */
+ * from where, whether one is open (a click closes it), whether a message in
+ * them is running or has failed, and the question a click opens. */
 export function researchMarkerLabel({
   count,
   whole,
   open,
-  running,
+  state,
   targetPrompt,
 }: {
   count: number;
   /** The marker stands for branches from the whole answer. */
   whole: boolean;
   open: boolean;
-  running: boolean;
+  state: "running" | "failed" | null;
   targetPrompt: string;
 }) {
   const what =
@@ -350,7 +350,8 @@ export function researchMarkerLabel({
         ? "1 branch from the whole answer"
         : "1 branch from this paragraph"
       : `${count} branches from ${whole ? "the whole answer" : "this paragraph"}`;
+  const status = state ? `, ${state}` : "";
   return open
-    ? `${what}, one is open${running ? ", running" : ""}. Closes it.`
-    : `${what}${running ? ", running" : ""}. Opens: ${targetPrompt.split(/\s+/).join(" ").trim().slice(0, 80)}`;
+    ? `${what}, one is open${status}. Closes it.`
+    : `${what}${status}. Opens: ${targetPrompt.split(/\s+/).join(" ").trim().slice(0, 80)}`;
 }

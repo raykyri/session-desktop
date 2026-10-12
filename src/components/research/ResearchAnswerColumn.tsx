@@ -79,14 +79,13 @@ function ResearchBranchMarkerButton({
   const count = marker.branchIds.length;
   const states = marker.branchIds.map(actions.branchState);
   const state = states.includes("failed") ? "failed" : states.includes("running") ? "running" : null;
-  const running = state === "running";
   const whole = marker.top === null;
   const targetNode = actions.nodeById.get(target);
   const label = researchMarkerLabel({
     count,
     whole,
     open: openIndex >= 0,
-    running,
+    state,
     targetPrompt: targetNode ? nodePrompt(targetNode) : "",
   });
   const showTip = (element: HTMLElement) =>
