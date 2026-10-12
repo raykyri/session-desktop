@@ -66,6 +66,8 @@ import {
   canFollowUpFrom,
   chainDisplayOrder,
   inlineChainFor,
+  researchRerunConfirms,
+  researchRerunDialogNode,
 } from "../../lib/researchChains";
 import { buildSegmentView, type SegmentView } from "../../lib/researchSegmentView";
 import {
@@ -394,7 +396,12 @@ function ResearchThreadPage({
     }
   }, [nodes]);
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  const rerunNode = rerunNodeId ? nodeById.get(rerunNodeId) : undefined;
+  // The Rerun confirmation is not shown in an archived thread; archiving the
+  // thread while it is open closes it.
+  const rerunNode = researchRerunDialogNode(rerunNodeId ? nodeById.get(rerunNodeId) : undefined, archived);
+  useEffect(() => {
+    if (archived) setRerunNodeId(null);
+  }, [archived]);
 
   // The open columns: one level per open conversation (its messages and its
   // answer; a post root is its post and its thread), then the unsent
@@ -2275,7 +2282,17 @@ function ResearchThreadPage({
           onToggleStar={toggleStarred}
           onCopyAnswer={handleCopyAnswer}
           onCopyThread={(chainIds) => void copyThread(chainIds)}
-          onRerun={setRerunNodeId}
+          onRerun={(nodeId) => {
+            // Only a complete answer is replaced, so only it asks first. A
+            // failed or cancelled run is retried at once, as the answer
+            // pane's Retry button does.
+            const target = nodeById.get(nodeId);
+            if (target && researchRerunConfirms(target)) {
+              setRerunNodeId(nodeId);
+            } else {
+              handleRetryNode(nodeId);
+            }
+          }}
           onGenerateRecap={setRecapDialogNodeId}
           onRename={(nodeId, value) => setRenameTarget({ nodeId, value })}
           onDelete={setDeletingBranchId}
@@ -2313,7 +2330,7 @@ function ResearchThreadPage({
           onDismiss={clearHighlightAction}
         />
       ) : null}
-      {rerunNode && !archived ? (
+      {rerunNode ? (
         <ResearchRerunDialog
           node={rerunNode}
           parent={rerunNode.parentNodeId ? nodeById.get(rerunNode.parentNodeId) ?? null : null}

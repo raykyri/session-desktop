@@ -208,6 +208,26 @@ export function researchRerunOffered(node: ResearchNode): boolean {
   return nodeType(node) === "exchange";
 }
 
+/** Whether Rerun asks for confirmation before it relaunches. Only a complete
+ * answer is replaced; a failed or cancelled run is retried at once, as the
+ * answer pane's Retry button does. */
+export function researchRerunConfirms(node: ResearchNode): boolean {
+  return nodeStatus(node) === "complete";
+}
+
+/** The node the Rerun confirmation dialog is open for: none in an archived
+ * thread, where the menu offers no Rerun. */
+export function researchRerunDialogNode<T extends ResearchNode>(
+  node: T | null | undefined,
+  archived: boolean,
+): T | null {
+  return node && !archived ? node : null;
+}
+
+/** Why the Rerun dialog's Continue button is disabled while another retry or
+ * rerun request is in flight. */
+export const RESEARCH_RERUN_PENDING_REASON = "Another retry or rerun is starting";
+
 /** Why Rerun is disabled for an exchange, or null when it can run: the run
  * must have settled (complete, failed or cancelled) with no pane from it
  * still open, and the answer it follows (its fork point) must be complete.

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { researchRerunBlocker } from "../../lib/researchChains";
+import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "../../lib/researchChains";
 import { nodePrompt } from "../../lib/researchNodeTypes";
 import { researchDeleteLabel } from "../../lib/researchThreadView";
 import type { ResearchNode } from "../../types";
@@ -24,6 +24,8 @@ export function ResearchRerunDialog({
 }) {
   useResearchDialogReturnFocus(true);
   const blocker = researchRerunBlocker(node, parent);
+  // Why Continue is disabled, if it is.
+  const reason = blocker ?? (pending ? RESEARCH_RERUN_PENDING_REASON : null);
   return createPortal(
     <div
       className="confirm-dialog-backdrop"
@@ -51,7 +53,7 @@ export function ResearchRerunDialog({
         <p id="rerun-research-dialog-description">
           Rerun will replace the current answer. Continue?
         </p>
-        {blocker ? <p role="status">{blocker}</p> : null}
+        {reason ? <p role="status">{reason}</p> : null}
         <div className="confirm-dialog-actions">
           <button className="control-button" type="button" autoFocus onClick={onClose}>
             Cancel
@@ -59,7 +61,7 @@ export function ResearchRerunDialog({
           <button
             className="control-button primary"
             type="button"
-            disabled={pending || blocker !== null}
+            disabled={reason !== null}
             onClick={onConfirm}
           >
             Continue

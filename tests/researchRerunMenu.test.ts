@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ResearchRerunMenuItem } from "../src/components/research/ResearchRerunMenuItem";
+import { ResearchRerunDialog } from "../src/components/research/ResearchThreadDialogs";
 import {
   canRerunResearchNode,
   canRetryResearchNode,
+  RESEARCH_RERUN_PENDING_REASON,
   researchRerunBlocker,
+  researchRerunConfirms,
+  researchRerunDialogNode,
 } from "../src/lib/researchChains";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
+import { withWidgetDom } from "./widgetDom";
 
 function node(id: string, fields: NodeFixture = {}): ResearchNode {
   return researchNode({ id, status: "complete", sessionReady: true, ...fields });
@@ -99,4 +105,53 @@ test("canRerunResearchNode extends canRetryResearchNode to complete exchanges", 
   }
   assert.equal(canRerunResearchNode(node("note", { type: "post" })), false);
   assert.equal(canRerunResearchNode(node("doc", { type: "document" })), false);
+});
+
+test("Rerun asks first only for a complete answer; a failed or cancelled run is retried at once", () => {
+  assert.equal(researchRerunConfirms(node("q")), true);
+  for (const status of ["failed", "cancelled"] as const) {
+    assert.equal(researchRerunConfirms(node("q", { status })), false);
+  }
+});
+
+test("the Rerun dialog is closed in an archived thread", () => {
+  const target = node("q");
+  assert.equal(researchRerunDialogNode(target, false), target);
+  assert.equal(researchRerunDialogNode(target, true), null);
+  assert.equal(researchRerunDialogNode(undefined, false), null);
+});
+
+test("the Rerun dialog says why Continue is disabled", async () => {
+  await withWidgetDom(async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const render = (target: ResearchNode, parent: ResearchNode | null, pending: boolean) =>
+      act(async () =>
+        root.render(
+          createElement(ResearchRerunDialog, { node: target, parent, pending, onConfirm: () => {}, onClose: () => {} }),
+        ),
+      );
+    const dialog = () => document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+    const status = () => dialog().querySelector('[role="status"]')?.textContent ?? null;
+    const continueButton = () =>
+      [...dialog().querySelectorAll("button")].find((button) => button.textContent === "Continue")!;
+    try {
+      await render(node("q"), null, false);
+      assert.match(dialog().textContent ?? "", /Rerun will replace the current answer/);
+      assert.equal(status(), null);
+      assert.equal(continueButton().disabled, false);
+
+      await render(node("q"), null, true);
+      assert.equal(status(), RESEARCH_RERUN_PENDING_REASON);
+      assert.equal(continueButton().disabled, true);
+
+      // A blocker takes precedence over the pending request.
+      await render(node("q", { parentNodeId: "p" }), node("p", { status: "failed" }), true);
+      assert.equal(status(), "The answer this follows did not complete");
+      assert.equal(continueButton().disabled, true);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
 });
