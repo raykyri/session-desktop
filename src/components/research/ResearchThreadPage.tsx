@@ -642,6 +642,11 @@ function ResearchThreadPage({
     });
   }, []);
 
+  // Counts the selections applyVisit shows (user navigation, and Back and
+  // Forward), so a send that resolves after the user moved elsewhere leaves
+  // the selection and focus where they are.
+  const navigationSeqRef = useRef(0);
+
   /** Shows `target` (see `selection`) without touching history. A path
    * that selects a removed message is cut to the part the tree lists (see
    * researchSelectionPath). Returns what it shows: the deepest message and
@@ -662,6 +667,7 @@ function ResearchThreadPage({
       if (!nodeId || !known(nodeId)) {
         return null;
       }
+      navigationSeqRef.current += 1;
       setSelection(shown);
       persistSelection(shown);
       setQueuedView(null);
@@ -1557,6 +1563,15 @@ function ResearchThreadPage({
         .filter((node): node is ResearchNode => Boolean(node));
       const tail = chain[chain.length - 1] ?? null;
       const editingId = editingByHeadRef.current[headId];
+      // The new message is selected (and its ask box focused) only when the
+      // user has not navigated since the send started and the chain is still
+      // open: a follow-up sent from a column that was cleared since then does
+      // not reopen it. An edited first message replaces the head, which may
+      // already be gone.
+      const navigationSeq = navigationSeqRef.current;
+      const stillShown = (replacedId?: string) =>
+        navigationSeqRef.current === navigationSeq &&
+        (headId === replacedId || stripRef.current.levels.some((level) => level.headId === headId));
       const clearComposer = () => {
         setComposerText((current) => ({ ...current, [headId]: "" }));
         if (headId === mainComposerKey && treeIdRef.current) {
@@ -1574,8 +1589,10 @@ function ResearchThreadPage({
           const child = await onForkRef.current(source.id, prompt, null, false);
           clearComposer();
           addCreatedNode(child);
-          navigate(selectionWith(child.id, child));
-          requestFocus({ kind: "composer", key: child.id }, "settle");
+          if (stillShown()) {
+            navigate(selectionWith(child.id, child));
+            requestFocus({ kind: "composer", key: child.id }, "settle");
+          }
         } catch (err) {
           onErrorRef.current(err instanceof Error ? err.message : String(err));
         } finally {
@@ -1602,8 +1619,10 @@ function ResearchThreadPage({
           clearComposer();
           setEditingByHead((current) => withoutKeys(current, [headId]));
           addCreatedNode(child);
-          navigate(selectionWith(child.id, child));
-          requestFocus({ kind: "composer", key: failed.id === headId ? child.id : headId }, "none");
+          if (stillShown(failed.id)) {
+            navigate(selectionWith(child.id, child));
+            requestFocus({ kind: "composer", key: failed.id === headId ? child.id : headId }, "none");
+          }
         } catch (err) {
           onErrorRef.current(err instanceof Error ? err.message : String(err));
         } finally {
@@ -1633,7 +1652,9 @@ function ResearchThreadPage({
         awaitChainChild(headId, child.id);
         clearComposer();
         addCreatedNode(child);
-        navigate(selectionWith(child.id, child));
+        if (stillShown()) {
+          navigate(selectionWith(child.id, child));
+        }
       } catch (err) {
         onErrorRef.current(err instanceof Error ? err.message : String(err));
       } finally {
