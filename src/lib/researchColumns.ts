@@ -283,6 +283,27 @@ export function researchSelectionPath(nodes: readonly ResearchNode[], selection:
   );
 }
 
+/** The selection a thread opens with, from its saved selection (see
+ * savedResearchSelection). A saved message alone, the format stored before
+ * each column kept its own selection, opens the levels it was asked from; a
+ * saved path opens cut to the part the tree lists. A saved selection the
+ * tree does not show opens the last message of the root's chain. */
+export function researchRestoredSelection(
+  nodes: readonly ResearchNode[],
+  rootNodeId: string,
+  saved: string | readonly string[] | null,
+): string | string[] {
+  if (typeof saved === "string" && nodes.some((node) => node.id === saved)) {
+    return saved;
+  }
+  const path = saved !== null && typeof saved !== "string" ? researchSelectionPath(nodes, saved) : [];
+  if (path.length > 0) {
+    return path;
+  }
+  const main = inlineChainFor(nodes, rootNodeId);
+  return main[main.length - 1] ?? rootNodeId;
+}
+
 /** `selection` with `nodeId` selected in the column that lists it. The
  * columns before that one keep their selection, and so do the columns after
  * it, which list the same messages whatever it selects. A node that no

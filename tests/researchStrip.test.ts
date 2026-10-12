@@ -9,6 +9,7 @@ import {
   columnScrollKey,
   columnSelector,
   isMessagesColumnId,
+  researchRestoredSelection,
   researchSelectionAfterRemoval,
   researchSelectionPath,
   researchSelectionWith,
@@ -587,5 +588,25 @@ test("a removed selection falls back to the message it followed or was asked fro
   // 1 does not list, so column 1 and the columns after it close.
   const withoutX1 = nodes.filter((candidate) => candidate.id !== "x1" && candidate.id !== "y2");
   assert.deepEqual(researchSelectionAfterRemoval(withoutX1, ["c2", "x1", "y2"], survivor(withoutX1)), ["c2"]);
+});
+
+test("a thread reopens with its saved selection, in either saved format", () => {
+  const nodes = selectionNodes();
+  const levelsOf = (selection: string | readonly string[]) =>
+    researchStrip(nodes, selection, null).levels.map((level) => level.selectedId);
+  // Saved before each column kept its selection: the deepest message alone
+  // opens the levels it was asked from.
+  const legacy = researchRestoredSelection(nodes, "root", "b2");
+  assert.equal(legacy, "b2");
+  assert.deepEqual(levelsOf(legacy), ["root", "b1f", "b2"]);
+  // Every column's selection.
+  assert.deepEqual(researchRestoredSelection(nodes, "root", ["c2", "b1f", "b2"]), ["c2", "b1f", "b2"]);
+  // A path the tree no longer lists in full is cut where it stops.
+  assert.deepEqual(researchRestoredSelection(nodes, "root", ["c2", "missing", "b2"]), ["c2"]);
+  // Nothing saved, or nothing the tree shows: the last message of the
+  // root's chain.
+  assert.equal(researchRestoredSelection(nodes, "root", null), "c2");
+  assert.equal(researchRestoredSelection(nodes, "root", "missing"), "c2");
+  assert.equal(researchRestoredSelection(nodes, "root", ["b1", "b2"]), "c2");
 });
 

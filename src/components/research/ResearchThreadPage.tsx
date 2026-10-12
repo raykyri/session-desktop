@@ -46,6 +46,7 @@ import {
   columnKey,
   columnLevelIndex,
   columnSelector,
+  researchRestoredSelection,
   researchSelectionAfterRemoval,
   researchSelectionPath,
   researchSelectionWith,
@@ -752,19 +753,7 @@ function ResearchThreadPage({
       return;
     }
     const navigation = navigationPersistence.store[treeId];
-    const nodeIds = new Set(detail.nodes.map((node) => node.id));
-    const saved = savedResearchSelection(navigation);
-    const main = inlineChainFor(detail.nodes, rootNodeId);
-    const savedPath =
-      saved === null
-        ? []
-        : researchSelectionPath(detail.nodes, typeof saved === "string" ? researchLevelPath(detail.nodes, saved) : saved);
-    const restored =
-      typeof saved === "string" && nodeIds.has(saved)
-        ? saved
-        : savedPath.length > 0
-          ? savedPath
-          : (main[main.length - 1] ?? rootNodeId);
+    const restored = researchRestoredSelection(detail.nodes, rootNodeId, savedResearchSelection(navigation));
     restoreQueues(navigation?.queuedFollowups ?? {});
     setSelection(restored);
     // The restored selection is this thread's visit on screen: it fills in a
