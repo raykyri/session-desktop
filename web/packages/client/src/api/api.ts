@@ -477,6 +477,13 @@ export function uploadDocuments(
   });
 }
 
-export function prepareWidgetPreview(html: string) {
-  return trpc().artifacts.prepareWidget.mutate({ html });
+/** Mints a preview of a widget block of a stored answer. The server resolves
+ * the HTML from the answer by its SHA-256; it never serves HTML the client
+ * sends. */
+export async function prepareWidgetPreview(nodeId: string, html: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
+  const sha256 = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return trpc().artifacts.prepareWidget.mutate({ nodeId, sha256 });
 }

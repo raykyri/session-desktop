@@ -29,11 +29,23 @@ function unexpectedRoleLabel(role: string): string {
   return `${role || "Unknown"} content`;
 }
 
-function MessageBlockView({ block, role }: { block: MessageBlock; role: string }) {
+function MessageBlockView({
+  block,
+  role,
+  nodeId,
+}: {
+  block: MessageBlock;
+  role: string;
+  nodeId: string;
+}) {
   if (block.type === "text") {
     if (role === "assistant") {
       return (
-        <ResearchMarkdown widgets markdown={block.text} oversized={OVERSIZED_MARKDOWN_POLICY} />
+        <ResearchMarkdown
+          widgetNodeId={nodeId}
+          markdown={block.text}
+          oversized={OVERSIZED_MARKDOWN_POLICY}
+        />
       );
     }
     // Display unexpected user turns inside responses as raw text callouts to distinguish them from model output.
@@ -48,7 +60,13 @@ function MessageBlockView({ block, role }: { block: MessageBlock; role: string }
   );
 }
 
-export const TimelineItem = memo(function TimelineItem({ item }: { item: MessageItem }) {
+export const TimelineItem = memo(function TimelineItem({
+  item,
+  nodeId,
+}: {
+  item: MessageItem;
+  nodeId: string;
+}) {
   const hasUnexpectedContent = item.role !== "assistant" && item.blocks.length > 0;
   return (
     <section
@@ -74,7 +92,12 @@ export const TimelineItem = memo(function TimelineItem({ item }: { item: Message
             <span className="text-fg-faint text-xs">{unexpectedRoleLabel(item.role)}</span>
           ) : null}
           {item.blocks.map((block, index) => (
-            <MessageBlockView key={`${item.key}-${index}`} block={block} role={item.role} />
+            <MessageBlockView
+              key={`${item.key}-${index}`}
+              block={block}
+              role={item.role}
+              nodeId={nodeId}
+            />
           ))}
         </div>
       ) : null}

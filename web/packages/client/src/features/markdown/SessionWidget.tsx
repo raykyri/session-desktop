@@ -1,9 +1,18 @@
+import { sessionWidgetDownloadDocument } from "@session/shared";
 import { useEffect, useRef, useState } from "react";
 
 import { prepareWidgetPreview } from "../../api/api.js";
 
 /** Static-only web boundary: no script or same-origin sandbox permission. */
-export function SessionWidget({ html, title }: { html: string; title: string }) {
+export function SessionWidget({
+  html,
+  title,
+  nodeId,
+}: {
+  html: string;
+  title: string;
+  nodeId: string;
+}) {
   const [page, setPage] = useState<{ url: string; expiresAt: number } | null>(null);
   const [source, setSource] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -14,7 +23,7 @@ export function SessionWidget({ html, title }: { html: string; title: string }) 
   useEffect(() => {
     let cancelled = false;
     loads.current = 0;
-    void prepareWidgetPreview(html).then(
+    void prepareWidgetPreview(nodeId, html).then(
       (result) => {
         if (!cancelled) setPage(result);
       },
@@ -28,7 +37,7 @@ export function SessionWidget({ html, title }: { html: string; title: string }) 
     return () => {
       cancelled = true;
     };
-  }, [html, attempt]);
+  }, [nodeId, html, attempt]);
   useEffect(() => {
     if (!page) return;
     const timer = setTimeout(
@@ -83,7 +92,11 @@ export function SessionWidget({ html, title }: { html: string; title: string }) 
           type="button"
           className={buttonClass}
           onClick={() => {
-            const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+            // The file carries the static preview's policy (no scripts, no
+            // network) as a meta CSP, since it opens outside the sandbox.
+            const url = URL.createObjectURL(
+              new Blob([sessionWidgetDownloadDocument(html)], { type: "text/html;charset=utf-8" }),
+            );
             const link = document.createElement("a");
             link.href = url;
             link.download = "session-widget.html";

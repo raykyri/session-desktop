@@ -39,6 +39,7 @@
     "hono": "^4.13.8",
     "linkedom": "^0.18.13",
     "mammoth": "^1.12.3",
+    "parse5": "^8.0.1",
     "rehype-sanitize": "^6.0.0",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",

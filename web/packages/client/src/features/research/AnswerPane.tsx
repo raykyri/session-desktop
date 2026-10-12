@@ -220,7 +220,7 @@ export const AnswerPane = memo(function AnswerPane({
                 onMouseLeave={onRootMouseLeave}
               >
                 {view.visibleTimelineItems.map((item) => (
-                  <TimelineItem key={item.key} item={item} />
+                  <TimelineItem key={item.key} item={item} nodeId={node.id} />
                 ))}
               </div>
             </>

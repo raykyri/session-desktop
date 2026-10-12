@@ -35,6 +35,18 @@ export function sessionWidgetHasScripts(html: string): boolean {
   return /<script\b|\son[a-z]+\s*=|javascript:/iu.test(html);
 }
 
+/** Content-Security-Policy of a downloaded widget file: the static preview's
+ * policy (no scripts, no network, no forms, no base URL). A `<meta>` policy
+ * cannot sandbox the page, so `http-equiv` in the widget is neutralised as on
+ * the served pages (a refresh would otherwise navigate). Mirrors
+ * `research_widgets::download_document` in src-tauri. */
+export const SESSION_WIDGET_DOWNLOAD_POLICY =
+  "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+
+export function sessionWidgetDownloadDocument(html: string): string {
+  return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${SESSION_WIDGET_DOWNLOAD_POLICY}">\n</head>\n<body>\n${html.replace(/http-equiv/giu, "data-http-equiv")}\n</body>\n</html>\n`;
+}
+
 export interface WidgetMarkdownNode {
   type: string;
   lang?: string | null | undefined;

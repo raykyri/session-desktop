@@ -155,7 +155,9 @@ function MarkdownCode({
   );
 }
 
-const WidgetContext = createContext(false);
+/** The answer node whose widget blocks render as previews; null renders them
+ * as ordinary code. */
+const WidgetContext = createContext<string | null>(null);
 function WidgetBlock({
   code,
   state,
@@ -167,27 +169,34 @@ function WidgetBlock({
   meta: string;
   children: ReactNode;
 }) {
-  const enabled = useContext(WidgetContext);
+  const nodeId = useContext(WidgetContext);
   const html = code.endsWith("\n") ? code.slice(0, -1) : code;
   const complete = state === "complete";
   const withinLimit = sessionWidgetByteLength(html) <= MAX_SESSION_WIDGET_BYTES;
-  if (enabled && complete && withinLimit)
+  // With widgets off the block is ordinary code: part of the text projection,
+  // find-in-page and highlights like any other code block.
+  if (nodeId === null)
+    return (
+      <div className="research-prose-code-block">
+        <pre>{children}</pre>
+      </div>
+    );
+  if (complete && withinLimit)
     return (
       <SessionWidget
         key={html}
         html={html}
+        nodeId={nodeId}
         title={sessionWidgetMetadata(meta).title ?? "Answer widget"}
       />
     );
   return (
     <div data-research-widget="" className="research-prose-code-block">
-      {enabled ? (
-        <p className="text-fg-muted text-xs">
-          {complete
-            ? "Widget exceeds the 64 KiB preview limit"
-            : "Widget preview awaits a complete closing fence"}
-        </p>
-      ) : null}
+      <p className="text-fg-muted text-xs">
+        {complete
+          ? "Widget exceeds the 64 KiB preview limit"
+          : "Widget preview awaits a complete closing fence"}
+      </p>
       <pre>{children}</pre>
     </div>
   );
@@ -279,7 +288,9 @@ export type ResearchMarkdownVariant = "prose" | "summary" | "compact";
 
 export interface ResearchMarkdownProps {
   markdown: string;
-  widgets?: boolean;
+  /** The answer node whose `session-html` blocks render as static previews.
+   * Without it they render as code. */
+  widgetNodeId?: string | undefined;
   /** `prose` for answers, `summary` for recap text, `compact` for previews. */
   variant?: ResearchMarkdownVariant;
   className?: string;
@@ -304,7 +315,7 @@ const VARIANT_CLASS: Record<ResearchMarkdownVariant, string> = {
  */
 export const ResearchMarkdown = memo(function ResearchMarkdown({
   markdown,
-  widgets = false,
+  widgetNodeId,
   variant = "prose",
   className,
   inline = false,
@@ -329,7 +340,9 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
   }
 
   return (
-    <WidgetContext.Provider value={widgets && !inline && variant === "prose"}>
+    <WidgetContext.Provider
+      value={widgetNodeId !== undefined && !inline && variant === "prose" ? widgetNodeId : null}
+    >
       <div className={cn(VARIANT_CLASS[variant], className)}>
         <ReactMarkdown
           components={inline ? inlineComponents : markdownComponents}
