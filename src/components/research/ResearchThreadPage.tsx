@@ -592,6 +592,13 @@ function ResearchThreadPage({
   const focusComposer = useCallback((headId: string) => composerRefs.current.get(headId)?.focus(), []);
   const { queues, queuesRef, restoreQueues, updateQueue, retryQueued, awaitChainChild, chainSendInFlight } =
     useResearchChainQueue({ treeId, navigationPersistence, detail, archived, nodeById, onFork, focusComposer });
+  // The selected queued message while it is still queued. Once it leaves
+  // the queue (sent, cancelled, or moved into the ask box by Edit question),
+  // its column shows its own selected message again.
+  const shownQueued =
+    queuedView && (queues[queuedView.headId] ?? EMPTY_QUEUE).some((item) => item.id === queuedView.itemId)
+      ? queuedView
+      : null;
 
   // ---- levels --------------------------------------------------------------
 
@@ -878,6 +885,7 @@ function ResearchThreadPage({
         }
       }
       setMenu(null);
+      setQueuedView(null);
       const path = levelPathRef.current;
       if (path[path.length - 1] !== parentNodeId) {
         // The unsent branch is shown after the deepest selection: its
@@ -2087,7 +2095,7 @@ function ResearchThreadPage({
     const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
     return {
       items: queues[headId] ?? EMPTY_QUEUE,
-      selectedId: queuedView?.headId === headId ? queuedView.itemId : null,
+      selectedId: shownQueued?.headId === headId ? shownQueued.itemId : null,
       tailStalled: researchQueueStep(tail) === "stalled",
       // The chain's last message becomes its column's selection, so the
       // column's answer column shows the queued message in its place.
@@ -2099,7 +2107,7 @@ function ResearchThreadPage({
         requestFocus({ kind: "row", level: Math.max(0, path.indexOf(tail.id)) }, "reveal");
       },
       onRemove: (item) => cancelQueued(headId, item.id),
-      // Retry removes the Retry button: focus moves to the item's Remove
+      // Retry removes the Retry button: focus moves to the item's Cancel
       // button, and to the ask box once the question has been sent (see
       // useResearchChainQueue).
       onRetry: (item, row) => {
@@ -2338,9 +2346,9 @@ function ResearchThreadPage({
         );
       }
       case "answer": {
-        const queuedHead = queuedView && column.level.headId === queuedView.headId ? queuedView.headId : null;
+        const queuedHead = shownQueued && column.level.headId === shownQueued.headId ? shownQueued.headId : null;
         const queuedItem = queuedHead
-          ? (queues[queuedHead] ?? EMPTY_QUEUE).find((item) => item.id === queuedView?.itemId)
+          ? (queues[queuedHead] ?? EMPTY_QUEUE).find((item) => item.id === shownQueued?.itemId)
           : undefined;
         if (queuedHead && queuedItem) {
           return (

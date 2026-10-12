@@ -1169,17 +1169,30 @@
   outline-offset: 1px;
 }
 
-
+/* A queued message's note and its Retry and Edit question buttons sit
+   above the row's selection button, as the content and meta line do:
+   clicks on the note select the row, and the buttons stay their own
+   targets. */
 .research-msg-note {
+  position: relative;
+  z-index: 1;
   margin: 0;
   padding: 0 8px 0 12px;
   color: var(--text-muted);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   line-height: 1.45;
+  pointer-events: none;
 }
 
 .research-msg-actions {
+  position: relative;
+  z-index: 1;
   padding: 0 8px 0 12px;
+  pointer-events: none;
+}
+
+.research-msg-actions > * {
+  pointer-events: auto;
 }
 
 /* A branch's source passage: a muted block at the top of its messages
