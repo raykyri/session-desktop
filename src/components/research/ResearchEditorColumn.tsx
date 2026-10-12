@@ -35,12 +35,12 @@ interface ResearchEditorColumnProps {
   onCancel: () => void;
   onSave: () => void;
   onAskAsQuestion: () => void;
-  /** Back and forward: a note's editor takes the note column's place, the
-   * root level's first column, whose header carries them. */
+  /** Back and forward: the root note's editor takes the note column's place,
+   * the root level's first column, whose header carries them. */
   history?: ComponentProps<typeof ResearchPairHeader>["history"];
 }
 
-/** The editor column (E0): the Markdown source of a document, or a post's
+/** The editor column (E{level}): the Markdown source of a document, or a post's
  * text, in a plain field, with Cancel, Save and "Ask as a question" in its
  * footer. A document's editor follows its answer column, which previews the
  * text; a note's editor is shown in place of the note column. ⌘↵ (Ctrl↵)

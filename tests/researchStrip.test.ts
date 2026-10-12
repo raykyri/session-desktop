@@ -305,6 +305,16 @@ test("editing the root note shows the editor column in place of the note column"
   // An open follow-up stays open beside the editor.
   assert.deepEqual(ids(researchStrip(nodes, "run", null, "post")), ["E0", "T0", "T1", "A1"]);
   assert.deepEqual(ids(researchStrip(nodes, "net", null, "post")), ["E0", "T0", "N1", "T1"]);
-  // Only the root note is edited: a follow-up note keeps its note column.
-  assert.deepEqual(ids(researchStrip(nodes, "net", null, "net")), ["N0", "T0", "N1", "T1"]);
+  // A follow-up note's editor takes its level's note column; the root note
+  // keeps its column.
+  const followUp = researchStrip(nodes, "net", null, "net");
+  assert.deepEqual(ids(followUp), ["N0", "T0", "E1", "T1"]);
+  assert.deepEqual(followUp.columns[2], { id: "E1", role: "editor", levelIndex: 1, nodeId: "net" });
+  assert.equal(columnLevelIndex("E1"), 1);
+  assert.equal(columnKey(followUp.columns[2]), "E1:net");
+  assert.equal(sameResearchStrip(followUp, researchStrip(nodes, "net", null)), false);
+  // A follow-up note that is not open has no editor column.
+  assert.deepEqual(ids(researchStrip(nodes, "run", null, "net")), ["N0", "T0", "T1", "A1"]);
+  // An AI follow-up's level is not a note: it has no editor column.
+  assert.deepEqual(ids(researchStrip(nodes, "run", null, "run")), ["N0", "T0", "T1", "A1"]);
 });

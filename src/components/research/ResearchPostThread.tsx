@@ -8,6 +8,7 @@ import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 import { PostFollowUpField, PostFollowUpStatus, type PostActions } from "./ResearchPost";
+import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is
@@ -32,7 +33,8 @@ export function postThreadEntries(nodes: readonly ResearchNode[], post: Research
  * follow-up as the next level. One row is in the tab order: the open
  * follow-up's, else the row focused last, else the first. ResearchThreadPage
  * handles the column's keys. Each row carries its node id in
- * `data-thread-key`. */
+ * `data-thread-key`. A right-click on a row, or Shift+F10 or the ContextMenu
+ * key in it, opens its follow-up's menu (`onOpenContextMenu`). */
 export default function ResearchPostThread({
   nodes,
   post,
@@ -43,6 +45,7 @@ export default function ResearchPostThread({
   composerRef,
   threadRef,
   onOpenFollowUp,
+  onOpenContextMenu,
 }: {
   nodes: readonly ResearchNode[];
   post: ResearchNode;
@@ -55,6 +58,9 @@ export default function ResearchPostThread({
   composerRef?: Ref<ResearchComposerHandle>;
   threadRef?: Ref<ResearchPostThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
+  /** Opens the menu of a row's follow-up at `placement`: a follow-up note's
+   * note menu, an AI follow-up's answer menu. */
+  onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
   // The row made current by makeCurrent, marked while focus stays elsewhere.
@@ -113,6 +119,7 @@ export default function ResearchPostThread({
               marked={markedRowKey === node.id}
               onRetry={actions.onRetry}
               onOpen={onOpenFollowUp}
+              onOpenContextMenu={onOpenContextMenu}
               onFocus={() => focusRow(node.id)}
             />
           ))}
@@ -135,6 +142,7 @@ function PostFollowUpRow({
   marked,
   onRetry,
   onOpen,
+  onOpenContextMenu,
   onFocus,
 }: {
   child: ResearchNode;
@@ -144,6 +152,7 @@ function PostFollowUpRow({
   marked: boolean;
   onRetry: (nodeId: string) => Promise<void>;
   onOpen: (nodeId: string) => void;
+  onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
   onFocus: () => void;
 }) {
   const labelId = useId();
@@ -157,11 +166,15 @@ function PostFollowUpRow({
     const summary = recentResearchQueryFromNode(child, true);
     state = summary ? <PostFollowUpStatus child={summary} archived={archived} onRetry={onRetry} /> : null;
   }
+  // The row has no … button, so a menu opened from the keyboard opens at the
+  // row.
+  const menuProps = researchUnitMenuProps((placement) => onOpenContextMenu(child, placement));
   return (
     <li
       className={`post-thread-item post-thread-follow-up${open ? " is-selected" : ""}`}
       data-type="follow-up"
       data-current={marked ? "" : undefined}
+      {...menuProps}
     >
       <button
         type="button"

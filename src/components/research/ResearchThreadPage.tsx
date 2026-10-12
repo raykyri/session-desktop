@@ -301,14 +301,14 @@ function ResearchThreadPage({
   const [editorAsking, setEditorAsking] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const editorFieldRef = useRef<HTMLTextAreaElement | null>(null);
-  // The root note column's scroll offset from before its editor took its
-  // place, applied once when the note column mounts again.
-  const noteScrollRestoreRef = useRef<number | null>(null);
+  // A note column's scroll offset from before its editor took its place,
+  // applied once when that level's note column mounts again.
+  const noteScrollRestoreRef = useRef<{ level: number; top: number } | null>(null);
   const restoreNoteScroll = useCallback((element: HTMLDivElement | null) => {
-    const top = noteScrollRestoreRef.current;
-    if (element && top !== null) {
+    const restore = noteScrollRestoreRef.current;
+    if (element && restore && columnIdOf(element) === `N${restore.level}`) {
       noteScrollRestoreRef.current = null;
-      element.scrollTop = top;
+      element.scrollTop = restore.top;
     }
   }, []);
   // Counting and matching scan the whole text (up to the 10 MB document
@@ -1188,10 +1188,15 @@ function ResearchThreadPage({
       return;
     }
     const starred = !node.starredAt;
+    const note = nodeType(node) === "post";
     setResearchNodeStarred(nodeId, starred)
       .then(() =>
         onToastRef.current(
-          starred
+          note
+            ? starred
+              ? "Starred. The note is listed under its thread in the feed."
+              : "Note unstarred."
+            : starred
             ? node.inline
               ? "Starred. It's listed under its question in the feed."
               : "Starred. The branch is listed under its question in the feed."
@@ -1221,6 +1226,19 @@ function ResearchThreadPage({
     (view: SegmentView) => void copyAnswer(view),
     [copyAnswer],
   );
+  const copyNote = useCallback(async (nodeId: string) => {
+    const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
+    const text = node ? nodePrompt(node) : "";
+    if (!text) {
+      return;
+    }
+    try {
+      await writeClipboardText(text);
+      onToastRef.current("Note copied.");
+    } catch {
+      onToastRef.current("Couldn't copy.", "warning");
+    }
+  }, []);
 
   const openAnswerMenu = useCallback((trigger: HTMLButtonElement, nodeId: string) => {
     if (menuRef.current?.kind === "answer" && menuRef.current.nodeId === nodeId && menuRef.current.trigger === trigger) {
@@ -1574,19 +1592,20 @@ function ResearchThreadPage({
     }
   }
 
-  /** Opens the editor column for the root's document or post; focus moves
-   * into the field. A document's editor follows the root level's columns, so
-   * the strip closes any branch level and the editor is the last column. A
-   * note's editor takes the note column's place, and an open follow-up stays
-   * open, so editing a note changes no selection and adds no history
-   * visit. */
+  /** Opens the editor column for the root's document or for a note (the
+   * root note or a follow-up note); focus moves into the field. A document's
+   * editor follows the root level's columns, so the strip closes any branch
+   * level and the editor is the last column. A note's editor takes its note
+   * column's place, and an open follow-up stays open, so editing an open
+   * note changes no selection and adds no history visit; a follow-up note
+   * that is not open (edited from its row's menu) opens first. */
   function startEditing(nodeId: string, returnFocus: HTMLElement | null) {
     const node = nodeById.get(nodeId);
-    if (!node || nodeId !== rootNodeId || archived) {
+    if (!node || archived || (nodeId !== rootNodeId && nodeType(node) !== "post")) {
       return;
     }
     let session: EditorSession;
-    if (documentHoldsMarkdown(node)) {
+    if (nodeId === rootNodeId && documentHoldsMarkdown(node)) {
       const content = contentByNode[nodeId];
       const markdown = segmentViews.get(nodeId)?.editableDocumentMarkdown ?? null;
       if (!content?.responseRevision || markdown == null) {
@@ -1613,6 +1632,8 @@ function ResearchThreadPage({
         noteScrollTop: 0,
       };
     } else if (nodeType(node) === "post") {
+      // The note column's level; a follow-up note that is not open has none.
+      const level = levelPathRef.current.indexOf(nodeId);
       session = {
         nodeId,
         kind: "post",
@@ -1627,8 +1648,11 @@ function ResearchThreadPage({
         imported: false,
         returnFocus,
         noteScrollTop:
-          workspaceRef.current?.querySelector<HTMLElement>(`${columnSelector("N0")} > .research-column-scroll`)
-            ?.scrollTop ?? 0,
+          level < 0
+            ? 0
+            : (workspaceRef.current?.querySelector<HTMLElement>(
+                `${columnSelector(`N${level}`)} > .research-column-scroll`,
+              )?.scrollTop ?? 0),
       };
     } else {
       return;
@@ -1638,7 +1662,11 @@ function ResearchThreadPage({
     setEditorError(null);
     setEditor(session);
     const path = levelPathRef.current;
-    if (path[0] !== nodeId || (session.kind === "document" && path.length !== 1)) {
+    if (
+      session.kind === "document"
+        ? path[0] !== nodeId || path.length !== 1
+        : !path.includes(nodeId)
+    ) {
       navigate(nodeId);
     }
     requestFocus({ kind: "editor" }, "settle");
@@ -1651,14 +1679,17 @@ function ResearchThreadPage({
    * button, and the column gets back its scroll offset. */
   function closeEditor() {
     const session = editorRef.current;
+    // The level whose note column the editor replaced, read before the
+    // strip drops the editor.
+    const level = stripRef.current.columns.find((column) => column.role === "editor")?.levelIndex ?? 0;
     setEditor(null);
     setEditorError(null);
     setEditorSaving(false);
     const target = session?.returnFocus;
     if (session?.kind === "post") {
-      noteScrollRestoreRef.current = session.noteScrollTop;
+      noteScrollRestoreRef.current = { level, top: session.noteScrollTop };
       if (!target?.isConnected) {
-        requestFocus({ kind: "note", menu: Boolean(target?.matches(".research-head-menu")) }, "settle");
+        requestFocus({ kind: "note", level, menu: Boolean(target?.matches(".research-head-menu")) }, "settle");
         return;
       }
     }
@@ -1982,9 +2013,8 @@ function ResearchThreadPage({
         if (!post) {
           return null;
         }
-        // Only the thread's root post has a … menu (in the column header);
-        // the column's context menu is the same menu.
-        const hasPostMenu = level === 0 && post.id === rootNodeId;
+        // Every note (the root note and each follow-up note) has a … menu
+        // in its column header; the column's context menu is the same menu.
         return (
           <ResearchNoteColumn
             key={columnKey(column)}
@@ -1995,17 +2025,16 @@ function ResearchThreadPage({
             title={level === 0 ? treeTitleText : researchNodeLabel(post, "Note")}
             history={level === 0 ? historyNav : null}
             archived={archived}
-            menu={
-              hasPostMenu
-                ? {
-                    open: menu?.kind === "post" && Boolean(menu.trigger),
-                    onOpen: (trigger) =>
-                      setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
-                    onContextMenu: (placement) => setMenu({ kind: "post", nodeId: post.id, ...placement }),
-                  }
-                : null
-            }
-            scrollRef={level === 0 ? restoreNoteScroll : undefined}
+            menu={{
+              open:
+                menu?.kind === "post" &&
+                menu.nodeId === post.id &&
+                Boolean(menu.trigger?.matches(".research-head-menu")),
+              onOpen: (trigger) =>
+                setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
+              onContextMenu: (placement) => setMenu({ kind: "post", nodeId: post.id, ...placement }),
+            }}
+            scrollRef={restoreNoteScroll}
             onSelectNode={navigate}
           />
         );
@@ -2033,6 +2062,11 @@ function ResearchThreadPage({
               openBranch(level, nodeId);
               requestFocus({ kind: "row", level }, "settle");
             }}
+            onOpenContextMenu={(node, placement) =>
+              // A follow-up note's row opens the note's menu; an AI
+              // follow-up's row, its answer menu.
+              setMenu({ kind: nodeType(node) === "post" ? "post" : "answer", nodeId: node.id, ...placement })
+            }
           />
         );
       }
@@ -2153,7 +2187,7 @@ function ResearchThreadPage({
             error={editorError}
             questionModel={readQuestionModel()}
             textareaRef={editorFieldRef}
-            history={editor.kind === "post" ? historyNav : null}
+            history={editor.kind === "post" && column.levelIndex === 0 ? historyNav : null}
             onChange={(patch) =>
               setEditor((current) => (current && current.nodeId === sessionNodeId ? { ...current, ...patch } : current))
             }
@@ -2281,6 +2315,7 @@ function ResearchThreadPage({
           onToggleFullTrace={toggleFullTrace}
           onToggleStar={toggleStarred}
           onCopyAnswer={handleCopyAnswer}
+          onCopyNote={(nodeId) => void copyNote(nodeId)}
           onCopyThread={(chainIds) => void copyThread(chainIds)}
           onRerun={(nodeId) => {
             // Only a complete answer is replaced, so only it asks first. A

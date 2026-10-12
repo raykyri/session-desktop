@@ -253,8 +253,11 @@ export function useResearchPairsKeyboard({
         if (scroller) {
           scroller.focus({ preventScroll: true });
           revealResearchColumns(columnsLayoutRef.current?.row ?? null, post);
-        } else if (level === 0 && editorRef.current?.kind === "post") {
-          // The root note is being edited: its editor is in the note
+        } else if (
+          editorRef.current?.kind === "post" &&
+          stripRef.current.columns.some((candidate) => candidate.id === `E${level}`)
+        ) {
+          // This level's note is being edited: its editor is in the note
           // column's place.
           requestFocus({ kind: "editor" }, "reveal");
         }

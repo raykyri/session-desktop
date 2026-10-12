@@ -11,9 +11,9 @@ import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researc
 
 type HistoryNav = ComponentProps<typeof ResearchPairHeader>["history"];
 
-/** A note level's note column (N{level}): the note itself. The thread's
- * root note has a … menu in the header, which is also the column's context
- * menu. */
+/** A note level's note column (N{level}): the note itself. Every note, the
+ * root note and each follow-up note, has a … menu in the header, which is
+ * also the column's context menu. */
 export function ResearchNoteColumn({
   column,
   current,
@@ -34,22 +34,20 @@ export function ResearchNoteColumn({
   title: string;
   history: HistoryNav;
   archived: boolean;
-  /** The root note's menu: whether it is open from its … button, and how it
+  /** The note's menu: whether it is open from its … button, and how it
    * opens from the button or as a context menu. */
   menu: {
     open: boolean;
     onOpen: (trigger: HTMLButtonElement) => void;
     onContextMenu: (placement: ResearchUnitMenuPlacement) => void;
-  } | null;
+  };
   scrollRef: Ref<HTMLDivElement> | undefined;
   onSelectNode: (nodeId: string) => void;
 }) {
-  const menuProps = menu
-    ? researchUnitMenuProps(menu.onContextMenu, (scroll) => ({
-        element: scroll.closest("section")?.querySelector<HTMLElement>(".research-head-menu") ?? null,
-        align: "end",
-      }))
-    : null;
+  const menuProps = researchUnitMenuProps(menu.onContextMenu, (scroll) => ({
+    element: scroll.closest("section")?.querySelector<HTMLElement>(".research-head-menu") ?? null,
+    align: "end",
+  }));
   return (
     <section
       className={`research-pair-post${current ? " is-current" : ""}`}
@@ -62,7 +60,7 @@ export function ResearchNoteColumn({
         title="Note"
         history={history}
         archived={archived}
-        menu={menu ? { label: "Note actions", open: menu.open, onOpen: menu.onOpen } : null}
+        menu={{ label: "Note actions", open: menu.open, onOpen: menu.onOpen }}
       />
       <div ref={scrollRef} className="research-column-scroll" tabIndex={-1} {...menuProps}>
         <div className="research-column-content research-reading-surface">
@@ -75,7 +73,9 @@ export function ResearchNoteColumn({
 }
 
 /** A note level's follow-ups column (T{level}): the note's follow-ups, with
- * the one open as the next level marked. */
+ * the one open as the next level marked. Each row's context menu is its
+ * follow-up's menu: a follow-up note's note menu, an AI follow-up's answer
+ * menu. */
 export function ResearchFollowUpsColumn({
   column,
   current,
@@ -88,6 +88,7 @@ export function ResearchFollowUpsColumn({
   composerRef,
   threadRef,
   onOpenFollowUp,
+  onOpenContextMenu,
 }: {
   column: Extract<ResearchColumn, { role: "thread" }>;
   current: boolean;
@@ -101,6 +102,7 @@ export function ResearchFollowUpsColumn({
   composerRef: Ref<ResearchComposerHandle>;
   threadRef: Ref<ResearchPostThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
+  onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
 }) {
   return (
     <section
@@ -121,6 +123,7 @@ export function ResearchFollowUpsColumn({
             composerRef={composerRef}
             threadRef={threadRef}
             onOpenFollowUp={onOpenFollowUp}
+            onOpenContextMenu={onOpenContextMenu}
           />
         </div>
       </div>

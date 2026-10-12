@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchPostColumn from "../src/components/research/ResearchPostColumn";
+import { researchMenuPoint } from "../src/components/research/ResearchMenu";
+import { ResearchNoteColumn } from "../src/components/research/ResearchNoteColumns";
+import { ResearchThreadMenu } from "../src/components/research/ResearchThreadMenu";
+import { researchStrip, type ResearchColumn } from "../src/lib/researchColumns";
+import { nodePrompt } from "../src/lib/researchNodeTypes";
 import type { ResearchNode, ResearchTreeDetail } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
+import { withWidgetDom } from "./widgetDom";
 
 const noop = () => {};
 
@@ -107,4 +114,104 @@ test("an edited post shows its text in place and Edited after its time", () => {
   assert.doesNotMatch(html, /[Cc]orrection/);
   // An unedited post has no Edited mark.
   assert.doesNotMatch(render([post]), /Edited/);
+});
+
+const followUpNoteFields = {
+  ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140, delivery: null,
+} satisfies NodeFixture;
+const followUpNote = researchNode(followUpNoteFields);
+const followUpDetail: ResearchTreeDetail = {
+  tree: {
+    id: "tree", title: "Who ships component-model plugins?", rootNodeId: "post",
+    workspaceId: "ws", createdAt: 100, updatedAt: 100,
+  },
+  nodes: [post, followUpNote],
+};
+
+test("every note level's column has the Note actions … button in its header", () => {
+  const strip = researchStrip(followUpDetail.nodes, "net", null);
+  const columns = strip.columns.filter(
+    (column): column is Extract<ResearchColumn, { role: "post" }> => column.role === "post",
+  );
+  assert.deepEqual(columns.map((column) => column.id), ["N0", "N1"]);
+  for (const column of columns) {
+    const followUp = column.level.index === 1;
+    const note = followUp ? followUpNote : post;
+    const html = renderToStaticMarkup(
+      createElement(ResearchNoteColumn, {
+        column, current: false, detail: followUpDetail, post: note, title: nodePrompt(note),
+        history: null, archived: false, menu: { open: followUp, onOpen: noop, onContextMenu: noop },
+        scrollRef: undefined, onSelectNode: noop,
+      }),
+    );
+    assert.match(html, new RegExp(`data-research-column="${column.id}"`));
+    assert.match(
+      html,
+      new RegExp(
+        `class="control-button research-head-button research-head-menu" aria-label="Note actions" title="Note actions" aria-haspopup="menu" aria-expanded="${followUp}"`,
+      ),
+    );
+  }
+});
+
+/** The labels of the open menu's items in order, "|" for a separator, with
+ * " (disabled)" after a disabled item. */
+function openMenuOutline(document: Document): string[] {
+  return [...document.querySelectorAll("[role='menu'] [role^='menuitem'], [role='menu'] [role='separator']")].map(
+    (item) =>
+      item.getAttribute("role") === "separator"
+        ? "|"
+        : `${item.querySelector(".research-menu-label")?.textContent ?? ""}${item.hasAttribute("disabled") ? " (disabled)" : ""}`,
+  );
+}
+
+async function noteMenuOutline(nodeId: string, options: { archived?: boolean; nodes?: ResearchNode[] } = {}) {
+  let outline: string[] = [];
+  await withWidgetDom(async (window) => {
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    const nodes = options.nodes ?? followUpDetail.nodes;
+    await act(async () =>
+      root.render(
+        createElement(ResearchThreadMenu, {
+          menu: { kind: "post", nodeId, anchor: researchMenuPoint(10, 10), align: "point" },
+          nodes, nodeById: new Map(nodes.map((node) => [node.id, node])), treeNodes: nodes,
+          rootNodeId: "post", treeTitle: "Who ships component-model plugins?", archived: options.archived ?? false,
+          content: null, view: null, hiddenHighlights: 0, fullTrace: false, openBranchIds: new Set<string>(),
+          relaunchPending: false, isPassagePress: () => false, onClose: noop, onOpenBranch: noop, onBranch: noop,
+          onRemoveHighlight: noop, onEdit: noop, onShowFullTrace: noop, onToggleFullTrace: noop, onToggleStar: noop,
+          onCopyAnswer: noop, onCopyNote: noop, onCopyThread: noop, onRerun: noop, onGenerateRecap: noop,
+          onRename: noop, onDelete: noop,
+        }),
+      ),
+    );
+    outline = openMenuOutline(window.document);
+    await act(async () => root.unmount());
+  });
+  return outline;
+}
+
+test("a follow-up note's menu edits, stars, copies and deletes the note; the root note's has no Star or Delete", async () => {
+  assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Star", "Copy note", "|", "Delete note"]);
+  const starred = researchNode({ ...followUpNoteFields, starredAt: 150 });
+  assert.deepEqual(
+    await noteMenuOutline("net", { nodes: [post, starred] }),
+    ["Edit note", "Remove star", "Copy note", "|", "Delete note"],
+  );
+  // An AI follow-up still answering under the note keeps it from being
+  // deleted.
+  const running = researchNode({
+    ...postFields, id: "ask", parentNodeId: "net", type: "exchange", status: "running", createdAt: 160, delivery: null,
+  });
+  assert.deepEqual(
+    await noteMenuOutline("net", { nodes: [post, followUpNote, running] }),
+    ["Edit note", "Star", "Copy note", "|", "Delete note (disabled)"],
+  );
+  assert.deepEqual(await noteMenuOutline("net", { archived: true }), [
+    "Edit note (disabled)", "Star", "Copy note", "|", "Delete note",
+  ]);
+  // The root note stands for the thread, which is deleted from the feed; the
+  // backend refuses a star on a tree's root.
+  assert.deepEqual(await noteMenuOutline("post"), ["Edit note", "Copy note"]);
 });

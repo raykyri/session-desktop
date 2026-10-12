@@ -6,8 +6,9 @@
 // note), which renders as the note column and its follow-ups column
 // (follow-ups and the follow-up composer). An unsent branch adds a pending
 // column after the level it was asked from. Editing the root's document adds
-// an editor column after the root level's columns; editing the root note
-// shows the editor column in place of the note column.
+// an editor column after the root level's columns; editing a note (the root
+// note or a follow-up note) shows the editor column in place of its note
+// column.
 //
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
@@ -98,10 +99,11 @@ interface ResearchPendingBranch {
 /** The columns for `selectedNodeId` (the deepest level's selected message)
  * and the unsent branch. A selection that is not in `nodes` yields an empty
  * strip. The pending branch opens a column only after the level that shows
- * its parent selected. `editingNodeId`, the root being edited, adds the
- * editor column: for a document, right after the root level's columns,
- * before any branch level; for a note, in place of the note column, so the
- * root level is the editor and the follow-ups column. */
+ * its parent selected. `editingNodeId`, the root document or a note being
+ * edited, adds the editor column: for a document, right after the root
+ * level's columns, before any branch level; for a note (the root note or a
+ * follow-up note), in place of that level's note column, so the level is the
+ * editor and the follow-ups column. */
 export function researchStrip(
   nodes: readonly ResearchNode[],
   selectedNodeId: string | null,
@@ -127,9 +129,11 @@ export function researchStrip(
   });
   const columns: ResearchColumn[] = [];
   for (const level of levels) {
+    // A document is edited only as the root; a note (the root note or a
+    // follow-up note) at the level that shows it.
     const editor: ResearchColumn | null =
-      level.index === 0 && editingNodeId !== null && level.headId === editingNodeId
-        ? { id: "E0", role: "editor", levelIndex: 0, nodeId: editingNodeId }
+      editingNodeId !== null && level.headId === editingNodeId && (level.index === 0 || level.kind === "post")
+        ? { id: `E${level.index}`, role: "editor", levelIndex: level.index, nodeId: editingNodeId }
         : null;
     if (level.kind === "post") {
       columns.push(editor ?? { id: `N${level.index}`, role: "post", level });

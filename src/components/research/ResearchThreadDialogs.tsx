@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { researchBranchInfo } from "../../lib/researchBranches";
 import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "../../lib/researchChains";
-import { nodePrompt } from "../../lib/researchNodeTypes";
+import { nodePrompt, nodeType } from "../../lib/researchNodeTypes";
 import { researchDeleteLabel } from "../../lib/researchThreadView";
 import type { ResearchNode } from "../../types";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
@@ -195,6 +195,8 @@ export function ResearchDeleteBranchDialog({
     return null;
   }
   const isRoot = node.id === rootNodeId;
+  // A follow-up note: deleting it deletes its own follow-ups.
+  const note = !isRoot && nodeType(node) === "post";
 
   async function confirm() {
     if (!node || !info || info.hasActiveRuns) {
@@ -239,6 +241,8 @@ export function ResearchDeleteBranchDialog({
         <h2 id="delete-research-branch-dialog-title">
           {isRoot
             ? "Delete research"
+            : note
+            ? "Delete this note?"
             : node.inline && info.descendantCount > 0
             ? "Delete the rest of this thread?"
             : info.descendantCount > 0
@@ -255,6 +259,10 @@ export function ResearchDeleteBranchDialog({
             ? info.descendantCount > 0
               ? `This permanently deletes the root answer and all ${info.descendantCount} follow-up${info.descendantCount === 1 ? "" : "s"}.`
               : "This permanently deletes the root answer and its research history."
+            : note
+            ? info.descendantCount > 0
+              ? `This permanently deletes the note and ${info.descendantCount} follow-up${info.descendantCount === 1 ? "" : "s"} under it.`
+              : "This permanently deletes the note."
             : node.inline && info.descendantCount > 0
             ? `This permanently deletes this follow-up and everything after it in the thread — ${info.descendantCount} descendant node${info.descendantCount === 1 ? "" : "s"} in total, including any branches. Its parent answer keeps the freed inline slot.`
             : info.descendantCount > 0
@@ -282,7 +290,11 @@ export function ResearchDeleteBranchDialog({
             disabled={removing || info.hasActiveRuns}
             onClick={() => void confirm()}
           >
-            {removing ? "Deleting…" : researchDeleteLabel(isRoot, node.inline, info.descendantCount)}
+            {removing
+              ? "Deleting…"
+              : note
+                ? "Delete note"
+                : researchDeleteLabel(isRoot, node.inline, info.descendantCount)}
           </button>
         </div>
       </div>

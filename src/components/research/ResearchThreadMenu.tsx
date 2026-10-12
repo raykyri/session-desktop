@@ -56,8 +56,8 @@ interface ThreadMenuPlacement {
 }
 
 /** The thread page's open menu: a message's answer menu (its … button or
- * context menu), the root note's menu, or the menu of a passage that
- * carries several branches or a highlight. */
+ * context menu), a note's menu (the root note or a follow-up note), or the
+ * menu of a passage that carries several branches or a highlight. */
 export type ThreadMenuState =
   | ({ kind: "answer"; nodeId: string } & ThreadMenuPlacement)
   | ({ kind: "post"; nodeId: string } & ThreadMenuPlacement)
@@ -95,6 +95,7 @@ export function ResearchThreadMenu({
   onToggleFullTrace,
   onToggleStar,
   onCopyAnswer,
+  onCopyNote,
   onCopyThread,
   onRerun,
   onGenerateRecap,
@@ -136,6 +137,8 @@ export function ResearchThreadMenu({
   onToggleFullTrace: (nodeId: string) => void;
   onToggleStar: (nodeId: string) => void;
   onCopyAnswer: (view: SegmentView) => void;
+  /** Copies a note's text. */
+  onCopyNote: (nodeId: string) => void;
   onCopyThread: (chainIds: string[]) => void;
   onRerun: (nodeId: string) => void;
   onGenerateRecap: (nodeId: string) => void;
@@ -197,6 +200,11 @@ export function ResearchThreadMenu({
   }
   if (menu.kind === "post") {
     const post = menuNode;
+    // The root note stands for the thread: it has the thread's Bookmark and
+    // Move to, and is deleted with the thread. A follow-up note is starred
+    // and deleted on its own.
+    const isRoot = post.id === rootNodeId;
+    const info = isRoot ? null : researchBranchInfo(treeNodes, post.id);
     return (
       <ResearchMenu
         anchor={menu.anchor}
@@ -209,14 +217,55 @@ export function ResearchThreadMenu({
           icon={<Pencil size={15} aria-hidden="true" />}
           label="Edit note"
           disabled={archived}
-          title={archived ? "Move this note out of Archive to edit it" : undefined}
+          title={
+            !archived
+              ? undefined
+              : isRoot
+                ? "Move this note out of Archive to edit it"
+                : "Move this thread out of Archive to edit its notes"
+          }
           onSelect={() => {
             const trigger = menu.trigger ?? null;
             onClose();
             onEdit(post.id, trigger);
           }}
         />
-        {treeMenu ? (
+        {isRoot ? null : (
+          <ResearchMenuItem
+            icon={<Star size={15} aria-hidden="true" />}
+            label={post.starredAt ? "Remove star" : "Star"}
+            title={post.starredAt ? undefined : "List this note under its thread in the feed"}
+            onSelect={() => {
+              onClose();
+              onToggleStar(post.id);
+            }}
+          />
+        )}
+        <ResearchMenuItem
+          icon={<Copy size={15} aria-hidden="true" />}
+          label="Copy note"
+          onSelect={() => {
+            onClose();
+            onCopyNote(post.id);
+          }}
+        />
+        {info ? (
+          <>
+            <ResearchMenuSeparator />
+            <ResearchMenuItem
+              icon={<Trash2 size={15} aria-hidden="true" />}
+              label="Delete note"
+              danger
+              disabled={info.hasActiveRuns}
+              title={info.hasActiveRuns ? "Its follow-ups must finish or be cancelled before deletion" : undefined}
+              onSelect={() => {
+                onClose();
+                onDelete(post.id);
+              }}
+            />
+          </>
+        ) : null}
+        {treeMenu && isRoot ? (
           <>
             <ResearchMenuSeparator />
             <ResearchTreeMenuItems

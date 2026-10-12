@@ -9,7 +9,8 @@ import { researchEditorCanSave, type researchEditorStats } from "../../lib/resea
 import type { ResearchHighlightAnchor } from "../../types";
 import { ResearchEditorColumn } from "./ResearchEditorColumn";
 
-/** The root's document or post open in the editor column (E0). */
+/** The root's document (E0), or a note (the root note or a follow-up note,
+ * E{level}), open in the editor column. */
 export interface EditorSession {
   nodeId: string;
   kind: "document" | "post";

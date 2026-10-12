@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ResearchUnitMenuPlacement } from "../src/components/research/researchUnitMenu";
 import ResearchPostThread, { postThreadEntries } from "../src/components/research/ResearchPostThread";
 import { postFollowUpCopy } from "../src/components/research/ResearchPost";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
+import { withWidgetDom } from "./widgetDom";
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -53,6 +56,7 @@ function render(nodes: ResearchNode[], options: { openNodeId?: string | null; ar
     openNodeId: options.openNodeId ?? null,
     actions: { onAskFollowUp: asyncNoop, onRetry: asyncNoop },
     onOpenFollowUp: noop,
+    onOpenContextMenu: noop,
   }));
 }
 
@@ -169,5 +173,45 @@ test("the follow-up box uses Ask mode by default and adds a note in Note mode", 
     placeholder: "Add a note",
     sendName: "Add note",
     sendTitle: "Add note",
+  });
+});
+
+test("each follow-up row opens its follow-up's menu as its context menu", async () => {
+  await withWidgetDom(async (window) => {
+    const MouseEvent = window.MouseEvent;
+    const opened: { id: string; placement: ResearchUnitMenuPlacement }[] = [];
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    await act(async () =>
+      root.render(createElement(ResearchPostThread, {
+        nodes: [withReplies, answered, note], post: withReplies, archived: true, requireCmdEnterToSend: true,
+        openNodeId: null, actions: { onAskFollowUp: asyncNoop, onRetry: asyncNoop }, onOpenFollowUp: noop,
+        onOpenContextMenu: (node, placement) => opened.push({ id: node.id, placement }),
+      })),
+    );
+    const text = (content: string) =>
+      [...container.querySelectorAll<HTMLElement>(".post-thread-question")].find((element) => element.textContent === content)!;
+    // A right-click on a follow-up note's text, and on an AI follow-up's,
+    // opens the menu at the pointer instead of the webview's menu.
+    for (const [content, x] of [["Anyone measured wizer?", 40], ["Which runtimes support it?", 60]] as const) {
+      const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: x, clientY: 20 });
+      await act(async () => { text(content).dispatchEvent(event); });
+      assert.equal(event.defaultPrevented, true);
+    }
+    assert.deepEqual(opened, [
+      { id: "note", placement: { anchor: { left: 40, top: 20, right: 40, bottom: 20 }, align: "point" } },
+      { id: "answered", placement: { anchor: { left: 60, top: 20, right: 60, bottom: 20 }, align: "point" } },
+    ]);
+    // Shift+F10 on a focused row opens the menu at the row, which has no …
+    // button.
+    const row = container.querySelector<HTMLElement>('[data-thread-key="note"]')!;
+    const key = new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F10", shiftKey: true });
+    await act(async () => { row.dispatchEvent(key); });
+    assert.equal(key.defaultPrevented, true);
+    assert.equal(opened.length, 3);
+    assert.equal(opened[2].id, "note");
+    assert.equal(opened[2].placement.align, "point");
+    await act(async () => root.unmount());
   });
 });

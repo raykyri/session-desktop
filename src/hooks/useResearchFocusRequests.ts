@@ -17,9 +17,9 @@ export type ResearchFocusTarget =
   | { kind: "marker"; level: number; key: string }
   | { kind: "composer"; key: string }
   | { kind: "editor" }
-  /** The root note's column (N0): its … button with `menu`, else its
-   * scroll area. */
-  | { kind: "note"; menu: boolean };
+  /** A note's column (N{level}): its … button with `menu`, else its scroll
+   * area. */
+  | { kind: "note"; level: number; menu: boolean };
 
 /** How the strip follows a focus request: `reveal` shows the level's pair by
  * the least scroll, `settle` shows the strip's last column with the target's
@@ -91,7 +91,8 @@ export function useResearchFocusRequests({
         case "editor":
           return editorField();
         case "note": {
-          const column = workspaceRef.current?.querySelector<HTMLElement>(columnSelector("N0")) ?? null;
+          const column =
+            workspaceRef.current?.querySelector<HTMLElement>(columnSelector(`N${target.level}`)) ?? null;
           return (
             (target.menu ? column?.querySelector<HTMLElement>(".research-head-menu") : null) ??
             column?.querySelector<HTMLElement>(":scope > .research-column-scroll") ??

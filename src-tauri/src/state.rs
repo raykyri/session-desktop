@@ -4639,11 +4639,12 @@ impl AppState {
         Ok(node)
     }
 
-    /// Edits a root post: it gets the new text, its highlights move to their
-    /// quote in it (research_anchors), its format follows the text, and it
-    /// is marked edited; the tree title follows the text when it was still
-    /// the title derived from the old text. Replies and follow-ups are kept
-    /// as they are. A post whose text changed since the editor opened
+    /// Edits a note: a thread's root post or a follow-up note. It gets the
+    /// new text, its highlights move to their quote in it
+    /// (research_anchors), its format follows the text, and it is marked
+    /// edited; for the root, the tree title follows the text when it was
+    /// still the title derived from the old text. Replies and follow-ups are
+    /// kept as they are. A post whose text changed since the editor opened
     /// (`request.expected_text`) is refused.
     pub fn update_research_post(
         &self,
@@ -4676,12 +4677,10 @@ impl AppState {
                 .get(&current.tree_id)
                 .cloned()
                 .ok_or_else(|| format!("research tree {} was not found", current.tree_id))?;
-            if current.node_type() != ResearchNodeType::Post
-                || current.parent_node_id.is_some()
-                || tree.root_node_id != current.id
-            {
-                return Err("only a thread's own note can be edited".to_string());
+            if current.node_type() != ResearchNodeType::Post {
+                return Err("only a note can be edited".to_string());
             }
+            let is_root = current.parent_node_id.is_none() && tree.root_node_id == current.id;
             if tree.archived_at.is_some() {
                 return Err("restore archived research before editing its note".to_string());
             }
@@ -4712,8 +4711,9 @@ impl AppState {
                 None,
             );
             node.highlights = kept;
+            // A follow-up note's text does not name the thread.
             let mut title = tree.title.clone();
-            if tree.title == research::post_default_title(current.prompt()) {
+            if is_root && tree.title == research::post_default_title(current.prompt()) {
                 title = research::post_default_title(&text);
             }
             // The format follows the text, as it did when the feed derived it
@@ -13629,6 +13629,73 @@ mod tests {
             .update_research_post(post_edit(&quiet_id, "Final plan", "Draft plan"))
             .unwrap();
         assert_eq!(quiet_edit.node.prompt(), "Final plan");
+    }
+
+    #[test]
+    fn a_follow_up_note_takes_new_text_and_keeps_the_thread_title() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let post = state
+            .create_research_post(post_request("Reading list", true), Vec::new())
+            .unwrap();
+        let post_id = post.tree.root_node_id.clone();
+        let note = state
+            .create_research_post_follow_up(&post_id, "Reading list".to_string(), Vec::new())
+            .unwrap();
+        let nested = state
+            .create_research_post_follow_up(&note.id, "Start with the spec".to_string(), Vec::new())
+            .unwrap();
+        assert!(
+            state
+                .update_research_post(post_edit(&note.id, "Next", "Old text"))
+                .unwrap_err()
+                .contains("changed while you were editing")
+        );
+        // The follow-up note's old text matched the derived title; the title
+        // still names the root note.
+        let edited = state
+            .update_research_post(post_edit(
+                &note.id,
+                "Reading list, part two",
+                "Reading list",
+            ))
+            .unwrap();
+        assert_eq!(edited.node.prompt(), "Reading list, part two");
+        assert!(edited.node.post().unwrap().edited_at.is_some());
+        assert_eq!(edited.tree.title, "Reading list");
+        assert_eq!(
+            state.research_node(&post_id).unwrap().prompt(),
+            "Reading list"
+        );
+        // Its own follow-ups are kept.
+        assert!(state.research_node(&nested.id).is_ok());
+        // An AI follow-up is not a note.
+        let exchange = state
+            .create_research_child_with_attachments(
+                &post_id,
+                "Summarize".to_string(),
+                None,
+                false,
+                Vec::new(),
+            )
+            .unwrap();
+        assert!(
+            state
+                .update_research_post(post_edit(&exchange.id, "Shorter", "Summarize"))
+                .unwrap_err()
+                .contains("only a note can be edited")
+        );
+        // An archived thread's follow-up notes are not edited. The AI
+        // follow-up finishes first: a thread with active runs is not
+        // archived.
+        settle_research_node(&state, &exchange.id);
+        state.archive_research_tree(&post.tree.id).unwrap();
+        assert!(
+            state
+                .update_research_post(post_edit(&nested.id, "Spec first", "Start with the spec"))
+                .unwrap_err()
+                .contains("restore archived research")
+        );
     }
 
     #[test]
