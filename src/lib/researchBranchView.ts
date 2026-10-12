@@ -1,7 +1,7 @@
 // Level math for the column pairs. A level shows an inline chain (see
 // researchChains); a branch is a non-inline child node, shown as the chain it
 // heads. Level 0 is the root's chain; each later level is a branch asked from
-// the previous level's selected message.
+// a message listed in the previous level's column (see researchColumns).
 
 import { canContinueChain, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchChains";
 import type { QueuedResearchFollowup } from "./researchNavigation";
@@ -42,9 +42,9 @@ export function researchBranchesByParent(
   return map;
 }
 
-/** The selected message of each open level, root level first. The
- * deepest level's selection determines the whole path: each level's chain
- * head was asked from the previous level's selected message. */
+/** The levels `nodeId` was asked from, as each column's selected message,
+ * root level first: `nodeId`, preceded by the message its chain's head was
+ * asked from, and so on up to the root's chain. */
 export function researchLevelPath(nodes: readonly ResearchNode[], nodeId: string): string[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const path: string[] = [];

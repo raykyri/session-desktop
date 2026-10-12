@@ -50,7 +50,8 @@ export interface ResearchLevel {
   displayIds: readonly string[];
   /** The message whose answer the level shows. */
   selectedId: string;
-  /** The message in the previous level this branch was asked from; null for
+  /** The message this branch was asked from, one of the messages listed in
+   * the previous level's column (not necessarily its selection); null for
    * the root level. */
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
