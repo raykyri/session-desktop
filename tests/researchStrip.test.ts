@@ -8,6 +8,7 @@ import {
   columnSelector,
   isMessagesColumnId,
   researchStrip,
+  researchStripSettleLeft,
   sameResearchStrip,
 } from "../src/lib/researchColumns";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
@@ -317,4 +318,24 @@ test("editing the root note shows the editor column in place of the note column"
   assert.deepEqual(ids(researchStrip(nodes, "run", null, "net")), ["N0", "T0", "T1", "A1"]);
   // An AI follow-up's level is not a note: it has no editor column.
   assert.deepEqual(ids(researchStrip(nodes, "run", null, "run")), ["N0", "T0", "T1", "A1"]);
+});
+
+test("settling the strip aligns the final column, or the column before a pending branch", () => {
+  const columns = [
+    { id: "feed", left: 0, width: 300 },
+    { id: "T0", left: 300, width: 300 },
+    { id: "A0", left: 600, width: 400 },
+    { id: "P1", left: 1000, width: 300 },
+  ];
+  // The pending branch is the final column: the strip scrolls to show it.
+  assert.equal(researchStripSettleLeft(columns, 1100, null), 200);
+  // Skipping it, the strip settles as it would without the branch.
+  assert.equal(researchStripSettleLeft(columns, 1100, null, true), 0);
+  assert.equal(researchStripSettleLeft(columns.slice(0, 3), 1100, null), 0);
+  assert.equal(researchStripSettleLeft(columns, 700, null, true), 300);
+  // A focused column stays in view, including a pending one.
+  assert.equal(researchStripSettleLeft(columns, 700, "T0", true), 300);
+  assert.equal(researchStripSettleLeft(columns, 700, "feed", true), 0);
+  assert.equal(researchStripSettleLeft(columns, 700, "P1", true), 600);
+  assert.equal(researchStripSettleLeft([], 700, null), null);
 });

@@ -234,6 +234,40 @@ export function isMessagesColumnId(id: string | null | undefined): boolean {
   return Boolean(id && /^[TP]\d+$/.test(id));
 }
 
+/** A column's horizontal extent in the strip, in the strip's scroll
+ * coordinates. */
+interface ResearchColumnExtent {
+  id: string;
+  left: number;
+  width: number;
+}
+
+/** The strip's scroll offset after a settle: the final column's right edge
+ * at the viewport's right edge (or 0 when everything fits), then shifted the
+ * least distance that shows the `focusId` column. With `skipPending`, a
+ * pending branch column (Pn) is not the final column, so the strip settles as
+ * it would without that column. Returns null when there are no columns to
+ * align. */
+export function researchStripSettleLeft(
+  columns: readonly ResearchColumnExtent[],
+  viewWidth: number,
+  focusId: string | null,
+  skipPending = false,
+): number | null {
+  const aligned = skipPending ? columns.filter((column) => !/^P\d+$/.test(column.id)) : columns;
+  const last = aligned[aligned.length - 1];
+  if (!last) return null;
+  let left = Math.max(0, last.left + last.width - viewWidth);
+  const focus = focusId ? columns.find((column) => column.id === focusId) : undefined;
+  if (focus) {
+    if (focus.left < left) left = focus.left;
+    if (focus.left + focus.width > left + viewWidth) {
+      left = focus.left + focus.width - viewWidth;
+    }
+  }
+  return left;
+}
+
 /** The data attributes that identify a column in the DOM, written in one
  * place for every column kind. `data-research-pair` and
  * `data-research-level` are set on the columns of a level: messages, thread,

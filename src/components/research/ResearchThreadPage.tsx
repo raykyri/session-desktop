@@ -705,13 +705,14 @@ function ResearchThreadPage({
     setFullTraceNodes({});
     // Restoring reopens the levels without animation: the strip shows the
     // deepest level (and, when the feed and the first pair don't fit, the
-    // answer rather than the feed).
+    // answer rather than the feed). A new branch restored with the thread
+    // reopens to the right of that level without moving the strip to it.
     // Keyboard focus already in the pairs (→ from the feed) stays in view.
     window.requestAnimationFrame(() =>
       window.requestAnimationFrame(() => {
         const row = columnsLayoutRef.current?.row ?? null;
         const focused = row?.contains(document.activeElement) ? columnIdOf(document.activeElement) : null;
-        settleResearchStrip(row, columnLevelIndex(focused) !== null ? focused : null, "auto");
+        settleResearchStrip(row, columnLevelIndex(focused) !== null ? focused : null, "auto", true);
       }),
     );
     // Runs once per tree: the thread page remounts on tree switches, and the

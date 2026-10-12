@@ -6,6 +6,7 @@ import {
   columnIdOf,
   columnSelector,
   isMessagesColumnId,
+  researchStripSettleLeft,
   type ResearchColumnId,
 } from "../../lib/researchColumns";
 import { isEditableTarget } from "../../lib/appHelpers";
@@ -76,25 +77,23 @@ export function revealResearchColumns(
 }
 
 /** Align the final column to the right after a level changes, then adjust the
- * position to keep `focusId` visible. */
+ * position to keep `focusId` visible. `skipPending` aligns the column before
+ * a pending branch instead, leaving that branch's column off screen when it
+ * does not fit (see researchStripSettleLeft). */
 export function settleResearchStrip(
   row: HTMLElement | null,
   focusId: ResearchColumnId | null,
   behavior: ScrollBehavior = researchScrollBehavior(),
+  skipPending = false,
 ) {
   if (!row) return;
-  const focus = focusId ? row.querySelector<HTMLElement>(columnSelector(focusId)) : null;
-  const columns = [...row.querySelectorAll<HTMLElement>(columnSelector())];
-  const last = columns[columns.length - 1];
-  if (!last) return;
-  const viewWidth = row.clientWidth;
-  let left = Math.max(0, last.offsetLeft + last.offsetWidth - viewWidth);
-  if (focus) {
-    if (focus.offsetLeft < left) left = focus.offsetLeft;
-    if (focus.offsetLeft + focus.offsetWidth > left + viewWidth) {
-      left = focus.offsetLeft + focus.offsetWidth - viewWidth;
-    }
-  }
+  const columns = [...row.querySelectorAll<HTMLElement>(columnSelector())].map((element) => ({
+    id: element.dataset.researchColumn ?? "",
+    left: element.offsetLeft,
+    width: element.offsetWidth,
+  }));
+  const left = researchStripSettleLeft(columns, row.clientWidth, focusId, skipPending);
+  if (left === null) return;
   if (Math.abs(row.scrollLeft - left) > 1) {
     row.scrollTo({ left, behavior });
   }
@@ -344,17 +343,20 @@ export default function ResearchColumns({
       focusOpenedThread: (deepest) => {
         const started = performance.now();
         const attempt = () => {
-          // The messages-side columns (a level's messages, thread or pending
-          // column, or a draft), left to right.
-          const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter((element) =>
-            isMessagesColumnId(element.dataset.researchColumn),
+          // The messages-side columns (a level's messages or thread column,
+          // or a draft), left to right. A new branch restored with the
+          // thread is not focused.
+          const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter(
+            (element) =>
+              isMessagesColumnId(element.dataset.researchColumn) && !element.dataset.researchColumn?.startsWith("P"),
           );
           const column = deepest ? columns[columns.length - 1] : columns[0];
           const target = column?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR);
           if (target && column) {
             target.focus({ preventScroll: true });
-            // Scroll the focused column into view.
-            settleResearchStrip(row, columnIdOf(column));
+            // Scroll the focused column into view; a restored new branch
+            // stays where it is.
+            settleResearchStrip(row, columnIdOf(column), researchScrollBehavior(), true);
             return;
           }
           if (!column?.classList.contains("research-draft-view") && performance.now() - started < 1500) {
