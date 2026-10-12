@@ -23,6 +23,7 @@ import {
   canGoResearchBack,
   canGoResearchForward,
   currentResearchVisit,
+  mapResearchVisits,
   pruneResearchVisits,
   pushResearchVisit,
   replaceResearchVisit,
@@ -30,6 +31,7 @@ import {
   researchVisitBack,
   researchVisitFor,
   researchVisitForward,
+  researchVisitAfterRemoval,
   researchVisitsAfterRemoval,
   seedResearchVisits,
   type ResearchVisit,
@@ -527,20 +529,23 @@ export function useResearchNavigation(
     },
     [updateResearchVisits],
   );
-  // Removed messages: their visits go; `selection` is the message the
-  // thread page moved to.
+  // Removed messages: a visit whose path selects one gets the path
+  // `survivingPath` makes of it, a visit without a path goes with its
+  // message, and `selection` (each column's selection the thread page moved
+  // to) is on screen.
   const pruneResearchNodeVisits = useCallback(
-    (treeId: string, keepNode: (nodeId: string) => boolean, selection: string | null, path?: readonly string[]) => {
-      const keep = (visit: ResearchVisit) =>
-        visit.kind === "home" || visit.treeId !== treeId || visit.nodeId === null || keepNode(visit.nodeId);
+    (
+      treeId: string,
+      keepNode: (nodeId: string) => boolean,
+      survivingPath: (path: readonly string[]) => readonly string[],
+      selection: readonly string[] | null,
+    ) => {
+      const update = (visit: ResearchVisit) => researchVisitAfterRemoval(visit, treeId, keepNode, survivingPath);
+      const nodeId = selection?.[selection.length - 1];
       updateResearchVisits((current) =>
-        selection
-          ? researchVisitsAfterRemoval(
-              current,
-              keep,
-              path ? { kind: "node", treeId, nodeId: selection, path } : { kind: "node", treeId, nodeId: selection },
-            )
-          : pruneResearchVisits(current, keep),
+        selection && nodeId
+          ? researchVisitsAfterRemoval(current, update, { kind: "node", treeId, nodeId, path: [...selection] })
+          : mapResearchVisits(current, update),
       );
     },
     [updateResearchVisits],

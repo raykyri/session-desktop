@@ -6,6 +6,7 @@ import {
   canGoResearchForward,
   currentResearchVisit,
   initResearchVisits,
+  mapResearchVisits,
   pruneResearchVisits,
   pushResearchVisit,
   replaceResearchVisit,
@@ -15,6 +16,7 @@ import {
   researchVisitBack,
   researchVisitFor,
   researchVisitForward,
+  researchVisitAfterRemoval,
   researchVisitsAfterRemoval,
   seedResearchVisits,
   type ResearchVisit,
@@ -107,10 +109,15 @@ test("visits with the same deepest message differ by the other columns' selectio
   assert.deepEqual(researchVisitBack(history)?.visit, first);
   // The same selection again adds no step.
   assert.equal(pushResearchVisit(history, { ...second, path: ["c", "b"] }), history);
-  // A visit without a path matches one with it, and takes the path.
+  // A visit with a path after one without it to the same message is a step:
+  // the visit without a path may have shown other columns.
   history = pushAll(EMPTY_RESEARCH_VISITS, [at("t", "b"), first]);
-  assert.equal(history.entries.length, 1);
+  assert.equal(history.entries.length, 2);
   assert.deepEqual(currentResearchVisit(history), first);
+  assert.equal(pushAll(EMPTY_RESEARCH_VISITS, [first, at("t", "b")]).entries.length, 2);
+  // Replacing the visit without a path gives it the path.
+  history = replaceResearchVisit(initResearchVisits(at("t", "b")), first);
+  assert.deepEqual(history, { entries: [first], index: 0 });
   // Replacing with another path changes the visit on screen.
   assert.deepEqual(currentResearchVisit(replaceResearchVisit(history, second)), second);
 });
@@ -191,7 +198,8 @@ test("pruning merges visits that become adjacent duplicates", () => {
 
 test("removal prunes the removed messages and puts the fallback on screen", () => {
   const history = pushAll(initResearchVisits(at("A", "c1-0")), [at("A", "c1-1"), at("A", "b1"), at("A", "b2")]);
-  const keep = (visit: ResearchVisit) => visit.kind === "home" || !["b1", "b2"].includes(visit.nodeId ?? "");
+  const keep = (visit: ResearchVisit) =>
+    visit.kind === "home" || !["b1", "b2"].includes(visit.nodeId ?? "") ? visit : null;
   const after = researchVisitsAfterRemoval(history, keep, at("A", "c1-1"));
   assert.deepEqual(after, { entries: [at("A", "c1-0"), at("A", "c1-1")], index: 1 });
   assert.deepEqual(researchVisitBack(after)?.visit, at("A", "c1-0"));
@@ -225,4 +233,65 @@ test("swipe tail captures horizontal momentum per wheel event", () => {
   assert.equal(researchSwipeTailCapturesWheel(0, 30), false);
   assert.equal(researchSwipeTailCapturesWheel(4, 12), false);
   assert.equal(researchSwipeTailCapturesWheel(10, -10), false);
+});
+
+test("mapping visits rewrites and removes them, merging new duplicates", () => {
+  const history = { entries: [at("A", "a0"), at("A", "a1"), at("A", "a2"), at("B", "b0")], index: 2 };
+  // a1 becomes a0 (merging with the visit before it); a2, on screen, goes.
+  const mapped = mapResearchVisits(history, (visit) =>
+    visit.kind === "node" && visit.nodeId === "a1" ? at("A", "a0") : visit.kind === "node" && visit.nodeId === "a2" ? null : visit,
+  );
+  assert.deepEqual(mapped, { entries: [at("A", "a0"), at("B", "b0")], index: 0 });
+  assert.equal(mapResearchVisits(history, (visit) => visit), history);
+  // With keepCurrent, the visit on screen is left as it is.
+  const kept = mapResearchVisits(history, () => null, { keepCurrent: true });
+  assert.deepEqual(kept, { entries: [at("A", "a2")], index: 0 });
+});
+
+test("a removal rewrites a visit's path that selects a removed message", () => {
+  const visit = (path: string[]): ResearchVisit => ({ kind: "node", treeId: "t", nodeId: path[path.length - 1], path });
+  const removed = new Set(["r2"]);
+  const keepNode = (nodeId: string) => !removed.has(nodeId);
+  // r2 (followed r1) was removed: r1 takes its place in the path.
+  const survivingPath = (path: readonly string[]) => path.map((id) => (id === "r2" ? "r1" : id));
+  assert.deepEqual(researchVisitAfterRemoval(visit(["r2", "b1"]), "t", keepNode, survivingPath), visit(["r1", "b1"]));
+  const untouched = visit(["r1", "b1"]);
+  assert.equal(researchVisitAfterRemoval(untouched, "t", keepNode, survivingPath), untouched);
+  // A path with nothing left is removed, as is a visit without a path to a
+  // removed message.
+  assert.equal(researchVisitAfterRemoval(visit(["r2"]), "t", keepNode, () => []), null);
+  assert.equal(researchVisitAfterRemoval(at("t", "r2"), "t", keepNode, survivingPath), null);
+  // Other threads, Home and visits without a message are kept.
+  const other = { kind: "node" as const, treeId: "u", nodeId: "r2", path: ["r2"] };
+  assert.equal(researchVisitAfterRemoval(other, "t", keepNode, survivingPath), other);
+  assert.equal(researchVisitAfterRemoval(home, "t", keepNode, survivingPath), home);
+});
+
+test("Back after a removal on the path does not return to the removed path", () => {
+  // Root r1 -> r2 inline, branch b1 of r1. Selecting r2 in column 0 and b1
+  // in column 1, then deleting r2: column 0 selects r1.
+  const visit = (path: string[]): ResearchVisit => ({ kind: "node", treeId: "t", nodeId: path[path.length - 1], path });
+  const history = pushAll(EMPTY_RESEARCH_VISITS, [visit(["r1"]), visit(["r1", "b1"]), visit(["r2", "b1"])]);
+  const survivingPath = (path: readonly string[]) => path.map((id) => (id === "r2" ? "r1" : id));
+  const update = (entry: ResearchVisit) =>
+    researchVisitAfterRemoval(entry, "t", (nodeId) => nodeId !== "r2", survivingPath);
+  const after = researchVisitsAfterRemoval(history, update, visit(["r1", "b1"]));
+  // The visit on screen is rewritten in place: nothing is pushed, and it
+  // merges with the identical visit before it.
+  assert.deepEqual(after, { entries: [visit(["r1"]), visit(["r1", "b1"])], index: 1 });
+  assert.deepEqual(researchVisitBack(after)?.visit, visit(["r1"]));
+});
+
+test("a removal replaces the visit on screen when it is to the same message", () => {
+  const visit = (path: string[]): ResearchVisit => ({ kind: "node", treeId: "t", nodeId: path[path.length - 1], path });
+  const history = { entries: [visit(["a"]), visit(["a", "x", "b"]), visit(["c"])], index: 1 };
+  // x was removed; the page moved to [a, b] (b listed after a). The forward
+  // visit stays.
+  const after = researchVisitsAfterRemoval(
+    history,
+    (entry) => (entry.kind === "node" && entry.path?.includes("x") ? visit(["a", "y", "b"]) : entry),
+    visit(["a", "b"]),
+  );
+  assert.deepEqual(after, { entries: [visit(["a"]), visit(["a", "b"]), visit(["c"])], index: 1 });
+  assert.equal(canGoResearchForward(after), true);
 });

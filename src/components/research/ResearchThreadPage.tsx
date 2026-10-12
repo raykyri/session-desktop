@@ -221,14 +221,16 @@ interface ResearchThreadPageProps {
    * selected message, for the visit history: "push" for user navigation, or
    * "replace" for the selection restored on opening. */
   onNavigate?: (treeId: string, nodeId: string, mode: "push" | "replace", path?: readonly string[]) => void;
-  /** Removes visits to this tree's messages that `keepNode` rejects (removed
-   * messages). With `selection` (and `path`), that selection is on screen
-   * afterwards. */
+  /** Updates the visits to this tree after messages were removed
+   * (`keepNode` rejects them): a visit whose path selects one gets the path
+   * `survivingPath` makes of it, and a visit without a path goes with its
+   * message. With `selection` (each column's selected message), that
+   * selection is on screen afterwards. */
   onPruneVisits?: (
     treeId: string,
     keepNode: (nodeId: string) => boolean,
-    selection: string | null,
-    path?: readonly string[],
+    survivingPath: (path: readonly string[]) => readonly string[],
+    selection: readonly string[] | null,
   ) => void;
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
@@ -621,23 +623,47 @@ function ResearchThreadPage({
     return researchSelectionWith(withCreated, levelPathRef.current, nodeId);
   }, []);
 
-  const markOpened = useCallback((nodeId: string) => {
-    setOpenedNodeIds((prev) => (prev.has(nodeId) ? prev : new Set(prev).add(nodeId)));
+  /** A selection after messages were removed (`validNodeIds` holds what
+   * remains; see researchSelectionAfterRemoval). */
+  const survivingSelection = useCallback(
+    (validNodeIds: ReadonlySet<string>) => (path: readonly string[]) =>
+      researchSelectionAfterRemoval(
+        nodesRef.current.filter((node) => validNodeIds.has(node.id)),
+        path,
+        (nodeId) => researchSurvivingAncestor(parentByIdRef.current, nodeId, validNodeIds),
+      ),
+    [],
+  );
+
+  const markOpened = useCallback((nodeIds: readonly string[]) => {
+    setOpenedNodeIds((prev) => {
+      const added = nodeIds.filter((nodeId) => !prev.has(nodeId));
+      return added.length === 0 ? prev : new Set([...prev, ...added]);
+    });
   }, []);
 
-  /** Shows `target` (see `selection`) without touching history. False
-   * when its deepest message is not in this tree. */
+  /** Shows `target` (see `selection`) without touching history. A path
+   * that selects a removed message is cut to the part the tree lists (see
+   * researchSelectionPath). Returns what it shows: the deepest message and
+   * each column's selection, or null when the deepest message is not in this
+   * tree. */
   const applyVisit = useCallback(
-    (target: string | readonly string[]): boolean => {
-      const nodeId = typeof target === "string" ? target : target[target.length - 1];
-      if (
-        !nodeId ||
-        (!nodesRef.current.some((node) => node.id === nodeId) && !createdNodeIdsRef.current.has(nodeId))
-      ) {
-        return false;
+    (target: string | readonly string[]): { nodeId: string; path: readonly string[] | undefined } | null => {
+      const nodesNow = nodesRef.current;
+      const inTree = (id: string) => nodesNow.some((node) => node.id === id);
+      const known = (id: string) => inTree(id) || createdNodeIdsRef.current.has(id);
+      // A path naming a node created a moment ago (not in `nodes` until the
+      // next render) is shown as given.
+      const shown =
+        typeof target === "string" || (target.every(known) && !target.every(inTree))
+          ? target
+          : researchSelectionPath(nodesNow, target);
+      const nodeId = typeof shown === "string" ? shown : shown[shown.length - 1];
+      if (!nodeId || !known(nodeId)) {
+        return null;
       }
-      setSelection(target);
-      persistSelection(target);
+      setSelection(shown);
+      persistSelection(shown);
       setQueuedView(null);
       // Leaving a new branch unsent discards it, as Esc does: its stored text
       // must not reopen it (and close these levels) on the next mount.
@@ -651,23 +677,21 @@ function ResearchThreadPage({
         setComposerText((text) => withoutKeys(text, [`pending:${dropped.parentNodeId}`]));
       }
       setMenu(null);
-      markOpened(nodeId);
-      return true;
+      const path = typeof shown === "string" ? researchLevelPath(nodesNow, shown) : shown;
+      markOpened([nodeId]);
+      return { nodeId, path: path.length > 0 ? path : undefined };
     },
     [markOpened, navigationPersistence, persistSelection],
   );
 
   /** User navigation: applies the visit and records it in the visit
-   * history. */
+   * history, with each column's selection. */
   const navigate = useCallback(
     (target: string | readonly string[]) => {
       const currentTreeId = treeIdRef.current;
-      if (applyVisit(target) && currentTreeId) {
-        if (typeof target === "string") {
-          onNavigateRef.current?.(currentTreeId, target, "push");
-        } else {
-          onNavigateRef.current?.(currentTreeId, target[target.length - 1], "push", target);
-        }
+      const shown = applyVisit(target);
+      if (shown && currentTreeId) {
+        onNavigateRef.current?.(currentTreeId, shown.nodeId, "push", shown.path);
       }
     },
     [applyVisit],
@@ -722,7 +746,7 @@ function ResearchThreadPage({
       if (!message) {
         return;
       }
-      markOpened(headId);
+      markOpened([headId]);
       const base =
         (path.length > level && !selectParent) || !parentId
           ? path
@@ -849,16 +873,16 @@ function ResearchThreadPage({
       const fallback =
         typeof selection === "string"
           ? researchLevelPath(remaining, survivor(selection) ?? detail.tree.rootNodeId)
-          : researchSelectionAfterRemoval(remaining, requested, survivor);
+          : survivingSelection(validNodeIds)(requested);
       const path = fallback.length > 0 ? fallback : [detail.tree.rootNodeId];
       setSelection(path);
       persistSelection(path);
-      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), path[path.length - 1], path);
+      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), survivingSelection(validNodeIds), path);
       requestFocus({ kind: "row", level: path.length - 1 }, "settle", true);
     } else {
-      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), null);
+      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), survivingSelection(validNodeIds), null);
     }
-  }, [createdNodes, detail, persistSelection, requestFocus, selection, treeId]);
+  }, [createdNodes, detail, persistSelection, requestFocus, selection, survivingSelection, treeId]);
 
   /** Opens a new branch on `anchor` (a passage) or on the whole answer of
    * `parentNodeId`, as a group in the branches column after the parent's level. Its ask box takes
@@ -1086,13 +1110,17 @@ function ResearchThreadPage({
         }
         const target =
           request.path && request.path[request.path.length - 1] === request.nodeId ? request.path : request.nodeId;
-        if (!applyVisit(target)) {
+        const shown = applyVisit(target);
+        if (!shown) {
           return false;
         }
         // Back/forward replaying a recorded visit selects the node without
-        // recording it again.
+        // recording it again; a recorded path that had to be cut replaces
+        // the visit.
         if (request.record) {
-          onNavigateRef.current?.(request.treeId, request.nodeId, "push", request.path);
+          onNavigateRef.current?.(request.treeId, shown.nodeId, "push", shown.path);
+        } else if (typeof target !== "string" && shown.path !== target) {
+          onNavigateRef.current?.(request.treeId, shown.nodeId, "replace", shown.path);
         }
         // A highlight opened from the Highlights feed in this thread: the
         // reveal effect runs again for it (the page does not remount).
@@ -1918,23 +1946,21 @@ function ResearchThreadPage({
     // A removed message on the open path: its column selects the message it
     // was asked from or followed, or closes (see
     // researchSelectionAfterRemoval).
+    const remaining = nodesRef.current.filter((candidate) => !removedNodeIds.has(candidate.id));
+    const surviving = survivingSelection(new Set(remaining.map((candidate) => candidate.id)));
     if (wasOnPath && removal.parentNodeId) {
-      const remaining = nodesRef.current.filter((candidate) => !removedNodeIds.has(candidate.id));
-      const valid = new Set(remaining.map((candidate) => candidate.id));
-      const kept = researchSelectionAfterRemoval(remaining, levelPathRef.current, (nodeId) =>
-        researchSurvivingAncestor(parentByIdRef.current, nodeId, valid),
-      );
+      const kept = surviving(levelPathRef.current);
       const path = kept.length > 0 ? kept : researchLevelPath(remaining, removal.parentNodeId);
       setSelection(path);
       persistSelection(path);
       onPruneVisitsRef.current?.(
         removal.treeId,
         (nodeId) => !removedNodeIds.has(nodeId),
-        path[path.length - 1] ?? removal.parentNodeId,
-        path,
+        surviving,
+        path.length > 0 ? path : [removal.parentNodeId],
       );
     } else {
-      onPruneVisitsRef.current?.(removal.treeId, (nodeId) => !removedNodeIds.has(nodeId), null);
+      onPruneVisitsRef.current?.(removal.treeId, (nodeId) => !removedNodeIds.has(nodeId), surviving, null);
     }
     setDeletingBranchId(null);
   }
