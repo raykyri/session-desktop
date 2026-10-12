@@ -854,10 +854,13 @@ function ResearchThreadPage({
       // messages went with it closes. Move focus there if the removed
       // columns contained focus.
       const survivor = (nodeId: string) => researchSurvivingAncestor(parentByIdRef.current, nodeId, validNodeIds);
+      // The remaining nodes include the ones created a moment ago that the
+      // detail does not hold yet: a selected new branch stays selected.
+      const remaining = nodesRef.current.filter((node) => validNodeIds.has(node.id));
       const fallback =
         typeof selection === "string"
-          ? researchLevelPath(detail.nodes, survivor(selection) ?? detail.tree.rootNodeId)
-          : researchSelectionAfterRemoval(detail.nodes, requested, survivor);
+          ? researchLevelPath(remaining, survivor(selection) ?? detail.tree.rootNodeId)
+          : researchSelectionAfterRemoval(remaining, requested, survivor);
       const path = fallback.length > 0 ? fallback : [detail.tree.rootNodeId];
       setSelection(path);
       persistSelection(path);
