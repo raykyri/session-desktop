@@ -186,8 +186,8 @@ export function useResearchColumnScroll({
   );
 
   /** Saves a column's scroll offset under its scroll key (an answer's
-   * message, a messages column's chain head, or a branches column's source
-   * level's head). */
+   * message, a messages column's chain head, or a branches column's first
+   * branch; see columnScrollKey). */
   const onColumnScroll = useCallback(
     (column: ResearchColumn) => {
       const scroll = columnScrollKey(column);

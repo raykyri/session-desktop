@@ -254,6 +254,16 @@ test("an unsent branch is a group at its source's position in the stack", () => 
   assert.deepEqual(ids(alone), ["T0", "A0", "T1"]);
   assert.deepEqual(kinds(alone), ["new"]);
   assert.equal(columnMessageIds(alone.columns[2]).length, 0);
+  // The column's scroll key is its first created branch, with or without an
+  // unsent branch listed before it; the unsent branch's parent when it is
+  // the only group.
+  const before = researchStrip(nodes, "doc", { parentNodeId: "doc", anchor: at(0) });
+  assert.deepEqual(kinds(before), ["new", "d1", "d2", "a1"]);
+  const branchesOf = (strip: ReturnType<typeof researchStrip>) =>
+    strip.columns.find((candidate) => candidate.role === "branches")!;
+  assert.deepEqual(columnScrollKey(branchesOf(before)), { kind: "branches", key: "d1" });
+  assert.deepEqual(columnScrollKey(branchesOf(researchStrip(nodes, "doc", null))), { kind: "branches", key: "d1" });
+  assert.deepEqual(columnScrollKey(branchesOf(alone)), { kind: "branches", key: "root" });
 });
 
 test("a level lists its messages oldest first, or in its head's stored order", () => {

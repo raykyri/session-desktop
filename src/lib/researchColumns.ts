@@ -621,11 +621,15 @@ export function columnScrollKey(column: ResearchColumn): { kind: ResearchScrollK
       return { kind: "answer", key: column.nodeId };
     case "messages":
       return { kind: "messages", key: column.level.headId };
-    case "branches":
+    case "branches": {
+      // An unsent branch listed first does not change the key, so its
+      // column keeps its offset while the branch is written.
+      const first = column.groups.find((group) => group.kind === "branch") ?? column.groups[0];
       return {
         kind: "branches",
-        key: column.groups.map((group) => (group.kind === "branch" ? group.headId : group.parentNodeId))[0] ?? "",
+        key: first ? (first.kind === "branch" ? first.headId : first.parentNodeId) : "",
       };
+    }
     default:
       return null;
   }
