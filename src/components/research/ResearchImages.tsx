@@ -304,7 +304,8 @@ export function useResearchImageInput({
       const files = filesFromDataTransfer(event.clipboardData);
       if (files.length === 0) return;
       const text = event.clipboardData.getData("text/plain");
-      if (!pasteAttachesImages(text, files.map((file) => file.name))) return;
+      const html = event.clipboardData.getData("text/html");
+      if (!pasteAttachesImages(text, files.map((file) => file.name), html)) return;
       event.preventDefault();
       addFiles(files);
     },

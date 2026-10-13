@@ -101,11 +101,27 @@ export function acceptResearchImageFiles<T extends ImageFileLike>(
   return { accepted, error };
 }
 
+/** Whether copied HTML is one image and nothing else: no text outside its
+ * tags and a single `<img>`. */
+function htmlIsOneImage(html: string): boolean {
+  const body = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(style|script|head)\b[\s\S]*?<\/\1>/gi, "");
+  const images = body.match(/<img\b/gi)?.length ?? 0;
+  const text = body
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;/g, " ")
+    .trim();
+  return images === 1 && text === "";
+}
+
 /** Whether a paste that carries image files attaches them instead of
- * pasting its text. A copied image comes with its URL (one word) or, from
- * Finder, its file names; copied cells or a document also carry a rendered
- * image of the selection, and those paste as text. */
-export function pasteAttachesImages(text: string, fileNames: readonly string[]): boolean {
+ * pasting its text. A copied image comes with HTML that is just its
+ * `<img>`, its URL as text, or, from Finder, its file names. Copied cells,
+ * a word, or a document also carry a rendered image of the selection, and
+ * those paste as text. */
+export function pasteAttachesImages(text: string, fileNames: readonly string[], html = ""): boolean {
+  if (html.trim() && htmlIsOneImage(html)) return true;
   const lines = text
     .split(/\r?\n|\r/)
     .map((line) => line.trim())
@@ -113,7 +129,7 @@ export function pasteAttachesImages(text: string, fileNames: readonly string[]):
   if (lines.length === 0) return true;
   const names = new Set(fileNames.filter(Boolean));
   if (lines.every((line) => names.has(line))) return true;
-  return lines.length === 1 && !/\s/.test(lines[0]);
+  return lines.length === 1 && /^(https?:\/\/|file:\/\/|data:image\/)\S+$/i.test(lines[0]);
 }
 
 /** The files of a paste or drop. Clipboard images appear only as items. */

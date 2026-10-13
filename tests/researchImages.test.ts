@@ -78,9 +78,18 @@ test("a paste attaches its images unless it carries text of its own", () => {
     pasteAttachesImages("Screen Shot 1.png\nScreen Shot 2.png", ["Screen Shot 1.png", "Screen Shot 2.png"]),
     true,
   );
-  // Cells or a document paste as text even with their rendered image.
+  // An image copied from a page: its HTML is one <img>.
+  assert.equal(
+    pasteAttachesImages("Alt text", ["image.png"], '<meta charset="utf-8"><img src="https://example.com/a.png" alt="Alt text">'),
+    true,
+  );
+  // Cells, a single cell or word, or a document paste as text even with
+  // their rendered image.
   assert.equal(pasteAttachesImages("Revenue\t2024\n12\t14", ["image.png"]), false);
   assert.equal(pasteAttachesImages("A sentence copied from a page", ["image.png"]), false);
+  assert.equal(pasteAttachesImages("Revenue", ["image.png"], "<table><tr><td>Revenue</td></tr></table>"), false);
+  assert.equal(pasteAttachesImages("1234", ["image.png"]), false);
+  assert.equal(pasteAttachesImages("Logo", ["image.png"], '<p>Logo <img src="a.png"></p>'), false);
 });
 
 test("images are labelled by count and named by file name", () => {
