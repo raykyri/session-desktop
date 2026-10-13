@@ -1,14 +1,29 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ResearchUnitMenuPlacement } from "../src/components/research/researchUnitMenu";
-import ResearchPostThread, { postThreadEntries } from "../src/components/research/ResearchPostThread";
-import { postFollowUpCopy } from "../src/components/research/ResearchPost";
-import type { ResearchNode } from "../src/types";
+import type { AgentAdapterMetadata, ResearchImageAttachment, ResearchNode } from "../src/types";
+import type { ResearchLaunchChoice } from "../src/components/research/ResearchQueryComposer";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { withWidgetDom } from "./widgetDom";
+
+// Registered before the thread is pulled in, since its composer shows
+// adapter icons.
+register("./svgStubLoader.mjs", import.meta.url);
+const { default: ResearchPostThread, postThreadEntries } = await import(
+  "../src/components/research/ResearchPostThread"
+);
+const {
+  PostFollowUpField,
+  postFollowUpAsk,
+  postFollowUpAskLabel,
+  postFollowUpCopy,
+  postFollowUpDefault,
+  postFollowUpImageBlock,
+} = await import("../src/components/research/ResearchPostFollowUpField");
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -213,5 +228,178 @@ test("each follow-up row opens its follow-up's menu as its context menu", async 
     assert.equal(opened[2].id, "note");
     assert.equal(opened[2].placement.align, "point");
     await act(async () => root.unmount());
+  });
+});
+
+function agentAdapter(
+  id: string,
+  overrides: Partial<AgentAdapterMetadata> = {},
+): AgentAdapterMetadata {
+  return {
+    id,
+    label: id === "claude" ? "Claude" : id === "codex" ? "Codex" : "Grok",
+    default: id === "claude",
+    supportsFork: true,
+    supportsResearch: true,
+    supportsRecapGeneration: true,
+    supportsForkAtMessage: true,
+    configuredBinary: id,
+    resolvedBinary: `/bin/${id}`,
+    readiness: "ready",
+    researchReadiness: "ready",
+    message: null,
+    version: null,
+    auth: "authenticated",
+    checkedAt: 1_700_000_000_000,
+    loginCommand: null,
+    installCommand: null,
+    installUrl: null,
+    updateCommand: null,
+    instanceId: `local:${id}`,
+    target: { kind: "local", id: null, label: "This Mac" },
+    ...overrides,
+  };
+}
+
+const claude = agentAdapter("claude");
+const codex = agentAdapter("codex");
+const unreadyGrok = agentAdapter("grok", { researchReadiness: "needsAuth" });
+
+test("a note's follow-up runs on the note's agent and model unless that agent cannot do research", () => {
+  assert.deepEqual(postFollowUpDefault(post, [claude, codex]), {
+    adapter: "claude",
+    model: "fable",
+    effort: null,
+  });
+  // As the backend: an agent without research support falls back to the
+  // default ready research agent, at its default model.
+  const onGrok = researchNode({ ...postFields, adapter: "grok", model: "grok-5", effort: "high" });
+  assert.deepEqual(postFollowUpDefault(onGrok, [claude, agentAdapter("grok", { supportsResearch: false })]), {
+    adapter: "claude",
+    model: null,
+    effort: null,
+  });
+  assert.equal(postFollowUpDefault(post, []), null);
+});
+
+test("the follow-up box asks with its model menu choice, else the note's follow-up agent", () => {
+  const fallback = postFollowUpDefault(post, [claude, codex]);
+  // No choice: the box shows the note's agent and sends none, so the
+  // backend's own pick applies.
+  assert.deepEqual(postFollowUpAsk([claude, codex], fallback, null), {
+    shown: fallback,
+    agent: null,
+    choice: { adapter: "claude", preset: "fable", customModel: "", effort: "" },
+  });
+  const onCodex = { adapter: "codex", preset: "gpt-6-astra", customModel: "", effort: "high" };
+  assert.deepEqual(postFollowUpAsk([claude, codex], fallback, onCodex), {
+    shown: { adapter: "codex", model: "gpt-6-astra", effort: "high" },
+    agent: { adapter: "codex", model: "gpt-6-astra", effort: "high" },
+    choice: onCodex,
+  });
+  // A chosen agent that is no longer ready falls back to the note's agent.
+  const onGrok = { adapter: "grok", preset: "custom", customModel: "", effort: "" };
+  assert.equal(postFollowUpAsk([claude, unreadyGrok], fallback, onGrok).agent, null);
+  assert.deepEqual(postFollowUpAsk([claude, unreadyGrok], fallback, onGrok).shown, fallback);
+  assert.deepEqual(postFollowUpAsk([], null, null), { shown: null, agent: null, choice: null });
+});
+
+test("the follow-up box's images are checked against the agent the follow-up runs on", () => {
+  const shot: ResearchImageAttachment = { kind: "image", id: "img", mimeType: "image/png", byteSize: 10 };
+  const grok = agentAdapter("grok");
+  assert.equal(postFollowUpImageBlock(false, "claude", [claude, grok], [shot]), null);
+  assert.equal(postFollowUpImageBlock(false, "grok", [claude, grok], [shot]), "Grok can't read images.");
+  assert.equal(postFollowUpImageBlock(false, "grok", [claude, grok], []), null);
+  assert.match(postFollowUpImageBlock(true, "claude", [claude], [shot]) ?? "", /Notes can't include images/);
+});
+
+test("the Ask segment is named for the agent and model the follow-up runs on", () => {
+  assert.equal(postFollowUpAskLabel({ adapter: "claude", model: "fable", effort: null }), "Ask Claude Fable");
+  assert.equal(
+    postFollowUpAskLabel({ adapter: "codex", model: "gpt-6-astra", effort: "high" }),
+    "Ask Codex gpt-6-astra",
+  );
+  assert.equal(postFollowUpAskLabel({ adapter: "claude", model: "my-model", effort: null }), "Ask Claude my-model");
+  assert.equal(postFollowUpAskLabel({ adapter: "grok", model: null, effort: null }), "Ask Grok");
+  assert.equal(postFollowUpAskLabel(null), "Ask AI");
+});
+
+test("the follow-up box's Ask segment shows the agent's icon and opens the model menu", async () => {
+  await withWidgetDom(async (window) => {
+    // The model menu places itself from computed styles.
+    Object.defineProperty(globalThis, "getComputedStyle", {
+      value: window.getComputedStyle.bind(window),
+      configurable: true,
+      writable: true,
+    });
+    // React DOM was loaded before this DOM existed, so it watches text
+    // fields with its fallback for browsers without input events, which
+    // listens through attachEvent and reads changes on keyup.
+    Object.assign(window.HTMLElement.prototype, { attachEvent: () => {}, detachEvent: () => {} });
+    const sent: {
+      prompt: string;
+      asNote: boolean;
+      images: ResearchImageAttachment[];
+      agent: ResearchLaunchChoice | null;
+    }[] = [];
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    await act(async () =>
+      root.render(
+        createElement(PostFollowUpField, {
+          post,
+          adapters: [claude, codex, unreadyGrok],
+          requireCmdEnter: true,
+          onSubmit: async (prompt, asNote, images, agent) => {
+            sent.push({ prompt, asNote, images, agent });
+          },
+        }),
+      ),
+    );
+    const textarea = container.querySelector("textarea")!;
+    await act(async () => textarea.focus());
+    const askSegment = () => container.querySelector<HTMLButtonElement>('.new-research-switch-option[role="radio"]')!;
+    // The note's agent and model, as the agent's icon instead of a sparkle.
+    assert.equal(askSegment().getAttribute("aria-label"), "Ask Claude Fable");
+    assert.equal(askSegment().getAttribute("title"), "Ask Claude Fable");
+    assert.ok(askSegment().querySelector("img.launcher-select-icon"));
+    assert.equal(askSegment().querySelector(".lucide-sparkles"), null);
+    assert.ok(askSegment().querySelector(".new-research-switch-chevron"));
+
+    // A press on the selected Ask segment opens the Home ask box's model menu.
+    await act(async () => askSegment().click());
+    const listbox = window.document.querySelector('[role="listbox"][aria-label="Model"]');
+    assert.ok(listbox);
+    const option = (label: string) =>
+      [...listbox.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+        (item) => item.querySelector(".launcher-select-item-label")?.textContent === label,
+      )!;
+    assert.equal(option("Fable").getAttribute("aria-selected"), "true");
+    // An agent that is not ready is listed but cannot be chosen.
+    assert.equal(option("Grok").disabled, true);
+    await act(async () => option("gpt-6-astra").click());
+    assert.equal(window.document.querySelector('[role="listbox"][aria-label="Model"]'), null);
+    assert.equal(askSegment().getAttribute("aria-label"), "Ask Codex gpt-6-astra");
+    assert.ok(askSegment().querySelector("img.launcher-select-icon.is-mono-light"));
+
+    // The follow-up is sent with the chosen agent and model.
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => {
+      textarea.focus();
+      setValue.call(textarea, "Which runtimes?");
+      textarea.dispatchEvent(new window.KeyboardEvent("keyup", { bubbles: true }));
+    });
+    await act(async () => container.querySelector<HTMLButtonElement>(".research-composer-send")!.click());
+    assert.deepEqual(sent, [
+      {
+        prompt: "Which runtimes?",
+        asNote: false,
+        images: [],
+        agent: { adapter: "codex", model: "gpt-6-astra", effort: null },
+      },
+    ]);
+    await act(async () => root.unmount());
+    Reflect.deleteProperty(globalThis, "getComputedStyle");
   });
 });

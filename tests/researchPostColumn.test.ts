@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchPostColumn from "../src/components/research/ResearchPostColumn";
 import { researchMenuPoint } from "../src/components/research/ResearchMenu";
-import { ResearchNoteColumn } from "../src/components/research/ResearchNoteColumns";
 import { ResearchThreadMenu } from "../src/components/research/ResearchThreadMenu";
 import { researchStrip, type ResearchColumn } from "../src/lib/researchColumns";
 import { nodePrompt } from "../src/lib/researchNodeTypes";
 import type { ResearchNode, ResearchTreeDetail } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { withWidgetDom } from "./widgetDom";
+
+// Registered before the note columns are pulled in, since the follow-ups
+// column's composer shows adapter icons.
+register("./svgStubLoader.mjs", import.meta.url);
+const { ResearchNoteColumn } = await import("../src/components/research/ResearchNoteColumns");
 
 const noop = () => {};
 

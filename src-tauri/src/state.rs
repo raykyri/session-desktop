@@ -2648,6 +2648,32 @@ impl AppState {
         inline: bool,
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
     ) -> Result<ResearchNode, String> {
+        self.create_research_child_with_agent(
+            parent_node_id,
+            prompt,
+            anchor,
+            inline,
+            attachments,
+            None,
+        )
+    }
+
+    /// As `create_research_child_with_attachments`, with the agent, model and
+    /// effort the follow-up runs on chosen by the user. `None` keeps the
+    /// agent the parent's type picks. A follow-up launched with the parent's
+    /// content as context (of a post or a document) can run on any research
+    /// agent, since it starts a fresh run; a follow-up of an exchange forks
+    /// the parent's native session, so it accepts a model or effort of the
+    /// parent's agent only.
+    pub fn create_research_child_with_agent(
+        &self,
+        parent_node_id: &str,
+        prompt: String,
+        anchor: Option<NodeAnchor>,
+        inline: bool,
+        attachments: Vec<crate::tweets::ResearchMessageAttachment>,
+        agent: Option<research::AgentSpec>,
+    ) -> Result<ResearchNode, String> {
         self.create_research_child_with_options(
             parent_node_id,
             prompt,
@@ -2655,6 +2681,7 @@ impl AppState {
             inline,
             attachments,
             None,
+            agent,
         )
     }
 
@@ -2671,6 +2698,7 @@ impl AppState {
         inline: bool,
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
         replaces: &str,
+        agent: Option<research::AgentSpec>,
     ) -> Result<ResearchNode, String> {
         self.create_research_child_with_options(
             parent_node_id,
@@ -2679,6 +2707,7 @@ impl AppState {
             inline,
             attachments,
             Some(replaces),
+            agent,
         )
     }
 
@@ -2690,7 +2719,9 @@ impl AppState {
         inline: bool,
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
         replaces: Option<&str>,
+        chosen_agent: Option<research::AgentSpec>,
     ) -> Result<ResearchNode, String> {
+        let chosen_agent = chosen_agent.map(chosen_research_agent).transpose()?;
         if let Some(NodeAnchor::Passage { anchor }) = &anchor {
             research::validate_highlight_anchor(anchor)?;
         }
@@ -2793,22 +2824,8 @@ impl AppState {
                     effort: None,
                 })
             };
-            let agent = match parent.follow_up_launch() {
-                FollowUpLaunch::Context(FollowUpContext::Document) => default_agent()?,
-                FollowUpLaunch::Context(FollowUpContext::Post | FollowUpContext::Snapshot) => {
-                    match parent.agent() {
-                        Some(agent)
-                            if crate::adapters::adapter_supports_research(
-                                &self.inner.config,
-                                &agent.adapter,
-                            ) =>
-                        {
-                            agent.clone()
-                        }
-                        _ => default_agent()?,
-                    }
-                }
-                FollowUpLaunch::Fork => {
+            let agent = match (parent.follow_up_launch(), chosen_agent) {
+                (FollowUpLaunch::Fork, chosen) => {
                     if parent
                         .binding()
                         .is_none_or(|binding| binding.native_session_id.is_none())
@@ -2817,8 +2834,45 @@ impl AppState {
                             "research follow-ups require a recorded parent checkpoint".to_string()
                         );
                     }
-                    parent.agent().cloned().unwrap_or_default()
+                    let inherited = parent.agent().cloned().unwrap_or_default();
+                    // The fork resumes the parent's native session, which only
+                    // the parent's agent can read.
+                    if chosen
+                        .as_ref()
+                        .is_some_and(|chosen| chosen.adapter != inherited.adapter)
+                    {
+                        return Err(
+                            "a follow-up of an answer runs on the answer's agent".to_string()
+                        );
+                    }
+                    chosen.unwrap_or(inherited)
                 }
+                // A fresh run reads the parent's content from its prompt, so
+                // any research agent can answer it.
+                (FollowUpLaunch::Context(_), Some(chosen)) => {
+                    if !crate::adapters::adapter_supports_research(
+                        &self.inner.config,
+                        &chosen.adapter,
+                    ) {
+                        return Err(format!(
+                            "'{}' is not a supported research agent",
+                            chosen.adapter
+                        ));
+                    }
+                    chosen
+                }
+                (FollowUpLaunch::Context(FollowUpContext::Document), None) => default_agent()?,
+                (FollowUpLaunch::Context(_), None) => match parent.agent() {
+                    Some(agent)
+                        if crate::adapters::adapter_supports_research(
+                            &self.inner.config,
+                            &agent.adapter,
+                        ) =>
+                    {
+                        agent.clone()
+                    }
+                    _ => default_agent()?,
+                },
             };
             crate::research_images::ensure_adapter_reads_images(
                 &self.inner.config.workspace_root,
@@ -6079,6 +6133,25 @@ fn prune_agent_locked(model: &mut Model, agent_id: &str) {
     model.turns.remove(agent_id);
 }
 
+/// A follow-up's chosen agent with surrounding whitespace removed; an empty
+/// model or effort means the agent's default.
+fn chosen_research_agent(agent: research::AgentSpec) -> Result<research::AgentSpec, String> {
+    let adapter = agent.adapter.trim().to_string();
+    if adapter.is_empty() {
+        return Err("research adapter cannot be empty".to_string());
+    }
+    let setting = |value: Option<String>| {
+        value
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
+    Ok(research::AgentSpec {
+        adapter,
+        model: setting(agent.model),
+        effort: setting(agent.effort),
+    })
+}
+
 /// Refuses user edits to a tree in the Trash, which the app no longer shows,
 /// so Restore returns it unchanged. Run bookkeeping for runs that settle is
 /// not an edit; trashing is refused while a tree has active runs.
@@ -7392,6 +7465,63 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_follow_up_runs_on_the_chosen_agent_where_its_parent_allows() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let spec = |adapter: &str, model: Option<&str>, effort: Option<&str>| research::AgentSpec {
+            adapter: adapter.to_string(),
+            model: model.map(str::to_string),
+            effort: effort.map(str::to_string),
+        };
+        let ask = |parent: &str, agent: research::AgentSpec| {
+            state.create_research_child_with_agent(
+                parent,
+                "Why?".to_string(),
+                None,
+                false,
+                Vec::new(),
+                Some(agent),
+            )
+        };
+        // A note's follow-up is a fresh run: any research agent can take it.
+        // An empty model or effort is the agent's default.
+        let post = state
+            .create_research_post(post_request("Question", false), Vec::new())
+            .unwrap();
+        let post_id = post.tree.root_node_id;
+        let codex = ask(&post_id, spec(" codex ", Some(" "), Some("high"))).unwrap();
+        assert_eq!(codex.adapter(), "codex");
+        assert_eq!(codex.model(), None);
+        assert_eq!(codex.effort(), Some("high"));
+        let sonnet = ask(&post_id, spec("claude", Some("sonnet"), None)).unwrap();
+        assert_eq!(sonnet.model(), Some("sonnet"));
+        assert!(
+            ask(&post_id, spec("unknown", None, None))
+                .unwrap_err()
+                .contains("not a supported research agent")
+        );
+        let grok = ask(&post_id, spec("grok", None, None)).unwrap();
+        assert_eq!(grok.adapter(), "grok");
+
+        // An answer's follow-up forks its session: another model of the same
+        // agent is accepted, another agent is refused.
+        let run = state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        let root_id = run.tree.root_node_id.clone();
+        settle_research_node(&state, &root_id);
+        let opus = ask(&root_id, spec("claude", Some("opus"), Some("max"))).unwrap();
+        assert_eq!(opus.adapter(), "claude");
+        assert_eq!(opus.model(), Some("opus"));
+        assert_eq!(opus.effort(), Some("max"));
+        assert!(
+            ask(&root_id, spec("codex", None, None))
+                .unwrap_err()
+                .contains("runs on the answer's agent")
+        );
+    }
+
     fn research_root_request(prompt: &str) -> CreateResearchTreeRequest {
         CreateResearchTreeRequest {
             prompt: prompt.to_string(),
@@ -8113,6 +8243,7 @@ mod tests {
                 true,
                 Vec::new(),
                 &failed.id,
+                None,
             )
             .unwrap();
         state.remove_research_branch(&failed.id).unwrap();
@@ -8285,6 +8416,7 @@ mod tests {
                 true,
                 Vec::new(),
                 replaces,
+                None,
             )
         };
         // A refused edit leaves the failed node in place.
@@ -8381,6 +8513,7 @@ mod tests {
                 false,
                 vec![child_image],
                 &failed.id,
+                None,
             )
             .unwrap();
         state.remove_research_branch(&failed.id).unwrap();

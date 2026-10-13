@@ -2543,6 +2543,7 @@ function ResearchThreadPage({
             post={post}
             archived={archived}
             postActions={postActions}
+            adapters={questionAdapters}
             requireCmdEnterToSend={requireCmdEnterToSend}
             openNodeId={levels[level + 1]?.headId ?? null}
             composerRef={registerComposer(post.id)}

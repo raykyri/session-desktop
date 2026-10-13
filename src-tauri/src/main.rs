@@ -1193,6 +1193,9 @@ async fn fork_research_node(
     inline: Option<bool>,
     replaces_node_id: Option<String>,
     images: Option<Vec<research_images::ImageInput>>,
+    // The agent, model and effort the user chose for this follow-up; None
+    // keeps the one the parent's type picks (`create_research_child_with_agent`).
+    agent: Option<research::AgentSpec>,
 ) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
@@ -1221,6 +1224,7 @@ async fn fork_research_node(
                         inline,
                         attachments,
                         replaced,
+                        agent,
                     )?;
                     if let Err(err) = state.remove_research_branch(replaced) {
                         let _ = state.remove_unsent_research_branch(&child.id);
@@ -1228,12 +1232,13 @@ async fn fork_research_node(
                     }
                     child
                 }
-                None => state.create_research_child_with_attachments(
+                None => state.create_research_child_with_agent(
                     &parent_node_id,
                     prompt,
                     anchor,
                     inline,
                     attachments,
+                    agent,
                 )?,
             };
             (parent, workspace, child)

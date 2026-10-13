@@ -1,7 +1,7 @@
 import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Sparkles, StickyNote } from "lucide-react";
-import type { ResearchNode } from "../../types";
+import type { AgentAdapterMetadata, ResearchNode } from "../../types";
 import {
   nodeAdapter,
   nodeAgent,
@@ -16,7 +16,8 @@ import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
-import { PostFollowUpField, PostFollowUpStatus, type PostActions } from "./ResearchPost";
+import { PostFollowUpStatus, type PostActions } from "./ResearchPost";
+import { PostFollowUpField } from "./ResearchPostFollowUpField";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
 import { researchNoteEditable } from "../../lib/researchNoteEdit";
@@ -52,6 +53,7 @@ export default function ResearchPostThread({
   post,
   archived,
   actions,
+  adapters,
   requireCmdEnterToSend,
   openNodeId,
   composerRef,
@@ -64,6 +66,8 @@ export default function ResearchPostThread({
   post: ResearchNode;
   archived: boolean;
   actions: PostActions;
+  /** The configured agents, for the follow-up composer's model menu. */
+  adapters?: AgentAdapterMetadata[];
   /** The "Require ⌘↵ to send" setting, for the follow-up composer. */
   requireCmdEnterToSend: boolean;
   /** The follow-up open as the next level, if any. */
@@ -110,19 +114,20 @@ export default function ResearchPostThread({
   const followUps = useMemo(() => postThreadEntries(nodes, post), [nodes, post]);
   const tabKey = followUps.some((node) => node.id === activeKey) ? activeKey : (followUps[0]?.id ?? null);
   const markedRowKey = markedKey === tabKey ? markedKey : null;
-  const modelLabel = formatResearchModelSummary(nodeAdapter(post), nodeAgent(post)?.model);
 
   return (
     <div className="post-thread">
       {!archived ? (
         <PostFollowUpField
+          // A model menu choice belongs to one note's box.
+          key={post.id}
           composerRef={composerRef}
-          modelLabel={modelLabel}
+          post={post}
+          adapters={adapters}
           fullWidth
           requireCmdEnter={requireCmdEnterToSend}
-          adapterId={nodeAdapter(post)}
-          onSubmit={(prompt, asNote, images) =>
-            actions.onAskFollowUp({ parentNodeId: post.id, prompt, asNote, images })
+          onSubmit={(prompt, asNote, images, agent) =>
+            actions.onAskFollowUp({ parentNodeId: post.id, prompt, asNote, images, agent })
           }
         />
       ) : null}

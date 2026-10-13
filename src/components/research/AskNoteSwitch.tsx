@@ -25,7 +25,7 @@ export function askSwitchKeyTarget(key: string, current: AskMode): AskMode | nul
 
 interface AskNoteSwitchProps {
   askMode: AskMode;
-  /** The Ask segment's icon: the selected agent's in the Home ask box. */
+  /** The Ask segment's icon: the icon of the agent the question goes to. */
   askIcon: ReactNode;
   /** "Ask with {agent} {model}": the Ask segment's name and tooltip. */
   askLabel: string;
@@ -33,8 +33,7 @@ interface AskNoteSwitchProps {
    * box, "Add a note" in a note's follow-up box. */
   noteLabel: string;
   /** Whether the model menu is open. Omit with onMenuOpenChange for a
-   * switch with no model menu, as in a note's follow-up box, whose AI
-   * follow-up uses the note's model. */
+   * switch with no model menu (a box with no research agent to choose). */
   menuOpen?: boolean;
   askRef?: RefObject<HTMLButtonElement | null>;
   onModeChange: (mode: AskMode) => void;

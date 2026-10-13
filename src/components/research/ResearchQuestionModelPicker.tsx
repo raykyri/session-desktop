@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { RefObject } from "react";
 import type { AgentAdapterMetadata } from "../../types";
 import { LauncherSelect, type LauncherSelectOption } from "../LauncherSelect";
 import { CUSTOM_MODEL, modelPresetsFor } from "../../lib/launcherModels";
@@ -72,16 +73,25 @@ export function researchQuestionModelOptions(
 
 /** The model menu of the Home ask box (agent and model, with Effort as a
  * submenu, and Custom asking for a model name) as a compact control. The
- * choice is the caller's; nothing here changes the Home ask box. */
+ * choice is the caller's; nothing here changes the Home ask box. With
+ * `anchor`, the menu opens from the caller's element (a note's follow-up
+ * box's Ask segment) instead of a trigger of its own. */
 export function ResearchQuestionModelPicker({
   adapters,
   choice,
   disabled = false,
+  anchor,
   onChange,
 }: {
   adapters: AgentAdapterMetadata[];
   choice: ResearchQuestionChoice;
   disabled?: boolean;
+  /** The element that opens the menu, and the menu's open state. */
+  anchor?: {
+    ref: RefObject<HTMLElement | null>;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  };
   onChange: (choice: ResearchQuestionChoice) => void;
 }) {
   // The agent whose Custom option was chosen, while its model name dialog is open.
@@ -90,13 +100,16 @@ export function ResearchQuestionModelPicker({
   const effortOptions = researchEffortOptionsFor(choice.adapter);
   const selectedEffort =
     effortOptions && effortOptions.some((option) => option.value === choice.effort) ? choice.effort : "";
-  return (
-    <span className="research-question-model">
+  const menu = (
+    <>
       <LauncherSelect
         value={researchModelChoiceValue(choice.adapter, choice.preset)}
         options={options}
         ariaLabel="Model"
         disabled={disabled}
+        anchorRef={anchor?.ref}
+        open={anchor?.open}
+        onOpenChange={anchor?.onOpenChange}
         onChange={(value) => {
           const next = parseResearchModelChoice(value);
           // Custom asks for the model name first; Cancel keeps the current
@@ -134,6 +147,8 @@ export function ResearchQuestionModelPicker({
           }}
         />
       ) : null}
-    </span>
+    </>
   );
+  // An anchored menu renders only its portals, so it needs no box of its own.
+  return anchor ? menu : <span className="research-question-model">{menu}</span>;
 }

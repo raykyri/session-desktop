@@ -7,6 +7,7 @@ import {
 } from "./humanBrowserLifecycleQueue";
 import type {
   AgentInfo,
+  AgentSpec,
   GithubAccount,
   GithubDeviceLogin,
   GithubLoginPoll,
@@ -339,6 +340,10 @@ export function forkResearchNode(
    * The backend admits the child first and removes that node only then. */
   replacesNodeId?: string | null,
   images: readonly ResearchImageAttachment[] = [],
+  /** The agent, model and effort chosen for this follow-up; null keeps the
+   * one the backend picks for the parent. A follow-up of an answer accepts
+   * another model or effort of the answer's agent only. */
+  agent: AgentSpec | null = null,
 ) {
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
@@ -347,6 +352,7 @@ export function forkResearchNode(
     inline,
     replacesNodeId: replacesNodeId ?? null,
     images: researchImageInputs(images),
+    agent,
   });
 }
 

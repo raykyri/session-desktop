@@ -27,6 +27,7 @@ import {
 import { reconcileResearchTreeDetail } from "../lib/researchSnapshots";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 import type {
+  AgentSpec,
   GroupInfo,
   NodeAnchor,
   ResearchImageAttachment,
@@ -327,6 +328,7 @@ export function useResearchActions(
       inline?: boolean,
       replacesNodeId?: string | null,
       images?: readonly ResearchImageAttachment[],
+      agent?: AgentSpec | null,
     ) => {
       const node = await forkResearchNode(
         parentNodeId,
@@ -335,6 +337,7 @@ export function useResearchActions(
         inline ?? false,
         replacesNodeId,
         images,
+        agent ?? null,
       );
       void applyGeneratedResearchNodeTitle(node.treeId, node.id);
       return node;
@@ -368,12 +371,12 @@ export function useResearchActions(
   // patched here.
   const postActions = useMemo<PostActions>(
     () => ({
-      onAskFollowUp: async ({ parentNodeId, prompt, asNote, images }) => {
+      onAskFollowUp: async ({ parentNodeId, prompt, asNote, images, agent }) => {
         if (asNote) {
           await createResearchPostFollowUp(parentNodeId, prompt);
           return;
         }
-        await createResearchFollowup(parentNodeId, prompt, null, false, null, images);
+        await createResearchFollowup(parentNodeId, prompt, null, false, null, images, agent);
       },
       onRetry: retryResearchRun,
     }),

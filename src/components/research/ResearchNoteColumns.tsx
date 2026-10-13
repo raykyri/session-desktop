@@ -1,6 +1,6 @@
 import type { ComponentProps, Ref } from "react";
 import { columnAttributes, type ResearchColumn } from "../../lib/researchColumns";
-import type { ResearchNode, ResearchTreeDetail } from "../../types";
+import type { AgentAdapterMetadata, ResearchNode, ResearchTreeDetail } from "../../types";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
@@ -90,6 +90,7 @@ export function ResearchFollowUpsColumn({
   post,
   archived,
   postActions,
+  adapters,
   requireCmdEnterToSend,
   openNodeId,
   composerRef,
@@ -104,6 +105,8 @@ export function ResearchFollowUpsColumn({
   post: ResearchNode;
   archived: boolean;
   postActions: PostActions;
+  /** The configured agents, for the follow-up composer's model menu. */
+  adapters: AgentAdapterMetadata[];
   requireCmdEnterToSend: boolean;
   /** The follow-up open as the next level. */
   openNodeId: string | null;
@@ -127,6 +130,7 @@ export function ResearchFollowUpsColumn({
             post={post}
             archived={archived}
             actions={postActions}
+            adapters={adapters}
             requireCmdEnterToSend={requireCmdEnterToSend}
             openNodeId={openNodeId}
             composerRef={composerRef}
