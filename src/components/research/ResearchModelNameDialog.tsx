@@ -32,6 +32,7 @@ export function ResearchModelNameDialog({
     <div
       className="confirm-dialog-backdrop"
       role="presentation"
+      data-research-model-dialog=""
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

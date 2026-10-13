@@ -13,6 +13,7 @@ const {
   applyComposerFocusRequest,
   askModeShowsAiControls,
   homeComposerDraftToStore,
+  insideComposer,
   parseResearchModelChoice,
   researchEffortOptionsFor,
   researchModelChoiceValue,
@@ -20,6 +21,8 @@ const {
 } = await import("../src/components/research/ResearchQueryComposer");
 const { AskNoteSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskNoteSwitch");
 const { postFormatOf } = await import("../src/lib/researchNodeTypes");
+const { ResearchModelNameDialog } = await import("../src/components/research/ResearchModelNameDialog");
+const { withWidgetDom } = await import("./widgetDom");
 const { LauncherSelect, OptionIcon: LauncherSelectIcon } = await import("../src/components/LauncherSelect");
 
 function adapter(id: string): AgentAdapterMetadata {
@@ -295,4 +298,31 @@ test("a composer without a research-ready agent links to Agent Setup", () => {
     }),
   );
   assert.match(html, /Review agents/);
+});
+
+test("focus in the Custom model dialog counts as inside the composer", async () => {
+  await withWidgetDom(async () => {
+    const { act } = await import("react");
+    const { createRoot } = await import("react-dom/client");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        createElement(ResearchModelNameDialog, {
+          agentLabel: "Claude Code",
+          initialName: "",
+          onSubmit: () => {},
+          onClose: () => {},
+        }),
+      );
+    });
+    const composer = document.createElement("div");
+    document.body.append(composer);
+    const field = document.querySelector('input[aria-label="Model name"]');
+    assert.ok(field);
+    assert.equal(insideComposer(composer, field), true);
+    assert.equal(insideComposer(composer, document.body), false);
+    await act(async () => root.unmount());
+  });
 });

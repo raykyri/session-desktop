@@ -844,10 +844,14 @@ export default function ResearchQueryComposer({
   );
 }
 
-/** Focus inside the composer or one of its menus (rendered in portals). The
- * note follow-up box, which shares the model menu, uses it too. */
+/** Focus inside the composer or one of its menus or the Custom model dialog
+ * (rendered in portals). The note follow-up box, which shares the model menu,
+ * uses it too. */
 export function insideComposer(root: HTMLElement | null, target: EventTarget | null) {
   if (!(target instanceof Node)) return false;
   if (root?.contains(target)) return true;
-  return target instanceof Element && Boolean(target.closest(".launcher-select-popover, .research-menu, .research-model-dialog"));
+  return (
+    target instanceof Element &&
+    Boolean(target.closest(".launcher-select-popover, .research-menu, [data-research-model-dialog]"))
+  );
 }
