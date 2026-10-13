@@ -878,7 +878,6 @@ mod tests {
                 },
             },
             legacy_claude_binary: None,
-            claude_plugin_dir: PathBuf::new(),
         }
     }
 

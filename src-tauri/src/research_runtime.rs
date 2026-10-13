@@ -1878,7 +1878,6 @@ time.sleep(2)
                 },
             },
             legacy_claude_binary: None,
-            claude_plugin_dir: PathBuf::new(),
         }
     }
 

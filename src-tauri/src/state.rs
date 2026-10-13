@@ -6493,7 +6493,6 @@ mod tests {
                 },
             },
             legacy_claude_binary: None,
-            claude_plugin_dir: std::path::PathBuf::new(),
         }
     }
 

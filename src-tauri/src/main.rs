@@ -2620,7 +2620,6 @@ mod local_link_tests {
                 },
             },
             legacy_claude_binary: None,
-            claude_plugin_dir: PathBuf::new(),
         });
         state
             .insert_group_after(
