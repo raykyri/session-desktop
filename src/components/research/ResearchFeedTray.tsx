@@ -20,11 +20,14 @@ export function researchPlaceEmptyText(place: string): string {
 }
 
 /** Home folder tray. The name opens the folder, while the remaining header
- * toggles the tray. The tray accepts drops and expands during drag hover. */
+ * toggles the tray. Unless `drop` is false, the tray accepts drops and
+ * expands during drag hover. */
 export default function ResearchFeedTray({
   place,
   name,
   count = 0,
+  countNoun = ["question", "questions"],
+  drop = true,
   collapsed,
   onToggle,
   onOpen,
@@ -34,6 +37,10 @@ export default function ResearchFeedTray({
   name: string;
   /** How many questions the folder holds; shown after its name. */
   count?: number;
+  /** The singular and plural noun read after the count. */
+  countNoun?: [string, string];
+  /** Whether cards can be dropped on the tray (not the Trash). */
+  drop?: boolean;
   collapsed: boolean;
   onToggle: () => void;
   onOpen: () => void;
@@ -43,7 +50,7 @@ export default function ResearchFeedTray({
     <section
       className={`research-feed-tray${collapsed ? " is-collapsed" : ""}`}
       aria-label={name}
-      data-research-drop={place}
+      data-research-drop={drop ? place : undefined}
       data-research-tray-collapsed={collapsed ? "" : undefined}
     >
       <header className="research-feed-tray-header" onClick={onToggle}>
@@ -63,7 +70,7 @@ export default function ResearchFeedTray({
           {count > 0 ? (
             <span className="research-feed-tray-count">
               {count}
-              <span className="research-visually-hidden"> {count === 1 ? "question" : "questions"}</span>
+              <span className="research-visually-hidden"> {count === 1 ? countNoun[0] : countNoun[1]}</span>
             </span>
           ) : null}
         </div>

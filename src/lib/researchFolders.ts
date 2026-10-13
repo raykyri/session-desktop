@@ -18,9 +18,12 @@ import {
 export const RESEARCH_DRAFTS_FOLDER_ID = "system:drafts";
 export const RESEARCH_ARCHIVE_FOLDER_ID = "system:archive";
 export const RESEARCH_UNFILED_FOLDER_ID = "system:unfiled";
+/** The Trash's place id, for its view, Home tray and icons. Nothing is filed
+ * in it: trees and folders in the Trash carry `trashedAt`. */
+export const RESEARCH_TRASH_FOLDER_ID = "system:trash";
 
 const RESEARCH_FOLDER_NAME_MAX_LENGTH = 40;
-const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "highlights"];
+const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "trash", "highlights"];
 
 export function emptyResearchFolderState(): ResearchFolderState {
   return { folders: [], membership: {}, collapsed: [] };
@@ -32,22 +35,28 @@ export function researchPlaceIsReorderable(place: string): boolean {
   return place !== RESEARCH_ARCHIVE_FOLDER_ID;
 }
 
+/** A workspace's folders outside the Trash: the sidebar's, Home's trays and
+ * Move to. */
 export function workspaceResearchFolders(
   state: ResearchFolderState,
   workspaceId: string | null,
 ): ResearchFolder[] {
-  return workspaceId ? state.folders.filter((folder) => folder.workspaceId === workspaceId) : [];
+  return workspaceId
+    ? state.folders.filter((folder) => folder.workspaceId === workspaceId && folder.trashedAt == null)
+    : [];
 }
 
 export function researchPlaceName(place: string, folders: ResearchFolder[]): string {
   if (place === RESEARCH_DRAFTS_FOLDER_ID) return "Drafts";
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) return "Archive";
+  if (place === RESEARCH_TRASH_FOLDER_ID) return "Trash";
   if (place === RESEARCH_UNFILED_FOLDER_ID) return "Unfiled";
   return folders.find((folder) => folder.id === place)?.name ?? "Unfiled";
 }
 
 /** Where a tree is listed. An archived tree appears only in Archive even if it
- * retains a folder membership. A missing folder is treated as Unfiled. */
+ * retains a folder membership. A missing folder, or one in the Trash, is
+ * treated as Unfiled; the membership stays for the folder's Restore. */
 export function researchTreePlace(
   tree: Pick<ResearchTreeSummary, "id" | "archivedAt">,
   state: ResearchFolderState,
@@ -55,7 +64,9 @@ export function researchTreePlace(
   if (tree.archivedAt != null) return RESEARCH_ARCHIVE_FOLDER_ID;
   const member = state.membership[tree.id];
   if (member === RESEARCH_DRAFTS_FOLDER_ID) return member;
-  if (member && state.folders.some((folder) => folder.id === member)) return member;
+  if (member && state.folders.some((folder) => folder.id === member && folder.trashedAt == null)) {
+    return member;
+  }
   return RESEARCH_UNFILED_FOLDER_ID;
 }
 
@@ -144,6 +155,26 @@ export function researchFolderStateWithoutFolder(
       Object.entries(state.membership).filter(([, member]) => member !== folderId),
     ),
     collapsed: state.collapsed.filter((id) => id !== folderId),
+  };
+}
+
+/** Moves a folder to the Trash at `trashedAt`, or out of it with null. Its
+ * membership and collapsed state stay. */
+export function researchFolderStateWithFolderTrashed(
+  state: ResearchFolderState,
+  folderId: string,
+  trashedAt: number | null,
+): ResearchFolderState {
+  const folder = state.folders.find((candidate) => candidate.id === folderId);
+  if (!folder || (folder.trashedAt ?? null) === trashedAt) return state;
+  return {
+    ...state,
+    folders: state.folders.map((candidate) => {
+      if (candidate.id !== folderId) return candidate;
+      const next: ResearchFolder = { ...candidate, trashedAt };
+      if (trashedAt === null) delete next.trashedAt;
+      return next;
+    }),
   };
 }
 

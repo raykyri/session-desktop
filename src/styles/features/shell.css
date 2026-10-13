@@ -503,7 +503,31 @@
   animation: spinner-spin 0.9s linear infinite;
 }
 
-.confirm-dialog-actions button:not(.danger, .primary):hover {
+.confirm-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A text-style action at the start of the button row (Delete now). */
+.confirm-dialog-actions .confirm-dialog-link {
+  margin-right: auto;
+  padding: 0 2px;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-base);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.confirm-dialog-actions .confirm-dialog-link:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.confirm-dialog-actions button:not(.danger, .primary, .confirm-dialog-link):hover {
   background: var(--control-bg-hover);
   border-color: var(--control-border-hover);
 }

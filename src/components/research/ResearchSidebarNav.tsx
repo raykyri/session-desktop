@@ -13,8 +13,10 @@ import type { ResearchFolder } from "../../types";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
+  RESEARCH_TRASH_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
   researchFolderMonogram,
+  researchPlaceName,
 } from "../../lib/researchFolders";
 import {
   researchFeedPageKey,
@@ -37,6 +39,7 @@ interface NavEntry {
 function placeView(place: string): ResearchFeedPage {
   if (place === RESEARCH_DRAFTS_FOLDER_ID) return { kind: "drafts" };
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) return { kind: "archive" };
+  if (place === RESEARCH_TRASH_FOLDER_ID) return { kind: "trash" };
   return { kind: "folder", folderId: place };
 }
 
@@ -56,19 +59,21 @@ function primaryEntries(): NavEntry[] {
   ];
 }
 
+/** Drafts, the user folders, Archive, then Trash, which takes no drops. */
 function folderEntries(folders: ResearchFolder[]): NavEntry[] {
   return [
     RESEARCH_DRAFTS_FOLDER_ID,
     ...folders.map((folder) => folder.id),
     RESEARCH_ARCHIVE_FOLDER_ID,
+    RESEARCH_TRASH_FOLDER_ID,
   ].map((place) => {
     const folder = folders.find((candidate) => candidate.id === place);
     return {
       view: placeView(place),
-      label: folder?.name ?? (place === RESEARCH_DRAFTS_FOLDER_ID ? "Drafts" : "Archive"),
+      label: folder?.name ?? researchPlaceName(place, folders),
       icon: <ResearchPlaceIcon place={place} size={16} />,
       monogram: folder ? researchFolderMonogram(folder.name) : undefined,
-      drop: place,
+      drop: place === RESEARCH_TRASH_FOLDER_ID ? undefined : place,
       folderId: folder?.id,
     };
   });
@@ -91,9 +96,9 @@ interface ResearchSidebarNavProps {
 }
 
 /** The full sidebar's rows: Home, Highlights, then the Folders section
- * (Drafts, user folders, Archive). Rows carry no counts. Every row but
- * Highlights is a drop target; user folders have a … menu with Rename and
- * Delete. */
+ * (Drafts, user folders, Archive, Trash). Rows carry no counts. Every row but
+ * Highlights and Trash is a drop target; user folders have a … menu with
+ * Rename and Delete. */
 export function ResearchSidebarNav({
   current,
   folders,
@@ -292,8 +297,9 @@ export function ResearchRailButton({
 }
 
 /** The collapsed sidebar: a 52px column of icons. Home and Highlights,
- * then one icon per folder (user folders as their first letter,
- * named in the tooltip), then New folder. Folder icons and Home accept drops. */
+ * then one icon per folder (user folders as their first letter, named in the
+ * tooltip) ending with Archive and Trash, then New folder. Home and the folder
+ * icons but Trash accept drops. */
 export function ResearchSidebarRail({
   current,
   folders,

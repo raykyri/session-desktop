@@ -172,6 +172,8 @@ interface ResearchThreadPageProps {
   postActions: PostActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
+  /** Moves the research to the Trash (the root delete confirmation's default). */
+  onTrashTree: (treeId: string) => Promise<void>;
   onRenameTree: (treeId: string, title: string) => Promise<void>;
   onUpdateDocument: (input: {
     nodeId: string;
@@ -266,6 +268,7 @@ function ResearchThreadPage({
   postActions,
   onRemoveBranch,
   onRemoveTree,
+  onTrashTree,
   onRenameTree,
   onUpdateDocument,
   onUpdatePost,
@@ -2053,6 +2056,14 @@ function ResearchThreadPage({
     }
   }
 
+  /** Moves the research to the Trash (the root delete dialog's default) and
+   * closes the dialog. */
+  async function trashTree() {
+    if (!detail) return;
+    await onTrashTree(detail.tree.id);
+    setDeletingBranchId(null);
+  }
+
   /** Deletes `node` and what follows it (the delete dialog's confirmation),
    * or the whole research for the root, and closes the dialog. */
   async function removeBranch(node: ResearchNode) {
@@ -2780,6 +2791,7 @@ function ResearchThreadPage({
           nodeId={deletingBranchId}
           rootNodeId={rootNodeId}
           treeTitle={treeTitleText}
+          onTrashRoot={trashTree}
           onRemove={removeBranch}
           onClose={() => setDeletingBranchId(null)}
           returnFocusFallback={deleteReturnFocus}

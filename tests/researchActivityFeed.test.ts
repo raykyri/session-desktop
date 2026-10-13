@@ -8,7 +8,9 @@ import ResearchActivityFeed, {
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
 } from "../src/components/research/ResearchActivityFeed";
-import { ResearchFolderDeletePanel } from "../src/components/research/ResearchFolderDialogs";
+import { researchFolderDeleteDialogProps } from "../src/components/research/ResearchFolderDialogs";
+import { ResearchDeleteDialogPanel } from "../src/components/research/ResearchDeleteDialog";
+import { researchTrashEntries } from "../src/lib/researchTrash";
 import type { ResearchFolderState } from "../src/types";
 
 const noop = () => {};
@@ -27,7 +29,7 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
     onOpenResearchQuery: noop,
     onResearchRecapApplied: noop, onError: noop,
     onRenameResearch: asyncNoop,
-    onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,
+    onRestoreResearch: asyncNoop, onTrashResearch: asyncNoop, onRemoveResearch: asyncNoop,
     onMoveTree: noop,
     onRefresh: noop, onBack: noop, onForward: noop,
     ...overrides,
@@ -292,7 +294,7 @@ test("Home lists filed questions in their folder's tray, after Unfiled", () => {
   const trays = html.split(/class="research-feed-tray(?=[ "])/).slice(1);
   assert.deepEqual(
     trays.map((tray) => tray.match(/aria-label="([^"]+)"/)?.[1]),
-    ["Drafts", "Reading list", "Archive"],
+    ["Drafts", "Reading list", "Archive", "Trash"],
   );
   assert.ok(html.indexOf("Investigate this question") < html.indexOf('aria-label="Drafts"'));
   assert.match(trays[0], /An unsent draft[\s\S]*Drafted tree/);
@@ -329,22 +331,67 @@ test("a folder view names the folder and lists only its questions", () => {
   assert.match(html, /data-research-drop="f-read"/);
 });
 
-test("the folder delete confirmation is a confirm dialog with Cancel before Delete folder", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchFolderDeletePanel, {
-      name: "Reading list",
-      count: 1,
-      onConfirm: noop,
-      onCancel: noop,
-    }),
-  );
+test("the folder delete confirmation moves the folder to the Trash, or deletes it now", () => {
+  const props = researchFolderDeleteDialogProps({
+    name: "Reading list",
+    count: 1,
+    onTrash: noop,
+    onDelete: noop,
+    onCancel: noop,
+  });
+  const html = renderToStaticMarkup(createElement(ResearchDeleteDialogPanel, props));
   assert.match(html, /class="confirm-dialog" role="dialog" aria-modal="true"/);
-  assert.match(html, /<h2[^>]*>Delete “Reading list”\?<\/h2><p>Its 1 question moves to Unfiled\.<\/p>/);
-  assert.ok(html.indexOf(">Cancel<") < html.indexOf(">Delete folder<"));
-  const empty = renderToStaticMarkup(
-    createElement(ResearchFolderDeletePanel, { name: "Empty", count: 0, onConfirm: noop, onCancel: noop }),
+  assert.match(html, /<h2[^>]*>Delete “Reading list”\?<\/h2>/);
+  assert.match(html, /The folder moves to the Trash\. Its 1 question shows in Unfiled until you restore it\./);
+  assert.ok(html.indexOf(">Delete now<") < html.indexOf(">Cancel<"));
+  assert.ok(html.indexOf(">Cancel<") < html.indexOf(">Move to Trash<"));
+  const now = renderToStaticMarkup(
+    createElement(ResearchDeleteDialogPanel, { ...props, initialStep: "remove" }),
   );
-  assert.match(empty, /It is empty\./);
+  assert.match(now, /Delete permanently\?/);
+  assert.match(now, /Its 1 question moves to Unfiled\. This can’t be undone\./);
+  const empty = researchFolderDeleteDialogProps({
+    name: "Empty", count: 0, onTrash: noop, onDelete: noop, onCancel: noop,
+  });
+  assert.match(
+    renderToStaticMarkup(createElement(ResearchDeleteDialogPanel, empty)),
+    /The folder is empty\. It moves to the Trash\./,
+  );
+});
+
+const trashedTree = { ...tree, id: "gone", title: "Old thread", trashedAt: 20 };
+const trashEntries = researchTrashEntries(
+  [trashedTree],
+  [{ id: "f-old", name: "Old folder", workspaceId: "ws", trashedAt: 30 }],
+  "ws",
+);
+
+test("Home ends with a collapsed Trash tray that counts its items and takes no drops", () => {
+  const html = renderFeed({ trashEntries, folderState: folders, folders: folders.folders });
+  const trays = html.split(/class="research-feed-tray(?=[ "])/).slice(1);
+  const trash = trays[trays.length - 1];
+  assert.match(trash, /^ is-collapsed" aria-label="Trash"/);
+  assert.doesNotMatch(trash, /data-research-drop/);
+  assert.match(trash, /research-feed-tray-count">2<span class="research-visually-hidden"> items<\/span>/);
+  assert.match(trash, /aria-expanded="false" aria-label="Expand Trash"/);
+  assert.doesNotMatch(trash, /Old thread/);
+});
+
+test("Trash lists its items newest first with Restore and Delete now, and empties from its header", () => {
+  const html = renderFeed({ view: { kind: "trash" }, trashEntries, onEmptyTrash: asyncNoop });
+  assert.match(html, /research-feed-header-title[^>]*>Trash</);
+  assert.match(html, /aria-label="Back to Home"/);
+  assert.match(html, /<button type="button" class="research-feed-button">Empty Trash<\/button>/);
+  assert.ok(html.indexOf("Old folder") < html.indexOf("Old thread"));
+  assert.match(html, /aria-label="Restore Old thread"/);
+  assert.match(html, /aria-label="Delete now: Old folder"/);
+  // Trash has no ask box and takes no drops.
+  assert.doesNotMatch(html, /Query composer/);
+  assert.doesNotMatch(html, /research-feed-solo"[^>]*data-research-drop/);
+
+  const empty = renderFeed({ view: { kind: "trash" }, onEmptyTrash: asyncNoop });
+  assert.match(empty, /The Trash is empty\./);
+  assert.match(empty, /<button type="button" class="research-feed-button" disabled="">Empty Trash<\/button>/);
 });
 
 test("Drafts lists unsent drafts, then trees filed in Drafts", () => {

@@ -4,6 +4,7 @@ import {
   emptyResearchFolderState,
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
+  RESEARCH_TRASH_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
   reorderedIds,
   researchCardTitle,
@@ -12,6 +13,7 @@ import {
   researchFolderNameError,
   researchFolderStateRenamed,
   researchFolderStateWithCollapsed,
+  researchFolderStateWithFolderTrashed,
   researchFolderStateWithMembership,
   researchFolderStateWithNewFolder,
   researchFolderStateWithoutFolder,
@@ -224,4 +226,40 @@ test("node updates keep a root's starred list current, or ask for a refetch", ()
   assert.equal(starred.stale, true);
   assert.equal(starred.items, items);
   assert.equal(patchRecentActivityStarred(items, node("g", null)).items, items);
+});
+
+test("a folder in the Trash leaves the lists, keeps its membership, and frees its name", () => {
+  const filed: ResearchFolderState = {
+    folders: [
+      { id: "f1", name: "Reading", workspaceId: "ws" },
+      { id: "f2", name: "Later", workspaceId: "ws" },
+    ],
+    membership: { a: "f1", b: "f2" },
+    collapsed: ["f1"],
+  };
+  const trashed = researchFolderStateWithFolderTrashed(filed, "f1", 40);
+  assert.equal(trashed.folders[0].trashedAt, 40);
+  assert.deepEqual(trashed.membership, filed.membership);
+  assert.deepEqual(trashed.collapsed, ["f1"]);
+  assert.deepEqual(workspaceResearchFolders(trashed, "ws").map((folder) => folder.id), ["f2"]);
+  // Its questions show as Unfiled until it is restored.
+  assert.equal(researchTreePlace(tree("a"), trashed), RESEARCH_UNFILED_FOLDER_ID);
+  assert.equal(researchTreePlace(tree("b"), trashed), "f2");
+  assert.equal(
+    researchFolderNameError("reading", workspaceResearchFolders(trashed, "ws")),
+    null,
+  );
+  // Trashing again or an unknown folder changes nothing.
+  assert.equal(researchFolderStateWithFolderTrashed(trashed, "f1", 40), trashed);
+  assert.equal(researchFolderStateWithFolderTrashed(trashed, "missing", 40), trashed);
+
+  const restored = researchFolderStateWithFolderTrashed(trashed, "f1", null);
+  assert.deepEqual(restored, filed);
+  assert.equal("trashedAt" in restored.folders[0], false);
+  assert.equal(researchTreePlace(tree("a"), restored), "f1");
+});
+
+test("Trash is a place name and a reserved folder name", () => {
+  assert.equal(researchPlaceName(RESEARCH_TRASH_FOLDER_ID, []), "Trash");
+  assert.equal(researchFolderNameError(" trash ", []), "“trash” is reserved. Choose another name.");
 });

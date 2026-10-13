@@ -16,6 +16,7 @@ import {
   importResearchReport,
   removeResearchBranch,
   removeResearchTree,
+  trashResearchTree,
   renameResearchNode,
   renameResearchTree,
   rerunResearchNode,
@@ -305,6 +306,19 @@ export function useResearchActions(
     },
     [focusResearchHome, pruneResearchTreeVisits],
   );
+  // Moving to the Trash closes the thread the same way; the tree's removed
+  // event updates the lists in every window.
+  const trashResearchTreeAndSelectFallback = useCallback(
+    async (treeId: string) => {
+      setError(null);
+      await trashResearchTree(treeId);
+      if (activeResearchTreeIdRef.current === treeId) {
+        focusResearchHome();
+      }
+      pruneResearchTreeVisits((id) => id !== treeId);
+    },
+    [focusResearchHome, pruneResearchTreeVisits],
+  );
   const removeResearchTreeFromMenu = useCallback(
     async (treeId: string) => {
       setError(null);
@@ -409,6 +423,7 @@ export function useResearchActions(
     renameResearchTreeTitle,
     restoreResearchTreeFromMenu,
     removeResearchTreeAndSelectFallback,
+    trashResearchTreeAndSelectFallback,
     removeResearchTreeFromMenu,
     createResearchFollowup,
     retryResearchRun,

@@ -25,8 +25,15 @@ export function useResearchFolderDialogs({
   researchTreesRef,
   archivedResearchTreesRef,
 }: ResearchFolderDialogContext) {
-  const { folders, folderState, renameFolder, moveTreeToNewFolder, createFolder, deleteFolder } =
-    filing;
+  const {
+    folders,
+    folderState,
+    renameFolder,
+    moveTreeToNewFolder,
+    createFolder,
+    deleteFolder,
+    setFolderTrashed,
+  } = filing;
   const folderStateRef = useRef(folderState);
   folderStateRef.current = folderState;
   const [nameRequest, setNameRequest] = useState<ResearchFolderNameRequest | null>(null);
@@ -91,7 +98,26 @@ export function useResearchFolderDialogs({
     },
     [openFeedPage],
   );
+  // The confirmation's default: the folder moves to the Trash and keeps its
+  // membership, so Undo or Restore puts its questions back.
   const confirmDelete = useCallback(
+    (folderId: string) => {
+      setPendingDelete(null);
+      openFeedPage({ kind: "home" });
+      const warn = (err: unknown) =>
+        showToast(err instanceof Error ? err.message : String(err), { tone: "warning" });
+      void setFolderTrashed(folderId, true).then(
+        () =>
+          showToast("Moved the folder to the Trash.", {
+            undo: () => void setFolderTrashed(folderId, false).catch(warn),
+          }),
+        warn,
+      );
+    },
+    [openFeedPage, setFolderTrashed, showToast],
+  );
+  // Delete now: the folder is deleted and its questions move to Unfiled.
+  const deleteNow = useCallback(
     (folderId: string) => {
       const moved = [...researchTreesRef.current, ...archivedResearchTreesRef.current].filter(
         (tree) => folderStateRef.current.membership[tree.id] === folderId,
@@ -120,6 +146,7 @@ export function useResearchFolderDialogs({
     pendingDelete,
     requestDelete,
     confirmDelete,
+    deleteNow,
     cancelDelete,
   };
 }

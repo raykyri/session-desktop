@@ -1,16 +1,19 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode, Ref, RefObject } from "react";
-import { Archive, ChevronLeft, FilePen, Folder, X } from "lucide-react";
+import { Archive, ChevronLeft, FilePen, Folder, Trash2, X } from "lucide-react";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
+  RESEARCH_TRASH_FOLDER_ID,
 } from "../../lib/researchFolders";
 import type { ResearchToast } from "../../hooks/useResearchToast";
 
-/** The icon of a place: Drafts and Archive have their own, user folders share one. */
+/** The icon of a place: Drafts, Archive and Trash have their own, user
+ * folders share one. */
 export function ResearchPlaceIcon({ place, size = 14 }: { place: string; size?: number }) {
   if (place === RESEARCH_DRAFTS_FOLDER_ID) return <FilePen size={size} aria-hidden="true" />;
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) return <Archive size={size} aria-hidden="true" />;
+  if (place === RESEARCH_TRASH_FOLDER_ID) return <Trash2 size={size} aria-hidden="true" />;
   return <Folder size={size} aria-hidden="true" />;
 }
 

@@ -129,7 +129,12 @@ import { researchTreeContents, type ResearchTreeContents } from "./lib/researchT
 import {
   setResearchNodeStarred,
   activatePane,
+  emptyResearchTrash,
+  removeResearchTree,
+  restoreResearchTreeFromTrash,
 } from "./lib/api";
+import { researchTrashEntries, type ResearchTrashEntry } from "./lib/researchTrash";
+import { useResearchTrash } from "./hooks/useResearchTrash";
 import type {
   AgentAdapterMetadata,
   ResearchDraft,
@@ -460,6 +465,8 @@ function MainApp() {
     refreshFolders: refreshResearchFolders,
     foldersLoadError: researchFoldersLoadError,
     retryFoldersLoad: retryResearchFoldersLoad,
+    setFolderTrashed: setResearchFolderTrashed,
+    deleteFolders: deleteResearchFolders,
   } = researchFiling;
   const {
     drafts: researchDrafts,
@@ -490,6 +497,7 @@ function MainApp() {
     pendingDelete: pendingResearchFolderDelete,
     requestDelete: requestResearchFolderDelete,
     confirmDelete: confirmResearchFolderDelete,
+    deleteNow: deleteResearchFolderNow,
     cancelDelete: cancelResearchFolderDelete,
   } = useResearchFolderDialogs({
     filing: researchFiling,
@@ -500,9 +508,11 @@ function MainApp() {
   });
   const researchHighlights = useResearchHighlights(feedPage.kind === "highlights", setError);
   const invalidateResearchHighlights = researchHighlights.invalidate;
+  const researchTrash = useResearchTrash(setError);
   const handleResearchEvent = useResearchEvents(researchData, navigation, {
     refreshResearchDrafts,
     refreshResearchFolders,
+    refreshResearchTrash: researchTrash.refresh,
     invalidateResearchHighlights,
   });
   const {
@@ -515,6 +525,7 @@ function MainApp() {
     renameResearchTreeTitle,
     restoreResearchTreeFromMenu,
     removeResearchTreeAndSelectFallback,
+    trashResearchTreeAndSelectFallback,
     removeResearchTreeFromMenu,
     createResearchFollowup,
     retryResearchRun,
@@ -545,6 +556,55 @@ function MainApp() {
       showResearchToast(message, tone === "warning" ? { tone: "warning" } : {}),
     [showResearchToast],
   );
+
+  // Delete's default for a thread, from every delete confirmation: it moves
+  // to the Trash, with Undo in the toast.
+  const trashResearchTreeWithUndo = useCallback(
+    async (treeId: string) => {
+      await trashResearchTreeAndSelectFallback(treeId);
+      showResearchToast("Moved to the Trash.", {
+        undo: () =>
+          void restoreResearchTreeFromTrash(treeId).catch((err: unknown) =>
+            setError(err instanceof Error ? err.message : String(err)),
+          ),
+      });
+    },
+    [showResearchToast, trashResearchTreeAndSelectFallback],
+  );
+  // The scoped workspace's Trash: its trees and its folders.
+  const researchTrashItems = useMemo(
+    () => researchTrashEntries(researchTrash.trees, researchFolderState.folders, researchScope),
+    [researchFolderState.folders, researchScope, researchTrash.trees],
+  );
+  const restoreResearchTrashEntry = useCallback(
+    (entry: ResearchTrashEntry) => {
+      const restore =
+        entry.kind === "tree"
+          ? restoreResearchTreeFromTrash(entry.id)
+          : setResearchFolderTrashed(entry.id, false);
+      void restore.then(
+        () => showResearchToast("Restored."),
+        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+      );
+    },
+    [setResearchFolderTrashed, showResearchToast],
+  );
+  // Permanent deletion from the Trash. Rejections keep the dialog open.
+  const deleteResearchTrashEntry = useCallback(
+    async (entry: ResearchTrashEntry) => {
+      if (entry.kind === "tree") await removeResearchTree(entry.id);
+      else await deleteResearchFolders([entry.id]);
+    },
+    [deleteResearchFolders],
+  );
+  const emptyResearchTrashNow = useCallback(async () => {
+    if (!researchScope) return;
+    const folderIds = researchTrashItems
+      .filter((entry) => entry.kind === "folder")
+      .map((entry) => entry.id);
+    await emptyResearchTrash(researchScope);
+    if (folderIds.length > 0) await deleteResearchFolders(folderIds);
+  }, [deleteResearchFolders, researchScope, researchTrashItems]);
 
   // The ⌘K palette's command list, rebuilt on each open from live state:
   // research threads and app actions.
@@ -1170,7 +1230,12 @@ function MainApp() {
                     onError={setError}
                     onRenameResearch={renameResearchTreeTitle}
                     onRestoreResearch={restoreResearchTreeFromMenu}
+                    onTrashResearch={trashResearchTreeWithUndo}
                     onRemoveResearch={removeResearchTreeFromMenu}
+                    trashEntries={researchTrashItems}
+                    onRestoreTrashEntry={restoreResearchTrashEntry}
+                    onDeleteTrashEntry={deleteResearchTrashEntry}
+                    onEmptyTrash={emptyResearchTrashNow}
                     onMoveTree={moveResearchTreeFromFeed}
                     onReorderTree={reorderResearchTreeFromFeed}
                     onReorderDraft={moveResearchDraftFromFeed}
@@ -1180,6 +1245,7 @@ function MainApp() {
                     onRequestDeleteFolder={requestResearchFolderDelete}
                     pendingDeleteFolderId={pendingResearchFolderDelete}
                     onConfirmDeleteFolder={confirmResearchFolderDelete}
+                    onDeleteFolderNow={deleteResearchFolderNow}
                     onCancelDeleteFolder={cancelResearchFolderDelete}
                     onToggleTray={toggleResearchTray}
                     onDeleteDraft={deleteResearchDraftFromFeed}
@@ -1221,6 +1287,7 @@ function MainApp() {
                     postActions={postActions}
                     onRemoveBranch={removeResearchBranchFromThread}
                     onRemoveTree={removeResearchTreeAndSelectFallback}
+                    onTrashTree={trashResearchTreeWithUndo}
                     onRenameTree={renameResearchTreeTitle}
                     onUpdateDocument={editResearchDocument}
                     onUpdatePost={editResearchPost}
@@ -1311,6 +1378,7 @@ function MainApp() {
           tree={researchOfferDeletingTree}
           fallbackFocus={askedResearchRow}
           onClose={() => setResearchOfferDeletingTreeId(null)}
+          onTrash={trashResearchTreeWithUndo}
           onRemove={removeResearchTreeFromMenu}
         />
       ) : null}

@@ -91,6 +91,12 @@ type FoldersChangedEvent = {
   timestamp: number;
 };
 
+/** A tree entered or left the Trash, or a trashed tree was deleted. */
+type TrashChangedEvent = {
+  type: "research.trash.changed";
+  timestamp: number;
+};
+
 /** Every research event currently emitted by the backend. Keeping this a
  * closed union makes a new backend event take the explicit recovery path
  * until its frontend state effects are intentionally implemented. */
@@ -105,7 +111,8 @@ export type ParsedResearchEvent =
   | TreeRemovedEvent
   | NodeRemovedEvent
   | DraftsChangedEvent
-  | FoldersChangedEvent;
+  | FoldersChangedEvent
+  | TrashChangedEvent;
 
 type ResearchEventParseResult =
   | { kind: "event"; event: ParsedResearchEvent }
@@ -158,6 +165,7 @@ function isResearchTree(value: unknown): value is ResearchTree {
     isFiniteNumber(value.createdAt) &&
     isFiniteNumber(value.updatedAt) &&
     isOptionalFiniteNumber(value.archivedAt) &&
+    isOptionalFiniteNumber(value.trashedAt) &&
     isOptionalFiniteNumber(value.lastViewedAt)
   );
 }
@@ -412,6 +420,7 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
           }
         : malformed();
     case "research.folders.changed":
+    case "research.trash.changed":
       return { kind: "event", event: { type: event.type, timestamp: event.timestamp } };
     default:
       return { kind: "unsupported", type: event.type };

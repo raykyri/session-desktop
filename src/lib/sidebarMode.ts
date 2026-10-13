@@ -1,9 +1,11 @@
-/** Lists the feed column can show. Home lists Unfiled and a tray per folder;
- * a folder, Drafts, or Archive lists only that place. */
+/** Lists the feed column can show. Home lists Unfiled, then a tray per
+ * folder, Archive and Trash; a folder, Drafts, Archive, or Trash lists only
+ * that place. */
 export type ResearchFeedView =
   | { kind: "home" }
   | { kind: "drafts" }
   | { kind: "archive" }
+  | { kind: "trash" }
   | { kind: "folder"; folderId: string };
 
 /** Pages the feed column can show: a feed list or Highlights. */

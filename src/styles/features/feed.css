@@ -572,6 +572,56 @@
   color: var(--text-heading);
 }
 
+/* — Trash — Rows don't open, so they have no hover fill; the actions sit at
+   the end of each row. */
+
+.research-trash-list {
+  margin: 0;
+  padding: 0 8px 4px;
+  list-style: none;
+}
+
+.research-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 4px 6px 12px;
+  border-radius: 8px;
+}
+
+.research-trash-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.research-trash-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.research-trash-title {
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.research-trash-meta {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.research-trash-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
 .research-feed-tray-name:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;

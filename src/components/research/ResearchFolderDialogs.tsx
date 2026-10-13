@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
 import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
 import { researchFeedCardControl } from "./ResearchFeedCard";
-import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
+import { researchTrashFolderSentence } from "../../lib/researchTrash";
+import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";
+import { trapResearchDialogTab } from "./researchFocus";
 
 /** `returnFocus` is the button that opened the dialog, often through a menu
  * that is gone by the time the dialog closes. */
@@ -149,67 +151,51 @@ interface ResearchFolderDeleteProps {
   name: string;
   /** Includes archived questions, which leave the folder too. */
   count: number;
-  onConfirm: () => void;
+  /** Moves the folder to the Trash (the default). */
+  onTrash: () => Promise<void> | void;
+  /** Deletes it now; its questions move to Unfiled. */
+  onDelete: () => Promise<void> | void;
   onCancel: () => void;
 }
 
-/** Confirms deleting a folder. Delete folder takes focus when it opens; Esc,
- * Cancel, or a click outside cancels. Focus returns to the control that
- * opened it, else to `fallbackFocus`. */
+/** The folder delete confirmation's steps, for ResearchDeleteDialog and its
+ * panel. */
+export function researchFolderDeleteDialogProps({
+  name,
+  count,
+  onTrash,
+  onDelete,
+  onCancel,
+}: ResearchFolderDeleteProps): ResearchDeleteDialogProps {
+  return {
+    trash: {
+      title: `Delete “${name}”?`,
+      body: <p>{researchTrashFolderSentence(count)}</p>,
+      onConfirm: onTrash,
+    },
+    remove: {
+      body: (
+        <p>
+          {count > 0
+            ? `Its ${count} question${count === 1 ? "" : "s"} move${count === 1 ? "s" : ""} to Unfiled. `
+            : ""}
+          This can’t be undone.
+        </p>
+      ),
+      onConfirm: onDelete,
+    },
+    onClose: onCancel,
+  };
+}
+
+/** Confirms deleting a folder: Move to Trash, or Delete now. Focus returns to
+ * the control that opened it, else to `fallbackFocus`. */
 export function ResearchFolderDeleteDialog({
   fallbackFocus,
   ...props
 }: ResearchFolderDeleteProps & { fallbackFocus?: () => HTMLElement | null | undefined }) {
-  useResearchDialogReturnFocus(true, fallbackFocus);
-  return createPortal(
-    <div
-      className="confirm-dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) props.onCancel();
-      }}
-    >
-      <ResearchFolderDeletePanel {...props} />
-    </div>,
-    document.body,
+  return (
+    <ResearchDeleteDialog {...researchFolderDeleteDialogProps(props)} fallbackFocus={fallbackFocus} />
   );
 }
 
-/** The dialog element of ResearchFolderDeleteDialog, without its backdrop
- * and portal. */
-export function ResearchFolderDeletePanel({ name, count, onConfirm, onCancel }: ResearchFolderDeleteProps) {
-  const id = useId();
-  const titleId = `${id}-title`;
-  return (
-    <div
-      className="confirm-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          onCancel();
-          return;
-        }
-        trapResearchDialogTab(event);
-      }}
-    >
-      <h2 id={titleId}>Delete “{name}”?</h2>
-      <p>
-        {count > 0
-          ? `Its ${count} question${count === 1 ? "" : "s"} move${count === 1 ? "s" : ""} to Unfiled.`
-          : "It is empty."}
-      </p>
-      <div className="confirm-dialog-actions">
-        <button className="control-button" type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="control-button danger" type="button" autoFocus onClick={onConfirm}>
-          Delete folder
-        </button>
-      </div>
-    </div>
-  );
-}

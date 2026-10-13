@@ -122,6 +122,8 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
     ],
     ["research.drafts.changed", { workspaceId: "workspace-1" }],
     ["research.folders.changed", {}],
+    ["research.trash.changed", {}],
+    ["research.tree.updated", { tree: { ...researchTree, trashedAt: 50 } }],
   ];
 
   for (const [type, payload] of cases) {

@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
 import { researchTreeContentsSentence, type ResearchTreeContents } from "../../lib/researchTreeContents";
+import { researchTrashTreeSentence } from "../../lib/researchTrash";
+import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";
 import { ResearchMenuItem, ResearchMenuSeparator } from "./ResearchMenu";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
@@ -256,89 +258,50 @@ export function ResearchTreeDeleteOfferPanel({ tree, contents, onKeep, onDelete 
   );
 }
 
-export function ResearchTreeDeleteDialog({
-  tree,
-  onClose,
-  onRemove,
-  fallbackFocus,
-}: {
+interface ResearchTreeDeleteProps {
   tree: ResearchTreeSummary;
   onClose: () => void;
+  /** Moves the thread to the Trash (the default). */
+  onTrash: (treeId: string) => Promise<void>;
+  /** Deletes it permanently (Delete now). */
   onRemove: (treeId: string) => Promise<void>;
+}
+
+/** A thread's delete confirmation steps, for ResearchDeleteDialog and its
+ * panel. */
+export function researchTreeDeleteDialogProps({
+  tree,
+  onClose,
+  onTrash,
+  onRemove,
+}: ResearchTreeDeleteProps): ResearchDeleteDialogProps {
+  return {
+    trash: {
+      title: `Delete “${tree.title}”?`,
+      body: <p>{researchTrashTreeSentence(null)}</p>,
+      onConfirm: () => onTrash(tree.id),
+    },
+    remove: { onConfirm: () => onRemove(tree.id) },
+    disabledReason:
+      tree.runningCount > 0
+        ? "It has active runs, which must finish or be cancelled before it can be deleted."
+        : null,
+    onClose,
+  };
+}
+
+/** Confirms deleting a thread from a feed menu or the delete offer: Move to
+ * Trash, or Delete now. */
+export function ResearchTreeDeleteDialog({
+  fallbackFocus,
+  ...props
+}: ResearchTreeDeleteProps & {
   /** Where focus goes on close when the control focused before the dialog
    * opened is gone. */
   fallbackFocus?: () => HTMLElement | null | undefined;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useResearchDialogReturnFocus(true, fallbackFocus);
-  return createPortal(
-    <div
-      className="confirm-dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !busy) {
-          onClose();
-        }
-      }}
-    >
-      <div
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-research-dialog-title"
-        aria-busy={busy}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !busy) {
-            event.preventDefault();
-            onClose();
-            return;
-          }
-          trapResearchDialogTab(event);
-        }}
-      >
-        <h2 id="delete-research-dialog-title">Delete “{tree.title}”?</h2>
-        <p>
-          This permanently deletes this research and its completed work and follow-up
-          history. This can’t be undone.
-        </p>
-        {error ? (
-          <p className="confirm-dialog-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <div className="confirm-dialog-actions">
-          <button className="control-button" type="button" disabled={busy} onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="control-button danger"
-            autoFocus
-            disabled={busy}
-            onClick={() => {
-              if (busy) {
-                return;
-              }
-              setError(null);
-              setBusy(true);
-              void onRemove(tree.id)
-                .then(() => {
-                  onClose();
-                })
-                .catch((err: unknown) => {
-                  setError(err instanceof Error ? err.message : String(err));
-                })
-                .finally(() => {
-                  setBusy(false);
-                });
-            }}
-          >
-            {busy ? "Deleting…" : "Delete research"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <ResearchDeleteDialog {...researchTreeDeleteDialogProps(props)} fallbackFocus={fallbackFocus} />
   );
 }
+

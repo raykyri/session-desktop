@@ -4,7 +4,9 @@ import { researchBranchInfo } from "../../lib/researchBranches";
 import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "../../lib/researchChains";
 import { nodePrompt, nodeType } from "../../lib/researchNodeTypes";
 import { researchDeleteLabel } from "../../lib/researchThreadView";
+import { researchTrashTreeSentence } from "../../lib/researchTrash";
 import type { ResearchNode } from "../../types";
+import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -164,6 +166,81 @@ export function ResearchRenameDialog({
   );
 }
 
+
+/** The steps of the thread page's delete confirmation for `node`. The root
+ * stands for the research: it moves to the Trash, or with Delete now is
+ * deleted. A message inside a thread is deleted at once with what follows it
+ * (messages have no Trash), so its dialog is the permanent step alone. */
+export function researchBranchDeleteDialogProps({
+  node,
+  info,
+  isRoot,
+  treeTitle,
+  onTrashRoot,
+  onRemove,
+  onClose,
+}: {
+  node: ResearchNode;
+  info: { descendantCount: number; hasActiveRuns: boolean };
+  isRoot: boolean;
+  treeTitle: string;
+  onTrashRoot: () => Promise<void>;
+  onRemove: () => Promise<void>;
+  onClose: () => void;
+}): ResearchDeleteDialogProps {
+  const name = (node.title ?? nodePrompt(node)) || treeTitle;
+  const count = info.descendantCount;
+  const plural = (noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+  const disabledReason = info.hasActiveRuns
+    ? "It has active runs, which must finish or be cancelled before it can be deleted."
+    : null;
+  if (isRoot) {
+    return {
+      trash: {
+        title: `Delete “${name}”?`,
+        body: <p>{researchTrashTreeSentence(count)}</p>,
+        onConfirm: onTrashRoot,
+      },
+      remove: { onConfirm: onRemove },
+      disabledReason,
+      onClose,
+    };
+  }
+  // A follow-up note: deleting it deletes its own follow-ups.
+  const note = nodeType(node) === "post";
+  const title = note
+    ? "Delete this note?"
+    : node.inline && count > 0
+      ? "Delete the rest of this thread?"
+      : count > 0
+        ? "Delete this research branch?"
+        : "Delete this follow-up?";
+  const what = note
+    ? count > 0
+      ? `This deletes the note and ${plural("follow-up")} under it.`
+      : "This deletes the note."
+    : node.inline && count > 0
+      ? `This deletes this follow-up and everything after it in the thread, ${plural("message")} in all, including any branches. Its parent answer keeps the freed inline slot.`
+      : count > 0
+        ? `This also deletes ${plural("follow-up")} under it.`
+        : "This deletes the follow-up and its response.";
+  return {
+    remove: {
+      title,
+      body: (
+        <>
+          <p>“{name}”</p>
+          <p>{what} This can’t be undone.</p>
+        </>
+      ),
+      label: note ? "Delete note" : researchDeleteLabel(false, node.inline, count),
+      onConfirm: onRemove,
+    },
+    disabledReason,
+    onClose,
+  };
+}
+
 /** The thread page's delete confirmation for a message and what follows it
  * (or, for the root, the whole research). Mounted while a deletion is asked
  * for; it renders nothing once the message has left `nodes`. Focus returns to
@@ -173,6 +250,7 @@ export function ResearchDeleteBranchDialog({
   nodeId,
   rootNodeId,
   treeTitle,
+  onTrashRoot,
   onRemove,
   onClose,
   returnFocusFallback,
@@ -181,124 +259,31 @@ export function ResearchDeleteBranchDialog({
   nodeId: string;
   rootNodeId: string | null;
   treeTitle: string;
-  /** Deletes `node`; a rejection keeps the dialog open with its message. */
+  /** Moves the research to the Trash (the root's default). */
+  onTrashRoot: () => Promise<void>;
+  /** Deletes `node` permanently; a rejection keeps the dialog open with its
+   * message. */
   onRemove: (node: ResearchNode) => Promise<void>;
   onClose: () => void;
   returnFocusFallback: () => HTMLElement | null | undefined;
 }) {
-  const [removing, setRemoving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useResearchDialogReturnFocus(true, returnFocusFallback);
   const node = useMemo(() => nodes.find((candidate) => candidate.id === nodeId) ?? null, [nodeId, nodes]);
   const info = useMemo(() => researchBranchInfo(nodes, nodeId), [nodeId, nodes]);
   if (!node || !info) {
     return null;
   }
-  const isRoot = node.id === rootNodeId;
-  // A follow-up note: deleting it deletes its own follow-ups.
-  const note = !isRoot && nodeType(node) === "post";
-
-  async function confirm() {
-    if (!node || !info || info.hasActiveRuns) {
-      return;
-    }
-    setError(null);
-    setRemoving(true);
-    try {
-      await onRemove(node);
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setRemoving(false);
-    }
-  }
-
-  return createPortal(
-    <div
-      className="confirm-dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !removing) {
-          onClose();
-        }
-      }}
-    >
-      <div
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-research-branch-dialog-title"
-        aria-busy={removing}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !removing) {
-            event.preventDefault();
-            onClose();
-            return;
-          }
-          trapResearchDialogTab(event);
-        }}
-      >
-        <h2 id="delete-research-branch-dialog-title">
-          {isRoot
-            ? "Delete research"
-            : note
-            ? "Delete this note?"
-            : node.inline && info.descendantCount > 0
-            ? "Delete the rest of this thread?"
-            : info.descendantCount > 0
-            ? "Delete this research branch?"
-            : "Delete this follow-up?"}
-        </h2>
-        <p>
-          Delete "
-          {(node.title ?? nodePrompt(node)) || treeTitle}
-          "?
-        </p>
-        <p>
-          {isRoot
-            ? info.descendantCount > 0
-              ? `This permanently deletes the root answer and all ${info.descendantCount} follow-up${info.descendantCount === 1 ? "" : "s"}.`
-              : "This permanently deletes the root answer and its research history."
-            : note
-            ? info.descendantCount > 0
-              ? `This permanently deletes the note and ${info.descendantCount} follow-up${info.descendantCount === 1 ? "" : "s"} under it.`
-              : "This permanently deletes the note."
-            : node.inline && info.descendantCount > 0
-            ? `This permanently deletes this follow-up and everything after it in the thread — ${info.descendantCount} descendant node${info.descendantCount === 1 ? "" : "s"} in total, including any branches. Its parent answer keeps the freed inline slot.`
-            : info.descendantCount > 0
-            ? `This also permanently deletes ${info.descendantCount} descendant follow-up${info.descendantCount === 1 ? "" : "s"}.`
-            : "This permanently deletes the follow-up and its response."} {" "}
-          This can’t be undone.
-        </p>
-        {error ? (
-          <p className="confirm-dialog-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <div className="confirm-dialog-actions">
-          <button className="control-button"
-            type="button"
-            disabled={removing}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="control-button danger"
-            autoFocus
-            disabled={removing || info.hasActiveRuns}
-            onClick={() => void confirm()}
-          >
-            {removing
-              ? "Deleting…"
-              : note
-                ? "Delete note"
-                : researchDeleteLabel(isRoot, node.inline, info.descendantCount)}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <ResearchDeleteDialog
+      {...researchBranchDeleteDialogProps({
+        node,
+        info,
+        isRoot: node.id === rootNodeId,
+        treeTitle,
+        onTrashRoot,
+        onRemove: () => onRemove(node),
+        onClose,
+      })}
+      fallbackFocus={returnFocusFallback}
+    />
   );
 }

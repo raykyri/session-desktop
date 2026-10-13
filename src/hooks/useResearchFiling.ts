@@ -15,6 +15,7 @@ import {
   RESEARCH_UNFILED_FOLDER_ID,
   researchFolderStateRenamed,
   researchFolderStateWithCollapsed,
+  researchFolderStateWithFolderTrashed,
   researchFolderStateWithMembership,
   researchFolderStateWithNewFolder,
   researchFolderStateWithoutFolder,
@@ -284,6 +285,26 @@ export function useResearchFiling({
     [commit],
   );
 
+  /** Moves a folder to the Trash, or with `trashed` false restores it.
+   * Rejects with the reason (restoring fails while another folder has its
+   * name). */
+  const setFolderTrashed = useCallback(
+    (folderId: string, trashed: boolean) =>
+      commit((current) =>
+        researchFolderStateWithFolderTrashed(current, folderId, trashed ? Date.now() : null),
+      ),
+    [commit],
+  );
+
+  /** Deletes folders in one write (emptying the Trash); rejects with the reason. */
+  const deleteFolders = useCallback(
+    (folderIds: readonly string[]) =>
+      commit((current) =>
+        folderIds.reduce((state, folderId) => researchFolderStateWithoutFolder(state, folderId), current),
+      ),
+    [commit],
+  );
+
   const setTrayCollapsed = useCallback(
     (place: string, collapsed: boolean) => {
       void commit((current) => researchFolderStateWithCollapsed(current, place, collapsed)).catch(
@@ -311,6 +332,8 @@ export function useResearchFiling({
     createFolder,
     renameFolder,
     deleteFolder,
+    deleteFolders,
+    setFolderTrashed,
     setTrayCollapsed,
     fileNewTree,
     refreshFolders: refresh,

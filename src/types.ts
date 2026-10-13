@@ -427,6 +427,9 @@ export interface ResearchTree {
   createdAt: number;
   updatedAt: number;
   archivedAt?: number | null;
+  /** When the tree was moved to the Trash; trees in the Trash are left out of
+   * every list but the Trash's own. */
+  trashedAt?: number | null;
   lastViewedAt?: number | null;
 }
 
@@ -606,6 +609,9 @@ export interface ResearchFolder {
   id: string;
   name: string;
   workspaceId: string;
+  /** When the folder was moved to the Trash. It keeps its membership, so its
+   * questions return to it on Restore; until then they show as Unfiled. */
+  trashedAt?: number | null;
 }
 
 /** Folder records plus the tree → folder membership. Membership values are a
@@ -676,6 +682,8 @@ export interface ResearchTreeSummary {
   cancelledCount: number;
   updatedAt: number;
   archivedAt?: number | null;
+  /** Set only in the Trash's list (listResearchTrash). */
+  trashedAt?: number | null;
   hasUnseenUpdate: boolean;
   /** A failure settled after the tree was last viewed. Attention flag —
    * viewing the tree acknowledges it — unlike failedCount, a lifetime total. */

@@ -36,6 +36,8 @@ interface ResearchEventTargets {
   /** Reloads the drafts list when `workspaceId` is the scoped workspace. */
   refreshResearchDrafts: (workspaceId: string) => unknown;
   refreshResearchFolders: () => unknown;
+  /** Reloads the Trash. Stable: the handler captures it once. */
+  refreshResearchTrash: () => unknown;
   /** Marks the Highlights feed stale. */
   invalidateResearchHighlights: () => void;
 }
@@ -50,7 +52,12 @@ interface ResearchEventTargets {
 export function useResearchEvents(
   data: ResearchData,
   navigation: ResearchNavigation,
-  { refreshResearchDrafts, refreshResearchFolders, invalidateResearchHighlights }: ResearchEventTargets,
+  {
+    refreshResearchDrafts,
+    refreshResearchFolders,
+    refreshResearchTrash,
+    invalidateResearchHighlights,
+  }: ResearchEventTargets,
 ) {
   const {
     setResearchTrees,
@@ -264,6 +271,10 @@ export function useResearchEvents(
       }
       if (event.type === "research.folders.changed") {
         void refreshResearchFolders();
+        return;
+      }
+      if (event.type === "research.trash.changed") {
+        void refreshResearchTrash();
         return;
       }
       const eventTreeId =

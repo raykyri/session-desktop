@@ -398,8 +398,27 @@ export function restoreResearchTree(treeId: string) {
   return invoke<ResearchTree>("restore_research_tree", { treeId });
 }
 
+/** Deletes a tree permanently, in or out of the Trash. */
 export function removeResearchTree(treeId: string) {
   return invoke<void>("remove_research_tree", { treeId });
+}
+
+export function trashResearchTree(treeId: string) {
+  return invoke<ResearchTree>("trash_research_tree", { treeId });
+}
+
+export function restoreResearchTreeFromTrash(treeId: string) {
+  return invoke<ResearchTree>("restore_research_tree_from_trash", { treeId });
+}
+
+/** Trees in the Trash of every workspace, most recently trashed first. */
+export function listResearchTrash() {
+  return invoke<ResearchTreeSummary[]>("list_research_trash");
+}
+
+/** Deletes the trees in a workspace's Trash; resolves to their ids. */
+export function emptyResearchTrash(workspaceId: string) {
+  return invoke<string[]>("empty_research_trash", { workspaceId });
 }
 
 export function removeResearchBranch(nodeId: string) {

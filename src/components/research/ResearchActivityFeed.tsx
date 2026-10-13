@@ -29,6 +29,7 @@ import { getResearchNodeContent } from "../../lib/api";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
+  RESEARCH_TRASH_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
   researchCardTitle,
   researchFeedChildren,
@@ -57,7 +58,10 @@ import ResearchFeedCard, {
   researchFeedCardControl,
 } from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
+import { ResearchDeleteDialog } from "./ResearchDeleteDialog";
 import { ResearchFolderDeleteDialog } from "./ResearchFolderDialogs";
+import ResearchTrashList from "./ResearchTrashList";
+import { researchTrashCount, type ResearchTrashEntry } from "../../lib/researchTrash";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 import ResearchFeedRowMenu from "./ResearchMoveMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
@@ -100,6 +104,7 @@ export function recentActivityAnchorScrollTop(
 }
 
 const EMPTY_DRAFTS: ResearchDraft[] = [];
+const EMPTY_TRASH: ResearchTrashEntry[] = [];
 const EMPTY_NODE_IDS: readonly string[] = [];
 
 /** The feed's rows: questions, drafts and starred children. */
@@ -174,7 +179,16 @@ export interface ResearchActivityFeedProps {
   onError: (message: string) => void;
   onRenameResearch: (treeId: string, title: string) => Promise<void>;
   onRestoreResearch: (treeId: string) => Promise<void>;
+  /** Moves a thread to the Trash (Delete's default). */
+  onTrashResearch: (treeId: string) => Promise<void>;
+  /** Deletes a thread permanently (Delete now). */
   onRemoveResearch: (treeId: string) => Promise<void>;
+  /** The scoped workspace's Trash, most recently trashed first. */
+  trashEntries?: ResearchTrashEntry[];
+  onRestoreTrashEntry?: (entry: ResearchTrashEntry) => void;
+  /** Deletes a Trash entry permanently; rejects to keep its dialog open. */
+  onDeleteTrashEntry?: (entry: ResearchTrashEntry) => Promise<void>;
+  onEmptyTrash?: () => Promise<void>;
   onMoveTree?: (treeId: string, place: string) => void;
   /** Moves a card within its place (⌥↑ and ⌥↓). */
   onReorderTree?: (treeId: string, place: string, position: ResearchDropPosition) => void;
@@ -186,9 +200,12 @@ export interface ResearchActivityFeedProps {
   onNewFolder?: (moveTreeId?: string, trigger?: HTMLElement) => void;
   onRenameFolder?: (folderId: string, trigger?: HTMLElement) => void;
   onRequestDeleteFolder?: (folderId: string) => void;
-  /** The folder whose delete confirmation shows under the header. */
+  /** The folder whose delete confirmation is open, over its folder view. */
   pendingDeleteFolderId?: string | null;
+  /** Moves the folder to the Trash. */
   onConfirmDeleteFolder?: (folderId: string) => void;
+  /** Deletes the folder now; its questions move to Unfiled. */
+  onDeleteFolderNow?: (folderId: string) => void;
   onCancelDeleteFolder?: () => void;
   onToggleTray?: (place: string) => void;
   onDeleteDraft?: (draft: ResearchDraft) => void;
@@ -324,6 +341,8 @@ function feedViewTitle(view: ResearchFeedView, folders: ResearchFolder[]): strin
       return "Drafts";
     case "archive":
       return "Archive";
+    case "trash":
+      return "Trash";
     case "folder":
       return researchPlaceName(view.folderId, folders);
   }
@@ -367,7 +386,12 @@ function ResearchActivityFeed({
   onError,
   onRenameResearch,
   onRestoreResearch,
+  onTrashResearch,
   onRemoveResearch,
+  trashEntries = EMPTY_TRASH,
+  onRestoreTrashEntry,
+  onDeleteTrashEntry,
+  onEmptyTrash,
   onMoveTree,
   onReorderTree,
   onReorderDraft,
@@ -377,6 +401,7 @@ function ResearchActivityFeed({
   onRequestDeleteFolder,
   pendingDeleteFolderId = null,
   onConfirmDeleteFolder,
+  onDeleteFolderNow,
   onCancelDeleteFolder,
   onToggleTray,
   onDeleteDraft,
@@ -395,6 +420,11 @@ function ResearchActivityFeed({
     setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
+  // Home's Trash tray starts collapsed; opening it is not saved.
+  const [trashTrayOpen, setTrashTrayOpen] = useState(false);
+  const [deletingTrashEntry, setDeletingTrashEntry] = useState<ResearchTrashEntry | null>(null);
+  const [emptyingTrash, setEmptyingTrash] = useState(false);
+  const trashTriggerRef = useRef<HTMLElement | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
     useState<ResearchNodeContent | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -987,10 +1017,23 @@ function ResearchActivityFeed({
     if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
       return researchTrees.filter((tree) => tree.archivedAt != null).length;
     }
+    if (place === RESEARCH_TRASH_FOLDER_ID) return trashEntries.length;
     return treesIn(place).length + (place === RESEARCH_DRAFTS_FOLDER_ID ? drafts.length : 0);
   }
 
   function renderPlaceCards(place: string) {
+    if (place === RESEARCH_TRASH_FOLDER_ID) {
+      return (
+        <ResearchTrashList
+          entries={trashEntries}
+          onRestore={(entry) => onRestoreTrashEntry?.(entry)}
+          onDeleteNow={(entry, trigger) => {
+            trashTriggerRef.current = trigger;
+            setDeletingTrashEntry(entry);
+          }}
+        />
+      );
+    }
     if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
       return (
         <ResearchArchivedFeed
@@ -1032,9 +1075,11 @@ function ResearchActivityFeed({
       ? RESEARCH_DRAFTS_FOLDER_ID
       : view.kind === "archive"
         ? RESEARCH_ARCHIVE_FOLDER_ID
-        : view.kind === "folder"
-          ? view.folderId
-          : null;
+        : view.kind === "trash"
+          ? RESEARCH_TRASH_FOLDER_ID
+          : view.kind === "folder"
+            ? view.folderId
+            : null;
   const userFolder =
     view.kind === "folder" ? (folders.find((folder) => folder.id === view.folderId) ?? null) : null;
 
@@ -1240,6 +1285,15 @@ function ResearchActivityFeed({
           <Trash2 size={15} aria-hidden="true" />
         </button>
       </>
+    ) : view.kind === "trash" ? (
+      <button
+        type="button"
+        className="research-feed-button"
+        disabled={trashEntries.length === 0 || !onEmptyTrash}
+        onClick={() => setEmptyingTrash(true)}
+      >
+        Empty Trash
+      </button>
     ) : view.kind === "home" ? (
       <>
         {onRefresh ? (
@@ -1278,9 +1332,13 @@ function ResearchActivityFeed({
               .length
           }
           fallbackFocus={() => deleteFolderButtonRef.current}
-          onConfirm={() => {
+          onTrash={() => {
             focusTitleOnViewChangeRef.current = true;
             onConfirmDeleteFolder?.(userFolder.id);
+          }}
+          onDelete={() => {
+            focusTitleOnViewChangeRef.current = true;
+            onDeleteFolderNow?.(userFolder.id);
           }}
           onCancel={() => onCancelDeleteFolder?.()}
         />
@@ -1460,16 +1518,31 @@ function ResearchActivityFeed({
                 </ResearchFeedTray>
               ))
             : null}
+          {view.kind === "home" ? (
+            // Trash ends Home, collapsed until opened; it takes no drops.
+            <ResearchFeedTray
+              place={RESEARCH_TRASH_FOLDER_ID}
+              name="Trash"
+              count={trashEntries.length}
+              countNoun={["item", "items"]}
+              drop={false}
+              collapsed={!trashTrayOpen}
+              onToggle={() => setTrashTrayOpen((open) => !open)}
+              onOpen={() => onOpenView?.({ kind: "trash" })}
+            >
+              {renderPlaceCards(RESEARCH_TRASH_FOLDER_ID)}
+            </ResearchFeedTray>
+          ) : null}
           {soloPlace ? (
             <section
               className="research-feed-solo"
               aria-label={viewTitle}
-              data-research-drop={soloPlace}
+              data-research-drop={soloPlace === RESEARCH_TRASH_FOLDER_ID ? undefined : soloPlace}
             >
               {renderPlaceCards(soloPlace)}
             </section>
           ) : null}
-          {soloPlace && view.kind !== "archive" ? composerBlock : null}
+          {soloPlace && view.kind !== "archive" && view.kind !== "trash" ? composerBlock : null}
         </div>
       </div>
       <ResearchFeedScrollThumb scrollRef={scrollRef} />
@@ -1570,7 +1643,37 @@ function ResearchActivityFeed({
         <ResearchTreeDeleteDialog
           tree={deletingTree}
           onClose={() => setDeletingTree(null)}
+          onTrash={onTrashResearch}
           onRemove={onRemoveResearch}
+        />
+      ) : null}
+      {deletingTrashEntry && onDeleteTrashEntry ? (
+        <ResearchDeleteDialog
+          fallbackFocus={() =>
+            trashTriggerRef.current?.isConnected ? trashTriggerRef.current : titleRef.current
+          }
+          remove={{
+            body: <p>“{deletingTrashEntry.title}” will be deleted. This can’t be undone.</p>,
+            onConfirm: () => onDeleteTrashEntry(deletingTrashEntry),
+          }}
+          onClose={() => setDeletingTrashEntry(null)}
+        />
+      ) : null}
+      {emptyingTrash && onEmptyTrash ? (
+        <ResearchDeleteDialog
+          fallbackFocus={() => titleRef.current}
+          remove={{
+            title: "Empty the Trash?",
+            body: (
+              <p>
+                {researchTrashCount(trashEntries.length)} will be deleted. This can’t be undone.
+              </p>
+            ),
+            label: "Empty Trash",
+            pendingLabel: "Emptying…",
+            onConfirm: onEmptyTrash,
+          }}
+          onClose={() => setEmptyingTrash(false)}
         />
       ) : null}
       {recapDialogContent
