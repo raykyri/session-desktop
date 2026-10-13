@@ -16,7 +16,6 @@ function group(id: string, scope: GroupInfo["scope"]): GroupInfo {
     dir: `/tmp/${id}`,
     managedDir: `/tmp/session/${id}`,
     createdAt: 1,
-    collapsed: false,
     scope,
     agents: [],
   };

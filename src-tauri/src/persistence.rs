@@ -1423,10 +1423,7 @@ mod tests {
             dir: "/tmp/work".to_string(),
             managed_dir: "/tmp/session/group-1".to_string(),
             base_repo: None,
-            base_ref: None,
-            parent_id: None,
             created_at: 1,
-            collapsed: false,
             scope: crate::workspace::WorkspaceScope::Research,
             imported_research_archive_id: None,
             agents: Vec::new(),
@@ -1732,6 +1729,12 @@ mod tests {
                 "managedBySession": false
             }
         }]);
+        // Group fields those builds also wrote: the worktree base ref, the
+        // parent group and the sidebar collapse state.
+        let group_legacy_keys = ["baseRef", "parentId", "collapsed"];
+        value["groups"][0]["baseRef"] = serde_json::json!("HEAD");
+        value["groups"][0]["parentId"] = serde_json::json!("group-0");
+        value["groups"][0]["collapsed"] = serde_json::json!(true);
         fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
 
         let outcome = load_with_diagnostics(&root);
@@ -1749,6 +1752,12 @@ mod tests {
             assert!(
                 saved["agents"][0].get(key).is_none(),
                 "agent {key} was written back"
+            );
+        }
+        for key in group_legacy_keys {
+            assert!(
+                saved["groups"][0].get(key).is_none(),
+                "group {key} was written back"
             );
         }
         assert_eq!(saved["agents"][0]["id"], "agent-1");

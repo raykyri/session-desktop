@@ -68,11 +68,7 @@ pub struct GroupInfo {
     /// Session-owned storage for the group's manifest.
     pub managed_dir: String,
     pub base_repo: Option<String>,
-    pub base_ref: Option<String>,
-    pub parent_id: Option<String>,
     pub created_at: u128,
-    #[serde(default)]
-    pub collapsed: bool,
     #[serde(default)]
     pub scope: WorkspaceScope,
     /// Identifies the exact portable archive whose import committed this
@@ -135,7 +131,6 @@ pub struct CreateGroupRequest {
     pub dir: Option<String>,
     pub after_group_id: Option<String>,
     pub base_repo: Option<String>,
-    pub base_ref: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -245,7 +240,6 @@ fn create_research_workspace_locked(
                 dir: Some(canonical.display().to_string()),
                 after_group_id: None,
                 base_repo: None,
-                base_ref: Some("HEAD".to_string()),
             },
             WorkspaceScope::Research,
         )?;
@@ -291,7 +285,6 @@ fn create_research_workspace_locked(
             dir: Some(canonical.display().to_string()),
             after_group_id: None,
             base_repo: None,
-            base_ref: Some("HEAD".to_string()),
         },
         WorkspaceScope::Research,
     )
@@ -679,10 +672,7 @@ pub(crate) fn create_group_record(
         dir: dir.display().to_string(),
         managed_dir: managed_dir.display().to_string(),
         base_repo: request.base_repo,
-        base_ref: request.base_ref,
-        parent_id: None,
         created_at: now_millis(),
-        collapsed: false,
         scope,
         imported_research_archive_id: None,
         agents: Vec::new(),
@@ -722,10 +712,7 @@ pub(crate) fn clone_group_record_for_scope(
         dir: source.dir.clone(),
         managed_dir: managed_dir.display().to_string(),
         base_repo: source.base_repo.clone(),
-        base_ref: source.base_ref.clone(),
-        parent_id: None,
         created_at: now_millis(),
-        collapsed: false,
         scope,
         imported_research_archive_id: None,
         // Research runs entirely on the local machine; a research clone of a
@@ -1414,10 +1401,7 @@ mod tests {
                 dir: folder.display().to_string(),
                 managed_dir: String::new(),
                 base_repo: None,
-                base_ref: Some("HEAD".to_string()),
-                parent_id: None,
                 created_at: 1,
-                collapsed: false,
                 scope: WorkspaceScope::Research,
                 imported_research_archive_id: None,
                 agents: Vec::new(),

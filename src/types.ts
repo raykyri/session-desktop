@@ -79,10 +79,7 @@ export interface GroupInfo {
   dir: string;
   managedDir: string;
   baseRepo?: string | null;
-  baseRef?: string | null;
-  parentId?: string | null;
   createdAt: number;
-  collapsed: boolean;
   scope: "terminal" | "research";
   importedResearchArchiveId?: string | null;
   agents: string[];

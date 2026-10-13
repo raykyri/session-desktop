@@ -10,7 +10,6 @@ function group(overrides: Partial<GroupInfo> = {}): GroupInfo {
     dir: "/Users/me/work/project",
     managedDir: "/Users/me/.session/g",
     createdAt: 0,
-    collapsed: false,
     scope: "research",
     agents: [],
     ...overrides,
