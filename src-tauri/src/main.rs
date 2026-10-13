@@ -1267,20 +1267,28 @@ fn list_research_drafts(
     state.list_research_drafts(&workspace_id)
 }
 
+/// `images` replaces the draft's images and reads each file; None keeps
+/// them. Runs off the main thread: the file reads and the state write (when
+/// images are released) can be slow.
 #[tauri::command]
-fn save_research_draft(
+async fn save_research_draft(
     state: tauri::State<'_, AppState>,
     id: Option<String>,
     workspace_id: String,
     prompt: String,
     images: Option<Vec<research_images::ImageInput>>,
 ) -> Result<ResearchDraft, String> {
-    let images = images
-        .map(|images| {
-            research_images::attachments_for_inputs(&state.config().workspace_root, &images)
-        })
-        .transpose()?;
-    state.save_research_draft_with_images(id, &workspace_id, prompt, images)
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let images = images
+            .map(|images| {
+                research_images::attachments_for_inputs(&state.config().workspace_root, &images)
+            })
+            .transpose()?;
+        state.save_research_draft_with_images(id, &workspace_id, prompt, images)
+    })
+    .await
+    .map_err(|err| format!("save_research_draft task failed: {err}"))?
 }
 
 #[tauri::command]

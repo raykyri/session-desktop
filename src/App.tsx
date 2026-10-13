@@ -894,7 +894,7 @@ function MainApp() {
     [focusResearchHome],
   );
   const saveOpenResearchDraft = useCallback(
-    async (draft: ResearchDraft, prompt: string, images: ResearchImageAttachment[]) => {
+    async (draft: ResearchDraft, prompt: string, images?: ResearchImageAttachment[]) => {
       await saveResearchDraftText(draft.id, prompt, draft.workspaceId, images);
     },
     [saveResearchDraftText],

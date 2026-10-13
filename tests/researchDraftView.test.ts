@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ResearchDraftView from "../src/components/research/ResearchDraftView";
 import { ResearchFeedToast } from "../src/components/research/ResearchFeedChrome";
 import { researchCardRefocus } from "../src/components/research/ResearchFeedCard";
-import { createResearchDraftAutosave } from "../src/lib/researchDraftAutosave";
+import { createResearchDraftAutosave, createResearchDraftImageSave } from "../src/lib/researchDraftAutosave";
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -142,4 +142,23 @@ test("a moved card regains focus only if no other control received focus", () =>
   assert.equal(researchCardRefocus(anchor, body, body), "focus", "the button is gone and focus fell to the page");
   assert.equal(researchCardRefocus(anchor, null, body), "focus");
   assert.equal(researchCardRefocus(anchor, { name: "answer column" }, body), "drop", "it never takes focus back");
+});
+
+test("a draft save sends its images only when they changed since the last save", async () => {
+  const sent: (readonly string[] | undefined)[] = [];
+  let fail = false;
+  const initial = ["a"];
+  const save = createResearchDraftImageSave(initial, async (_prompt, images) => {
+    sent.push(images);
+    if (fail) throw new Error("offline");
+  });
+  await save("Text", initial);
+  const changed = ["a", "b"];
+  fail = true;
+  await assert.rejects(save("Text", changed));
+  // A failed save sends the images again with the next one.
+  fail = false;
+  await save("Text, edited", changed);
+  await save("Text, edited again", changed);
+  assert.deepEqual(sent, [undefined, changed, changed, undefined]);
 });

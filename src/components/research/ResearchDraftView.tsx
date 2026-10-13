@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResearchDraft, ResearchImageAttachment } from "../../types";
-import { createResearchDraftAutosave } from "../../lib/researchDraftAutosave";
+import { createResearchDraftAutosave, createResearchDraftImageSave } from "../../lib/researchDraftAutosave";
 import { researchImages } from "../../lib/researchImages";
 import { columnAttributes } from "../../lib/researchColumns";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
@@ -25,7 +25,8 @@ export default function ResearchDraftView({
 }: {
   draft: ResearchDraft;
   requireCmdEnterToSend: boolean;
-  onSave: (prompt: string, images: ResearchImageAttachment[]) => Promise<void>;
+  /** `images` replaces the draft's images; omitted, they are kept. */
+  onSave: (prompt: string, images?: ResearchImageAttachment[]) => Promise<void>;
   onSend: (prompt: string, images: ResearchImageAttachment[]) => Promise<void>;
 }) {
   const [value, setValue] = useState(draft.prompt);
@@ -38,11 +39,16 @@ export default function ResearchDraftView({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const sendingRef = useRef(false);
+  const [save] = useState(() =>
+    createResearchDraftImageSave(images, (prompt, changed) =>
+      onSaveRef.current(prompt, changed ? [...changed] : undefined),
+    ),
+  );
   const [autosave] = useState(() =>
     createResearchDraftAutosave({
       initial: draft.prompt,
       delayMs: SAVE_DELAY_MS,
-      save: (prompt) => onSaveRef.current(prompt, imagesRef.current),
+      save: (prompt) => save(prompt, imagesRef.current),
       onError: setError,
     }),
   );
@@ -51,11 +57,11 @@ export default function ResearchDraftView({
   useEffect(() => () => autosave.flush(), [autosave]);
   // Images save with the current text; with no text, the next text edit
   // saves them.
-  const savedImagesRef = useRef(images);
+  const shownImagesRef = useRef(images);
   useEffect(() => {
-    if (images === savedImagesRef.current || sendingRef.current || !value.trim()) return;
-    savedImagesRef.current = images;
-    void onSaveRef.current(value, images).catch((err: unknown) => {
+    if (images === shownImagesRef.current || sendingRef.current || !value.trim()) return;
+    shownImagesRef.current = images;
+    void save(value, images).catch((err: unknown) => {
       if (!sendingRef.current) setError(errorMessage(err));
     });
     // Saves on image changes only; text edits go through autosave.

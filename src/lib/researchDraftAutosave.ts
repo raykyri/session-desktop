@@ -64,3 +64,18 @@ export function createResearchDraftAutosave({
     },
   };
 }
+
+/** Saves a draft's text with its images only when they differ from the
+ * images last saved, so text autosaves do not make the backend read every
+ * image file again. `save` gets undefined to keep the stored images. */
+export function createResearchDraftImageSave<Image>(
+  initial: readonly Image[],
+  save: (prompt: string, images: readonly Image[] | undefined) => Promise<unknown>,
+) {
+  let saved = initial;
+  return async (prompt: string, images: readonly Image[]) => {
+    const changed = images !== saved ? images : undefined;
+    await save(prompt, changed);
+    if (changed) saved = changed;
+  };
+}
