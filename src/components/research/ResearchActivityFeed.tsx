@@ -57,7 +57,7 @@ import ResearchFeedCard, {
   researchFeedCardControl,
 } from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
-import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
+import { ResearchFolderDeleteDialog } from "./ResearchFolderDialogs";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 import ResearchFeedRowMenu from "./ResearchMoveMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
@@ -789,8 +789,9 @@ function ResearchActivityFeed({
     target?.focus({ preventScroll: true });
   });
 
-  // Esc on the delete confirmation returns to the header's Delete folder
-  // button; deleting returns to Home with its title focused.
+  // Cancelling the delete confirmation returns focus to the control that
+  // opened it, else the header's Delete folder button; deleting returns to
+  // Home with its title focused.
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const deleteFolderButtonRef = useRef<HTMLButtonElement | null>(null);
   const focusTitleOnViewChangeRef = useRef(false);
@@ -1270,20 +1271,18 @@ function ResearchActivityFeed({
         home={view.kind === "home"}
       />
       {userFolder && pendingDeleteFolderId === userFolder.id ? (
-        <ResearchFolderDeleteConfirm
+        <ResearchFolderDeleteDialog
           name={userFolder.name}
           count={
             researchTrees.filter((tree) => folderState?.membership[tree.id] === userFolder.id)
               .length
           }
+          fallbackFocus={() => deleteFolderButtonRef.current}
           onConfirm={() => {
             focusTitleOnViewChangeRef.current = true;
             onConfirmDeleteFolder?.(userFolder.id);
           }}
-          onCancel={() => {
-            onCancelDeleteFolder?.();
-            deleteFolderButtonRef.current?.focus();
-          }}
+          onCancel={() => onCancelDeleteFolder?.()}
         />
       ) : null}
       <div

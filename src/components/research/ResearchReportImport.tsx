@@ -156,7 +156,7 @@ export default function ResearchReportImport({ dropTarget, onImport, onError }: 
           {error && <p className="confirm-dialog-error" role="alert">{error}</p>}
           <div className="confirm-dialog-actions">
             <button type="button" className="control-button" disabled={busy} onClick={close}>Cancel</button>
-            <button type="submit" className="control-button" disabled={busy || !prompt.trim()}>
+            <button type="submit" className="control-button primary" disabled={busy || !prompt.trim()}>
               {busy ? "Importing…" : "Import report"}
             </button>
           </div>

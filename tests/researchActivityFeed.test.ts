@@ -8,6 +8,7 @@ import ResearchActivityFeed, {
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
 } from "../src/components/research/ResearchActivityFeed";
+import { ResearchFolderDeletePanel } from "../src/components/research/ResearchFolderDialogs";
 import type { ResearchFolderState } from "../src/types";
 
 const noop = () => {};
@@ -326,15 +327,24 @@ test("a folder view names the folder and lists only its questions", () => {
   assert.doesNotMatch(html, /Investigate this question/);
   assert.match(html, /Empty folder\. Drag or file questions here\./);
   assert.match(html, /data-research-drop="f-read"/);
+});
 
-  const confirm = renderFeed({
-    view: { kind: "folder", folderId: "f-read" },
-    researchTrees: [tree],
-    folders: folders.folders,
-    folderState: { ...folders, membership: { tree: "f-read" } },
-    pendingDeleteFolderId: "f-read",
-  });
-  assert.match(confirm, /Delete “Reading list”\? Its 1 question moves to Unfiled\./);
+test("the folder delete confirmation is a confirm dialog with Cancel before Delete folder", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchFolderDeletePanel, {
+      name: "Reading list",
+      count: 1,
+      onConfirm: noop,
+      onCancel: noop,
+    }),
+  );
+  assert.match(html, /class="confirm-dialog" role="dialog" aria-modal="true"/);
+  assert.match(html, /<h2[^>]*>Delete “Reading list”\?<\/h2><p>Its 1 question moves to Unfiled\.<\/p>/);
+  assert.ok(html.indexOf(">Cancel<") < html.indexOf(">Delete folder<"));
+  const empty = renderToStaticMarkup(
+    createElement(ResearchFolderDeletePanel, { name: "Empty", count: 0, onConfirm: noop, onCancel: noop }),
+  );
+  assert.match(empty, /It is empty\./);
 });
 
 test("Drafts lists unsent drafts, then trees filed in Drafts", () => {

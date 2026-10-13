@@ -503,9 +503,20 @@
   animation: spinner-spin 0.9s linear infinite;
 }
 
-.confirm-dialog-actions button:not(.danger):hover {
+.confirm-dialog-actions button:not(.danger, .primary):hover {
   background: var(--control-bg-hover);
   border-color: var(--control-border-hover);
+}
+
+/* The dialog's confirming action when it is not destructive. */
+.confirm-dialog-actions .primary {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.confirm-dialog-actions .primary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
 .confirm-dialog-actions .danger {
@@ -533,6 +544,10 @@
 .confirm-dialog-actions .danger:focus {
   border-color: var(--danger-border);
   outline-color: var(--danger-focus-ring);
+}
+
+.confirm-dialog-actions .primary:focus {
+  border-color: var(--accent-strong);
 }
 
 /* GitHub device-flow dialog: the user code is the one thing to read, so it is
@@ -722,7 +737,7 @@
   align-items: center;
   justify-content: center;
   padding: 18px;
-  background: transparent;
+  background: var(--scrim-bg);
 }
 
 .settings-panel {

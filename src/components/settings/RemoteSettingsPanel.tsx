@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Check, ChevronDown, Globe, LoaderCircle, Minus, Plus, X } from "lucide-react";
 import ConfirmDialogActionButton from "../ConfirmDialogActionButton";
 import { useConfirmDialogFocus } from "../../hooks/useConfirmDialogFocus";
+import { trapResearchDialogTab } from "../research/researchFocus";
 import { remoteProbeKey, type RemoteSettingsState } from "../../hooks/useRemoteSettings";
 import { agentResearchState, agentSetupStatusLabel } from "../../lib/agentSetup";
 import { availableRemoteId, remoteIdFromLabel, remoteSettingsDraft } from "../../lib/remoteSettings";
@@ -457,6 +458,7 @@ export function RemoteDeleteDialog({ state }: { state: RemoteSettingsState }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="remote-delete-dialog-title"
+        onKeyDown={trapResearchDialogTab}
         aria-busy={state.saving}
       >
         <h2 id="remote-delete-dialog-title">Remove {confirm.label}?</h2>

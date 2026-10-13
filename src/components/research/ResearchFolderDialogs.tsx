@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
 import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
 import { researchFeedCardControl } from "./ResearchFeedCard";
+import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
 /** `returnFocus` is the button that opened the dialog, often through a menu
  * that is gone by the time the dialog closes. */
@@ -12,9 +12,9 @@ export type ResearchFolderNameRequest = (
   | { kind: "rename"; folderId: string; name: string }
 ) & { returnFocus?: HTMLElement | null };
 
-/** New folder / Rename folder: a small modal over the window with the name
- * field focused. Enter or the primary button confirms; Esc, Cancel, or a
- * click outside closes it. Problems show inline and keep the text. */
+/** New folder / Rename folder: a confirm dialog with the name field focused.
+ * Enter or the primary button confirms; Esc, Cancel, or a click outside
+ * closes it. Problems show inline and keep the text. */
 export function ResearchFolderNameDialog({
   request,
   folders,
@@ -29,14 +29,12 @@ export function ResearchFolderNameDialog({
   const [value, setValue] = useState(request.kind === "rename" ? request.name : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const dialogRef = useRef<HTMLFormElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const returnFocusRef = useRef<Element | null>(
     request.returnFocus ?? (typeof document === "undefined" ? null : document.activeElement),
   );
   const id = useId();
   const titleId = `${id}-title`;
-  const inputId = `${id}-name`;
   const errorId = `${id}-error`;
 
   // A card's … button is gone once Create and move has moved the card into
@@ -82,54 +80,44 @@ export function ResearchFolderNameDialog({
     }
   }
 
-  function trapFocus(event: KeyboardEvent<HTMLFormElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [
-      ...(dialogRef.current?.querySelectorAll<HTMLElement>("input, button:not(:disabled)") ?? []),
-    ];
-    const index = focusable.indexOf(document.activeElement as HTMLElement);
-    if (index < 0 || (event.shiftKey && index === 0) || (!event.shiftKey && index === focusable.length - 1)) {
-      event.preventDefault();
-      focusable[event.shiftKey ? focusable.length - 1 : 0]?.focus();
-    }
-  }
-
   return createPortal(
-    <div className="research-folder-dialog-layer">
-      <div className="research-folder-dialog-scrim" onMouseDown={onClose} />
+    <div
+      className="confirm-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <form
-        ref={dialogRef}
-        className={`research-folder-dialog${value.trim() ? " is-ready" : ""}`}
+        className="confirm-dialog rename-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-busy={busy}
         noValidate
-        onKeyDown={trapFocus}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+            return;
+          }
+          trapResearchDialogTab(event);
+        }}
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <h3 id={titleId}>{title}</h3>
-        {moving ? (
-          <p className="research-folder-dialog-sub">The question moves into it once it's created.</p>
-        ) : null}
-        <label className="research-visually-hidden" htmlFor={inputId}>
-          Folder name
-        </label>
+        <h2 id={titleId}>{title}</h2>
+        {moving ? <p>The question moves into it once it's created.</p> : null}
         <input
           ref={inputRef}
-          id={inputId}
-          className="research-folder-dialog-input"
+          className="rename-dialog-input"
           autoComplete="off"
           spellCheck={false}
           placeholder="Folder name"
+          aria-label="Folder name"
           value={value}
           aria-invalid={error ? "true" : undefined}
           aria-describedby={error ? errorId : undefined}
@@ -138,17 +126,17 @@ export function ResearchFolderNameDialog({
             setError(null);
           }}
         />
-        <div id={errorId} className="research-feed-error" role="alert" hidden={!error}>
-          {error}
-        </div>
-        <div className="research-folder-dialog-row">
-          <span className="research-feed-header-spacer" />
-          <button type="button" className="research-feed-button is-tint" onClick={onClose}>
+        {error ? (
+          <p id={errorId} className="confirm-dialog-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="confirm-dialog-actions">
+          <button className="control-button" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="research-feed-button is-primary" disabled={busy}>
+          <button className="control-button primary" type="submit" disabled={busy}>
             {submitLabel}
-            <span className="research-feed-enter" aria-hidden="true">↵</span>
           </button>
         </div>
       </form>
@@ -157,53 +145,69 @@ export function ResearchFolderNameDialog({
   );
 }
 
-/** Confirms deleting a folder under the folder view's header. Cancel takes
- * focus when it opens; Esc cancels, and goes no further. `count` includes
- * archived questions, which leave the folder too. */
-export function ResearchFolderDeleteConfirm({
-  name,
-  count,
-  onConfirm,
-  onCancel,
-}: {
+interface ResearchFolderDeleteProps {
   name: string;
+  /** Includes archived questions, which leave the folder too. */
   count: number;
   onConfirm: () => void;
   onCancel: () => void;
-}) {
-  const cancelRef = useRef<HTMLButtonElement | null>(null);
-  const onCancelRef = useRef(onCancel);
-  onCancelRef.current = onCancel;
-  useEffect(() => {
-    cancelRef.current?.focus();
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape" || event.isComposing) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onCancelRef.current();
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, []);
+}
+
+/** Confirms deleting a folder. Delete folder takes focus when it opens; Esc,
+ * Cancel, or a click outside cancels. Focus returns to the control that
+ * opened it, else to `fallbackFocus`. */
+export function ResearchFolderDeleteDialog({
+  fallbackFocus,
+  ...props
+}: ResearchFolderDeleteProps & { fallbackFocus?: () => HTMLElement | null | undefined }) {
+  useResearchDialogReturnFocus(true, fallbackFocus);
+  return createPortal(
+    <div
+      className="confirm-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) props.onCancel();
+      }}
+    >
+      <ResearchFolderDeletePanel {...props} />
+    </div>,
+    document.body,
+  );
+}
+
+/** The dialog element of ResearchFolderDeleteDialog, without its backdrop
+ * and portal. */
+export function ResearchFolderDeletePanel({ name, count, onConfirm, onCancel }: ResearchFolderDeleteProps) {
+  const id = useId();
+  const titleId = `${id}-title`;
   return (
-    <div className="research-folder-confirm" role="alertdialog" aria-label="Delete folder">
-      <div>
-        Delete “{name}”?{" "}
+    <div
+      className="confirm-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+          return;
+        }
+        trapResearchDialogTab(event);
+      }}
+    >
+      <h2 id={titleId}>Delete “{name}”?</h2>
+      <p>
         {count > 0
           ? `Its ${count} question${count === 1 ? "" : "s"} move${count === 1 ? "s" : ""} to Unfiled.`
           : "It is empty."}
-      </div>
-      <div className="research-folder-confirm-row">
-        <button type="button" className="research-feed-button is-danger" onClick={onConfirm}>
-          Delete folder
-        </button>
-        <button
-          ref={cancelRef}
-          type="button"
-          className="research-feed-button is-ghost"
-          onClick={onCancel}
-        >
+      </p>
+      <div className="confirm-dialog-actions">
+        <button className="control-button" type="button" onClick={onCancel}>
           Cancel
+        </button>
+        <button className="control-button danger" type="button" autoFocus onClick={onConfirm}>
+          Delete folder
         </button>
       </div>
     </div>

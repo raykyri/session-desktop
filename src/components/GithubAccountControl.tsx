@@ -11,6 +11,7 @@ import {
   startGithubLogin,
 } from "../lib/api";
 import { writeClipboardText } from "../lib/clipboard";
+import { trapResearchDialogTab } from "./research/researchFocus";
 
 type LoginState =
   | { phase: "starting" }
@@ -227,6 +228,7 @@ export default function GithubAccountControl() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="github-login-dialog-title"
+            onKeyDown={trapResearchDialogTab}
           >
             <h2 id="github-login-dialog-title">Login to GitHub</h2>
             {login.phase === "starting" ? (

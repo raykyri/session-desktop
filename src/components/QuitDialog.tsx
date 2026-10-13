@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { ExitDialogState } from "../appTypes";
 import { useConfirmDialogFocus } from "../hooks/useConfirmDialogFocus";
 import ConfirmDialogActionButton from "./ConfirmDialogActionButton";
+import { trapResearchDialogTab } from "./research/researchFocus";
 
 /** The Quit Session confirmation, naming the tabs and research runs that
  * quitting stops. */
@@ -33,6 +34,7 @@ export default function QuitDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="exit-dialog-title"
+        onKeyDown={trapResearchDialogTab}
         aria-busy={quitting}
       >
         <h2 id="exit-dialog-title">Quit Session?</h2>

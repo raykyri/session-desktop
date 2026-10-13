@@ -2682,12 +2682,6 @@
   overflow-wrap: anywhere;
 }
 
-.research-recap-dialog .confirm-dialog-actions .primary {
-  border-color: var(--accent-strong);
-  background: var(--accent-soft);
-  color: var(--text-strong);
-}
-
 @media (max-width: 620px) {
   .research-recap-dialog-controls {
     grid-template-columns: minmax(0, 1fr);

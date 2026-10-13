@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useConfirmDialogFocus } from "../../hooks/useConfirmDialogFocus";
 import type { GroupInfo } from "../../types";
+import { trapResearchDialogTab } from "./researchFocus";
 
 /** Confirms removing a research workspace from Session; its folder stays on
  * disk. The dialog stays open while `removing`. */
@@ -36,6 +37,7 @@ export function ResearchWorkspaceRemovalDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="close-dialog-title"
+        onKeyDown={trapResearchDialogTab}
       >
         <h2 id="close-dialog-title">{`Remove ${name}?`}</h2>
         <p>Remove this workspace from Session?</p>
@@ -106,6 +108,14 @@ export function ResearchWorkspaceRenameDialog({
           event.preventDefault();
           onSubmit(value);
         }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          trapResearchDialogTab(event);
+        }}
       >
         <h2 id="rename-dialog-title">
           {researchFolder ? "Rename workspace" : "Rename group"}
@@ -115,12 +125,6 @@ export function ResearchWorkspaceRenameDialog({
           className="rename-dialog-input"
           value={value}
           onChange={(event) => setValue(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onClose();
-            }
-          }}
           aria-label={researchFolder ? "Workspace name" : "Group name"}
           aria-describedby={researchFolder ? "rename-folder-hint" : undefined}
         />
@@ -133,7 +137,7 @@ export function ResearchWorkspaceRenameDialog({
           <button className="control-button" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="control-button" type="submit">Rename</button>
+          <button className="control-button primary" type="submit">Rename</button>
         </div>
       </form>
     </div>

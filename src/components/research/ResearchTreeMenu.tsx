@@ -163,7 +163,7 @@ export function ResearchTreeRenameDialog({
           <button className="control-button" type="button" disabled={busy} onClick={onClose}>
             Cancel
           </button>
-          <button className="control-button" type="submit" disabled={busy}>
+          <button className="control-button primary" type="submit" disabled={busy}>
             {busy ? "Renaming…" : "Rename"}
           </button>
         </div>
