@@ -73,6 +73,14 @@ export interface SavedResearchNavigation {
   /** Each branches column's scroll offset, keyed by the head node of its
    * first branch. */
   branchesScrollBySource?: Record<string, SavedResearchScrollPosition>;
+  /** The images in the thread's ask boxes, keyed as the page keys their
+   * text, so they survive a restart with the text. They are pending images,
+   * which the backend removes after a day, so they are not restored after
+   * that. */
+  composerImages?: {
+    images: Record<string, ResearchImageAttachment[]>;
+    updatedAt: number;
+  };
 }
 
 /** The stored offsets of one kind of column. */
@@ -92,6 +100,9 @@ function scrollPositionsOf(
 
 const RESEARCH_NAVIGATION_KEY = "session.research-navigation.v1";
 export const RESEARCH_SCROLL_POSITION_TTL_MS = 15 * 60 * 1000;
+/** How long the backend keeps a pending image (PENDING_LIFETIME in
+ * src-tauri/src/research_images.rs). */
+export const RESEARCH_COMPOSER_IMAGES_TTL_MS = 24 * 60 * 60 * 1000;
 
 let store: Record<string, SavedResearchNavigation> | null = null;
 
@@ -236,6 +247,24 @@ function load(): Record<string, SavedResearchNavigation> {
             return queue.length > 0 ? [[headId, queue]] : [];
           }),
         );
+        const savedComposerImages = candidate.composerImages;
+        const composerImageEntries =
+          savedComposerImages &&
+          typeof savedComposerImages === "object" &&
+          typeof savedComposerImages.updatedAt === "number" &&
+          Number.isFinite(savedComposerImages.updatedAt) &&
+          now - savedComposerImages.updatedAt < RESEARCH_COMPOSER_IMAGES_TTL_MS &&
+          savedComposerImages.images &&
+          typeof savedComposerImages.images === "object"
+            ? Object.entries(savedComposerImages.images).flatMap(([key, value]) => {
+                const images = storedImages(value);
+                return images.length > 0 ? [[key, images] as const] : [];
+              })
+            : [];
+        const composerImages =
+          composerImageEntries.length > 0 && savedComposerImages
+            ? { images: Object.fromEntries(composerImageEntries), updatedAt: savedComposerImages.updatedAt }
+            : undefined;
         const selectionPath =
           Array.isArray(candidate.selectionPath) &&
           candidate.selectionPath.length > 0 &&
@@ -254,6 +283,7 @@ function load(): Record<string, SavedResearchNavigation> {
           ...(Object.keys(queuedFollowups).length > 0 ? { queuedFollowups } : {}),
           ...(Object.keys(turnsScrollByHead).length > 0 ? { turnsScrollByHead } : {}),
           ...(Object.keys(branchesScrollBySource).length > 0 ? { branchesScrollBySource } : {}),
+          ...(composerImages ? { composerImages } : {}),
         } satisfies SavedResearchNavigation]];
       }),
     );
@@ -262,8 +292,8 @@ function load(): Record<string, SavedResearchNavigation> {
   }
 }
 
-/** The well-formed image attachments of a stored queued question. The
- * backend checks each image again when the question is sent. */
+/** The well-formed image attachments of a stored queued question or ask
+ * box. The backend checks each image again when the question is sent. */
 function storedImages(value: unknown): ResearchImageAttachment[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry: unknown) => {
@@ -351,6 +381,37 @@ export function recordResearchFollowupDraft(
   }
   navigation.followupDraft = { text, updatedAt: now };
   return true;
+}
+
+/** The images a tree's ask boxes held, unless they were saved more than
+ * a day ago. */
+export function savedResearchComposerImages(
+  treeId: string,
+  now = Date.now(),
+): Record<string, ResearchImageAttachment[]> {
+  const saved = researchNavigationStore()[treeId]?.composerImages;
+  return saved && now - saved.updatedAt < RESEARCH_COMPOSER_IMAGES_TTL_MS ? saved.images : {};
+}
+
+/** Stores the images in a tree's ask boxes; none removes them. */
+export function recordResearchComposerImages(
+  treeId: string,
+  images: Record<string, ResearchImageAttachment[]>,
+  now = Date.now(),
+): void {
+  const store = researchNavigationStore();
+  const navigation = store[treeId];
+  const empty = Object.keys(images).length === 0;
+  if (empty && !navigation?.composerImages) return;
+  if (navigation?.composerImages && JSON.stringify(navigation.composerImages.images) === JSON.stringify(images)) {
+    return;
+  }
+  if (empty) {
+    delete navigation!.composerImages;
+  } else {
+    (store[treeId] ??= { scrollByNode: {} }).composerImages = { images, updatedAt: now };
+  }
+  saveResearchNavigation();
 }
 
 /** Drops navigation state for trees that no longer exist. */

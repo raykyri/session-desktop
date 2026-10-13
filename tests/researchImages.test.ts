@@ -196,3 +196,23 @@ test("a stored queued question keeps its well-formed images", async () => {
     { id: "q-2", prompt: "No images", createdAt: 6 },
   ]);
 });
+
+test("a thread's ask box images are stored with its navigation for a day", async () => {
+  const navigation = await import("../src/lib/researchNavigation");
+  const boxes = { root: [image("1", "One.png")], "pending:n1": [image("2")] };
+  navigation.recordResearchComposerImages("tree-images", boxes, 1_000);
+  assert.deepEqual(navigation.savedResearchComposerImages("tree-images", 2_000), boxes);
+  const stored = JSON.parse(localStorage.getItem("session.research-navigation.v1") ?? "{}");
+  assert.deepEqual(stored["tree-images"].composerImages, { images: boxes, updatedAt: 1_000 });
+  // The backend removes pending images after a day.
+  assert.deepEqual(
+    navigation.savedResearchComposerImages("tree-images", 1_000 + navigation.RESEARCH_COMPOSER_IMAGES_TTL_MS),
+    {},
+  );
+  navigation.recordResearchComposerImages("tree-images", {});
+  assert.deepEqual(navigation.savedResearchComposerImages("tree-images"), {});
+  // Deleting the tree removes them with the rest of its navigation.
+  navigation.recordResearchComposerImages("tree-images", boxes);
+  navigation.pruneResearchNavigation([]);
+  assert.deepEqual(navigation.savedResearchComposerImages("tree-images"), {});
+});

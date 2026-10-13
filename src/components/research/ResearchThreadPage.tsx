@@ -91,6 +91,8 @@ import {
 } from "../../lib/researchThreadView";
 import {
   pruneResearchNavigationNodes,
+  recordResearchComposerImages,
+  savedResearchComposerImages,
   savedResearchSelection,
   type QueuedResearchFollowup,
 } from "../../lib/researchNavigation";
@@ -150,11 +152,6 @@ import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_MARKERS: ResearchBranchMarker[] = [];
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
-
-/** Each tree's ask box images, kept while the app runs so they survive the
- * page remounting for another tree (the text is kept by the navigation
- * store). */
-const threadComposerImages = new Map<string, Record<string, ResearchImageAttachment[]>>();
 
 /** The ask boxes' images with `images` as box `key`'s; an empty list
  * removes the key. */
@@ -359,15 +356,15 @@ function ResearchThreadPage({
   // which makes the deepest level current.
   const [focusedColumnId, setFocusedColumnId] = useState<ResearchColumnId | null>(null);
   const [composerText, setComposerText] = useState<Record<string, string>>({});
-  // The images in each ask box, keyed as `composerText`. They stay while the
-  // page is open; a sent or queued question takes them along.
-  const [composerImages, setComposerImages] = useState<Record<string, ResearchImageAttachment[]>>(
-    () => (treeId ? threadComposerImages.get(treeId) : undefined) ?? {},
+  // The images in each ask box, keyed as `composerText`; a sent or queued
+  // question takes them along. The navigation store keeps them, like the
+  // text, across remounts and restarts, for as long as the backend keeps
+  // pending images; deleting the tree removes them.
+  const [composerImages, setComposerImages] = useState<Record<string, ResearchImageAttachment[]>>(() =>
+    treeId ? savedResearchComposerImages(treeId) : {},
   );
   useEffect(() => {
-    if (!treeId) return;
-    if (Object.keys(composerImages).length > 0) threadComposerImages.set(treeId, composerImages);
-    else threadComposerImages.delete(treeId);
+    if (treeId) recordResearchComposerImages(treeId, composerImages);
   }, [composerImages, treeId]);
   // The selected queued message (an item of a chain's client-side queue):
   // its column's answer column shows it. Any other selection clears it.

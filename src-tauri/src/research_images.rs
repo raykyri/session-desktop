@@ -11,9 +11,9 @@
 //! may still hold it. A message removed because its run failed to launch
 //! returns its images to pending whatever their age.
 //!
-//! The frontend keeps unsent images in composers and in a thread's queue of
-//! follow-ups (stored in the webview across restarts), which the backend
-//! cannot see. Pending images that no node or draft references are therefore
+//! The frontend keeps unsent images in composers, a thread's ask boxes, and
+//! its queue of follow-ups (the last two stored in the webview across
+//! restarts), which the backend cannot see. Pending images that no node or draft references are therefore
 //! removed once they are older than [`PENDING_LIFETIME`], at startup and
 //! whenever an image is saved. A clean startup also moves stored images that
 //! nothing references to pending. Removing a workspace folder copies its
