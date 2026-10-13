@@ -163,7 +163,7 @@ function exchangeNode(status: "running" | "complete" = "running"): ResearchNode 
     highlights: [],
     message: { text: "Question" },
     agent: { adapter: "claude" },
-    run: { status, sessionReady: true, holdsProcess: status === "running" },
+    run: { status, sessionReady: true },
   } as ResearchNode;
 }
 

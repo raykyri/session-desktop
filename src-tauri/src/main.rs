@@ -11,9 +11,9 @@ mod github_auth;
 mod headless_process;
 mod human_browser;
 mod launch_path;
+mod legacy_files;
 mod native_support;
 mod persistence;
-mod remote_files;
 mod research;
 mod research_anchors;
 mod research_artifacts;
@@ -21,7 +21,6 @@ mod research_images;
 mod research_recap;
 mod research_runtime;
 mod research_widgets;
-mod scrollback;
 mod show_hide_shortcut;
 mod sleep;
 mod state;
@@ -1241,8 +1240,6 @@ fn launch_research_child_run(
                 worktree_dir: binding.worktree_dir.clone(),
                 branch: None,
                 active_workspace: None,
-                pane_id: None,
-                orphaned_queue_pane_id: None,
                 session_id: Some(session_id.clone()),
                 transcript_path: binding.transcript_path.clone(),
                 status: AgentStatus::Done,
@@ -1257,6 +1254,7 @@ fn launch_research_child_run(
                 native_leaf_id: None,
                 paused: false,
                 created_at: parent.created_at,
+                pane_id: None,
             }
         }
     };
@@ -2265,21 +2263,6 @@ fn main() {
                 // Restore the persisted session before the command handlers go
                 // live. Panes saved by older builds are dropped during the load.
                 state.restore_session();
-                {
-                    let workspace_root = state.config().workspace_root.clone();
-                    let referenced = state
-                        .list_artifacts()
-                        .map(|artifacts| {
-                            artifacts
-                                .into_iter()
-                                .filter_map(|artifact| artifact.path.map(std::path::PathBuf::from))
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default();
-                    std::thread::spawn(move || {
-                        remote_files::remove_orphaned(&workspace_root, &referenced);
-                    });
-                }
                 workspace::reconcile_imported_research_archives(&state);
                 // Recovery fell back to an empty session (state discarded to a .bak)
                 // or dropped entries: say so in a dialog, since a Finder launch never
@@ -2287,11 +2270,11 @@ fn main() {
                 if let Some(warning) = state.take_recovery_warning() {
                     notify_startup_warning(app.handle(), &warning);
                 }
-                // Remove scrollback left by the retired terminal workspace.
+                // Remove scrollback and uploads left by builds with terminal panes.
                 {
                     let workspace_root = state.config().workspace_root.clone();
                     std::thread::spawn(move || {
-                        scrollback::remove_legacy_scrollback(&workspace_root);
+                        legacy_files::remove_terminal_leftovers(&workspace_root);
                     });
                 }
                 app.manage(state.clone());

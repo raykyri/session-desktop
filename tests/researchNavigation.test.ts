@@ -192,11 +192,9 @@ test("branch info includes every descendant but not siblings", () => {
   });
 });
 
-test("branch info detects active descendants and live panes", () => {
+test("branch info detects active descendants", () => {
   const running = [node("branch", "root"), node("child", "branch", "running")];
   assert.equal(researchBranchInfo(running, "branch")?.hasActiveRuns, true);
-  const pane = researchNode({ id: "child", treeId: "tree", parentNodeId: "branch", holdsProcess: true });
-  assert.equal(researchBranchInfo([node("branch", "root"), pane], "branch")?.hasActiveRuns, true);
   assert.equal(researchBranchInfo(running, "missing"), null);
 });
 

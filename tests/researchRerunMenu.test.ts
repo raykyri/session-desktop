@@ -57,9 +57,6 @@ test("Rerun is disabled, with the reason as its title, while the run is active",
     assert.match(html, /disabled=""/);
     assert.match(html, /title="Wait for the answer to finish"/);
   }
-  const lingering = item(node("q", { status: "cancelled", holdsProcess: true }));
-  assert.match(lingering, /disabled=""/);
-  assert.match(lingering, /terminal is still open/);
   // Another relaunch request in flight.
   assert.match(item(node("q"), { pending: true }), /disabled=""/);
 });
@@ -99,7 +96,6 @@ test("canRerunResearchNode extends canRetryResearchNode to complete exchanges", 
   }
   assert.equal(canRetryResearchNode(node("q")), false);
   assert.equal(canRerunResearchNode(node("q")), true);
-  assert.equal(canRerunResearchNode(node("q", { holdsProcess: true })), false);
   for (const status of ["queued", "starting", "running"] as const) {
     assert.equal(canRerunResearchNode(node("q", { status })), false);
   }

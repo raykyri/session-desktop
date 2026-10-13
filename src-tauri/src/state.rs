@@ -12,14 +12,13 @@ use crate::research::{
 };
 use crate::thread_graph;
 use crate::transcript::Turn;
-use crate::workspace::{ActiveWorkspace, AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
-use serde::{Deserialize, Serialize};
+use crate::workspace::{AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
 use serde_json::json;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Url};
+use tauri::{AppHandle, Emitter};
 
 /// Upper bound on the parsed transcript turns retained in memory per agent. The
 /// store feeds the UI timeline on (re)connect and crash recovery; without a cap a
@@ -82,7 +81,7 @@ struct AppStateInner {
     // Serializes the whole snapshot->write->rename in persist() so concurrent
     // saves commit in snapshot order. Without it, a slower older snapshot's
     // rename can complete after a newer one and overwrite it, losing the last change
-    // (or re-sending an already-drained queued turn) across a restart.
+    // across a restart.
     persist_lock: Mutex<()>,
     // Serializes document snapshot replacement with highlight mutations and
     // follow-up prompt capture. Those operations span both the in-memory model
@@ -124,7 +123,6 @@ struct AppStateInner {
 
 #[derive(Default)]
 struct Model {
-    pane_splits: Vec<PaneSplitInfo>,
     groups: HashMap<String, GroupInfo>,
     group_order: Vec<String>,
     agents: HashMap<String, AgentInfo>,
@@ -144,263 +142,11 @@ struct Model {
     /// Persistent feed of `session send` notifications. Oldest first; capped by
     /// the notifications module. Distinct from the research feed.
     notification_log: crate::user_notifications::NotificationLog,
-    agent_turn_queues: HashMap<String, VecDeque<QueuedTurn>>,
-    /// Application-global prompt drafts (the home Drafts rail), oldest first.
-    global_drafts: Vec<GlobalDraft>,
-    /// A queued turn claimed for delivery but not yet confirmed on the PTY, per agent
-    /// (at most one — `agent_draining` serializes drains). Popped out of the queue at
-    /// claim and persisted here so a crash mid-delivery re-queues it on restart
-    /// instead of losing it; cleared once the write completes. At most one per agent.
-    agent_inflight: HashMap<String, QueuedTurn>,
-    agent_drafts: HashMap<String, String>,
-    /// Files and loopback URLs surfaced from agent panes via `session open`, oldest
-    /// first — the per-workspace artifact tray. Persisted; capped per group.
-    artifacts: Vec<ArtifactInfo>,
-    /// The selected frontend tab, persisted so restarts return to the same place.
-    /// The value is either a pane id or the frontend's Home tab sentinel.
-    active_tab_id: Option<String>,
-}
-
-/// One artifact-tray entry: a file or loopback URL a pane's agent (or its user,
-/// while the agent was backgrounded) opened via `session open`. File artifacts keep
-/// the canonical path — file-server URLs are generated per run and would go stale —
-/// while URL artifacts keep the loopback URL itself.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArtifactInfo {
-    pub id: String,
-    pub group_id: Option<String>,
-    pub pane_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    pub created_at: u128,
-}
-
-/// Parses the only URL form the artifact tray accepts: a complete HTTP(S)
-/// loopback URL. Returning the URL's canonical serialization both validates
-/// ports/authorities and keeps equivalent explicit opens deduplicated.
-pub(crate) fn canonical_loopback_artifact_url(raw: &str) -> Option<String> {
-    if raw.trim() != raw
-        || raw
-            .chars()
-            .any(|character| character.is_control() || character.is_whitespace())
-        || raw.contains(['\\', '|'])
-    {
-        return None;
-    }
-    let parsed = Url::parse(raw).ok()?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return None;
-    }
-    parsed.host_str()?;
-    // `url` intentionally accepts legacy shortened IPv4 spellings such as
-    // `127.0.0` and canonicalizes them to `127.0.0.0`. For artifact detection
-    // that is indistinguishable from a truncated terminal redraw, so validate
-    // the original authority host text as well as the parsed URL.
-    let authority = raw.split_once("://")?.1.split(['/', '?', '#']).next()?;
-    let host_port = authority
-        .rsplit_once('@')
-        .map_or(authority, |(_, value)| value);
-    let host = if let Some(bracketed) = host_port.strip_prefix('[') {
-        bracketed.split_once(']')?.0
-    } else {
-        host_port
-            .split_once(':')
-            .map_or(host_port, |(host, _)| host)
-    };
-    let loopback = host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|address| address.is_loopback());
-    loopback.then(|| parsed.to_string())
-}
-
-/// Normalizes a persisted or restored artifact to the current target policy.
-/// File artifacts own only their path; URL artifacts must be complete loopback
-/// URLs. `Some(changed)` means the entry is valid, while `None` drops it.
-fn normalize_artifact_target(artifact: &mut ArtifactInfo) -> Option<bool> {
-    let mut changed = false;
-    if artifact
-        .path
-        .as_deref()
-        .is_some_and(|path| !path.trim().is_empty())
-    {
-        changed = artifact.url.take().is_some();
-        return Some(changed);
-    }
-    if artifact.path.take().is_some() {
-        changed = true;
-    }
-    let raw = artifact.url.as_deref()?;
-    let canonical = canonical_loopback_artifact_url(raw)?;
-    if canonical != raw {
-        artifact.url = Some(canonical);
-        changed = true;
-    }
-    Some(changed)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ResearchWorkspaceDependencies {
     pub has_active_runs: bool,
-}
-
-/// A prompt queued application-wide before it has an owner — the home view's
-/// Drafts rail. Assigning one to an agent marks it consumed (kept for a while
-/// as history) rather than deleting it, so an assignment that queues work is
-/// still visible and a crash can never silently lose the text.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalDraft {
-    pub id: String,
-    pub text: String,
-    pub created_at: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub consumed: Option<GlobalDraftConsumed>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalDraftConsumed {
-    pub agent_id: String,
-    pub at: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueuedTurnWait {
-    pub agent_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pane_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-}
-
-/// Where a queued turn is delivered when it is reached. Absent on a turn means the
-/// default: paste it into the owning agent's own pane. `Fork` resumes the source
-/// session into a new forked pane launched with the turn text; `NewSession` starts
-/// a fresh session of the same adapter in the source's directory. Either way the
-/// source agent never runs the turn itself and stays idle.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    tag = "kind"
-)]
-pub enum QueuedTurnDelivery {
-    Fork {
-        #[serde(default)]
-        use_worktree: bool,
-    },
-    NewSession,
-}
-
-static QUEUED_TURN_ID_SEQ: AtomicU64 = AtomicU64::new(0);
-
-/// A stable, unique identity for a queued turn. Two queued turns can share the
-/// same text and differ only in pause/wait/delivery metadata; without an id,
-/// mutations that identify a turn by index+text can act on the wrong one when
-/// duplicates shift position, so every turn carries an opaque id used for the
-/// optimistic-concurrency guards. Random by default; the counter fallback keeps
-/// ids unique if the CSPRNG is momentarily unavailable (this runs inside
-/// infallible constructors, so it must never fail).
-fn new_queued_turn_id() -> String {
-    let mut bytes = [0u8; 16];
-    if getrandom::getrandom(&mut bytes).is_ok() {
-        let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-        return format!("qturn-{hex}");
-    }
-    let seq = QUEUED_TURN_ID_SEQ.fetch_add(1, Ordering::Relaxed);
-    format!("qturn-seq-{seq}")
-}
-
-/// A queued turn: an id, the text to send, plus optional directives controlling
-/// when and where it should send. Deserializes from either a bare string (the
-/// legacy persisted format) or a `{ text, pauseAfter, waitFor, delivery }`
-/// object, so old state still loads; a turn persisted without an id is assigned
-/// a fresh one on load.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueuedTurn {
-    pub id: String,
-    pub text: String,
-    pub pause_after: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wait_for: Option<QueuedTurnWait>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delivery: Option<QueuedTurnDelivery>,
-    /// Whether this turn's text may already be sitting in the pane's composer from
-    /// a previous delivery attempt — a send whose paste landed but whose submit was
-    /// never confirmed. Draining a tagged turn submits a bare Return instead of
-    /// re-pasting, so a retry can never concatenate a second copy of the text onto
-    /// the one already in the composer. The tag is process-local by design: it is
-    /// never persisted, because the composer's contents do not survive an agent
-    /// process restart, and a restored turn must re-paste normally.
-    #[serde(skip)]
-    pub possibly_pasted: bool,
-}
-
-impl QueuedTurn {}
-
-impl<'de> Deserialize<'de> for QueuedTurn {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Repr {
-            Text(String),
-            Full {
-                #[serde(default)]
-                id: Option<String>,
-                text: String,
-                #[serde(default, rename = "pauseAfter")]
-                pause_after: bool,
-                #[serde(default, rename = "waitFor")]
-                wait_for: Option<QueuedTurnWait>,
-                #[serde(default)]
-                delivery: Option<QueuedTurnDelivery>,
-            },
-        }
-        Ok(match Repr::deserialize(deserializer)? {
-            Repr::Text(text) => QueuedTurn {
-                id: new_queued_turn_id(),
-                text,
-                pause_after: false,
-                wait_for: None,
-                delivery: None,
-                possibly_pasted: false,
-            },
-            Repr::Full {
-                id,
-                text,
-                pause_after,
-                wait_for,
-                delivery,
-            } => QueuedTurn {
-                // A turn persisted before turns had ids is migrated to a fresh
-                // one; a stored id is preserved so it stays stable across loads.
-                id: id.unwrap_or_else(new_queued_turn_id),
-                text,
-                pause_after,
-                wait_for,
-                delivery,
-                // Deliberately never restored: the composer's contents do not
-                // survive the agent process, so a loaded turn re-pastes normally.
-                possibly_pasted: false,
-            },
-        })
-    }
-}
-
-fn sanitize_active_tab_id(tab_id: Option<String>) -> Option<String> {
-    tab_id.and_then(|id| {
-        let trimmed = id.trim();
-        (!trimmed.is_empty()).then(|| trimmed.to_string())
-    })
 }
 
 fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut AgentInfo) {
@@ -507,217 +253,6 @@ fn migrate_thread_records_to_global(
         }
     }
     warnings
-}
-
-/// Durable coordinates for the tmux session that owns a remote pane.
-///
-/// The SSH connection is intentionally absent: connections are disposable,
-/// while these names are the stable identity a new connection must attach to.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteSessionIdentity {
-    /// The snapshotted remote id from the pane's workspace group.
-    pub remote_id: String,
-    /// A session-specific tmux server, isolated from the user's default server.
-    pub tmux_server: String,
-    /// A collision-resistant session name persisted across Session restarts.
-    pub tmux_session: String,
-    /// Owner-only remote directory containing generated files for this pane.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub support_dir: Option<String>,
-}
-
-impl RemoteSessionIdentity {}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RemoteConnectionState {
-    Connecting,
-    Checking,
-    Connected,
-    Reconnecting,
-    #[default]
-    Disconnected,
-    Failed,
-}
-
-/// Process-local connection health exposed with pane metadata. Persisted files
-/// may contain the last observation, but restore always resets it to
-/// `disconnected`; only a live attachment may claim a stronger state.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteConnectionInfo {
-    pub state: RemoteConnectionState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub startup_started_at: Option<u128>,
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub startup_timings: std::collections::BTreeMap<String, u128>,
-    #[serde(default)]
-    pub hook_health: Option<RemoteHookHealth>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
-    #[serde(default)]
-    pub stage: Option<String>,
-    #[serde(default)]
-    pub reason: Option<String>,
-    #[serde(default)]
-    pub attempt: u32,
-    #[serde(default)]
-    pub next_retry_at: Option<u128>,
-    #[serde(default)]
-    pub disconnected_at: Option<u128>,
-    #[serde(default)]
-    pub last_connected_at: Option<u128>,
-    #[serde(default)]
-    pub last_verified_at: Option<u128>,
-    #[serde(default)]
-    pub recovery_duration_ms: Option<u128>,
-    #[serde(default)]
-    pub recovery_action: Option<String>,
-    #[serde(default)]
-    pub session_exists: Option<bool>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RemoteHookHealth {
-    Checking,
-    Healthy,
-    AuthenticationFailed,
-    Unavailable,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneInfo {
-    pub id: String,
-    pub title: String,
-    /// Last title reported by OSC 0/2. Kept separate from `title`: the latter is
-    /// the durable user/generated name and must continue to override terminal
-    /// programs when it differs from the pane's default title.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_osc_title: Option<String>,
-    pub kind: PaneKind,
-    pub agent_id: Option<String>,
-    pub group_id: String,
-    pub cwd: String,
-    /// Display-only workspace observation for shell tabs (checkout kind, git
-    /// root, branch), resolved with a single git invocation at spawn and on
-    /// each shell prompt. Agent panes leave this unset: they carry their own
-    /// live `AgentInfo.active_workspace` from transcript tailing instead.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub active_workspace: Option<ActiveWorkspace>,
-    /// Present only for panes whose process is owned by session-managed tmux on a
-    /// remote host. This identity, not a local ssh child pid, drives recovery.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_session: Option<RemoteSessionIdentity>,
-    /// Live attachment health for a remote pane. Local panes leave it absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote_connection: Option<RemoteConnectionInfo>,
-    /// Host passed to a client `ssh` process that lives in a group which is
-    /// not itself bound to that machine. Restart re-runs `ssh` instead of a
-    /// local login shell. Absent for ordinary shells and session-managed remote
-    /// panes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ssh_target: Option<String>,
-    pub cols: u16,
-    pub rows: u16,
-    pub status: PaneStatus,
-    /// Wall-clock millis when this pane was last focused. Stamped at spawn and on
-    /// every activation (`touch_pane_active`); consulted to pick a group's
-    /// most-recently-active shell pane when resolving a spawn cwd. `#[serde(default)]`
-    /// so pre-existing persisted state loads as 0 ("least recent until first focus").
-    #[serde(default)]
-    pub last_active_at: u128,
-    /// True for panes recreated from persisted state on restart. Set at respawn
-    /// time only; the persisted value is never consulted when reloading.
-    #[serde(default)]
-    pub recovered: bool,
-    /// Deprecated wire field retained so older persisted snapshots and clients can
-    /// still deserialize pane records. New versions always return and persist zero.
-    #[serde(default)]
-    pub depth: u16,
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PaneSplitAxis {
-    #[default]
-    Vertical,
-    Horizontal,
-}
-
-fn pane_split_axis_is_vertical(axis: &PaneSplitAxis) -> bool {
-    matches!(axis, PaneSplitAxis::Vertical)
-}
-
-/// One node of a nested split's layout tree. `size` is the node's fraction of
-/// its parent along the parent's axis; absent means an equal share.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "kind")]
-pub enum PaneSplitNode {
-    #[serde(rename = "pane")]
-    Pane {
-        #[serde(rename = "paneId")]
-        pane_id: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        size: Option<f64>,
-    },
-    #[serde(rename = "split")]
-    Split {
-        #[serde(default)]
-        axis: PaneSplitAxis,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        size: Option<f64>,
-        children: Vec<PaneSplitNode>,
-    },
-}
-
-impl PaneSplitNode {}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneSplitInfo {
-    pub id: String,
-    pub pane_ids: Vec<String>,
-    #[serde(default)]
-    pub sizes: HashMap<String, f64>,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub intent: HashMap<String, PaneSplitIntent>,
-    #[serde(default, skip_serializing_if = "pane_split_axis_is_vertical")]
-    pub axis: PaneSplitAxis,
-    /// Nesting structure over `pane_ids`, present only when the layout is
-    /// actually nested. The tree's in-order leaves always equal `pane_ids`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub root: Option<PaneSplitNode>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneSplitIntent {
-    pub kind: String,
-    pub anchor_pane_id: String,
-    pub position: String,
-    pub source: String,
-    #[serde(default)]
-    pub created_at: f64,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PaneKind {
-    Shell,
-    Agent,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PaneStatus {
-    Starting,
-    Running,
-    Exited,
-    Killed,
-    Failed,
 }
 
 impl AppState {
@@ -897,14 +432,12 @@ impl AppState {
         {
             migration_warnings.push(err);
         }
-        // The next save writes research nodes and agent composer text at the
-        // current version, which the source's builds refuse. A version-8 or
+        // The next save writes research nodes at the current version, which
+        // the source's builds refuse. A version-8 or
         // version-9 source can need no node migration (its nodes may already
         // have the body shape, and need no star) and still be rewritten. A
         // version-2 source is already preserved whole as state.v2.bak.
-        if (research_nodes_migrated
-            || !persisted.research_nodes.is_empty()
-            || !persisted.agent_composer_text.is_empty())
+        if (research_nodes_migrated || !persisted.research_nodes.is_empty())
             && let Some(source_version) = source_version.filter(|version| *version != 2)
             && let Err(err) = persistence::backup_state_for_current_version(
                 &self.inner.config.workspace_root,
@@ -982,59 +515,28 @@ impl AppState {
                 break;
             }
         }
-        // Session creates no terminal panes. Panes saved by older builds (shells,
-        // agent tabs, and the hidden panes of pane-hosted research runs) are
-        // dropped here; their scrollback is deleted at startup. Research runs
-        // never survive a restart either: every still-active node is settled
-        // as failed below, since nothing that could finish it remains.
-        let dropped_pane_ids = persisted
-            .panes
-            .drain(..)
-            .map(|pane| pane.id)
+        // Session creates no terminal panes. The panes older builds saved
+        // (shells, agent tabs, and the hidden panes of pane-hosted research
+        // runs) are not loaded, and their scrollback is deleted at startup.
+        // An agent bound to one has nothing left to own: keeping the record
+        // would leave a dead AgentInfo in state.json that nothing reaps.
+        // Research runs never survive a restart either: every still-active
+        // node is settled as failed below, since nothing that could finish it
+        // remains.
+        let dropped_agent_ids = persisted
+            .agents
+            .iter()
+            .filter(|agent| agent.pane_id.is_some())
+            .map(|agent| agent.id.clone())
             .collect::<HashSet<_>>();
-        if !dropped_pane_ids.is_empty() {
-            // A dropped pane's agent has nothing left to own. Keeping the
-            // record would leave one dead AgentInfo in state.json per pane,
-            // with nothing that would ever reap it. An agent that still holds
-            // queued work keeps its record without the pane binding.
-            let dropped_agent_ids = persisted
-                .agents
-                .iter()
-                .filter(|agent| {
-                    agent
-                        .pane_id
-                        .as_deref()
-                        .is_some_and(|pane_id| dropped_pane_ids.contains(pane_id))
-                        && persisted
-                            .queues
-                            .get(&agent.id)
-                            .is_none_or(|turns| turns.is_empty())
-                        && !persisted.inflight.contains_key(&agent.id)
-                })
-                .map(|agent| agent.id.clone())
-                .collect::<HashSet<_>>();
+        if !dropped_agent_ids.is_empty() {
             persisted
                 .agents
                 .retain(|agent| !dropped_agent_ids.contains(&agent.id));
-            for agent in &mut persisted.agents {
-                // Kept only because it still holds recoverable queued work.
-                if agent
-                    .pane_id
-                    .as_deref()
-                    .is_some_and(|pane_id| dropped_pane_ids.contains(pane_id))
-                {
-                    agent.pane_id = None;
-                    agent.status = AgentStatus::Idle;
-                }
-            }
             for group in &mut persisted.groups {
                 group
                     .agents
                     .retain(|agent_id| !dropped_agent_ids.contains(agent_id));
-            }
-            for agent_id in &dropped_agent_ids {
-                persisted.queues.remove(agent_id);
-                persisted.agent_composer_text.remove(agent_id);
             }
             research_reconciled = true;
         }
@@ -1043,12 +545,6 @@ impl AppState {
             let Some(exchange) = node.exchange_mut() else {
                 continue;
             };
-            // Also covers bindings to panes that were never persisted (crash
-            // during multi-stage removal): either way the pane is gone, and a
-            // stale binding would count the node as an active run forever.
-            if exchange.binding.pane_id.take().is_some() {
-                research_reconciled = true;
-            }
             let run = &mut exchange.run;
             if run.status.is_active()
                 && exchange.binding.runtime == ResearchRuntime::Sdk
@@ -1081,15 +577,7 @@ impl AppState {
         let dropped_sdk_agent_ids = persisted
             .agents
             .iter()
-            .filter(|agent| {
-                agent.pane_id.is_none()
-                    && sdk_agent_ids.contains(&agent.id)
-                    && persisted
-                        .queues
-                        .get(&agent.id)
-                        .is_none_or(|turns| turns.is_empty())
-                    && !persisted.inflight.contains_key(&agent.id)
-            })
+            .filter(|agent| sdk_agent_ids.contains(&agent.id))
             .map(|agent| agent.id.clone())
             .collect::<HashSet<_>>();
         if !dropped_sdk_agent_ids.is_empty() {
@@ -1100,10 +588,6 @@ impl AppState {
                 group
                     .agents
                     .retain(|agent_id| !dropped_sdk_agent_ids.contains(agent_id));
-            }
-            for agent_id in &dropped_sdk_agent_ids {
-                persisted.queues.remove(agent_id);
-                persisted.agent_composer_text.remove(agent_id);
             }
             research_reconciled = true;
         }
@@ -1164,18 +648,6 @@ impl AppState {
                 *slot = Some(warning);
             }
         }
-        let active_tab_id = sanitize_active_tab_id(persisted.active_tab_id.clone());
-        let queued_agent_ids = persisted
-            .queues
-            .iter()
-            .filter(|&(_agent_id, turns)| !turns.is_empty())
-            .map(|(agent_id, _turns)| agent_id.clone())
-            // An in-flight turn (claimed pre-shutdown, delivery unconfirmed) is
-            // re-queued below, so its agent counts as having pending work too.
-            .chain(persisted.inflight.keys().cloned())
-            .collect::<HashSet<_>>();
-
-        let mut artifacts_reconciled = false;
         if let Ok(mut model) = self.inner.model.lock() {
             for group in persisted.groups {
                 if !model.group_order.iter().any(|id| id == &group.id) {
@@ -1248,78 +720,18 @@ impl AppState {
             );
             for mut agent in persisted.agents {
                 ensure_agent_thread_metadata(self, &mut model, &mut agent);
-                if !queued_agent_ids.contains(&agent.id) {
-                    agent.orphaned_queue_pane_id = None;
-                }
                 model.agents.insert(agent.id.clone(), agent);
             }
-            for (agent_id, turns) in persisted.queues {
-                if !turns.is_empty() {
-                    model
-                        .agent_turn_queues
-                        .insert(agent_id, turns.into_iter().collect());
-                }
-            }
-            // Re-queue any in-flight turn (claimed for delivery but not confirmed before
-            // shutdown) at the front of its agent's queue, so it's re-delivered rather
-            // than lost. A crash in the tiny window after delivery but before the record
-            // cleared re-sends it — at-least-once, preferred over a silent drop. Live
-            // in-flight state starts empty after restore.
-            for (agent_id, turn) in persisted.inflight {
-                model
-                    .agent_turn_queues
-                    .entry(agent_id)
-                    .or_default()
-                    .push_front(turn);
-            }
-            for (agent_id, draft) in persisted.agent_composer_text {
-                // Drop drafts whose agent no longer exists so dead entries don't
-                // accumulate in state.json across restarts. (Agents are hydrated above.)
-                if !draft.trim().is_empty() && model.agents.contains_key(&agent_id) {
-                    model.agent_drafts.insert(agent_id, draft);
-                }
-            }
-            model.global_drafts = persisted.global_drafts;
-            // Drop artifacts whose group is gone or whose legacy URL is not a
-            // complete loopback target. The removed workspace-intelligence
-            // scanner could persist external and redraw-truncated URLs; none of
-            // those should survive hydration into the explicit artifact tray.
-            model.artifacts = persisted
-                .artifacts
-                .into_iter()
-                .filter_map(|mut artifact| {
-                    let group_exists = artifact
-                        .group_id
-                        .as_ref()
-                        .is_none_or(|group_id| model.groups.contains_key(group_id));
-                    if !group_exists {
-                        artifacts_reconciled = true;
-                        return None;
-                    }
-                    match normalize_artifact_target(&mut artifact) {
-                        Some(changed) => {
-                            artifacts_reconciled |= changed;
-                            Some(artifact)
-                        }
-                        None => {
-                            artifacts_reconciled = true;
-                            None
-                        }
-                    }
-                })
-                .collect();
-            model.active_tab_id = active_tab_id;
-            model.pane_splits = persisted.pane_splits;
         }
 
         // Enable persistence only after hydration so loading does not rewrite the
         // file.
         self.inner.persist_enabled.store(true, Ordering::Relaxed);
         self.spawn_persister();
-        if research_reconciled || artifacts_reconciled {
+        if research_reconciled {
             // Migration/reconciliation may have changed durable workspace
-            // relationships or discarded unsafe legacy artifacts. Commit the
-            // normalized snapshot before recovery continues.
+            // relationships. Commit the normalized snapshot before recovery
+            // continues.
             self.persist_now();
         }
     }
@@ -1448,12 +860,11 @@ impl AppState {
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
                 // Research nodes (an envelope with a tagged body, `chainOrder`
-                // and image attachments), `agentComposerText`, and
-                // drafts with image attachments are read only by builds that
-                // accept the current version; older builds would drop them. A
-                // state without any stays loadable by builds that accept 2 to 4.
+                // and image attachments) and drafts with image attachments are
+                // read only by builds that accept the current version; older
+                // builds would drop them. A state without either stays
+                // loadable by builds that accept 2 to 4.
                 version: if model.research_nodes.is_empty()
-                    && model.agent_drafts.is_empty()
                     && model
                         .research_drafts
                         .iter()
@@ -1464,21 +875,9 @@ impl AppState {
                     persistence::STATE_VERSION
                 },
                 next_id: self.inner.next_id.load(Ordering::Relaxed),
-                panes: Vec::new(),
                 groups: model.groups.values().cloned().collect(),
                 group_order: ordered_group_ids(&model),
                 agents: model.agents.values().cloned().collect(),
-                queues: model
-                    .agent_turn_queues
-                    .iter()
-                    .map(|(agent_id, queue)| (agent_id.clone(), queue.iter().cloned().collect()))
-                    .collect(),
-                artifacts: model.artifacts.clone(),
-                agent_composer_text: model.agent_drafts.clone(),
-                global_drafts: model.global_drafts.clone(),
-                inflight: model.agent_inflight.clone(),
-                pane_splits: Vec::new(),
-                active_tab_id: model.active_tab_id.clone(),
                 threads: model.threads.clone(),
                 thread_focus: model.thread_focus.clone(),
                 research_trees: model.research_trees.clone(),
@@ -1666,15 +1065,6 @@ impl AppState {
             .lock()
             .map_err(|_| "model lock poisoned".to_string())?;
         Ok(model.agents.values().cloned().collect())
-    }
-
-    pub fn list_artifacts(&self) -> Result<Vec<ArtifactInfo>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.artifacts.clone())
     }
 
     pub fn list_research_trees(&self) -> Result<Vec<ResearchTreeSummary>, String> {
@@ -1924,11 +1314,7 @@ impl AppState {
             .values()
             // Queued launch-in-flight nodes are active even before an agent is
             // bound. Keep them visible to exit cancellation and activity UI.
-            .filter(|node| {
-                node.binding()
-                    .is_some_and(|binding| binding.pane_id.is_some())
-                    || node.status().is_active()
-            })
+            .filter(|node| node.status().is_active())
             .cloned()
             .collect::<Vec<_>>();
         nodes.sort_by_key(|node| (node.created_at, node.id.clone()));
@@ -3378,7 +2764,6 @@ impl AppState {
             binding.thread_id = agent.thread_id.clone();
             binding.native_session_id = agent.session_id.clone();
             binding.transcript_path = agent.transcript_path.clone();
-            binding.pane_id = None;
             binding.runtime = ResearchRuntime::Sdk;
             let run = &mut exchange.run;
             run.started_at.get_or_insert(research::body_millis(now));
@@ -3716,7 +3101,7 @@ impl AppState {
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",
-            node.pane_id().map(str::to_string),
+            None,
             node.agent_id().map(str::to_string),
             json!({ "node": node.view() }),
         ));
@@ -3738,7 +3123,7 @@ impl AppState {
                 .ok_or_else(|| format!("research node {node_id} was not found"))?;
             let active = node.status().is_active();
             let runtime = node.runtime();
-            if !active && node.pane_id().is_none() {
+            if !active {
                 let sdk_still_stopping = runtime == ResearchRuntime::Sdk
                     && crate::research_runtime::session_registered(node_id);
                 if !sdk_still_stopping {
@@ -3757,7 +3142,7 @@ impl AppState {
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",
-            node.pane_id().map(str::to_string),
+            None,
             node.agent_id().map(str::to_string),
             json!({ "node": node.view() }),
         ));
@@ -5550,7 +4935,6 @@ impl AppState {
                 // Keeping an old agent id could accidentally bind a restored
                 // follow-up to an unrelated live agent whose
                 // installation-local id collides.
-                binding.pane_id = None;
                 binding.agent_id = None;
                 binding.transcript_path = None;
                 // Thread records and their graph snapshots are
@@ -5811,19 +5195,7 @@ impl AppState {
             if agent.thread_id.is_some() {
                 binding.thread_id = agent.thread_id.clone();
             }
-            // A sync is built from an agent snapshot taken under a previously
-            // released lock, so it can complete after pane teardown already ran
-            // detach_research_pane. Rewriting pane_id would re-bind the inactive
-            // pane to a settled node — a state nothing clears until restart,
-            // and one that pins the tree (archive/remove/folder ops treat a
-            // bound pane as an active run). Terminal nodes keep whatever
-            // binding teardown left them; the checkpoint fields above still
-            // flow, since the native session id and transcript path trail the
-            // Complete status by design.
             let run = &mut exchange.run;
-            if !run.status.is_terminal() {
-                binding.pane_id = agent.pane_id.clone();
-            }
             if prompt_id.is_some() {
                 binding.prompt_native_id = prompt_id;
             }
@@ -5855,7 +5227,7 @@ impl AppState {
         if let Some(node) = updated {
             self.emit(SessionEvent::new(
                 "research.node.updated",
-                node.pane_id().map(str::to_string),
+                None,
                 node.agent_id().map(str::to_string),
                 json!({ "node": node.view() }),
             ));
@@ -5889,7 +5261,7 @@ impl AppState {
             self.persist();
             self.emit(SessionEvent::new(
                 "research.node.updated",
-                node.pane_id().map(str::to_string),
+                None,
                 node.agent_id().map(str::to_string),
                 json!({ "node": node.view() }),
             ));
@@ -5943,7 +5315,7 @@ impl AppState {
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",
-            updated.pane_id().map(str::to_string),
+            None,
             updated.agent_id().map(str::to_string),
             json!({ "node": updated.view() }),
         ));
@@ -6026,7 +5398,7 @@ impl AppState {
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",
-            updated.pane_id().map(str::to_string),
+            None,
             updated.agent_id().map(str::to_string),
             json!({ "node": updated.view() }),
         ));
@@ -6134,36 +5506,6 @@ impl AppState {
             Some(agent_id.to_string()),
             json!({ "nodeId": node_id }),
         ));
-    }
-
-    /// Stores the agent's composer text. No command calls this any more; it
-    /// stays for the persistence tests of the legacy `agentComposerText` key.
-    #[cfg(test)]
-    pub fn set_agent_draft(&self, agent_id: &str, draft: String) -> Result<(), String> {
-        {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if draft.trim().is_empty() {
-                model.agent_drafts.remove(agent_id);
-            } else {
-                model.agent_drafts.insert(agent_id.to_string(), draft);
-            }
-        }
-        self.persist();
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn agent_draft(&self, agent_id: &str) -> Result<Option<String>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.agent_drafts.get(agent_id).cloned())
     }
 
     pub fn interface_draft(&self, key: &str) -> Result<Option<String>, String> {
@@ -6496,8 +5838,6 @@ fn research_image_ids<'a>(
 fn prune_agent_locked(model: &mut Model, agent_id: &str) {
     model.agents.remove(agent_id);
     model.turns.remove(agent_id);
-    model.agent_turn_queues.remove(agent_id);
-    model.agent_drafts.remove(agent_id);
 }
 
 /// Refuses user edits to a tree in the Trash, which the app no longer shows,
@@ -6653,12 +5993,6 @@ fn migrate_legacy_research_workspaces(
             },
         };
 
-        let research_pane_ids = persisted
-            .research_nodes
-            .values()
-            .filter(|node| tree_ids.contains(&node.tree_id))
-            .filter_map(|node| node.pane_id().map(str::to_string))
-            .collect::<HashSet<_>>();
         let research_agent_ids = persisted
             .research_nodes
             .values()
@@ -6715,12 +6049,6 @@ fn migrate_legacy_research_workspaces(
                 node.group_id = research_group_id.clone();
             }
         }
-        for pane in &mut persisted.panes {
-            if pane.group_id == legacy_group_id && research_pane_ids.contains(&pane.id) {
-                pane.group_id = research_group_id.clone();
-                pane.depth = 0;
-            }
-        }
         for agent in &mut persisted.agents {
             if agent.group_id == legacy_group_id && research_agent_ids.contains(&agent.id) {
                 agent.group_id = research_group_id.clone();
@@ -6751,43 +6079,15 @@ fn migrate_legacy_research_workspaces(
             persisted.groups[index] = source;
         }
         let source_still_used = persisted
-            .panes
+            .agents
             .iter()
-            .any(|pane| pane.group_id == legacy_group_id)
-            || persisted
-                .agents
-                .iter()
-                .any(|agent| agent.group_id == legacy_group_id);
+            .any(|agent| agent.group_id == legacy_group_id);
         if !source_still_used {
             persisted.groups.retain(|group| group.id != legacy_group_id);
             persisted.group_order.retain(|id| id != &legacy_group_id);
         }
         changed = true;
     }
-
-    // Split groups are viewport constructs and cannot span modes. Drop only the
-    // invalid split; the normal layout reconciliation keeps all valid siblings.
-    let pane_group = persisted
-        .panes
-        .iter()
-        .map(|pane| (pane.id.clone(), pane.group_id.clone()))
-        .collect::<HashMap<_, _>>();
-    let scope_by_group = persisted
-        .groups
-        .iter()
-        .map(|group| (group.id.clone(), group.scope))
-        .collect::<HashMap<_, _>>();
-    let split_count = persisted.pane_splits.len();
-    persisted.pane_splits.retain(|split| {
-        let mut scopes = split.pane_ids.iter().filter_map(|pane_id| {
-            pane_group
-                .get(pane_id)
-                .and_then(|group_id| scope_by_group.get(group_id))
-        });
-        let first = scopes.next();
-        first.is_none_or(|first| scopes.all(|scope| scope == first))
-    });
-    changed |= persisted.pane_splits.len() != split_count;
 
     (changed, warnings)
 }
@@ -6888,8 +6188,6 @@ mod tests {
             worktree_dir: "/tmp/work/agent-1".to_string(),
             branch: Some("session/group-1/agent-1".to_string()),
             active_workspace: None,
-            pane_id: Some("pane-7".to_string()),
-            orphaned_queue_pane_id: None,
             session_id: Some("session-abc".to_string()),
             transcript_path: Some("/tmp/transcript.jsonl".to_string()),
             status: AgentStatus::Running,
@@ -6904,6 +6202,7 @@ mod tests {
             native_leaf_id: None,
             paused: false,
             created_at: 1,
+            pane_id: None,
         }
     }
 
@@ -6964,68 +6263,6 @@ mod tests {
     }
 
     #[test]
-    fn restore_session_sanitizes_legacy_url_artifacts() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.restore_session();
-        let mut group = sample_group();
-        group.dir = workspace.display().to_string();
-        group.managed_dir = workspace.join("managed").display().to_string();
-        group.agents.clear();
-        state.insert_group_after(group, None).unwrap();
-
-        let mut persisted = persistence::load_with_diagnostics(&workspace).state;
-        let artifact = |id: &str, path: Option<&str>, url: Option<&str>, created_at| ArtifactInfo {
-            id: id.to_string(),
-            group_id: Some("group-1".to_string()),
-            pane_id: "pane-legacy".to_string(),
-            path: path.map(str::to_string),
-            url: url.map(str::to_string),
-            created_at,
-        };
-        persisted.artifacts = vec![
-            artifact("file", Some("/tmp/report.html"), None, 1),
-            artifact("valid", None, Some("http://LOCALHOST:5173"), 2),
-            artifact("external", None, Some("https://example.com/result"), 3),
-            artifact("partial", None, Some("http://localhos"), 4),
-            artifact("redraw", None, Some("http://localhost:5555|"), 5),
-            artifact(
-                "file-with-stale-url",
-                Some("/tmp/preview.html"),
-                Some("https://example.com/stale"),
-                6,
-            ),
-        ];
-        persistence::save(&workspace, &persisted).unwrap();
-
-        let restored = AppState::new(test_config(workspace.clone()));
-        restored.restore_session();
-        let artifacts = restored.list_artifacts().unwrap();
-        assert_eq!(artifacts.len(), 3);
-        assert_eq!(
-            artifacts
-                .iter()
-                .find(|artifact| artifact.id == "valid")
-                .and_then(|artifact| artifact.url.as_deref()),
-            Some("http://localhost:5173/")
-        );
-        assert!(
-            artifacts
-                .iter()
-                .find(|artifact| artifact.id == "file-with-stale-url")
-                .is_some_and(|artifact| artifact.url.is_none())
-        );
-        assert!(artifacts.iter().all(|artifact| {
-            !matches!(artifact.id.as_str(), "external" | "partial" | "redraw")
-        }));
-
-        // Hydration commits the cleanup immediately, so a crash before another
-        // mutation cannot restore discarded workspace-intelligence rows.
-        let saved = persistence::load_with_diagnostics(&workspace).state;
-        assert_eq!(saved.artifacts, artifacts);
-    }
-
-    #[test]
     fn detached_research_import_remaps_tree_and_node_id_collisions() {
         let root = temp_workspace();
         let state = AppState::new(test_config(root.clone()));
@@ -7057,7 +6294,6 @@ mod tests {
         imported_node.message_mut().unwrap().text = "Imported".to_string();
         imported_node.run_mut().unwrap().status = ResearchNodeStatus::Failed;
         imported_node.binding_mut().unwrap().agent_id = Some("agent-colliding".to_string());
-        imported_node.binding_mut().unwrap().pane_id = None;
         imported_node.binding_mut().unwrap().thread_id =
             Some("thread-from-another-installation".to_string());
 
@@ -9863,7 +9099,6 @@ mod tests {
         assert_eq!(reset.status(), ResearchNodeStatus::Queued);
         assert!(reset.run().unwrap().error.is_none());
         assert!(reset.agent_id().is_none());
-        assert!(reset.pane_id().is_none());
         assert!(reset.binding().unwrap().thread_id.is_none());
         assert!(reset.binding().unwrap().native_session_id.is_none());
         assert!(reset.binding().unwrap().transcript_path.is_none());
@@ -10272,14 +9507,12 @@ mod tests {
                 group_id: "group-1".to_string(),
             })
             .unwrap();
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         state.insert_agent(agent.clone()).unwrap();
         let bound = state
             .bind_research_node_harness(&detail.tree.root_node_id, &agent)
             .unwrap();
         assert_eq!(bound.runtime(), ResearchRuntime::Sdk);
-        assert!(bound.pane_id().is_none());
         assert_eq!(bound.agent_id().as_deref(), Some("sdk-agent"));
         assert_eq!(bound.status(), ResearchNodeStatus::Starting);
     }
@@ -10299,8 +9532,7 @@ mod tests {
             })
             .unwrap();
         let root_id = detail.tree.root_node_id.clone();
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         state.insert_agent(agent.clone()).unwrap();
         state.bind_research_node_harness(&root_id, &agent).unwrap();
         state
@@ -10402,7 +9634,6 @@ mod tests {
         let (tree_id, root_id) = completed_research_root(&state, &workspace);
         let node = state.research_node(&root_id).unwrap();
         assert_eq!(node.status(), ResearchNodeStatus::Complete);
-        assert!(node.pane_id().is_none());
         // A completed answer is never retryable; it is rerun.
         let err = state.reset_research_node_for_retry(&root_id).unwrap_err();
         assert!(err.contains("only failed or cancelled"), "{err}");
@@ -10578,8 +9809,7 @@ mod tests {
             .unwrap();
         let tree_id = detail.tree.id.clone();
         let node_id = detail.tree.root_node_id;
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         state.insert_agent(agent.clone()).unwrap();
         state.bind_research_node_harness(&node_id, &agent).unwrap();
         let mut turn = sample_user_turn(&agent.id, "answer");
@@ -10627,8 +9857,7 @@ mod tests {
             })
             .unwrap();
         let node_id = detail.tree.root_node_id;
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         state.insert_agent(agent.clone()).unwrap();
         state.bind_research_node_harness(&node_id, &agent).unwrap();
         let mut stale = sample_user_turn(&agent.id, "stale");
@@ -10673,8 +9902,7 @@ mod tests {
                     group_id: "group-1".to_string(),
                 })
                 .unwrap();
-            let mut agent = sample_agent("sdk-agent");
-            agent.pane_id = None;
+            let agent = sample_agent("sdk-agent");
             state.insert_agent(agent.clone()).unwrap();
             state
                 .bind_research_node_harness(&detail.tree.root_node_id, &agent)
@@ -10693,6 +9921,44 @@ mod tests {
         );
         assert!(restored.agent("sdk-agent").unwrap().is_none());
         restored.remove_research_tree(&tree_id).unwrap();
+    }
+
+    /// An agent saved with a terminal pane binding is dropped on restore, even
+    /// with queued or in-flight turns, which are no longer read. The next save
+    /// writes neither the agent nor the pane-era keys.
+    #[test]
+    fn restore_drops_agents_bound_to_terminal_panes_with_their_queued_work() {
+        let workspace = temp_workspace();
+        {
+            let state = AppState::new(test_config(workspace.clone()));
+            state.restore_session();
+            state.insert_group_after(sample_group(), None).unwrap();
+            state.finalize_persistence_for_exit();
+        }
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let mut pane_agent = serde_json::to_value(sample_agent("pane-agent")).unwrap();
+        pane_agent["paneId"] = serde_json::json!("pane-1");
+        raw["agents"] = serde_json::json!([pane_agent]);
+        raw["groups"][0]["agents"] = serde_json::json!(["pane-agent"]);
+        raw["panes"] = serde_json::json!([{ "id": "pane-1", "agentId": "pane-agent" }]);
+        raw["queues"] = serde_json::json!({ "pane-agent": ["queued text"] });
+        raw["inflight"] = serde_json::json!({ "pane-agent": "in-flight text" });
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        assert!(restored.agent("pane-agent").unwrap().is_none());
+        assert!(restored.list_groups().unwrap()[0].agents.is_empty());
+        restored.finalize_persistence_for_exit();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["agents"], serde_json::json!([]));
+        for key in ["panes", "queues", "inflight"] {
+            assert!(saved.get(key).is_none(), "{key} was written back");
+        }
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
@@ -10836,7 +10102,6 @@ mod tests {
                     transcript_path: None,
                     prompt_native_id: None,
                     agent_id: None,
-                    pane_id: None,
                     runtime: crate::research::ResearchRuntime::Pane,
                     thread_id: None,
                 },
@@ -10858,14 +10123,14 @@ mod tests {
         let workspace = temp_workspace();
         let mut state = PersistedState::default();
         state.groups.push(sample_group());
-        // A valid tree with a valid child, plus a completed node still bound
-        // to a pane that no longer exists (crash during multi-stage removal).
+        // A valid tree with a valid child.
         state
             .research_trees
             .insert("tree-a".to_string(), persisted_tree("tree-a", "root-a"));
-        let mut root_a = persisted_node("root-a", "tree-a", None);
-        root_a.binding_mut().unwrap().pane_id = Some("ghost-pane".to_string());
-        state.research_nodes.insert("root-a".to_string(), root_a);
+        state.research_nodes.insert(
+            "root-a".to_string(),
+            persisted_node("root-a", "tree-a", None),
+        );
         state.research_nodes.insert(
             "child-a".to_string(),
             persisted_node("child-a", "tree-a", Some("root-a")),
@@ -10901,15 +10166,6 @@ mod tests {
             .collect::<Vec<_>>();
         kept.sort_unstable();
         assert_eq!(kept, ["child-a", "root-a"]);
-        // The dangling pane binding is cleared, so the tree is removable
-        // instead of being pinned by an incorrectly active run.
-        assert!(
-            restored
-                .research_node("root-a")
-                .unwrap()
-                .pane_id()
-                .is_none()
-        );
         assert!(restored.research_tree("tree-b").is_err());
         assert!(restored.research_node("node-b").is_err());
         restored.remove_research_tree("tree-a").unwrap();
@@ -10963,15 +10219,13 @@ mod tests {
                     transcript_path: None,
                     prompt_native_id: None,
                     agent_id: Some("sdk-agent".to_string()),
-                    pane_id: None,
                     runtime: ResearchRuntime::Sdk,
                     thread_id: None,
                 },
                 recap: None,
             }),
         };
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         let persisted = PersistedState {
             groups: vec![sample_group()],
             group_order: vec!["group-1".to_string()],
@@ -11060,7 +10314,6 @@ mod tests {
                     transcript_path: None,
                     prompt_native_id: None,
                     agent_id: None,
-                    pane_id: None,
                     runtime: crate::research::ResearchRuntime::Pane,
                     thread_id: None,
                 },
@@ -11149,7 +10402,6 @@ mod tests {
                     transcript_path: None,
                     prompt_native_id: None,
                     agent_id: None,
-                    pane_id: None,
                     runtime: crate::research::ResearchRuntime::Pane,
                     thread_id: None,
                 },
@@ -11247,7 +10499,6 @@ mod tests {
                             transcript_path: None,
                             prompt_native_id: None,
                             agent_id: None,
-                            pane_id: None,
                             runtime: crate::research::ResearchRuntime::Pane,
                             thread_id: None,
                         },
@@ -11475,7 +10726,6 @@ mod tests {
         assert_eq!(node.prompt(), prompt);
         assert!(node.model().is_none());
         assert!(node.agent_id().is_none());
-        assert!(node.pane_id().is_none());
         assert_eq!(detail.tree.title, "Imported findings");
         let serialized = serde_json::to_value(node).unwrap();
         assert!(serialized.get("model").is_none());
@@ -12168,10 +11418,11 @@ mod tests {
     fn rewrite_with_version_nine_keys(raw: &mut serde_json::Value) {
         raw["version"] = serde_json::json!(9);
         let state = raw.as_object_mut().unwrap();
-        let composer_text = state
-            .remove("agentComposerText")
-            .unwrap_or_else(|| serde_json::json!({}));
-        state.insert("drafts".into(), composer_text);
+        // Version 9 kept terminal agents' composer text under `drafts`.
+        state.insert(
+            "drafts".into(),
+            serde_json::json!({"agent-1": "half-written thought"}),
+        );
         if let Some(folders) = state
             .get_mut("researchFolders")
             .and_then(serde_json::Value::as_object_mut)
@@ -12211,12 +11462,12 @@ mod tests {
 
     /// Version 9 stored a star as `promotedAt`, the agent composer text as
     /// `drafts`, and an unused `starred` list in the folder state. Current
-    /// builds keep the version-9 bytes as state.v9.bak, load the composer text
-    /// under its new key, drop the stars (stars were removed), and save with
-    /// only the current keys. A second load changes nothing and writes no
-    /// further backup.
+    /// builds keep the version-9 bytes as state.v9.bak, drop the stars (stars
+    /// were removed) and the composer text (it belonged to terminal agents and
+    /// is not read), and save with only the current keys. A second load
+    /// changes nothing and writes no further backup.
     #[test]
-    fn version_nine_state_renames_composer_text_and_drops_stars() {
+    fn version_nine_state_drops_stars_and_composer_text() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
         let follow_ups = research_nodes_by_id(&state)
@@ -12225,10 +11476,6 @@ mod tests {
             .map(|node| node.id)
             .collect::<Vec<_>>();
         assert_eq!(follow_ups.len(), 2);
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .set_agent_draft("agent-1", "half-written thought".to_string())
-            .unwrap();
         let mut folders = state.research_folders().unwrap();
         folders.folders.push(research::ResearchFolder {
             id: "rf-1".to_string(),
@@ -12260,10 +11507,6 @@ mod tests {
         );
         assert_eq!(backup_names(&workspace), vec!["state.v9.bak".to_string()]);
         assert_eq!(research_nodes_by_id(&restored), original);
-        assert_eq!(
-            restored.agent_draft("agent-1").unwrap().as_deref(),
-            Some("half-written thought")
-        );
         restored.finalize_persistence_for_exit();
         drop(restored);
 
@@ -12273,10 +11516,7 @@ mod tests {
         let text = String::from_utf8(saved.clone()).unwrap();
         assert!(!text.contains("starredAt") && !text.contains("promotedAt"));
         assert!(raw.get("drafts").is_none());
-        assert_eq!(
-            raw["agentComposerText"],
-            serde_json::json!({"agent-1": "half-written thought"})
-        );
+        assert!(raw.get("agentComposerText").is_none());
         assert!(raw["researchFolders"].get("starred").is_none());
         assert_eq!(raw["researchFolders"]["folders"][0]["id"], "rf-1");
 
@@ -12294,53 +11534,41 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// Agent composer text without research nodes is still written at
-    /// version 10: builds that accept versions 2 to 4 read only `drafts` and
-    /// would drop it. A version-4 source holding composer text is kept as
-    /// state.v6.bak first.
+    /// Agent composer text in a state without research nodes is dropped on
+    /// load. Nothing the next save writes is unreadable to the builds that
+    /// accept versions 2 to 4, so the state stays at version 4 and no backup
+    /// is made.
     #[test]
-    fn composer_text_alone_raises_the_state_to_version_ten() {
+    fn composer_text_alone_is_dropped_and_keeps_the_state_at_version_four() {
         let workspace = temp_workspace();
         let path = persistence::state_path(&workspace);
-        let version = || {
-            let raw: serde_json::Value =
-                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            raw["version"].clone()
-        };
         let state = AppState::new(test_config(workspace.clone()));
         state.restore_session();
-        state.insert_agent(sample_agent("agent-1")).unwrap();
         state.finalize_persistence_for_exit();
         drop(state);
-        assert_eq!(version(), persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES);
 
         let mut raw: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert!(raw.get("agentComposerText").is_none());
+        assert_eq!(
+            raw["version"],
+            persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
+        );
         raw["drafts"] = serde_json::json!({"agent-1": "unsent"});
+        raw["agentComposerText"] = serde_json::json!({"agent-2": "unsent"});
         std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
-        let version_four_bytes = std::fs::read(&path).unwrap();
 
         let restored = AppState::new(test_config(workspace.clone()));
         restored.restore_session();
-        assert_eq!(
-            std::fs::read(path.with_file_name("state.v6.bak")).unwrap(),
-            version_four_bytes
-        );
-        assert_eq!(
-            restored.agent_draft("agent-1").unwrap().as_deref(),
-            Some("unsent")
-        );
-        restored.finalize_persistence_for_exit();
-        assert_eq!(version(), persistence::STATE_VERSION);
-        // Clearing the text drops the state back to version 4.
-        restored.set_agent_draft("agent-1", String::new()).unwrap();
         restored.finalize_persistence_for_exit();
         drop(restored);
-        assert_eq!(version(), persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES);
         let raw: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            raw["version"],
+            persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
+        );
         assert!(raw.get("agentComposerText").is_none() && raw.get("drafts").is_none());
+        assert!(backup_names(&workspace).is_empty());
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -13761,41 +12989,6 @@ mod tests {
     }
 
     #[test]
-    fn queued_turns_persisted_without_ids_are_migrated_on_load() {
-        // A turn stored by an older build (no `id` field) still loads, gaining a
-        // fresh id, so mutations can identify it afterward.
-        let turn: QueuedTurn =
-            serde_json::from_str(r#"{"text":"legacy","pauseAfter":true}"#).unwrap();
-        assert_eq!(turn.text, "legacy");
-        assert!(turn.pause_after);
-        assert!(turn.id.starts_with("qturn-"));
-        // The legacy bare-string form is migrated too.
-        let bare: QueuedTurn = serde_json::from_str(r#""just text""#).unwrap();
-        assert_eq!(bare.text, "just text");
-        assert!(bare.id.starts_with("qturn-"));
-    }
-
-    #[test]
-    fn pane_split_axis_omits_vertical_and_round_trips_horizontal() {
-        let vertical: PaneSplitInfo =
-            serde_json::from_str(r#"{"id":"split-1","paneIds":["a","b"],"sizes":{}}"#).unwrap();
-        assert_eq!(vertical.axis, PaneSplitAxis::Vertical);
-        let vertical_json = serde_json::to_value(&vertical).unwrap();
-        assert!(vertical_json.get("axis").is_none());
-
-        let horizontal: PaneSplitInfo = serde_json::from_str(
-            r#"{"id":"split-1","paneIds":["a","b"],"sizes":{},"axis":"horizontal"}"#,
-        )
-        .unwrap();
-        assert_eq!(horizontal.axis, PaneSplitAxis::Horizontal);
-        let horizontal_json = serde_json::to_value(&horizontal).unwrap();
-        assert_eq!(
-            horizontal_json.get("axis").and_then(|value| value.as_str()),
-            Some("horizontal")
-        );
-    }
-
-    #[test]
     fn confirmed_exit_persists_active_research_as_cancelled() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
@@ -13810,8 +13003,7 @@ mod tests {
                 group_id: "group-1".to_string(),
             })
             .unwrap();
-        let mut agent = sample_agent("sdk-agent");
-        agent.pane_id = None;
+        let agent = sample_agent("sdk-agent");
         state.insert_agent(agent.clone()).unwrap();
         state
             .bind_research_node_harness(&detail.tree.root_node_id, &agent)
@@ -13837,41 +13029,5 @@ mod tests {
             AgentStatus::Idle
         );
         std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn agent_draft_round_trips_and_clears_through_persistence() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // First process: stash a draft for one agent. The agent must exist so the draft
-        // survives restore's orphaned-draft pruning (a real draft always has a live
-        // agent — the frontend only drafts for agents present in its own agent list).
-        {
-            let state = AppState::new(config.clone());
-            state.restore_session();
-            state.insert_agent(sample_agent("agent-1")).unwrap();
-            state
-                .set_agent_draft("agent-1", "half-written thought".to_string())
-                .unwrap();
-        }
-
-        // Second process: the draft reloads from disk and a trimmed-empty value
-        // clears it (so recovery never restores stray whitespace).
-        {
-            let state = AppState::new(config.clone());
-            state.restore_session();
-            assert_eq!(
-                state.agent_draft("agent-1").unwrap().as_deref(),
-                Some("half-written thought")
-            );
-            state.set_agent_draft("agent-1", "   ".to_string()).unwrap();
-            assert_eq!(state.agent_draft("agent-1").unwrap(), None);
-        }
-
-        // Third process: the clear was persisted too.
-        let state = AppState::new(config);
-        state.restore_session();
-        assert_eq!(state.agent_draft("agent-1").unwrap(), None);
     }
 }

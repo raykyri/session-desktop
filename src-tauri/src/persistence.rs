@@ -1,5 +1,4 @@
 use crate::research::{ResearchDraft, ResearchFolderState, ResearchNode, ResearchTree};
-use crate::state::{ArtifactInfo, GlobalDraft, PaneInfo, PaneSplitInfo, QueuedTurn};
 use crate::thread_graph::ThreadRecord;
 use crate::user_notifications::NotificationLog;
 use crate::workspace::{AgentInfo, GroupInfo};
@@ -19,16 +18,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// never share (and then race to rename) the same temp path.
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 /// Preferences are one small document updated by several independent UI surfaces
-/// (launcher selection, login-shell toggle, OpenRouter key, global shortcut). Keep
-/// each read-modify-write transaction under one lock so concurrent setters cannot
+/// (research settings, GitHub sign-in, global shortcut). Keep each
+/// read-modify-write transaction under one lock so concurrent setters cannot
 /// both read the same snapshot and then overwrite one another's field.
 static PREFERENCES_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-/// Last-loaded preferences per path, written through on every successful save.
-/// Preference reads sit on hot paths — every shell spawn consults
-/// `use_login_shell` — and each previously re-read and re-parsed the file;
-/// serving repeats from memory keeps spawn paths free of disk I/O. Writes from
-/// outside this process are only picked up at the next in-process save, which
-/// matches the app's single-writer assumption for this file.
+/// Last-loaded preferences per path, written through on every successful save,
+/// so repeated reads (every research launch reads the launch instruction) do
+/// not re-read and re-parse the file. Writes from outside this process are only
+/// picked up at the next in-process save, which matches the app's
+/// single-writer assumption for this file.
 static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -56,8 +54,9 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// `promotedAt` becomes `starredAt`, and the per-agent composer text
 /// `drafts` becomes `agentComposerText`. Builds that accept up to version 9
 /// ignore both new keys and would drop stars and composer text on their next
-/// save, so they must refuse the file. Loads rename the old keys
-/// (`migrate_v9_keys` and `research::migrate_promoted_at_to_starred_at`).
+/// save, so they must refuse the file. Loads rename `promotedAt`
+/// (`research::migrate_promoted_at_to_starred_at`); composer text is no longer
+/// read under either key.
 ///
 /// Version 9 stores research nodes as an envelope with a tagged body (see
 /// `research::ResearchNode`); builds that accept up to version 8 read flat
@@ -70,9 +69,10 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// kept reading states without those features; with every node in the body
 /// shape, a state holds either no research nodes or version-9 nodes.
 pub const STATE_VERSION: u32 = 12;
-/// Written when the state contains no research nodes and no agent composer
-/// text (the data whose keys changed in versions 9 and 10), so it stays
-/// loadable by builds that accept versions 2 to 4.
+/// Written when the state contains no research nodes (the data whose shape
+/// changed in versions 9 to 12), so it stays loadable by builds that accept
+/// versions 2 to 4. Version 10 also renamed the terminal agents' composer text,
+/// which this build neither reads nor writes.
 pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
 const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
@@ -110,9 +110,14 @@ const MIGRATION_BACKUP_FILES: [&str; 7] = [
 ];
 pub(crate) const STATE_DIR: &str = ".session";
 
-/// Snapshot of everything a Session restart needs to recreate panes, agents,
-/// groups and queued turns. Live PTY handles are intentionally absent: a
-/// restarted process cannot adopt the old PTY, so only metadata is persisted.
+/// Snapshot of everything a Session restart needs: groups, agents, thread
+/// routing, research state and the notification log.
+///
+/// Builds that hosted terminal panes also wrote `panes`, `paneSplits`,
+/// `activeTabId`, `queues`, `inflight`, `agentComposerText` (`drafts` before
+/// version 10), `globalDrafts` and `artifacts`. Those keys are not read, and
+/// the next save omits them. Every one was optional in the builds that wrote
+/// it, so they still load a file without them at the same version.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedState {
@@ -120,43 +125,11 @@ pub struct PersistedState {
     #[serde(default)]
     pub next_id: u64,
     #[serde(default)]
-    pub panes: Vec<PaneInfo>,
-    #[serde(default)]
     pub groups: Vec<GroupInfo>,
     #[serde(default)]
     pub group_order: Vec<String>,
     #[serde(default)]
     pub agents: Vec<AgentInfo>,
-    #[serde(default)]
-    pub queues: HashMap<String, Vec<QueuedTurn>>,
-    /// Artifact-tray entries: files/loopback URLs opened from agent panes via
-    /// `session open`, oldest first. Entries outlive their pane (the tray is
-    /// workspace-scoped) and are pruned when their group is deleted.
-    #[serde(default)]
-    pub artifacts: Vec<ArtifactInfo>,
-    /// Unsent text in each terminal agent's composer, by agent id. Persisted so
-    /// an in-progress message survives a restart, recovered alongside queues
-    /// and transcripts. Stored as `drafts` before version 10. Omitted when
-    /// empty; a state that holds any is written at the current version (see
-    /// `STATE_VERSION_WITHOUT_RESEARCH_NODES`).
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub agent_composer_text: HashMap<String, String>,
-    /// Application-global prompt drafts (the home Drafts rail), oldest first.
-    #[serde(default)]
-    pub global_drafts: Vec<GlobalDraft>,
-    /// Per-agent in-flight turn: a queued turn claimed for delivery but not confirmed
-    /// on the PTY before shutdown. Recovered by re-queueing at the front so a crash
-    /// mid-delivery re-sends rather than loses it. Absent in older state files.
-    #[serde(default)]
-    pub inflight: HashMap<String, QueuedTurn>,
-    /// Vertical terminal split groups. Each group glues adjacent pane tabs into a
-    /// shared top-to-bottom terminal viewport; older state files simply have none.
-    #[serde(default)]
-    pub pane_splits: Vec<PaneSplitInfo>,
-    /// The selected tab in the frontend. This may be a pane id or the Home tab
-    /// sentinel; the frontend validates it against the recovered panes on boot.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub active_tab_id: Option<String>,
     /// Per-thread routing and storage metadata. The thread snapshot itself lives in
     /// `<workspaceRoot>/.session/threads/<thread-id>.json`; this tells Session where to find
     /// it and what branch a default view should focus.
@@ -164,7 +137,7 @@ pub struct PersistedState {
     pub threads: HashMap<String, ThreadRecord>,
     /// Focused branch per Session transcript thread. The full graph lives in the global
     /// thread store; state.json keeps only the routing metadata needed to recover
-    /// pane/agent views.
+    /// agent views.
     #[serde(default)]
     pub thread_focus: HashMap<String, String>,
     /// Research trees by id: a tree's title, root node and workspace. The nodes
@@ -198,17 +171,9 @@ impl Default for PersistedState {
         Self {
             version: STATE_VERSION,
             next_id: 0,
-            panes: Vec::new(),
             groups: Vec::new(),
             group_order: Vec::new(),
             agents: Vec::new(),
-            queues: HashMap::new(),
-            artifacts: Vec::new(),
-            agent_composer_text: HashMap::new(),
-            global_drafts: Vec::new(),
-            inflight: HashMap::new(),
-            pane_splits: Vec::new(),
-            active_tab_id: None,
             threads: HashMap::new(),
             thread_focus: HashMap::new(),
             research_trees: HashMap::new(),
@@ -225,41 +190,18 @@ pub fn state_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(STATE_DIR).join(STATE_FILE)
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum WorktreeLocation {
-    #[default]
-    Global,
-    LocalSession,
-    LocalClaude,
-}
-
+/// UI-owned preferences in `.session/preferences.json`.
+///
+/// Builds with terminal panes also stored `remotes`, `useLoginShell`,
+/// `worktreeLocation`, `globalLauncherHotkey` and `openRouterKey`. Those keys
+/// are ignored on read and dropped by the next preference update.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppPreferences {
-    /// Whether new and recovered shells run as login shells (sourcing the user's
-    /// login profile files in addition to the interactive rc). Absent means the
-    /// default, on — matching how terminal emulators launch shells.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub use_login_shell: Option<bool>,
-    /// Root used for newly-created isolated worktrees. Absent preserves the
-    /// historical global session workspace location.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worktree_location: Option<WorktreeLocation>,
     /// Global shortcut used to show or hide the Session app. Absent means no
     /// shortcut is registered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_hide_shortcut: Option<String>,
-    /// Fixed-choice global shortcut that opens the task launcher. Absent means
-    /// the global hotkey is disabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub global_launcher_hotkey: Option<String>,
-    /// OpenRouter API key used for tab-title generation. Kept here — in the
-    /// owner-only (0600) preferences file — rather than in webview localStorage,
-    /// so the secret isn't sitting in a store any injected script could read at
-    /// rest. Absent means no key is configured.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub open_router_key: Option<String>,
     /// Custom instruction text sent with every research launch (fresh runs,
     /// run follow-ups, and document/conversation follow-ups). The backend owns
     /// this preference because follow-up launches assemble their sent prompt
@@ -271,9 +213,10 @@ pub struct AppPreferences {
     /// and research launches tell agents about them. Absent means on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research_inline_widgets: Option<bool>,
-    /// GitHub OAuth access token from the device-flow sign-in. Kept in this
-    /// owner-only file for the same reason as `open_router_key`. Absent means
-    /// the user is signed out.
+    /// GitHub OAuth access token from the device-flow sign-in. Kept here — in
+    /// the owner-only (0600) preferences file — rather than in webview
+    /// localStorage, so the secret is not in a store any injected script could
+    /// read at rest. Absent means the user is signed out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_token: Option<String>,
     /// Profile resolved from `/user` at sign-in, so the sidebar can render the
@@ -285,11 +228,7 @@ pub struct AppPreferences {
 impl Default for AppPreferences {
     fn default() -> Self {
         Self {
-            use_login_shell: None,
-            worktree_location: None,
             show_hide_shortcut: None,
-            global_launcher_hotkey: None,
-            open_router_key: None,
             research_launch_instruction: None,
             research_inline_widgets: None,
             github_token: None,
@@ -657,9 +596,8 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     // shape and no node is dropped for having the old one. The migration is
     // shape-based and idempotent, so it runs on files of every version:
     // version-8 files hold either flat posts or the body shape. Version 10
-    // renames `promotedAt` (a node migration step) and `drafts`.
+    // renames `promotedAt` (a node migration step).
     let research_nodes_migrated = migrate_research_nodes(&mut value);
-    migrate_v9_keys(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -739,22 +677,6 @@ fn migrate_v2_to_v3(value: &mut Value) {
     map.insert("version".to_string(), Value::from(STATE_VERSION));
 }
 
-/// Pure JSON-shape migration of the version-9 top-level key `drafts` to
-/// `agentComposerText`. A file that already has the new key keeps it, and the
-/// old key is dropped either way, so the migration is idempotent. The nodes'
-/// `promotedAt` is renamed with the other node migrations.
-fn migrate_v9_keys(value: &mut Value) {
-    let Value::Object(map) = value else {
-        return;
-    };
-    let Some(drafts) = map.remove("drafts") else {
-        return;
-    };
-    if map.get("agentComposerText").is_none_or(Value::is_null) {
-        map.insert("agentComposerText".to_string(), drafts);
-    }
-}
-
 /// Pure JSON-shape migration of the research nodes to the current shape
 /// (see `research::migrate_research_node_values`). Returns whether any node
 /// changed.
@@ -785,16 +707,11 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
     if let Some(next_id) = map.get("nextId").and_then(Value::as_u64) {
         state.next_id = next_id;
     }
-    state.panes = take_vec(&mut map, "panes", "pane", &mut dropped);
+    // Keys of the terminal-pane builds (see `PersistedState`) are left
+    // unread, so a malformed entry in one cannot drop anything.
     state.groups = take_vec(&mut map, "groups", "group", &mut dropped);
     state.agents = take_vec(&mut map, "agents", "agent", &mut dropped);
-    state.artifacts = take_vec(&mut map, "artifacts", "artifact", &mut dropped);
-    state.pane_splits = take_vec(&mut map, "paneSplits", "pane split", &mut dropped);
     state.group_order = take_string_vec(&mut map, "groupOrder");
-    state.queues = take_map_of_vecs(&mut map, "queues", "queued turn", &mut dropped);
-    state.inflight = take_typed_map(&mut map, "inflight", "in-flight turn", &mut dropped);
-    state.agent_composer_text = take_string_map(&mut map, "agentComposerText");
-    state.global_drafts = take_vec(&mut map, "globalDrafts", "global draft", &mut dropped);
     state.threads = take_typed_map(&mut map, "threads", "thread", &mut dropped);
     state.thread_focus = take_string_map(&mut map, "threadFocus");
     state.research_trees = take_typed_map(&mut map, "researchTrees", "research tree", &mut dropped);
@@ -828,10 +745,6 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
         },
         None => NotificationLog::default(),
     };
-    state.active_tab_id = map
-        .get("activeTabId")
-        .and_then(Value::as_str)
-        .map(str::to_string);
     (state, dropped)
 }
 
@@ -861,40 +774,6 @@ fn take_vec<T: DeserializeOwned>(
         }
         None => Vec::new(),
     }
-}
-
-/// Removes a `{ key: [values] }` field, deserializing each value list leniently
-/// and dropping any bad elements. A key whose value list ends up empty is
-/// omitted, matching how `restore_session` treats empty queues.
-fn take_map_of_vecs<T: DeserializeOwned>(
-    map: &mut serde_json::Map<String, Value>,
-    key: &str,
-    label: &str,
-    dropped: &mut Vec<String>,
-) -> HashMap<String, Vec<T>> {
-    let Some(Value::Object(entries)) = map.remove(key) else {
-        return HashMap::new();
-    };
-    let mut out = HashMap::new();
-    for (entry_key, value) in entries {
-        let Value::Array(items) = value else {
-            dropped.push(format!(
-                "{label}s for '{entry_key}' were not an array; ignored"
-            ));
-            continue;
-        };
-        let mut parsed_items = Vec::with_capacity(items.len());
-        for (index, item) in items.into_iter().enumerate() {
-            match serde_json::from_value::<T>(item) {
-                Ok(parsed) => parsed_items.push(parsed),
-                Err(err) => dropped.push(format!("{label} '{entry_key}' #{index}: {err}")),
-            }
-        }
-        if !parsed_items.is_empty() {
-            out.insert(entry_key, parsed_items);
-        }
-    }
-    out
 }
 
 /// Removes a `{ key: value }` field, deserializing each value on its own and dropping
@@ -1173,7 +1052,7 @@ pub fn save(workspace_root: &Path, state: &PersistedState) -> Result<(), String>
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("failed to create state dir {}: {err}", parent.display()))?;
-        // Owner-only state dir (drafts, queued-turn prompts), consistent with the
+        // Owner-only state dir (research drafts and prompts), consistent with the
         // startup hardening in config.rs. Best-effort on an existing directory.
         let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
     }
@@ -1256,8 +1135,8 @@ pub(crate) fn process_is_alive(pid: u32) -> bool {
 pub(crate) fn write_synced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     // Owner-only: this temp is renamed over state.json / preferences.json, which hold
-    // composer drafts and queued-turn prompt text, so keep it 0600 rather than the umask
-    // default — matching the socket / scrollback hardening.
+    // research prompts and the GitHub token, so keep it 0600 rather than the umask
+    // default — matching the socket hardening.
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -1272,7 +1151,6 @@ pub(crate) fn write_synced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{PaneKind, PaneStatus};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1360,38 +1238,6 @@ mod tests {
     }
 
     #[test]
-    fn global_drafts_round_trip() {
-        use crate::state::{GlobalDraft, GlobalDraftConsumed};
-        let root = temp_root();
-        let drafts = vec![
-            GlobalDraft {
-                id: "draft-1".to_string(),
-                text: "open draft".to_string(),
-                created_at: 100,
-                consumed: None,
-            },
-            GlobalDraft {
-                id: "draft-2".to_string(),
-                text: "assigned draft".to_string(),
-                created_at: 200,
-                consumed: Some(GlobalDraftConsumed {
-                    agent_id: "agent-1".to_string(),
-                    at: 300,
-                }),
-            },
-        ];
-        let state = PersistedState {
-            global_drafts: drafts.clone(),
-            ..Default::default()
-        };
-        save(&root, &state).unwrap();
-        let outcome = load_with_diagnostics(&root);
-        assert!(outcome.warning.is_none());
-        assert_eq!(outcome.state.global_drafts, drafts);
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
     fn preferences_round_trip_github_account() {
         let root = temp_root();
         assert_eq!(load_preferences(&root).unwrap().github_account, None);
@@ -1420,32 +1266,18 @@ mod tests {
     }
 
     #[test]
-    fn preferences_round_trip_open_router_key() {
+    fn preferences_file_holding_the_github_token_is_owner_only() {
         let root = temp_root();
-        // Absent in a fresh preferences file (no key configured).
-        assert_eq!(load_preferences(&root).unwrap().open_router_key, None);
-
         save_preferences(
             &root,
             &AppPreferences {
-                open_router_key: Some("sk-or-secret".to_string()),
+                github_token: Some("gho_secret".to_string()),
                 ..Default::default()
             },
         )
         .unwrap();
 
-        assert_eq!(
-            load_preferences(&root).unwrap().open_router_key,
-            Some("sk-or-secret".to_string())
-        );
-        assert_eq!(
-            read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .open_router_key,
-            Some("sk-or-secret".to_string())
-        );
-
-        // The preferences file that holds the key is written owner-only (0600), so the
+        // The preferences file that holds the token is written owner-only (0600), so the
         // secret at rest isn't world/group readable.
         use std::os::unix::fs::PermissionsExt;
         let mode = fs::metadata(preferences_path(&root))
@@ -1461,54 +1293,54 @@ mod tests {
     }
 
     #[test]
-    fn preferences_round_trip_use_login_shell() {
+    fn preferences_from_terminal_pane_builds_load_and_drop_their_removed_keys() {
         let root = temp_root();
-        // Absent in a fresh preferences file; the spawn path treats that as the
-        // default (on).
-        assert_eq!(load_preferences(&root).unwrap().use_login_shell, None);
-
-        save_preferences(
-            &root,
-            &AppPreferences {
-                use_login_shell: Some(false),
-                ..Default::default()
-            },
+        let path = preferences_path(&root);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            &path,
+            r#"{
+              "remotes": { "devbox": { "host": "user@devbox" } },
+              "useLoginShell": false,
+              "worktreeLocation": "localClaude",
+              "showHideShortcut": "CommandOrControl+Shift+Space",
+              "globalLauncherHotkey": "CommandOrControl+Space",
+              "openRouterKey": "sk-or-secret",
+              "researchLaunchInstruction": "Be concise.",
+              "githubToken": "gho_secret"
+            }"#,
         )
         .unwrap();
 
+        let loaded = read_preferences_from_disk(&path).unwrap();
         assert_eq!(
-            load_preferences(&root).unwrap().use_login_shell,
-            Some(false)
+            loaded.show_hide_shortcut.as_deref(),
+            Some("CommandOrControl+Shift+Space")
         );
         assert_eq!(
-            read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .use_login_shell,
-            Some(false)
+            loaded.research_launch_instruction.as_deref(),
+            Some("Be concise.")
         );
-        fs::remove_dir_all(root).unwrap();
-    }
+        assert_eq!(loaded.github_token.as_deref(), Some("gho_secret"));
 
-    #[test]
-    fn preferences_round_trip_worktree_location() {
-        let root = temp_root();
-        assert_eq!(load_preferences(&root).unwrap().worktree_location, None);
-
-        save_preferences(
-            &root,
-            &AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalClaude),
-                ..Default::default()
-            },
-        )
+        update_preferences(&root, |preferences| {
+            preferences.research_inline_widgets = Some(false);
+        })
         .unwrap();
-
-        assert_eq!(
-            read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .worktree_location,
-            Some(WorktreeLocation::LocalClaude)
-        );
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for key in [
+            "remotes",
+            "useLoginShell",
+            "worktreeLocation",
+            "globalLauncherHotkey",
+            "openRouterKey",
+        ] {
+            assert!(saved.get(key).is_none(), "{key} was written back");
+        }
+        assert_eq!(saved["showHideShortcut"], "CommandOrControl+Shift+Space");
+        assert_eq!(saved["researchLaunchInstruction"], "Be concise.");
+        assert_eq!(saved["githubToken"], "gho_secret");
+        assert_eq!(saved["researchInlineWidgets"], false);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1549,7 +1381,7 @@ mod tests {
         let key = std::thread::spawn(move || {
             for _ in 0..32 {
                 update_preferences(&key_root, |preferences| {
-                    preferences.open_router_key = Some("sk-or-secret".to_string());
+                    preferences.github_token = Some("gho_secret".to_string());
                 })
                 .unwrap();
             }
@@ -1562,7 +1394,7 @@ mod tests {
             preferences.research_launch_instruction.as_deref(),
             Some("Be concise.")
         );
-        assert_eq!(preferences.open_router_key.as_deref(), Some("sk-or-secret"));
+        assert_eq!(preferences.github_token.as_deref(), Some("gho_secret"));
         fs::remove_dir_all(root.as_ref()).unwrap();
     }
 
@@ -1574,7 +1406,7 @@ mod tests {
         fs::write(&path, b"{not valid json").unwrap();
 
         let error = update_preferences(&root, |preferences| {
-            preferences.use_login_shell = Some(false);
+            preferences.research_inline_widgets = Some(false);
         })
         .unwrap_err();
 
@@ -1583,25 +1415,21 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn sample_pane() -> PaneInfo {
-        PaneInfo {
-            id: "pane-1".to_string(),
-            title: "Shell".to_string(),
-            last_osc_title: None,
-            kind: PaneKind::Shell,
-            agent_id: None,
-            group_id: "group-1".to_string(),
-            cwd: "/tmp/work".to_string(),
-            active_workspace: None,
-            remote_session: None,
-            remote_connection: None,
-            cols: 120,
-            rows: 40,
-            status: PaneStatus::Running,
-            last_active_at: 0,
-            recovered: false,
-            ssh_target: None,
-            depth: 0,
+    fn sample_group() -> GroupInfo {
+        GroupInfo {
+            id: "group-1".to_string(),
+            name: "work".to_string(),
+            name_override: None,
+            dir: "/tmp/work".to_string(),
+            managed_dir: "/tmp/session/group-1".to_string(),
+            base_repo: None,
+            base_ref: None,
+            parent_id: None,
+            created_at: 1,
+            collapsed: false,
+            scope: crate::workspace::WorkspaceScope::Research,
+            imported_research_archive_id: None,
+            agents: Vec::new(),
         }
     }
 
@@ -1610,9 +1438,8 @@ mod tests {
         let root = temp_root();
         let state = load_with_diagnostics(&root).state;
         assert_eq!(state.version, STATE_VERSION);
-        assert!(state.panes.is_empty());
+        assert!(state.groups.is_empty());
         assert!(state.agents.is_empty());
-        assert!(state.queues.is_empty());
     }
 
     #[test]
@@ -1677,24 +1504,6 @@ mod tests {
     }
 
     #[test]
-    fn version_nine_drafts_become_agent_composer_text_once() {
-        let mut value = serde_json::json!({"version": 9, "drafts": {"agent-1": "text"}});
-        migrate_v9_keys(&mut value);
-        assert_eq!(
-            value,
-            serde_json::json!({"version": 9, "agentComposerText": {"agent-1": "text"}})
-        );
-        let migrated = value.clone();
-        migrate_v9_keys(&mut value);
-        assert_eq!(value, migrated);
-        // The new key wins when a file has both.
-        let mut both =
-            serde_json::json!({"drafts": {"a": "old"}, "agentComposerText": {"a": "new"}});
-        migrate_v9_keys(&mut both);
-        assert_eq!(both, serde_json::json!({"agentComposerText": {"a": "new"}}));
-    }
-
-    #[test]
     fn version_two_migration_backup_is_never_overwritten() {
         let root = temp_root();
         let path = state_path(&root);
@@ -1727,7 +1536,7 @@ mod tests {
     fn preflight_bytes_feed_the_loader_without_a_second_read() {
         let root = temp_root();
         let mut persisted = PersistedState::default();
-        persisted.panes.push(sample_pane());
+        persisted.groups.push(sample_group());
         save(&root, &persisted).unwrap();
 
         let bytes = preflight_state(&root)
@@ -1739,8 +1548,8 @@ mod tests {
 
         let outcome = load_with_diagnostics_from(&root, Some(bytes));
         assert!(outcome.warning.is_none());
-        assert_eq!(outcome.state.panes.len(), 1);
-        assert_eq!(outcome.state.panes[0].id, sample_pane().id);
+        assert_eq!(outcome.state.groups.len(), 1);
+        assert_eq!(outcome.state.groups[0].id, sample_group().id);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1754,7 +1563,7 @@ mod tests {
 
         let outcome = load_with_diagnostics_from(&root, Some(bad_state.to_vec()));
         assert_eq!(outcome.state.version, STATE_VERSION);
-        assert!(outcome.state.panes.is_empty());
+        assert!(outcome.state.groups.is_empty());
         let warning = outcome.warning.expect("non-UTF-8 state should warn");
         assert!(warning.message.contains("not valid UTF-8"));
         let backup_path = warning
@@ -1780,7 +1589,7 @@ mod tests {
         assert!(backup.exists());
         let outcome = load_with_diagnostics_from(&root, None);
         assert!(outcome.warning.is_none());
-        assert!(outcome.state.panes.is_empty());
+        assert!(outcome.state.groups.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1794,7 +1603,7 @@ mod tests {
 
         let outcome = load_with_diagnostics(&root);
         assert_eq!(outcome.state.version, STATE_VERSION);
-        assert!(outcome.state.panes.is_empty());
+        assert!(outcome.state.groups.is_empty());
         let warning = outcome.warning.expect("corrupt state should warn");
         assert!(warning.message.contains("invalid JSON"));
         let backup_path = warning
@@ -1813,7 +1622,7 @@ mod tests {
         fs::write(&path, bad_state).unwrap();
 
         let outcome = load_with_diagnostics(&root);
-        assert!(outcome.state.panes.is_empty());
+        assert!(outcome.state.groups.is_empty());
         let warning = outcome
             .warning
             .expect("unsupported state version should warn");
@@ -1828,32 +1637,32 @@ mod tests {
     #[test]
     fn load_drops_only_malformed_entries_and_keeps_the_rest() {
         let root = temp_root();
-        // Start from a real, schema-valid snapshot with one good pane so the
+        // Start from a real, schema-valid snapshot with one good group so the
         // surviving entry is produced by the actual serializer.
         let state = PersistedState {
             next_id: 5,
-            panes: vec![sample_pane()],
+            groups: vec![sample_group()],
             ..PersistedState::default()
         };
         save(&root, &state).unwrap();
 
-        // Splice a malformed pane (missing required fields) beside the good one.
+        // Splice a malformed group (missing required fields) beside the good one.
         let path = state_path(&root);
         let mut value: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        value["panes"]
+        value["groups"]
             .as_array_mut()
             .unwrap()
             .push(serde_json::json!({ "id": "broken" }));
         fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
 
         let outcome = load_with_diagnostics(&root);
-        // The good pane survives; only the malformed one is dropped, and other
+        // The good group survives; only the malformed one is dropped, and other
         // top-level fields still load.
-        assert_eq!(outcome.state.panes.len(), 1);
-        assert_eq!(outcome.state.panes[0].id, "pane-1");
+        assert_eq!(outcome.state.groups.len(), 1);
+        assert_eq!(outcome.state.groups[0].id, "group-1");
         assert_eq!(outcome.state.next_id, 5);
         let warning = outcome.warning.expect("dropped entries should warn");
-        assert!(warning.message.contains("pane #1"));
+        assert!(warning.message.contains("group #1"));
         // A partial recovery rewrites the file on the next save rather than
         // discarding it, so nothing is renamed aside.
         assert!(warning.backup_path.is_none());
@@ -1862,26 +1671,47 @@ mod tests {
     }
 
     #[test]
-    fn pane_metadata_survives_round_trip() {
+    fn keys_of_terminal_pane_builds_are_not_loaded_and_not_saved() {
         let root = temp_root();
-        let state = PersistedState {
+        let path = state_path(&root);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut value = serde_json::to_value(PersistedState {
             next_id: 17,
-            panes: vec![sample_pane()],
-            active_tab_id: Some("pane-1".to_string()),
+            groups: vec![sample_group()],
             ..PersistedState::default()
-        };
-        save(&root, &state).unwrap();
+        })
+        .unwrap();
+        // Entries as builds with terminal panes wrote them, including ones a
+        // removed reader would have rejected: none of them is read any more,
+        // so none of them can produce a dropped-entry warning.
+        let legacy = serde_json::json!({
+            "panes": [{ "id": "pane-1", "kind": "shell" }, { "id": "broken" }],
+            "paneSplits": [{ "id": "split-1", "paneIds": ["pane-1"] }],
+            "activeTabId": "pane-1",
+            "queues": { "agent-1": ["queued text", 3] },
+            "inflight": { "agent-1": { "id": "turn-1", "text": "in flight" } },
+            "agentComposerText": { "agent-1": "unsent" },
+            "drafts": { "agent-1": "unsent before version 10" },
+            "globalDrafts": [{ "id": "draft-1" }],
+            "artifacts": [{ "id": "artifact-1", "paneId": "pane-1" }]
+        });
+        for (key, entry) in legacy.as_object().unwrap() {
+            value[key] = entry.clone();
+        }
+        fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
 
-        let loaded = load_with_diagnostics(&root).state;
-        assert_eq!(loaded.next_id, 17);
-        assert_eq!(loaded.active_tab_id.as_deref(), Some("pane-1"));
-        assert_eq!(loaded.panes.len(), 1);
-        let pane = &loaded.panes[0];
-        assert_eq!(pane.id, "pane-1");
-        assert_eq!(pane.cwd, "/tmp/work");
-        assert_eq!(pane.cols, 120);
-        assert_eq!(pane.rows, 40);
-        assert!(matches!(pane.kind, PaneKind::Shell));
+        let outcome = load_with_diagnostics(&root);
+        assert!(outcome.warning.is_none(), "{:?}", outcome.warning);
+        assert_eq!(outcome.state.next_id, 17);
+        assert_eq!(outcome.state.groups.len(), 1);
+
+        save(&root, &outcome.state).unwrap();
+        let saved: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for key in legacy.as_object().unwrap().keys() {
+            assert!(saved.get(key).is_none(), "{key} was written back");
+        }
+        assert_eq!(saved["groups"][0]["id"], "group-1");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

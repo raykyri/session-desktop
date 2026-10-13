@@ -971,7 +971,6 @@ mod tests {
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
-    use crate::state::canonical_loopback_artifact_url;
 
     use std::io::Read;
     use std::path::PathBuf;
@@ -1079,35 +1078,6 @@ mod tests {
 
     fn request_line(token: &str, command: &str, payload: Value) -> String {
         json!({ "token": token, "command": command, "payload": payload }).to_string()
-    }
-
-    #[test]
-    fn browser_target_accepts_complete_loopback_urls_and_rejects_fragments() {
-        assert_eq!(
-            canonical_loopback_artifact_url("http://localhost:3000/app").as_deref(),
-            Some("http://localhost:3000/app")
-        );
-        assert!(canonical_loopback_artifact_url("http://127.0.0.1:8080").is_some());
-        assert!(canonical_loopback_artifact_url("http://[::1]:3000/").is_some());
-
-        for invalid in [
-            "http://example.com/",
-            "http://127.0.0.1.evil.com/",
-            "http://127.0.0.1@evil.com/",
-            "http://evil.com\\@127.0.0.1/",
-            "http://l",
-            "http://lo",
-            "http://localhos",
-            "http://127.0.0",
-            "http://localhost:5555|",
-            "http://localhost:5556|localhost:5555|",
-            "http://localhost:5557/\\",
-        ] {
-            assert!(
-                canonical_loopback_artifact_url(invalid).is_none(),
-                "accepted malformed loopback URL: {invalid}"
-            );
-        }
     }
 
     #[test]

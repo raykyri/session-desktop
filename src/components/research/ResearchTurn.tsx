@@ -265,7 +265,6 @@ function sameTurnNode(a: ResearchNode, b: ResearchNode) {
     nodeStatus(a) === nodeStatus(b) &&
     nodeRun(a)?.error === nodeRun(b)?.error &&
     nodeRun(a)?.errorKind === nodeRun(b)?.errorKind &&
-    nodeRun(a)?.holdsProcess === nodeRun(b)?.holdsProcess &&
     nodeRun(a)?.sessionReady === nodeRun(b)?.sessionReady &&
     a.parentNodeId === b.parentNodeId &&
     nodePrompt(a) === nodePrompt(b) &&
@@ -368,7 +367,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRootMouseLeave,
 }: ResearchAnswerPaneProps) {
   const active = nodeStatus(node) === "queued" || nodeStatus(node) === "starting" || nodeStatus(node) === "running";
-  const lingeringPane = nodeStatus(node) === "cancelled" && Boolean(nodeRun(node)?.holdsProcess);
   const run = nodeRun(node);
   // Stable, so React does not detach and reattach the root on every render.
   const nodeId = node.id;
@@ -531,7 +529,6 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
         </div>
         <div className="research-turn-actions">
           {retryButton("Run again")}
-          {lingeringPane ? stopButton("Retry stop") : null}
         </div>
       </>
     ) : null;

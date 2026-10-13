@@ -398,12 +398,10 @@ export function useResearchEvents(
             nodeStatus(cached) !== nodeStatus(event.node) ||
             nodeRun(cached)?.completedAt !== nodeRun(event.node)?.completedAt ||
             cached.parentNodeId !== event.node.parentNodeId;
-          const activityBindingChanged =
-            !cached || nodeRun(cached)?.holdsProcess !== nodeRun(event.node)?.holdsProcess;
           const previous = patchNode(
             event.node,
             event.timestamp,
-            lifecycleChanged || activityBindingChanged,
+            lifecycleChanged,
           );
           if (lifecycleChanged || activeResearchDetailRef.current === null) {
             scheduleResearchTreeRecovery(event.node.treeId);

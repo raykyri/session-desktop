@@ -71,7 +71,6 @@ function node(overrides: NodeFixture = {}): ResearchNode {
     model: null,
     groupId: "workspace-1",
     sessionReady: false,
-    holdsProcess: false,
     type: "exchange",
     status: "queued",
     error: null,
@@ -229,19 +228,15 @@ test("node collection helpers upsert in backend order and remove without no-op c
   assert.deepEqual(removeResearchNodes(replaced, new Set(["node-a"])), [later]);
 });
 
-test("activity helper retains terminal nodes while their pane is bound, then removes them", () => {
-  const active = node({ holdsProcess: true, status: "running" });
+test("activity helper keeps active nodes and removes them once they settle", () => {
+  const active = node({ status: "running" });
   assert.equal(researchNodeIsActivity(active), true);
   const activity = upsertResearchActivity([], active);
+  assert.equal(activity.length, 1);
 
-  const settledBound = withRun(active, { status: "complete", completedAt: 30 });
-  const settledActivity = upsertResearchActivity(activity, settledBound);
-  assert.equal(settledActivity.length, 1);
-  assert.equal(settledActivity[0], settledBound);
-
-  const detached = withRun(settledBound, { holdsProcess: false });
-  assert.equal(researchNodeIsActivity(detached), false);
-  assert.deepEqual(upsertResearchActivity(settledActivity, detached), []);
+  const settled = withRun(active, { status: "complete", completedAt: 30 });
+  assert.equal(researchNodeIsActivity(settled), false);
+  assert.deepEqual(upsertResearchActivity(activity, settled), []);
 });
 
 test("detail node/tree/remove helpers touch only their matching tree", () => {

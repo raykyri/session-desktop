@@ -1195,8 +1195,6 @@ mod tests {
             worktree_dir,
             branch: None,
             active_workspace: None,
-            pane_id: None,
-            orphaned_queue_pane_id: None,
             session_id: Some(format!("{id}-session")),
             transcript_path: Some(format!("/tmp/{id}-session.jsonl")),
             status: AgentStatus::Done,
@@ -1211,6 +1209,7 @@ mod tests {
             native_leaf_id: None,
             paused: false,
             created_at: 123,
+            pane_id: None,
         }
     }
 

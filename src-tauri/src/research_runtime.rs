@@ -2013,7 +2013,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         )
         .unwrap();
         assert_eq!(launched.runtime(), ResearchRuntime::Sdk);
-        assert!(launched.pane_id().is_none());
         let agent_id = launched
             .agent_id()
             .clone()
@@ -2037,7 +2036,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             finished.binding().unwrap().native_session_id.as_deref(),
             Some("sess-1")
         );
-        assert!(finished.pane_id().is_none());
         assert!(state.agent(&agent_id).unwrap().is_none());
         fs::remove_dir_all(root).ok();
     }
@@ -2517,7 +2515,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             finished.binding().unwrap().native_session_id.as_deref(),
             Some("codex-thread-1")
         );
-        assert!(finished.pane_id().is_none());
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
             .unwrap()
             .unwrap();
@@ -2565,7 +2562,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         let finished = state.research_node(&node.id).unwrap();
         assert_eq!(finished.status(), ResearchNodeStatus::Complete);
         assert!(finished.binding().unwrap().native_session_id.is_some());
-        assert!(finished.pane_id().is_none());
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
             .unwrap()
             .unwrap();

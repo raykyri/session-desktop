@@ -667,8 +667,6 @@ pub struct RunBinding {
     pub prompt_native_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pane_id: Option<String>,
     /// How the run executes; the default `Pane` is omitted.
     #[serde(default, skip_serializing_if = "ResearchRuntime::is_pane")]
     pub runtime: ResearchRuntime,
@@ -974,11 +972,6 @@ impl ResearchNode {
         self.exchange_mut().map(|exchange| &mut exchange.binding)
     }
 
-    /// The pane an exchange's run is bound to.
-    pub fn pane_id(&self) -> Option<&str> {
-        self.binding()?.pane_id.as_deref()
-    }
-
     /// The agent record an exchange's run is bound to.
     pub fn agent_id(&self) -> Option<&str> {
         self.binding()?.agent_id.as_deref()
@@ -1137,9 +1130,6 @@ pub struct RunView {
     pub error_kind: Option<RunErrorKind>,
     /// The native session id was recorded, so a follow-up can fork it.
     pub session_ready: bool,
-    /// A pane process is still bound to the run and has to be closed, even
-    /// after the run settled (a cancel whose kill failed).
-    pub holds_process: bool,
 }
 
 /// A run failure Session recognized, so the UI can offer a repair specific to
@@ -1217,7 +1207,6 @@ impl ResearchNode {
                         error_kind: record.error.as_deref().and_then(run_error_kind),
                         record,
                         session_ready: exchange.binding.native_session_id.is_some(),
-                        holds_process: exchange.binding.pane_id.is_some(),
                     }
                 },
                 recap: exchange.recap.clone(),
@@ -2441,11 +2430,7 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
                 node.id
             ));
         }
-        if node.status().is_active()
-            || node
-                .binding()
-                .is_some_and(|binding| binding.pane_id.is_some())
-        {
+        if node.status().is_active() {
             return Err(format!(
                 "research node {} still contains live runtime state",
                 node.id
@@ -4618,7 +4603,6 @@ mod tests {
                     transcript_path: None,
                     prompt_native_id: None,
                     agent_id: Some("agent-1".to_string()),
-                    pane_id: None,
                     runtime: ResearchRuntime::Pane,
                     thread_id: None,
                 },
@@ -5038,7 +5022,6 @@ mod tests {
         assert_eq!(view["agent"]["adapter"], "claude");
         assert_eq!(view["run"]["status"], "complete");
         assert_eq!(view["run"]["sessionReady"], true);
-        assert_eq!(view["run"]["holdsProcess"], false);
         assert_eq!(view["highlights"], serde_json::json!([]));
         assert_eq!(view["inline"], false);
         assert!(view.get("binding").is_none() && view.get("body").is_none());
@@ -5052,10 +5035,8 @@ mod tests {
         ] {
             assert!(!text.contains(binding), "{binding} in {text}");
         }
-        run.binding_mut().unwrap().pane_id = Some("pane-1".into());
         run.binding_mut().unwrap().native_session_id = None;
         let run_view = serde_json::to_value(run.view()).unwrap()["run"].clone();
-        assert_eq!(run_view["holdsProcess"], true);
         assert_eq!(run_view["sessionReady"], false);
 
         let post = serde_json::to_value(with_body(&run, post_body("Who?", None)).view()).unwrap();

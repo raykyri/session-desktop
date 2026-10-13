@@ -93,10 +93,8 @@ test("Stop is available during queuing and startup and disappears after settleme
   assert.equal(researchChainStopTarget([]), null);
 });
 
-test("Retry stop remains available for incomplete pane cleanup but not settled SDK runs", () => {
-  const stopping = node("run", { status: "cancelled", holdsProcess: true });
-  assert.equal(researchChainStopTarget([stopping])?.id, "run");
-  assert.equal(canStopResearchNode(node("sdk", { status: "cancelled", holdsProcess: false })), false);
+test("a cancelled run has nothing left to stop", () => {
+  assert.equal(canStopResearchNode(node("run", { status: "cancelled" })), false);
 });
 
 test("branch children never appear as inline children", () => {
@@ -176,23 +174,11 @@ test("canFollowUpFrom gates on completion and the run checkpoint", () => {
   );
 });
 
-test("canRetryResearchNode allows settled failures without a lingering pane", () => {
+test("canRetryResearchNode allows settled failures", () => {
   assert.equal(canRetryResearchNode(node("failed", { status: "failed" })), true);
   assert.equal(
     canRetryResearchNode(node("cancelled", { status: "cancelled" })),
     true,
-  );
-  // A still-bound pane means the previous run's process may linger — the
-  // cancel controls own that recovery, not retry.
-  assert.equal(
-    canRetryResearchNode(node("stuck", { status: "failed", holdsProcess: true })),
-    false,
-  );
-  assert.equal(
-    canRetryResearchNode(
-      node("stuck-cancel", { status: "cancelled", holdsProcess: true }),
-    ),
-    false,
   );
   assert.equal(canRetryResearchNode(node("done")), false);
   for (const status of ["queued", "starting", "running"] as const) {

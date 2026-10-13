@@ -99,9 +99,11 @@ pub struct AgentInfo {
     /// Session owns and are used by resume, fork, and cleanup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_workspace: Option<ActiveWorkspace>,
+    /// The terminal pane hosting the agent, in records saved by builds that
+    /// had panes. Never set now and never written; restore drops a record
+    /// that carries one.
+    #[serde(default, skip_serializing)]
     pub pane_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub orphaned_queue_pane_id: Option<String>,
     pub session_id: Option<String>,
     pub transcript_path: Option<String>,
     pub status: AgentStatus,
@@ -849,8 +851,6 @@ fn prepare_agent_workspace_locked(
         worktree_dir,
         branch: None,
         active_workspace,
-        pane_id: None,
-        orphaned_queue_pane_id: None,
         session_id: None,
         transcript_path: None,
         status: AgentStatus::Starting,
@@ -865,6 +865,7 @@ fn prepare_agent_workspace_locked(
         native_leaf_id: None,
         paused: false,
         created_at: now_millis(),
+        pane_id: None,
     };
 
     group.agents.push(agent_id);
@@ -1204,7 +1205,6 @@ mod tests {
             branch: None,
             active_workspace: None,
             pane_id: pane_id.map(ToString::to_string),
-            orphaned_queue_pane_id: None,
             session_id: None,
             transcript_path: None,
             status,

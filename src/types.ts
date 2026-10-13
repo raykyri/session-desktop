@@ -103,8 +103,6 @@ export interface AgentInfo {
   /** Display-only command workspace observed from the live agent. Launch,
    * resume, fork, and cleanup continue to use worktreeDir/branch. */
   activeWorkspace?: ActiveWorkspace | null;
-  paneId?: string | null;
-  orphanedQueuePaneId?: string | null;
   sessionId?: string | null;
   transcriptPath?: string | null;
   threadId?: string | null;
@@ -269,9 +267,6 @@ export interface RunState {
   responseSnapshotAt?: number | null;
   /** The native session was recorded, so a follow-up can fork it. */
   sessionReady: boolean;
-  /** A pane process is still bound to the run and has to be closed, even
-   * after the run settled (a cancel whose kill failed). */
-  holdsProcess: boolean;
 }
 
 /** The fields every node shares. */

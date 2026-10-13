@@ -229,8 +229,7 @@ function isRunState(value: unknown): boolean {
     isOptionalFiniteNumber(value.startedAt) &&
     isOptionalFiniteNumber(value.completedAt) &&
     isOptionalFiniteNumber(value.responseSnapshotAt) &&
-    typeof value.sessionReady === "boolean" &&
-    typeof value.holdsProcess === "boolean"
+    typeof value.sessionReady === "boolean"
   );
 }
 
@@ -532,7 +531,6 @@ export function removeResearchNodes(nodes: ResearchNode[], removedIds: Iterable<
 
 export function researchNodeIsActivity(node: ResearchNode): boolean {
   return (
-    Boolean(nodeRun(node)?.holdsProcess) ||
     nodeStatus(node) === "queued" ||
     nodeStatus(node) === "starting" ||
     nodeStatus(node) === "running"

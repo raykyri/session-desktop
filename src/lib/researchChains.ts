@@ -22,14 +22,9 @@ export function isActiveResearchStatus(status: ResearchNodeStatus): boolean {
   return ACTIVE_RESEARCH_STATUSES.includes(status);
 }
 
-/** A cancelled pane run can still need process cleanup (`holdsProcess`). SDK
- * cancellation interrupts the session without a pane binding, so it needs no
- * retry here. */
+/** Whether Stop applies to a node: its run is still active. */
 export function canStopResearchNode(node: ResearchNode): boolean {
-  return (
-    isActiveResearchStatus(nodeStatus(node)) ||
-    (nodeStatus(node) === "cancelled" && Boolean(nodeRun(node)?.holdsProcess))
-  );
+  return isActiveResearchStatus(nodeStatus(node));
 }
 
 /** The header acts on the visible inline chain, even when an earlier answer
@@ -188,23 +183,16 @@ export function chainDisplayOrder(
 
 /** Whether a settled node can be retried in place (same node id, same launch
  * inputs, relaunched through the ordinary machinery): it failed or was
- * cancelled, and no pane from the previous run lingers — an unfinished cancel
- * keeps its own Retry-cancel controls until the pane is reclaimed.
- * Archived-tree gating stays the caller's job, matching canContinueChain. */
+ * cancelled. Archived-tree gating stays the caller's job, matching
+ * canContinueChain. */
 export function canRetryResearchNode(node: ResearchNode): boolean {
-  return (
-    (nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled") && !nodeRun(node)?.holdsProcess
-  );
+  return nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
 }
 
 /** Whether a settled exchange can be rerun in place: as canRetryResearchNode,
  * and a complete answer too (the rerun replaces it). */
 export function canRerunResearchNode(node: ResearchNode): boolean {
-  return (
-    nodeType(node) === "exchange" &&
-    !isActiveResearchStatus(nodeStatus(node)) &&
-    !nodeRun(node)?.holdsProcess
-  );
+  return nodeType(node) === "exchange" && !isActiveResearchStatus(nodeStatus(node));
 }
 
 /** Whether a node's answer menu shows Rerun. Only exchanges have runs to
@@ -235,16 +223,13 @@ export function researchRerunDialogNode<T extends ResearchNode>(
 export const RESEARCH_RERUN_PENDING_REASON = "Another retry or rerun is starting";
 
 /** Why Rerun is disabled for an exchange, or null when it can run: the run
- * must have settled (complete, failed or cancelled) with no pane from it
- * still open, and the answer it follows (its fork point) must be complete.
+ * must have settled (complete, failed or cancelled), and the answer it
+ * follows (its fork point) must be complete.
  * An inline follow-up whose previous answer is still running is not blocked:
  * the rerun waits behind it, as a Retry does. */
 export function researchRerunBlocker(node: ResearchNode, parent: ResearchNode | null): string | null {
   if (isActiveResearchStatus(nodeStatus(node))) {
     return "Wait for the answer to finish";
-  }
-  if (nodeRun(node)?.holdsProcess) {
-    return "The previous run's terminal is still open";
   }
   if (parent && nodeStatus(parent) !== "complete") {
     if (!node.inline || !isActiveResearchStatus(nodeStatus(parent))) {

@@ -42,7 +42,6 @@ export interface NodeFixture {
   completedAt?: number | null;
   responseSnapshotAt?: number | null;
   sessionReady?: boolean;
-  holdsProcess?: boolean;
   recap?: ResearchRecap | null;
   delivery?: PostDelivery | null;
   format?: PostFormat;
@@ -107,7 +106,6 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
           completedAt: fields.completedAt ?? null,
           responseSnapshotAt: fields.responseSnapshotAt ?? null,
           sessionReady: fields.sessionReady ?? false,
-          holdsProcess: fields.holdsProcess ?? false,
         },
         recap: fields.recap ?? null,
       };
