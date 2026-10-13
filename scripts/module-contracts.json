@@ -1,17 +1,8 @@
 {
   "testOnlyModules": {
-    "src/lib/handoff.ts": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
     "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts."
   },
   "exports": {
-    "src/lib/handoff.ts": {
-      "reason": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
-      "names": [
-        "DEFAULT_HANDOFF_LIMITS",
-        "HandoffContext",
-        "HandoffLimits"
-      ]
-    },
     "src/lib/imageMarkers.ts": {
       "reason": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
       "names": [
@@ -24,8 +15,6 @@
       "names": [
         "AgentReadiness",
         "ArtifactInfo",
-        "HomeTurnHistoryPage",
-        "HomeTurnSummary",
         "PaneKind",
         "PostReplyAuthor",
         "PromptLibrary",

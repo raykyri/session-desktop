@@ -33,7 +33,6 @@
     "test:tagged-instructions": "npm run test:node -- tests/taggedInstructions.test.ts",
     "test:research-instruction-setting": "npm run test:node -- tests/researchInstructionSetting.test.ts",
     "test:workspace-scope": "npm run test:node -- tests/workspaceScope.test.ts",
-    "test:handoff": "npm run test:node -- tests/handoff.test.ts",
     "tauri": "tauri",
     "test:node": "TSX_TSCONFIG_PATH=tsconfig.runtime.json node --import tsx --test",
     "check:types": "tsc && npm run check:test-types",

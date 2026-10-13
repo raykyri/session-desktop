@@ -63,13 +63,12 @@ use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
 };
 use sleep::SleepGuard;
-use state::{AppState, PaneInfo, ResearchRelaunch, ShellAgentJobInfo};
+use state::{AppState, PaneInfo, ResearchRelaunch};
 use tauri::{Manager, Url};
-use transcript::Turn;
 use workspace::{
-    AgentInfo, AgentStatus, GroupInfo, LaunchOrigin, ResearchWorkspaceInfo,
-    create_research_workspace, ensure_default_research_workspace, move_research_workspace,
-    remove_research_workspace, rename_research_workspace, validate_launch_workspace,
+    AgentInfo, AgentStatus, GroupInfo, LaunchOrigin, create_research_workspace,
+    ensure_default_research_workspace, move_research_workspace, remove_research_workspace,
+    rename_research_workspace, validate_launch_workspace,
 };
 
 fn handle_global_shortcut(
@@ -1141,24 +1140,6 @@ async fn list_groups(state: tauri::State<'_, AppState>) -> Result<Vec<GroupInfo>
 }
 
 #[tauri::command]
-fn list_research_workspaces(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<ResearchWorkspaceInfo>, String> {
-    state
-        .list_research_workspaces()?
-        .into_iter()
-        .map(|group| {
-            let dependencies = state.research_workspace_dependencies(&group.id)?;
-            Ok(ResearchWorkspaceInfo {
-                available: std::path::Path::new(&group.dir).is_dir(),
-                tree_count: dependencies.tree_count,
-                group,
-            })
-        })
-        .collect()
-}
-
-#[tauri::command]
 async fn ensure_default_research_workspace_command(
     state: tauri::State<'_, AppState>,
 ) -> Result<GroupInfo, String> {
@@ -1241,36 +1222,6 @@ fn research_workspace_reveal(
 #[tauri::command]
 async fn list_agents(state: tauri::State<'_, AppState>) -> Result<Vec<AgentInfo>, String> {
     state.list_agents()
-}
-
-#[tauri::command]
-fn list_shell_agent_jobs(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<ShellAgentJobInfo>, String> {
-    state.list_shell_agent_jobs()
-}
-
-#[tauri::command(async)]
-fn list_turns(
-    state: tauri::State<'_, AppState>,
-    agent_id: Option<String>,
-) -> Result<Vec<Turn>, String> {
-    state.list_turns(agent_id.as_deref())
-}
-
-#[tauri::command]
-async fn list_home_turn_history(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    before: Option<String>,
-    limit: Option<usize>,
-) -> Result<thread_graph::HomeTurnHistoryPage, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state.home_turn_history(&agent_id, before.as_deref(), limit.unwrap_or(100))
-    })
-    .await
-    .map_err(|err| format!("list_home_turn_history task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -3124,7 +3075,6 @@ fn main() {
             browser_open_codex_visualization_reference,
             list_panes,
             list_groups,
-            list_research_workspaces,
             ensure_default_research_workspace_command,
             research_workspace_create_pick,
             research_workspace_rename,
@@ -3132,9 +3082,6 @@ fn main() {
             research_workspace_remove,
             research_workspace_reveal,
             list_agents,
-            list_shell_agent_jobs,
-            list_turns,
-            list_home_turn_history,
             list_research_trees,
             reorder_research_trees,
             list_research_folders,

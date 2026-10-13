@@ -710,18 +710,6 @@ export interface MessageAnchor {
   sourceIndex: number;
 }
 
-export interface HomeTurnSummary {
-  id: string;
-  text: string;
-  settledAt: number | null;
-}
-
-export interface HomeTurnHistoryPage {
-  turns: HomeTurnSummary[];
-  /** Turn id cursor for the next older page (pass as `before` to listHomeTurnHistory). */
-  nextBefore: string | null;
-}
-
 export interface ThreadParticipant {
   kind: "user" | "assistant" | "session";
   actorId: string;

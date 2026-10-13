@@ -641,7 +641,6 @@ fn normalize_artifact_target(artifact: &mut ArtifactInfo) -> Option<bool> {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ResearchWorkspaceDependencies {
-    pub tree_count: usize,
     pub has_active_runs: bool,
     pub has_live_panes: bool,
 }
@@ -1694,15 +1693,6 @@ impl AppState {
             },
         );
         Ok(info)
-    }
-
-    pub fn list_shell_agent_jobs(&self) -> Result<Vec<ShellAgentJobInfo>, String> {
-        let jobs = self
-            .inner
-            .shell_agent_jobs
-            .lock()
-            .map_err(|_| "shell agent job lock poisoned".to_string())?;
-        Ok(jobs.values().map(|job| job.info.clone()).collect())
     }
 
     pub(crate) fn shell_agent_job_targets(&self) -> Vec<ShellAgentJobTarget> {
@@ -3334,47 +3324,6 @@ impl AppState {
                 .flat_map(|turns| turns.iter().cloned())
                 .collect())
         }
-    }
-
-    pub fn home_turn_history(
-        &self,
-        agent_id: &str,
-        before: Option<&str>,
-        limit: usize,
-    ) -> Result<thread_graph::HomeTurnHistoryPage, String> {
-        let (agent, record) = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let agent = model
-                .agents
-                .get(agent_id)
-                .cloned()
-                .ok_or_else(|| format!("agent not found: {agent_id}"))?;
-            let thread_id = thread_graph::agent_thread_id(&agent);
-            (agent, model.threads.get(&thread_id).cloned())
-        };
-        let Some(record) = record else {
-            return Ok(thread_graph::HomeTurnHistoryPage {
-                turns: Vec::new(),
-                next_before: None,
-            });
-        };
-        let store = thread_graph::ThreadStore::new(record.storage_root);
-        let Some(graph) = store.read_thread(&record.id)? else {
-            return Ok(thread_graph::HomeTurnHistoryPage {
-                turns: Vec::new(),
-                next_before: None,
-            });
-        };
-        Ok(thread_graph::home_turn_history_page(
-            &graph,
-            &thread_graph::agent_branch_id(&agent),
-            before,
-            limit,
-        ))
     }
 
     /// Snapshots the source side of a fork before the child process starts.
@@ -7110,7 +7059,6 @@ impl AppState {
             .map(|tree| tree.id.as_str())
             .collect::<HashSet<_>>();
         Ok(ResearchWorkspaceDependencies {
-            tree_count: tree_ids.len(),
             has_active_runs: model.research_nodes.values().any(|node| {
                 tree_ids.contains(node.tree_id.as_str()) && research_node_has_live_execution(node)
             }),
@@ -21690,64 +21638,5 @@ mod tests {
         let state = AppState::new(config);
         state.restore_session();
         assert_eq!(state.agent_draft("agent-1").unwrap(), None);
-    }
-
-    #[test]
-    fn shell_agent_jobs_track_transitions_and_require_two_missing_samples() {
-        let state = AppState::new(test_config(temp_workspace()));
-        let registered = state
-            .register_shell_agent_job(
-                "job-1".to_string(),
-                "agent-1".to_string(),
-                "pane-1".to_string(),
-                42,
-            )
-            .unwrap();
-        assert_eq!(registered.state, ShellAgentJobState::Foreground);
-        assert!(
-            state
-                .update_shell_agent_job_sample("job-1", ShellAgentJobState::Foreground)
-                .is_none()
-        );
-        assert_eq!(
-            state
-                .update_shell_agent_job_sample("job-1", ShellAgentJobState::Backgrounded)
-                .unwrap()
-                .state,
-            ShellAgentJobState::Backgrounded
-        );
-        assert!(state.note_shell_agent_job_missing("job-1").is_none());
-        assert_eq!(
-            state
-                .note_shell_agent_job_missing("job-1")
-                .unwrap()
-                .agent_id,
-            "agent-1"
-        );
-        assert!(state.list_shell_agent_jobs().unwrap().is_empty());
-    }
-
-    #[test]
-    fn stale_shell_job_cleanup_must_match_its_agent() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state
-            .register_shell_agent_job(
-                "job-1".to_string(),
-                "agent-old".to_string(),
-                "pane-1".to_string(),
-                42,
-            )
-            .unwrap();
-        assert!(
-            state
-                .unregister_shell_agent_job("job-1", Some("agent-new"), Some("pane-1"))
-                .is_none()
-        );
-        assert_eq!(state.list_shell_agent_jobs().unwrap().len(), 1);
-        assert!(
-            state
-                .unregister_shell_agent_job("job-1", Some("agent-old"), Some("pane-1"))
-                .is_some()
-        );
     }
 }

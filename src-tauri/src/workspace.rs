@@ -151,15 +151,6 @@ impl GroupInfo {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResearchWorkspaceInfo {
-    #[serde(flatten)]
-    pub group: GroupInfo,
-    pub available: bool,
-    pub tree_count: usize,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInfo {

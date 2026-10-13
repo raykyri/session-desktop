@@ -964,7 +964,7 @@ export function assistantRunCopyTextByItemKey(items: MessageItem[]) {
   return copyTextByKey;
 }
 
-export function messageItemIsTaggedInstruction(item: MessageItem) {
+function messageItemIsTaggedInstruction(item: MessageItem) {
   if (item.role !== "user" || item.blocks.length !== 1) {
     return false;
   }
