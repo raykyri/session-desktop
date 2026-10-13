@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  followUpAdapter,
   followUpLaunch,
   nodeMessage,
   nodeType,
@@ -8,7 +9,7 @@ import {
   recapEligible,
 } from "../src/lib/researchNodeTypes";
 import { canFollowUpFrom } from "../src/lib/researchChains";
-import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
+import type { AgentAdapterMetadata, ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { recentResearchQueryFromNode } from "../src/lib/activity";
 
@@ -87,4 +88,22 @@ test("a note's follow-up quotes the note's text, not a stored reply", () => {
   assert.ok(cut!.length <= 30);
   // Only posts have a follow-up source excerpt.
   assert.equal(postFollowUpSourceExcerpt(node({ id: "q" })), null);
+});
+
+test("a follow-up's agent is the one the backend picks for its parent", () => {
+  const adapter = (id: string, fields: Partial<AgentAdapterMetadata> = {}) =>
+    ({ id, label: id, default: false, supportsResearch: true, researchReadiness: "ready", ...fields }) as AgentAdapterMetadata;
+  const adapters = [adapter("grok"), adapter("claude", { default: true }), adapter("shell", { supportsResearch: false })];
+  // An exchange forks its own agent.
+  assert.equal(followUpAdapter(node({ adapter: "grok" }), adapters), "grok");
+  // A post, imported report or transcript uses its follow-up agent if it
+  // supports research.
+  assert.equal(followUpAdapter(node({ type: "post", adapter: "grok" }), adapters), "grok");
+  assert.equal(followUpAdapter(node({ type: "document", source: "imported", adapter: "grok" }), adapters), "grok");
+  assert.equal(followUpAdapter(node({ type: "post", adapter: "shell" }), adapters), "claude");
+  // An authored document always uses the default ready research agent.
+  assert.equal(followUpAdapter(node({ type: "document", adapter: "grok" }), adapters), "claude");
+  const notReady = [adapter("grok"), adapter("claude", { default: true, researchReadiness: "missing" })];
+  assert.equal(followUpAdapter(node({ type: "document", adapter: "claude" }), notReady), "grok");
+  assert.equal(followUpAdapter(node({ type: "document" }), []), null);
 });

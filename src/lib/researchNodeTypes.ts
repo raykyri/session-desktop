@@ -4,6 +4,7 @@
 // types carry with one answer for the others.
 
 import type {
+  AgentAdapterMetadata,
   AgentSpec,
   DocumentSource,
   PostDelivery,
@@ -112,6 +113,24 @@ export function documentHoldsMarkdown(node: ResearchNode): boolean {
  * their saved content as context. */
 export function followUpLaunch(node: Typed): "fork" | "context" {
   return nodeType(node) === "exchange" ? "fork" : "context";
+}
+
+/** The adapter a follow-up of `parent` runs on, as the backend picks it
+ * (create_research_child in state.rs): an exchange's own agent; a post's,
+ * an imported report's, or a transcript's follow-up agent when it supports
+ * research; otherwise, and always for an authored document, the default
+ * adapter that supports research and is ready (`default_fork_adapter`).
+ * Null when none is. */
+export function followUpAdapter(
+  parent: ResearchNode,
+  adapters: readonly AgentAdapterMetadata[],
+): string | null {
+  if (parent.type === "exchange") return parent.agent.adapter || null;
+  const ready = adapters.filter((adapter) => adapter.supportsResearch && adapter.researchReadiness === "ready");
+  const fallback = (ready.find((adapter) => adapter.default) ?? ready[0])?.id ?? null;
+  if (documentSource(parent) === "authored") return fallback;
+  const own = nodeAdapter(parent);
+  return own && adapters.some((adapter) => adapter.id === own && adapter.supportsResearch) ? own : fallback;
 }
 
 /** Whether a summary (recap) belongs to the node: exchanges and imported

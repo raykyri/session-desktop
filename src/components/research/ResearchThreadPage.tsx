@@ -41,7 +41,7 @@ import { writeClipboardText } from "../../lib/clipboard";
 import type { ResearchPostThreadHandle } from "./ResearchPostThread";
 import type { PostActions } from "./ResearchPost";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
-import { documentHoldsMarkdown, documentSource, nodeAgent, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, followUpAdapter, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnIdOf,
@@ -2432,7 +2432,7 @@ function ResearchThreadPage({
   /** The agent a branch asked from `parentNodeId` runs on. */
   const parentAgentAdapter = (parentNodeId: string) => {
     const parent = nodeById.get(parentNodeId);
-    return parent ? (nodeAgent(parent)?.adapter ?? null) : null;
+    return parent ? followUpAdapter(parent, questionAdapters) : null;
   };
 
   /** The ask box of the chain headed by `headId` (none for a note's chain);
@@ -2451,8 +2451,9 @@ function ResearchThreadPage({
       setComposerImages((current) => withImages(current, headId, []));
       requestFocus({ kind: "composer", key: headId }, "none");
     };
-    // A follow-up runs on the chain's agent (a document's follow-up agent).
-    const chainAdapter = nodeAgent(chain[chain.length - 1])?.adapter ?? null;
+    // A follow-up runs on the agent the backend picks for the chain's last
+    // message.
+    const chainAdapter = followUpAdapter(chain[chain.length - 1], questionAdapters);
     return (
       <ResearchChainComposer
         nodes={nodes}
