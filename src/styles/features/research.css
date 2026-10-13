@@ -2476,6 +2476,27 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* A note's field fills the region above the footer: the editor's padding
+   moves into the field, and the field has no border, background or focus
+   ring, so the whole region takes clicks and text. */
+.research-editor:has(> .research-editor-field.is-note) {
+  gap: 0;
+  padding: 0;
+}
+
+.research-editor-field.is-note,
+.research-editor-field.is-note:focus {
+  padding: 14px 16px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.research-editor-field.is-note ~ .research-editor-notes {
+  padding: 0 16px 12px;
+}
+
 .research-editor-notes {
   display: flex;
   flex-direction: column;
