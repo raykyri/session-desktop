@@ -277,22 +277,65 @@ pub fn save_pending(
     Ok(attachment_from_bytes(id, format, bytes, file_name))
 }
 
+/// Directories a dropped image file may come from: the home directory, the
+/// temporary directory, and on macOS `/Volumes`, where removable drives and
+/// disk images mount. The paths come from the webview, so they are confined
+/// the way transcript image reads are (`crate::image_files`).
+fn import_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(home) = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .filter(|home| !home.as_os_str().is_empty())
+    {
+        roots.push(home);
+    }
+    roots.push(std::env::temp_dir());
+    if cfg!(target_os = "macos") {
+        roots.push(PathBuf::from("/Volumes"));
+    }
+    roots
+}
+
 /// Copies an image file the user dropped on a composer into the pending
 /// store. The window receives native file drops as paths, not bytes.
 pub fn import_pending(
     workspace_root: &Path,
     path: &Path,
 ) -> Result<ResearchMessageAttachment, String> {
-    let metadata =
-        fs::metadata(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    import_pending_within(workspace_root, path, &import_roots())
+}
+
+/// [`import_pending`] with the allowed directories given, for tests. The
+/// path is canonicalized first (resolving symlinks and `..`), so a link
+/// inside an allowed directory to a file outside it is refused; the file
+/// opened is the canonical one.
+fn import_pending_within(
+    workspace_root: &Path,
+    path: &Path,
+    allowed_roots: &[PathBuf],
+) -> Result<ResearchMessageAttachment, String> {
+    let canonical = fs::canonicalize(path)
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    let allowed = allowed_roots
+        .iter()
+        .any(|root| fs::canonicalize(root).is_ok_and(|root| canonical.starts_with(root)));
+    if !allowed {
+        return Err(
+            "Only images from your home folder, a temporary folder, or a mounted drive can be attached."
+                .to_string(),
+        );
+    }
+    let file = fs::File::open(&canonical)
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    let metadata = file
+        .metadata()
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     if !metadata.is_file() {
         return Err(unsupported());
     }
     if metadata.len() > MAX_IMAGE_BYTES {
         return Err(too_large());
     }
-    let file =
-        fs::File::open(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     let mut bytes = Vec::new();
     file.take(MAX_IMAGE_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -781,11 +824,45 @@ mod tests {
     }
 
     #[test]
+    fn dropped_files_are_confined_to_the_allowed_directories() {
+        let root = temp_root();
+        let allowed = root.join("allowed");
+        let outside = root.join("outside");
+        fs::create_dir_all(&allowed).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let roots = [allowed.clone()];
+        let inside = allowed.join("shot.png");
+        fs::write(&inside, png(2, 2)).unwrap();
+        import_pending_within(&root, &inside, &roots).unwrap();
+
+        let external = outside.join("external.png");
+        fs::write(&external, png(2, 2)).unwrap();
+        assert!(
+            import_pending_within(&root, &external, &roots)
+                .unwrap_err()
+                .contains("home folder")
+        );
+        // `..` and a symlink are resolved before the check.
+        let dotted = allowed.join("../outside/external.png");
+        assert!(import_pending_within(&root, &dotted, &roots).is_err());
+        let link = allowed.join("link.png");
+        std::os::unix::fs::symlink(&external, &link).unwrap();
+        assert!(import_pending_within(&root, &link, &roots).is_err());
+        // A link that stays inside is followed.
+        let inner_link = allowed.join("inner.png");
+        std::os::unix::fs::symlink(&inside, &inner_link).unwrap();
+        import_pending_within(&root, &inner_link, &roots).unwrap();
+        assert!(import_pending_within(&root, &allowed.join("missing.png"), &roots).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn dropped_files_are_copied_with_their_name() {
         let root = temp_root();
         let source = root.join("Dropped shot.png");
         fs::write(&source, png(5, 6)).unwrap();
-        let attachment = import_pending(&root, &source).unwrap();
+        let roots = [root.clone()];
+        let attachment = import_pending_within(&root, &source, &roots).unwrap();
         assert!(matches!(
             &attachment,
             ResearchMessageAttachment::Image { file_name: Some(name), width: Some(5), .. }
@@ -794,8 +871,12 @@ mod tests {
         assert!(source.is_file());
         let text = root.join("notes.txt");
         fs::write(&text, "not an image").unwrap();
-        assert!(import_pending(&root, &text).unwrap_err().contains("PNG"));
-        assert!(import_pending(&root, &root).is_err());
+        assert!(
+            import_pending_within(&root, &text, &roots)
+                .unwrap_err()
+                .contains("PNG")
+        );
+        assert!(import_pending_within(&root, &root, &roots).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 
