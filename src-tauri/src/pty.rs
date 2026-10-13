@@ -4,22 +4,17 @@ use crate::host::Host;
 use crate::remote_terminal::{
     RemoteAttachment, RemoteAttachmentController, RemoteClientHandshake, RemoteHistoryCheckpoint,
 };
-#[cfg(test)]
-use crate::scrollback::read_remote_history_checkpoint;
 use crate::scrollback::{append_pane_scrollback, write_remote_history_checkpoint};
 use crate::state::{
     AppState, HostPtyBackend, PaneBackend, PaneInfo, PaneKind, PaneRuntime, PaneStatus,
     RemoteConnectionInfo, RemoteConnectionState, RemoteHookHealth, RemoteSessionIdentity,
-    RemoteTmuxBackend, SharedBacklog, SharedChild, ShellAgentResume,
+    RemoteTmuxBackend, SharedBacklog, SharedChild,
 };
 use crate::turn_queue::{abort_fork_barrier_for_child, release_waiters_for_agent};
-use crate::workspace::{
-    ActiveWorkspace, CreateGroupRequest, RemoteRef, WorkspaceScope, capture_agent_worktree_removal,
-    create_group, group_recoverable_dir, remove_captured_worktree,
-};
+use crate::workspace::{ActiveWorkspace, CreateGroupRequest, WorkspaceScope, create_group};
 use portable_pty::PtySize;
 use portable_pty::{CommandBuilder, native_pty_system};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -107,39 +102,6 @@ const KILL_ESCALATION_TICKS: u32 = 2;
 pub struct InitialPaneSize {
     pub cols: u16,
     pub rows: u16,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneActivity {
-    pub kind: PaneActivityKind,
-    pub process_count: usize,
-    pub process_summary: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PaneActivityKind {
-    Idle,
-    RunningProcess,
-}
-
-impl PaneActivity {
-    fn idle() -> Self {
-        Self {
-            kind: PaneActivityKind::Idle,
-            process_count: 0,
-            process_summary: None,
-        }
-    }
-
-    fn running_process(process_count: usize, process_summary: Option<String>) -> Self {
-        Self {
-            kind: PaneActivityKind::RunningProcess,
-            process_count,
-            process_summary,
-        }
-    }
 }
 
 /// A file the spawn backend must write on the host that runs the command,
@@ -451,15 +413,6 @@ impl PaneWriteFailure {
     }
 }
 
-pub fn spawn_shell_pane(
-    state: &AppState,
-    initial_size: Option<InitialPaneSize>,
-    source_pane_id: Option<&str>,
-    group_id: Option<&str>,
-) -> Result<PaneInfo, String> {
-    spawn_shell_pane_at(state, initial_size, source_pane_id, group_id, None)
-}
-
 pub fn spawn_shell_pane_at(
     state: &AppState,
     initial_size: Option<InitialPaneSize>,
@@ -531,119 +484,6 @@ pub fn spawn_shell_pane_at(
     )
 }
 
-/// Opens an interactive `ssh` session to `remote` as a tab in the current
-/// group. If that group is already bound to this machine, this is just a
-/// normal remote shell. Otherwise the pane's process is `ssh -t -- host`, so
-/// the group stays where it is.
-pub fn spawn_ssh_shell_pane(
-    state: &AppState,
-    initial_size: Option<InitialPaneSize>,
-    source_pane_id: Option<&str>,
-    group_id: Option<&str>,
-    remote: &RemoteRef,
-) -> Result<PaneInfo, String> {
-    let source_group_id = source_pane_id.and_then(|id| state.pane_group_id(id).ok().flatten());
-    let group = match group_id.or(source_group_id.as_deref()) {
-        Some(group_id) => state
-            .group(group_id)?
-            .ok_or_else(|| format!("group {group_id} was not found"))?,
-        None => create_group(
-            state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: None,
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-        )?,
-    };
-    if group.scope != WorkspaceScope::Terminal {
-        return Err("ordinary shells cannot be opened in a research workspace".to_string());
-    }
-    if group
-        .remote
-        .as_ref()
-        .is_some_and(|bound| bound.id == remote.id)
-    {
-        return spawn_shell_pane(state, initial_size, source_pane_id, Some(&group.id));
-    }
-    let cwd = state.resolve_shell_spawn_cwd(&group, source_pane_id, None)?;
-    let pane_id = state.next_id("pane");
-    spawn_pty(
-        state,
-        ssh_client_spawn_spec(state, pane_id, group.id, cwd, initial_size, false, remote)?,
-    )
-}
-
-fn ssh_client_command(host: &str) -> (String, Vec<String>) {
-    (
-        "ssh".to_string(),
-        vec!["-t".to_string(), "--".to_string(), host.to_string()],
-    )
-}
-
-fn ssh_client_spawn_spec(
-    state: &AppState,
-    pane_id: String,
-    group_id: String,
-    cwd: PathBuf,
-    initial_size: Option<InitialPaneSize>,
-    recovered: bool,
-    remote: &RemoteRef,
-) -> Result<PtySpawnSpec, String> {
-    ssh_client_spawn_spec_for_host(
-        state,
-        pane_id,
-        group_id,
-        cwd,
-        initial_size,
-        recovered,
-        &remote.host,
-        &remote.label,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn ssh_client_spawn_spec_for_host(
-    state: &AppState,
-    pane_id: String,
-    group_id: String,
-    cwd: PathBuf,
-    initial_size: Option<InitialPaneSize>,
-    recovered: bool,
-    host: &str,
-    title: &str,
-) -> Result<PtySpawnSpec, String> {
-    let (program, args) = ssh_client_command(host);
-    let envs = shell_pane_envs(state, &pane_id)?;
-    let mut spec = plan_to_spec(
-        state,
-        PaneMeta {
-            pane_id: Some(pane_id),
-            agent_id: None,
-            group_id,
-            kind: PaneKind::Shell,
-            title: title.to_string(),
-            last_osc_title: None,
-            initial_size,
-            recovered,
-        },
-        CommandPlan {
-            program,
-            args,
-            cwd,
-            envs,
-            support_files: Vec::new(),
-            support_file_fallback: None,
-        },
-    )?;
-    spec.ssh_target = Some(host.to_string());
-    Ok(spec)
-}
-
 pub fn ensure_shell_agent_startup_supported() -> Result<(), String> {
     let shell = pane_shell();
     ensure_shell_agent_startup_supported_for(&shell)
@@ -705,168 +545,6 @@ fn shell_agent_exec_command(
     ];
     command.extend(agent_args.iter().map(|arg| shell_quote_str(arg)));
     command.join(" ")
-}
-
-/// Recreates a previously persisted shell pane: same pane id (so UI mappings and
-/// queues keep lining up), reopened in its last-known cwd when that still exists,
-/// at its persisted geometry. Marked recovered so the UI can label it.
-pub fn respawn_shell_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo, String> {
-    // A queued resume rebinds the agent that was live in this pane at shutdown. Its
-    // session is keyed to the original launch dir (Claude/Codex scope sessions by project
-    // dir), and the resume command runs in whatever cwd this shell reopens in, so reopen
-    // there rather than the pane's last cwd — which `cd` may have moved away from since
-    // launch (`update_pane_cwd` tracks the active directory). Reopening at the changed cwd
-    // would both fail to resolve the session and miss the agent rebind, minting a
-    // duplicate on every restart. The hint is taken (drained) either way so it can't
-    // linger and fire on a later relaunch of the same pane id; the resume only proceeds
-    // when that original dir still exists.
-    let resume = state.take_shell_agent_resume(&pane.id);
-    // A recovered shell whose last dir was deleted between sessions reopens near the
-    // group's other work (its most-recently-active shell pane), else the group's
-    // creation-time seed dir, else the default dir / home rather than the bare `/` a
-    // Finder/Dock launch inherits. During startup recovery siblings may not be
-    // respawned yet, in which case group_spawn_cwd yields None and the seed/default
-    // apply.
-    let group = state.group(&pane.group_id).ok().flatten();
-    let group_remote = group.as_ref().and_then(|group| group.remote.as_ref());
-    // Every dir probe below is group-aware: a remote group's paths live on its
-    // host, so a local stat would discard the resume dir (dropping the resume
-    // command with it) and then discard the pane's own cwd.
-    let resume_dir = resume
-        .as_ref()
-        .and_then(|resume| group_recoverable_dir(group_remote, &resume.cwd));
-    let group_seed_dir = group
-        .as_ref()
-        .and_then(|group| group_recoverable_dir(group.remote.as_ref(), &group.dir));
-    let cwd = resume_dir
-        .clone()
-        .or_else(|| group_recoverable_dir(group_remote, &pane.cwd))
-        .or_else(|| state.group_spawn_cwd(&pane.group_id))
-        .or(group_seed_dir)
-        .unwrap_or_else(|| state.default_open_dir());
-    let resume_command = resume
-        .filter(|_| resume_dir.is_some())
-        .and_then(|resume| shell_resume_command(state, &resume));
-    let initial_size = Some(InitialPaneSize {
-        cols: pane.cols,
-        rows: pane.rows,
-    });
-    let mut spec = if let Some(host) = pane.ssh_target.as_deref() {
-        ssh_client_spawn_spec_for_host(
-            state,
-            pane.id.clone(),
-            pane.group_id.clone(),
-            cwd,
-            initial_size,
-            true,
-            host,
-            if pane.title.trim().is_empty() {
-                host
-            } else {
-                pane.title.as_str()
-            },
-        )?
-    } else {
-        shell_spawn_spec(
-            state,
-            pane.id.clone(),
-            pane.group_id.clone(),
-            cwd,
-            initial_size,
-            true,
-            resume_command,
-        )?
-    };
-    // A shell pane may carry a manual/generated base title as well as a cached
-    // OSC title. Recovery previously rebuilt every shell as literal "Shell",
-    // discarding even explicitly renamed tabs.
-    apply_recovered_shell_titles(&mut spec, pane);
-    if spec.cwd == PathBuf::from(&pane.cwd) {
-        spec.fallback_workspace = pane.active_workspace.clone();
-    }
-    spawn_pty(state, spec)
-}
-
-/// Rebuilds only the local attachment for a persisted remote pane. This path
-/// never has a create command: a missing tmux identity is a recovery failure,
-/// not permission to launch a replacement process.
-#[cfg(test)]
-fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo, String> {
-    let identity = pane
-        .remote_session
-        .clone()
-        .ok_or_else(|| format!("pane {} has no remote session identity", pane.id))?;
-    let group = state
-        .group(&pane.group_id)?
-        .ok_or_else(|| format!("group {} was not found", pane.group_id))?;
-    let remote = group
-        .remote
-        .as_ref()
-        .ok_or_else(|| format!("group {} is no longer remote", pane.group_id))?;
-    if remote.id != identity.remote_id {
-        return Err(format!(
-            "pane {} belongs to remote '{}' but its group uses '{}'",
-            pane.id, identity.remote_id, remote.id
-        ));
-    }
-    let host = crate::host::for_group(Some(remote));
-    let commands = host.existing_tmux_session_commands(
-        &identity,
-        &state.config().socket_path.display().to_string(),
-    )?;
-
-    let controller = RemoteAttachmentController::new();
-    let history = RemoteHistoryCheckpoint::new(read_remote_history_checkpoint(
-        &state.config().workspace_root,
-        &pane.id,
-    )?);
-    let backlog: SharedBacklog = Arc::new(Mutex::new(Default::default()));
-    let mut recovered = pane.clone();
-    recovered.recovered = true;
-    recovered.remote_connection = Some(RemoteConnectionInfo {
-        last_connected_at: pane
-            .remote_connection
-            .as_ref()
-            .and_then(|connection| connection.last_connected_at),
-        ..Default::default()
-    });
-    let backend = RemoteTmuxBackend::new(
-        controller.clone(),
-        history.clone(),
-        backlog.clone(),
-        commands.clone(),
-    );
-    state.insert_pane(PaneRuntime {
-        info: recovered.clone(),
-        backend: PaneBackend::RemoteTmux(backend),
-        cwd_observation_seq: 0,
-    })?;
-
-    schedule_remote_reconnect(
-        state.clone(),
-        pane.id.clone(),
-        controller,
-        history,
-        commands,
-        backlog,
-        "appRestart".to_string(),
-    );
-    Ok(recovered)
-}
-
-fn apply_recovered_shell_titles(spec: &mut PtySpawnSpec, pane: &PaneInfo) {
-    spec.title.clone_from(&pane.title);
-    spec.last_osc_title.clone_from(&pane.last_osc_title);
-}
-
-/// Resolves the shell command that resumes a captured agent session through its
-/// adapter's injected wrapper (e.g. `claude --resume <id>`). `None` when the adapter
-/// has no resume command.
-fn shell_resume_command(state: &AppState, resume: &ShellAgentResume) -> Option<String> {
-    adapter_registry(state.config())
-        .get(&resume.adapter)
-        .ok()?
-        .shell_resume_command(&resume.session_id)
 }
 
 /// The shell for new panes: `$SHELL` when set (terminal launches), else the
@@ -3315,20 +2993,6 @@ fn scrub_inherited_session_context(command: &mut CommandBuilder) {
     }
 }
 
-/// Compatibility attach flushes explicitly staged bytes; readers record output immediately.
-pub fn attach_pane(state: &AppState, pane_id: String) -> Result<(), String> {
-    let backlog = state
-        .pane_backlog(&pane_id)?
-        .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let mut backlog = backlog.lock().map_err(|_| "pane output lock poisoned")?;
-    if !backlog.ready {
-        let pending = std::mem::take(&mut backlog.buffer);
-        record_scrollback(state, &pane_id, &pending);
-        backlog.ready = true;
-    }
-    Ok(())
-}
-
 /// Close any interrupted alternate-screen state in the durable process log.
 /// These bytes describe output state; they are never written to the PTY child.
 pub fn reset_pane_terminal_modes(state: &AppState, pane_id: &str) -> Result<(), String> {
@@ -3505,154 +3169,13 @@ fn write_pane_input<W: Write + ?Sized>(
     Ok(())
 }
 
-pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    let explicitly_notify_resize = state
-        .agent_by_pane(&pane_id)
-        .ok()
-        .flatten()
-        .is_some_and(|agent| agent_needs_explicit_resize_signal(Some(&agent.adapter)));
-    let Some(master) = state.pane_master(&pane_id)? else {
-        // A remote pane deliberately has no local master between attachment
-        // generations. Persist the desired geometry so the next SSH PTY is
-        // created at the latest size rather than treating "offline" as
-        // "missing" and permanently dropping this resize.
-        if state.pane_exists(&pane_id)? {
-            return state.update_pane_size(&pane_id, cols, rows);
-        }
-        return Err(format!("pane {pane_id} was not found"));
-    };
-    let master = master
-        .lock()
-        .map_err(|_| format!("pane {pane_id} master lock poisoned"))?;
-    let size_changed = master
-        .get_size()
-        .map(|size| size.cols != cols || size.rows != rows)
-        .unwrap_or(true);
-    let resize_result = if size_changed {
-        master
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|err| format!("failed to resize pane {pane_id}: {err}"))
-    } else {
-        Ok(())
-    };
-    #[cfg(target_os = "macos")]
-    if resize_result.is_ok()
-        && size_changed
-        && explicitly_notify_resize
-        && let Some(process_group) = master.process_group_leader()
-    {
-        // Signal the foreground group, not just the pane's direct child. An
-        // agent launched from a shell pane runs below Session's agent-exec
-        // supervisor, while a dedicated agent pane has the same process as
-        // its group leader. SIGWINCH is ignored by default, so an exit/detach
-        // race is harmless.
-        let result = unsafe { libc::kill(-process_group, libc::SIGWINCH) };
-        if result != 0 {
-            let err = std::io::Error::last_os_error();
-            if err.raw_os_error() != Some(libc::ESRCH) {
-                eprintln!(
-                    "session: failed to explicitly notify agent pane {pane_id} of resize: {err}"
-                );
-            }
-        }
-    }
-    drop(master);
-    // Persist even when an attachment vanished during the ioctl. Reconnect
-    // will apply this geometry to the replacement PTY; the caller still gets
-    // the immediate resize error for observability.
-    state.update_pane_size(&pane_id, cols, rows)?;
-    resize_result
-}
-
 #[cfg(target_os = "macos")]
 fn agent_needs_explicit_resize_signal(adapter_id: Option<&str>) -> bool {
     adapter_id.is_some()
 }
 
-pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, String> {
-    // Validate the pane id against the model before inspecting the child handle. Process
-    // inspection below is best-effort, but a missing pane is still a caller error.
-    if !state.list_panes()?.iter().any(|pane| pane.id == pane_id) {
-        return Err(format!("pane {pane_id} was not found"));
-    }
-    if let Some((_, _, commands)) = state.pane_remote_control(&pane_id)? {
-        let (program, args) = commands
-            .activity_argv
-            .split_first()
-            .ok_or_else(|| "remote pane activity command is empty".to_string())?;
-        let mut command = Command::new(program);
-        command.args(args);
-        let output = remote_command_output(command, None, "inspect remote pane activity")?;
-        if !output.status.success() {
-            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(if detail.is_empty() {
-                format!("failed to inspect remote pane activity: {}", output.status)
-            } else {
-                format!("failed to inspect remote pane activity: {detail}")
-            });
-        }
-        let raw = String::from_utf8_lossy(&output.stdout);
-        let mut fields = raw.trim().split('\t');
-        let command = fields.next().unwrap_or_default().trim();
-        let _pane_pid = fields.next().unwrap_or_default();
-        let dead = fields.next().unwrap_or_default().trim() == "1";
-        let idle_shell = matches!(
-            command,
-            "sh" | "bash" | "dash" | "zsh" | "fish" | "ksh" | "tcsh" | "csh" | "nu"
-        );
-        return if dead || idle_shell || command.is_empty() {
-            Ok(PaneActivity::idle())
-        } else {
-            Ok(PaneActivity::running_process(1, Some(command.to_string())))
-        };
-    }
-
-    let child = state
-        .pane_child(&pane_id)?
-        .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let root_pid = {
-        let mut child = child
-            .lock()
-            .map_err(|_| format!("pane {pane_id} child lock poisoned"))?;
-
-        if child
-            .try_wait()
-            .map_err(|err| format!("failed to inspect pane {pane_id}: {err}"))?
-            .is_some()
-        {
-            return Ok(PaneActivity::idle());
-        }
-
-        child.process_id()
-    };
-
-    let Some(root_pid) = root_pid else {
-        return Ok(PaneActivity::idle());
-    };
-    // The Session bridge is implementation plumbing, not user work. Do not make
-    // it inflate the close-warning count or trigger a warning on its own.
-    let processes = user_running_processes(running_descendant_processes(root_pid));
-    if processes.is_empty() {
-        Ok(PaneActivity::idle())
-    } else {
-        Ok(PaneActivity::running_process(
-            processes.len(),
-            processes.first().map(|process| process.name.clone()),
-        ))
-    }
-}
-
 pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
     let pane_agent_id = state.agent_by_pane(&pane_id)?.map(|agent| agent.id);
-    if let Err(err) = state.capture_last_closed_pane(&pane_id) {
-        eprintln!("session: failed to capture closed pane {pane_id}: {err}");
-    }
     if let Some((controller, _, commands)) = state.pane_remote_control(&pane_id)? {
         if controller.initial_launch_in_progress() {
             controller.cancel_recovery();
@@ -3667,7 +3190,6 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
         if let Err(err) = run_remote_argv(&commands.kill_argv, "kill remote tmux session")
             && probe_remote_session(&commands.probe_argv) != Ok(false)
         {
-            state.clear_last_closed_pane_for_pane(&pane_id);
             let _ = state.update_remote_connection(
                 &pane_id,
                 RemoteConnectionState::Failed,
@@ -3724,7 +3246,6 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
             })
             .is_some();
         if !exited {
-            state.clear_last_closed_pane_for_pane(&pane_id);
             return Err(err);
         }
         eprintln!(
@@ -3807,34 +3328,6 @@ where
             scope.spawn(move || action(item));
         }
     });
-}
-
-pub fn close_worktree_pane(
-    state: &AppState,
-    agent_id: &str,
-    delete_worktree: bool,
-) -> Result<(), String> {
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    let pane_id = agent
-        .pane_id
-        .clone()
-        .ok_or_else(|| format!("agent {agent_id} has no pane to close"))?;
-    let worktree_removal = if delete_worktree {
-        Some(capture_agent_worktree_removal(state, &agent)?)
-    } else {
-        None
-    };
-
-    kill_pane(state, pane_id)?;
-
-    if let Some(removal) = worktree_removal {
-        remove_captured_worktree(removal)?;
-        state.clear_last_closed_pane_for_agent(agent_id);
-    }
-
-    Ok(())
 }
 
 #[cfg_attr(all(target_os = "macos", not(test)), allow(dead_code))]
@@ -3941,17 +3434,6 @@ fn start_reader_thread(
             )
         {
             eprintln!("session: failed to release fork barrier for exited agent {agent_id}: {err}");
-        }
-        // A natural exit normally leaves no undo snapshot (unlike `kill_pane`), but if this
-        // is the group's last pane and the group still has queued turns, removing it would
-        // prune that pending work with no way back. Capture a close snapshot first so it
-        // can be reopened, matching the explicit-close path.
-        if state
-            .closing_pane_would_strand_queued_work(&pane_id)
-            .unwrap_or(false)
-            && let Err(err) = state.capture_last_closed_pane(&pane_id)
-        {
-            eprintln!("session: failed to capture exited pane {pane_id}: {err}");
         }
         if let Err(err) = state.remove_pane(&pane_id) {
             // A failure here (e.g. a poisoned model lock) leaves a dead pane in
@@ -4127,53 +3609,6 @@ fn terminate_descendants(pid: u32) {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct RunningProcess {
-    name: String,
-}
-
-fn running_descendant_processes(pid: u32) -> Vec<RunningProcess> {
-    running_processes(&descendant_process_ids(pid))
-}
-
-fn user_running_processes(processes: Vec<RunningProcess>) -> Vec<RunningProcess> {
-    processes
-        .into_iter()
-        .filter(|process| !process.name.eq_ignore_ascii_case("session"))
-        .collect()
-}
-
-/// Filters `pids` down to live, non-zombie processes with a single `ps`
-/// invocation — one subprocess total instead of one per pid — returning each
-/// one's executable basename. When a requested pid is already gone, `ps`
-/// still prints rows for the live ones but its exit status is
-/// platform-dependent, so stdout is parsed regardless of exit status.
-fn running_processes(pids: &[u32]) -> Vec<RunningProcess> {
-    if pids.is_empty() {
-        return Vec::new();
-    }
-    let pid_list = pids
-        .iter()
-        .map(u32::to_string)
-        .collect::<Vec<_>>()
-        .join(",");
-    let Ok(output) = Command::new("/bin/ps")
-        .arg("-p")
-        .arg(pid_list)
-        .arg("-o")
-        .arg("stat=")
-        .arg("-o")
-        .arg("comm=")
-        .output()
-    else {
-        return Vec::new();
-    };
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(running_process_from_line)
-        .collect()
-}
-
 /// Walks a process's live descendants from a single `ps` snapshot. The previous
 /// implementation forked one `pgrep -P` per tree node, so inspecting a shell
 /// running a dev server with a handful of children cost a fork/exec (~5-15ms on
@@ -4268,44 +3703,16 @@ fn descendants_from_parent_pairs(root: u32, parent_pairs: &[(u32, u32)]) -> Vec<
     descendants
 }
 
-fn running_process_from_line(line: &str) -> Option<RunningProcess> {
-    let mut parts = line.split_whitespace();
-    let status = parts.next()?;
-    if status.starts_with('Z') {
-        return None;
-    }
-    let command = parts.collect::<Vec<_>>().join(" ");
-    let name = Path::new(&command)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or(command.trim())
-        .trim()
-        .to_string();
-    if name.is_empty() {
-        return None;
-    }
-
-    Some(RunningProcess { name })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
-    use crate::scrollback::read_pane_scrollback;
-    use crate::workspace::{AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
+    use crate::workspace::RemoteRef;
     use std::io;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn windows_contains(haystack: &[u8], needle: &[u8]) -> bool {
-        haystack
-            .windows(needle.len())
-            .any(|window| window == needle)
-    }
 
     #[test]
     fn passwd_login_shell_resolves_for_current_user() {
@@ -4557,40 +3964,6 @@ mod tests {
             spec.support_file_fallback.is_some()
         );
         assert!(recovered.recovered);
-    }
-
-    #[test]
-    fn ssh_client_spec_stays_local_and_targets_the_host() {
-        let state = test_state_with_workspace(temp_workspace());
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: None,
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-        )
-        .unwrap();
-        let remote = test_remote();
-        let spec = ssh_client_spawn_spec(
-            &state,
-            "pane-ssh".to_string(),
-            group.id,
-            std::env::temp_dir(),
-            None,
-            false,
-            &remote,
-        )
-        .unwrap();
-        assert_eq!(spec.program, "ssh");
-        assert_eq!(spec.args, vec!["-t", "--", "workbox"]);
-        assert!(spec.remote.is_none());
-        assert_eq!(spec.ssh_target.as_deref(), Some("workbox"));
-        assert_eq!(spec.title, "workbox");
     }
 
     #[test]
@@ -5452,341 +4825,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires SESSION_TEST_SSH_TARGET; creates and removes isolated remote test shells"]
-    fn pending_remote_shell_opens_and_cancels_without_orphans() {
-        let target = std::env::var("SESSION_TEST_SSH_TARGET").expect("SESSION_TEST_SSH_TARGET");
-        let workspace = temp_workspace();
-        let state = test_state_with_workspace(workspace.clone());
-        let _control = crate::control_socket::start_control_socket(state.clone()).unwrap();
-        let remote_root = format!(
-            "/tmp/{}",
-            RemoteSessionIdentity::new("test", "pending-launch")
-                .unwrap()
-                .tmux_session
-        );
-        let remote = RemoteRef {
-            id: "pending-test".into(),
-            label: "Pending test".into(),
-            host: target,
-            multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: Some(remote_root.clone()),
-        };
-        let host = crate::host::for_group(Some(&remote));
-        eprintln!("test remote root: {remote_root}");
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                name: Some("Pending test".into()),
-                dir: Some("/tmp".into()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: Some(remote),
-                remote_id: None,
-            },
-        )
-        .unwrap();
-        for cancel in [false, false, true] {
-            state.update_group(group.clone()).unwrap();
-            let requested = Instant::now();
-            let pane = spawn_shell_pane(&state, None, None, Some(&group.id)).unwrap();
-            eprintln!(
-                "test remote pane returned in {} ms (cancel={cancel})",
-                requested.elapsed().as_millis()
-            );
-            assert_eq!(
-                pane.remote_connection.as_ref().unwrap().stage.as_deref(),
-                Some("starting")
-            );
-            let (controller, _, _) = state.pane_remote_control(&pane.id).unwrap().unwrap();
-            if !cancel {
-                let deadline = Instant::now() + Duration::from_secs(30);
-                loop {
-                    let connection = state
-                        .list_panes()
-                        .unwrap()
-                        .into_iter()
-                        .find(|p| p.id == pane.id)
-                        .unwrap()
-                        .remote_connection
-                        .unwrap();
-                    if connection.state == RemoteConnectionState::Connected {
-                        assert!(connection.startup_timings.contains_key("bootstrapped"));
-                        assert!(connection.startup_timings.contains_key("ready"));
-                        eprintln!(
-                            "test remote startup timings: {:?}",
-                            connection.startup_timings
-                        );
-                        break;
-                    }
-                    assert_ne!(
-                        connection.state,
-                        RemoteConnectionState::Failed,
-                        "{:?}",
-                        connection
-                    );
-                    assert!(
-                        Instant::now() < deadline,
-                        "remote shell did not connect: {:?}",
-                        connection
-                    );
-                    thread::sleep(Duration::from_millis(20));
-                }
-            }
-            kill_pane(&state, pane.id.clone()).unwrap();
-            assert!(controller.stopped());
-            assert!(!controller.initial_launch_in_progress());
-            let commands = host
-                .existing_tmux_session_commands(
-                    pane.remote_session.as_ref().unwrap(),
-                    "/unused.sock",
-                )
-                .unwrap();
-            assert_eq!(probe_remote_session(&commands.probe_argv), Ok(false));
-            assert!(!state.pane_exists(&pane.id).unwrap());
-        }
-        let cleanup = host
-            .command(crate::host::RemoteCommand {
-                program: "rm",
-                args: vec!["-rf".into(), "--".into(), remote_root],
-                ..Default::default()
-            })
-            .status()
-            .unwrap();
-        assert!(cleanup.success());
-        drop(_control);
-        fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    #[ignore = "requires SESSION_TEST_SSH_TARGET and mutates a session-prefixed tmux session there"]
-    fn managed_remote_tmux_round_trip() {
-        let target = std::env::var("SESSION_TEST_SSH_TARGET").expect("SESSION_TEST_SSH_TARGET");
-        let workspace = temp_workspace();
-        let state = test_state_with_workspace(workspace.clone());
-        // The SSH attachment is required to fail closed when its reverse hook
-        // forward cannot be created, so exercise it against a real Session control
-        // listener rather than the stale/nonexistent path older versions of
-        // this test tolerated.
-        let _control = crate::control_socket::start_control_socket(state.clone()).unwrap();
-        let remote_ref = crate::workspace::RemoteRef {
-            id: "integration-remote".to_string(),
-            label: target.clone(),
-            host: target,
-            multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: Some("/tmp/session-integration-workspaces".to_string()),
-        };
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                name: Some("Remote integration".to_string()),
-                dir: Some("/tmp".to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: Some(remote_ref.clone()),
-                remote_id: None,
-            },
-        )
-        .unwrap();
-        let pane_id = "pane-remote-integration".to_string();
-        let support_dir = PathBuf::from(
-            "/tmp/session-integration-workspaces/.session/support/pane-remote-integration",
-        );
-        let support_path = support_dir.join("probe.txt");
-        let mut identity = RemoteSessionIdentity::new("integration-remote", &pane_id).unwrap();
-        identity.support_dir = Some(support_dir.display().to_string());
-        let pane = spawn_pty(
-            &state,
-            PtySpawnSpec {
-                pane_id: Some(pane_id.clone()),
-                agent_id: None,
-                group_id: group.id,
-                kind: PaneKind::Shell,
-                title: "Remote integration".to_string(),
-                last_osc_title: None,
-                program: "/bin/sh".to_string(),
-                args: vec![
-                    "-lc".to_string(),
-                    format!("test \"$(cat '{}')\" = 'provisioned remotely' || exit 91; printf 'remote-ready\\n'; IFS= read -r trigger; printf 'remote-gap-armed\\n'; sleep 0.2; gap=1; while [ \"$gap\" -le 40 ]; do printf 'remote-offline-gap-%s\\n' \"$gap\"; gap=$((gap + 1)); done; count=1; while [ \"$count\" -le 2 ]; do IFS= read -r line; printf 'remote-got-%s:%s\\n' \"$count\" \"$line\"; count=$((count + 1)); done; sleep 300", support_path.display()),
-                ],
-                cwd: PathBuf::from("/tmp"),
-                envs: Vec::new(),
-                support_files: vec![SupportFile {
-                    root: support_dir.clone(),
-                    path: support_path,
-                    contents: "provisioned remotely".to_string(),
-                    mode: 0o600,
-                    create_new: true,
-                    prune_prefix: Some("probe".to_string()),
-                }],
-                support_file_fallback: None,
-                initial_size: Some(InitialPaneSize { cols: 90, rows: 10 }),
-                recovered: false,
-                ssh_target: None,
-                remote: Some(RemoteSpawnSpec {
-                    host: crate::host::for_group(Some(&remote_ref)),
-                    identity,
-                }),
-                fallback_workspace: None,
-            },
-        )
-        .unwrap();
-
-        let wait_for = |needle: &[u8]| {
-            let deadline = std::time::Instant::now() + Duration::from_secs(15);
-            loop {
-                let backlog = state.pane_backlog(&pane.id).unwrap().unwrap();
-                let buffered = windows_contains(&backlog.lock().unwrap().buffer, needle);
-                let durable = read_pane_scrollback(&workspace, &pane.id)
-                    .map(|bytes| windows_contains(&bytes, needle))
-                    .unwrap_or(false);
-                if buffered || durable {
-                    return true;
-                }
-                if std::time::Instant::now() >= deadline {
-                    return false;
-                }
-                thread::sleep(Duration::from_millis(25));
-            }
-        };
-        let wait_connected = || {
-            let deadline = std::time::Instant::now() + Duration::from_secs(20);
-            loop {
-                if state.list_panes().unwrap().iter().any(|candidate| {
-                    candidate.id == pane.id
-                        && candidate
-                            .remote_connection
-                            .as_ref()
-                            .is_some_and(|connection| {
-                                connection.state == RemoteConnectionState::Connected
-                            })
-                }) {
-                    return;
-                }
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "remote attachment never verified"
-                );
-                thread::sleep(Duration::from_millis(25));
-            }
-        };
-        wait_connected();
-        let ready = wait_for(b"remote-ready");
-        if ready {
-            state
-                .pane_writer(&pane.id)
-                .unwrap()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .write_all(b"arm gap\r")
-                .unwrap();
-        }
-        let gap_armed = ready && wait_for(b"remote-gap-armed");
-        let (first_controller, _, _) = state
-            .pane_remote_control(&pane.id)
-            .unwrap()
-            .expect("remote controller");
-        let first_child = first_controller.current_child().expect("first SSH child");
-        first_child.lock().unwrap().kill().unwrap();
-        let reconnect_deadline = std::time::Instant::now() + Duration::from_secs(20);
-        let reconnected = loop {
-            if let Some(child) = first_controller.current_child()
-                && !Arc::ptr_eq(&child, &first_child)
-            {
-                break true;
-            }
-            if std::time::Instant::now() >= reconnect_deadline {
-                break false;
-            }
-            thread::sleep(Duration::from_millis(25));
-        };
-        let disconnected_history = reconnected && wait_for(b"remote-offline-gap-40");
-        attach_pane(&state, pane.id.clone()).unwrap();
-        if gap_armed && reconnected {
-            wait_connected();
-            state
-                .pane_writer(&pane.id)
-                .unwrap()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .write_all(b"hello from session\r")
-                .unwrap();
-        }
-        let round_trip = gap_armed && reconnected && wait_for(b"remote-got-1:hello from session");
-
-        // Replace the process-local runtime with the persisted pane identity,
-        // simulating a Session restart. Recovery must attach the existing session
-        // and must not execute any create command.
-        let snapshot = state
-            .list_panes()
-            .unwrap()
-            .into_iter()
-            .find(|candidate| candidate.id == pane.id)
-            .unwrap();
-        let (_, attachment) = first_controller.begin_generation();
-        if let Some(attachment) = attachment {
-            let _ = kill_child(&pane.id, attachment.child);
-        }
-        let restart_recovered = reattach_remote_pane(&state, &snapshot).unwrap();
-        let (restart_controller, _, commands) = state
-            .pane_remote_control(&pane.id)
-            .unwrap()
-            .expect("recovered remote controller");
-        assert!(!Arc::ptr_eq(&first_controller, &restart_controller));
-        assert!(commands.create_argv.is_empty());
-        wait_connected();
-        state
-            .pane_writer(&pane.id)
-            .unwrap()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .write_all(b"after restart\r")
-            .unwrap();
-        let restart_round_trip = wait_for(b"remote-got-2:after restart");
-        let durable_history = read_pane_scrollback(&workspace, &pane.id).unwrap();
-        let cleanup = kill_pane(&state, pane.id.clone());
-        let support_removed = crate::host::for_group(Some(&remote_ref))
-            .command(crate::host::RemoteCommand {
-                program: "test",
-                args: vec![
-                    "!".to_string(),
-                    "-e".to_string(),
-                    support_dir.display().to_string(),
-                ],
-                ..Default::default()
-            })
-            .status()
-            .is_ok_and(|status| status.success());
-        let _ = fs::remove_dir_all(workspace);
-
-        assert!(ready, "remote pane never produced its startup output");
-        assert!(
-            round_trip,
-            "remote pane did not reconnect and round trip through tmux"
-        );
-        assert!(
-            disconnected_history && windows_contains(&durable_history, b"remote-offline-gap-40"),
-            "output produced while SSH was detached was not reconciled into local scrollback"
-        );
-        assert!(restart_recovered.recovered);
-        assert!(
-            support_removed,
-            "remote support directory was not cleaned up"
-        );
-        assert!(
-            restart_round_trip,
-            "attach-only restart recovery did not reach the existing process"
-        );
-        cleanup.unwrap();
-    }
-
-    #[test]
     fn materialize_support_files_rejects_paths_outside_their_root() {
         let error = materialize_support_files(&[SupportFile {
             root: PathBuf::from("/tmp/session-sf-root"),
@@ -6238,240 +5276,6 @@ mod tests {
     }
 
     #[test]
-    fn recovered_shell_preserves_base_and_osc_titles() {
-        let mut spec = PtySpawnSpec {
-            pane_id: Some("pane-1".to_string()),
-            agent_id: None,
-            group_id: "group-1".to_string(),
-            kind: PaneKind::Shell,
-            title: "Shell".to_string(),
-            last_osc_title: None,
-            program: "/bin/sh".to_string(),
-            args: Vec::new(),
-            cwd: std::env::temp_dir(),
-            envs: Vec::new(),
-            support_files: Vec::new(),
-            support_file_fallback: None,
-            initial_size: None,
-            recovered: true,
-            ssh_target: None,
-            remote: None,
-            fallback_workspace: None,
-        };
-        let pane = PaneInfo {
-            id: "pane-1".to_string(),
-            title: "Generated review title".to_string(),
-            last_osc_title: Some("Agent OSC title".to_string()),
-            kind: PaneKind::Shell,
-            agent_id: None,
-            group_id: "group-1".to_string(),
-            cwd: std::env::temp_dir().display().to_string(),
-            active_workspace: None,
-            remote_session: None,
-            remote_connection: None,
-            cols: 100,
-            rows: 24,
-            status: PaneStatus::Running,
-            last_active_at: 0,
-            recovered: true,
-            ssh_target: None,
-            depth: 0,
-        };
-
-        apply_recovered_shell_titles(&mut spec, &pane);
-
-        assert_eq!(spec.title, "Generated review title");
-        assert_eq!(spec.last_osc_title.as_deref(), Some("Agent OSC title"));
-    }
-
-    fn git(repo: &Path, args: &[&str]) {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(args)
-            .output()
-            .expect("git runs");
-        assert!(
-            output.status.success(),
-            "git {args:?} failed: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    #[test]
-    fn close_worktree_pane_deletes_after_agent_is_pruned() {
-        let workspace = temp_workspace();
-        let repo = workspace.join("repo");
-        let worktree = workspace.join("agent-worktree");
-        fs::create_dir_all(&repo).unwrap();
-        git(&repo, &["init", "-b", "main"]);
-        git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "session test"]);
-        git(&repo, &["commit", "--allow-empty", "-m", "init"]);
-
-        let branch = "session/test-agent";
-        let worktree_arg = worktree.to_string_lossy().to_string();
-        git(
-            &repo,
-            &["worktree", "add", "-b", branch, &worktree_arg, "HEAD"],
-        );
-
-        let state = test_state_with_workspace(workspace.clone());
-        state
-            .insert_group_after(
-                GroupInfo {
-                    id: "group-1".to_string(),
-                    name: "group".to_string(),
-                    name_override: None,
-                    dir: workspace.to_string_lossy().to_string(),
-                    managed_dir: workspace.join("managed").to_string_lossy().to_string(),
-                    base_repo: Some(repo.to_string_lossy().to_string()),
-                    base_ref: None,
-                    parent_id: None,
-                    created_at: 1,
-                    collapsed: false,
-                    scope: WorkspaceScope::Terminal,
-                    imported_research_archive_id: None,
-                    remote: None,
-                    agents: vec!["agent-1".to_string()],
-                },
-                None,
-            )
-            .unwrap();
-        let pane = spawn_test_pty(
-            &state,
-            "pane-worktree",
-            vec!["-c".to_string(), "sleep 30".to_string()],
-        );
-        state
-            .insert_agent(AgentInfo {
-                id: "agent-1".to_string(),
-                group_id: "group-1".to_string(),
-                adapter: "claude".to_string(),
-                worktree_dir: worktree.to_string_lossy().to_string(),
-                branch: Some(branch.to_string()),
-                active_workspace: None,
-                pane_id: Some(pane.id),
-                orphaned_queue_pane_id: None,
-                session_id: None,
-                transcript_path: None,
-                status: AgentStatus::Running,
-                model: None,
-                effort: None,
-                approval_mode: None,
-                parent_id: None,
-                fork_point: None,
-                root_session_id: None,
-                thread_id: None,
-                branch_id: None,
-                native_leaf_id: None,
-                paused: false,
-                created_at: 1,
-            })
-            .unwrap();
-
-        close_worktree_pane(&state, "agent-1", true).unwrap();
-
-        assert!(state.agent("agent-1").unwrap().is_none());
-        assert!(!worktree.exists());
-
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn resize_pane_is_a_noop_when_the_grid_is_unchanged() {
-        let state = test_state();
-        let pane = spawn_test_pty(
-            &state,
-            "pane-resize-noop",
-            vec!["-c".to_string(), "sleep 30".to_string()],
-        );
-        resize_pane(&state, pane.id.clone(), 100, 40).unwrap();
-        let master = state.pane_master(&pane.id).unwrap().unwrap();
-        {
-            let size = master.lock().unwrap().get_size().unwrap();
-            assert_eq!(size.cols, 100);
-            assert_eq!(size.rows, 40);
-        }
-        resize_pane(&state, pane.id.clone(), 100, 40).unwrap();
-        let size = master.lock().unwrap().get_size().unwrap();
-        assert_eq!(size.cols, 100);
-        assert_eq!(size.rows, 40);
-        let _ = kill_pane(&state, pane.id);
-    }
-
-    fn state_with_disconnected_remote() -> AppState {
-        let state = test_state();
-        let controller = RemoteAttachmentController::new();
-        let history = RemoteHistoryCheckpoint::new(Vec::new());
-        let backlog: SharedBacklog = Arc::new(Mutex::new(Default::default()));
-        let commands = crate::host::RemoteTmuxCommands {
-            version_argv: Vec::new(),
-            create_argv: Vec::new(),
-            configure_argv: Vec::new(),
-            attach_argv: Vec::new(),
-            probe_argv: Vec::new(),
-            clients_argv: Vec::new(),
-            capture_argv: Vec::new(),
-            capture_full_argv: Vec::new(),
-            activity_argv: Vec::new(),
-            kill_argv: Vec::new(),
-            forward_cleanup_argv: Vec::new(),
-            support_cleanup_argv: Vec::new(),
-            remote_socket_path: "/tmp/session-offline.sock".to_string(),
-        };
-        state
-            .insert_pane(PaneRuntime {
-                info: PaneInfo {
-                    id: "pane-offline-resize".to_string(),
-                    title: "Remote".to_string(),
-                    last_osc_title: None,
-                    kind: PaneKind::Shell,
-                    agent_id: None,
-                    group_id: "group-1".to_string(),
-                    cwd: "/srv/project".to_string(),
-                    active_workspace: None,
-                    remote_session: Some(
-                        RemoteSessionIdentity::new("remote-1", "pane-offline-resize").unwrap(),
-                    ),
-                    remote_connection: Some(RemoteConnectionInfo {
-                        state: RemoteConnectionState::Reconnecting,
-                        message: None,
-                        ..Default::default()
-                    }),
-                    cols: 80,
-                    rows: 24,
-                    status: PaneStatus::Running,
-                    last_active_at: 0,
-                    recovered: false,
-                    ssh_target: None,
-                    depth: 0,
-                },
-                backend: PaneBackend::RemoteTmux(RemoteTmuxBackend::new(
-                    controller, history, backlog, commands,
-                )),
-                cwd_observation_seq: 0,
-            })
-            .unwrap();
-
-        state
-    }
-
-    #[test]
-    fn disconnected_remote_resize_is_persisted_for_the_next_attachment() {
-        let state = state_with_disconnected_remote();
-        resize_pane(&state, "pane-offline-resize".to_string(), 132, 41).unwrap();
-        let pane = state
-            .list_panes()
-            .unwrap()
-            .into_iter()
-            .find(|pane| pane.id == "pane-offline-resize")
-            .unwrap();
-        assert_eq!((pane.cols, pane.rows), (132, 41));
-    }
-
-    #[test]
     fn reader_thread_reaps_and_removes_pane_after_child_exits() {
         let state = test_state();
         let pane = spawn_test_pty(
@@ -6510,46 +5314,6 @@ mod tests {
     }
 
     #[test]
-    fn pane_activity_is_idle_for_shell_without_children() {
-        let state = test_state();
-        let pane = spawn_test_pty(&state, "pane-idle", Vec::new());
-
-        assert_eq!(
-            pane_activity(&state, pane.id.clone()).unwrap(),
-            PaneActivity::idle()
-        );
-
-        kill_pane(&state, pane.id).expect("cleanup test pane");
-    }
-
-    #[test]
-    fn pane_activity_detects_running_descendant_processes() {
-        let state = test_state();
-        let pane = spawn_test_pty(
-            &state,
-            "pane-busy",
-            vec!["-c".to_string(), "sleep 30 & wait".to_string()],
-        );
-
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        loop {
-            let activity = pane_activity(&state, pane.id.clone()).unwrap();
-            if matches!(activity.kind, PaneActivityKind::RunningProcess) {
-                assert!(activity.process_count >= 1);
-                assert!(activity.process_summary.is_some());
-                break;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "pane activity never detected the child process"
-            );
-            thread::sleep(Duration::from_millis(20));
-        }
-
-        kill_pane(&state, pane.id).expect("cleanup test pane");
-    }
-
-    #[test]
     fn descendant_walk_follows_parent_pairs_and_survives_cycles() {
         // 1 → {2, 3}, 2 → {4}, plus an unrelated 9→10 subtree and a stale
         // cycle (4 → 1) a mid-snapshot pid reuse could produce.
@@ -6569,28 +5333,6 @@ mod tests {
 
         assert_eq!(descendants_from_parent_pairs(9, &pairs), vec![10]);
         assert!(descendants_from_parent_pairs(42, &pairs).is_empty());
-    }
-
-    #[test]
-    fn pane_activity_process_filter_excludes_session() {
-        let processes = user_running_processes(vec![
-            RunningProcess {
-                name: "session".to_string(),
-            },
-            RunningProcess {
-                name: "SESSION".to_string(),
-            },
-            RunningProcess {
-                name: "node".to_string(),
-            },
-        ]);
-
-        assert_eq!(
-            processes,
-            vec![RunningProcess {
-                name: "node".to_string(),
-            }]
-        );
     }
 
     #[test]
@@ -6629,46 +5371,5 @@ mod tests {
 
         let second = second.expect("pane teardowns should overlap");
         assert_ne!(first, second);
-    }
-
-    #[test]
-    fn process_output_is_durable_without_frontend_attachment() {
-        let workspace = temp_workspace();
-        let state = test_state_with_workspace(workspace.clone());
-        // Exceed the old 8 MiB pre-attach cap, then keep the process alive so
-        // ordinary pane-exit cleanup does not delete its log during assertions.
-        let pane = spawn_test_pty(
-            &state,
-            "pane-scrollback",
-            vec![
-                "-c".into(),
-                "head -c 9437184 /dev/zero; printf 'OUTPUT_COMPLETE'; sleep 30".into(),
-            ],
-        );
-        let deadline = std::time::Instant::now() + Duration::from_secs(15);
-        let output = loop {
-            let output = read_pane_scrollback(&workspace, &pane.id).unwrap();
-            if output.ends_with(b"OUTPUT_COMPLETE") {
-                break output;
-            }
-            if std::time::Instant::now() >= deadline {
-                let _ = kill_pane(&state, pane.id.clone());
-                panic!("process output must be durable before any frontend attachment");
-            }
-            thread::sleep(Duration::from_millis(20));
-        };
-        attach_pane(&state, pane.id.clone()).unwrap();
-        attach_pane(&state, pane.id.clone()).unwrap();
-        assert_eq!(
-            read_pane_scrollback(&workspace, &pane.id).unwrap(),
-            output,
-            "repeated compatibility attaches must not duplicate output"
-        );
-        kill_pane(&state, pane.id.clone()).unwrap();
-        assert!(
-            read_pane_scrollback(&workspace, &pane.id)
-                .unwrap()
-                .is_empty()
-        );
     }
 }

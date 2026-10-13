@@ -149,71 +149,6 @@ export interface RemoteConnectionInfo {
   sessionExists?: boolean | null;
 }
 
-export type PaneSplitIntentSource = "command" | "join" | "drag-half" | "drag-divider";
-
-export type PaneSplitIntentPosition = "above" | "below";
-
-export type PaneSplitAxis = "vertical" | "horizontal";
-
-export interface PaneSplitIntent {
-  kind: "inserted-relative";
-  anchorPaneId: string;
-  position: PaneSplitIntentPosition;
-  source: PaneSplitIntentSource;
-  createdAt: number;
-}
-
-/** A single pane occupying a leaf of a nested split's layout tree. */
-export interface PaneSplitPaneNode {
-  kind: "pane";
-  paneId: string;
-  /** Fraction of the parent node along the parent's axis. Missing means equal share. */
-  size?: number;
-}
-
-/** An interior node: two or more children laid out along `axis`. */
-export interface PaneSplitBranchNode {
-  kind: "split";
-  axis: PaneSplitAxis;
-  /** Fraction of the parent node along the parent's axis. Missing means equal share. */
-  size?: number;
-  children: PaneSplitNode[];
-}
-
-export type PaneSplitNode = PaneSplitPaneNode | PaneSplitBranchNode;
-
-export interface PaneSplitInfo {
-  id: string;
-  paneIds: string[];
-  sizes: Record<string, number>;
-  intent?: Record<string, PaneSplitIntent>;
-  /** Layout axis. Omitted or `vertical` is the stacked (top/bottom) default.
-   * With a `root`, this mirrors the root node's axis. */
-  axis?: PaneSplitAxis;
-  /** Nesting structure over `paneIds`. Present only when the layout is actually
-   * nested (depth >= 2); a flat split omits it and behaves exactly as before.
-   * The tree's in-order leaves always equal `paneIds`, so tab order and geometry
-   * cannot disagree. Older builds ignore this and render the flat run. */
-  root?: PaneSplitNode;
-}
-
-export type PaneActivity =
-  | {
-      kind: "idle";
-      processCount: 0;
-      processSummary?: null;
-    }
-  | {
-      kind: "runningProcess";
-      processCount: number;
-      processSummary?: string | null;
-    };
-
-export interface InitialPaneSize {
-  cols: number;
-  rows: number;
-}
-
 export type RemoteMultiplexer = "tmux" | "herdr";
 
 /** An effective saved machine, from config or the UI-owned preferences store. */
@@ -815,11 +750,6 @@ export interface PromptLibrary {
   // False when the workspace root is the home directory, making the two scopes
   // one folder — the UI then collapses to a single Global section.
   hasProjectScope: boolean;
-}
-
-export interface WorktreeStatus {
-  hasChanges: boolean;
-  changedFiles: number;
 }
 
 export interface TranscriptHookEvent {

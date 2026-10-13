@@ -11,8 +11,7 @@ use crate::config::SessionConfig;
 use crate::events::SessionEvent;
 use crate::host::{self, Host};
 use crate::pty::{
-    CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
-    spawn_pty,
+    CommandPlan, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir, spawn_pty,
 };
 use crate::state::{AppState, PaneInfo, PaneKind};
 use crate::transcript::{
@@ -167,15 +166,6 @@ impl AgentAdapter for CodexAdapter {
         self.spawn_pane(state, request)
     }
 
-    fn resume(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        self.respawn_pane(state, pane, agent)
-    }
-
     fn prepare_shell_launch(
         &self,
         state: &AppState,
@@ -189,10 +179,6 @@ impl AgentAdapter for CodexAdapter {
             command_name: "codex",
             adapter_id: self.id(),
         }]
-    }
-
-    fn shell_resume_command(&self, session_id: &str) -> Option<String> {
-        Some(format!("codex resume {}", shell_quote_arg(session_id)))
     }
 
     fn ingest_notification(
@@ -484,98 +470,6 @@ impl CodexAdapter {
                 Err(err)
             }
         }
-    }
-
-    fn respawn_pane(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        let host = self.host_for_group(state, &agent.group_id)?;
-        // Older Session versions could persist a hook-reported side-conversation id
-        // beside the original rollout path. The rollout is the durable authority,
-        // so repair that hybrid before choosing which Codex session to resume. A
-        // remote rollout path cannot be opened through the local filesystem.
-        let agent = if host.is_local() {
-            reconcile_codex_agent_identity(state, agent)?
-        } else {
-            agent.clone()
-        };
-        let binary = self.binary_for_host(&host)?;
-        let (codex_home, remote_hook_cli) = self.integration_for_host(&host)?;
-        let cwd = self.cwd_for_host(&host, &agent.worktree_dir, || {
-            format!(
-                "agent worktree {} no longer exists; relaunch manually",
-                agent.worktree_dir
-            )
-        })?;
-        let options = CodexLaunchOptions {
-            reasoning_effort: agent.effort.clone(),
-            ..CodexLaunchOptions::default()
-        };
-        let worktree_root = codex_worktree_root(state, &agent, &cwd)?;
-        let (args, resumed) = build_codex_resume_args(
-            &cwd,
-            host.is_local()
-                .then_some(state.config().workspace_root.as_path()),
-            agent.model.as_deref(),
-            &options,
-            worktree_root
-                .as_deref()
-                .map(|_| CODEX_SESSION_WORKTREE_INSTRUCTIONS),
-            remote_hook_cli.as_deref(),
-            agent.session_id.as_deref(),
-        );
-
-        let mut envs = agent_pane_envs(state, &pane.id, &agent.id)?;
-        if let Some(codex_home) = codex_home {
-            envs.push(("CODEX_HOME".to_string(), codex_home.display().to_string()));
-        }
-        add_codex_worktree_root_env(&mut envs, worktree_root.as_deref());
-
-        let spec = plan_to_spec(
-            state,
-            PaneMeta {
-                pane_id: Some(pane.id.clone()),
-                agent_id: Some(agent.id.clone()),
-                group_id: agent.group_id.clone(),
-                kind: PaneKind::Agent,
-                title: pane.title.clone(),
-                last_osc_title: pane.last_osc_title.clone(),
-                initial_size: Some(InitialPaneSize {
-                    cols: pane.cols,
-                    rows: pane.rows,
-                }),
-                recovered: true,
-            },
-            CommandPlan {
-                program: binary,
-                args,
-                cwd,
-                envs,
-                support_files: Vec::new(),
-                support_file_fallback: None,
-            },
-        )?;
-        let info = spawn_pty(state, spec)?;
-
-        // A recovered Codex process is launched without an inline prompt, even when
-        // resuming a session, so it is ready once the TUI appears. Mark it Idle (not
-        // Running) so a recovered quiet session isn't shown as working; the first real
-        // prompt/tool hook promotes it to Running.
-        let restored = attach_codex_agent_pane(state, &agent.id, pane.id.clone(), false)?;
-        if host.is_local() {
-            ensure_codex_transcript_tail(state, &restored);
-        }
-        state.emit(SessionEvent::new(
-            "agent.recovered",
-            Some(pane.id.clone()),
-            Some(restored.id.clone()),
-            json!({ "resumed": resumed, "agent": restored }),
-        ));
-
-        Ok(info)
     }
 
     /// Forks `source` into a new Codex agent pane using `codex fork <session> [prompt]`.
@@ -1235,47 +1129,6 @@ fn build_codex_args(
 
     args.extend(tail_args);
     args
-}
-
-fn build_codex_resume_args(
-    cwd: &Path,
-    additional_workspace_root: Option<&Path>,
-    model: Option<&str>,
-    options: &CodexLaunchOptions,
-    developer_instructions: Option<&str>,
-    remote_hook_cli: Option<&str>,
-    session_id: Option<&str>,
-) -> (Vec<String>, bool) {
-    let Some(session_id) = session_id
-        .map(str::trim)
-        .filter(|session_id| !session_id.is_empty())
-    else {
-        return (
-            build_codex_args(
-                cwd,
-                additional_workspace_root,
-                model,
-                options,
-                developer_instructions,
-                remote_hook_cli,
-                Vec::new(),
-            ),
-            false,
-        );
-    };
-
-    (
-        build_codex_args(
-            cwd,
-            additional_workspace_root,
-            model,
-            options,
-            developer_instructions,
-            remote_hook_cli,
-            vec!["resume".to_string(), session_id.to_string()],
-        ),
-        true,
-    )
 }
 
 fn build_codex_fork_args(
@@ -3571,47 +3424,6 @@ mod tests {
     }
 
     #[test]
-    fn resume_args_include_session_id_when_present() {
-        let options = CodexLaunchOptions::from_value(json!({
-            "sandbox": "workspace-write",
-            "approvalPolicy": "on-request"
-        }))
-        .unwrap();
-
-        let (args, resumed) = build_codex_resume_args(
-            Path::new("/tmp/session"),
-            Some(Path::new("/tmp/session/.session/workspaces")),
-            Some("gpt-5"),
-            &options,
-            None,
-            None,
-            Some(" session-123 "),
-        );
-
-        assert!(resumed);
-        assert_eq!(
-            args,
-            vec![
-                "--cd",
-                "/tmp/session",
-                "--add-dir",
-                "/tmp/session/.session/workspaces",
-                "--model",
-                "gpt-5",
-                "--profile",
-                "session-codex",
-                "--sandbox",
-                "workspace-write",
-                "--ask-for-approval",
-                "on-request",
-                "--search",
-                "resume",
-                "session-123"
-            ]
-        );
-    }
-
-    #[test]
     fn fork_args_include_session_id_and_prompt_when_present() {
         let options = CodexLaunchOptions::from_value(json!({
             "sandbox": "workspace-write",
@@ -3681,35 +3493,6 @@ mod tests {
                 "--search",
                 "fork",
                 "session-123"
-            ]
-        );
-    }
-
-    #[test]
-    fn resume_args_fall_back_to_fresh_launch_without_session_id() {
-        let options = CodexLaunchOptions::default();
-
-        let (args, resumed) = build_codex_resume_args(
-            Path::new("/tmp/session"),
-            None,
-            None,
-            &options,
-            None,
-            None,
-            Some("   "),
-        );
-
-        assert!(!resumed);
-        assert_eq!(
-            args,
-            vec![
-                "--cd",
-                "/tmp/session",
-                "--profile",
-                "session-codex",
-                "--sandbox",
-                "workspace-write",
-                "--search"
             ]
         );
     }

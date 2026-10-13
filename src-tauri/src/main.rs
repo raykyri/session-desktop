@@ -18,7 +18,6 @@ mod mcp;
 mod native_support;
 mod persistence;
 mod pty;
-mod recovery;
 mod remote_cli;
 mod remote_files;
 mod remote_terminal;
@@ -52,11 +51,6 @@ use native_support::{
     native_support_set_browser_background, native_support_set_browser_overlay_open,
     native_support_set_iframe_shortcut_fallback,
 };
-use pty::{
-    InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane,
-    pane_activity as inspect_pane_activity, resize_pane, spawn_shell_pane, spawn_ssh_shell_pane,
-    write_pane,
-};
 use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
     RecentResearchQueryCursor, ResearchBranchRemoval, ResearchDraft, ResearchFolderState,
@@ -69,16 +63,13 @@ use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
 };
 use sleep::SleepGuard;
-use state::{
-    AppState, PaneInfo, PaneLayoutEntry, PaneSplitInfo, ResearchRelaunch, ShellAgentJobInfo,
-};
+use state::{AppState, PaneInfo, ResearchRelaunch, ShellAgentJobInfo};
 use tauri::{Manager, Url};
 use transcript::Turn;
 use workspace::{
-    AgentInfo, AgentStatus, CreateGroupRequest, GroupInfo, LaunchOrigin, ResearchWorkspaceInfo,
-    WorktreeStatus, agent_worktree_status, create_group, create_research_workspace,
-    ensure_default_research_workspace, move_research_workspace, remove_agent_worktree,
-    remove_research_workspace, rename_group, rename_research_workspace, validate_launch_workspace,
+    AgentInfo, AgentStatus, GroupInfo, LaunchOrigin, ResearchWorkspaceInfo,
+    create_research_workspace, ensure_default_research_workspace, move_research_workspace,
+    remove_research_workspace, rename_research_workspace, validate_launch_workspace,
 };
 
 fn handle_global_shortcut(
@@ -253,22 +244,6 @@ fn validate_ui_remote(id: &str, remote: &config::SavedRemote) -> Result<(), Stri
         return Err("workspace root must be an absolute path or start with ~/".to_string());
     }
     Ok(())
-}
-
-fn prepare_remote_group_request(
-    state: &AppState,
-    mut request: CreateGroupRequest,
-) -> Result<CreateGroupRequest, String> {
-    if request.remote.is_none()
-        && let Some(id) = request.remote_id.as_deref()
-    {
-        let preferences = persistence::load_preferences(&state.config().workspace_root)?;
-        request.remote = Some(state.config().saved_remote_with(id, &preferences.remotes)?);
-    }
-    if let Some(remote) = request.remote.as_mut() {
-        remote_cli::prepare_remote_ref(state, remote)?;
-    }
-    Ok(request)
 }
 
 fn normalize_ui_remote(mut remote: config::SavedRemote) -> config::SavedRemote {
@@ -711,11 +686,6 @@ fn open_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
         .map_err(|err| format!("failed to open {}: {err}", path.display()))
 }
 
-#[tauri::command]
-fn active_tab_set(state: tauri::State<'_, AppState>, tab_id: Option<String>) -> Result<(), String> {
-    state.set_active_tab_id(tab_id)
-}
-
 /// Surfaces a fatal startup error in a native dialog, for GUI (Finder/Dock)
 /// launches that have no terminal to show the `eprintln`. Best-effort: if
 /// `osascript` fails the message is still on stderr for a terminal launch.
@@ -943,19 +913,6 @@ fn browser_open_local_path(
     }
     let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
     open_local_link(&state, &pane_id, resolved, artifact_id)
-}
-
-/// Open a filesystem path activated from the native terminal. Relative paths
-/// resolve against the clicked pane's live cwd before the normal root
-/// confinement and safe preview/reveal disposition.
-#[tauri::command(async)]
-fn browser_open_terminal_path(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    path: String,
-) -> Result<serde_json::Value, String> {
-    let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
-    open_local_link(&state, &pane_id, resolved, None)
 }
 
 /// Reveal a validated local link without opening or executing it.
@@ -2260,77 +2217,6 @@ fn remove_research_branch(
     state.remove_research_branch(&node_id)
 }
 
-#[tauri::command]
-async fn group_create(
-    state: tauri::State<'_, AppState>,
-    request: CreateGroupRequest,
-) -> Result<GroupInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        create_group(&state, prepare_remote_group_request(&state, request)?)
-    })
-    .await
-    .map_err(|err| format!("group_create task failed: {err}"))?
-}
-
-#[tauri::command]
-fn group_rename(
-    state: tauri::State<'_, AppState>,
-    group_id: String,
-    name: Option<String>,
-) -> Result<GroupInfo, String> {
-    rename_group(&state, &group_id, name)
-}
-
-#[tauri::command]
-fn group_reorder(
-    state: tauri::State<'_, AppState>,
-    group_ids: Vec<String>,
-) -> Result<Vec<GroupInfo>, String> {
-    state.reorder_groups(group_ids)
-}
-
-// Commands whose bodies can block for seconds or longer run on tokio's
-// dedicated blocking pool (spawn_blocking, which grows to hundreds of threads)
-// rather than as `(async)` sync bodies: the latter execute inline on the
-// runtime's core workers (one per CPU), so a handful of concurrent git
-// checkouts — or a folder picker parked open — could otherwise starve every
-// other command, including pane writes and turn submits.
-#[tauri::command]
-async fn spawn_shell(
-    state: tauri::State<'_, AppState>,
-    initial_size: Option<InitialPaneSize>,
-    source_pane_id: Option<String>,
-    group_id: Option<String>,
-    remote_id: Option<String>,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        validate_launch_workspace(&state, group_id.as_deref(), LaunchOrigin::Terminal)?;
-        let Some(remote_id) = remote_id.as_deref() else {
-            return spawn_shell_pane(
-                &state,
-                initial_size,
-                source_pane_id.as_deref(),
-                group_id.as_deref(),
-            );
-        };
-        let preferences = persistence::load_preferences(&state.config().workspace_root)?;
-        let remote = state
-            .config()
-            .saved_remote_with(remote_id, &preferences.remotes)?;
-        spawn_ssh_shell_pane(
-            &state,
-            initial_size,
-            source_pane_id.as_deref(),
-            group_id.as_deref(),
-            &remote,
-        )
-    })
-    .await
-    .map_err(|err| format!("spawn_shell task failed: {err}"))?
-}
-
 #[tauri::command(async)]
 fn use_login_shell_get(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     Ok(
@@ -2545,37 +2431,6 @@ async fn research_widget_prepare(
     .map_err(|err| format!("research_widget_prepare task failed: {err}"))?
 }
 
-// pane_write and every agent turn-queue command below are `(async)` as a
-// correctness requirement, not just latency: a submit holds the pane's send
-// lock across native bridge calls that each hop to the main thread, so no
-// synchronous (main-thread) command may ever contend for a send lock — see
-// write_pane. This also keeps the 15ms submit-key delay off the main thread.
-#[tauri::command(async)]
-fn pane_write(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    data: String,
-    paste: bool,
-    submit: bool,
-) -> Result<(), String> {
-    write_pane(
-        &state,
-        PaneWriteOptions {
-            pane_id,
-            data,
-            paste,
-            submit,
-        },
-    )
-}
-
-/// Signals that the webview's listener for `pane_id` is live, flushing any
-/// output the pane produced before the frontend was ready to receive it.
-#[tauri::command(async)]
-fn pane_attach(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(), String> {
-    attach_pane(&state, pane_id)
-}
-
 /// Marks the webview's session-event listener as live. Until this arrives (and
 /// again after any page navigation clears it, see `on_page_load` below), the
 /// native shortcut classifiers decline to consume chords: their events would
@@ -2584,53 +2439,6 @@ fn pane_attach(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(),
 #[tauri::command]
 fn mark_events_listener_ready() {
     native_support::set_events_listener_ready(true);
-}
-
-/// User-invoked escape hatch (pane context menu) for a terminal a crashed or
-/// killed TUI left in a broken state: clears latched modes — kitty keyboard
-/// flags, mouse/focus reporting, the alternate screen — without touching the
-/// running process or the visible content. Async like the other pane commands
-/// that take the scrollback I/O lock.
-#[tauri::command(async)]
-fn pane_reset_terminal_modes(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-) -> Result<(), String> {
-    pty::reset_pane_terminal_modes(&state, &pane_id)
-}
-
-#[tauri::command]
-fn pane_resize(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    cols: u16,
-    rows: u16,
-) -> Result<(), String> {
-    resize_pane(&state, pane_id, cols, rows)
-}
-
-#[tauri::command]
-async fn pane_activity(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-) -> Result<PaneActivity, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || inspect_pane_activity(&state, pane_id))
-        .await
-        .map_err(|err| format!("pane_activity task failed: {err}"))?
-}
-
-#[tauri::command]
-fn pane_reconnect(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(), String> {
-    pty::check_remote_pane(&state, &pane_id, "manualRetry")
-}
-
-#[tauri::command]
-async fn pane_kill(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(), String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || state.close_pane_for_user(&pane_id))
-        .await
-        .map_err(|err| format!("pane_kill task failed: {err}"))?
 }
 
 /// Records that `pane_id` is now the focused pane. Fired by the frontend whenever
@@ -2642,70 +2450,12 @@ fn pane_activate(state: tauri::State<'_, AppState>, pane_id: String) {
 }
 
 #[tauri::command]
-async fn pane_restore_last_closed(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<PaneInfo>, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || recovery::restore_last_closed_pane(&state))
-        .await
-        .map_err(|err| format!("pane_restore_last_closed task failed: {err}"))?
-}
-
-#[tauri::command]
 fn pane_rename(
     state: tauri::State<'_, AppState>,
     pane_id: String,
     title: String,
 ) -> Result<PaneInfo, String> {
     state.rename_pane(&pane_id, title)
-}
-
-#[tauri::command]
-fn pane_reorder(
-    state: tauri::State<'_, AppState>,
-    pane_ids: Vec<String>,
-) -> Result<Vec<PaneInfo>, String> {
-    state.reorder_panes(pane_ids)
-}
-
-#[tauri::command]
-fn pane_set_layout(
-    state: tauri::State<'_, AppState>,
-    items: Vec<PaneLayoutEntry>,
-) -> Result<Vec<PaneInfo>, String> {
-    state.set_pane_layout(items)
-}
-
-#[tauri::command]
-fn pane_move_to_group(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    target_group_id: String,
-    items: Vec<PaneLayoutEntry>,
-) -> Result<Vec<PaneInfo>, String> {
-    state.move_pane_to_group(&pane_id, &target_group_id, items)
-}
-
-#[tauri::command]
-fn pane_place_after(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    sibling_pane_id: String,
-) -> Result<Vec<PaneInfo>, String> {
-    state.place_pane_after(&pane_id, &sibling_pane_id)
-}
-
-#[tauri::command]
-fn pane_splits_get(state: tauri::State<'_, AppState>) -> Result<Vec<PaneSplitInfo>, String> {
-    state.pane_splits()
-}
-
-#[tauri::command]
-fn pane_splits_set(
-    state: tauri::State<'_, AppState>,
-    splits: Vec<PaneSplitInfo>,
-) -> Result<Vec<PaneSplitInfo>, String> {
-    state.set_pane_splits(splits)
 }
 
 #[tauri::command]
@@ -2723,42 +2473,6 @@ fn interface_draft_set(
     value: Option<String>,
 ) -> Result<(), String> {
     state.set_interface_draft(&key, value)
-}
-
-#[tauri::command]
-async fn worktree_status(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<WorktreeStatus, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || agent_worktree_status(&state, &agent_id))
-        .await
-        .map_err(|err| format!("worktree_status task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn worktree_remove(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<(), String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || remove_agent_worktree(&state, &agent_id))
-        .await
-        .map_err(|err| format!("worktree_remove task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn worktree_close_pane(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    delete_worktree: bool,
-) -> Result<(), String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        close_worktree_pane(&state, &agent_id, delete_worktree)
-    })
-    .await
-    .map_err(|err| format!("worktree_close_pane task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -3385,7 +3099,6 @@ fn main() {
             github_auth::github_login_poll,
             github_auth::github_login_cancel,
             github_auth::github_logout,
-            active_tab_set,
             browser_backend::browser_automation_snapshot,
             browser_backend::browser_automation_start_screencast,
             browser_backend::browser_automation_stop_screencast,
@@ -3405,7 +3118,6 @@ fn main() {
             open_external_url,
             browser_open_preview_external,
             browser_open_local_path,
-            browser_open_terminal_path,
             browser_reveal_local_path,
             browser_open_local_path_external,
             browser_open_codex_inline_visualization,
@@ -3470,10 +3182,6 @@ fn main() {
             list_research_trash,
             empty_research_trash,
             remove_research_branch,
-            group_create,
-            group_rename,
-            group_reorder,
-            spawn_shell,
             use_login_shell_get,
             use_login_shell_set,
             research_launch_instruction_get,
@@ -3488,31 +3196,14 @@ fn main() {
             research_artifact_state_update,
             worktree_location_get,
             worktree_location_set,
-            pane_write,
-            pane_attach,
-            pane_reset_terminal_modes,
             mark_events_listener_ready,
-            pane_resize,
-            pane_activity,
-            pane_reconnect,
-            pane_kill,
             pane_activate,
-            pane_restore_last_closed,
             pane_rename,
-            pane_reorder,
-            pane_set_layout,
-            pane_move_to_group,
-            pane_place_after,
-            pane_splits_get,
-            pane_splits_set,
             native_support_set_browser_overlay_open,
             native_support_set_iframe_shortcut_fallback,
             native_support_set_browser_background,
             interface_draft_get,
             interface_draft_set,
-            worktree_status,
-            worktree_remove,
-            worktree_close_pane,
             app_confirm_exit,
             app_set_prevent_sleep,
             generate_research_agent_title,

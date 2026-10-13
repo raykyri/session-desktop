@@ -5,14 +5,14 @@ use super::{
     WorkspaceObservation, apply_shell_cli_model, ensure_on_path,
     model_from_claude_native_transcript_line, new_uuid_v4, parse_transcript_records,
     prepared_shell_agent, record_shell_fork_lineage, record_shell_session_lineage,
-    reusable_session_agent, shell_cli_model, shell_quote_arg, shell_quote_path,
+    reusable_session_agent, shell_cli_model, shell_quote_path,
 };
 use crate::config::SessionConfig;
 use crate::events::SessionEvent;
 use crate::host::Host;
 use crate::pty::{
-    CommandPlan, InitialPaneSize, PaneMeta, SupportFile, agent_pane_envs,
-    materialize_in_pane_support_files, plan_to_spec, recoverable_dir, spawn_pty,
+    CommandPlan, PaneMeta, SupportFile, agent_pane_envs, materialize_in_pane_support_files,
+    plan_to_spec, recoverable_dir, spawn_pty,
 };
 use crate::state::{AppState, PaneInfo, PaneKind};
 use crate::transcript::{
@@ -179,15 +179,6 @@ impl AgentAdapter for ClaudeAdapter {
         self.spawn_pane(state, request)
     }
 
-    fn resume(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        self.respawn_pane(state, pane, agent)
-    }
-
     fn prepare_shell_launch(
         &self,
         state: &AppState,
@@ -201,10 +192,6 @@ impl AgentAdapter for ClaudeAdapter {
             command_name: "claude",
             adapter_id: self.id(),
         }]
-    }
-
-    fn shell_resume_command(&self, session_id: &str) -> Option<String> {
-        Some(format!("claude --resume {}", shell_quote_arg(session_id)))
     }
 
     fn ingest_notification(
@@ -662,108 +649,6 @@ impl ClaudeAdapter {
         };
 
         Ok((pane, forked))
-    }
-
-    fn respawn_pane(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        let host = self.host_for_group(state, &agent.group_id)?;
-        let binary = self.binary_for_host(&host)?;
-        let cwd = self.cwd_for_host(&host, &agent.worktree_dir, || {
-            format!(
-                "agent worktree {} no longer exists; relaunch manually",
-                agent.worktree_dir
-            )
-        })?;
-
-        let (settings_path, hook_settings) = hook_settings_support_file(state.config(), &pane.id)?;
-        let mut args = vec![
-            "--settings".to_string(),
-            settings_path.display().to_string(),
-        ];
-        args.extend(self.plugin_dir_args(&host));
-
-        if let Some(model) = agent.model.clone().filter(|model| !model.trim().is_empty()) {
-            args.push("--model".to_string());
-            args.push(model);
-        }
-        push_effort_args(&mut args, agent.effort.as_deref());
-
-        let resumed = if let Some(session_id) = agent
-            .session_id
-            .clone()
-            .filter(|session_id| !session_id.trim().is_empty())
-        {
-            args.push("--resume".to_string());
-            args.push(session_id);
-            true
-        } else {
-            false
-        };
-
-        let envs = agent_pane_envs(state, &pane.id, &agent.id)?;
-
-        let spec = plan_to_spec(
-            state,
-            PaneMeta {
-                pane_id: Some(pane.id.clone()),
-                agent_id: Some(agent.id.clone()),
-                group_id: agent.group_id.clone(),
-                kind: PaneKind::Agent,
-                title: pane.title.clone(),
-                last_osc_title: pane.last_osc_title.clone(),
-                initial_size: Some(InitialPaneSize {
-                    cols: pane.cols,
-                    rows: pane.rows,
-                }),
-                recovered: true,
-            },
-            CommandPlan {
-                program: binary,
-                args,
-                cwd,
-                envs,
-                support_files: vec![hook_settings],
-                support_file_fallback: None,
-            },
-        )?;
-        let info = spawn_pty(state, spec)?;
-
-        // Re-bind the agent to its restored pane. A recovered Claude process is
-        // launched without an inline prompt, even when resuming a session, so it is
-        // ready once the TUI appears. The first real prompt/tool hook will promote it
-        // to Running.
-        let mut restored = agent.clone();
-        restored.pane_id = Some(pane.id.clone());
-        restored.status = AgentStatus::Idle;
-        state.update_agent(restored.clone())?;
-
-        // Remote transcript paths belong to the SSH host. Lifecycle hooks still
-        // drive status/queue state, but a local filesystem tail would only emit
-        // a misleading permanent "Transcript unavailable" notice. A transport-
-        // aware transcript reader is a separate capability from terminal launch.
-        if host.is_local()
-            && let Some(transcript_path) = restored.transcript_path.clone()
-        {
-            start_transcript_tail(
-                state.clone(),
-                restored.id.clone(),
-                transcript_path,
-                self.id().to_string(),
-            );
-        }
-
-        state.emit(SessionEvent::new(
-            "agent.recovered",
-            Some(pane.id.clone()),
-            Some(restored.id.clone()),
-            json!({ "resumed": resumed, "agent": restored }),
-        ));
-
-        Ok(info)
     }
 
     fn prepare_shell_launch(
@@ -2813,27 +2698,6 @@ mod tests {
         })
     }
 
-    fn test_state_with_claude_binary(binary: &Path) -> AppState {
-        AppState::new(SessionConfig {
-            remotes: Default::default(),
-            workspace_root: unique_test_dir("session-claude-workspace"),
-            socket_path: unique_test_dir("session-claude-socket").join("session.sock"),
-            adapters: AdapterConfigs {
-                claude: ClaudeAdapterConfig {
-                    binary: Some(binary.display().to_string()),
-                },
-                codex: CodexAdapterConfig {
-                    binary: Some("codex".to_string()),
-                },
-                grok: GrokAdapterConfig {
-                    binary: Some("grok".to_string()),
-                },
-            },
-            legacy_claude_binary: None,
-            claude_plugin_dir: PathBuf::new(),
-        })
-    }
-
     #[test]
     fn remote_claude_uses_remote_binary_and_omits_the_local_plugin() {
         let plugin_dir = unique_test_dir("session-claude-local-plugin");
@@ -2942,20 +2806,6 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()))
-    }
-
-    fn fake_claude_binary(dir: &Path) -> PathBuf {
-        fs::create_dir_all(dir).unwrap();
-        let binary = dir.join("fake-claude");
-        fs::write(
-            &binary,
-            "#!/bin/sh\nprintf 'fake claude ready\\n'\nsleep 1\n",
-        )
-        .unwrap();
-        let mut permissions = fs::metadata(&binary).unwrap().permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&binary, permissions).unwrap();
-        binary
     }
 
     fn sample_agent() -> AgentInfo {
@@ -3523,46 +3373,6 @@ mod tests {
         let agent = state.agent("agent-1").unwrap().expect("agent exists");
         assert!(matches!(agent.status, AgentStatus::AwaitingInput));
         assert_eq!(agent.session_id.as_deref(), Some("sess-abc"));
-    }
-
-    #[test]
-    fn recovered_claude_resume_starts_idle() {
-        let dir = unique_test_dir("session-claude-recover");
-        let fake_claude = fake_claude_binary(&dir);
-        let state = test_state_with_claude_binary(&fake_claude);
-        let mut agent = sample_agent();
-        agent.worktree_dir = dir.display().to_string();
-        agent.session_id = Some("sess-abc".to_string());
-        agent.status = AgentStatus::Running;
-        state.insert_agent(agent.clone()).unwrap();
-
-        let pane = PaneInfo {
-            id: "pane-recovered".to_string(),
-            title: "Claude".to_string(),
-            last_osc_title: None,
-            kind: PaneKind::Agent,
-            agent_id: Some(agent.id.clone()),
-            group_id: agent.group_id.clone(),
-            cwd: dir.display().to_string(),
-            active_workspace: None,
-            remote_session: None,
-            remote_connection: None,
-            cols: 80,
-            rows: 24,
-            status: PaneStatus::Running,
-            last_active_at: 0,
-            recovered: true,
-            ssh_target: None,
-            depth: 0,
-        };
-
-        ClaudeAdapter::new(state.config())
-            .respawn_pane(&state, &pane, &agent)
-            .unwrap();
-
-        let restored = state.agent("agent-1").unwrap().expect("agent exists");
-        assert_eq!(restored.pane_id.as_deref(), Some("pane-recovered"));
-        assert!(matches!(restored.status, AgentStatus::Idle));
     }
 
     #[test]

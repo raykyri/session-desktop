@@ -1,13 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { GroupInfo, PaneInfo, ResearchTreeSummary } from "../src/types";
-import {
-  groupsForScope,
-  paneCanOpenWorktree,
-  panesForScope,
-  researchAttention,
-  replaceScopedGroupOrder,
-} from "../src/lib/workspaceScope";
+import type { GroupInfo, ResearchTreeSummary } from "../src/types";
+import { groupsForScope, researchAttention } from "../src/lib/workspaceScope";
 import {
   resolveResearchScope,
   treeForResearchScope,
@@ -28,48 +22,17 @@ function group(id: string, scope: GroupInfo["scope"]): GroupInfo {
   };
 }
 
-function pane(id: string, groupId: string): PaneInfo {
-  return {
-    id,
-    title: id,
-    kind: "shell",
-    groupId,
-    cwd: "/tmp",
-    cols: 80,
-    rows: 24,
-    status: "running",
-  };
-}
-
-test("scope selectors partition groups and panes without relying on research node bindings", () => {
+test("scope selectors partition groups without relying on research node bindings", () => {
   const terminalA = group("terminal-a", "terminal");
   const research = group("research-a", "research");
   const terminalB = group("terminal-b", "terminal");
   const groups = [terminalA, research, terminalB];
-  const panes = [
-    pane("research-pane", research.id),
-    pane("terminal-b-pane", terminalB.id),
-    pane("terminal-a-pane", terminalA.id),
-  ];
 
   assert.deepEqual(groupsForScope(groups, "terminal").map(({ id }) => id), [
     terminalA.id,
     terminalB.id,
   ]);
-  assert.deepEqual(panesForScope(panes, groups, "terminal").map(({ id }) => id), [
-    "terminal-a-pane",
-    "terminal-b-pane",
-  ]);
-  assert.deepEqual(panesForScope(panes, groups, "research").map(({ id }) => id), [
-    "research-pane",
-  ]);
-});
-
-test("a pane with missing group metadata remains recoverable in Terminal scope", () => {
-  const orphan = pane("orphan", "missing-group");
-
-  assert.deepEqual(panesForScope([orphan], [], "terminal"), [orphan]);
-  assert.deepEqual(panesForScope([orphan], [], "research"), []);
+  assert.deepEqual(groupsForScope(groups, "research").map(({ id }) => id), [research.id]);
 });
 
 test("research attention is derived from durable summaries", () => {
@@ -121,39 +84,6 @@ test("research attention is derived from durable summaries", () => {
       },
     ]),
     { runningCount: 2, failedCount: 1, unseenCount: 1 },
-  );
-});
-
-test("reordering Terminal groups preserves Research slots", () => {
-  const terminalA = group("terminal-a", "terminal");
-  const researchA = group("research-a", "research");
-  const terminalB = group("terminal-b", "terminal");
-  const researchB = group("research-b", "research");
-
-  assert.deepEqual(
-    replaceScopedGroupOrder(
-      [terminalA, researchA, terminalB, researchB],
-      "terminal",
-      [terminalB, terminalA],
-    ).map(({ id }) => id),
-    [terminalB.id, researchA.id, terminalA.id, researchB.id],
-  );
-});
-
-test("a stale, duplicate, or cross-scope reorder is ignored", () => {
-  const terminalA = group("terminal-a", "terminal");
-  const research = group("research-a", "research");
-  const terminalB = group("terminal-b", "terminal");
-  const groups = [terminalA, research, terminalB];
-
-  assert.equal(
-    replaceScopedGroupOrder(groups, "terminal", [terminalA, terminalA]),
-    groups,
-  );
-  assert.equal(replaceScopedGroupOrder(groups, "terminal", [terminalA]), groups);
-  assert.equal(
-    replaceScopedGroupOrder(groups, "terminal", [terminalA, research]),
-    groups,
   );
 });
 
@@ -214,23 +144,3 @@ test("research restoration never crosses the selected folder scope", () => {
   assert.equal(workspaceIsInResearchScope("research-a", null), false);
 });
 
-test("Open worktree is disabled for Research and for non-git agent checkouts", () => {
-  const terminal = group("terminal-a", "terminal");
-  const research = group("research-a", "research");
-  assert.deepEqual(paneCanOpenWorktree(undefined, terminal), { enabled: true });
-  assert.deepEqual(paneCanOpenWorktree(undefined, research), {
-    enabled: false,
-    reason: "Worktrees are not available in Research",
-  });
-  assert.deepEqual(
-    paneCanOpenWorktree({ activeWorkspace: { gitRoot: null } }, terminal),
-    {
-      enabled: false,
-      reason: "This tab is not inside a git repository",
-    },
-  );
-  assert.deepEqual(
-    paneCanOpenWorktree({ activeWorkspace: { gitRoot: "/tmp/repo" } }, terminal),
-    { enabled: true },
-  );
-});

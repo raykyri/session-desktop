@@ -6,61 +6,17 @@
 // recognizes and routes through the token-scoped file server.
 export const SESSION_FILE_HREF_PREFIX = "session-file:";
 
-// Transcript renderers and Ghostty commonly include display-only suffixes in a
-// detected path: source positions (`/path/to/file.ts:36` or `:36:8`) and the
-// sentence-ending period after a filename.
-// Neither belongs to the filesystem path. Apply this only inside local-path
+// Transcript renderers commonly include display-only suffixes in a detected
+// path: source positions (`/path/to/file.ts:36` or `:36:8`) and the
+// sentence-ending period after a filename. Neither belongs to the filesystem
+// path. Apply this only inside local-path
 // parsing so URL ports and punctuation keep their original meaning.
 function withoutTrailingPathDecoration(path: string): string {
   return path.replace(/(?::\d+(?:[:-]\d+)?|\.)+$/u, "");
 }
 
-type TerminalLinkTarget =
-  | { kind: "externalUrl"; url: string }
-  | { kind: "localPath"; path: string };
-
-/** Classify the raw target Ghostty reports for a Cmd-click. Explicit web and
- * mail links retain the terminal's external-browser behavior. Filesystem paths
- * are handed to the pane-scoped backend resolver, including relative paths
- * whose base must come from the pane's live cwd. Unknown URL schemes are
- * rejected rather than accidentally interpreted as filenames. */
-export function terminalLinkTarget(value: unknown): TerminalLinkTarget | undefined {
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-    return undefined;
-  }
-  const localPath = absoluteLocalFilePath(value);
-  if (localPath !== undefined) {
-    return { kind: "localPath", path: localPath };
-  }
-  if (/[\u0000-\u001f\u007f]/u.test(value)) {
-    return undefined;
-  }
-  const relativePath = withoutTrailingPathDecoration(value);
-  if (relativePath !== value && /^[^/\\]+\.[A-Za-z0-9]{1,16}$/u.test(relativePath)) {
-    return { kind: "localPath", path: relativePath };
-  }
-  try {
-    const parsed = new URL(value);
-    if (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:" ||
-      parsed.protocol === "mailto:"
-    ) {
-      return { kind: "externalUrl", url: parsed.href };
-    }
-    return undefined;
-  } catch {
-    // A target without a URL scheme is a relative filesystem path. The backend
-    // resolves it against the clicked pane's cwd and confines the result to that
-    // pane's preview roots.
-  }
-  return relativePath.length > 0 && !relativePath.startsWith("//")
-    ? { kind: "localPath", path: relativePath }
-    : undefined;
-}
-
-// Only let links through that the webview can safely open. Transcript markdown and
-// terminal output can contain arbitrary agent/process text; a javascript:/file:/tauri:
+// Only let links through that the webview can safely open. Transcript markdown
+// can contain arbitrary agent/process text; a javascript:/file:/tauri:
 // URL clicked inside the Tauri webview reaches a JS context with native IPC access.
 // Anything that isn't http/https/mailto (or a recognized absolute local path) is
 // rendered or treated as non-navigable text.

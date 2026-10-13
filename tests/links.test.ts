@@ -12,7 +12,6 @@ import {
   pathFromSessionFileHref,
   resolveLocalLinkPath,
   safeHref,
-  terminalLinkTarget,
 } from "../src/lib/links";
 
 test("loopbackHtmlUrl recognizes only loopback HTML documents", () => {
@@ -112,10 +111,6 @@ test("local path cleanup does not alter web URL ports or punctuation", () => {
     "https://example.com/report.html.",
   );
   assert.equal(absoluteLocalFilePath("http://localhost:36"), undefined);
-  assert.deepEqual(
-    terminalLinkTarget("https://example.com/report.html."),
-    { kind: "externalUrl", url: "https://example.com/report.html." },
-  );
 });
 
 test("inlineCodeFilePath accepts portable .html and .md paths", () => {
@@ -249,48 +244,3 @@ test("resolveLocalLinkPath joins relative transcript paths against pane cwd", ()
   assert.equal(resolveLocalLinkPath("dev/mock.html"), "dev/mock.html");
 });
 
-test("terminal links keep ordinary web URLs external", () => {
-  assert.deepEqual(terminalLinkTarget("https://example.com/report.html#result"), {
-    kind: "externalUrl",
-    url: "https://example.com/report.html#result",
-  });
-  assert.deepEqual(terminalLinkTarget("mailto:hello@example.com"), {
-    kind: "externalUrl",
-    url: "mailto:hello@example.com",
-  });
-});
-
-test("terminal links recognize absolute, file URL, and relative paths", () => {
-  assert.deepEqual(terminalLinkTarget("/tmp/report.html:36:8"), {
-    kind: "localPath",
-    path: "/tmp/report.html",
-  });
-  assert.deepEqual(terminalLinkTarget("/tmp/report.html:760-843"), {
-    kind: "localPath",
-    path: "/tmp/report.html",
-  });
-  assert.deepEqual(terminalLinkTarget("file:///tmp/report%20one.html"), {
-    kind: "localPath",
-    path: "/tmp/report one.html",
-  });
-  assert.deepEqual(terminalLinkTarget("dist/report.html:42"), {
-    kind: "localPath",
-    path: "dist/report.html",
-  });
-  assert.deepEqual(terminalLinkTarget("report.html:42"), {
-    kind: "localPath",
-    path: "report.html",
-  });
-  assert.deepEqual(terminalLinkTarget("example.html."), {
-    kind: "localPath",
-    path: "example.html",
-  });
-});
-
-test("terminal links reject unknown schemes and malformed targets", () => {
-  assert.equal(terminalLinkTarget("javascript:alert(1)"), undefined);
-  assert.equal(terminalLinkTarget("ssh://example.com/path"), undefined);
-  assert.equal(terminalLinkTarget("//example.com/report.html"), undefined);
-  assert.equal(terminalLinkTarget(" report.html"), undefined);
-  assert.equal(terminalLinkTarget("report\n.html"), undefined);
-});

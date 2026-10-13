@@ -4,13 +4,12 @@ use super::{
     SpawnAgentRequest, TranscriptLifecycleEvent, apply_shell_cli_model, ensure_on_path,
     hook_transcript_path_acceptable, model_from_claude_native_transcript_line,
     prepared_shell_agent, record_shell_session_lineage, reusable_session_agent, shell_cli_model,
-    shell_quote_arg, shell_quote_path,
+    shell_quote_path,
 };
 use crate::config::SessionConfig;
 use crate::events::SessionEvent;
 use crate::pty::{
-    CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
-    spawn_pty,
+    CommandPlan, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir, spawn_pty,
 };
 use crate::state::{AppState, PaneInfo, PaneKind};
 use crate::transcript::{Turn, TurnBlock, start_transcript_tail};
@@ -112,15 +111,6 @@ impl AgentAdapter for GrokAdapter {
         self.spawn_pane(state, request)
     }
 
-    fn resume(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        self.respawn_pane(state, pane, agent)
-    }
-
     fn prepare_shell_launch(
         &self,
         state: &AppState,
@@ -143,10 +133,6 @@ impl AgentAdapter for GrokAdapter {
                 adapter_id: self.id(),
             },
         ]
-    }
-
-    fn shell_resume_command(&self, session_id: &str) -> Option<String> {
-        Some(format!("grok --resume {}", shell_quote_arg(session_id)))
     }
 
     fn ingest_notification(
@@ -313,87 +299,6 @@ impl GrokAdapter {
                 Err(err)
             }
         }
-    }
-
-    fn respawn_pane(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String> {
-        let binary = self.ensure_binary()?;
-        ensure_grok_integration()?;
-        let cwd = recoverable_dir(&agent.worktree_dir).ok_or_else(|| {
-            format!(
-                "agent worktree {} no longer exists; relaunch manually",
-                agent.worktree_dir
-            )
-        })?;
-
-        // Resume the recorded session when there is one (`grok --resume <id>`;
-        // sessions live under ~/.grok/sessions), so a recovered pane continues the
-        // prior conversation instead of starting over.
-        let (args, resumed) =
-            build_grok_resume_args(&cwd, agent.model.as_deref(), agent.session_id.as_deref());
-
-        let envs = agent_pane_envs(state, &pane.id, &agent.id)?;
-
-        let spec = plan_to_spec(
-            state,
-            PaneMeta {
-                pane_id: Some(pane.id.clone()),
-                agent_id: Some(agent.id.clone()),
-                group_id: agent.group_id.clone(),
-                kind: PaneKind::Agent,
-                title: pane.title.clone(),
-                last_osc_title: pane.last_osc_title.clone(),
-                initial_size: Some(InitialPaneSize {
-                    cols: pane.cols,
-                    rows: pane.rows,
-                }),
-                recovered: true,
-            },
-            CommandPlan {
-                program: binary,
-                args,
-                cwd,
-                envs,
-                support_files: Vec::new(),
-                support_file_fallback: None,
-            },
-        )?;
-        let info = spawn_pty(state, spec)?;
-
-        // A recovered Grok process launches without an inline prompt, so it is ready
-        // once the TUI appears. The first real prompt/tool hook promotes it to Running.
-        // Resumes may still carry a pre-fix `updates.jsonl` binding — rewrite it to
-        // sibling chat history before the first tail so the right pane is not blank
-        // while waiting for SessionStart.
-        let mut restored = agent.clone();
-        restored.pane_id = Some(pane.id.clone());
-        restored.status = AgentStatus::Idle;
-        if let Some(transcript_path) = restored.transcript_path.as_deref() {
-            restored.transcript_path = Some(grok_conversation_transcript_path(transcript_path));
-        }
-        state.update_agent(restored.clone())?;
-
-        if let Some(transcript_path) = restored.transcript_path.clone() {
-            start_transcript_tail(
-                state.clone(),
-                restored.id.clone(),
-                transcript_path,
-                self.id().to_string(),
-            );
-        }
-
-        state.emit(SessionEvent::new(
-            "agent.recovered",
-            Some(pane.id.clone()),
-            Some(restored.id.clone()),
-            json!({ "resumed": resumed, "agent": restored }),
-        ));
-
-        Ok(info)
     }
 
     /// Forks a Grok session into a new independent session using
@@ -991,27 +896,6 @@ fn build_grok_args(cwd: &Path, model: Option<&str>, prompt: &str) -> Vec<String>
     }
 
     args
-}
-
-/// Builds args for recovering a Grok agent. With a recorded session id, resumes it
-/// via `grok --cwd <dir> [--model <m>] --resume <id>` and returns `true`; without
-/// one, falls back to a fresh interactive launch and returns `false`.
-fn build_grok_resume_args(
-    cwd: &Path,
-    model: Option<&str>,
-    session_id: Option<&str>,
-) -> (Vec<String>, bool) {
-    let Some(session_id) = session_id
-        .map(str::trim)
-        .filter(|session_id| !session_id.is_empty())
-    else {
-        return (build_grok_args(cwd, model, ""), false);
-    };
-
-    let mut args = build_grok_args(cwd, model, "");
-    args.push("--resume".to_string());
-    args.push(session_id.to_string());
-    (args, true)
 }
 
 fn build_grok_fork_args(
@@ -2217,36 +2101,6 @@ mod tests {
     }
 
     #[test]
-    fn resume_args_include_session_id_when_present() {
-        let (args, resumed) = build_grok_resume_args(
-            Path::new("/tmp/session"),
-            Some("grok-code"),
-            Some(" sess-1 "),
-        );
-
-        assert!(resumed);
-        assert_eq!(
-            args,
-            vec![
-                "--cwd",
-                "/tmp/session",
-                "--model",
-                "grok-code",
-                "--resume",
-                "sess-1"
-            ]
-        );
-    }
-
-    #[test]
-    fn resume_args_fall_back_to_fresh_launch_without_session_id() {
-        let (args, resumed) = build_grok_resume_args(Path::new("/tmp/session"), None, Some("   "));
-
-        assert!(!resumed);
-        assert_eq!(args, vec!["--cwd", "/tmp/session"]);
-    }
-
-    #[test]
     fn fork_args_resume_into_new_session_and_append_prompt() {
         let args = build_grok_fork_args(
             Path::new("/tmp/session"),
@@ -2269,14 +2123,6 @@ mod tests {
                 "continue here",
             ]
         );
-    }
-
-    #[test]
-    fn shell_resume_command_resumes_the_session() {
-        let command = GrokAdapter::new(&test_config())
-            .shell_resume_command("sess-1")
-            .expect("grok supports shell resume");
-        assert_eq!(command, "grok --resume 'sess-1'");
     }
 
     #[test]

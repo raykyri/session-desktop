@@ -513,40 +513,6 @@ fn trim_scrollback_file(path: &Path, len: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Returns the newest `cap` bytes of a captured log, nudged forward to a line
-/// boundary so the tail doesn't begin mid-scalar when it is later replayed.
-/// Used to bound the scrollback an undo snapshot keeps resident: the durable
-/// log is deleted when a pane closes, so the snapshot is the only copy, and the
-/// undo stack holds many of them — storing each full multi-MB log would pin
-/// hundreds of MB for a convenience buffer. Buffers already within `cap` are
-/// returned as-is (no copy).
-fn bounded_scrollback_tail(bytes: Vec<u8>, cap: usize) -> Vec<u8> {
-    if bytes.len() <= cap {
-        return bytes;
-    }
-    let start = safe_cut_boundary(&bytes, bytes.len() - cap);
-    bytes[start..].to_vec()
-}
-
-/// Captures the newest `cap` bytes of a pane's scrollback for an undo snapshot,
-/// made inert and alternate-screen-correct first.
-///
-/// A raw byte cut (what `bounded_scrollback_tail` alone does) can leave the
-/// retained tail beginning *inside* an open alternate screen — the `?1049h`
-/// that opened it having fallen off the front — and replay, which starts in the
-/// primary screen, then renders that hidden TUI repaint as garbled primary
-/// history. Unlike `trim_scrollback_file`, which re-injects a trailing
-/// `?1049h` marker so the *same* live process's future writes stay recognized
-/// as alternate-screen, an undo snapshot is a frozen tail replayed ahead of a
-/// *fresh* process's output, which begins in the primary screen — so no trailing
-/// marker is added (one would wrongly discard the restored pane's own output).
-/// Sanitizing at capture drops the alternate-screen repaint entirely, and as a
-/// bonus lets `cap` retain that much more real primary-screen history, since the
-/// stripped control bytes no longer count against it.
-pub fn bounded_undo_scrollback(bytes: &[u8], cap: usize) -> Vec<u8> {
-    bounded_scrollback_tail(sanitize_scrollback_replay(bytes), cap)
-}
-
 /// Advances a raw cut offset to a safe boundary so the retained tail doesn't
 /// begin mid-scalar or mid-escape. Prefers the byte after the next `\n` (a line
 /// boundary is virtually never straddled by a UTF-8 scalar or an ANSI escape),
@@ -1153,42 +1119,6 @@ mod tests {
         for handle in handles {
             handle.join().unwrap();
         }
-    }
-
-    #[test]
-    fn bounded_scrollback_tail_keeps_recent_bytes_on_a_boundary() {
-        // Under the cap: returned verbatim.
-        assert_eq!(
-            bounded_scrollback_tail(b"short".to_vec(), 1024),
-            b"short".to_vec()
-        );
-        // Over the cap: the newest bytes, beginning at a line boundary.
-        let input = b"line one\nline two\nline three\n".to_vec();
-        let tail = bounded_scrollback_tail(input, 12);
-        assert!(tail.len() <= 12);
-        assert_eq!(tail, b"line three\n".to_vec());
-    }
-
-    // An undo snapshot whose retained region begins inside an open alternate
-    // screen (the `?1049h` fell off the front) must not replay the hidden TUI
-    // repaint as primary history. Sanitizing at capture drops it, keeping only
-    // the real primary-screen content on both sides.
-    #[test]
-    fn bounded_undo_scrollback_strips_alternate_screen_repaint() {
-        let mut log = b"primary line\r\n\x1b[?1049h".to_vec();
-        log.extend(std::iter::repeat_n(b'x', 4096)); // alternate-screen repaint
-        log.extend_from_slice(b"\x1b[?1049lafter restore\r\n");
-
-        let snap = bounded_undo_scrollback(&log, 1024);
-
-        assert!(
-            !snap.contains(&b'x'),
-            "snapshot must not store alternate-screen repaint"
-        );
-        assert!(snap.starts_with(b"primary line\r\n"));
-        assert!(snap.ends_with(b"after restore\r\n"));
-        // Idempotent under the replay sanitizer it will pass through again.
-        assert_eq!(sanitize_scrollback_replay(&snap), snap);
     }
 
     #[test]

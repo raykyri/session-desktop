@@ -387,8 +387,6 @@ fn release_agent(
         }));
     };
     state.close_pane_for_user(&pane_id)?;
-    // Agent-driven cleanup should not replace the user's Cmd-W reopen target.
-    state.clear_last_closed_pane_for_pane(&pane_id);
     Ok(json!({
         "agentId": target.id,
         "released": true,

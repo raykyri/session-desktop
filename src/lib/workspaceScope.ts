@@ -1,48 +1,9 @@
-import type { GroupInfo, PaneInfo, ResearchTreeSummary } from "../types";
+import type { GroupInfo, ResearchTreeSummary } from "../types";
 
 type WorkspaceScope = GroupInfo["scope"];
 
 export function groupsForScope(groups: GroupInfo[], scope: WorkspaceScope): GroupInfo[] {
   return groups.filter((group) => group.scope === scope);
-}
-
-export function paneCanOpenWorktree(
-  agent: { activeWorkspace?: { gitRoot?: string | null } | null } | undefined,
-  group: GroupInfo | undefined,
-): { enabled: boolean; reason?: string } {
-  if (group?.scope === "research") {
-    return { enabled: false, reason: "Worktrees are not available in Research" };
-  }
-  if (agent?.activeWorkspace && !agent.activeWorkspace.gitRoot) {
-    return { enabled: false, reason: "This tab is not inside a git repository" };
-  }
-  return { enabled: true };
-}
-
-function paneScope(
-  pane: PaneInfo,
-  groupById: ReadonlyMap<string, GroupInfo>,
-): WorkspaceScope {
-  // A pane without valid group metadata is treated as a terminal pane so it
-  // remains recoverable instead of being mistaken for Research infrastructure.
-  return groupById.get(pane.groupId)?.scope ?? "terminal";
-}
-
-export function panesForScope(
-  panes: PaneInfo[],
-  groups: GroupInfo[],
-  scope: WorkspaceScope,
-): PaneInfo[] {
-  const scopedGroups = groupsForScope(groups, scope);
-  const groupById = new Map(groups.map((group) => [group.id, group]));
-  const grouped = scopedGroups.flatMap((group) =>
-    panes.filter((pane) => pane.groupId === group.id),
-  );
-  const groupedIds = new Set(grouped.map((pane) => pane.id));
-  const ungrouped = panes.filter(
-    (pane) => !groupedIds.has(pane.id) && paneScope(pane, groupById) === scope,
-  );
-  return [...grouped, ...ungrouped];
 }
 
 export function researchAttention(trees: ResearchTreeSummary[]) {
@@ -59,24 +20,3 @@ export function researchAttention(trees: ResearchTreeSummary[]) {
   );
 }
 
-/** Reorders one scope while preserving the other scope's slots and identity. */
-export function replaceScopedGroupOrder(
-  groups: GroupInfo[],
-  scope: WorkspaceScope,
-  orderedScopeGroups: GroupInfo[],
-): GroupInfo[] {
-  const expected = groupsForScope(groups, scope);
-  if (
-    expected.length !== orderedScopeGroups.length ||
-    new Set(orderedScopeGroups.map((group) => group.id)).size !== orderedScopeGroups.length ||
-    orderedScopeGroups.some(
-      (group) => group.scope !== scope || !expected.some((candidate) => candidate.id === group.id),
-    )
-  ) {
-    return groups;
-  }
-  let index = 0;
-  return groups.map((group) =>
-    group.scope === scope ? orderedScopeGroups[index++] : group,
-  );
-}

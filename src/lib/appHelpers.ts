@@ -2,43 +2,11 @@ import { findAgentUiAdapter } from "../adapters";
 import type {
   AgentInfo,
   PaneInfo,
-  PaneSplitInfo,
   RuntimeConfig,
 } from "../types";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-/** Inset kept between a pointer-anchored context menu and the window edge. */
-export const CONTEXT_MENU_VIEWPORT_MARGIN = 8;
-
-/**
- * Keep a fixed-position context menu inside the window. `x`/`y` are the
- * preferred top-left (usually the pointer). When the menu would run off the
- * bottom or right edge, it shifts up/left; a menu taller than the window pins
- * to the top margin (CSS `max-height` then scrolls the rest).
- */
-export function clampContextMenuToViewport(args: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  margin?: number;
-  viewportWidth?: number;
-  viewportHeight?: number;
-}): { x: number; y: number } {
-  const margin = args.margin ?? CONTEXT_MENU_VIEWPORT_MARGIN;
-  const viewportWidth =
-    args.viewportWidth ??
-    (typeof window === "undefined" ? args.x + args.width + margin : window.innerWidth);
-  const viewportHeight =
-    args.viewportHeight ??
-    (typeof window === "undefined" ? args.y + args.height + margin : window.innerHeight);
-  return {
-    x: clamp(args.x, margin, Math.max(margin, viewportWidth - margin - args.width)),
-    y: clamp(args.y, margin, Math.max(margin, viewportHeight - margin - args.height)),
-  };
 }
 
 const DEFAULT_SHELL_TITLE = "Shell";
@@ -139,77 +107,6 @@ export function placePanePopover(args: {
   };
 }
 
-export function selectPaneAfterClose(
-  panes: PaneInfo[],
-  closedPaneId: string,
-  paneSplits: PaneSplitInfo[] = [],
-  options?: {
-    isPaneInCollapsedGroup?: (pane: PaneInfo) => boolean;
-  },
-): string | null {
-  const selectPreferredPane = (candidates: PaneInfo[]) => {
-    if (candidates.length === 0) {
-      return null;
-    }
-    const isPaneInCollapsedGroup = options?.isPaneInCollapsedGroup;
-    if (!isPaneInCollapsedGroup) {
-      return candidates[0].id;
-    }
-    return candidates.find((pane) => !isPaneInCollapsedGroup(pane))?.id ?? candidates[0].id;
-  };
-
-  const closedIndex = panes.findIndex((pane) => pane.id === closedPaneId);
-  if (closedIndex === -1) {
-    return selectPreferredPane(panes);
-  }
-
-  const availablePaneIds = new Set(panes.map((pane) => pane.id));
-  availablePaneIds.delete(closedPaneId);
-  const paneById = new Map(panes.map((pane) => [pane.id, pane]));
-  const candidates: PaneInfo[] = [];
-  const candidateIds = new Set<string>();
-  const addCandidate = (paneId?: string) => {
-    if (!paneId || paneId === closedPaneId || candidateIds.has(paneId)) {
-      return;
-    }
-    if (!availablePaneIds.has(paneId)) {
-      return;
-    }
-    const pane = paneById.get(paneId);
-    if (!pane) {
-      return;
-    }
-    candidateIds.add(paneId);
-    candidates.push(pane);
-  };
-
-  const split = paneSplits.find((candidate) => candidate.paneIds.includes(closedPaneId));
-  const splitIndex = split?.paneIds.indexOf(closedPaneId) ?? -1;
-  if (split && splitIndex >= 0) {
-    for (let index = splitIndex - 1; index >= 0; index -= 1) {
-      addCandidate(split.paneIds[index]);
-    }
-    for (let index = splitIndex + 1; index < split.paneIds.length; index += 1) {
-      addCandidate(split.paneIds[index]);
-    }
-  }
-
-  const closedGroupId = panes[closedIndex].groupId;
-  for (let offset = 1; offset < panes.length; offset += 1) {
-    const previous = panes[closedIndex - offset];
-    const next = panes[closedIndex + offset];
-    addCandidate(previous?.groupId === closedGroupId ? previous.id : undefined);
-    addCandidate(next?.groupId === closedGroupId ? next.id : undefined);
-  }
-
-  for (let offset = 1; offset < panes.length; offset += 1) {
-    addCandidate(panes[closedIndex - offset]?.id);
-    addCandidate(panes[closedIndex + offset]?.id);
-  }
-
-  return selectPreferredPane(candidates);
-}
-
 // Validates an agent payload arriving on an event before it is applied to local
 // state, mirroring isTurn. Status events now carry the updated agent so the UI can
 // apply changes surgically instead of refetching the whole list every time.
@@ -277,35 +174,11 @@ export function isTerminalTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && target.closest(`.${TERMINAL_PANE_CLASS}`) !== null;
 }
 
-/** Workspace metadata can arrive in a full AgentInfo payload, but it is not
- * evidence that the agent's execution lifecycle changed. */
-export function agentEventAffectsThinkingState(eventType: string): boolean {
-  return eventType !== "agent.workspace_changed";
-}
-
 const AGENT_STATUSES_AT_REST = new Set<AgentInfo["status"]>([
   "done",
   "idle",
   "failed",
 ]);
-
-/** The live command cwd is display-only; lifecycle operations continue to use
- * AgentInfo.worktreeDir and AgentInfo.branch directly. */
-export function agentDisplayDirectory(agent: AgentInfo | undefined, paneCwd: string): string {
-  return agent?.activeWorkspace?.cwd ?? agent?.worktreeDir ?? paneCwd;
-}
-
-/** True when the observed command cwd is a different directory than the launch
- * worktree. macOS aliases `/tmp` as `/private/tmp` (and `/var` as
- * `/private/var`), so a raw string compare would always show a redundant
- * Launch directory row after canonicalize. */
-export function agentShowsLaunchDirectory(agent: AgentInfo | undefined): boolean {
-  const cwd = agent?.activeWorkspace?.cwd;
-  if (!agent || !cwd) {
-    return false;
-  }
-  return !displayPathsReferToSameDirectory(cwd, agent.worktreeDir);
-}
 
 export function displayPathsReferToSameDirectory(left: string, right: string): boolean {
   return normalizeDisplayPath(left) === normalizeDisplayPath(right);
@@ -314,113 +187,6 @@ export function displayPathsReferToSameDirectory(left: string, right: string): b
 function normalizeDisplayPath(value: string): string {
   const trimmed = value.replace(/\/+$/, "") || "/";
   return trimmed.replace(/^\/private\/(tmp|var)(?=\/|$)/, "/$1");
-}
-
-export function agentDisplayBranch(agent: AgentInfo | undefined): string | null {
-  return agent?.activeWorkspace
-    ? (agent.activeWorkspace.branch ?? null)
-    : (agent?.branch ?? null);
-}
-
-export function agentDisplayWorktreeRoot(agent: AgentInfo | undefined): string | null {
-  if (agent?.activeWorkspace) {
-    return agent.activeWorkspace.kind === "linkedWorktree"
-      ? (agent.activeWorkspace.gitRoot ?? null)
-      : null;
-  }
-  return agent?.branch ? agent.worktreeDir : null;
-}
-
-export function agentDisplayCheckoutRoot(agent: AgentInfo | undefined): string | null {
-  return agent?.activeWorkspace
-    ? (agent.activeWorkspace.gitRoot ?? null)
-    : agent?.branch
-      ? agent.worktreeDir
-      : null;
-}
-
-function paneDisplayCheckoutRoot(pane: PaneInfo, agent: AgentInfo | undefined): string | null {
-  return agent
-    ? agentDisplayCheckoutRoot(agent)
-    : (pane.activeWorkspace?.gitRoot ?? null);
-}
-
-function paneDisplayDirectory(pane: PaneInfo, agent: AgentInfo | undefined): string {
-  return agentDisplayDirectory(agent, pane.cwd);
-}
-
-/**
- * Names a tab's checkout when it differs from the group's. Recovered first
- * shells often reopen in an agent worktree; that tab must not become the
- * baseline or every main-checkout tab looks "outside" the group.
- */
-export function paneBranchLocationLabel(
-  pane: PaneInfo,
-  agent: AgentInfo | undefined,
-  firstPane: PaneInfo | undefined,
-  firstAgent: AgentInfo | undefined,
-  groupDir?: string,
-): string | null {
-  const branch = agent
-    ? agentDisplayBranch(agent)
-    : (pane.activeWorkspace?.branch ?? null);
-  const checkoutRoot = paneDisplayCheckoutRoot(pane, agent);
-  if (!branch || !checkoutRoot) {
-    return null;
-  }
-
-  const firstCheckoutRoot = firstPane
-    ? paneDisplayCheckoutRoot(firstPane, firstAgent)
-    : null;
-  const firstLocation = firstPane
-    ? paneDisplayDirectory(firstPane, firstAgent)
-    : groupDir;
-  const baseline =
-    groupCheckoutBaseline(groupDir, firstCheckoutRoot) ??
-    groupDir ??
-    firstLocation;
-  if (!baseline) {
-    return null;
-  }
-  if (displayPathsReferToSameDirectory(checkoutRoot, baseline)) {
-    return null;
-  }
-  // The group's directory (or a just-spawned first tab's cwd) still proves
-  // this tab is the group's checkout when git metadata has not landed yet.
-  const normalizedRoot = normalizeDisplayPath(checkoutRoot);
-  const normalizedBaseline = normalizeDisplayPath(baseline);
-  const rootPrefix = normalizedRoot === "/" ? "/" : `${normalizedRoot}/`;
-  if (normalizedBaseline.startsWith(rootPrefix)) {
-    return null;
-  }
-
-  const name = checkoutRoot.split("/").filter(Boolean).pop();
-  return name || checkoutRoot;
-}
-
-function groupCheckoutBaseline(
-  groupDir: string | undefined,
-  firstCheckoutRoot: string | null,
-): string | null {
-  if (!firstCheckoutRoot) {
-    return null;
-  }
-  if (!groupDir) {
-    return firstCheckoutRoot;
-  }
-  const normalizedGroup = normalizeDisplayPath(groupDir);
-  const normalizedRoot = normalizeDisplayPath(firstCheckoutRoot);
-  const rootPrefix = normalizedRoot === "/" ? "/" : `${normalizedRoot}/`;
-  // A worktree under the group folder is a different git root. Only treat the
-  // first tab as the group checkout when its root *is* the group directory or
-  // the group directory lives inside that checkout.
-  if (
-    displayPathsReferToSameDirectory(normalizedRoot, normalizedGroup) ||
-    normalizedGroup.startsWith(rootPrefix)
-  ) {
-    return firstCheckoutRoot;
-  }
-  return null;
 }
 
 /** Whether an agent may still be doing work and should keep the machine awake.

@@ -405,15 +405,6 @@ impl RemoteAttachmentController {
         state.generation == generation && state.current.is_some()
     }
 
-    pub fn current_master(&self) -> Option<SharedMaster> {
-        self.state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .current
-            .as_ref()
-            .map(|attachment| attachment.master.clone())
-    }
-
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_child(&self) -> Option<SharedChild> {
         self.state
@@ -688,32 +679,6 @@ mod tests {
 
         assert_eq!(&*first_output.lock().unwrap(), b"first");
         assert_eq!(&*second_output.lock().unwrap(), b"second");
-    }
-
-    #[test]
-    fn stale_install_and_eof_cannot_replace_or_clear_a_newer_attachment() {
-        let controller = RemoteAttachmentController::new();
-        let (first, _) = controller.begin_generation();
-        let (second, _) = controller.begin_generation();
-        assert!(
-            controller
-                .install_if_current(second, attachment(Default::default()))
-                .is_ok()
-        );
-
-        assert!(
-            controller
-                .install_if_current(first, attachment(Default::default()))
-                .is_err()
-        );
-        assert!(controller.clear_if_current(first).is_none());
-        assert!(controller.is_current(second));
-        assert!(controller.current_master().is_some());
-        assert!(controller.current_child().is_some());
-
-        assert!(controller.clear_if_current(second).is_some());
-        assert!(!controller.is_current(second));
-        assert!(controller.current_master().is_none());
     }
 
     #[test]

@@ -5,10 +5,7 @@
 //! path that provisions support files.
 
 use crate::host::{Host, RemoteCommand};
-use crate::persistence;
 use crate::pty;
-use crate::state::AppState;
-use crate::workspace::RemoteRef;
 use session_cli::{VERSION, parse_version_line};
 use session_proto::{
     REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION, WORKSPACE_OBSERVATION_VERSION,
@@ -101,42 +98,6 @@ pub fn bundled_cli_path(target: &str) -> Result<PathBuf, String> {
         ));
     };
     Ok(dir.join(target).join("session-cli"))
-}
-
-/// Ensures a version-matching CLI exists on `remote`, updating `session_cli` to
-/// the managed absolute path when Session owns the install.
-pub fn prepare_remote_ref(
-    state: &AppState,
-    remote: &mut RemoteRef,
-) -> Result<EnsureCliResult, String> {
-    let host = crate::host::for_group(Some(remote));
-    let result = ensure_cli(&host)?;
-    if !matches!(
-        result.skipped,
-        Some(EnsureSkip::CustomCli | EnsureSkip::UnsupportedHost)
-    ) {
-        remote.session_cli = Some(result.path.clone());
-        persist_managed_path(state, &remote.id, &result.path)?;
-    }
-    Ok(result)
-}
-
-fn persist_managed_path(state: &AppState, remote_id: &str, path: &str) -> Result<(), String> {
-    if state.config().remotes.contains_key(remote_id) {
-        return Ok(());
-    }
-    persistence::update_preferences(&state.config().workspace_root, |preferences| {
-        if let Some(saved) = preferences.remotes.get_mut(remote_id) {
-            let current = saved
-                .session_cli
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty());
-            if is_managed_cli(current) {
-                saved.session_cli = Some(path.to_string());
-            }
-        }
-    })
 }
 
 pub fn ensure_cli(host: &Host) -> Result<EnsureCliResult, String> {

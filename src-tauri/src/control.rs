@@ -846,7 +846,6 @@ fn agent_release(state: &AppState, context: &ControlContext, arguments: Value) -
         .pane_id
         .ok_or_else(|| ControlFailure::new("agent_exited", "agent has no live pane"))?;
     state.close_pane_for_user(&pane_id).map_err(internal)?;
-    state.clear_last_closed_pane_for_pane(&pane_id);
     Ok(json!({
         "agentId": args.id,
         "released": true,

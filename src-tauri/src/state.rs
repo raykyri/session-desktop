@@ -13,7 +13,7 @@ use crate::research::{
     ResearchNodeStatus, ResearchNodeType, ResearchRuntime, ResearchTree, ResearchTreeDetail,
     ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
-use crate::scrollback::{bounded_undo_scrollback, read_pane_scrollback, remove_pane_scrollback};
+use crate::scrollback::remove_pane_scrollback;
 use crate::thread_graph;
 use crate::transcript::Turn;
 use crate::workspace::{
@@ -79,13 +79,6 @@ impl PaneBackend {
         match self {
             Self::HostPty(backend) => Some(backend.writer.clone()),
             Self::RemoteTmux(backend) => Some(backend.writer.clone()),
-        }
-    }
-
-    fn host_master(&self) -> Option<SharedMaster> {
-        match self {
-            Self::HostPty(backend) => Some(backend.master.clone()),
-            Self::RemoteTmux(backend) => backend.controller.current_master(),
         }
     }
 
@@ -213,19 +206,6 @@ fn propagated_workspace(
 /// the cap the oldest turns are dropped (the live timeline still streams every new
 /// turn to the frontend as it arrives).
 const MAX_TURNS_PER_AGENT: usize = 200;
-
-/// Depth of the closed-pane undo stack. Each entry can carry a full pane snapshot
-/// (agent, turns, queued prompts, scrollback), so this bounds transient memory while
-/// still letting a run of accidental closes be reopened one at a time. Oldest entries
-/// are dropped past the cap. Transient — the stack is never persisted across restart.
-const MAX_CLOSED_PANE_UNDO: usize = 25;
-
-/// Per-snapshot cap on the scrollback an undo entry keeps resident. A closed
-/// pane's durable log is deleted, so the snapshot is the only surviving copy and
-/// the `MAX_CLOSED_PANE_UNDO`-deep stack could otherwise pin ~25× the full log
-/// (up to the trim trigger each) in memory. The newest slice restores plenty of
-/// context on reopen; the rest is a convenience buffer not worth the RAM.
-const MAX_UNDO_SCROLLBACK_BYTES: usize = 1024 * 1024;
 
 /// Upper bound on pending turns queued for a single agent. This is a safety
 /// ceiling against unbounded growth (memory plus a larger `state.json` rewritten
@@ -573,51 +553,9 @@ struct Model {
     /// send racing the pre-barrier spawn window resumes after the child is ready.
     /// Ordinary dispatch completion clears it. Transient (not persisted).
     agent_deferred_queue_resume: HashSet<String>,
-    /// Agent-session resumes queued at restore, keyed by the recovered shell pane id;
-    /// each is drained by that pane's respawn. Transient (not persisted).
-    shell_agent_resumes: HashMap<String, ShellAgentResume>,
     /// The selected frontend tab, persisted so restarts return to the same place.
     /// The value is either a pane id or the frontend's Home tab sentinel.
     active_tab_id: Option<String>,
-    /// Undo stack for explicitly closed tabs, most-recent last. Transient: closed tabs
-    /// can be restored during the current app run (repeated undo reopens successive
-    /// closes), but they are not restored after restart. Bounded by
-    /// `MAX_CLOSED_PANE_UNDO`.
-    closed_pane_stack: Vec<ClosedPaneSnapshot>,
-}
-
-/// A pending request to resume an agent session inside a recovered shell pane.
-/// Captured during `restore_session` for a shell pane whose agent was still bound at
-/// shutdown — the wrapper clears the binding when the agent process exits, so a
-/// still-bound agent means it was running live — and consumed once by the pane's
-/// respawn, which injects the adapter's resume command (`claude --resume <id>`,
-/// `codex resume <id>`) into the new shell. Transient: never persisted.
-#[derive(Clone, Debug)]
-pub struct ShellAgentResume {
-    pub adapter: String,
-    pub session_id: String,
-    /// The agent's original launch directory. Claude/Codex scope sessions by project
-    /// dir, so the respawn must reopen here for `--resume` to resolve the session — and
-    /// for the rebind to match — even if the pane's live cwd has since drifted via `cd`.
-    pub cwd: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ClosedPaneAgentSnapshot {
-    pub agent: AgentInfo,
-    pub turns: Vec<Turn>,
-    pub queued_turns: Vec<QueuedTurn>,
-    pub draft: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ClosedPaneSnapshot {
-    pub pane: PaneInfo,
-    pub group: Option<GroupInfo>,
-    pub agent: Option<ClosedPaneAgentSnapshot>,
-    pub orphaned_agents: Vec<ClosedPaneAgentSnapshot>,
-    pub index: usize,
-    pub scrollback: Vec<u8>,
 }
 
 /// One artifact-tray entry: a file or loopback URL a pane's agent (or its user,
@@ -1669,15 +1607,6 @@ pub struct PaneSplitIntent {
     pub created_at: f64,
 }
 
-/// One entry in a `set_pane_layout` request. `depth` remains for rolling upgrade
-/// compatibility, but nonzero values are no longer supported.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaneLayoutEntry {
-    pub pane_id: String,
-    pub depth: u16,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PaneKind {
@@ -2674,13 +2603,6 @@ impl AppState {
                     .clone()
                     .filter(|pane_id| shell_pane_ids.contains(pane_id))
                 {
-                    // The agent was still bound to its shell pane at shutdown, so it was
-                    // running live (the wrapper detaches on the agent process exiting).
-                    // Queue a resume for the pane's respawn when the session is still
-                    // recoverable, before clearing the now-stale binding.
-                    if let Some(resume) = shell_agent_resume(&agent) {
-                        model.shell_agent_resumes.insert(pane_id.clone(), resume);
-                    }
                     agent.pane_id = None;
                     agent.status = AgentStatus::Idle;
                     let has_queue = queued_agent_ids.contains(&agent.id);
@@ -3250,27 +3172,6 @@ impl AppState {
         Ok(ordered_panes(&model))
     }
 
-    pub fn set_active_tab_id(&self, tab_id: Option<String>) -> Result<(), String> {
-        let tab_id = sanitize_active_tab_id(tab_id);
-        let changed = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if model.active_tab_id == tab_id {
-                false
-            } else {
-                model.active_tab_id = tab_id;
-                true
-            }
-        };
-        if changed {
-            self.persist();
-        }
-        Ok(())
-    }
-
     pub fn pane_splits(&self) -> Result<Vec<PaneSplitInfo>, String> {
         let mut model = self
             .inner
@@ -3311,34 +3212,6 @@ impl AppState {
             .lock()
             .map_err(|_| "model lock poisoned".to_string())?;
         Ok(ordered_groups(&model))
-    }
-
-    pub fn reorder_groups(&self, group_ids: Vec<String>) -> Result<Vec<GroupInfo>, String> {
-        let groups = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if group_ids.len() != model.groups.len() {
-                return Err("group order is stale; refresh before reordering".to_string());
-            }
-
-            let mut seen = HashSet::with_capacity(group_ids.len());
-            for group_id in &group_ids {
-                if !seen.insert(group_id.clone()) {
-                    return Err("group order contains a duplicate group".to_string());
-                }
-                if !model.groups.contains_key(group_id) {
-                    return Err(format!("group {group_id} was not found"));
-                }
-            }
-
-            model.group_order = group_ids;
-            ordered_groups(&model)
-        };
-        self.persist();
-        Ok(groups)
     }
 
     pub fn list_research_workspaces(&self) -> Result<Vec<GroupInfo>, String> {
@@ -3444,14 +3317,6 @@ impl AppState {
             .find(|entry| entry.id == artifact_id)
             .cloned()
             .ok_or_else(|| format!("artifact {artifact_id} was not found"))
-    }
-
-    /// Removes and returns the agent-session resume queued for `pane_id` at restore, if
-    /// any. One-shot: consumed by the pane's respawn so a later relaunch of the same
-    /// pane id never re-triggers it.
-    pub fn take_shell_agent_resume(&self, pane_id: &str) -> Option<ShellAgentResume> {
-        let mut model = self.inner.model.lock().ok()?;
-        model.shell_agent_resumes.remove(pane_id)
     }
 
     pub fn list_turns(&self, agent_id: Option<&str>) -> Result<Vec<Turn>, String> {
@@ -7947,296 +7812,6 @@ impl AppState {
         Ok(())
     }
 
-    pub fn capture_last_closed_pane(&self, pane_id: &str) -> Result<(), String> {
-        let mut snapshot = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            // A pane bound to a research node is reclaimed by research lifecycle
-            // handling (settlement, cancellation, or failed-launch cleanup), so
-            // it must not become a restorable "closed tab". Skipping the
-            // capture here, rather than clearing it after kill_pane returns,
-            // closes the window in which a restore request could still see it.
-            if model
-                .research_nodes
-                .values()
-                .any(|node| node.pane_id() == Some(pane_id))
-            {
-                return Ok(());
-            }
-            let runtime = model
-                .panes
-                .get(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            let ordered_ids = ordered_pane_ids(&model);
-            let index = ordered_ids
-                .iter()
-                .position(|id| id == pane_id)
-                .unwrap_or(ordered_ids.len());
-
-            let mut pane = runtime.info.clone();
-            pane.depth = 0;
-            let group = model.groups.get(&pane.group_id).cloned();
-
-            let group_pane_count = model
-                .panes
-                .values()
-                .filter(|candidate| candidate.info.group_id == pane.group_id)
-                .count();
-            let closing_last_group_pane = group_pane_count == 1;
-            let pane_agent_id = pane.agent_id.clone();
-            let snapshot_agent = |agent: &AgentInfo| {
-                let turns = model.turns.get(&agent.id).cloned().unwrap_or_default();
-                let queued_turns = model
-                    .agent_turn_queues
-                    .get(&agent.id)
-                    .map(|queue| queue.iter().cloned().collect())
-                    .unwrap_or_default();
-                let draft = model.agent_drafts.get(&agent.id).cloned();
-                ClosedPaneAgentSnapshot {
-                    agent: agent.clone(),
-                    turns,
-                    queued_turns,
-                    draft,
-                }
-            };
-            let agent = pane_agent_id
-                .as_deref()
-                .and_then(|agent_id| model.agents.get(agent_id))
-                .or_else(|| {
-                    model
-                        .agents
-                        .values()
-                        .find(|agent| agent.pane_id.as_deref() == Some(pane_id))
-                })
-                .cloned()
-                .map(|agent| snapshot_agent(&agent));
-            let captured_agent_id = agent
-                .as_ref()
-                .map(|agent_snapshot| agent_snapshot.agent.id.as_str());
-            let orphaned_agents = model
-                .agents
-                .values()
-                .filter(|agent| Some(agent.id.as_str()) != captured_agent_id)
-                .filter(|agent| {
-                    agent.orphaned_queue_pane_id.as_deref() == Some(pane_id)
-                        || (closing_last_group_pane
-                            && agent.group_id == pane.group_id
-                            && agent.pane_id.is_none())
-                })
-                // Only agents that still carry a queue are worth preserving across the
-                // close: a queue-less one restores with no pane and no orphaned-queue
-                // binding (see `restore_closed_pane_metadata`), an invisible, unreachable
-                // agent. Such agents are pruned on close and stay resumable via recent
-                // sessions instead.
-                .filter(|agent| {
-                    model
-                        .agent_turn_queues
-                        .get(&agent.id)
-                        .is_some_and(|queue| !queue.is_empty())
-                })
-                .map(snapshot_agent)
-                .collect();
-
-            ClosedPaneSnapshot {
-                pane,
-                group,
-                agent,
-                orphaned_agents,
-                index,
-                scrollback: Vec::new(),
-            }
-        };
-
-        snapshot.scrollback =
-            match read_pane_scrollback(&self.inner.config.workspace_root, &snapshot.pane.id) {
-                Ok(bytes) => bounded_undo_scrollback(&bytes, MAX_UNDO_SCROLLBACK_BYTES),
-                Err(err) => {
-                    eprintln!(
-                        "session: failed to capture scrollback for closed pane {}: {err}",
-                        snapshot.pane.id
-                    );
-                    Vec::new()
-                }
-            };
-
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        model.closed_pane_stack.push(snapshot);
-        // Drop the oldest closes once past the cap so the stack can't grow unbounded.
-        let overflow = model
-            .closed_pane_stack
-            .len()
-            .saturating_sub(MAX_CLOSED_PANE_UNDO);
-        if overflow > 0 {
-            model.closed_pane_stack.drain(0..overflow);
-        }
-        Ok(())
-    }
-
-    /// Pops the most recently closed pane for undo, or `None` when the stack is empty.
-    pub fn take_last_closed_pane(&self) -> Result<Option<ClosedPaneSnapshot>, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.closed_pane_stack.pop())
-    }
-
-    /// Pushes a snapshot back onto the undo stack (used when a restore attempt fails, so
-    /// the just-popped close remains reopenable).
-    pub fn remember_last_closed_pane(&self, snapshot: ClosedPaneSnapshot) -> Result<(), String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        model.closed_pane_stack.push(snapshot);
-        Ok(())
-    }
-
-    /// Drops any undo entry for `pane_id` — used when a close is aborted, so a stale
-    /// snapshot can't be reopened. Pane ids are unique per run, so this matches at most
-    /// one entry.
-    pub fn clear_last_closed_pane_for_pane(&self, pane_id: &str) {
-        if let Ok(mut model) = self.inner.model.lock() {
-            model
-                .closed_pane_stack
-                .retain(|snapshot| snapshot.pane.id != pane_id);
-        }
-    }
-
-    /// Drops any undo entry whose captured agent is `agent_id` — used when the agent is
-    /// permanently gone, so its snapshot isn't offered for reopen.
-    pub fn clear_last_closed_pane_for_agent(&self, agent_id: &str) {
-        if let Ok(mut model) = self.inner.model.lock() {
-            model.closed_pane_stack.retain(|snapshot| {
-                snapshot
-                    .agent
-                    .as_ref()
-                    .is_none_or(|agent_snapshot| agent_snapshot.agent.id != agent_id)
-            });
-        }
-    }
-
-    pub fn restore_closed_pane_metadata(
-        &self,
-        snapshot: &ClosedPaneSnapshot,
-    ) -> Result<(), String> {
-        if matches!(snapshot.pane.kind, PaneKind::Agent) && snapshot.agent.is_none() {
-            return Err(format!(
-                "closed agent pane {} is missing its agent",
-                snapshot.pane.id
-            ));
-        }
-
-        {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if !model.groups.contains_key(&snapshot.pane.group_id)
-                && let Some(group) = snapshot.group.clone()
-            {
-                let group_id = group.id.clone();
-                model.groups.insert(group_id.clone(), group);
-                if !model.group_order.iter().any(|id| id == &group_id) {
-                    model.group_order.push(group_id);
-                }
-            }
-            model.shell_agent_resumes.remove(&snapshot.pane.id);
-
-            if let Some(agent_snapshot) = &snapshot.agent {
-                restore_closed_agent_snapshot_locked(
-                    &mut model,
-                    &snapshot.pane,
-                    agent_snapshot,
-                    matches!(snapshot.pane.kind, PaneKind::Agent),
-                    matches!(snapshot.pane.kind, PaneKind::Shell),
-                );
-            }
-            for agent_snapshot in &snapshot.orphaned_agents {
-                restore_closed_agent_snapshot_locked(
-                    &mut model,
-                    &snapshot.pane,
-                    agent_snapshot,
-                    false,
-                    false,
-                );
-            }
-        }
-        self.persist();
-        Ok(())
-    }
-
-    pub fn place_restored_pane(
-        &self,
-        pane_id: &str,
-        index: usize,
-    ) -> Result<Vec<PaneInfo>, String> {
-        let panes = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if !model.panes.contains_key(pane_id) {
-                return Err(format!("pane {pane_id} was not found"));
-            }
-
-            let mut ids = ordered_pane_ids(&model);
-            ids.retain(|id| id != pane_id);
-            ids.insert(index.min(ids.len()), pane_id.to_string());
-            model.pane_order = ids;
-            normalize_pane_splits_locked(&mut model);
-            ordered_panes(&model)
-        };
-        self.persist();
-        Ok(panes)
-    }
-
-    /// True when `pane_id` is the only remaining pane in its group and that group still
-    /// owns an agent with queued turns. Removing such a pane prunes the group's agents
-    /// (closing the group with it), so a caller that does not first capture a close
-    /// snapshot — the natural PTY-exit path, unlike `kill_pane` — would discard that
-    /// pending work irrecoverably. Used to decide whether to snapshot before removal.
-    pub fn closing_pane_would_strand_queued_work(&self, pane_id: &str) -> Result<bool, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let Some(group_id) = model
-            .panes
-            .get(pane_id)
-            .map(|pane| pane.info.group_id.clone())
-        else {
-            return Ok(false);
-        };
-        let is_last_pane = !model
-            .panes
-            .values()
-            .any(|other| other.info.id != pane_id && other.info.group_id == group_id);
-        if !is_last_pane {
-            return Ok(false);
-        }
-        let has_queued_work = model.agents.values().any(|agent| {
-            agent.group_id == group_id
-                && model
-                    .agent_turn_queues
-                    .get(&agent.id)
-                    .is_some_and(|queue| !queue.is_empty())
-        });
-        Ok(has_queued_work)
-    }
-
     pub fn remove_pane(&self, pane_id: &str) -> Result<(), String> {
         // Cancel network helpers before removing the runtime; a late recovery
         // must not install a new attachment into a closing pane.
@@ -8411,158 +7986,6 @@ impl AppState {
             ));
         }
         Ok(())
-    }
-
-    pub fn reorder_panes(&self, pane_ids: Vec<String>) -> Result<Vec<PaneInfo>, String> {
-        let panes = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if pane_ids.len() != model.panes.len() {
-                return Err("pane order is stale; refresh before reordering".to_string());
-            }
-
-            let mut seen = HashSet::with_capacity(pane_ids.len());
-            for pane_id in &pane_ids {
-                if !seen.insert(pane_id.clone()) {
-                    return Err("pane order contains a duplicate pane".to_string());
-                }
-                if !model.panes.contains_key(pane_id) {
-                    return Err(format!("pane {pane_id} was not found"));
-                }
-            }
-
-            model.pane_order = pane_ids;
-            normalize_pane_splits_locked(&mut model);
-            ordered_panes(&model)
-        };
-        self.persist();
-        Ok(panes)
-    }
-
-    /// Atomically replaces the flat sidebar tab order. The layout must list exactly
-    /// the current panes (no missing/duplicate/unknown id). The legacy depth field
-    /// must be zero.
-    pub fn set_pane_layout(&self, layout: Vec<PaneLayoutEntry>) -> Result<Vec<PaneInfo>, String> {
-        let panes = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if layout.len() != model.panes.len() {
-                return Err("pane layout is stale; refresh before updating".to_string());
-            }
-
-            let mut seen = HashSet::with_capacity(layout.len());
-            for entry in &layout {
-                if !seen.insert(entry.pane_id.clone()) {
-                    return Err("pane layout contains a duplicate pane".to_string());
-                }
-                if !model.panes.contains_key(&entry.pane_id) {
-                    return Err(format!("pane {} was not found", entry.pane_id));
-                }
-                if entry.depth != 0 {
-                    return Err("pane indentation is no longer supported".to_string());
-                }
-            }
-
-            model.pane_order = layout.iter().map(|entry| entry.pane_id.clone()).collect();
-            normalize_pane_splits_locked(&mut model);
-            ordered_panes(&model)
-        };
-        self.persist();
-        Ok(panes)
-    }
-
-    /// Moves a plain shell tab into another terminal group, applying `layout` as the
-    /// resulting flat tab order in the same locked mutation. Agent tabs are rejected: an
-    /// agent's worktree, branch, and queue bookkeeping are bound to its group, and
-    /// this move deliberately doesn't touch them. When the move empties the source
-    /// group it is removed, mirroring the close-last-pane path.
-    pub fn move_pane_to_group(
-        &self,
-        pane_id: &str,
-        target_group_id: &str,
-        layout: Vec<PaneLayoutEntry>,
-    ) -> Result<Vec<PaneInfo>, String> {
-        let (panes, removed_source_group_id) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let source_group_id = model
-                .panes
-                .get(pane_id)
-                .map(|pane| pane.info.group_id.clone())
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            if source_group_id == target_group_id {
-                return Err(format!(
-                    "pane {pane_id} is already in group {target_group_id}"
-                ));
-            }
-            let source_scope = model.groups.get(&source_group_id).map(|group| group.scope);
-            let target_scope = model
-                .groups
-                .get(target_group_id)
-                .map(|group| group.scope)
-                .ok_or_else(|| format!("group {target_group_id} was not found"))?;
-            if source_scope != Some(WorkspaceScope::Terminal)
-                || target_scope != WorkspaceScope::Terminal
-            {
-                return Err("tabs can only move between terminal groups".to_string());
-            }
-
-            let moved = model
-                .panes
-                .get(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            if !matches!(moved.info.kind, PaneKind::Shell) || moved.info.agent_id.is_some() {
-                return Err("agent tabs can't move to another group".to_string());
-            }
-            // Same validation as `set_pane_layout`, with the moved pane counted
-            // against its prospective group.
-            if layout.len() != model.panes.len() {
-                return Err("pane layout is stale; refresh before updating".to_string());
-            }
-            let mut seen = HashSet::with_capacity(layout.len());
-            for entry in &layout {
-                if !seen.insert(entry.pane_id.clone()) {
-                    return Err("pane layout contains a duplicate pane".to_string());
-                }
-                if !model.panes.contains_key(&entry.pane_id) {
-                    return Err(format!("pane {} was not found", entry.pane_id));
-                }
-                if entry.depth != 0 {
-                    return Err("pane indentation is no longer supported".to_string());
-                }
-            }
-
-            if let Some(moved) = model.panes.get_mut(pane_id) {
-                moved.info.group_id = target_group_id.to_string();
-            }
-            model.pane_order = layout.iter().map(|entry| entry.pane_id.clone()).collect();
-            // A moved pane's split memberships can't survive the group change; the
-            // normalizer drops it from any split it belonged to.
-            normalize_pane_splits_locked(&mut model);
-            let removed_source_group_id =
-                remove_group_without_open_panes_locked(&mut model, &source_group_id)
-                    .then_some(source_group_id);
-            (ordered_panes(&model), removed_source_group_id)
-        };
-        self.persist();
-        if let Some(group_id) = removed_source_group_id {
-            self.emit(SessionEvent::new(
-                "group.removed",
-                None,
-                None,
-                json!({ "groupId": group_id }),
-            ));
-        }
-        Ok(panes)
     }
 
     /// Moves `pane_id` to sit immediately after `sibling_pane_id`.
@@ -9262,8 +8685,6 @@ impl AppState {
                 }
                 match crate::pty::kill_pane(&state, pane_id.clone()) {
                     Ok(()) => {
-                        // Automated retirement is not a user close and must not be undoable.
-                        state.clear_last_closed_pane_for_pane(&pane_id);
                         return;
                     }
                     Err(err) => {
@@ -10749,18 +10170,6 @@ impl AppState {
             .and_then(|pane| pane.backend.writer()))
     }
 
-    pub fn pane_master(&self, pane_id: &str) -> Result<Option<SharedMaster>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .panes
-            .get(pane_id)
-            .and_then(|pane| pane.backend.host_master()))
-    }
-
     pub fn pane_child(&self, pane_id: &str) -> Result<Option<SharedChild>, String> {
         let model = self
             .inner
@@ -10959,24 +10368,6 @@ impl AppState {
             .research_nodes
             .values()
             .any(|node| node.agent_id() == Some(agent_id)))
-    }
-
-    pub fn update_pane_size(&self, pane_id: &str, cols: u16, rows: u16) -> Result<(), String> {
-        {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let pane = model
-                .panes
-                .get_mut(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            pane.info.cols = cols;
-            pane.info.rows = rows;
-        }
-        self.persist();
-        Ok(())
     }
 
     /// Updates a pane's last-known working directory, reported by shell
@@ -11248,23 +10639,6 @@ impl AppState {
         Ok(info)
     }
 
-    pub fn set_pane_recovered(&self, pane_id: &str, recovered: bool) -> Result<(), String> {
-        {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let pane = model
-                .panes
-                .get_mut(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            pane.info.recovered = recovered;
-        }
-        self.persist();
-        Ok(())
-    }
-
     #[cfg(test)]
     pub fn mark_pane_status(&self, pane_id: &str, status: PaneStatus) -> Result<(), String> {
         {
@@ -11280,28 +10654,6 @@ impl AppState {
         self.persist();
         Ok(())
     }
-}
-
-/// Builds a resume request for an agent that was bound to a shell pane at shutdown,
-/// when its session is still resumable. Requires a non-empty session id and skips a
-/// session whose recorded transcript file no longer exists, since resuming a deleted
-/// session would just error out in the new shell.
-fn shell_agent_resume(agent: &AgentInfo) -> Option<ShellAgentResume> {
-    let session_id = agent
-        .session_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|id| !id.is_empty())?;
-    if let Some(transcript_path) = agent.transcript_path.as_deref()
-        && !std::path::Path::new(transcript_path).exists()
-    {
-        return None;
-    }
-    Some(ShellAgentResume {
-        adapter: agent.adapter.clone(),
-        session_id: session_id.to_string(),
-        cwd: agent.worktree_dir.clone(),
-    })
 }
 
 pub(crate) fn now_millis() -> u128 {
@@ -11616,62 +10968,6 @@ fn ordered_groups(model: &Model) -> Vec<GroupInfo> {
         .into_iter()
         .filter_map(|group_id| model.groups.get(&group_id).cloned())
         .collect()
-}
-
-fn restore_closed_agent_snapshot_locked(
-    model: &mut Model,
-    pane: &PaneInfo,
-    agent_snapshot: &ClosedPaneAgentSnapshot,
-    attach_to_pane: bool,
-    queue_shell_resume: bool,
-) {
-    let mut agent = agent_snapshot.agent.clone();
-    if attach_to_pane {
-        agent.pane_id = Some(pane.id.clone());
-        agent.orphaned_queue_pane_id = None;
-    } else {
-        let has_queue = !agent_snapshot.queued_turns.is_empty();
-        agent.pane_id = None;
-        agent.orphaned_queue_pane_id = has_queue.then(|| pane.id.clone());
-        agent.status = AgentStatus::Idle;
-        if has_queue {
-            agent.paused = true;
-        }
-    }
-
-    if queue_shell_resume && let Some(resume) = shell_agent_resume(&agent) {
-        model.shell_agent_resumes.insert(pane.id.clone(), resume);
-    }
-
-    let agent_id = agent.id.clone();
-    model.agents.insert(agent_id.clone(), agent);
-    if agent_snapshot.turns.is_empty() {
-        model.turns.remove(&agent_id);
-    } else {
-        model
-            .turns
-            .insert(agent_id.clone(), agent_snapshot.turns.clone());
-    }
-    if agent_snapshot.queued_turns.is_empty() {
-        model.agent_turn_queues.remove(&agent_id);
-    } else {
-        model.agent_turn_queues.insert(
-            agent_id.clone(),
-            agent_snapshot.queued_turns.iter().cloned().collect(),
-        );
-    }
-    match agent_snapshot
-        .draft
-        .clone()
-        .filter(|draft| !draft.trim().is_empty())
-    {
-        Some(draft) => {
-            model.agent_drafts.insert(agent_id, draft);
-        }
-        None => {
-            model.agent_drafts.remove(&agent_id);
-        }
-    }
 }
 
 /// Image ids that a research node or draft references.
@@ -16887,8 +16183,6 @@ mod tests {
         assert!(cancelled.pane_id().is_none());
         assert!(cancelled.run().unwrap().completed_at.is_some());
         assert!(state.list_panes().unwrap().is_empty());
-        // No undo entry: cancellation reclaims the pane for good.
-        assert!(state.take_last_closed_pane().unwrap().is_none());
         // A settled tree is removable, and double-cancel is rejected cleanly.
         assert!(
             state
@@ -17594,7 +16888,7 @@ mod tests {
     }
 
     #[test]
-    fn queue_idle_completion_retires_research_pane_without_creating_an_undo_entry() {
+    fn queue_idle_completion_retires_research_pane() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
@@ -17643,7 +16937,6 @@ mod tests {
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
         assert!(node.pane_id().is_none());
         assert_eq!(node.agent_id(), Some("research-agent"));
-        assert!(state.take_last_closed_pane().unwrap().is_none());
         assert!(state.group("group-1").unwrap().is_some());
         let snapshot = research::read_response_snapshot(
             &state.config().workspace_root,
@@ -20077,7 +19370,6 @@ mod tests {
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
         assert_eq!(node.status(), ResearchNodeStatus::Failed);
         assert!(node.pane_id().is_none());
-        assert!(state.take_last_closed_pane().unwrap().is_none());
     }
 
     #[test]
@@ -20810,48 +20102,6 @@ mod tests {
                 "pane-c".to_string()
             ]
         );
-    }
-
-    #[test]
-    fn pane_splits_require_adjacent_tabs_and_prune_on_layout_change() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-
-        let invalid = state
-            .set_pane_splits(vec![PaneSplitInfo {
-                id: "split-a".to_string(),
-                pane_ids: vec!["pane-1".to_string(), "pane-3".to_string()],
-                sizes: HashMap::new(),
-                intent: HashMap::new(),
-                axis: PaneSplitAxis::Vertical,
-                root: None,
-            }])
-            .unwrap_err();
-        assert!(invalid.contains("adjacent"));
-
-        let splits = state
-            .set_pane_splits(vec![PaneSplitInfo {
-                id: "split-a".to_string(),
-                pane_ids: vec!["pane-1".to_string(), "pane-2".to_string()],
-                sizes: HashMap::from([("pane-1".to_string(), 0.4), ("pane-2".to_string(), 0.6)]),
-                intent: HashMap::new(),
-                axis: PaneSplitAxis::Vertical,
-                root: None,
-            }])
-            .unwrap();
-        assert_eq!(splits.len(), 1);
-        assert_eq!(splits[0].pane_ids, vec!["pane-1", "pane-2"]);
-        assert_eq!(splits[0].sizes.get("pane-1"), Some(&0.4));
-
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-3", 0), ("pane-2", 0)]))
-            .unwrap();
-
-        assert!(state.pane_splits().unwrap().is_empty());
     }
 
     #[test]
@@ -21809,477 +21059,11 @@ mod tests {
         std::fs::remove_dir_all(workspace).ok();
     }
 
-    #[test]
-    fn pane_reorder_round_trips_through_persistence() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-            state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-            state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-
-            let reordered = state
-                .reorder_panes(vec![
-                    "pane-3".to_string(),
-                    "pane-1".to_string(),
-                    "pane-2".to_string(),
-                ])
-                .unwrap();
-            assert_eq!(
-                reordered
-                    .into_iter()
-                    .map(|pane| pane.id)
-                    .collect::<Vec<_>>(),
-                vec![
-                    "pane-3".to_string(),
-                    "pane-1".to_string(),
-                    "pane-2".to_string()
-                ]
-            );
-        }
-
-        let state = AppState::new(config);
-        let recovered = state.restore_session();
-        assert_eq!(
-            recovered
-                .into_iter()
-                .map(|pane| pane.id)
-                .collect::<Vec<_>>(),
-            vec![
-                "pane-3".to_string(),
-                "pane-1".to_string(),
-                "pane-2".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn pane_reorder_rejects_stale_or_duplicate_orders() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-
-        let duplicate = state
-            .reorder_panes(vec!["pane-1".to_string(), "pane-1".to_string()])
-            .unwrap_err();
-        assert!(duplicate.contains("duplicate"));
-
-        let stale = state.reorder_panes(vec!["pane-1".to_string()]).unwrap_err();
-        assert!(stale.contains("stale"));
-    }
-
-    #[test]
-    fn group_reorder_round_trips_through_persistence_and_rejects_stale_orders() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state
-                .insert_group_after(sample_group_with_id("group-1"), None)
-                .unwrap();
-            state
-                .insert_group_after(sample_group_with_id("group-2"), Some("group-1"))
-                .unwrap();
-            state
-                .insert_group_after(sample_group_with_id("group-3"), Some("group-2"))
-                .unwrap();
-
-            let reordered = state
-                .reorder_groups(vec![
-                    "group-3".to_string(),
-                    "group-1".to_string(),
-                    "group-2".to_string(),
-                ])
-                .unwrap();
-            assert_eq!(
-                reordered
-                    .into_iter()
-                    .map(|group| group.id)
-                    .collect::<Vec<_>>(),
-                vec![
-                    "group-3".to_string(),
-                    "group-1".to_string(),
-                    "group-2".to_string()
-                ]
-            );
-
-            let duplicate = state
-                .reorder_groups(vec![
-                    "group-3".to_string(),
-                    "group-3".to_string(),
-                    "group-2".to_string(),
-                ])
-                .unwrap_err();
-            assert!(duplicate.contains("duplicate"));
-
-            let stale = state
-                .reorder_groups(vec!["group-3".to_string()])
-                .unwrap_err();
-            assert!(stale.contains("stale"));
-        }
-
-        let state = AppState::new(config);
-        assert!(state.restore_session().is_empty());
-        assert_eq!(
-            state
-                .list_groups()
-                .unwrap()
-                .into_iter()
-                .map(|group| group.id)
-                .collect::<Vec<_>>(),
-            vec![
-                "group-3".to_string(),
-                "group-1".to_string(),
-                "group-2".to_string()
-            ]
-        );
-    }
-
-    fn layout(items: &[(&str, u16)]) -> Vec<PaneLayoutEntry> {
-        items
-            .iter()
-            .map(|(id, depth)| PaneLayoutEntry {
-                pane_id: id.to_string(),
-                depth: *depth,
-            })
-            .collect()
-    }
-
     fn id_depths(panes: &[PaneInfo]) -> Vec<(String, u16)> {
         panes
             .iter()
             .map(|pane| (pane.id.clone(), pane.depth))
             .collect()
-    }
-
-    #[test]
-    fn set_pane_layout_applies_and_round_trips_flat_order() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-            state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-            state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-
-            let panes = state
-                .set_pane_layout(layout(&[("pane-3", 0), ("pane-1", 0), ("pane-2", 0)]))
-                .unwrap();
-            assert_eq!(
-                id_depths(&panes),
-                vec![
-                    ("pane-3".to_string(), 0),
-                    ("pane-1".to_string(), 0),
-                    ("pane-2".to_string(), 0),
-                ]
-            );
-        }
-
-        // Flat order survives a restart via the persisted pane list.
-        let state = AppState::new(config);
-        let recovered = state.restore_session();
-        assert_eq!(
-            id_depths(&recovered),
-            vec![
-                ("pane-3".to_string(), 0),
-                ("pane-1".to_string(), 0),
-                ("pane-2".to_string(), 0),
-            ]
-        );
-    }
-
-    #[test]
-    fn set_pane_layout_rejects_invalid_layouts() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-
-        // Legacy clients can still deserialize the field, but nonzero depth is
-        // rejected so indentation cannot be reintroduced after the cutover.
-        assert!(
-            state
-                .set_pane_layout(layout(&[("pane-1", 1), ("pane-2", 1)]))
-                .unwrap_err()
-                .contains("no longer supported")
-        );
-        // Membership must match the live panes exactly.
-        assert!(
-            state
-                .set_pane_layout(layout(&[("pane-1", 0), ("pane-1", 0)]))
-                .unwrap_err()
-                .contains("duplicate")
-        );
-        assert!(
-            state
-                .set_pane_layout(layout(&[("pane-1", 0)]))
-                .unwrap_err()
-                .contains("stale")
-        );
-    }
-
-    #[test]
-    fn move_pane_to_group_moves_shell_pane_and_removes_emptied_group() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state
-                .insert_group_after(sample_group_with_id("group-1"), None)
-                .unwrap();
-            state
-                .insert_group_after(sample_group_with_id("group-2"), Some("group-1"))
-                .unwrap();
-            state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-            let mut other = sample_pane_runtime("pane-3");
-            other.info.group_id = "group-2".to_string();
-            state.insert_pane(other).unwrap();
-            state
-                .set_pane_layout(layout(&[("pane-1", 0), ("pane-3", 0)]))
-                .unwrap();
-
-            // The pane re-homes to the target group with the given layout.
-            let panes = state
-                .move_pane_to_group("pane-1", "group-2", layout(&[("pane-3", 0), ("pane-1", 0)]))
-                .unwrap();
-            assert_eq!(
-                id_depths(&panes),
-                vec![("pane-3".to_string(), 0), ("pane-1".to_string(), 0),]
-            );
-            assert!(panes.iter().all(|pane| pane.group_id == "group-2"));
-
-            // The move emptied group-1, so it's removed like closing its last pane.
-            let groups = state.list_groups().unwrap();
-            assert_eq!(
-                groups
-                    .iter()
-                    .map(|group| group.id.clone())
-                    .collect::<Vec<_>>(),
-                vec!["group-2".to_string()]
-            );
-        }
-
-        // The new group membership, order, and group removal all survive a restart.
-        let state = AppState::new(config);
-        let recovered = state.restore_session();
-        assert_eq!(
-            id_depths(&recovered),
-            vec![("pane-3".to_string(), 0), ("pane-1".to_string(), 0),]
-        );
-        assert!(recovered.iter().all(|pane| pane.group_id == "group-2"));
-        assert_eq!(state.list_groups().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn move_pane_to_group_rejects_agent_tabs_and_non_terminal_targets() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_group_with_id("group-1"), None)
-            .unwrap();
-        state
-            .insert_group_after(sample_group_with_id("group-2"), Some("group-1"))
-            .unwrap();
-        let mut research = sample_group_with_id("group-research");
-        research.scope = WorkspaceScope::Research;
-        state.insert_group_after(research, Some("group-2")).unwrap();
-
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        let mut agent = sample_pane_runtime("pane-agent");
-        agent.info.kind = PaneKind::Agent;
-        agent.info.agent_id = Some("agent-1".to_string());
-        state.insert_pane(agent).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-agent", 0), ("pane-2", 0)]))
-            .unwrap();
-        let full = || layout(&[("pane-1", 0), ("pane-agent", 0), ("pane-2", 0)]);
-
-        // An agent tab can't move.
-        assert!(
-            state
-                .move_pane_to_group("pane-agent", "group-2", full())
-                .unwrap_err()
-                .contains("agent tabs")
-        );
-        // Only terminal-to-terminal moves are valid, and both groups must exist.
-        assert!(
-            state
-                .move_pane_to_group("pane-2", "group-research", full())
-                .unwrap_err()
-                .contains("terminal groups")
-        );
-        assert!(
-            state
-                .move_pane_to_group("pane-2", "group-1", full())
-                .unwrap_err()
-                .contains("already in")
-        );
-        assert!(
-            state
-                .move_pane_to_group("pane-2", "group-missing", full())
-                .unwrap_err()
-                .contains("not found")
-        );
-
-        // A plain shell tab does move, and the source group survives while its
-        // other panes remain.
-        let panes = state
-            .move_pane_to_group("pane-2", "group-2", full())
-            .unwrap();
-        let moved = panes.iter().find(|pane| pane.id == "pane-2").unwrap();
-        assert_eq!(moved.group_id, "group-2");
-        assert_eq!(state.list_groups().unwrap().len(), 3);
-    }
-
-    #[test]
-    fn remove_pane_keeps_remaining_layout_flat() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-2", 0), ("pane-3", 0)]))
-            .unwrap();
-
-        state.remove_pane("pane-1").unwrap();
-        assert_eq!(
-            id_depths(&state.list_panes().unwrap()),
-            vec![("pane-2".to_string(), 0), ("pane-3".to_string(), 0)]
-        );
-    }
-
-    #[test]
-    fn closed_pane_undo_stack_pops_most_recent_first_and_survives_extra_closes() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-
-        // Three successive closes stack up (unlike the old single slot, the earlier ones
-        // aren't discarded by the next close).
-        state.capture_last_closed_pane("pane-1").unwrap();
-        state.capture_last_closed_pane("pane-2").unwrap();
-        state.capture_last_closed_pane("pane-3").unwrap();
-
-        // Undo reopens them most-recent first.
-        assert_eq!(
-            state.take_last_closed_pane().unwrap().unwrap().pane.id,
-            "pane-3"
-        );
-        assert_eq!(
-            state.take_last_closed_pane().unwrap().unwrap().pane.id,
-            "pane-2"
-        );
-        assert_eq!(
-            state.take_last_closed_pane().unwrap().unwrap().pane.id,
-            "pane-1"
-        );
-        assert!(state.take_last_closed_pane().unwrap().is_none());
-    }
-
-    #[test]
-    fn closed_pane_undo_stack_is_bounded() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        // Capture more closes than the cap; the oldest are dropped and only the most
-        // recent MAX_CLOSED_PANE_UNDO remain reopenable.
-        for index in 0..(MAX_CLOSED_PANE_UNDO + 5) {
-            let pane_id = format!("pane-{index}");
-            state.insert_pane(sample_pane_runtime(&pane_id)).unwrap();
-            state.capture_last_closed_pane(&pane_id).unwrap();
-        }
-        let mut popped = 0;
-        let mut newest_first = Vec::new();
-        while let Some(snapshot) = state.take_last_closed_pane().unwrap() {
-            newest_first.push(snapshot.pane.id);
-            popped += 1;
-        }
-        assert_eq!(popped, MAX_CLOSED_PANE_UNDO);
-        // The newest close is still first out; the oldest five were evicted.
-        assert_eq!(
-            newest_first.first().map(String::as_str),
-            Some(format!("pane-{}", MAX_CLOSED_PANE_UNDO + 4).as_str())
-        );
-        assert!(!newest_first.contains(&"pane-0".to_string()));
-    }
-
-    #[test]
-    fn capture_last_closed_pane_records_layout_agent_state_and_scrollback() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        let mut pane_2 = sample_pane_runtime("pane-2");
-        pane_2.info.kind = PaneKind::Agent;
-        pane_2.info.agent_id = Some("agent-1".to_string());
-        state.insert_pane(pane_2).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-2", 0), ("pane-3", 0)]))
-            .unwrap();
-        let mut agent = sample_agent("agent-1");
-        agent.pane_id = Some("pane-2".to_string());
-        state.insert_agent(agent).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "later".to_string())
-            .unwrap();
-        state
-            .set_agent_draft("agent-1", "draft text".to_string())
-            .unwrap();
-        append_pane_scrollback(&workspace, "pane-2", b"old output").unwrap();
-
-        state.capture_last_closed_pane("pane-2").unwrap();
-
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-        assert_eq!(snapshot.pane.id, "pane-2");
-        assert_eq!(snapshot.pane.depth, 0);
-        assert_eq!(snapshot.group.as_ref().map(|group| group.id.as_str()), None);
-        assert_eq!(snapshot.index, 1);
-        assert_eq!(snapshot.scrollback, b"old output");
-        let agent = snapshot.agent.unwrap();
-        assert_eq!(agent.agent.id, "agent-1");
-        assert_eq!(agent.queued_turns.len(), 1);
-        assert_eq!(agent.queued_turns[0].text, "later");
-        assert_eq!(agent.draft.as_deref(), Some("draft text"));
-    }
-
-    #[test]
-    fn capture_last_closed_pane_caps_large_scrollback() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.set_pane_layout(layout(&[("pane-1", 0)])).unwrap();
-        // Well past the undo cap so the snapshot must keep only the tail rather
-        // than retain the whole log. Line delimiters provide an exact cut point.
-        let line = b"scrollback line of terminal output\n";
-        let mut big = Vec::new();
-        while big.len() < MAX_UNDO_SCROLLBACK_BYTES + line.len() * 2 {
-            big.extend_from_slice(line);
-        }
-        append_pane_scrollback(&workspace, "pane-1", &big).unwrap();
-
-        state.capture_last_closed_pane("pane-1").unwrap();
-
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-        assert!(
-            snapshot.scrollback.len() <= MAX_UNDO_SCROLLBACK_BYTES,
-            "undo snapshot must not pin the full log ({} bytes)",
-            snapshot.scrollback.len()
-        );
-        assert!(snapshot.scrollback.starts_with(line));
-        assert!(snapshot.scrollback.ends_with(line));
     }
 
     #[test]
@@ -22315,143 +21099,6 @@ mod tests {
         assert_eq!(
             read_pane_scrollback(&workspace, "pane-1").unwrap(),
             b"old output"
-        );
-    }
-
-    #[test]
-    fn capture_last_group_pane_records_orphaned_agents_for_restore() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let mut agent = sample_agent("agent-1");
-        agent.pane_id = None;
-        agent.orphaned_queue_pane_id = Some("pane-7".to_string());
-        state.insert_agent(agent).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "recover me".to_string())
-            .unwrap();
-
-        state.capture_last_closed_pane("pane-7").unwrap();
-
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-        assert!(snapshot.agent.is_none());
-        assert_eq!(snapshot.orphaned_agents.len(), 1);
-        assert_eq!(snapshot.orphaned_agents[0].agent.id, "agent-1");
-        assert_eq!(
-            snapshot.orphaned_agents[0].queued_turns[0].text,
-            "recover me"
-        );
-        assert_eq!(
-            snapshot.group.as_ref().map(|group| group.id.as_str()),
-            Some("group-1")
-        );
-    }
-
-    #[test]
-    fn capture_last_group_pane_skips_queueless_orphaned_agents() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        // A pane-less sibling with no queue: restoring it would only recreate an
-        // invisible, unreachable agent, so it must not be captured.
-        let mut idle_sibling = sample_agent("agent-1");
-        idle_sibling.pane_id = None;
-        state.insert_agent(idle_sibling).unwrap();
-
-        state.capture_last_closed_pane("pane-7").unwrap();
-
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-        assert!(snapshot.orphaned_agents.is_empty());
-    }
-
-    #[test]
-    fn closing_pane_would_strand_queued_work_only_for_last_pane_with_a_queue() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-
-        // Last pane, but no queued work yet.
-        assert!(
-            !state
-                .closing_pane_would_strand_queued_work("pane-7")
-                .unwrap()
-        );
-
-        // Last pane with a queued agent: closing it would strand the queue.
-        state
-            .enqueue_agent_turn("agent-1", "later".to_string())
-            .unwrap();
-        assert!(
-            state
-                .closing_pane_would_strand_queued_work("pane-7")
-                .unwrap()
-        );
-
-        // A sibling pane keeps the group active, so no state is left without a pane.
-        state.insert_pane(sample_pane_runtime("pane-8")).unwrap();
-        assert!(
-            !state
-                .closing_pane_would_strand_queued_work("pane-7")
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn restore_closed_pane_metadata_reinserts_pruned_agent_and_layout() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        let mut pane_2 = sample_pane_runtime("pane-2");
-        pane_2.info.kind = PaneKind::Agent;
-        pane_2.info.agent_id = Some("agent-1".to_string());
-        state.insert_pane(pane_2).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-2", 0), ("pane-3", 0)]))
-            .unwrap();
-        let mut agent = sample_agent("agent-1");
-        agent.pane_id = Some("pane-2".to_string());
-        state.insert_agent(agent).unwrap();
-        state
-            .set_agent_draft("agent-1", "draft text".to_string())
-            .unwrap();
-        state.capture_last_closed_pane("pane-2").unwrap();
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-
-        state.remove_pane("pane-2").unwrap();
-        assert!(state.agent("agent-1").unwrap().is_none());
-
-        state.restore_closed_pane_metadata(&snapshot).unwrap();
-        let mut restored_pane = sample_pane_runtime("pane-2");
-        restored_pane.info = snapshot.pane.clone();
-        state.insert_pane(restored_pane).unwrap();
-        state
-            .place_restored_pane(&snapshot.pane.id, snapshot.index)
-            .unwrap();
-
-        assert_eq!(
-            id_depths(&state.list_panes().unwrap()),
-            vec![
-                ("pane-1".to_string(), 0),
-                ("pane-2".to_string(), 0),
-                ("pane-3".to_string(), 0),
-            ]
-        );
-        let restored_agent = state.agent("agent-1").unwrap().unwrap();
-        assert_eq!(restored_agent.pane_id.as_deref(), Some("pane-2"));
-        assert_eq!(
-            state.agent_draft("agent-1").unwrap().as_deref(),
-            Some("draft text")
         );
     }
 
@@ -22522,108 +21169,6 @@ mod tests {
         state.remove_pane("pane-2").unwrap();
 
         assert!(state.list_groups().unwrap().is_empty());
-    }
-
-    #[test]
-    fn restore_closed_pane_metadata_recreates_removed_group() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        state.capture_last_closed_pane("pane-7").unwrap();
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-
-        state.remove_pane("pane-7").unwrap();
-        assert!(state.list_groups().unwrap().is_empty());
-
-        state.restore_closed_pane_metadata(&snapshot).unwrap();
-        assert_eq!(state.list_groups().unwrap()[0].id, "group-1");
-    }
-
-    #[test]
-    fn last_agent_pane_close_removes_group_and_restore_recreates_it() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        let mut pane = sample_pane_runtime("pane-7");
-        pane.info.kind = PaneKind::Agent;
-        pane.info.agent_id = Some("agent-1".to_string());
-        state.insert_pane(pane).unwrap();
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "queued restore".to_string())
-            .unwrap();
-        state.capture_last_closed_pane("pane-7").unwrap();
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-
-        state.remove_pane("pane-7").unwrap();
-
-        assert!(state.list_groups().unwrap().is_empty());
-        assert!(state.agent("agent-1").unwrap().is_none());
-
-        state.restore_closed_pane_metadata(&snapshot).unwrap();
-        let mut restored_pane = sample_pane_runtime("pane-7");
-        restored_pane.info = snapshot.pane.clone();
-        state.insert_pane(restored_pane).unwrap();
-        state
-            .place_restored_pane(&snapshot.pane.id, snapshot.index)
-            .unwrap();
-
-        assert_eq!(state.list_groups().unwrap()[0].id, "group-1");
-        let restored_agent = state.agent("agent-1").unwrap().unwrap();
-        assert_eq!(restored_agent.pane_id.as_deref(), Some("pane-7"));
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["queued restore".to_string()]
-        );
-    }
-
-    #[test]
-    fn last_pane_close_prunes_orphaned_agents_and_restore_rehydrates_them() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let mut agent = sample_agent("agent-1");
-        agent.pane_id = None;
-        agent.orphaned_queue_pane_id = Some("pane-7".to_string());
-        state.insert_agent(agent).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "queued restore".to_string())
-            .unwrap();
-        state.capture_last_closed_pane("pane-7").unwrap();
-        let snapshot = state.take_last_closed_pane().unwrap().unwrap();
-
-        state.remove_pane("pane-7").unwrap();
-
-        assert!(state.list_groups().unwrap().is_empty());
-        assert!(state.agent("agent-1").unwrap().is_none());
-
-        state.restore_closed_pane_metadata(&snapshot).unwrap();
-        let mut restored_pane = sample_pane_runtime("pane-7");
-        restored_pane.info = snapshot.pane.clone();
-        state.insert_pane(restored_pane).unwrap();
-        state
-            .place_restored_pane(&snapshot.pane.id, snapshot.index)
-            .unwrap();
-
-        assert_eq!(state.list_groups().unwrap()[0].id, "group-1");
-        let restored_agent = state.agent("agent-1").unwrap().unwrap();
-        assert_eq!(restored_agent.pane_id, None);
-        assert_eq!(
-            restored_agent.orphaned_queue_pane_id.as_deref(),
-            Some("pane-7")
-        );
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["queued restore".to_string()]
-        );
     }
 
     #[test]
@@ -23002,34 +21547,6 @@ mod tests {
     }
 
     #[test]
-    fn reorder_panes_preserves_flat_depth() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-        state
-            .set_pane_layout(layout(&[("pane-1", 0), ("pane-2", 0), ("pane-3", 0)]))
-            .unwrap();
-
-        let panes = state
-            .reorder_panes(vec![
-                "pane-2".to_string(),
-                "pane-1".to_string(),
-                "pane-3".to_string(),
-            ])
-            .unwrap();
-        assert_eq!(
-            id_depths(&panes),
-            vec![
-                ("pane-2".to_string(), 0),
-                ("pane-1".to_string(), 0),
-                ("pane-3".to_string(), 0),
-            ]
-        );
-    }
-
-    #[test]
     fn restore_rehydrates_metadata_but_not_pane_runtimes() {
         let workspace = temp_workspace();
         let config = test_config(workspace.clone());
@@ -23126,62 +21643,6 @@ mod tests {
     }
 
     #[test]
-    fn restore_captures_a_one_shot_resume_for_a_live_shell_agent() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // A transcript on disk marks the session as still resumable.
-        let transcript = workspace.join("session-abc.jsonl");
-        std::fs::write(&transcript, b"{}\n").unwrap();
-        let mut agent = sample_agent("agent-1");
-        agent.branch = None;
-        agent.transcript_path = Some(transcript.display().to_string());
-
-        let persisted = PersistedState {
-            next_id: 99,
-            groups: vec![sample_terminal_group()],
-            // The agent is still bound to its shell pane (it was running at shutdown).
-            agents: vec![agent],
-            panes: vec![sample_pane("pane-7", None)],
-            ..PersistedState::default()
-        };
-        crate::persistence::save(&workspace, &persisted).unwrap();
-
-        let state = AppState::new(config);
-        state.restore_session();
-
-        let resume = state
-            .take_shell_agent_resume("pane-7")
-            .expect("a resume was captured for the live shell agent");
-        assert_eq!(resume.adapter, "claude");
-        assert_eq!(resume.session_id, "session-abc");
-        // One-shot: a later relaunch of the same pane id never re-triggers the resume.
-        assert!(state.take_shell_agent_resume("pane-7").is_none());
-    }
-
-    #[test]
-    fn restore_skips_resume_when_the_session_transcript_is_gone() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // sample_agent points at a transcript that does not exist; resuming it would
-        // only error in the new shell, so no resume should be captured.
-        let persisted = PersistedState {
-            next_id: 99,
-            groups: vec![sample_terminal_group()],
-            agents: vec![sample_agent("agent-1")],
-            panes: vec![sample_pane("pane-7", None)],
-            ..PersistedState::default()
-        };
-        crate::persistence::save(&workspace, &persisted).unwrap();
-
-        let state = AppState::new(config);
-        state.restore_session();
-
-        assert!(state.take_shell_agent_resume("pane-7").is_none());
-    }
-
-    #[test]
     fn persistence_stays_off_until_restore() {
         let workspace = temp_workspace();
         let config = test_config(workspace.clone());
@@ -23193,35 +21654,6 @@ mod tests {
             .enqueue_agent_turn("agent-1", "ghost".to_string())
             .unwrap();
         assert!(!crate::persistence::state_path(&workspace).exists());
-    }
-
-    #[test]
-    fn active_tab_round_trips_through_persistence() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-        let active_tab = |state: &AppState| state.inner.model.lock().unwrap().active_tab_id.clone();
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-            state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-
-            state
-                .set_active_tab_id(Some(" pane-2 ".to_string()))
-                .unwrap();
-            assert_eq!(active_tab(&state).as_deref(), Some("pane-2"));
-
-            let saved = crate::persistence::load_with_diagnostics(&workspace).state;
-            assert_eq!(saved.active_tab_id.as_deref(), Some("pane-2"));
-        }
-
-        let state = AppState::new(config);
-        state.restore_session();
-        assert_eq!(active_tab(&state).as_deref(), Some("pane-2"));
-
-        state.set_active_tab_id(Some("   ".to_string())).unwrap();
-        assert_eq!(active_tab(&state), None);
     }
 
     #[test]

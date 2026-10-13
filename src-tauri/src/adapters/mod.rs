@@ -760,13 +760,6 @@ pub trait AgentAdapter: Send + Sync {
 
     fn launch(&self, state: &AppState, request: SpawnAgentRequest) -> Result<PaneInfo, String>;
 
-    fn resume(
-        &self,
-        state: &AppState,
-        pane: &PaneInfo,
-        agent: &AgentInfo,
-    ) -> Result<PaneInfo, String>;
-
     fn prepare_shell_launch(
         &self,
         state: &AppState,
@@ -797,13 +790,6 @@ pub trait AgentAdapter: Send + Sync {
     /// Opting in means an adapter has been checked for all three.
     fn supports_remote(&self) -> bool {
         false
-    }
-
-    /// The shell command that resumes `session_id` through this adapter's injected
-    /// wrapper function (e.g. `claude --resume <id>`), used to re-launch the agent in
-    /// a recovered shell pane. Defaults to `None` for adapters without a resume command.
-    fn shell_resume_command(&self, _session_id: &str) -> Option<String> {
-        None
     }
 
     fn ingest_notification(
