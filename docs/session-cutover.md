@@ -32,8 +32,7 @@ authenticates as a same-user socket peer; it takes no token.
   and `session.*` browser storage keys are the only current storage locations.
 - Persisted workspace/participant fields, `sessionToolActivity`,
   `session_instruction`, and `session-file:` links use
-  Session names. Generated plugin files and browser automation profiles also use
-  Session prefixes.
+  Session names. Browser automation profiles also use Session prefixes.
   No legacy values or paths are read or migrated.
 - The updater public/private key identity remains a separate deployment contract.
   The updater endpoint, release download URLs, and release script use
