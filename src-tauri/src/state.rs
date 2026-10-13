@@ -4182,149 +4182,6 @@ impl AppState {
         Ok(node)
     }
 
-    /// Appends a reply to a shared post (one with a delivery record). The
-    /// post's author may only respond to a member's top-level reply; member
-    /// replies are top-level. There is no transport for member replies; the
-    /// desktop app shows no replies.
-    pub fn add_research_post_reply(
-        &self,
-        request: research::AddPostReplyRequest,
-    ) -> Result<ResearchNode, String> {
-        let body = request.body.trim().to_string();
-        match (&request.author, request.in_reply_to.as_deref()) {
-            (research::PostReplyAuthor::Author, None) => {
-                return Err("the post's author can only respond to a reply".to_string());
-            }
-            (research::PostReplyAuthor::Member { .. }, Some(_)) => {
-                return Err("member replies are top-level".to_string());
-            }
-            _ => {}
-        }
-        if let research::PostReplyAuthor::Member {
-            id, display_name, ..
-        } = &request.author
-            && (id.trim().is_empty() || display_name.trim().is_empty())
-        {
-            return Err("member replies need an id and a display name".to_string());
-        }
-        let reply_id = self.next_id("post-reply");
-        let now = now_millis();
-        let node = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let node = model
-                .research_nodes
-                .get(&request.node_id)
-                .ok_or_else(|| format!("research node {} was not found", request.node_id))?;
-            reject_trashed_research_tree(&model, &node.tree_id)?;
-            if model
-                .research_trees
-                .get(&node.tree_id)
-                .is_none_or(|tree| tree.archived_at.is_some())
-            {
-                return Err("restore archived research before replying".to_string());
-            }
-            let tree_id = node.tree_id.clone();
-            let node = model
-                .research_nodes
-                .get_mut(&request.node_id)
-                .expect("the node was found above");
-            let Some(delivery) = node.delivery_mut() else {
-                return Err("replies require a shared note".to_string());
-            };
-            if let Some(parent_id) = request.in_reply_to.as_deref() {
-                let target = delivery
-                    .replies
-                    .iter()
-                    .find(|reply| reply.id == parent_id)
-                    .ok_or_else(|| format!("reply {parent_id} was not found"))?;
-                if !matches!(target.author, research::PostReplyAuthor::Member { .. }) {
-                    return Err(
-                        "the post's author can only respond to a member's reply".to_string()
-                    );
-                }
-            }
-            let mut replies = delivery.replies.clone();
-            replies.push(research::PostReply {
-                id: reply_id,
-                author: request.author,
-                body,
-                in_reply_to: request.in_reply_to,
-                created_at: research::body_millis(now),
-            });
-            research::validate_post_replies(&replies)?;
-            delivery.replies = replies;
-            let node = node.clone();
-            touch_research_tree_locked(&mut model, &tree_id, now);
-            node
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "research.node.updated",
-            None,
-            None,
-            json!({ "node": node.view() }),
-        ));
-        Ok(node)
-    }
-
-    /// Deletes one of the post author's own responses. Member replies are not
-    /// removable locally, and responses are never edited.
-    pub fn remove_research_post_reply(
-        &self,
-        node_id: &str,
-        reply_id: &str,
-    ) -> Result<ResearchNode, String> {
-        let node = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let tree_id = model
-                .research_nodes
-                .get(node_id)
-                .map(|node| node.tree_id.clone())
-                .ok_or_else(|| format!("research node {node_id} was not found"))?;
-            reject_trashed_research_tree(&model, &tree_id)?;
-            if model
-                .research_trees
-                .get(&tree_id)
-                .is_none_or(|tree| tree.archived_at.is_some())
-            {
-                return Err("restore archived research before deleting a response".to_string());
-            }
-            let node = model
-                .research_nodes
-                .get_mut(node_id)
-                .expect("the node was found above");
-            let delivery = node
-                .delivery_mut()
-                .ok_or_else(|| "the note is not shared".to_string())?;
-            let index = delivery
-                .replies
-                .iter()
-                .position(|reply| reply.id == reply_id)
-                .ok_or_else(|| format!("reply {reply_id} was not found"))?;
-            if delivery.replies[index].author != research::PostReplyAuthor::Author {
-                return Err("only your own responses can be deleted".to_string());
-            }
-            delivery.replies.remove(index);
-            node.clone()
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "research.node.updated",
-            None,
-            None,
-            json!({ "node": node.view() }),
-        ));
-        Ok(node)
-    }
-
     /// Edits a note: a thread's root post or a follow-up note. It gets the
     /// new text, its highlights move to their quote in it
     /// (research_anchors), its format follows the text, and it is marked
@@ -12097,16 +11954,41 @@ mod tests {
         }
     }
 
-    fn add_member_reply(state: &AppState, node_id: &str, name: &str, body: &str) -> String {
-        let node = state
-            .add_research_post_reply(research::AddPostReplyRequest {
-                node_id: node_id.to_string(),
+    /// Appends a reply to a shared post's delivery record, as replies stored by
+    /// older builds load. The app no longer writes replies itself.
+    fn store_post_reply(
+        state: &AppState,
+        node_id: &str,
+        author: research::PostReplyAuthor,
+        in_reply_to: Option<String>,
+        body: &str,
+    ) -> String {
+        let reply_id = state.next_id("post-reply");
+        let now = now_millis();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let node = model.research_nodes.get_mut(node_id).unwrap();
+            let tree_id = node.tree_id.clone();
+            let delivery = node
+                .post_mut()
+                .and_then(|post| post.delivery.as_mut())
+                .expect("a shared note");
+            delivery.replies.push(research::PostReply {
+                id: reply_id.clone(),
+                author,
                 body: body.to_string(),
-                author: member(name),
-                in_reply_to: None,
-            })
-            .unwrap();
-        node.delivery().unwrap().replies.last().unwrap().id.clone()
+                in_reply_to,
+                created_at: research::body_millis(now),
+            });
+            research::validate_post_replies(&delivery.replies).unwrap();
+            touch_research_tree_locked(&mut model, &tree_id, now);
+        }
+        state.persist();
+        reply_id
+    }
+
+    fn add_member_reply(state: &AppState, node_id: &str, name: &str, body: &str) -> String {
+        store_post_reply(state, node_id, member(name), None, body)
     }
 
     #[test]
@@ -12326,14 +12208,13 @@ mod tests {
                 "reply",
             ));
         }
-        state
-            .add_research_post_reply(research::AddPostReplyRequest {
-                node_id: post_id.clone(),
-                body: "response".to_string(),
-                author: research::PostReplyAuthor::Author,
-                in_reply_to: Some(reply_ids[1].clone()),
-            })
-            .unwrap();
+        store_post_reply(
+            &state,
+            &post_id,
+            research::PostReplyAuthor::Author,
+            Some(reply_ids[1].clone()),
+            "response",
+        );
         let page = state.list_recent_activity(10, None).unwrap();
         let query = &page.items[0];
         assert_eq!(query.reply_count, 7);
@@ -12403,18 +12284,6 @@ mod tests {
         assert_eq!(
             shared.nodes[0].delivery().as_ref().unwrap().status,
             research::PostDeliveryStatus::Posted
-        );
-        // Notes without delivery take no replies.
-        assert!(
-            state
-                .add_research_post_reply(research::AddPostReplyRequest {
-                    node_id: link_node.id.clone(),
-                    body: "hi".to_string(),
-                    author: member("Ana"),
-                    in_reply_to: None,
-                })
-                .unwrap_err()
-                .contains("shared note")
         );
     }
 
@@ -12494,55 +12363,6 @@ mod tests {
                 .create_research_post_follow_up(&link_id, "  ".to_string(), Vec::new())
                 .unwrap_err()
                 .contains("note cannot be empty")
-        );
-    }
-
-    #[test]
-    fn post_replies_keep_authorship_and_one_level_of_responses() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        let post = state
-            .create_research_post(post_request("Question", true), Vec::new())
-            .unwrap();
-        let post_id = post.tree.root_node_id;
-        let reply = |author, in_reply_to: Option<&str>| {
-            state.add_research_post_reply(research::AddPostReplyRequest {
-                node_id: post_id.clone(),
-                body: "text".to_string(),
-                author,
-                in_reply_to: in_reply_to.map(str::to_string),
-            })
-        };
-        // The author only responds; members only reply at the top level.
-        assert!(reply(research::PostReplyAuthor::Author, None).is_err());
-        let ana = add_member_reply(&state, &post_id, "Ana", "reply");
-        assert!(reply(member("Ben"), Some(&ana)).is_err());
-        let response = reply(research::PostReplyAuthor::Author, Some(&ana))
-            .unwrap()
-            .delivery()
-            .unwrap()
-            .replies
-            .last()
-            .unwrap()
-            .id
-            .clone();
-        // Responses are not themselves respondable.
-        assert!(reply(research::PostReplyAuthor::Author, Some(&response)).is_err());
-        assert!(reply(research::PostReplyAuthor::Author, Some("missing")).is_err());
-        // Only the author's own responses can be deleted.
-        assert!(state.remove_research_post_reply(&post_id, &ana).is_err());
-        let after = state
-            .remove_research_post_reply(&post_id, &response)
-            .unwrap();
-        assert_eq!(
-            after
-                .delivery()
-                .unwrap()
-                .replies
-                .iter()
-                .map(|reply| reply.id.clone())
-                .collect::<Vec<_>>(),
-            vec![ana]
         );
     }
 

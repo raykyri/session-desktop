@@ -1040,10 +1040,6 @@ impl ResearchNode {
         self.post().and_then(|post| post.delivery.as_ref())
     }
 
-    pub fn delivery_mut(&mut self) -> Option<&mut PostDelivery> {
-        self.post_mut().and_then(|post| post.delivery.as_mut())
-    }
-
     /// When the node's response snapshot was last written: an exchange's
     /// answer or a document's body.
     pub fn response_snapshot_at(&self) -> Option<u64> {
@@ -1414,16 +1410,6 @@ pub struct CreateResearchPostRequest {
     /// notes are private. Named `askNetwork` in earlier builds.
     #[serde(default, alias = "askNetwork")]
     pub share: bool,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AddPostReplyRequest {
-    pub node_id: String,
-    pub body: String,
-    pub author: PostReplyAuthor,
-    #[serde(default)]
-    pub in_reply_to: Option<String>,
 }
 
 /// Display name of the author of the reply `child`'s reply anchor names in

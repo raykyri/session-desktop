@@ -1520,44 +1520,6 @@ async fn create_research_post_follow_up(
     .map(|node| node.view())
 }
 
-/// The post author's response to a member reply (`in_reply_to` set). There
-/// is no transport for replies from other users and the desktop UI shows no
-/// replies; debug builds accept `member` (with no `in_reply_to`) to seed
-/// stored replies. Release builds refuse it.
-#[tauri::command]
-fn add_research_post_reply(
-    state: tauri::State<'_, AppState>,
-    node_id: String,
-    in_reply_to: Option<String>,
-    body: String,
-    member: Option<research::PostReplyAuthor>,
-) -> Result<ResearchNodeView, String> {
-    let author = match member {
-        Some(member @ research::PostReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
-        Some(_) => return Err("member replies can only come from other users".to_string()),
-        None => research::PostReplyAuthor::Author,
-    };
-    state
-        .add_research_post_reply(research::AddPostReplyRequest {
-            node_id,
-            body,
-            author,
-            in_reply_to,
-        })
-        .map(|node| node.view())
-}
-
-#[tauri::command]
-fn remove_research_post_reply(
-    state: tauri::State<'_, AppState>,
-    node_id: String,
-    reply_id: String,
-) -> Result<ResearchNodeView, String> {
-    state
-        .remove_research_post_reply(&node_id, &reply_id)
-        .map(|node| node.view())
-}
-
 #[tauri::command]
 fn update_research_post(
     state: tauri::State<'_, AppState>,
@@ -3125,8 +3087,6 @@ fn main() {
             import_research_report,
             create_research_post,
             create_research_post_follow_up,
-            add_research_post_reply,
-            remove_research_post_reply,
             update_research_document,
             update_research_post,
             read_transcript_image,
