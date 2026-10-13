@@ -961,7 +961,8 @@
 }
 
 .research-msg-content a,
-.research-msg-content .research-message-attachments {
+.research-msg-content .research-message-attachments,
+.research-msg-content .research-message-images {
   pointer-events: auto;
 }
 

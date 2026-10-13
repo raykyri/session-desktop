@@ -1,8 +1,15 @@
-import { useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { useId, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 import { ArrowRight, ExternalLink, LoaderCircle, Sparkles } from "lucide-react";
-import type { PostFormat, RecentResearchQuery, ResearchMessageAttachment } from "../../types";
+import type {
+  PostFormat,
+  RecentResearchQuery,
+  ResearchImageAttachment,
+  ResearchMessageAttachment,
+} from "../../types";
 import { openExternalUrl } from "../../lib/api";
+import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages";
+import { ResearchImageStrip, useResearchImageInput } from "./ResearchImages";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { ResearchMessageBody, type ResearchProseVariant } from "./ResearchMessage";
@@ -14,8 +21,13 @@ import type { ResearchComposerHandle } from "./ResearchConversationComposer";
  * message so the control that started it can show it. */
 export interface PostActions {
   /** An AI follow-up (a run child) or, with `asNote`, a follow-up note (a
-   * post child). */
-  onAskFollowUp: (input: { parentNodeId: string; prompt: string; asNote: boolean }) => Promise<void>;
+   * post child). Only an AI follow-up has images. */
+  onAskFollowUp: (input: {
+    parentNodeId: string;
+    prompt: string;
+    asNote: boolean;
+    images: ResearchImageAttachment[];
+  }) => Promise<void>;
   onRetry: (nodeId: string) => Promise<void>;
 }
 
@@ -51,7 +63,8 @@ export function PostContent({
   tweetLabels?: boolean;
 }) {
   const resolvedTweet = attachments.some(
-    (attachment) => attachment.status === "resolved" && attachment.tweet,
+    (attachment) =>
+      attachment.kind === "tweet" && attachment.status === "resolved" && attachment.tweet,
   );
   if (format === "link" && !resolvedTweet) {
     const url = prompt.trim();
@@ -168,9 +181,11 @@ export function postFollowUpCopy(
  * switch and Send appear on a row under the text. It starts in Ask, marked
  * with the AI follow-up rows' icon, which uses the note's model, so the
  * switch has no model menu. "Add a note" adds a follow-up note instead. The
- * send shortcut follows the "Require ⌘↵ to send" setting. */
+ * send shortcut follows the "Require ⌘↵ to send" setting. Images pasted or
+ * dropped on the box go with an AI follow-up; a note keeps none. */
 export function PostFollowUpField({
   modelLabel,
+  adapterId = null,
   placeholder = "Ask a follow-up",
   autoFocus = false,
   fullWidth = false,
@@ -179,20 +194,30 @@ export function PostFollowUpField({
   onSubmit,
 }: {
   modelLabel: string;
+  /** The agent of AI follow-ups, which decides whether images can go. */
+  adapterId?: string | null;
   placeholder?: string;
   autoFocus?: boolean;
   fullWidth?: boolean;
   requireCmdEnter: boolean;
   /** Lets the document focus the field (⌘J). */
   composerRef?: Ref<ResearchComposerHandle>;
-  onSubmit: (prompt: string, asNote: boolean) => Promise<void>;
+  onSubmit: (prompt: string, asNote: boolean, images: ResearchImageAttachment[]) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
+  const [images, setImages] = useState<ResearchImageAttachment[]>([]);
   const [mode, setMode] = useState<AskMode>("ai");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const imageInput = useResearchImageInput({
+    images,
+    onImagesChange: (update) => setImages((current) => update(current)),
+    disabled: submitting,
+    dropTarget: wrapRef,
+  });
+  const imageProblemId = useId();
   const { focused, collapseIfFocusLeft, rootProps } = useComposerPopOpen(wrapRef);
   useImperativeHandle(
     composerRef,
@@ -204,17 +229,27 @@ export function PostFollowUpField({
       growComposerTextarea(textareaRef.current);
     }
   }, [draft]);
-  const expanded = focused || Boolean(draft) || submitting;
+  const expanded = focused || Boolean(draft) || submitting || images.length > 0;
   const asNote = mode === "note";
   const askLabel = `Ask ${modelLabel || "AI"}`;
-  const ready = Boolean(draft.trim()) && !submitting;
+  const imageBlock =
+    images.length === 0
+      ? null
+      : asNote
+        ? RESEARCH_NOTE_IMAGE_ERROR
+        : researchImageBlockReason(adapterId, null, images.length);
+  const imageProblem = imageInput.error ?? imageBlock;
+  const ready = Boolean(draft.trim()) && !submitting && imageInput.saving === 0 && !imageBlock;
   const submit = () => {
     const prompt = draft.trim();
-    if (!prompt || submitting) return;
+    if (!prompt || !ready) return;
     setSubmitting(true);
     setError(null);
-    onSubmit(prompt, asNote)
-      .then(() => setDraft(""))
+    onSubmit(prompt, asNote, asNote ? [] : images)
+      .then(() => {
+        setDraft("");
+        setImages([]);
+      })
       .catch((err) => setError(errorMessage(err)))
       .finally(() => {
         setSubmitting(false);
@@ -242,7 +277,14 @@ export function PostFollowUpField({
       }`}
       onClick={stopForInteractive}
       {...rootProps}
+      {...imageInput.fieldProps}
     >
+      <ResearchImageStrip
+        className="research-composer-images"
+        images={images}
+        saving={imageInput.saving}
+        onRemove={submitting ? undefined : imageInput.remove}
+      />
       <form
         className={`research-composer${ready ? " is-ready" : ""}`}
         onSubmit={(event) => {
@@ -258,7 +300,11 @@ export function PostFollowUpField({
           disabled={submitting}
           placeholder={copy.placeholder}
           aria-label="Follow-up"
-          onChange={(event) => setDraft(event.currentTarget.value)}
+          aria-describedby={imageProblem ? imageProblemId : undefined}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+            imageInput.clearError();
+          }}
           onKeyDown={onKeyDown}
         />
         {expanded ? (
@@ -294,6 +340,11 @@ export function PostFollowUpField({
           </div>
         ) : null}
       </form>
+      {imageProblem ? (
+        <p id={imageProblemId} className="post-thread-error" role="alert">
+          {imageProblem}
+        </p>
+      ) : null}
       {error ? (
         <p className="post-thread-error" role="alert">
           {error}

@@ -53,6 +53,7 @@ import {
   type ResearchAgentRepair,
 } from "./components/research/ResearchSignInRepair";
 import ResearchDraftView from "./components/research/ResearchDraftView";
+import { researchImageBlockReason } from "./lib/researchImages";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
 import { ResearchEmptyContent } from "./components/research/ResearchColumnChrome";
@@ -137,6 +138,7 @@ import { useResearchTrash } from "./hooks/useResearchTrash";
 import type {
   AgentAdapterMetadata,
   ResearchDraft,
+  ResearchImageAttachment,
   RuntimeConfig,
   RemoteChoice,
 } from "./types";
@@ -818,8 +820,8 @@ function MainApp() {
     [focusResearchHome],
   );
   const saveOpenResearchDraft = useCallback(
-    async (draft: ResearchDraft, prompt: string) => {
-      await saveResearchDraftText(draft.id, prompt, draft.workspaceId);
+    async (draft: ResearchDraft, prompt: string, images: ResearchImageAttachment[]) => {
+      await saveResearchDraftText(draft.id, prompt, draft.workspaceId, images);
     },
     [saveResearchDraftText],
   );
@@ -864,8 +866,8 @@ function MainApp() {
     [composerFolderId, fileNewResearchTree, submitNewPost],
   );
   const saveComposerDraft = useCallback(
-    async (prompt: string) => {
-      await saveResearchDraftText(null, prompt);
+    async (prompt: string, images: ResearchImageAttachment[]) => {
+      await saveResearchDraftText(null, prompt, undefined, images);
       setResearchTrayCollapsed(RESEARCH_DRAFTS_FOLDER_ID, false);
       showResearchToast(
         <span>
@@ -880,12 +882,18 @@ function MainApp() {
   // report that error without rejecting the successful send.
   const composerLaunchChoiceRef = useRef<(() => ResearchLaunchChoice | null) | null>(null);
   const sendResearchDraft = useCallback(
-    async (draft: ResearchDraft, prompt: string) => {
+    async (draft: ResearchDraft, prompt: string, images: ResearchImageAttachment[]) => {
       const choice = composerLaunchChoiceRef.current?.();
       if (!choice) {
         throw new Error("No research agent is ready. Review agents in Settings.");
       }
-      await submitNewResearch({ prompt, ...choice, workspaceId: draft.workspaceId });
+      const imageBlock = researchImageBlockReason(
+        choice.adapter,
+        config?.adapters.find((adapter) => adapter.id === choice.adapter)?.label,
+        images.length,
+      );
+      if (imageBlock) throw new Error(imageBlock);
+      await submitNewResearch({ prompt, ...choice, workspaceId: draft.workspaceId, images });
       setOpenResearchDraftId((current) => (current === draft.id ? null : current));
       try {
         await deleteResearchDraftEntry(draft.id);
@@ -903,7 +911,7 @@ function MainApp() {
         </span>,
       );
     },
-    [deleteResearchDraftEntry, showResearchToast, submitNewResearch],
+    [config?.adapters, deleteResearchDraftEntry, showResearchToast, submitNewResearch],
   );
   // "Ask as a question" in the editor column: a new thread with the edited
   // text, asked with the agent, model and effort chosen in the editor's
@@ -1314,8 +1322,8 @@ function MainApp() {
                 key={openResearchDraft.id}
                 draft={openResearchDraft}
                 requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                onSave={(prompt) => saveOpenResearchDraft(openResearchDraft, prompt)}
-                onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
+                onSave={(prompt, images) => saveOpenResearchDraft(openResearchDraft, prompt, images)}
+                onSend={(prompt, images) => sendResearchDraft(openResearchDraft, prompt, images)}
               />
             ) : (
               <ResearchEmptyContent history={researchHistoryNav}>

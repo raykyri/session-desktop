@@ -1,7 +1,11 @@
 import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { ArrowRight, LoaderCircle, X } from "lucide-react";
+import type { ResearchImageAttachment } from "../../types";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
+import { ResearchImageStrip, useResearchImageInput, type ResearchImagesUpdate } from "./ResearchImages";
+
+const NO_IMAGES: readonly ResearchImageAttachment[] = [];
 
 export interface ResearchComposerHandle {
   focus: () => void;
@@ -34,7 +38,8 @@ export function researchComposerEnterAction(
  * last finished answer instead of continuing the conversation. A mode label
  * ("Draft", "New branch", "Editing …") sits above the field, with a × that
  * Esc also triggers; a draft gives the text the full width, with Send on its
- * own row. */
+ * own row. With `onImagesChange`, images pasted or dropped on the box are
+ * attached and shown above the field. */
 const ResearchConversationComposer = forwardRef<
   ResearchComposerHandle,
   {
@@ -55,6 +60,12 @@ const ResearchConversationComposer = forwardRef<
     ariaLabel?: string;
     /** The "Require ⌘↵ to send" setting. */
     requireCmdEnter: boolean;
+    /** The attached images; with `onImagesChange`, the box accepts more. */
+    images?: readonly ResearchImageAttachment[];
+    onImagesChange?: ResearchImagesUpdate;
+    /** Why the attached images cannot be sent (the agent can't read them).
+     * Shown under the field; Send stays disabled. */
+    imageBlockReason?: string | null;
     onChange: (value: string) => void;
     onSubmit: () => void;
     onSubmitBranch?: () => void;
@@ -73,6 +84,9 @@ const ResearchConversationComposer = forwardRef<
     shortcutHint,
     ariaLabel = "Ask a follow-up",
     requireCmdEnter,
+    images = NO_IMAGES,
+    onImagesChange,
+    imageBlockReason = null,
     onChange,
     onSubmit,
     onSubmitBranch,
@@ -81,6 +95,13 @@ const ResearchConversationComposer = forwardRef<
 ) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const imageInput = useResearchImageInput({
+    images,
+    onImagesChange,
+    disabled,
+    dropTarget: wrapRef,
+  });
+  const imageProblem = imageInput.error ?? (images.length > 0 ? imageBlockReason : null);
   useImperativeHandle(
     ref,
     () => ({
@@ -94,10 +115,23 @@ const ResearchConversationComposer = forwardRef<
       growComposerTextarea(textareaRef.current);
     }
   }, [value]);
-  const ready = canSubmit && value.trim().length > 0;
+  // Images still being saved, or images the agent can't read, hold the send.
+  const ready =
+    canSubmit &&
+    value.trim().length > 0 &&
+    imageInput.saving === 0 &&
+    !(images.length > 0 && imageBlockReason);
   const noteId = useId();
+  const imageProblemId = useId();
+  const describedBy = [note ? noteId : null, imageProblem ? imageProblemId : null]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div ref={wrapRef} className={`research-composer-wrap${fullWidth ? " is-full-width" : ""}`}>
+    <div
+      ref={wrapRef}
+      className={`research-composer-wrap${fullWidth ? " is-full-width" : ""}`}
+      {...imageInput.fieldProps}
+    >
       {mode ? (
         <div className="research-composer-mode">
           <span className="research-composer-mode-label">{mode.label}</span>
@@ -119,6 +153,12 @@ const ResearchConversationComposer = forwardRef<
           {note}
         </div>
       ) : null}
+      <ResearchImageStrip
+        className="research-composer-images"
+        images={images}
+        saving={imageInput.saving}
+        onRemove={onImagesChange && !disabled ? imageInput.remove : undefined}
+      />
       <form
         className={`research-composer${ready ? " is-ready" : ""}${disabled ? " is-disabled" : ""}`}
         onSubmit={(event) => {
@@ -139,9 +179,12 @@ const ResearchConversationComposer = forwardRef<
           rows={1}
           placeholder={placeholder}
           aria-label={ariaLabel}
-          aria-describedby={note ? noteId : undefined}
+          aria-describedby={describedBy || undefined}
           disabled={disabled}
-          onChange={(event) => onChange(event.currentTarget.value)}
+          onChange={(event) => {
+            imageInput.clearError();
+            onChange(event.currentTarget.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape" && mode?.onCancel && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -155,7 +198,8 @@ const ResearchConversationComposer = forwardRef<
             }
             event.preventDefault();
             if (action === "branch") {
-              if (value.trim() && onSubmitBranch) {
+              const imagesReady = imageInput.saving === 0 && !(images.length > 0 && imageBlockReason);
+              if (value.trim() && onSubmitBranch && imagesReady) {
                 onSubmitBranch();
               }
             } else if (ready) {
@@ -182,6 +226,11 @@ const ResearchConversationComposer = forwardRef<
           />
         </button>
       </form>
+      {imageProblem ? (
+        <p id={imageProblemId} className="research-composer-image-error" role="alert">
+          {imageProblem}
+        </p>
+      ) : null}
       {agent ? <div className="research-composer-agent">{agent}</div> : null}
     </div>
   );

@@ -417,7 +417,19 @@ export interface ResearchTweetAttachment {
   failure?: "timeout" | "notFound" | "invalidPayload" | "network";
 }
 
-export type ResearchMessageAttachment = ResearchTweetAttachment;
+/** An image pasted or dropped into a composer. `id` names its file in the
+ * backend's research image store (src-tauri/src/research_images.rs). */
+export interface ResearchImageAttachment {
+  kind: "image";
+  id: string;
+  mimeType: string;
+  byteSize: number;
+  width?: number;
+  height?: number;
+  fileName?: string;
+}
+
+export type ResearchMessageAttachment = ResearchTweetAttachment | ResearchImageAttachment;
 
 export interface ResearchTree {
   id: string;
@@ -630,6 +642,8 @@ export interface ResearchDraft {
   prompt: string;
   createdAt: number;
   updatedAt: number;
+  /** Image attachments only. Omitted by the backend when empty. */
+  attachments?: ResearchMessageAttachment[];
 }
 
 export interface RecentResearchQueryCursor {

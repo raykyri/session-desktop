@@ -3,7 +3,7 @@ import { researchQueueAction } from "../lib/researchBranchView";
 import type { QueuedResearchFollowup } from "../lib/researchNavigation";
 import type { createResearchThreadPersistence } from "../lib/researchThreadPersistence";
 import { withoutKeys } from "../lib/researchThreadView";
-import type { NodeAnchor, ResearchNode, ResearchTreeDetail } from "../types";
+import type { NodeAnchor, ResearchImageAttachment, ResearchNode, ResearchTreeDetail } from "../types";
 
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
 /** How long a sent queued follow-up keeps its chain blocked while waiting
@@ -29,7 +29,14 @@ export function useResearchChainQueue({
   detail: ResearchTreeDetail | null;
   archived: boolean;
   nodeById: ReadonlyMap<string, ResearchNode>;
-  onFork: (parentNodeId: string, prompt: string, anchor?: NodeAnchor | null, inline?: boolean) => Promise<ResearchNode>;
+  onFork: (
+    parentNodeId: string,
+    prompt: string,
+    anchor?: NodeAnchor | null,
+    inline?: boolean,
+    replacesNodeId?: string | null,
+    images?: readonly ResearchImageAttachment[],
+  ) => Promise<ResearchNode>;
   /** Focuses the ask box of the chain headed by `headId`. Stable. */
   focusComposer: (headId: string) => void;
 }) {
@@ -102,7 +109,7 @@ export function useResearchChainQueue({
       }
       const { item, tailId } = action;
       inFlight.set(headId, true);
-      onFork(tailId, item.prompt, null, true)
+      onFork(tailId, item.prompt, null, true, null, item.images ?? [])
         .then((child) => {
           awaitChainChild(headId, child.id);
           updateQueue(headId, (current) => current.filter((entry) => entry.id !== item.id));

@@ -1,11 +1,21 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
-import type { ResearchMessageAttachment } from "../../types";
+import type { ResearchMessageAttachment, ResearchTweetAttachment } from "../../types";
 import TranscriptMarkdown, {
   type OversizedMarkdownPolicy,
 } from "../TranscriptMarkdown";
+import { researchImageLabel, researchImages } from "../../lib/researchImages";
 import { tweetLabelText } from "../../lib/tweets";
+import { ResearchImageStrip } from "./ResearchImages";
 import { TweetEmbed } from "./TweetEmbed";
+
+/** The message's tweets whose snapshot resolved, in order. */
+function resolvedTweets(attachments: readonly ResearchMessageAttachment[]) {
+  return attachments.filter(
+    (attachment): attachment is ResearchTweetAttachment =>
+      attachment.kind === "tweet" && attachment.status === "resolved" && Boolean(attachment.tweet),
+  );
+}
 
 export type ResearchProseVariant = "body" | "compact";
 
@@ -77,12 +87,8 @@ export function visibleResearchPrompt(
   attachments: ResearchMessageAttachment[] = [],
 ): string {
   let visible = prompt;
-  for (const attachment of [...attachments].reverse()) {
-    if (
-      attachment.status !== "resolved" ||
-      attachment.placement !== "trailing" ||
-      !attachment.tweet
-    ) {
+  for (const attachment of [...resolvedTweets(attachments)].reverse()) {
+    if (attachment.placement !== "trailing") {
       continue;
     }
     const trimmedEnd = visible.trimEnd();
@@ -107,8 +113,9 @@ export function ResearchMessageBody({
   /** Compact for previews such as Home posts; body where the message is read. */
   variant?: ResearchProseVariant;
   /** Show each resolved tweet as a "[Tweet: @handle]" label instead of its
-   * embed (Home cards). A tweet whose URL still shows in the prompt text
-   * gets no label. */
+   * embed, and images as one "[Image]" or "[2 images]" label instead of
+   * thumbnails (Home cards). A tweet whose URL still shows in the prompt
+   * text gets no label. */
   tweetLabels?: boolean;
   /** A row glyph for the start of the first line: before the prompt's
    * Markdown, or in the first tweet's header when no prompt shows. With
@@ -117,9 +124,8 @@ export function ResearchMessageBody({
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
-  const resolved = attachments.filter(
-    (attachment) => attachment.status === "resolved" && attachment.tweet,
-  );
+  const resolved = resolvedTweets(attachments);
+  const images = researchImages(attachments);
   const promptContent = visiblePrompt ? (
     renderPrompt ? (
       renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
@@ -134,6 +140,8 @@ export function ResearchMessageBody({
     const labels = resolved
       .filter((attachment) => !visiblePrompt.includes(attachment.sourceUrl))
       .map((attachment) => tweetLabelText(attachment.tweet));
+    const imageLabel = researchImageLabel(images.length);
+    if (imageLabel) labels.push(imageLabel);
     return (
       <>
         {promptContent}
@@ -147,6 +155,10 @@ export function ResearchMessageBody({
   return (
     <>
       {promptContent}
+      <ResearchImageStrip
+        className={`research-message-images${visiblePrompt ? " has-prompt" : ""}`}
+        images={images}
+      />
       {tweets.length > 0 ? (
         <div
           className={`research-message-attachments${visiblePrompt ? " has-prompt" : ""}`}

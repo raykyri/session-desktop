@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { ArrowRight, FilePen, LoaderCircle, MoreHorizontal } from "lucide-react";
-import type { AgentAdapterMetadata } from "../../types";
+import type { AgentAdapterMetadata, ResearchImageAttachment } from "../../types";
 import { LauncherSelect, OptionIcon, type LauncherSelectOption } from "../LauncherSelect";
 import { isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
@@ -34,6 +34,8 @@ import { postFormatOf } from "../../lib/researchNodeTypes";
 import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
 import { ResearchModelNameDialog } from "./ResearchModelNameDialog";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
+import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages";
+import { ResearchImageStrip, useResearchImageInput } from "./ResearchImages";
 
 const CLAUDE_RESEARCH_EFFORT_OPTIONS = CLAUDE_EFFORT_OPTIONS.map((option) => ({
   ...option,
@@ -141,6 +143,7 @@ interface ResearchQueryComposerProps {
     model: string | null;
     effort: string | null;
     workspaceId: string | null;
+    images: ResearchImageAttachment[];
   }) => Promise<void>;
   /** Note mode: saves a note (a post node). The selected agent and model are
    * stored as the default for the note's AI follow-ups. */
@@ -151,9 +154,9 @@ interface ResearchQueryComposerProps {
     effort: string | null;
     workspaceId: string | null;
   }) => Promise<void>;
-  /** Save draft: keeps the question in Drafts and clears the text; the agent,
-   * model, and effort choice stays. */
-  onSaveDraft?: (prompt: string) => Promise<void>;
+  /** Save draft: keeps the question and its images in Drafts and clears
+   * them; the agent, model, and effort choice stays. */
+  onSaveDraft?: (prompt: string, images: ResearchImageAttachment[]) => Promise<void>;
   placeholder?: string;
   /** Filled with an accessor for the selected agent, model, and effort, so a draft
    * sent from Drafts launches with the composer's current choice. */
@@ -171,15 +174,16 @@ export interface ResearchLaunchChoice {
   effort: string | null;
 }
 
-/** The Home ask box's session draft: the question text and the agent, model,
- * and effort choice. `effortChoice` is absent in drafts stored before it was
- * kept. */
+/** The Home ask box's session draft: the question text, its images, and the
+ * agent, model, and effort choice. `effortChoice` and `images` are absent in
+ * drafts stored before they were kept. */
 interface HomeComposerDraft {
   prompt: string;
   adapter: string;
   modelChoice: string | null;
   customModel: string;
   effortChoice?: string;
+  images?: ResearchImageAttachment[];
 }
 
 /** The ask box after a focus request from Agent Setup: the requested agent
@@ -209,6 +213,7 @@ export function homeComposerDraftToStore(
 ): HomeComposerDraft | null {
   const empty =
     !draft.prompt &&
+    !draft.images?.length &&
     !draft.modelChoice &&
     !draft.customModel &&
     !draft.effortChoice &&
@@ -234,6 +239,7 @@ export default function ResearchQueryComposer({
   launchChoiceRef,
 }: ResearchQueryComposerProps) {
   const [prompt, setPrompt] = useState("");
+  const [images, setImages] = useState<ResearchImageAttachment[]>([]);
   // Recipient choice is not persisted with the rest of the draft; every new
   // composer opens on Ask.
   const [askMode, setAskMode] = useState<AskMode>("ai");
@@ -272,6 +278,7 @@ export default function ResearchQueryComposer({
     sessionDraftTouchedRef.current = false;
     const restored = readSessionDraftJson<HomeComposerDraft>(draftKey);
     setPrompt(restored?.prompt ?? "");
+    setImages(restored?.images ?? []);
     setModelChoice(restored?.modelChoice ?? null);
     setCustomModel(restored?.customModel ?? "");
     setEffortChoice(restored?.effortChoice ?? "");
@@ -287,6 +294,7 @@ export default function ResearchQueryComposer({
       .then((backendDraft) => {
         if (!disposed && backendDraft && !sessionDraftTouchedRef.current) {
           setPrompt(backendDraft.prompt);
+          setImages(backendDraft.images ?? []);
           setAdapter(requestedAdapterRef.current ?? backendDraft.adapter);
           setModelChoice(backendDraft.modelChoice);
           setCustomModel(backendDraft.customModel);
@@ -311,7 +319,7 @@ export default function ResearchQueryComposer({
   useEffect(() => {
     if (!focusRequest) return;
     const next = applyComposerFocusRequest(
-      { prompt, adapter, modelChoice, customModel, effortChoice },
+      { prompt, adapter, modelChoice, customModel, effortChoice, images },
       focusRequest,
       adapters,
     );
@@ -331,9 +339,16 @@ export default function ResearchQueryComposer({
   // Runs from the effect below on each change, and directly after a send or
   // Save draft so the choice is stored even when the send unmounts the box
   // before the effect runs.
-  function storeDraft(nextPrompt: string) {
+  function storeDraft(nextPrompt: string, nextImages: ResearchImageAttachment[]) {
     const draft = homeComposerDraftToStore(
-      { prompt: nextPrompt, adapter, modelChoice, customModel, effortChoice },
+      {
+        prompt: nextPrompt,
+        adapter,
+        modelChoice,
+        customModel,
+        effortChoice,
+        ...(nextImages.length > 0 ? { images: nextImages } : {}),
+      },
       defaultAdapter,
     );
     if (draft) {
@@ -344,7 +359,7 @@ export default function ResearchQueryComposer({
   }
   useEffect(() => {
     if (sessionDraftReady) {
-      storeDraft(prompt);
+      storeDraft(prompt, images);
     }
     // storeDraft reads the same state listed here.
   }, [
@@ -353,6 +368,7 @@ export default function ResearchQueryComposer({
     defaultAdapter,
     draftKey,
     effortChoice,
+    images,
     modelChoice,
     prompt,
     sessionDraftReady,
@@ -377,7 +393,7 @@ export default function ResearchQueryComposer({
   // useLayoutEffect keeps the value and height in the same pre-paint commit.
   // An empty field drops the measured height, so it returns to one line (or
   // the expanded minimum) after a send or Save draft.
-  const expanded = focused || Boolean(prompt);
+  const expanded = focused || Boolean(prompt) || images.length > 0;
   useLayoutEffect(() => {
     const textarea = promptRef.current;
     if (!textarea) {
@@ -406,10 +422,32 @@ export default function ResearchQueryComposer({
       : "";
   const resolvedEffort = selectedEffort || null;
 
+  const imageInput = useResearchImageInput({
+    images,
+    onImagesChange: (update) => {
+      sessionDraftTouchedRef.current = true;
+      setImages((current) => update(current));
+    },
+    disabled: submitting,
+    dropTarget: rootRef,
+  });
+  // A note keeps no images, and an agent that can't read them never gets
+  // the question without them.
+  const imageBlock =
+    images.length === 0
+      ? null
+      : askMode === "note"
+        ? RESEARCH_NOTE_IMAGE_ERROR
+        : researchImageBlockReason(adapter, selectedAdapter?.label, images.length);
+  const imageProblem = imageInput.error ?? imageBlock;
+  const imageProblemId = useId();
+
   // A note never launches an agent, so saving one needs no ready adapter.
   const canSubmit =
     Boolean(prompt.trim()) &&
     !submitting &&
+    imageInput.saving === 0 &&
+    !imageBlock &&
     (askMode === "note" || (Boolean(adapter) && adapterReady));
 
   async function submit() {
@@ -438,14 +476,16 @@ export default function ResearchQueryComposer({
           model: resolvedModel,
           effort: resolvedEffort,
           workspaceId,
+          images,
         });
       }
       // A successful launch opens its research page, and a note appears at the
-      // top of the feed. Clear the text; the agent, model, and effort stay
-      // selected for the next ask.
+      // top of the feed. Clear the text and images; the agent, model, and
+      // effort stay selected for the next ask.
       setPrompt("");
+      setImages([]);
       setError(null);
-      storeDraft("");
+      storeDraft("", []);
     } catch (err) {
       // Surfaced here, where the user is looking, with every field intact for
       // the retry.
@@ -534,7 +574,7 @@ export default function ResearchQueryComposer({
   const [savingDraft, setSavingDraft] = useState(false);
   // The … menu before Send (Save draft); it exists only while there is text.
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
-  const canSaveDraft = Boolean(onSaveDraft) && Boolean(prompt.trim());
+  const canSaveDraft = Boolean(onSaveDraft) && Boolean(prompt.trim()) && imageInput.saving === 0;
   useEffect(() => {
     if (!canSaveDraft) setMoreAnchor(null);
   }, [canSaveDraft]);
@@ -548,10 +588,11 @@ export default function ResearchQueryComposer({
     }
     setSavingDraft(true);
     try {
-      await onSaveDraft(text);
+      await onSaveDraft(text, images);
       setPrompt("");
+      setImages([]);
       setError(null);
-      storeDraft("");
+      storeDraft("", []);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -567,6 +608,7 @@ export default function ResearchQueryComposer({
       ref={rootRef}
       className="new-research-composer"
       {...rootProps}
+      {...imageInput.fieldProps}
     >
       <form
         className={`new-research-launcher${menuOpen ? " is-menu-open" : ""}`}
@@ -603,6 +645,12 @@ export default function ResearchQueryComposer({
           }
         }}
       >
+        <ResearchImageStrip
+          className="new-research-images"
+          images={images}
+          saving={imageInput.saving}
+          onRemove={submitting ? undefined : imageInput.remove}
+        />
         <textarea
           ref={promptRef}
           className="new-research-input"
@@ -610,10 +658,12 @@ export default function ResearchQueryComposer({
           value={prompt}
           placeholder={shownPlaceholder}
           aria-label="New question"
+          aria-describedby={imageProblem ? imageProblemId : undefined}
           onChange={(event) => {
             sessionDraftTouchedRef.current = true;
             setPrompt(event.currentTarget.value);
             setError(null);
+            imageInput.clearError();
           }}
           onKeyDown={(event) => {
             // Esc leaves the field, which collapses again when it is empty.
@@ -723,8 +773,13 @@ export default function ResearchQueryComposer({
             </button>
           </div>
         ) : null}
-        {setupNeeded || error ? (
+        {setupNeeded || error || imageProblem ? (
           <div className="new-research-footer">
+            {imageProblem ? (
+              <p id={imageProblemId} className="new-research-error" role="alert">
+                {imageProblem}
+              </p>
+            ) : null}
             {setupNeeded ? (
               <p className="new-research-unavailable" role="alert">
                 {selectedAdapter

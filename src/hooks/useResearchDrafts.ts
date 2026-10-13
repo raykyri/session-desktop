@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ResearchDraft } from "../types";
+import type { ResearchDraft, ResearchImageAttachment } from "../types";
 import {
   deleteResearchDraft,
   listResearchDrafts,
@@ -49,16 +49,18 @@ export function useResearchDrafts(workspaceId: string | null, onError: (message:
    * scoped workspace), so a save after a workspace switch still reaches the
    * draft's own workspace. An update to a draft no longer listed (sent or
    * deleted meanwhile) doesn't bring it back. Rejects with the backend's
-   * message, which the caller shows where the draft is being edited. */
+   * message, which the caller shows where the draft is being edited.
+   * `images` replaces the draft's images; omitted, they are kept. */
   const saveDraft = useCallback(
     async (
       id: string | null,
       prompt: string,
       workspaceId: string | null = workspaceIdRef.current,
+      images?: readonly ResearchImageAttachment[],
     ): Promise<ResearchDraft> => {
       if (!workspaceId) throw new Error("Choose a research workspace first.");
       requestSeqRef.current += 1;
-      const saved = await saveResearchDraft({ id, workspaceId, prompt });
+      const saved = await saveResearchDraft({ id, workspaceId, prompt, images });
       if (workspaceIdRef.current === workspaceId) {
         setDrafts((current) =>
           current.some((draft) => draft.id === saved.id)

@@ -65,7 +65,8 @@ export function researchRowKind(entry: KindSource): ResearchRowKind {
     case "post":
       if (entry.format !== "link") return "note";
       return (entry.attachments ?? []).some(
-        (attachment) => attachment.status === "resolved" && attachment.tweet,
+        (attachment) =>
+          attachment.kind === "tweet" && attachment.status === "resolved" && attachment.tweet,
       )
         ? "xpost"
         : "link";

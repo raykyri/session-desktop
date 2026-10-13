@@ -11,7 +11,8 @@ import {
 import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
 import { nodeMessage, postFollowUpSourceExcerpt } from "../../lib/researchNodeTypes";
 import { researchChainComposerState, researchNodeLabel, researchQuoteText } from "../../lib/researchThreadView";
-import type { ResearchHighlightAnchor, ResearchNode } from "../../types";
+import type { ResearchHighlightAnchor, ResearchImageAttachment, ResearchNode } from "../../types";
+import { ResearchImageStrip, type ResearchImagesUpdate } from "./ResearchImages";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
@@ -95,6 +96,9 @@ export function ResearchChainComposer({
   shortcutHint,
   requireCmdEnter,
   composerRef,
+  images,
+  onImagesChange,
+  imageBlockReason,
   onChange,
   onSubmit,
   onSubmitBranch,
@@ -112,6 +116,10 @@ export function ResearchChainComposer({
   shortcutHint: string | null;
   requireCmdEnter: boolean;
   composerRef: Ref<ResearchComposerHandle>;
+  /** As in ResearchConversationComposer. */
+  images?: readonly ResearchImageAttachment[];
+  onImagesChange?: ResearchImagesUpdate;
+  imageBlockReason?: string | null;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onSubmitBranch: () => void;
@@ -151,6 +159,9 @@ export function ResearchChainComposer({
       note={note}
       shortcutHint={shortcutHint}
       requireCmdEnter={requireCmdEnter}
+      images={images}
+      onImagesChange={onImagesChange}
+      imageBlockReason={imageBlockReason}
       onChange={onChange}
       onSubmit={onSubmit}
       onSubmitBranch={onSubmitBranch}
@@ -241,6 +252,8 @@ function ResearchQueuedFollowup({
             {item.prompt}
           </div>
         </div>
+        {/* Images follow the clamp box, as tweet cards do in message rows. */}
+        <ResearchImageStrip className="research-message-images has-prompt" images={item.images ?? []} />
       </div>
       {onToggleExpanded && clamp.overflows ? (
         <ResearchTileToggle
@@ -486,6 +499,9 @@ export function ResearchNewBranchComposer({
   shortcutHint,
   requireCmdEnter,
   composerRef,
+  images,
+  onImagesChange,
+  imageBlockReason,
   onChange,
   onSubmit,
   onCancel,
@@ -497,6 +513,10 @@ export function ResearchNewBranchComposer({
   shortcutHint: string | null;
   requireCmdEnter: boolean;
   composerRef: Ref<ResearchComposerHandle>;
+  /** As in ResearchConversationComposer. */
+  images?: readonly ResearchImageAttachment[];
+  onImagesChange?: ResearchImagesUpdate;
+  imageBlockReason?: string | null;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -513,6 +533,9 @@ export function ResearchNewBranchComposer({
       canSubmit={!archived}
       submitting={submitting}
       shortcutHint={shortcutHint}
+      images={images}
+      onImagesChange={onImagesChange}
+      imageBlockReason={imageBlockReason}
       onChange={onChange}
       onSubmit={onSubmit}
     />

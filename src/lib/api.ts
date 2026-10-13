@@ -18,6 +18,7 @@ import type {
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchDraft,
+  ResearchImageAttachment,
   ResearchFolderState,
   ResearchHighlight,
   ResearchHighlightFeedItem,
@@ -186,13 +187,42 @@ export function listResearchDrafts(workspaceId: string) {
   return invoke<ResearchDraft[]>("list_research_drafts", { workspaceId });
 }
 
-/** Creates a draft (first in order) without an id, or updates its prompt. */
-export function saveResearchDraft(draft: { id?: string | null; workspaceId: string; prompt: string }) {
+/** Creates a draft (first in order) without an id, or updates its prompt.
+ * `images` replaces the draft's images; omitted, they are kept. */
+export function saveResearchDraft(draft: {
+  id?: string | null;
+  workspaceId: string;
+  prompt: string;
+  images?: readonly ResearchImageAttachment[];
+}) {
   return invoke<ResearchDraft>("save_research_draft", {
     id: draft.id ?? null,
     workspaceId: draft.workspaceId,
     prompt: draft.prompt,
+    images: draft.images ? researchImageInputs(draft.images) : null,
   });
+}
+
+/** What the backend needs to attach a saved image: the type, size, and
+ * dimensions are read again from the stored file. */
+function researchImageInputs(images: readonly ResearchImageAttachment[]) {
+  return images.map((image) => ({ id: image.id, fileName: image.fileName ?? null }));
+}
+
+/** Saves a pasted or dropped image (base64 bytes) for a research message. */
+export function saveResearchImage(dataBase64: string, fileName: string | null) {
+  return invoke<ResearchImageAttachment>("save_research_image", { dataBase64, fileName });
+}
+
+/** Copies an image file dropped on a composer (native drops arrive as
+ * paths) for a research message. */
+export function importResearchImage(path: string) {
+  return invoke<ResearchImageAttachment>("import_research_image", { path });
+}
+
+/** A research message image as a `data:` URL. */
+export function readResearchImage(id: string) {
+  return invoke<string>("read_research_image", { id });
 }
 
 export function deleteResearchDraft(draftId: string) {
@@ -247,15 +277,21 @@ export function getResearchTree(treeId: string) {
   return invoke<ResearchTreeDetail>("get_research_tree", { treeId });
 }
 
-export function createResearchTree(request: {
-  prompt: string;
-  title?: string | null;
-  adapter: string;
-  model?: string | null;
-  effort?: string | null;
-  workspaceId: string;
-}) {
-  return invoke<ResearchTreeDetail>("create_research_tree", { request });
+export function createResearchTree(
+  request: {
+    prompt: string;
+    title?: string | null;
+    adapter: string;
+    model?: string | null;
+    effort?: string | null;
+    workspaceId: string;
+  },
+  images: readonly ResearchImageAttachment[] = [],
+) {
+  return invoke<ResearchTreeDetail>("create_research_tree", {
+    request,
+    images: researchImageInputs(images),
+  });
 }
 
 export function generateResearchAgentTitle(nodeId: string) {
@@ -318,6 +354,7 @@ export function forkResearchNode(
   /** An edited question: the failed or stopped sibling this child replaces.
    * The backend admits the child first and removes that node only then. */
   replacesNodeId?: string | null,
+  images: readonly ResearchImageAttachment[] = [],
 ) {
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
@@ -325,6 +362,7 @@ export function forkResearchNode(
     anchor: anchor ?? null,
     inline,
     replacesNodeId: replacesNodeId ?? null,
+    images: researchImageInputs(images),
   });
 }
 

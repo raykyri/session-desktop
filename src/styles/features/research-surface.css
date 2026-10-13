@@ -663,6 +663,129 @@ a.tweet-embed-more:hover {
   margin-top: 10px;
 }
 
+/* Images attached to a question: small thumbnails in a wrapping row, under
+   the text of a message or above the field of a composer. A thumbnail opens
+   the image lightbox; in a composer its × removes the image. */
+.research-image-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.research-image-strip > li {
+  margin: 0;
+}
+
+.research-message-images {
+  margin-bottom: 2px;
+}
+
+.research-message-images.has-prompt {
+  margin-top: 8px;
+}
+
+.research-image {
+  position: relative;
+}
+
+.research-image-open {
+  display: block;
+  height: 64px;
+  min-width: 32px;
+  max-width: 128px;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--surface-border-default);
+  border-radius: 8px;
+  background: var(--surface-fill-medium);
+  cursor: zoom-in;
+}
+
+.research-image-open:disabled {
+  cursor: default;
+}
+
+.research-image-open:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.research-image-open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.research-image-status {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  color: var(--text-faint);
+  font-size: calc(11px + var(--font-ui-size-offset));
+}
+
+.research-image.is-saving {
+  display: flex;
+  width: 64px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--surface-border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+
+.research-image-remove.control-button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: var(--research-feed-field-bg);
+}
+
+.research-image-remove.control-button:hover {
+  color: var(--text-strong);
+}
+
+/* A column's ask box shows its images above the field. */
+.research-composer-images {
+  margin: 6px 2px 10px 8px;
+}
+
+.research-composer-image-error {
+  margin: 6px 2px 0 8px;
+  color: var(--status-failed-fg);
+  font-size: calc(12px + var(--font-ui-size-offset));
+  line-height: 1.45;
+}
+
+/* The Home ask box shows its images above the question. */
+.new-research-images {
+  margin: 4px 0 8px;
+}
+
+/* A note's AI follow-up lists its images under the question. */
+.post-thread-images {
+  margin-top: 6px;
+}
+
 .research-message-attachment {
   width: min(100%, var(--research-feed-max-width));
   padding: 12px 14px 11px;

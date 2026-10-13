@@ -27,7 +27,13 @@ import {
 } from "../lib/api";
 import { reconcileResearchTreeDetail } from "../lib/researchSnapshots";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
-import type { GroupInfo, NodeAnchor, ResearchTreeDetail, RuntimeConfig } from "../types";
+import type {
+  GroupInfo,
+  NodeAnchor,
+  ResearchImageAttachment,
+  ResearchTreeDetail,
+  RuntimeConfig,
+} from "../types";
 
 interface ResearchActionContext {
   groups: GroupInfo[];
@@ -145,6 +151,7 @@ export function useResearchActions(
       model: string | null;
       effort: string | null;
       workspaceId: string | null;
+      images?: readonly ResearchImageAttachment[];
     }) => {
       const probedAdapters = await refreshAdapterReadiness();
       const selectedAdapter = probedAdapters.find(
@@ -160,13 +167,16 @@ export function useResearchActions(
       const group = await resolveResearchComposerWorkspace(input.workspaceId);
       let detail: ResearchTreeDetail;
       try {
-        detail = await createResearchTree({
-          prompt: input.prompt,
-          adapter: input.adapter,
-          model: input.model,
-          effort: input.effort,
-          workspaceId: group.id,
-        });
+        detail = await createResearchTree(
+          {
+            prompt: input.prompt,
+            adapter: input.adapter,
+            model: input.model,
+            effort: input.effort,
+            workspaceId: group.id,
+          },
+          input.images,
+        );
       } catch (err) {
         // The Home composer displays the rethrown error beside the retained fields.
         void refreshResearchNavigation().catch(() => undefined);
@@ -338,6 +348,7 @@ export function useResearchActions(
       anchor?: NodeAnchor | null,
       inline?: boolean,
       replacesNodeId?: string | null,
+      images?: readonly ResearchImageAttachment[],
     ) => {
       const node = await forkResearchNode(
         parentNodeId,
@@ -345,6 +356,7 @@ export function useResearchActions(
         anchor,
         inline ?? false,
         replacesNodeId,
+        images,
       );
       void applyGeneratedResearchNodeTitle(node.treeId, node.id);
       return node;
@@ -378,12 +390,12 @@ export function useResearchActions(
   // patched here.
   const postActions = useMemo<PostActions>(
     () => ({
-      onAskFollowUp: async ({ parentNodeId, prompt, asNote }) => {
+      onAskFollowUp: async ({ parentNodeId, prompt, asNote, images }) => {
         if (asNote) {
           await createResearchPostFollowUp(parentNodeId, prompt);
           return;
         }
-        await createResearchFollowup(parentNodeId, prompt, null, false);
+        await createResearchFollowup(parentNodeId, prompt, null, false, null, images);
       },
       onRetry: retryResearchRun,
     }),

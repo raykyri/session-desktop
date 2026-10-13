@@ -5,7 +5,7 @@
 // pruned localStorage data on the next save.
 
 import type { ResearchScrollKind } from "./researchColumns";
-import type { ResearchHighlightAnchor } from "../types";
+import type { ResearchHighlightAnchor, ResearchImageAttachment } from "../types";
 
 interface SavedResearchScrollPosition {
   top: number;
@@ -35,6 +35,8 @@ export interface QueuedResearchFollowup {
   id: string;
   prompt: string;
   createdAt: number;
+  /** Images sent with the question. Absent when it has none. */
+  images?: ResearchImageAttachment[];
   /** Why sending it failed. A failed question is not sent again until the
    * reader retries it; this is not restored on load, so a reload retries. */
   failed?: string;
@@ -211,14 +213,25 @@ function load(): Record<string, SavedResearchNavigation> {
             }
             const queue = value.flatMap((entry: unknown) => {
               const item = entry as Partial<QueuedResearchFollowup> | null;
-              return item &&
-                typeof item.id === "string" &&
-                typeof item.prompt === "string" &&
-                item.prompt.trim() &&
-                typeof item.createdAt === "number" &&
-                Number.isFinite(item.createdAt)
-                ? [{ id: item.id, prompt: item.prompt, createdAt: item.createdAt }]
-                : [];
+              if (
+                !item ||
+                typeof item.id !== "string" ||
+                typeof item.prompt !== "string" ||
+                !item.prompt.trim() ||
+                typeof item.createdAt !== "number" ||
+                !Number.isFinite(item.createdAt)
+              ) {
+                return [];
+              }
+              const images = storedImages(item.images);
+              return [
+                {
+                  id: item.id,
+                  prompt: item.prompt,
+                  createdAt: item.createdAt,
+                  ...(images.length > 0 ? { images } : {}),
+                },
+              ];
             });
             return queue.length > 0 ? [[headId, queue]] : [];
           }),
@@ -247,6 +260,32 @@ function load(): Record<string, SavedResearchNavigation> {
   } catch {
     return {};
   }
+}
+
+/** The well-formed image attachments of a stored queued question. The
+ * backend checks each image again when the question is sent. */
+function storedImages(value: unknown): ResearchImageAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: unknown) => {
+    const image = entry as Partial<ResearchImageAttachment> | null;
+    return image &&
+      image.kind === "image" &&
+      typeof image.id === "string" &&
+      typeof image.mimeType === "string" &&
+      typeof image.byteSize === "number"
+      ? [
+          {
+            kind: "image" as const,
+            id: image.id,
+            mimeType: image.mimeType,
+            byteSize: image.byteSize,
+            ...(typeof image.width === "number" ? { width: image.width } : {}),
+            ...(typeof image.height === "number" ? { height: image.height } : {}),
+            ...(typeof image.fileName === "string" ? { fileName: image.fileName } : {}),
+          },
+        ]
+      : [];
+  });
 }
 
 export function researchNavigationStore(): Record<string, SavedResearchNavigation> {

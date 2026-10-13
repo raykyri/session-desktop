@@ -2,7 +2,16 @@ import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Sparkles, StickyNote } from "lucide-react";
 import type { ResearchNode } from "../../types";
-import { nodeAdapter, nodeAgent, nodePrompt, nodeStatus, nodeType } from "../../lib/researchNodeTypes";
+import {
+  nodeAdapter,
+  nodeAgent,
+  nodeAttachments,
+  nodePrompt,
+  nodeStatus,
+  nodeType,
+} from "../../lib/researchNodeTypes";
+import { researchImages } from "../../lib/researchImages";
+import { ResearchImageStrip } from "./ResearchImages";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
@@ -111,7 +120,10 @@ export default function ResearchPostThread({
           modelLabel={modelLabel}
           fullWidth
           requireCmdEnter={requireCmdEnterToSend}
-          onSubmit={(prompt, asNote) => actions.onAskFollowUp({ parentNodeId: post.id, prompt, asNote })}
+          adapterId={nodeAdapter(post)}
+          onSubmit={(prompt, asNote, images) =>
+            actions.onAskFollowUp({ parentNodeId: post.id, prompt, asNote, images })
+          }
         />
       ) : null}
       {followUps.length > 0 ? (
@@ -228,6 +240,10 @@ function PostFollowUpRow({
         <div id={labelId} className="post-thread-question">
           {nodePrompt(child)}
         </div>
+        <ResearchImageStrip
+          className="post-thread-images"
+          images={researchImages(nodeAttachments(child))}
+        />
         {state}
       </div>
     </li>

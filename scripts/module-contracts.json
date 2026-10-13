@@ -75,7 +75,6 @@
         "ResearchDocumentNode",
         "ResearchExchangeNode",
         "ResearchPostNode",
-        "ResearchTweetAttachment",
         "SavedPrompt",
         "SendNextQueuedAgentTurnResult",
         "ShellAgentJobInfo",

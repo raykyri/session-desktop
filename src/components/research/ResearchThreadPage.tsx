@@ -41,7 +41,7 @@ import { writeClipboardText } from "../../lib/clipboard";
 import type { ResearchPostThreadHandle } from "./ResearchPostThread";
 import type { PostActions } from "./ResearchPost";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
-import { documentHoldsMarkdown, documentSource, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, nodeAgent, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnIdOf,
@@ -100,12 +100,15 @@ import type {
   NodeAnchor,
   ResearchNodeType,
   ResearchHighlightAnchor,
+  ResearchImageAttachment,
   ResearchNode,
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
   UpdateResearchPostResult,
 } from "../../types";
+import { researchImageBlockReason, researchImages } from "../../lib/researchImages";
+import type { ResearchImagesUpdate } from "./ResearchImages";
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
@@ -146,6 +149,16 @@ import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_MARKERS: ResearchBranchMarker[] = [];
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
+
+/** The ask boxes' images with `images` as box `key`'s; an empty list
+ * removes the key. */
+function withImages(
+  current: Record<string, ResearchImageAttachment[]>,
+  key: string,
+  images: ResearchImageAttachment[],
+): Record<string, ResearchImageAttachment[]> {
+  return images.length === 0 ? withoutKeys(current, [key]) : { ...current, [key]: images };
+}
 /** How long a node created a moment ago is shown before it appears in the
  * tree detail. */
 const PENDING_NODE_TTL_MS = 30_000;
@@ -170,6 +183,7 @@ interface ResearchThreadPageProps {
     anchor?: NodeAnchor | null,
     inline?: boolean,
     replacesNodeId?: string | null,
+    images?: readonly ResearchImageAttachment[],
   ) => Promise<ResearchNode>;
   /** Follow-ups in a note's follow-ups column (see ResearchPostThread). */
   postActions: PostActions;
@@ -327,6 +341,9 @@ function ResearchThreadPage({
   // which makes the deepest level current.
   const [focusedColumnId, setFocusedColumnId] = useState<ResearchColumnId | null>(null);
   const [composerText, setComposerText] = useState<Record<string, string>>({});
+  // The images in each ask box, keyed as `composerText`. They stay while the
+  // page is open; a sent or queued question takes them along.
+  const [composerImages, setComposerImages] = useState<Record<string, ResearchImageAttachment[]>>({});
   // The selected queued message (an item of a chain's client-side queue):
   // its column's answer column shows it. Any other selection clears it.
   const [queuedView, setQueuedView] = useState<{ headId: string; itemId: string } | null>(null);
@@ -391,6 +408,7 @@ function ResearchThreadPage({
   const pendingRef = useRef(pending);
   // Live mirrors for stable callbacks that must read current state.
   const composerTextRef = useRef(composerText);
+  const composerImagesRef = useRef(composerImages);
   const submittingKeyRef = useRef(submittingKey);
   const editingByHeadRef = useRef(editingByHead);
   treeIdRef.current = treeId;
@@ -398,6 +416,7 @@ function ResearchThreadPage({
   menuRef.current = menu;
   pendingRef.current = pending;
   composerTextRef.current = composerText;
+  composerImagesRef.current = composerImages;
   submittingKeyRef.current = submittingKey;
   editingByHeadRef.current = editingByHead;
 
@@ -1478,6 +1497,7 @@ function ResearchThreadPage({
     const headId = inlineChainFor(currentDetail.nodes, nodeId)[0] ?? nodeId;
     setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
     setComposerText((current) => ({ ...current, [headId]: nodePrompt(node) }));
+    setComposerImages((current) => withImages(current, headId, researchImages(nodeMessage(node)?.attachments)));
     requestFocus({ kind: "composer", key: headId }, "reveal");
   }, [requestFocus]);
 
@@ -1650,6 +1670,7 @@ function ResearchThreadPage({
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
       const currentDetail = detailRef.current;
       const prompt = (composerTextRef.current[headId] ?? "").trim();
+      const images = composerImagesRef.current[headId] ?? [];
       if (!currentDetail || !prompt || archived || submittingKeyRef.current) {
         return;
       }
@@ -1669,6 +1690,7 @@ function ResearchThreadPage({
         (headId === replacedId || stripRef.current.levels.some((level) => level.headId === headId));
       const clearComposer = () => {
         setComposerText((current) => ({ ...current, [headId]: "" }));
+        setComposerImages((current) => withImages(current, headId, []));
         if (headId === mainComposerKey && treeIdRef.current) {
           navigationPersistence.recordDraft(treeIdRef.current, "");
           navigationPersistence.flush();
@@ -1681,7 +1703,7 @@ function ResearchThreadPage({
         }
         setSubmittingKey(headId);
         try {
-          const child = await onForkRef.current(source.id, prompt, null, false);
+          const child = await onForkRef.current(source.id, prompt, null, false, null, images);
           clearComposer();
           addCreatedNode(child);
           if (stillShown()) {
@@ -1710,6 +1732,7 @@ function ResearchThreadPage({
             request.anchor,
             request.inline,
             request.replacesNodeId,
+            images,
           );
           clearComposer();
           setEditingByHead((current) => withoutKeys(current, [headId]));
@@ -1733,7 +1756,12 @@ function ResearchThreadPage({
       if (step === "wait" || queued.length > 0 || chainSendInFlight(headId)) {
         updateQueue(headId, (queue) => [
           ...queue,
-          { id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, prompt, createdAt: Date.now() },
+          {
+            id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+            prompt,
+            createdAt: Date.now(),
+            ...(images.length > 0 ? { images: [...images] } : {}),
+          },
         ]);
         clearComposer();
         return;
@@ -1743,7 +1771,7 @@ function ResearchThreadPage({
       }
       setSubmittingKey(headId);
       try {
-        const child = await onForkRef.current(tail.id, prompt, null, true);
+        const child = await onForkRef.current(tail.id, prompt, null, true, null, images);
         awaitChainChild(headId, child.id);
         clearComposer();
         addCreatedNode(child);
@@ -1768,6 +1796,7 @@ function ResearchThreadPage({
     }
     const key = `pending:${current.parentNodeId}`;
     const prompt = (composerTextRef.current[key] ?? "").trim();
+    const images = composerImagesRef.current[key] ?? [];
     if (!prompt || submittingKeyRef.current || archived) {
       return;
     }
@@ -1778,12 +1807,15 @@ function ResearchThreadPage({
         prompt,
         current.anchor ? { kind: "passage", anchor: current.anchor } : null,
         false,
+        null,
+        images,
       );
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
         navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
       }
       setComposerText((text) => withoutKeys(text, [key]));
+      setComposerImages((current) => withoutKeys(current, [key]));
       if (pendingRef.current === current) {
         addCreatedNode(child);
         navigate(selectionWith(child.id, child));
@@ -2296,7 +2328,7 @@ function ResearchThreadPage({
       // A branches column shows the ask box only in its selected group, so a
       // chain in another group is selected first (its last message).
       onEdit: (item) => {
-        if ((composerTextRef.current[headId] ?? "").trim()) {
+        if ((composerTextRef.current[headId] ?? "").trim() || (composerImagesRef.current[headId] ?? []).length > 0) {
           onToast("Clear the ask box to edit this question.");
           return;
         }
@@ -2305,6 +2337,7 @@ function ResearchThreadPage({
           setQueuedView(null);
         }
         setComposerText((current) => ({ ...current, [headId]: item.prompt }));
+        setComposerImages((current) => withImages(current, headId, item.images ?? []));
         const shown = Boolean(composerField(headId));
         if (!shown && tail) {
           navigate(selectionWith(tail.id));
@@ -2352,6 +2385,24 @@ function ResearchThreadPage({
     onOpen: (trigger: HTMLButtonElement) => openAnswerMenu(trigger, headId),
   });
 
+  /** Updates the images of the ask box keyed `key`. */
+  const composerImagesUpdate =
+    (key: string): ResearchImagesUpdate =>
+    (update) =>
+      setComposerImages((current) => withImages(current, key, update(current[key] ?? [])));
+  /** Why an ask box's images cannot go to `adapter`, or null. */
+  const imageBlockReasonFor = (adapter: string | null, images: readonly ResearchImageAttachment[] | undefined) =>
+    researchImageBlockReason(
+      adapter,
+      questionAdapters.find((candidate) => candidate.id === adapter)?.label,
+      images?.length ?? 0,
+    );
+  /** The agent a branch asked from `parentNodeId` runs on. */
+  const parentAgentAdapter = (parentNodeId: string) => {
+    const parent = nodeById.get(parentNodeId);
+    return parent ? (nodeAgent(parent)?.adapter ?? null) : null;
+  };
+
   /** The ask box of the chain headed by `headId` (none for a note's chain);
    * `hinted` shows its ⌘J hint. */
   const chainComposer = (headId: string, level: number, hinted: boolean) => {
@@ -2365,8 +2416,11 @@ function ResearchThreadPage({
     const cancelEditing = () => {
       setEditingByHead((current) => withoutKeys(current, [headId]));
       setComposerText((current) => ({ ...current, [headId]: "" }));
+      setComposerImages((current) => withImages(current, headId, []));
       requestFocus({ kind: "composer", key: headId }, "none");
     };
+    // A follow-up runs on the chain's agent (a document's follow-up agent).
+    const chainAdapter = nodeAgent(chain[chain.length - 1])?.adapter ?? null;
     return (
       <ResearchChainComposer
         nodes={nodes}
@@ -2382,6 +2436,9 @@ function ResearchThreadPage({
         // a line.
         requireCmdEnter
         composerRef={registerComposer(headId)}
+        images={composerImages[headId]}
+        onImagesChange={composerImagesUpdate(headId)}
+        imageBlockReason={imageBlockReasonFor(chainAdapter, composerImages[headId])}
         onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
         onSubmit={() => void submitComposer(headId)}
         onSubmitBranch={() => void submitComposer(headId, { branch: true })}
@@ -2408,6 +2465,12 @@ function ResearchThreadPage({
         // a line.
         requireCmdEnter
         composerRef={registerComposer(pendingKey)}
+        images={composerImages[pendingKey]}
+        onImagesChange={composerImagesUpdate(pendingKey)}
+        imageBlockReason={imageBlockReasonFor(
+          parentAgentAdapter(group.parentNodeId),
+          composerImages[pendingKey],
+        )}
         onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
         onSubmit={() => void submitPendingBranch()}
         onCancel={cancelPending}
