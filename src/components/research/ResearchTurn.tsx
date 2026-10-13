@@ -34,6 +34,7 @@ import { WidgetAnswerContext } from "../../lib/sessionWidgetActions";
 import { SessionWidgetStreamingContext } from "../SessionWidget";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+import { ResearchTileToggle, useResearchTileClamp } from "./ResearchTileClamp";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
 import {
@@ -675,7 +676,9 @@ export function researchMessageStateWord(state: ResearchRowState): string | null
  * button sits in a pill in the row's top-right corner, which shows on hover
  * and focus as on a feed card, with a drag handle when the row reorders by
  * drag (`dragPlace`, the column's drop zone): a press on the row then starts
- * a drag that reorders the column. */
+ * a drag that reorders the column. The row's text is clamped to 12 lines,
+ * with Show more below it when it is longer (`expanded` shows it in full);
+ * a tweet card after the text shows whole. */
 export const ResearchMessageRow = memo(function ResearchMessageRow({
   node,
   level,
@@ -690,11 +693,13 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   branchState = null,
   branchUnread,
   answerMenuOpen,
+  expanded = false,
   registerSegmentElement,
   onSelect,
   onToggleBranches,
   onOpenAnswerMenu,
   onOpenContextMenu,
+  onToggleExpanded,
   dragPlace = null,
   onDragStart,
 }: {
@@ -721,6 +726,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   branchUnread: boolean;
   /** The answer's menu is open from this row's … button. */
   answerMenuOpen: boolean;
+  /** The row's text shows in full (Show less), not clamped. */
+  expanded?: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
   /** The branch indicator: selects the answer's first branch in the next
@@ -730,6 +737,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** Opens the answer's menu at `placement`: a right-click on the row, or
    * Shift+F10 or the ContextMenu key with focus in it. */
   onOpenContextMenu: (nodeId: string, placement: ResearchUnitMenuPlacement) => void;
+  /** Show more or Show less; without it the row has no toggle. */
+  onToggleExpanded?: (nodeId: string) => void;
   dragPlace?: string | null;
   onDragStart?: ResearchCardDragStart;
 }) {
@@ -765,16 +774,32 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         (row) => ({ element: row.querySelector<HTMLElement>(".research-feed-card-menu"), align: "end" }),
       )
     : null;
+  const clamp = useResearchTileClamp(expanded);
   let prompt: ReactNode = (
-    <span className="research-msg-plain">
-      {glyph}
-      {label}
-    </span>
+    <div ref={clamp.ref} id={clamp.id} className={clamp.className}>
+      <span className="research-msg-plain">
+        {glyph}
+        {label}
+      </span>
+    </div>
   );
   if (showPrompt) {
+    // Only the text is clamped: tweet cards follow the clamp box.
     prompt = (
       <ResearchUserMessage className="research-prompt research-msg-prompt">
-        <ResearchMessageBody prompt={nodePrompt(node)} attachments={nodeAttachments(node)} lead={glyph} />
+        <ResearchMessageBody
+          prompt={nodePrompt(node)}
+          attachments={nodeAttachments(node)}
+          lead={glyph}
+          renderPrompt={(content) => (
+            <div ref={clamp.ref} id={clamp.id} className={clamp.className}>
+              <div className="research-msg-clamp-text">
+                {glyph}
+                {content}
+              </div>
+            </div>
+          )}
+        />
       </ResearchUserMessage>
     );
   }
@@ -807,6 +832,14 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       <div id={labelId} className="research-msg-content" data-research-drag-label="">
         {prompt}
       </div>
+      {onToggleExpanded && clamp.overflows ? (
+        <ResearchTileToggle
+          controls={clamp.id}
+          expanded={expanded}
+          tabIndex={tabIndex}
+          onToggle={() => onToggleExpanded(node.id)}
+        />
+      ) : null}
       {stateWord || imported || starred ? (
         <div className="research-msg-meta">
           {imported ? (

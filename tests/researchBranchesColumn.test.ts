@@ -86,6 +86,7 @@ function render(
     answerMenuOpenId: null,
     isUnread: () => false,
     branchStateOf,
+    expandedTiles: new Set<string>(),
     rowActions: {
       registerSegmentElement: noop,
       onSelect: noop,
@@ -203,6 +204,7 @@ test("a row with branches shows an indicator: accent when one is selected in the
         answerMenuOpenId: null,
         isUnread: () => false,
         branchStateOf: (id) => (id === "d1" ? "running" : null),
+        expandedTiles: new Set<string>(),
         rowActions: {
           registerSegmentElement: noop,
           onSelect: noop,
@@ -269,6 +271,7 @@ test("a queued message is selectable, with Cancel in its row and Cancel queued m
         answerMenuOpenId: null,
         isUnread: () => false,
         branchStateOf: () => null,
+        expandedTiles: new Set<string>(),
         rowActions: {
           registerSegmentElement: noop,
           onSelect: noop,

@@ -966,8 +966,49 @@
 }
 
 /* A row with no meta line ends 10px below its text, as it starts. */
-.research-msg-row:not(:has(> .research-msg-meta)) > .research-msg-content {
+.research-msg-row:not(:has(> .research-msg-meta, > .research-msg-more)) > .research-msg-content {
   padding-bottom: 10px;
+}
+
+/* A row's text is clamped to 12 lines until Show more. The clamp box holds
+   one block (the glyph and the text), so the glyph still floats beside the
+   first line; tweet cards follow the box and are never cut. */
+.research-msg-clamp.is-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+}
+
+/* Show more or Show less: faint text below the clamped text, above the
+   row's selection button. */
+.research-msg-more {
+  position: relative;
+  z-index: 1;
+  display: block;
+  min-height: 0;
+  margin: 2px 0 0 8px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  background: transparent;
+  font-size: calc(12px + var(--font-ui-size-offset));
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.research-msg-more:hover {
+  text-decoration: underline;
+}
+
+.research-msg-more:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+.research-msg-row:not(:has(> .research-msg-meta)) > .research-msg-more {
+  margin-bottom: 8px;
 }
 
 .research-msg-content .research-prompt {
@@ -989,7 +1030,7 @@
 
 /* The glyph before a message's Markdown is set in the Markdown's type, so
    its 1lh centers it on the first line (feed.css). */
-.research-msg-prompt > .research-row-glyph {
+.research-msg-clamp-text > .research-row-glyph {
   font-size: calc(var(--research-compact-font-size) + 1px);
   line-height: var(--research-compact-line-height);
 }

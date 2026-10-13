@@ -16,6 +16,7 @@ import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
 import ResearchRowGlyph from "./ResearchRowGlyph";
+import { ResearchTileToggle, useResearchTileClamp } from "./ResearchTileClamp";
 import { ResearchMessageRow } from "./ResearchTurn";
 
 const EMPTY_BRANCHES: ResearchNode[] = [];
@@ -176,87 +177,130 @@ export interface ResearchQueueProps {
 
 function ResearchQueuedFollowups({
   items,
-  selectedId,
   tailStalled,
+  expandedTiles,
+  onToggleExpanded,
+  ...rest
+}: ResearchQueueProps & {
+  expandedTiles: ReadonlySet<string>;
+  onToggleExpanded: ((id: string) => void) | undefined;
+}) {
+  return (
+    <>
+      {items.map((item, index) => (
+        <ResearchQueuedFollowup
+          key={item.id}
+          {...rest}
+          item={item}
+          stalled={index === 0 && !item.failed && tailStalled}
+          expanded={expandedTiles.has(item.id)}
+          onToggleExpanded={onToggleExpanded}
+        />
+      ))}
+    </>
+  );
+}
+
+function ResearchQueuedFollowup({
+  item,
+  stalled,
+  selectedId,
+  expanded,
   onSelect,
   onRemove,
   onRetry,
   onEdit,
-}: ResearchQueueProps) {
+  onToggleExpanded,
+}: Omit<ResearchQueueProps, "items" | "tailStalled"> & {
+  item: QueuedResearchFollowup;
+  /** The first item, which cannot send while the chain's last answer is stopped. */
+  stalled: boolean;
+  expanded: boolean;
+  onToggleExpanded: ((id: string) => void) | undefined;
+}) {
+  const selected = item.id === selectedId;
+  const labelId = `research-queued-${item.id}`;
+  const clamp = useResearchTileClamp(expanded);
   return (
-    <>
-      {items.map((item, index) => {
-        const stalled = index === 0 && !item.failed && tailStalled;
-        const selected = item.id === selectedId;
-        const labelId = `research-queued-${item.id}`;
-        return (
-          <li
-            key={item.id}
-            className={`research-msg-row is-status-queued is-client-queued${selected ? " is-selected" : ""}`}
-            data-research-queued={item.id}
-          >
+    <li
+      className={`research-msg-row is-status-queued is-client-queued${selected ? " is-selected" : ""}`}
+      data-research-queued={item.id}
+    >
+      <button
+        type="button"
+        className="research-msg-hit"
+        aria-current={selected ? "true" : undefined}
+        aria-labelledby={labelId}
+        tabIndex={selected ? 0 : -1}
+        onClick={() => onSelect(item)}
+      />
+      <div id={labelId} className="research-msg-content">
+        <div ref={clamp.ref} id={clamp.id} className={clamp.className}>
+          <div className="research-msg-plain is-typed">
+            <ResearchRowGlyph kind="exchange" state="queued" />
+            {item.prompt}
+          </div>
+        </div>
+      </div>
+      {onToggleExpanded && clamp.overflows ? (
+        <ResearchTileToggle
+          controls={clamp.id}
+          expanded={expanded}
+          tabIndex={selected ? 0 : -1}
+          onToggle={() => onToggleExpanded(item.id)}
+        />
+      ) : null}
+      <div className="research-msg-meta">
+        {item.failed || stalled ? (
+          <span className="research-msg-pill is-error">Not sent</span>
+        ) : (
+          <span className="research-msg-state">Queued</span>
+        )}
+        <button
+          type="button"
+          className="research-msg-meta-button research-queue-remove"
+          aria-label="Cancel this queued message"
+          onClick={() => onRemove(item)}
+        >
+          Cancel
+        </button>
+      </div>
+      {item.failed || stalled ? (
+        <p className="research-msg-note" role={item.failed ? "alert" : undefined}>
+          {item.failed ?? "The last answer stopped; retry it, or edit this question."}
+        </p>
+      ) : null}
+      {item.failed || stalled ? (
+        <div className="research-turn-actions research-msg-actions">
+          {item.failed ? (
             <button
               type="button"
-              className="research-msg-hit"
-              aria-current={selected ? "true" : undefined}
-              aria-labelledby={labelId}
-              tabIndex={selected ? 0 : -1}
-              onClick={() => onSelect(item)}
-            />
-            <div id={labelId} className="research-msg-content">
-              <div className="research-msg-plain is-typed">
-                <ResearchRowGlyph kind="exchange" state="queued" />
-                {item.prompt}
-              </div>
-            </div>
-            <div className="research-msg-meta">
-              {item.failed || stalled ? (
-                <span className="research-msg-pill is-error">Not sent</span>
-              ) : (
-                <span className="research-msg-state">Queued</span>
-              )}
-              <button
-                type="button"
-                className="research-msg-meta-button research-queue-remove"
-                aria-label="Cancel this queued message"
-                onClick={() => onRemove(item)}
-              >
-                Cancel
-              </button>
-            </div>
-            {item.failed || stalled ? (
-              <p className="research-msg-note" role={item.failed ? "alert" : undefined}>
-                {item.failed ?? "The last answer stopped; retry it, or edit this question."}
-              </p>
-            ) : null}
-            {item.failed || stalled ? (
-              <div className="research-turn-actions research-msg-actions">
-                {item.failed ? (
-                  <button
-                    type="button"
-                    className="control-button research-turn-button"
-                    onClick={(event) => onRetry(item, event.currentTarget.closest("li"))}
-                  >
-                    <RefreshCw size={13} aria-hidden="true" />
-                    <span>Retry</span>
-                  </button>
-                ) : null}
-                <button type="button" className="control-button research-turn-button is-ghost" onClick={() => onEdit(item)}>
-                  Edit question
-                </button>
-              </div>
-            ) : null}
-          </li>
-        );
-      })}
-    </>
+              className="control-button research-turn-button"
+              onClick={(event) => onRetry(item, event.currentTarget.closest("li"))}
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              <span>Retry</span>
+            </button>
+          ) : null}
+          <button type="button" className="control-button research-turn-button is-ghost" onClick={() => onEdit(item)}>
+            Edit question
+          </button>
+        </div>
+      ) : null}
+    </li>
   );
 }
 
 /** The message rows' callbacks, the same for every messages column. */
 export type ResearchMessageRowActions = Pick<
   ComponentProps<typeof ResearchMessageRow>,
-  "registerSegmentElement" | "onSelect" | "onToggleBranches" | "onOpenAnswerMenu" | "onOpenContextMenu" | "onDragStart"
+  | "registerSegmentElement"
+  | "onSelect"
+  | "onToggleBranches"
+  | "onOpenAnswerMenu"
+  | "onOpenContextMenu"
+  | "onToggleExpanded"
+  | "onDragStart"
 >;
 
 /** What every list of a chain's messages shares: the tree, the rows'
@@ -275,6 +319,9 @@ export interface ResearchChainRowsShared {
   /** Running or failed, when a message in a message's branches (or below
    * them) is; failed first. */
   branchStateOf: (nodeId: string) => "running" | "failed" | null;
+  /** The rows (messages and queued messages, by id) whose text shows in
+   * full: Show more was pressed while the thread is open. */
+  expandedTiles: ReadonlySet<string>;
   rowActions: ResearchMessageRowActions;
 }
 
@@ -311,6 +358,7 @@ function ResearchChainRows({
     answerMenuOpenId,
     isUnread,
     branchStateOf,
+    expandedTiles,
     rowActions,
   } = shared;
   const head = nodeById.get(headId);
@@ -344,12 +392,17 @@ function ResearchChainRows({
             branchState={branches.length > 0 ? branchStateOf(id) : null}
             branchUnread={branches.some(isUnread)}
             answerMenuOpen={answerMenuOpenId === id}
+            expanded={expandedTiles.has(id)}
             dragPlace={dragPlace}
             {...rowActions}
           />
         );
       })}
-      <ResearchQueuedFollowups {...queue} />
+      <ResearchQueuedFollowups
+        {...queue}
+        expandedTiles={expandedTiles}
+        onToggleExpanded={rowActions.onToggleExpanded}
+      />
     </ul>
   );
 }

@@ -36,6 +36,7 @@ import { useResearchRunControls } from "../../hooks/useResearchRunControls";
 import { useResearchTextSelection } from "../../hooks/useResearchTextSelection";
 import { useStableValue } from "../../hooks/useStableValue";
 import { reorderedIds, stepReorderTarget } from "../../lib/researchFolders";
+import { toggleResearchTile } from "../../lib/researchTileClamp";
 import { writeClipboardText } from "../../lib/clipboard";
 import type { ResearchPostThreadHandle } from "./ResearchPostThread";
 import type { PostActions } from "./ResearchPost";
@@ -378,6 +379,9 @@ function ResearchThreadPage({
   const [openedNodeIds, setOpenedNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [markerTip, setMarkerTip] = useState<{ element: HTMLElement; branchIds: string[]; level: number } | null>(null);
   const dismissMarkerTip = useCallback(() => setMarkerTip(null), []);
+  // Message rows whose text shows in full (Show more), while the thread is open.
+  const [expandedTiles, setExpandedTiles] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleTile = useCallback((id: string) => setExpandedTiles((current) => toggleResearchTile(current, id)), []);
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const composerRefs = useRef(new Map<string, ResearchComposerHandle>());
@@ -2156,9 +2160,10 @@ function ResearchThreadPage({
       onToggleBranches: toggleBranches,
       onOpenAnswerMenu: openAnswerMenu,
       onOpenContextMenu: openContextMenu,
+      onToggleExpanded: toggleTile,
       onDragStart: startMessageDrag,
     }),
-    [openAnswerMenu, openContextMenu, registerSegmentElement, selectRow, startMessageDrag, toggleBranches],
+    [openAnswerMenu, openContextMenu, registerSegmentElement, selectRow, startMessageDrag, toggleBranches, toggleTile],
   );
   const markerActions = useMemo<ResearchMarkerActions>(
     () => ({
@@ -2335,6 +2340,7 @@ function ResearchThreadPage({
       menu?.kind === "answer" && menu.trigger && !menu.trigger.matches(".research-head-menu") ? menu.nodeId : null,
     isUnread,
     branchStateOf: (nodeId) => branchStates.ofMessage.get(nodeId) ?? null,
+    expandedTiles,
     rowActions: messageRowActions,
   };
 
