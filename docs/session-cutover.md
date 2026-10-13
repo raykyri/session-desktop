@@ -1,35 +1,23 @@
 # Session naming cutover
 
-The desktop binary is `session`. The standalone remote helper is `session-cli`,
-and the shared Rust wire-types crate is `session-proto`. App-owned environment
+The desktop binary is `session`. The standalone CLI is `session-cli`, and the
+shared Rust wire-types crate is `session-proto`. App-owned environment
 variables use `SESSION_*`, the desktop event channel is `session-event`, and
 frontend APIs use names such as `SessionEvent` and `useSessionEvents`.
 
 ## Restart and configuration
 
-This is a coordinated software cutover: restart the app and relaunch agent/shell
-processes so commands, generated hooks, event listeners, and environment variables
-come from the same build. Old executable and environment aliases are not supported.
+This is a coordinated software cutover: restart the app so commands, event
+listeners, and environment variables come from the same build. Old executable and
+environment aliases are not supported.
 
 Rename app-owned `QMUX_*` settings to `SESSION_*` in local build configuration,
 external scripts, and deployment secrets. Examples include `SESSION_CONFIG` and
 `SESSION_BUILD_TARGET`. `SESSION_PUBLIC_ORIGIN` now configures the web
 application at `https://session.dev` (`web/.env.example`), not a landing page.
-The app supplies fresh
-`SESSION_SOCK`, `SESSION_TOKEN`, `SESSION_CLI`, and pane/agent variables to children;
-do not copy credentials from an old process. Inherited Session context is cleared
-before fresh pane credentials are installed.
-
-The Codex adapter now supplies `SESSION_WORKTREE_ROOT` and matching developer
-instructions. An already-running agent's older launcher instructions still apply
-until that process is relaunched; an external launcher must update its producers
-and instructions together.
-
-Remote configuration exposes only `sessionCli`; the legacy field is ignored.
-Managed helpers live at `~/.session/bin/session-cli`. Custom CLI paths are never
-overwritten: their owners must install a matching helper. Remote provisioning
-still requires a bundled helper for the remote architecture; this change does not add remote support to
-builds that omit those artifacts.
+The `session` CLI (`send`, `ping`, `--version`) finds the control socket through
+`SESSION_SOCK`, the configured `socketPath`, or the default runtime location, and
+authenticates as a same-user socket peer; it takes no token.
 
 ## Current identity and compatibility contracts
 
@@ -43,8 +31,8 @@ builds that omit those artifacts.
   and `session.*` browser storage keys are the only current storage locations.
 - Persisted workspace/participant fields, `sessionToolActivity`,
   `session_instruction`, and `session-file:` links use
-  Session names. Generated hooks, profiles, plugin files, remote tmux identities,
-  SSH control paths, and browser automation profiles also use Session prefixes.
+  Session names. Generated plugin files and browser automation profiles also use
+  Session prefixes.
   No legacy values or paths are read or migrated.
 - The updater public/private key identity remains a separate deployment contract.
   The updater endpoint, release download URLs, and release script use
@@ -65,9 +53,11 @@ completion-sound, and interface recovery behavior. The package is dependency-fre
 and exports only the current Session native ABI.
 The Apple bundle and Keychain service use the new Session identities.
 
-`pane.read --source viewport` now returns an explicit invalid-argument error.
-Use `--source terminal` for stored process output. Research SDK/JSONL execution,
-PTY input ordering, remote recovery, and process cleanup remain available.
+Session has no terminal panes, PTYs, or remote terminals; research runs use the
+providers' SDK/JSONL interfaces. A state file from a build with panes loads
+without its panes, queued turns, composer text, and artifact tray, and the next
+save omits them. Startup deletes `.session/terminal` (pane scrollback) and
+`.session/remote-files` (artifact uploads).
 
 Settings use the `session.settings.v1` key. The app reads legacy `fontSize` as
 `textSize` to preserve research typography; obsolete terminal themes, fonts,
@@ -87,6 +77,6 @@ configuration that explicitly points to the old socket when cutting over.
 The Apple Foundation Models provider, Swift title bridge, native title command,
 and release-build requirement have been removed. Swift is still required for the
 AppKit/WebKit support bridge. Research titles and recaps continue to use the
-research agent. Optional tab titles still support OpenRouter when explicitly
-selected; existing Foundation Models selections and new installations default
-to disabled. Stored OpenRouter selections, keys, and models are preserved.
+research agent. Tab titles, and the OpenRouter provider they could use, were
+removed with terminal tabs; a stored OpenRouter key is dropped from
+`preferences.json` on its next update.

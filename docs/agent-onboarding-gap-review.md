@@ -54,7 +54,7 @@ T3's [WelcomeWizard](https://github.com/pingdotgg/t3code/blob/8d199b4f7b91807916
 
 [Provider probing](../src-tauri/src/adapters/mod.rs) initializes an installed CLI as generally ready. Unrecognized authentication output produces `Unknown`; an auth-probe error is ignored. [Setup completion](../src/lib/agentSetup.ts) requires a check timestamp and general readiness, rather than authenticated evidence. It can therefore mark Sign in complete without verifying sign-in.
 
-There is a second mismatch: remote probing can report general readiness while deliberately setting research readiness to Error. Setup receives all configured adapters and does not require research readiness for completion. This can count an unusable research target as set up when remote entries are present.
+A second mismatch, remote probing reporting general readiness with research readiness set to Error, no longer applies: remote targets were removed, and every probed adapter is local.
 
 **Done when:** installed, authentication verified, authentication unverified, and research-compatible are distinct states. A failed or unsupported auth probe cannot claim verified sign-in. Preserve an explicit attempt path for valid configurations that cannot be probed. Only research-capable targets count toward research setup completion; remote limitations are stated accurately.
 
@@ -62,7 +62,7 @@ There is a second mismatch: remote probing can report general readiness while de
 
 **P1. Desktop defect and recovery gap.**
 
-[research_runtime.rs](../src-tauri/src/research_runtime.rs) and [claude_sdk.rs](../src-tauri/src/claude_sdk.rs) still direct users to a terminal tab, although Session intentionally has no terminal surface. Failed turns already expose [Retry](../src/components/research/ResearchTurn.tsx), but the error is not a structured route through provider repair and verification.
+[research_runtime.rs](../src-tauri/src/research_runtime.rs) and [claude_sdk.rs](../src-tauri/src/claude_sdk.rs) now tell users to run the provider's login command in Terminal, the macOS application, rather than a terminal tab. Failed turns already expose [Retry](../src/components/research/ResearchTurn.tsx), but the error is not a structured route through provider repair and verification.
 
 **Done when:** authentication and version failures offer the relevant provider's setup action, retain the question and failed research node, refresh its status, then offer Retry. Instructions name the correct login command and external application when needed. No terminal renderer or general shell surface is restored.
 

@@ -67,9 +67,9 @@ all unit and Rust tests. For a faster frontend-only check, use
 Use `npm run test:node -- tests/example.test.ts` for focused TypeScript tests.
 The runner uses `tsconfig.runtime.json`, so JSX uses the same automatic React
 transform as the builds. The module reachability check recognizes the app
-entrypoint and tests, including literal lazy imports and type-only imports; it
-does not audit Rust command registration or unused exports inside otherwise
-reachable modules.
+entrypoint and tests, including literal lazy imports and type-only imports, and
+reports exports nothing outside their module consumes; it does not audit Rust
+command registration.
 
 The Tauri product name is `Session`; the executable is `session`, with standalone
 `session-cli` and shared `session-proto` crates. Apple bundle/Keychain identity,
@@ -147,7 +147,5 @@ The development configuration in `session.config.json` uses `~/.session/workspac
 `~/.session/run/session.sock`. Shipping builds use the platform application-data location for
 `dev.session.desktop`.
 
-See [docs/home.md](docs/home.md) for the activity feed and
-its navigation and card actions.
 Frontend styling conventions and stylesheet ownership are documented in
 [docs/css-conventions.md](docs/css-conventions.md).

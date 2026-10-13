@@ -15,11 +15,12 @@ checks and removed the additional orphan composer tree they identified.
   rails, pane-tab dragging, split controls, launcher options, and artifact actions.
 - Frontend artifact/notification-history mirrors, unused prompt-palette loading,
   and unread shell-job/global-draft hydration and event updates. Per-agent queues,
-  drafts, and terminal attachment sequencing remain supported.
+  drafts, and terminal attachment sequencing were kept then and removed later
+  with the terminal pane runtime.
 - Uncalled frontend API wrappers, utility exports, and private helper cascades.
 - Rust `PermissionAction` metadata, three uncalled Claude test shims, unused
   binding sweeps, and the dormant full-session respawn path. Explicit
-  closed-pane restoration remains supported.
+  closed-pane restoration was kept then and removed later with the panes.
 
 Backend command registration, persisted formats, notification/artifact storage,
 Apple, hosted-service, and native compatibility identifiers, platform-specific code, vendor patches, examples,
