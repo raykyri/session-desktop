@@ -13,6 +13,7 @@ import {
 } from "../src/components/research/ResearchMessage";
 import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { nodePrompt } from "../src/lib/researchNodeTypes";
+import { tweetLabelText } from "../src/lib/tweets";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const tweetAttachment: ResearchMessageAttachment = {
@@ -245,6 +246,40 @@ test("resolved trailing tweet URLs are presentation-only while the embed renders
   assert.match(html, /Captured post text/);
   assert.match(html, /A useful diagram/);
   assert.doesNotMatch(html, />https:\/\/x\.com\/example\/status\/123</);
+});
+
+test("Home labels a resolved tweet with its author instead of embedding it", () => {
+  const prompt = `What does this mean?\n\n${tweetAttachment.sourceUrl}`;
+  const html = renderToStaticMarkup(
+    createElement(ResearchMessageBody, {
+      prompt,
+      attachments: [tweetAttachment],
+      variant: "compact",
+      tweetLabels: true,
+    }),
+  );
+  assert.match(html, /What does this mean\?/);
+  assert.match(html, /<p class="research-message-tweet-labels">\[Tweet: @example\]<\/p>/);
+  assert.doesNotMatch(html, /tweet-embed/);
+  assert.doesNotMatch(html, /x\.com\/example\/status\/123/);
+
+  // A tweet whose URL still shows in the text (placed inline) gets no label.
+  const inline = { ...tweetAttachment, placement: "inline" as const };
+  const inlineHtml = renderToStaticMarkup(
+    createElement(ResearchMessageBody, {
+      prompt: `Review ${tweetAttachment.sourceUrl} please`,
+      attachments: [inline],
+      tweetLabels: true,
+    }),
+  );
+  assert.doesNotMatch(inlineHtml, /\[Tweet/);
+});
+
+test("tweet label text uses the author's handle, or [Tweet] without one", () => {
+  assert.equal(tweetLabelText(tweetAttachment.tweet), "[Tweet: @example]");
+  assert.equal(tweetLabelText({ author: { name: "A", handle: "@at" } }), "[Tweet: @at]");
+  assert.equal(tweetLabelText({ author: { name: "A", handle: " " } }), "[Tweet]");
+  assert.equal(tweetLabelText(undefined), "[Tweet]");
 });
 
 test("inline or unavailable tweet URLs remain visible", () => {

@@ -179,7 +179,7 @@ test("the glyph occupies its own column beside titled, untitled, link and tweet 
   });
   const card = (text: string) => cards(html).find((entry) => entry.includes(text)) ?? "";
   const glyph = '<span (?:id="[^"]*" )?class="research-row-glyph[^"]*"[^>]*><svg[^]*?</svg></span>';
-  for (const text of ["Investigate this question", "Untitled question", "Not loaded yet", "example.com/finding", "A note", "Tweet text"]) {
+  for (const text of ["Investigate this question", "Untitled question", "Not loaded yet", "example.com/finding", "A note", "[Tweet: @example]"]) {
     const entry = card(text);
     assert.match(entry, new RegExp(`<div class="research-feed-card-layout(?: has-title)?">${glyph}<div class="research-feed-card-content">`));
     assert.equal((entry.match(/research-row-glyph /g) ?? []).length, 1);
@@ -188,7 +188,9 @@ test("the glyph occupies its own column beside titled, untitled, link and tweet 
   assert.deepEqual(glyphOf(card("Not loaded yet")), ["running", "Running"]);
   assert.deepEqual(glyphOf(card("example.com/finding")), ["link", undefined]);
   assert.deepEqual(glyphOf(card("A note")), ["note", undefined]);
-  assert.deepEqual(glyphOf(card("Tweet text")), ["xpost", undefined]);
+  assert.deepEqual(glyphOf(card("[Tweet: @example]")), ["xpost", undefined]);
+  // Home shows the tweet as a label, not its embed.
+  assert.doesNotMatch(card("[Tweet: @example]"), /tweet-embed|Tweet text/);
 });
 
 test("starred follow-ups and branches are indented rows under their question", () => {

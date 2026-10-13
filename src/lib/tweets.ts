@@ -68,3 +68,10 @@ export interface TweetSnapshot {
 }
 
 export type QuotedTweetSnapshot = Omit<TweetSnapshot, "quoted" | "replyTo">;
+
+/** The text Home shows in place of a tweet embed: "[Tweet: @handle]" with
+ * the author's handle, or "[Tweet]" when the snapshot has none. */
+export function tweetLabelText(tweet?: Pick<TweetSnapshot, "author"> | null): string {
+  const handle = tweet?.author?.handle?.trim().replace(/^@+/, "");
+  return handle ? `[Tweet: @${handle}]` : "[Tweet]";
+}

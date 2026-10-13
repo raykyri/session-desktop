@@ -39,6 +39,7 @@ export function PostContent({
   variant = "body",
   lead,
   renderPrompt,
+  tweetLabels,
 }: {
   prompt: string;
   format: PostFormat;
@@ -46,6 +47,8 @@ export function PostContent({
   variant?: ResearchProseVariant;
   lead?: ReactNode;
   renderPrompt?: (content: ReactNode) => ReactNode;
+  /** As in ResearchMessageBody. */
+  tweetLabels?: boolean;
 }) {
   const resolvedTweet = attachments.some(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
@@ -86,6 +89,7 @@ export function PostContent({
       variant={variant}
       lead={lead}
       renderPrompt={renderPrompt}
+      tweetLabels={tweetLabels}
     />
   );
 }

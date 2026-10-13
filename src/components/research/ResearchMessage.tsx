@@ -4,6 +4,7 @@ import type { ResearchMessageAttachment } from "../../types";
 import TranscriptMarkdown, {
   type OversizedMarkdownPolicy,
 } from "../TranscriptMarkdown";
+import { tweetLabelText } from "../../lib/tweets";
 import { TweetEmbed } from "./TweetEmbed";
 
 export type ResearchProseVariant = "body" | "compact";
@@ -99,11 +100,16 @@ export function ResearchMessageBody({
   variant = "body",
   lead,
   renderPrompt,
+  tweetLabels = false,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
   /** Compact for previews such as Home posts; body where the message is read. */
   variant?: ResearchProseVariant;
+  /** Show each resolved tweet as a "[Tweet: @handle]" label instead of its
+   * embed (Home cards). A tweet whose URL still shows in the prompt text
+   * gets no label. */
+  tweetLabels?: boolean;
   /** A row glyph for the start of the first line: before the prompt's
    * Markdown, or in the first tweet's header when no prompt shows. With
    * `renderPrompt`, the prompt's renderer places it instead. */
@@ -111,21 +117,36 @@ export function ResearchMessageBody({
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
-  const tweets = attachments.flatMap((attachment) =>
-    attachment.status === "resolved" && attachment.tweet ? [attachment.tweet] : [],
+  const resolved = attachments.filter(
+    (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
+  const promptContent = visiblePrompt ? (
+    renderPrompt ? (
+      renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
+    ) : (
+      <>
+        {lead}
+        <ResearchMarkdown text={visiblePrompt} variant={variant} />
+      </>
+    )
+  ) : null;
+  if (tweetLabels) {
+    const labels = resolved
+      .filter((attachment) => !visiblePrompt.includes(attachment.sourceUrl))
+      .map((attachment) => tweetLabelText(attachment.tweet));
+    return (
+      <>
+        {promptContent}
+        {labels.length > 0 ? (
+          <p className="research-message-tweet-labels">{labels.join(" ")}</p>
+        ) : null}
+      </>
+    );
+  }
+  const tweets = resolved.flatMap((attachment) => (attachment.tweet ? [attachment.tweet] : []));
   return (
     <>
-      {visiblePrompt ? (
-        renderPrompt ? (
-          renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
-        ) : (
-          <>
-            {lead}
-            <ResearchMarkdown text={visiblePrompt} variant={variant} />
-          </>
-        )
-      ) : null}
+      {promptContent}
       {tweets.length > 0 ? (
         <div
           className={`research-message-attachments${visiblePrompt ? " has-prompt" : ""}`}

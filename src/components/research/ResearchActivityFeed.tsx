@@ -235,11 +235,7 @@ export function researchFeedRows(
 }
 
 function estimatedActivityRowHeight(row: ResearchFeedRow): number {
-  const query = row.query;
-  const hasTweet = query?.attachments?.some(
-    (attachment) => attachment.status === "resolved" && attachment.tweet,
-  );
-  return hasTweet ? 400 : 92 + (query?.starred?.length ?? 0) * 48;
+  return 92 + (row.query?.starred?.length ?? 0) * 48;
 }
 
 interface VirtualActivityRange {
@@ -607,7 +603,7 @@ function ResearchActivityFeed({
   }, [captureScrollState]);
 
   // Keep the first visible row at the same pixel when a live item is inserted
-  // above it or a measured tweet replaces its estimate.
+  // above it or a measured row replaces its estimate.
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     const anchor = anchorRef.current;
@@ -852,8 +848,8 @@ function ResearchActivityFeed({
     const state = researchThreadState(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
     // The card shows the question as plain text, URLs in the link color; its
-    // Markdown renders in the conversation. Link cards and tweet embeds still
-    // show.
+    // Markdown renders in the conversation. Link cards still show; a tweet
+    // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
       asQuestion(
         feedText(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question),
@@ -874,6 +870,7 @@ function ResearchActivityFeed({
                   attachments={query.attachments}
                   variant="compact"
                   renderPrompt={plainPrompt(asQuestion)}
+                  tweetLabels
                 />
               ) : (
                 <ResearchMessageBody
@@ -881,6 +878,7 @@ function ResearchActivityFeed({
                   attachments={query.attachments}
                   variant="compact"
                   renderPrompt={plainPrompt(asQuestion)}
+                  tweetLabels
                 />
               )}
             </ResearchUserMessage>

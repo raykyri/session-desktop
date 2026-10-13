@@ -884,6 +884,17 @@
   margin-top: 6px;
 }
 
+/* A card shows each tweet as a "[Tweet: @handle]" label in the faint text
+   color, on its own line under the question; the embed shows in the
+   conversation. */
+.research-message-tweet-labels {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: calc(var(--research-compact-font-size) + 1px);
+  line-height: var(--research-compact-line-height);
+  overflow-wrap: anywhere;
+}
+
 /* The drag handle and … button share a pill in the row's top-right corner.
    The pill appears on hover and focus and overlays the text without reserving
    space. Pointer events on the handle reach the row to start dragging. */
