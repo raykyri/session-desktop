@@ -1,4 +1,6 @@
-use std::process::{Child, Command};
+use std::process::Child;
+#[cfg(target_os = "macos")]
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 

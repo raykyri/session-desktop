@@ -171,6 +171,9 @@ fn customize_app_menu(app: &tauri::App) -> tauri::Result<()> {
                 submenu.remove(predefined)?;
                 submenu.insert(&replacement, index)?;
             }
+            // Only the macOS Quit replacement needs the item's slot.
+            #[cfg(not(target_os = "macos"))]
+            let _ = index;
         }
     }
     app.set_menu(menu)?;
@@ -3174,6 +3177,7 @@ impl InterfaceHealthTracker {
         }
     }
 
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     fn begin(&self) -> u64 {
         let mut state = self.state.lock().unwrap_or_else(|err| err.into_inner());
         state.generation = state.generation.wrapping_add(1);
@@ -3198,6 +3202,7 @@ impl InterfaceHealthTracker {
         state.reload_claimed = false;
     }
 
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     fn claim_unanswered_reload(&self, generation: u64) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|err| err.into_inner());
         if state.generation != generation || state.acknowledged || state.reload_claimed {
@@ -3207,6 +3212,7 @@ impl InterfaceHealthTracker {
         true
     }
 
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     fn claim_reload(&self, generation: u64) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|err| err.into_inner());
         if state.generation != generation || state.reload_claimed {
@@ -3218,6 +3224,7 @@ impl InterfaceHealthTracker {
 
     /// True when a deferred reload retry for `generation` is still meaningful
     /// (same generation, not yet claimed, and still unanswered when required).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     fn reload_still_pending(&self, generation: u64, require_unanswered: bool) -> bool {
         let state = self.state.lock().unwrap_or_else(|err| err.into_inner());
         if state.generation != generation || state.reload_claimed {
@@ -3231,6 +3238,7 @@ impl InterfaceHealthTracker {
 }
 
 static INTERFACE_HEALTH: InterfaceHealthTracker = InterfaceHealthTracker::new();
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const INTERFACE_HEALTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 pub(crate) fn cancel_interface_health_probe() {
@@ -3247,6 +3255,7 @@ fn acknowledge_interface_health_probe(generation: u64) {
 /// WKWebView to exercise the compositor; this event/ack round trip waits for
 /// frontend animation frames and proves the document can still schedule paint.
 #[cfg(desktop)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
     let generation = INTERFACE_HEALTH.begin();
     state.emit(events::SessionEvent::new(
@@ -3267,17 +3276,19 @@ pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
     generation
 }
 
-/// Called by the native WKWebView snapshot watchdog when the compositor fails
-/// or never completes. Reload only the webview; research and PTY processes stay
-/// alive through the same reset path as the manual recovery command.
-#[cfg(desktop)]
 /// How long to wait before retrying a health-driven reload that was deferred
 /// because the main window was unfocused, minimized, or hidden. Short enough
 /// that returning to Session recovers a hung document quickly; claim helpers
 /// no-op if the generation was cancelled or already reloaded.
+#[cfg(desktop)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const INTERFACE_HEALTH_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// Called by the native WKWebView snapshot watchdog when the compositor fails
+/// or never completes. Reload only the webview; research and PTY processes stay
+/// alive through the same reset path as the manual recovery command.
 #[cfg(desktop)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn request_unhealthy_interface_reload(
     state: AppState,
     generation: u64,

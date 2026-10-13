@@ -67,7 +67,9 @@ Write the block as ```session-html, then the fragment, then ``` on its own line.
 static SCRIPTS_ALLOWED: AtomicBool = AtomicBool::new(false);
 
 /// Records whether widget scripts may run in this process: true only once the
-/// app web view has WebRTC turned off (see `main.rs` startup).
+/// app web view has WebRTC turned off (see `main.rs` startup). Only the macOS
+/// startup path and tests call it; other platforms keep scripts off.
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
 pub fn set_scripts_allowed(allowed: bool) {
     SCRIPTS_ALLOWED.store(allowed, Ordering::SeqCst);
 }

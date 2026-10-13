@@ -2512,7 +2512,6 @@ mod tests {
     use crate::transcript::TurnBlock;
     use crate::workspace::{GroupInfo, RemoteMultiplexer, RemoteRef, WorkspaceScope};
     use portable_pty::{Child, ChildKiller, ExitStatus, PtySize, native_pty_system};
-    use std::env;
     use std::io::{self, Write};
     use std::os::unix::fs::PermissionsExt;
     use std::sync::{Arc, Mutex};
