@@ -132,6 +132,16 @@ export function pasteAttachesImages(text: string, fileNames: readonly string[], 
   return lines.length === 1 && /^(https?:\/\/|file:\/\/|data:image\/)\S+$/i.test(lines[0]);
 }
 
+/** The files of a drop by name (the last path component), in order, so a
+ * DOM drop (file names) and the window's native drop (paths) of the same
+ * files compare equal. */
+export function researchDropKey(namesOrPaths: readonly string[]): string {
+  return namesOrPaths
+    .map((name) => name.split(/[\\/]/).pop() ?? name)
+    .sort()
+    .join("\n");
+}
+
 /** The files of a paste or drop. Clipboard images appear only as items. */
 export function filesFromDataTransfer(data: DataTransfer | null): File[] {
   if (!data) return [];

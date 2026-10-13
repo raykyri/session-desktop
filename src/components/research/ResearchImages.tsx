@@ -17,6 +17,7 @@ import {
   dragCarriesFiles,
   filesFromDataTransfer,
   pasteAttachesImages,
+  researchDropKey,
   RESEARCH_IMAGE_COUNT_ERROR,
   RESEARCH_IMAGE_MAX_COUNT,
   researchImageAlt,
@@ -25,7 +26,8 @@ import {
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** A file drop can reach the page both as a DOM drop and as the window's
- * native drop; the second within this window is the same drop. */
+ * native drop. A second drop of the same file names within this window is
+ * the same drop; a drop of other files is not. */
 const DUPLICATE_DROP_MS = 1_000;
 
 // Data URLs of recently shown thumbnails and full images, most recent
@@ -219,7 +221,16 @@ export function useResearchImageInput({
   countRef.current = images.length + saving;
   const onChangeRef = useRef(onImagesChange);
   onChangeRef.current = onImagesChange;
-  const lastDropRef = useRef(0);
+  const lastDropRef = useRef<{ at: number; names: string } | null>(null);
+  /** Records a drop of files with these names, and returns whether it
+   * repeats the last one. */
+  const repeatsLastDrop = useCallback((names: readonly string[]) => {
+    const key = researchDropKey(names);
+    const last = lastDropRef.current;
+    const now = Date.now();
+    lastDropRef.current = { at: now, names: key };
+    return Boolean(last && last.names === key && now - last.at < DUPLICATE_DROP_MS);
+  }, []);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -279,12 +290,13 @@ export function useResearchImageInput({
       .onDragDropEvent(({ payload }) => {
         const target = dropTarget.current;
         if (payload.type !== "drop" || !target || payload.paths.length === 0) return;
-        const rect = target.getBoundingClientRect();
         const x = payload.position.x / window.devicePixelRatio;
         const y = payload.position.y / window.devicePixelRatio;
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
-        if (Date.now() - lastDropRef.current < DUPLICATE_DROP_MS) return;
-        lastDropRef.current = Date.now();
+        // The element on top at the drop point must be in the composer: a
+        // dialog or the image lightbox over it takes the drop instead.
+        const topmost = document.elementFromPoint(x, y);
+        if (!topmost || !target.contains(topmost)) return;
+        if (repeatsLastDrop(payload.paths)) return;
         addPaths(payload.paths);
       })
       .then((cleanup) => {
@@ -296,7 +308,7 @@ export function useResearchImageInput({
       disposed = true;
       unlisten?.();
     };
-  }, [addPaths, dropTarget, enabled]);
+  }, [addPaths, dropTarget, enabled, repeatsLastDrop]);
 
   const onPaste = useCallback(
     (event: ClipboardEvent<HTMLElement>) => {
@@ -325,11 +337,10 @@ export function useResearchImageInput({
       const files = filesFromDataTransfer(event.dataTransfer);
       if (files.length === 0) return;
       event.preventDefault();
-      if (Date.now() - lastDropRef.current < DUPLICATE_DROP_MS) return;
-      lastDropRef.current = Date.now();
+      if (repeatsLastDrop(files.map((file) => file.name))) return;
       addFiles(files);
     },
-    [addFiles, enabled],
+    [addFiles, enabled, repeatsLastDrop],
   );
   const remove = useCallback((id: string) => {
     setError(null);

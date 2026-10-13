@@ -15,6 +15,7 @@ import {
   researchImageAlt,
   researchImageBlockReason,
   pasteAttachesImages,
+  researchDropKey,
   researchImageLabel,
   researchImages,
 } from "../src/lib/researchImages";
@@ -90,6 +91,11 @@ test("a paste attaches its images unless it carries text of its own", () => {
   assert.equal(pasteAttachesImages("Revenue", ["image.png"], "<table><tr><td>Revenue</td></tr></table>"), false);
   assert.equal(pasteAttachesImages("1234", ["image.png"]), false);
   assert.equal(pasteAttachesImages("Logo", ["image.png"], '<p>Logo <img src="a.png"></p>'), false);
+});
+
+test("a DOM drop and the native drop of the same files compare equal", () => {
+  assert.equal(researchDropKey(["b.png", "a.png"]), researchDropKey(["/Users/me/a.png", "/Users/me/b.png"]));
+  assert.notEqual(researchDropKey(["a.png"]), researchDropKey(["/Users/me/c.png"]));
 });
 
 test("images are labelled by count and named by file name", () => {
