@@ -3504,64 +3504,6 @@ impl AppState {
             .ok_or_else(|| format!("artifact {artifact_id} was not found"))
     }
 
-    /// Removes an artifact-tray entry and returns it, so the tray's undo can
-    /// restore it verbatim. Emits `artifact.removed`.
-    pub fn remove_artifact(&self, artifact_id: &str) -> Result<ArtifactInfo, String> {
-        let removed = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let index = model
-                .artifacts
-                .iter()
-                .position(|entry| entry.id == artifact_id)
-                .ok_or_else(|| format!("artifact {artifact_id} was not found"))?;
-            model.artifacts.remove(index)
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "artifact.removed",
-            Some(removed.pane_id.clone()),
-            None,
-            serde_json::json!({ "id": removed.id }),
-        ));
-        Ok(removed)
-    }
-
-    /// Reinserts a previously removed artifact at its chronological position
-    /// (tray undo). A duplicate id is a no-op so a double-undo can't clone rows.
-    /// Emits `artifact.added`.
-    pub fn restore_artifact(&self, mut artifact: ArtifactInfo) -> Result<(), String> {
-        normalize_artifact_target(&mut artifact)
-            .ok_or_else(|| "an artifact needs a valid path or loopback URL".to_string())?;
-        {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if model.artifacts.iter().any(|entry| entry.id == artifact.id) {
-                return Ok(());
-            }
-            let index = model
-                .artifacts
-                .iter()
-                .position(|entry| entry.created_at > artifact.created_at)
-                .unwrap_or(model.artifacts.len());
-            model.artifacts.insert(index, artifact.clone());
-        }
-        self.persist();
-        self.emit(SessionEvent::new(
-            "artifact.added",
-            Some(artifact.pane_id.clone()),
-            None,
-            serde_json::json!({ "artifact": artifact, "removedIds": [] }),
-        ));
-        Ok(())
-    }
-
     /// Removes and returns the agent-session resume queued for `pane_id` at restore, if
     /// any. One-shot: consumed by the pane's respawn so a later relaunch of the same
     /// pane id never re-triggers it.
@@ -13055,15 +12997,7 @@ mod tests {
             .record_artifact("pane-1", None, Some("http://localhost:5173/".to_string()))
             .unwrap();
 
-        // Remove + restore round-trips the entry (the tray's undo); a repeated
-        // restore of the same id stays a no-op.
-        let removed = state.remove_artifact(&bumped.id).unwrap();
-        assert_eq!(state.list_artifacts().unwrap().len(), 1);
-        state.restore_artifact(removed.clone()).unwrap();
-        state.restore_artifact(removed.clone()).unwrap();
-        let listed = state.list_artifacts().unwrap();
-        assert_eq!(listed.len(), 2);
-        assert!(listed.iter().any(|entry| entry.id == removed.id));
+        assert_eq!(state.list_artifacts().unwrap().len(), 2);
 
         // The per-group cap evicts the oldest entries first.
         for index in 0..MAX_ARTIFACTS_PER_GROUP {
@@ -13073,7 +13007,7 @@ mod tests {
         }
         let listed = state.list_artifacts().unwrap();
         assert_eq!(listed.len(), MAX_ARTIFACTS_PER_GROUP);
-        assert!(listed.iter().all(|entry| entry.id != removed.id));
+        assert!(listed.iter().all(|entry| entry.id != bumped.id));
 
         // Test-mode mutations persist synchronously: the snapshot carries the
         // tray, and a reload prunes entries whose group has been deleted.

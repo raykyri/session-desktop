@@ -70,7 +70,7 @@ use show_hide_shortcut::{
 };
 use sleep::SleepGuard;
 use state::{
-    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ResearchRelaunch,
+    AppState, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ResearchRelaunch,
     ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
@@ -999,103 +999,6 @@ fn browser_open_local_path_external(
         .as_deref()
         .ok_or_else(|| "local path resolution returned no source file".to_string())?;
     open_path_with_default_app(source)
-}
-
-#[tauri::command]
-fn artifact_list(state: tauri::State<'_, AppState>) -> Result<Vec<ArtifactInfo>, String> {
-    state.list_artifacts()
-}
-
-/// Removes an artifact-tray entry, returning it so the frontend can offer undo.
-#[tauri::command]
-fn artifact_remove(
-    state: tauri::State<'_, AppState>,
-    artifact_id: String,
-) -> Result<ArtifactInfo, String> {
-    state.remove_artifact(&artifact_id)
-}
-
-/// Reinserts a previously removed artifact (the tray's undo).
-#[tauri::command]
-fn artifact_restore(
-    state: tauri::State<'_, AppState>,
-    artifact: ArtifactInfo,
-) -> Result<(), String> {
-    state.restore_artifact(artifact)
-}
-
-/// Opens an artifact outside session: URL artifacts in the default browser, file
-/// artifacts with the OS default app for that file type (a browser for .html).
-/// The target comes from Session state by id, never from arbitrary frontend input.
-#[tauri::command(async)]
-fn artifact_open_external(
-    state: tauri::State<'_, AppState>,
-    artifact_id: String,
-) -> Result<(), String> {
-    let artifact = state.artifact(&artifact_id)?;
-    if let Some(url) = &artifact.url {
-        return open_in_os_browser(url);
-    }
-    let path = artifact
-        .path
-        .as_deref()
-        .ok_or_else(|| "artifact has no target".to_string())?;
-    if !std::path::Path::new(path).exists() {
-        return Err(format!("'{path}' no longer exists"));
-    }
-    open_path_with_default_app(std::path::Path::new(path))
-}
-
-/// Mints a token-scoped file-server URL for a file artifact so the tray can
-/// render tiny thumbnails/previews. None (rather than an error) when the source
-/// pane is gone — file tokens are per-pane — or the artifact is a URL or the
-/// file moved outside the pane's roots/exact grants; the tray falls back to a
-/// glyph tile.
-#[tauri::command]
-fn artifact_file_url(
-    state: tauri::State<'_, AppState>,
-    artifact_id: String,
-) -> Result<Option<String>, String> {
-    let artifact = state.artifact(&artifact_id)?;
-    let Some(path) = artifact.path.as_deref() else {
-        return Ok(None);
-    };
-    if !state.pane_exists(&artifact.pane_id)? {
-        return Ok(None);
-    }
-    let Some(port) = state.file_server_port() else {
-        return Ok(None);
-    };
-    let Ok(token) = state.pane_file_token(&artifact.pane_id) else {
-        return Ok(None);
-    };
-    if remote_files::resolve_staged_file(&state.config().workspace_root, std::path::Path::new(path))
-        .is_some()
-    {
-        grant_staged_artifact_to_pane(&state, &artifact.pane_id, &artifact.id, path)?;
-    }
-    let roots = state.pane_file_roots(&artifact.pane_id);
-    let grants = state.pane_file_preview_grants(&artifact.pane_id);
-    let Some(canonical) = file_server::resolve_under_roots(std::path::Path::new(path), &roots)
-        .or_else(|| file_server::resolve_exact_file(std::path::Path::new(path), &grants))
-    else {
-        return Ok(None);
-    };
-    Ok(Some(file_server::file_url(port, &token, &canonical)))
-}
-
-/// Reveals a file artifact in the OS file manager, selecting the file itself.
-#[tauri::command(async)]
-fn artifact_reveal(state: tauri::State<'_, AppState>, artifact_id: String) -> Result<(), String> {
-    let artifact = state.artifact(&artifact_id)?;
-    let path = artifact
-        .path
-        .as_deref()
-        .ok_or_else(|| "URL artifacts have no folder to open".to_string())?;
-    if !std::path::Path::new(path).exists() {
-        return Err(format!("'{path}' no longer exists"));
-    }
-    reveal_path_in_file_manager(std::path::Path::new(path))
 }
 
 #[cfg(target_os = "macos")]
@@ -3707,12 +3610,6 @@ fn main() {
             browser_open_local_path_external,
             browser_open_codex_inline_visualization,
             browser_open_codex_visualization_reference,
-            artifact_list,
-            artifact_remove,
-            artifact_restore,
-            artifact_open_external,
-            artifact_reveal,
-            artifact_file_url,
             list_panes,
             list_groups,
             list_research_workspaces,
