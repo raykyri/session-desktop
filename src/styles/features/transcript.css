@@ -780,9 +780,11 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   border-bottom-color: var(--markdown-table-header-border);
 }
 
+/* Twice the paragraph gap above and below; a block's 0.72em bottom margin
+   collapses into the top margin. */
 .turn-markdown hr {
   height: 1px;
-  margin: 10px 0;
+  margin: 1.44em 0;
   border: 0;
   background: var(--surface-border-strong);
 }
