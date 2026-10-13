@@ -2348,6 +2348,18 @@
   line-height: 1.6;
 }
 
+/* A note's text as the note column shows it (.turn-markdown.research-prose in
+   .research-turn-prompt): the reading surface's body size and line height,
+   heading colour, regular weight, no common ligatures. The family is the UI
+   face both inherit. Paragraph spacing has no textarea equivalent. */
+.research-editor-field.is-note {
+  color: var(--text-heading);
+  font-size: var(--research-body-font-size);
+  font-variant-ligatures: no-common-ligatures;
+  font-weight: 400;
+  line-height: var(--research-body-line-height);
+}
+
 .research-editor-title:focus,
 .research-editor-field:focus {
   outline: none;

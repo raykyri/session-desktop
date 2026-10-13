@@ -148,7 +148,9 @@ export function ResearchEditorColumn({
     >
       <ResearchPairHeader title={heading} history={history} />
       <div className="research-column-scroll">
-        <div className="research-editor">
+        {/* A note's field is set in the note column's reading scale, which
+            the reading surface defines. */}
+        <div className={`research-editor${kind === "post" ? " research-reading-surface" : ""}`}>
           {title ? (
             <input
               className="research-editor-title"
@@ -161,7 +163,7 @@ export function ResearchEditorColumn({
           ) : null}
           <textarea
             ref={setField}
-            className={`research-editor-field${kind === "document" ? " is-source" : ""}`}
+            className={`research-editor-field${kind === "document" ? " is-source" : " is-note"}`}
             value={value}
             spellCheck={kind === "post"}
             aria-label={kind === "document" ? "Document Markdown" : "Note text"}

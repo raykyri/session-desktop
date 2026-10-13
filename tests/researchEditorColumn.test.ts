@@ -194,3 +194,12 @@ test("a named Custom option is labelled with its name, so the menu's trigger sho
   // Another agent's Custom option keeps its label.
   assert.equal(options.find((option) => option.value === "codex:custom")?.label, "Custom");
 });
+
+test("a note's field is set in the reading scale and a document's in the source face", () => {
+  const note = editor("A note");
+  assert.match(note, /class="research-editor research-reading-surface"/);
+  assert.match(note, /class="research-editor-field is-note"/);
+  const document = editor("# Doc", { kind: "document" });
+  assert.match(document, /class="research-editor"/);
+  assert.match(document, /class="research-editor-field is-source"/);
+});
