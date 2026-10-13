@@ -1,4 +1,4 @@
-import { collapseBlankLines, feedTextRuns } from "../../lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "../../lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "../../lib/researchNodeTypes";
 import { researchNoteEditable } from "../../lib/researchNoteEdit";
@@ -951,15 +951,20 @@ function ResearchActivityFeed({
     // Markdown renders in the conversation. Link cards still show; a tweet
     // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
     // A note, and a question still waiting for its title, show at most four
-    // lines in the muted color, with blank lines removed.
+    // lines in the muted color, with blank lines removed. A note whose first
+    // line is a Markdown heading shows that line in the card title's style.
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () => {
       const text = query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question;
+      if (!isPost && !awaitingTitle) return asQuestion(feedText(text));
+      const { heading, rest } = isPost ? splitNoteHeading(text) : { heading: null, rest: text };
+      const preview = collapseBlankLines(rest).trim();
       return asQuestion(
-        isPost || awaitingTitle ? (
-          <span className="research-feed-preview-text">{feedText(collapseBlankLines(text))}</span>
-        ) : (
-          feedText(text)
-        ),
+        <>
+          {heading ? <span className="research-feed-card-title research-feed-note-heading">{heading}</span> : null}
+          {preview ? (
+            <span className={`research-feed-preview-text${heading ? " is-after-heading" : ""}`}>{feedText(preview)}</span>
+          ) : null}
+        </>,
       );
     };
     const name = title ?? question;

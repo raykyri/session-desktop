@@ -35,3 +35,17 @@ export function feedTextRuns(text: string): FeedTextRun[] {
 export function collapseBlankLines(text: string): string {
   return text.replace(/\r?\n(?:[ \t]*\r?\n)+/g, "\n");
 }
+
+const NOTE_HEADING = /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
+
+/** A note whose first line is a Markdown heading ("# Title"): the heading's
+ * text without its markers, and the text after that line. `heading` is null
+ * when the first line is not a heading. */
+export function splitNoteHeading(text: string): { heading: string | null; rest: string } {
+  const lineEnd = text.search(/\r?\n/);
+  const first = lineEnd < 0 ? text : text.slice(0, lineEnd);
+  const match = NOTE_HEADING.exec(first);
+  const heading = match?.[1]?.trim();
+  if (!heading) return { heading: null, rest: text };
+  return { heading, rest: lineEnd < 0 ? "" : text.slice(lineEnd).replace(/^\r?\n/, "") };
+}

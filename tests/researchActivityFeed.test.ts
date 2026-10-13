@@ -427,6 +427,14 @@ test("a question still waiting for its title shows in the clamped preview style;
   assert.doesNotMatch(titled, /research-feed-preview-text/);
 });
 
+test("a note whose first line is a Markdown heading shows that line in the title style", () => {
+  const note = { ...savedLink, nodeId: "note", treeId: "note-tree", prompt: "## Wikisim\n\nCompelling demo\n# Not a title", format: "text" as const };
+  const html = renderFeed({ items: [note], researchTrees: [{ ...tree, id: "note-tree", rootNodeId: "note", type: "post" as const }] });
+  assert.match(html, /<span class="research-feed-card-title research-feed-note-heading">Wikisim<\/span><span class="research-feed-preview-text is-after-heading">Compelling demo\n# Not a title<\/span>/);
+  const plain = renderFeed({ items: [{ ...note, prompt: "Wikisim\nCompelling demo" }], researchTrees: [{ ...tree, id: "note-tree", rootNodeId: "note", type: "post" as const }] });
+  assert.doesNotMatch(plain, /research-feed-note-heading/);
+});
+
 test("Home lists Unfiled trees in the tree order; a card whose root is not loaded shows its title", () => {
   const html = renderFeed({
     items: [

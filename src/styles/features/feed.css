@@ -925,6 +925,19 @@
   -webkit-line-clamp: 4;
 }
 
+/* A note whose first line is a Markdown heading: the heading in the card
+   title's style, then at most three lines of the rest. */
+.research-feed-note-heading {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+}
+
+.research-feed-preview-text.is-after-heading {
+  -webkit-line-clamp: 3;
+}
+
 /* A card shows each tweet as a "[Tweet: @handle]" label in the faint text
    color, on its own line under the question; the embed shows in the
    conversation. */

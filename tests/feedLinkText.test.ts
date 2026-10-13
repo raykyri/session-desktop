@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collapseBlankLines, feedTextRuns } from "../src/lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "../src/lib/feedLinkText";
 
 test("feed text splits http(s) URLs from the text around them", () => {
   assert.deepEqual(feedTextRuns("See https://example.com/a?b=1 for details"), [
@@ -33,4 +33,12 @@ test("blank lines between a note's paragraphs collapse to one line break", () =>
   assert.equal(collapseBlankLines("One\r\n\r\nTwo"), "One\nTwo");
   assert.equal(collapseBlankLines("One\nTwo"), "One\nTwo");
   assert.equal(collapseBlankLines("No breaks"), "No breaks");
+});
+
+test("a note's first-line Markdown heading is split from the rest", () => {
+  assert.deepEqual(splitNoteHeading("# Wikisim\nCompelling demo"), { heading: "Wikisim", rest: "Compelling demo" });
+  assert.deepEqual(splitNoteHeading("### Plan ###"), { heading: "Plan", rest: "" });
+  assert.deepEqual(splitNoteHeading("Plain first line\n# Later heading"), { heading: null, rest: "Plain first line\n# Later heading" });
+  assert.deepEqual(splitNoteHeading("#hashtag only"), { heading: null, rest: "#hashtag only" });
+  assert.deepEqual(splitNoteHeading("#   \nBody"), { heading: null, rest: "#   \nBody" });
 });
