@@ -360,7 +360,7 @@ function MarkdownCode({
   const artifactLinks = useContext(TranscriptArtifactLinksContext);
   const localHtmlUrl = markedValue(node, LOCAL_HTML_DATA_KEY);
   const filePath = markedValue(node, LOCAL_FILE_PATH_DATA_KEY);
-  // Pane-backed transcripts opt into artifactLinks; research documents and
+  // Run activity opts into artifactLinks; research documents and
   // compact labels share this renderer but have no cwd to resolve against.
   if (artifactLinks && filePath) {
     return (
@@ -873,7 +873,8 @@ interface TranscriptMarkdownProps {
   inline?: boolean;
   /** Add explicit browser controls to launchable artifacts in transcript prose.
    * Disabled by default because this renderer also serves research documents
-   * and compact labels that have no owning terminal pane. */
+   * and compact labels, which have no working directory to resolve local
+   * paths against. */
   artifactLinks?: boolean;
   /** Display complete `session-html` blocks as sandboxed widget frames.
    * Without it such blocks render as ordinary code. */

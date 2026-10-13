@@ -7,9 +7,9 @@ enum WebAppShortcutResponderState: Int32 {
 
 /// The browser overlay owns bare Escape before AppKit chooses between the
 /// native support host, the outer app webview, and either embedded browser
-/// document. Shift is deliberately ignored, matching the existing DOM and
-/// terminal Escape handlers; Command/Control/Option variants keep their native
-/// meaning and continue through the responder chain.
+/// document. Shift is deliberately ignored, matching the DOM Escape handlers;
+/// Command/Control/Option variants keep their native meaning and continue
+/// through the responder chain.
 func shouldClaimBrowserEscape(
     browserOverlayOpen: Bool,
     key: String?,

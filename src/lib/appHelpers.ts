@@ -124,8 +124,8 @@ export function upsertAgent(agents: AgentInfo[], updated: AgentInfo): AgentInfo[
   return unchanged ? agents : next;
 }
 
-// On macOS the find shortcut is Cmd-F; on other platforms it is Ctrl-F. (Ctrl-F
-// is readline's forward-char, so on the Mac we leave it for the terminal.)
+// On macOS the find shortcut is Cmd-F; on other platforms it is Ctrl-F. (On the
+// Mac, Ctrl-F is the text system's forward-char.)
 export const IS_MAC =
   typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent);
 

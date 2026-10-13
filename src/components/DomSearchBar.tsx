@@ -108,9 +108,8 @@ export default function DomSearchBar({
     };
   }, []);
 
-  // Cmd-F (macOS) / Ctrl-F opens the active rendered pane's find bar. A native
-  // terminal keeps ownership while focused, and editables outside this pane
-  // keep the chord for their own surface.
+  // Cmd-F (macOS) / Ctrl-F opens the active rendered pane's find bar.
+  // Editables outside this pane keep the chord for their own surface.
   const onActivateRef = useRef(onActivate);
   onActivateRef.current = onActivate;
   const canActivate = Boolean(onActivate);
@@ -142,7 +141,7 @@ export default function DomSearchBar({
         onActivateRef.current?.();
       }
       setOpen(true);
-      // Select even when the bar is already open, matching native terminal find.
+      // Select the query even when the bar is already open.
       window.requestAnimationFrame(() => {
         inputRef.current?.focus();
         inputRef.current?.select();

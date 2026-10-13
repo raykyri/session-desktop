@@ -2309,9 +2309,9 @@ fn main() {
                         eprintln!("session: failed to apply window vibrancy: {err}");
                     }
                 }
-                // Loopback static server for the browser overlay. Start before the
-                // control socket so an early `session open` (or a transcript file link)
-                // that races startup cannot hit "the file server is not running".
+                // Loopback static server for the browser overlay. Start it early
+                // so a transcript file link that races startup cannot hit "the
+                // file server is not running".
                 // Best-effort: if it can't bind, the app still runs (file previews
                 // just won't work until relaunch).
                 match file_server::start_file_server(state.clone()) {

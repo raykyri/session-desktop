@@ -41,7 +41,7 @@
   box-shadow: var(--context-menu-shadow);
 }
 
-/* Right-click action for a transcript/terminal link. */
+/* Right-click action for a transcript link. */
 .link-context-menu {
   z-index: var(--z-context-menu);
   gap: 2px;

@@ -6,15 +6,9 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Adapter for the xAI Grok Build CLI. Grok ships a Claude-compatible hook system
-/// (shell commands run at lifecycle events, event JSON on stdin), so Session integrates
-/// it like its Claude and Codex adapters: a Session-managed
-/// hook file is installed at `~/.grok/hooks/session.json` and a shim forwards each
-/// lifecycle event back to Session via `session notify <event>`. The hook command no-ops
-/// outside Session (it checks for the `SESSION_*` env vars only Session-launched panes set),
-/// so standalone `grok` runs are unaffected. Agent status (running, idle, awaiting
-/// permission) is driven by these hooks; the transcript timeline binds to the
-/// transcript path the `SessionStart` hook reports when Grok provides one.
+/// Adapter for the xAI Grok Build CLI. Research runs start it headlessly (see
+/// `research_runtime`); this adapter resolves its executable and finds and
+/// parses the session transcripts Grok writes under its config home.
 #[derive(Clone, Debug)]
 pub struct GrokAdapter {
     binary: String,
@@ -73,7 +67,7 @@ fn grok_home() -> Result<PathBuf, String> {
     env::var_os("GROK_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".grok")))
-        .ok_or_else(|| "GROK_HOME and HOME are not set; cannot configure Grok hooks".to_string())
+        .ok_or_else(|| "GROK_HOME and HOME are not set; cannot locate Grok sessions".to_string())
 }
 
 /// Native Grok conversations live at

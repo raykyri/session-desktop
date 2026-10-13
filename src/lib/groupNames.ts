@@ -1,5 +1,5 @@
-// Default and displayed names of groups (research workspaces and terminal
-// groups), derived from their directories.
+// Default and displayed names of groups (research workspaces), derived from
+// their directories.
 import type { GroupInfo } from "../types";
 
 /** The directories group directory labels are shown relative to. */

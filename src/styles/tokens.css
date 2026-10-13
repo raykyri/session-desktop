@@ -258,7 +258,7 @@
   --toast-warning-border: #e9b65d;
   --toast-error-fg: #ed8a8a;
   --toast-error-border: #e07979;
-  /* Amber attention badges on terminal tabs (needs-input / bell). */
+  /* Amber attention badges (find-bar match highlights). */
   --attention-badge-bg: #665a2b;
   --attention-badge-fg: #f4f4ef;
   --attention-badge-bg-strong: #a8842f;

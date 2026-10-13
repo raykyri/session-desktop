@@ -1,9 +1,9 @@
 import { useRef } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 
-// The find bar shared by native terminal search and DOM-range search in
-// transcripts and research documents. It owns only presentation and the
-// Enter/Shift+Enter/Escape keys; matching and focus stay with the host.
+// The find bar for DOM-range search in transcripts and research documents. It
+// owns only presentation and the Enter/Shift+Enter/Escape keys; matching and
+// focus stay with the host.
 export default function PaneSearchBar({
   inputRef,
   placeholder,

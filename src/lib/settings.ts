@@ -3,7 +3,7 @@ import { APP_TEXT_SIZE, APP_TEXT_SIZE_MIN, APP_TEXT_SIZE_MAX } from "./appearanc
 export interface BodyFontOption {
   id: string;
   label: string;
-  /** Full CSS font-family stack applied to non-terminal app UI. */
+  /** Full CSS font-family stack applied to the app UI. */
   stack: string;
   /** Full/PostScript local face names used to verify an optional installed font. */
   localNames?: readonly string[];

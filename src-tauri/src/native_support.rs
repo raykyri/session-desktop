@@ -462,8 +462,7 @@ pub extern "C" fn session_native_support_did_receive_app_shortcut(
     let Some(key) = callback_string(key) else {
         return 0;
     };
-    // Same delivery gate as the terminal-scoped classifier above: never
-    // consume a chord the frontend cannot receive.
+    // Never consume a chord the frontend cannot receive.
     if !events_listener_ready() {
         return 0;
     }

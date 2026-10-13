@@ -252,7 +252,7 @@
   box-shadow: 0 0 0 2px var(--accent-shadow);
 }
 
-/* Right-click chooser for a transcript/terminal link. Positioned at the pointer
+/* Right-click chooser for a transcript link. Positioned at the pointer
    (viewport coords), above the browser overlay and other chrome. */
 .link-context-menu {
   z-index: var(--z-context-menu);

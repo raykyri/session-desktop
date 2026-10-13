@@ -89,10 +89,10 @@ function cssPixelValue(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-// The browser overlay is positioned over the sidebar and center terminal (leaving a left
-// strip of the tabs visible) and renders a URL bound to the active tab. A minimal
-// navigation bar at the top shows the current URL and lets the user navigate. The
-// close control stays on the left while browser-engine selection stays on the right.
+// The browser overlay is inset over the main content area (full-width mode also
+// covers the sidebar) and renders a URL bound to its owner. A minimal navigation
+// bar at the top shows the current URL and lets the user navigate. The close
+// control stays on the left while browser-engine selection stays on the right.
 interface BrowserOverlayProps {
   paneId: string;
   url: string | null;

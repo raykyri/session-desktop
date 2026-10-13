@@ -5,7 +5,7 @@ import XCTest
 
 final class NativeSupportHostTests: XCTestCase {
     @MainActor
-    func testWindowlessAttachReloadAndShutdownDoNotNeedATerminalContainer() {
+    func testWindowlessAttachReloadAndShutdown() {
         let host = NativeSupportHost.shared
         defer { host.shutdown() }
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))

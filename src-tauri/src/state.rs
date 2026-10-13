@@ -382,7 +382,7 @@ impl AppState {
 
     /// Empty, session-managed working directory used when the user has not chosen
     /// a project for research. It is deliberately separate from `.session`, which
-    /// contains private state and terminal credentials.
+    /// contains private state and credentials.
     pub fn default_research_dir(&self) -> std::path::PathBuf {
         self.inner
             .config
@@ -4414,8 +4414,8 @@ impl AppState {
             // via the ordinary agent machinery, and nothing else ever reaps
             // them once the run's agent is pruned — deleting the tree is the
             // last point where the node still links run to record. Skip any
-            // record a live agent still references (a pane teardown may be
-            // settling concurrently); it is re-reaped only if its tree is
+            // record a live agent still references (its run may be settling
+            // concurrently); it is re-reaped only if its tree is
             // removed again, so erring towards keeping is safe.
             let thread_ids = model
                 .research_nodes
@@ -5500,8 +5500,8 @@ impl AppState {
             // Hooks and transcript tailing deliver agent events asynchronously,
             // so a generic Running/Idle update can arrive after the run has
             // settled — most visibly after a user cancellation, where rewriting
-            // the status would return the run to an active state and let pane teardown
-            // re-settle it as Failed. Terminal outcomes stay as written.
+            // the status would return the run to an active state. Terminal
+            // outcomes stay as written.
             if !run.status.is_terminal() {
                 run.status = research_status_for_agent(agent.status);
                 if run.status.is_terminal() && run.completed_at.is_none() {

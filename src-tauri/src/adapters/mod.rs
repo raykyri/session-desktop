@@ -20,17 +20,17 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Single-quotes an arbitrary argument for safe interpolation into a POSIX shell
-/// command. Used to embed a session id into an adapter's resume command line.
+/// command. Used to build the login and update commands the setup guide shows.
 pub(crate) fn shell_quote_arg(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-/// Whether a `transcript_path` reported by an adapter's hook notification may be
-/// bound and tailed.
+/// Whether a `transcript_path` reported by a research run's Claude process (in
+/// its stream-JSON messages, or derived from its session id) may be bound and
+/// tailed.
 ///
-/// A hook arrives over the control socket carrying the pane's token, so a
-/// prompt-injected agent can forge a `SessionStart` and point `transcript_path`
-/// at any file. We can't fully validate the *first* path (SessionStart is how
+/// The path is process output, so a prompt-injected agent can point it at any
+/// file. We can't fully validate the *first* path (the init message is how
 /// Session discovers it, and the agent may not have written the file yet), but we
 /// constrain it several ways: a `.jsonl` extension, an absolute path (a relative
 /// one would resolve against an unknown cwd), and — when the target already
@@ -39,9 +39,8 @@ pub(crate) fn shell_quote_arg(value: &str) -> String {
 /// transcript is bound we additionally require any later path to be a sibling in
 /// the same session directory. Adapters keep a session's rollouts in one flat
 /// directory, so a legitimate rotation stays a sibling while a forged mid-session
-/// hook can no longer relocate the tail to an unrelated file (another agent's
-/// transcript, a device/FIFO, an arbitrary log). The Claude adapter delegates
-/// here so the guard stays single-sourced.
+/// path can no longer relocate the tail to an unrelated file (another agent's
+/// transcript, a device/FIFO, an arbitrary log).
 pub(crate) fn hook_transcript_path_acceptable(current: Option<&str>, candidate: &str) -> bool {
     let candidate = Path::new(candidate);
     if candidate.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
@@ -373,8 +372,8 @@ pub struct AdapterMetadata {
     pub resolved_binary: Option<String>,
     pub readiness: AdapterReadiness,
     pub message: Option<String>,
-    /// Headless Research can have stricter version/auth requirements than an
-    /// interactive terminal session.
+    /// Headless research can have stricter version/auth requirements than
+    /// `readiness`, which only reports whether the executable was found.
     pub research_readiness: AdapterReadiness,
     pub version: Option<String>,
     pub auth: AdapterAuthState,

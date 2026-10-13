@@ -445,7 +445,7 @@ pub enum ResearchNodeStatus {
 }
 
 impl ResearchNodeStatus {
-    /// A run that is still expected to produce a result (and may hold a pane).
+    /// A run that is still expected to produce a result.
     pub fn is_active(self) -> bool {
         matches!(self, Self::Queued | Self::Starting | Self::Running)
     }
@@ -679,7 +679,7 @@ pub struct RunBinding {
     #[serde(default, skip_serializing_if = "ResearchRuntime::is_pane")]
     pub runtime: ResearchRuntime,
     /// The run agent's thread-graph record id. The agent record itself is
-    /// pruned when the run's pane retires, so this is the only surviving link
+    /// pruned when the run ends, so this is the only surviving link
     /// from a node to its thread record — tree removal uses it to reap the
     /// record and its on-disk graph snapshot, which would otherwise
     /// accumulate one dead entry per run forever.

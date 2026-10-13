@@ -114,9 +114,8 @@ export function isSearchableText(node: Node): boolean {
 }
 
 // Collects a Range per match, in document order. Matches stay within a single
-// text node (like the terminal's per-line search). Matches with no client rects
-// are omitted because unrendered content (such as a collapsed <details>) cannot
-// be highlighted or scrolled to.
+// text node. Matches with no client rects are omitted because unrendered
+// content (such as a collapsed <details>) cannot be highlighted or scrolled to.
 export function collectSearchRanges(
   root: HTMLElement,
   term: string,

@@ -299,9 +299,8 @@ fn should_add_codex_turn(turn: &Turn, seen_native_message_ids: &mut HashSet<Stri
 /// it summarizes. The top-level `compacted` line itself does not appear as a
 /// turn; instead, each entry in `payload.replacement_history` becomes a turn
 /// with a synthetic source index derived from the parent line so it is unique
-/// and stable across re-reads. This makes the right pane transcript keep
-/// working after Codex replaces earlier `response_item` records with a compacted
-/// summary.
+/// and stable across re-reads. This keeps the transcript readable after Codex
+/// replaces earlier `response_item` records with a compacted summary.
 fn codex_compacted_record_turns(agent_id: &str, source_index: usize, value: &Value) -> Vec<Turn> {
     let Some(payload) = value.get("payload") else {
         return Vec::new();

@@ -614,7 +614,7 @@ pub struct HumanBrowserHideAllRequest {
 
 /// Collapse every native child. Used when React state already marks the overlay
 /// as closed but an AppKit hide was dropped, leaving a white WKWebView square
-/// over the terminal. Views stay in the map so a still-open owner can show
+/// over the app. Views stay in the map so a still-open owner can show
 /// again; destroy retires them when the overlay is actually closed.
 #[tauri::command]
 pub fn human_browser_hide_all(

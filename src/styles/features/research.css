@@ -2109,7 +2109,7 @@
   color: var(--accent-color);
 }
 
-/* Plain count like the terminal sidebar's group counts, not a pill. */
+/* A plain count, not a pill. */
 .research-menu-count {
   flex: none;
   color: var(--text-faint);
