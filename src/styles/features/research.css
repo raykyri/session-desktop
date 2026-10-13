@@ -2381,13 +2381,25 @@
   color: var(--status-failed-fg);
 }
 
+/* "Ask as a question" and its note on the left, Cancel and Save on the right,
+   on one line when the column is wide enough; the right group wraps under the
+   left one as a unit when it is not. */
 .research-editor-foot {
   display: flex;
   flex: none;
-  flex-direction: column;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   padding: 10px 16px 14px;
   border-top: 1px solid var(--surface-divider);
+}
+
+.research-editor-row + .research-editor-row {
+  margin-left: auto;
+}
+
+.research-editor-foot > .research-editor-error {
+  flex-basis: 100%;
 }
 
 .research-editor-row {
@@ -2435,6 +2447,7 @@
 }
 
 .research-editor-row.is-confirm {
+  flex: 1 1 100%;
   padding: 6px 8px;
   border-radius: var(--radius-md);
   background: var(--surface-fill-hover);
