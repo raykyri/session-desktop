@@ -1289,6 +1289,7 @@ mod tests {
                 prompt: "Newer".to_string(),
                 created_at: 200,
                 updated_at: 250,
+                attachments: Vec::new(),
             },
             ResearchDraft {
                 id: "research-draft-1".to_string(),
@@ -1296,6 +1297,7 @@ mod tests {
                 prompt: "Older".to_string(),
                 created_at: 100,
                 updated_at: 100,
+                attachments: Vec::new(),
             },
         ];
         let state = PersistedState {

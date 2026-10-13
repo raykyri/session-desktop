@@ -285,7 +285,7 @@ pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, worksp
 /// An unsent research question saved from the composer, scoped to one
 /// research workspace. Stored as one vector in `state.json`; its order is the
 /// display order within each workspace.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchDraft {
     pub id: String,
@@ -293,6 +293,10 @@ pub struct ResearchDraft {
     pub prompt: String,
     pub created_at: u128,
     pub updated_at: u128,
+    /// Images attached to the question (image attachments only). Absent in
+    /// drafts saved before drafts kept images.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::tweets::ResearchMessageAttachment>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

@@ -27,6 +27,7 @@ mod remote_transcript;
 mod research;
 mod research_anchors;
 mod research_artifacts;
+mod research_images;
 mod research_recap;
 mod research_runtime;
 mod research_widgets;
@@ -1545,8 +1546,14 @@ fn save_research_draft(
     id: Option<String>,
     workspace_id: String,
     prompt: String,
+    images: Option<Vec<research_images::ImageInput>>,
 ) -> Result<ResearchDraft, String> {
-    state.save_research_draft(id, &workspace_id, prompt)
+    let images = images
+        .map(|images| {
+            research_images::attachments_for_inputs(&state.config().workspace_root, &images)
+        })
+        .transpose()?;
+    state.save_research_draft_with_images(id, &workspace_id, prompt, images)
 }
 
 #[tauri::command]
@@ -1616,14 +1623,19 @@ async fn get_research_tree(
 async fn create_research_tree(
     state: tauri::State<'_, AppState>,
     request: CreateResearchTreeRequest,
+    images: Option<Vec<research_images::ImageInput>>,
 ) -> Result<ResearchTreeDetail, String> {
     let state = state.inner().clone();
-    let attachments = tweets::resolve_research_message_attachments(&request.prompt).await;
+    let mut attachments = tweets::resolve_research_message_attachments(&request.prompt).await;
     tauri::async_runtime::spawn_blocking(move || {
         // Probe before inserting a tree or reserving an agent. The frontend
         // performs the same preflight before creating a default workspace, but
         // this backend guard also covers stale UI state and direct IPC callers.
         adapters::ensure_adapter_ready_for_research(state.config(), &request.adapter)?;
+        attachments.extend(research_images::attachments_for_inputs(
+            &state.config().workspace_root,
+            images.as_deref().unwrap_or_default(),
+        )?);
         // Admission holds the workspace-mutation guard so a concurrent folder
         // removal can't slip between validation and the node insert —
         // the spawn itself runs unguarded (it's slow, and the Queued node
@@ -1862,6 +1874,39 @@ async fn save_pasted_image(data_base64: String, extension: String) -> Result<Str
     .map_err(|err| format!("save_pasted_image task failed: {err}"))?
 }
 
+/// Saves an image pasted or dropped into a research composer and returns its
+/// attachment. It stays pending until a question or draft that includes it
+/// is saved (see `research_images`).
+#[tauri::command]
+async fn save_research_image(
+    state: tauri::State<'_, AppState>,
+    data_base64: String,
+    file_name: Option<String>,
+) -> Result<tweets::ResearchMessageAttachment, String> {
+    let root = state.config().workspace_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        use base64::Engine as _;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data_base64.trim())
+            .map_err(|err| format!("failed to decode the image: {err}"))?;
+        research_images::save_pending(&root, &bytes, file_name.as_deref())
+    })
+    .await
+    .map_err(|err| format!("save_research_image task failed: {err}"))?
+}
+
+/// An image attached to a research message, as a `data:` URL.
+#[tauri::command]
+async fn read_research_image(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<String, String> {
+    let root = state.config().workspace_root.clone();
+    tauri::async_runtime::spawn_blocking(move || research_images::read_data_url(&root, &id))
+        .await
+        .map_err(|err| format!("read_research_image task failed: {err}"))?
+}
+
 /// The tree is committed before its root run launches so a crash mid-launch is
 /// recoverable, but a root that never launched holds nothing durable. Leaving
 /// retaining it after a launch failure accumulated obsolete entries the caller could not
@@ -1950,11 +1995,16 @@ async fn fork_research_node(
     anchor: Option<research::NodeAnchor>,
     inline: Option<bool>,
     replaces_node_id: Option<String>,
+    images: Option<Vec<research_images::ImageInput>>,
 ) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
-    let attachments = tweets::resolve_research_message_attachments(&prompt).await;
+    let mut attachments = tweets::resolve_research_message_attachments(&prompt).await;
     tauri::async_runtime::spawn_blocking(move || {
+        attachments.extend(research_images::attachments_for_inputs(
+            &state.config().workspace_root,
+            images.as_deref().unwrap_or_default(),
+        )?);
         // Same admission guard as create_research_tree: the Queued child must
         // be admitted atomically with the workspace checks, or a concurrent
         // folder removal could invalidate its workspace before the fork.
@@ -3753,6 +3803,8 @@ fn main() {
             update_research_post,
             read_transcript_image,
             save_pasted_image,
+            save_research_image,
+            read_research_image,
             get_research_node_content,
             fork_research_node,
             retry_research_node,

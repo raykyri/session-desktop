@@ -2381,12 +2381,12 @@ impl AppState {
             .collect::<HashMap<_, _>>();
         for node in persisted.research_nodes.values_mut() {
             // Attachment snapshots are an external-data cache. A malformed or
-            // hand-edited cache must not make the underlying research prompt
+            // hand-edited entry must not make the underlying research prompt
             // unrestorable; discard it so the original permalink stays visible.
             if crate::tweets::validate_research_message_attachments(node.attachments()).is_err()
                 && let Some(message) = node.message_mut()
             {
-                message.attachments.clear();
+                crate::tweets::retain_valid_research_message_attachments(&mut message.attachments);
                 research_reconciled = true;
             }
             if let Some(workspace_id) = tree_workspaces
@@ -2599,6 +2599,24 @@ impl AppState {
                 &self.inner.config.workspace_root,
                 &surviving_research_node_ids,
                 crate::research_artifacts::MAX_STORE_BYTES,
+            );
+            // No composer survives a restart, so pending images that no node
+            // or draft references were never sent.
+            let referenced_images = persisted
+                .research_nodes
+                .values()
+                .flat_map(|node| crate::research_images::image_ids(node.attachments()))
+                .chain(
+                    persisted
+                        .research_drafts
+                        .iter()
+                        .flat_map(|draft| crate::research_images::image_ids(&draft.attachments)),
+                )
+                .map(str::to_string)
+                .collect::<HashSet<_>>();
+            crate::research_images::sweep_pending(
+                &self.inner.config.workspace_root,
+                &referenced_images,
             );
         }
         migration_warnings.extend(migrate_thread_records_to_global(
@@ -4178,6 +4196,7 @@ impl AppState {
             return Err("research workspace cannot be empty".to_string());
         }
         crate::tweets::validate_research_message_attachments(&attachments)?;
+        crate::research_images::ensure_adapter_reads_images(&request.adapter, &attachments)?;
         let tree_id = self.next_id("research");
         let node_id = self.next_id("research-node");
         let now = now_millis();
@@ -4215,6 +4234,10 @@ impl AppState {
         );
         self.admit_research_root(&tree, &mut node)?;
         self.persist();
+        crate::research_images::commit(
+            &self.inner.config.workspace_root,
+            crate::research_images::image_ids(node.attachments()),
+        );
         self.emit(SessionEvent::new(
             "research.tree.created",
             None,
@@ -4645,7 +4668,10 @@ impl AppState {
             // An attached X post keeps the link it was captured from. A saved
             // link may otherwise take any text; its format follows the text.
             if let Some(url) = node.attachments().iter().find_map(|attachment| {
-                let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } = attachment;
+                let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } = attachment
+                else {
+                    return None;
+                };
                 (!text.contains(source_url.as_str())).then(|| source_url.clone())
             }) {
                 return Err(format!(
@@ -5353,6 +5379,7 @@ impl AppState {
                     parent.agent().cloned().unwrap_or_default()
                 }
             };
+            crate::research_images::ensure_adapter_reads_images(&agent.adapter, &attachments)?;
             let workspace = model
                 .groups
                 .get(&tree.workspace_id)
@@ -5392,6 +5419,10 @@ impl AppState {
         };
         let (node, reordered_head) = node;
         self.persist();
+        crate::research_images::commit(
+            &self.inner.config.workspace_root,
+            crate::research_images::image_ids(node.attachments()),
+        );
         self.emit(SessionEvent::new(
             "research.node.created",
             None,
@@ -6434,10 +6465,35 @@ impl AppState {
         workspace_id: &str,
         prompt: String,
     ) -> Result<research::ResearchDraft, String> {
+        self.save_research_draft_with_images(id, workspace_id, prompt, None)
+    }
+
+    /// As `save_research_draft`; `images` (image attachments only) replaces
+    /// the draft's images, and None keeps them. Images no longer attached are
+    /// released when nothing else references them.
+    pub fn save_research_draft_with_images(
+        &self,
+        id: Option<String>,
+        workspace_id: &str,
+        prompt: String,
+        images: Option<Vec<crate::tweets::ResearchMessageAttachment>>,
+    ) -> Result<research::ResearchDraft, String> {
         let prompt = prompt.trim().to_string();
         if prompt.is_empty() {
             return Err("Research draft prompt cannot be empty.".to_string());
         }
+        if let Some(images) = &images {
+            if images.iter().any(|attachment| {
+                !matches!(
+                    attachment,
+                    crate::tweets::ResearchMessageAttachment::Image { .. }
+                )
+            }) {
+                return Err("Research drafts keep only image attachments.".to_string());
+            }
+            crate::tweets::validate_research_message_attachments(images)?;
+        }
+        let mut replaced_images = Vec::new();
         let draft = {
             let mut model = self
                 .inner
@@ -6461,6 +6517,9 @@ impl AppState {
                         .ok_or_else(|| format!("Research draft {id} was not found."))?;
                     draft.prompt = prompt;
                     draft.updated_at = now;
+                    if let Some(images) = images {
+                        replaced_images = std::mem::replace(&mut draft.attachments, images);
+                    }
                     draft.clone()
                 }
                 None => {
@@ -6470,6 +6529,7 @@ impl AppState {
                         prompt,
                         created_at: now,
                         updated_at: now,
+                        attachments: images.unwrap_or_default(),
                     };
                     model.research_drafts.insert(0, draft.clone());
                     draft
@@ -6477,8 +6537,42 @@ impl AppState {
             }
         };
         self.persist();
+        crate::research_images::commit(
+            &self.inner.config.workspace_root,
+            crate::research_images::image_ids(&draft.attachments),
+        );
+        self.release_research_images(&replaced_images);
         self.emit_research_drafts_changed(workspace_id);
         Ok(draft)
+    }
+
+    /// Image ids that a research node or draft references.
+    pub fn research_image_ids_in_use(&self) -> Result<HashSet<String>, String> {
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        Ok(research_image_ids_locked(&model))
+    }
+
+    /// Releases the images in `attachments` that no research node or draft
+    /// references any more (see `crate::research_images`). Call after the
+    /// change that dropped the references.
+    fn release_research_images(&self, attachments: &[crate::tweets::ResearchMessageAttachment]) {
+        if crate::research_images::image_ids(attachments)
+            .next()
+            .is_none()
+        {
+            return;
+        }
+        let Ok(in_use) = self.research_image_ids_in_use() else {
+            return;
+        };
+        crate::research_images::release(
+            &self.inner.config.workspace_root,
+            crate::research_images::image_ids(attachments).filter(|id| !in_use.contains(*id)),
+        );
     }
 
     pub fn delete_research_draft(&self, draft_id: &str) -> Result<(), String> {
@@ -6496,6 +6590,7 @@ impl AppState {
             model.research_drafts.remove(index)
         };
         self.persist();
+        self.release_research_images(&draft.attachments);
         self.emit_research_drafts_changed(&draft.workspace_id);
         Ok(())
     }
@@ -6968,7 +7063,7 @@ impl AppState {
             .research_document_lock
             .lock()
             .map_err(|_| "research document lock poisoned".to_string())?;
-        let (removed, was_trashed, removed_node_ids, reaped_thread_records) = {
+        let (removed, was_trashed, removed_node_ids, reaped_thread_records, removed_images) = {
             let mut model = self
                 .inner
                 .model
@@ -7019,6 +7114,12 @@ impl AppState {
                         .any(|agent| agent.thread_id.as_deref() == Some(thread_id))
                 })
                 .collect::<Vec<_>>();
+            let removed_images = model
+                .research_nodes
+                .values()
+                .filter(|node| node.tree_id == tree_id)
+                .flat_map(|node| node.attachments().iter().cloned())
+                .collect::<Vec<_>>();
             let removed_tree = model.research_trees.remove(tree_id);
             let removed = removed_tree.is_some();
             let was_trashed = removed_tree.is_some_and(|tree| tree.is_trashed());
@@ -7045,13 +7146,20 @@ impl AppState {
             // A research tree references its durable workspace; it does not own
             // it. Other trees may use the same directory, so deleting a tree
             // never deletes the workspace record or anything in that directory.
-            (removed, was_trashed, node_ids, reaped_records)
+            (
+                removed,
+                was_trashed,
+                node_ids,
+                reaped_records,
+                removed_images,
+            )
         };
         if !removed {
             return Err(format!("research tree {tree_id} was not found"));
         }
         crate::research_artifacts::remove_tree(&self.inner.config.workspace_root, tree_id);
         self.persist();
+        self.release_research_images(&removed_images);
         self.emit(SessionEvent::new(
             "research.tree.removed",
             None,
@@ -7085,7 +7193,7 @@ impl AppState {
     }
 
     pub fn remove_research_branch(&self, node_id: &str) -> Result<ResearchBranchRemoval, String> {
-        let (removal, removed_node_ids, reaped_thread_records) = {
+        let (removal, removed_node_ids, reaped_thread_records, removed_images) = {
             let mut model = self
                 .inner
                 .model
@@ -7168,6 +7276,11 @@ impl AppState {
                     .get(id)
                     .map(|node| (node.created_at, node.id.clone()))
             });
+            let removed_images = removed_node_ids
+                .iter()
+                .filter_map(|id| model.research_nodes.get(id))
+                .flat_map(|node| node.attachments().iter().cloned())
+                .collect::<Vec<_>>();
             model
                 .research_nodes
                 .retain(|id, _| !removed_node_ids.contains(id));
@@ -7187,9 +7300,11 @@ impl AppState {
                 },
                 removed_node_ids,
                 reaped_thread_records,
+                removed_images,
             )
         };
         self.persist();
+        self.release_research_images(&removed_images);
         self.emit(SessionEvent::new(
             "research.node.removed",
             None,
@@ -12086,6 +12201,22 @@ fn restore_closed_agent_snapshot_locked(
     }
 }
 
+/// Image ids that a research node or draft references.
+fn research_image_ids_locked(model: &Model) -> HashSet<String> {
+    model
+        .research_nodes
+        .values()
+        .flat_map(|node| crate::research_images::image_ids(node.attachments()))
+        .chain(
+            model
+                .research_drafts
+                .iter()
+                .flat_map(|draft| crate::research_images::image_ids(&draft.attachments)),
+        )
+        .map(str::to_string)
+        .collect()
+}
+
 fn prune_agent_locked(model: &mut Model, agent_id: &str) {
     model.agents.remove(agent_id);
     model.turns.remove(agent_id);
@@ -14998,6 +15129,143 @@ mod tests {
         assert_eq!(inline_children, vec![edited.id.clone()]);
         // A running node is not replaceable.
         assert!(replace("Again", &edited.id).is_err());
+    }
+
+    #[test]
+    fn research_images_follow_the_messages_and_drafts_that_reference_them() {
+        use crate::research_images::{save_pending, store_dir};
+        use crate::tweets::ResearchMessageAttachment;
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x02\0\0\0\x02\x08\x06\0\0\0".to_vec();
+        let save = || save_pending(&workspace, &png, Some("shot.png")).unwrap();
+        let id_of = |attachment: &ResearchMessageAttachment| match attachment {
+            ResearchMessageAttachment::Image { id, .. } => id.clone(),
+            ResearchMessageAttachment::Tweet { .. } => unreachable!(),
+        };
+        let stored = |id: &str| store_dir(&workspace).join(id).is_file();
+        let pending = |id: &str| store_dir(&workspace).join("pending").join(id).is_file();
+        let request = |adapter: &str| CreateResearchTreeRequest {
+            prompt: "Root".to_string(),
+            title: None,
+            adapter: adapter.to_string(),
+            model: None,
+            effort: None,
+            group_id: "group-1".to_string(),
+        };
+
+        let state = AppState::new(config.clone());
+        assert!(state.restore_session().is_empty());
+        state.insert_group_after(sample_group(), None).unwrap();
+        let root_image = save();
+        let root_id = id_of(&root_image);
+        assert_eq!(
+            state
+                .create_research_tree_with_attachments(request("grok"), vec![root_image.clone()])
+                .unwrap_err(),
+            "Grok can't read images."
+        );
+        assert!(pending(&root_id));
+        let detail = state
+            .create_research_tree_with_attachments(request("claude"), vec![root_image.clone()])
+            .unwrap();
+        assert!(stored(&root_id) && !pending(&root_id));
+        let root = detail.tree.root_node_id.clone();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let node = model.research_nodes.get_mut(&root).unwrap();
+            node.run_mut().unwrap().status = ResearchNodeStatus::Complete;
+            node.binding_mut().unwrap().native_session_id = Some("session-root".to_string());
+            node.run_mut().unwrap().completed_at = Some(research::body_millis(now_millis()));
+        }
+
+        // Editing a failed question carries its image to the replacement, so
+        // removing the failed node keeps the image stored.
+        let child_image = save();
+        let child_id = id_of(&child_image);
+        let failed = state
+            .create_research_child_with_attachments(
+                &root,
+                "Branch".to_string(),
+                None,
+                false,
+                vec![child_image.clone()],
+            )
+            .unwrap();
+        assert!(stored(&child_id));
+        state
+            .fail_research_node(&failed.id, "settled".to_string())
+            .unwrap();
+        let replacement = state
+            .create_research_child_replacing(
+                &root,
+                "Branch, edited".to_string(),
+                None,
+                false,
+                vec![child_image],
+                &failed.id,
+            )
+            .unwrap();
+        state.remove_research_branch(&failed.id).unwrap();
+        assert!(stored(&child_id));
+        state
+            .fail_research_node(&replacement.id, "settled".to_string())
+            .unwrap();
+        state.remove_research_branch(&replacement.id).unwrap();
+        assert!(!stored(&child_id) && pending(&child_id));
+
+        // Drafts store their images and release the ones they drop.
+        let first = save();
+        let second = save();
+        let draft = state
+            .save_research_draft_with_images(
+                None,
+                "group-1",
+                "Draft".to_string(),
+                Some(vec![first.clone(), second.clone()]),
+            )
+            .unwrap();
+        assert!(stored(&id_of(&first)) && stored(&id_of(&second)));
+        state
+            .save_research_draft_with_images(
+                Some(draft.id.clone()),
+                "group-1",
+                "Draft".to_string(),
+                Some(vec![second.clone()]),
+            )
+            .unwrap();
+        assert!(pending(&id_of(&first)) && stored(&id_of(&second)));
+        let kept = state
+            .save_research_draft(
+                Some(draft.id.clone()),
+                "group-1",
+                "Draft, edited".to_string(),
+            )
+            .unwrap();
+        assert_eq!(kept.attachments, vec![second.clone()]);
+        assert!(
+            state
+                .save_research_draft_with_images(
+                    Some(draft.id.clone()),
+                    "group-1",
+                    "Draft".to_string(),
+                    Some(vec![second.clone(), second.clone()]),
+                )
+                .is_err()
+        );
+
+        state.remove_research_tree(&detail.tree.id).unwrap();
+        assert!(pending(&root_id));
+        drop(state);
+
+        // A restart removes pending images nothing references and keeps the
+        // draft's stored image.
+        let restarted = AppState::new(config);
+        assert!(restarted.restore_session().is_empty());
+        assert!(!pending(&root_id) && !pending(&child_id) && !pending(&id_of(&first)));
+        assert!(stored(&id_of(&second)));
+        restarted.delete_research_draft(&draft.id).unwrap();
+        assert!(pending(&id_of(&second)));
     }
 
     #[test]

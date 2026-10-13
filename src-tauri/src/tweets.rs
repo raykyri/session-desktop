@@ -67,6 +67,20 @@ pub enum ResearchMessageAttachment {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         failure: Option<TweetAttachmentFailure>,
     },
+    /// An image the user pasted or dropped into the composer. `id` names its
+    /// file in the research image store (see `crate::research_images`);
+    /// width and height are absent when the header could not be read.
+    Image {
+        id: String,
+        mime_type: String,
+        byte_size: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        width: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        height: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+    },
 }
 
 impl ResearchMessageAttachment {
@@ -85,12 +99,61 @@ impl ResearchMessageAttachment {
 pub fn validate_research_message_attachments(
     attachments: &[ResearchMessageAttachment],
 ) -> Result<(), String> {
-    if attachments.len() > MAX_TWEETS_PER_MESSAGE {
+    let tweet_count = attachments
+        .iter()
+        .filter(|attachment| matches!(attachment, ResearchMessageAttachment::Tweet { .. }))
+        .count();
+    if tweet_count > MAX_TWEETS_PER_MESSAGE {
         return Err("research message contains too many tweet attachments".to_string());
+    }
+    if attachments.len() - tweet_count > crate::research_images::MAX_IMAGES_PER_MESSAGE {
+        return Err("research message contains too many image attachments".to_string());
     }
     let mut seen = HashSet::new();
     for attachment in attachments {
-        let ResearchMessageAttachment::Tweet {
+        validate_research_message_attachment(attachment)?;
+        if !seen.insert(attachment_identity(attachment)) {
+            return Err("research message contains a duplicate attachment".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// What makes two attachments of one message the same: the tweet's id, or
+/// the image's file.
+fn attachment_identity(attachment: &ResearchMessageAttachment) -> (&'static str, &str) {
+    match attachment {
+        ResearchMessageAttachment::Tweet { tweet_id, .. } => ("tweet", tweet_id),
+        ResearchMessageAttachment::Image { id, .. } => ("image", id),
+    }
+}
+
+/// Drops the attachments that fail validation, so one malformed entry does
+/// not take the message's valid ones with it. Returns whether any were
+/// dropped.
+pub fn retain_valid_research_message_attachments(
+    attachments: &mut Vec<ResearchMessageAttachment>,
+) -> bool {
+    if validate_research_message_attachments(attachments).is_ok() {
+        return false;
+    }
+    let mut kept = Vec::with_capacity(attachments.len());
+    for attachment in attachments.drain(..) {
+        let mut candidate = kept.clone();
+        candidate.push(attachment);
+        if validate_research_message_attachments(&candidate).is_ok() {
+            kept = candidate;
+        }
+    }
+    *attachments = kept;
+    true
+}
+
+fn validate_research_message_attachment(
+    attachment: &ResearchMessageAttachment,
+) -> Result<(), String> {
+    match attachment {
+        ResearchMessageAttachment::Tweet {
             schema_version,
             source_url,
             tweet_id,
@@ -101,34 +164,43 @@ pub fn validate_research_message_attachments(
             tweet,
             failure,
             ..
-        } = attachment;
-        if *schema_version != TWEET_ATTACHMENT_SCHEMA_VERSION || provider != "xSyndication" {
-            return Err("research message contains an unsupported tweet attachment".to_string());
-        }
-        if source_url.len() > MAX_TWEET_SOURCE_URL_BYTES
-            || tweet_id_from_url(source_url).as_deref() != Some(tweet_id)
-            || tweet_id.len() > 25
-            || !seen.insert(tweet_id)
-            || *attempted_at == 0
-        {
-            return Err("research message contains an invalid tweet attachment".to_string());
-        }
-        match (status, fetched_at, tweet, failure) {
-            (TweetAttachmentStatus::Resolved, Some(_), Some(snapshot), None) => {
-                if snapshot.id != *tweet_id {
-                    return Err(
-                        "tweet attachment snapshot id does not match its source".to_string()
-                    );
+        } => {
+            if *schema_version != TWEET_ATTACHMENT_SCHEMA_VERSION || provider != "xSyndication" {
+                return Err("research message contains an unsupported tweet attachment".to_string());
+            }
+            if source_url.len() > MAX_TWEET_SOURCE_URL_BYTES
+                || tweet_id_from_url(source_url).as_deref() != Some(tweet_id)
+                || tweet_id.len() > 25
+                || *attempted_at == 0
+            {
+                return Err("research message contains an invalid tweet attachment".to_string());
+            }
+            match (status, fetched_at, tweet, failure) {
+                (TweetAttachmentStatus::Resolved, Some(_), Some(snapshot), None) => {
+                    if snapshot.id != *tweet_id {
+                        return Err(
+                            "tweet attachment snapshot id does not match its source".to_string()
+                        );
+                    }
+                    validate_tweet_snapshot(snapshot, true)
                 }
-                validate_tweet_snapshot(snapshot, true)?;
-            }
-            (TweetAttachmentStatus::Unavailable, None, None, Some(_)) => {}
-            _ => {
-                return Err("tweet attachment has inconsistent resolution state".to_string());
+                (TweetAttachmentStatus::Unavailable, None, None, Some(_)) => Ok(()),
+                _ => Err("tweet attachment has inconsistent resolution state".to_string()),
             }
         }
+        ResearchMessageAttachment::Image {
+            id,
+            mime_type,
+            byte_size,
+            file_name,
+            ..
+        } => crate::research_images::validate_attachment(
+            id,
+            mime_type,
+            *byte_size,
+            file_name.as_deref(),
+        ),
     }
-    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -1062,9 +1134,88 @@ mod tests {
         let decoded: ResearchMessageAttachment = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, attachment);
 
-        let ResearchMessageAttachment::Tweet { provider, .. } = &mut attachment;
+        let ResearchMessageAttachment::Tweet { provider, .. } = &mut attachment else {
+            panic!("expected a tweet attachment");
+        };
         *provider = "arbitraryProvider".to_string();
         assert!(validate_research_message_attachments(&[attachment]).is_err());
+    }
+
+    fn image_attachment(id: &str) -> ResearchMessageAttachment {
+        ResearchMessageAttachment::Image {
+            id: format!("{id:0>32}.png"),
+            mime_type: "image/png".to_string(),
+            byte_size: 1024,
+            width: Some(640),
+            height: None,
+            file_name: Some("Screenshot 1.png".to_string()),
+        }
+    }
+
+    #[test]
+    fn image_attachments_round_trip_and_validate() {
+        let attachment = image_attachment("a1");
+        validate_research_message_attachments(std::slice::from_ref(&attachment)).unwrap();
+        let encoded = serde_json::to_value(&attachment).unwrap();
+        assert_eq!(
+            encoded,
+            serde_json::json!({
+                "kind": "image",
+                "id": "000000000000000000000000000000a1.png",
+                "mimeType": "image/png",
+                "byteSize": 1024,
+                "width": 640,
+                "fileName": "Screenshot 1.png",
+            })
+        );
+        let decoded: ResearchMessageAttachment = serde_json::from_value(serde_json::json!({
+            "kind": "image",
+            "id": "000000000000000000000000000000a1.png",
+            "mimeType": "image/png",
+            "byteSize": 1024,
+        }))
+        .unwrap();
+        assert!(matches!(
+            decoded,
+            ResearchMessageAttachment::Image {
+                width: None,
+                height: None,
+                file_name: None,
+                ..
+            }
+        ));
+        assert_eq!(decoded.resolved_tweet(), None);
+
+        let mut wrong_type = attachment.clone();
+        if let ResearchMessageAttachment::Image { mime_type, .. } = &mut wrong_type {
+            *mime_type = "image/gif".to_string();
+        }
+        assert!(validate_research_message_attachments(&[wrong_type]).is_err());
+        let mut traversal = attachment.clone();
+        if let ResearchMessageAttachment::Image { id, .. } = &mut traversal {
+            *id = "../../etc/passwd.png".to_string();
+        }
+        assert!(validate_research_message_attachments(&[traversal]).is_err());
+        assert!(validate_research_message_attachments(&[attachment.clone(), attachment]).is_err());
+        let nine = (0..9)
+            .map(|index| image_attachment(&format!("b{index}")))
+            .collect::<Vec<_>>();
+        assert!(validate_research_message_attachments(&nine).is_err());
+    }
+
+    #[test]
+    fn retaining_valid_attachments_drops_only_the_invalid_ones() {
+        let mut attachments = vec![image_attachment("c1"), image_attachment("c1")];
+        if let Some(ResearchMessageAttachment::Image { byte_size, .. }) = attachments.get_mut(1) {
+            *byte_size = 0;
+        }
+        attachments.push(image_attachment("c2"));
+        assert!(retain_valid_research_message_attachments(&mut attachments));
+        assert_eq!(
+            attachments,
+            vec![image_attachment("c1"), image_attachment("c2")]
+        );
+        assert!(!retain_valid_research_message_attachments(&mut attachments));
     }
 
     #[test]
