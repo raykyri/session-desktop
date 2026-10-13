@@ -53,10 +53,10 @@ test("branches are non-inline children in creation order", () => {
   assert.equal(byParent.has("root"), false);
 });
 
-test("one selection determines every open level: a branch's level follows the message it was asked from", () => {
+test("one selection determines every open level: a branch's level follows its source message", () => {
   assert.deepEqual(researchLevelPath(nodes, "c3"), ["c3"]);
   assert.deepEqual(researchLevelPath(nodes, "root"), ["root"]);
-  // b1f continues b1, which was asked from c2; b2 was asked from b1f.
+  // b1f continues b1, whose source is c2; b1f is the source of b2.
   assert.deepEqual(researchLevelPath(nodes, "b1f"), ["c2", "b1f"]);
   assert.deepEqual(researchLevelPath(nodes, "b2"), ["c2", "b1f", "b2"]);
   assert.deepEqual(researchLevelPath(nodes, "b4"), ["c3", "b4"]);

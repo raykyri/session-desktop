@@ -201,7 +201,7 @@ export default function SettingsDialog({
                   <span className="settings-label-stack">
                     <span className="settings-label">Require ⌘↵ to send</span>
                     <span className="settings-hint settings-hint-weak">
-                      Ask boxes in a thread's columns always send with ⌘↵. This setting applies to the other ask boxes.
+                      Thread ask boxes always require ⌘↵. This setting controls all other ask boxes.
                     </span>
                   </span>
                   <input

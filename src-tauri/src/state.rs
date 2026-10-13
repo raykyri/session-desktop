@@ -5014,7 +5014,7 @@ impl AppState {
                 0
             };
             let node = node.clone();
-            // Branches asked from a passage of the document move with their
+            // Branches created from a passage of the document move with their
             // quote too. A branch whose quote is gone keeps its anchor: the
             // branch itself and its question stay as they were.
             let mut moved_branches = Vec::new();
@@ -11767,7 +11767,7 @@ fn recent_activity_entries(model: &Model, roots: Vec<&ResearchNode>) -> Vec<Rece
             if trees_with_stars.contains(root.tree_id.as_str()) {
                 // Depth-first. A node's branches (oldest first) come before
                 // its inline continuation, so each starred branch follows
-                // the turn it was asked from. Stray documents are skipped
+                // its source turn. Stray documents are skipped
                 // with their subtrees, matching `children`. The stack holds
                 // each level reversed so the next entry pops first.
                 let traversal_order = |parent: &ResearchNode| {
@@ -13901,7 +13901,7 @@ mod tests {
             ]
         );
         // Each node's branches precede its inline continuation: B1 (asked
-        // from B) comes before B2, and C and B (asked from the root) come
+        // from B) comes before B2, and C and B (whose source is the root) come
         // before the root's continuation A.
         assert_eq!(
             entries(&root.starred),
@@ -18250,7 +18250,7 @@ mod tests {
     }
 
     /// A state with a shared post (with a member reply and a follow-up
-    /// asked about it), a saved link, a run tree with a branch asked from a
+    /// asked about it), a saved link, a run tree with a branch created from a
     /// passage of its answer, and an exported terminal conversation.
     fn state_with_posts_and_anchors(workspace: &std::path::Path) -> AppState {
         let state = AppState::new(test_config(workspace.to_path_buf()));

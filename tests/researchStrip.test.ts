@@ -121,8 +121,8 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
     "data-research-pair": "answer",
     "data-research-level": "2",
   });
-  // Each branch level's messages column is the branches column after the
-  // level it was asked from.
+  // Each branch level's messages column is the branches column after its
+  // source level.
   assert.deepEqual(strip.columns.map((column) => column.role), [
     "messages",
     "answer",
@@ -319,7 +319,7 @@ test("a pending branch adds the branches column after the level that shows its p
   assert.equal(columnKey(column), "T2:branches");
   // The open nodes do not include the unsent branch.
   assert.deepEqual(strip.openNodeIds, ["root", "b1"]);
-  // A pending branch asked from a message that is not the deepest selection
+  // A pending branch whose source is not the deepest selected message
   // is not shown.
   const elsewhere = researchStrip(nodes, "b1", { parentNodeId: "root", anchor: null });
   assert.deepEqual(ids(elsewhere), ["T0", "A0", "T1", "A1"]);
@@ -540,7 +540,7 @@ test("each column keeps its own selection, and a branches column lists the branc
   assert.deepEqual(groupHeads(other.columns[2]), ["b1", "x1"]);
   assert.deepEqual(groupHeads(other.columns[4]), ["b2", "y2"]);
   assert.equal(columnKey(other.columns[2]), columnKey(strip.columns[2]));
-  // A single id opens the levels it was asked from.
+  // A single id opens its source path.
   assert.deepEqual(researchStrip(nodes, "b2", null).levels.map((level) => level.selectedId), ["root", "b1f", "b2"]);
 });
 
@@ -563,11 +563,11 @@ test("selecting a node keeps the other columns' selections", () => {
   assert.deepEqual(researchSelectionWith(nodes, ["c2", "b1f", "y2"], "x1"), ["c2", "x1", "y2"]);
   // A message of the first column without a selection.
   assert.deepEqual(researchSelectionWith(nodes, ["c2"], "b1"), ["c2", "b1"]);
-  // A node no open column lists opens the levels it was asked from.
+  // A node no open column lists opens its source path.
   assert.deepEqual(researchSelectionWith(nodes, ["c2"], "b2"), ["root", "b1f", "b2"]);
 });
 
-test("selecting a node that no open column lists falls back to the levels it was asked from", () => {
+test("selecting a node that no open column lists falls back to its source path", () => {
   const nodes = selectionNodes();
   // Nothing is open.
   assert.deepEqual(researchSelectionWith(nodes, [], "y2"), ["c2", "x1", "y2"]);
@@ -583,7 +583,7 @@ test("selecting a node that no open column lists falls back to the levels it was
   assert.deepEqual(researchSelectionWith(nodes, ["c2"], "missing"), []);
 });
 
-test("a removed selection falls back to the message it followed or was asked from", () => {
+test("a removed selection falls back to its source or preceding message", () => {
   const nodes = selectionNodes();
   const parents = new Map(nodes.map((candidate) => [candidate.id, candidate.parentNodeId ?? null]));
   const survivor = (remaining: ResearchNode[]) => (nodeId: string) => {
@@ -611,7 +611,7 @@ test("a thread reopens with its saved selection, in either saved format", () => 
   const levelsOf = (selection: string | readonly string[]) =>
     researchStrip(nodes, selection, null).levels.map((level) => level.selectedId);
   // Saved before each column kept its selection: the deepest message alone
-  // opens the levels it was asked from.
+  // opens its source path.
   const legacy = researchRestoredSelection(nodes, "root", "b2");
   assert.equal(legacy, "b2");
   assert.deepEqual(levelsOf(legacy), ["root", "b1f", "b2"]);

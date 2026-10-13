@@ -45,7 +45,7 @@ interface ResearchOpenNodeRequest {
    * the node without reporting a new visit. */
   record: boolean;
   /** Each column's selected message, ending with `nodeId` (a recorded
-   * visit's); without it the levels `nodeId` was asked from open. */
+   * visit's); without it `nodeId`'s source path opens. */
   path?: readonly string[];
 }
 

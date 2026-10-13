@@ -110,7 +110,7 @@ test("a message row's meta line shows the starred mark and branch count, with no
   // The unread dot is announced as part of the button's name.
   assert.match(
     html,
-    /aria-label="3 branches from this answer, one selected in the next column, one with a new answer"/,
+    /aria-label="3 branches from this answer\. One is selected\. One has a new answer\."/,
   );
   // The indicator is an up-right arrow, with no count.
   assert.match(html, /research-msg-branches is-open"[^>]*>(?:(?!<\/button>).)*lucide-arrow-up-right/);

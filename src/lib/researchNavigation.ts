@@ -42,12 +42,12 @@ export interface QueuedResearchFollowup {
 
 export interface SavedResearchNavigation {
   /** The deepest open level's selected message. Without `selectionPath`,
-   * the levels before it are the ones it was asked from, each with the
-   * message its branch was asked from selected. */
+   * the levels before it form its source path, with each branch's source
+   * message selected. */
   selectedNodeId?: string;
   /** Each column's selected message, root column first, when it ends with
    * `selectedNodeId`. A column's selection need not be the message the next
-   * column's branch was asked from. */
+   * column's branch uses as its source. */
   selectionPath?: string[];
   scrollByNode: Record<string, SavedResearchScrollPosition>;
   /** Nodes whose "Show earlier" window the user expanded. Restore this with
@@ -333,7 +333,7 @@ export function pruneResearchNavigation(validTreeIds: Iterable<string>): void {
 
 /** The selection a tree's saved navigation restores: `selectionPath` when
  * it ends with `selectedNodeId`, else `selectedNodeId` alone (the levels it
- * was asked from open with it), else null. */
+ * source path opens with it), else null. */
 export function savedResearchSelection(navigation: SavedResearchNavigation | undefined): string | string[] | null {
   const nodeId = navigation?.selectedNodeId;
   if (!nodeId) {

@@ -24,8 +24,8 @@ export default function ResearchPostColumn({
   const parent = post.parentNodeId
     ? detail.nodes.find((node) => node.id === post.parentNodeId) ?? null
     : null;
-  // A follow-up note's parent is always a note (the backend refuses any
-  // other parent).
+  // A follow-up note's parent is always a note; the backend rejects any
+  // other parent type.
   const parentExcerpt = parent ? postFollowUpSourceExcerpt(parent, 60) : null;
   const editedAt = nodeEditedAt(post);
 

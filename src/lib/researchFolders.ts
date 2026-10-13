@@ -264,7 +264,7 @@ export interface ResearchFeedChild {
 
 /** Starred follow-ups and branches listed under a root question, in tree
  * order. Only follow-ups of the root level and branch heads can be
- * starred, so a branch head's parent is the message it was asked from. */
+ * starred, so a branch head's parent is its source message. */
 export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
   const starred = (root.starred ?? []).filter((child) => child.nodeId !== root.nodeId);
   const starredFollowUps = new Set(

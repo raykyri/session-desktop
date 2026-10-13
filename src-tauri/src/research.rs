@@ -2076,7 +2076,7 @@ pub struct UpdateResearchDocumentResult {
     pub response_revision: String,
     pub markdown_changed: bool,
     pub removed_highlight_count: usize,
-    /// Branches asked from a passage whose quote is not in the new body. The
+    /// Branches created from a passage whose quote is not in the new body. The
     /// branches and their anchors are kept as they were.
     pub unmatched_branch_count: usize,
 }

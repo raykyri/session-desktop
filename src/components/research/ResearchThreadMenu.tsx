@@ -199,7 +199,7 @@ export function ResearchThreadMenu({
   }
   if (menu.kind === "post") {
     const post = menuNode;
-    // The root note stands for the thread: it has the thread's Move to, and
+    // The root note represents the thread: it has the thread's Move to, and
     // is deleted with the thread. A follow-up note is starred
     // and deleted on its own.
     const isRoot = post.id === rootNodeId;
@@ -256,7 +256,7 @@ export function ResearchThreadMenu({
               label="Delete note"
               danger
               disabled={info.hasActiveRuns}
-              title={info.hasActiveRuns ? "Its follow-ups must finish or be cancelled before deletion" : undefined}
+              title={info.hasActiveRuns ? "Finish or cancel all follow-ups before deleting this note" : undefined}
               onSelect={() => {
                 onClose();
                 onDelete(post.id);

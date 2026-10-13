@@ -668,7 +668,7 @@ test.serial("opens a branch page with a breadcrumb back to the parent", async (t
   );
   fireEvent.click(screen.getByText("What about forgetting?"));
   // The branch becomes the page: its answer replaces the root's, and the Back
-  // link to the answer it was asked from appears.
+  // link to its source answer appears.
   await waitUntil(
     t,
     () => screen.queryByText("A branch answer.") !== null,

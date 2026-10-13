@@ -264,7 +264,7 @@ export function ResearchDeleteBranchDialog({
               ? `This permanently deletes the note and ${info.descendantCount} follow-up${info.descendantCount === 1 ? "" : "s"} under it.`
               : "This permanently deletes the note."
             : node.inline && info.descendantCount > 0
-            ? `This permanently deletes this follow-up and everything after it in the thread — ${info.descendantCount} descendant node${info.descendantCount === 1 ? "" : "s"} in total, including any branches. Its parent answer keeps the freed inline slot.`
+            ? `This permanently deletes this follow-up and everything after it in the thread — ${info.descendantCount} descendant node${info.descendantCount === 1 ? "" : "s"} in total, including any branches. After deletion, you can add another follow-up directly to the parent answer.`
             : info.descendantCount > 0
             ? `This also permanently deletes ${info.descendantCount} descendant follow-up${info.descendantCount === 1 ? "" : "s"}.`
             : "This permanently deletes the follow-up and its response."} {" "}

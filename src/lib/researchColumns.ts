@@ -50,7 +50,7 @@ export interface ResearchLevel {
   displayIds: readonly string[];
   /** The message whose answer the level shows. */
   selectedId: string;
-  /** The message this branch was asked from, one of the messages listed in
+  /** This branch's source message, one of the messages listed in
    * the previous level's column (not necessarily its selection); null for
    * the root level. */
   sourceId: string | null;
@@ -69,7 +69,7 @@ interface ResearchBranchGroup {
   chainIds: readonly string[];
   /** The order the group lists its messages in (see `chainDisplayOrder`). */
   displayIds: readonly string[];
-  /** The message of the previous level it was asked from. */
+  /** The source message in the previous level. */
   sourceId: string;
   anchor: ResearchHighlightAnchor | null;
   /** The selected message when this branch is the open level, else null. */
@@ -112,7 +112,7 @@ export type ResearchColumn =
       role: "branches";
       /** The level a branch opens as: `source.index + 1`. */
       levelIndex: number;
-      /** The level whose messages the branches were asked from. */
+      /** The level that contains the branches' source messages. */
       source: ResearchLevel;
       /** The open branch's level, or null when none of them is open. */
       level: ResearchLevel | null;
@@ -139,7 +139,7 @@ interface ResearchStrip {
   openNodeIds: readonly string[];
 }
 
-/** An unsent branch: the message it is asked from, and the passage. */
+/** An unsent branch: its source message and passage. */
 interface ResearchPendingBranch {
   parentNodeId: string;
   anchor: ResearchHighlightAnchor | null;
@@ -286,7 +286,7 @@ export function researchSelectionPath(nodes: readonly ResearchNode[], selection:
 
 /** The selection a thread opens with, from its saved selection (see
  * savedResearchSelection). A saved message alone, the format stored before
- * each column kept its own selection, opens the levels it was asked from; a
+ * each column kept its own selection, opens its source path; a
  * saved path opens cut to the part the tree lists. A saved selection the
  * tree does not show opens the last message of the root's chain. */
 export function researchRestoredSelection(
@@ -308,7 +308,7 @@ export function researchRestoredSelection(
 /** `selection` with `nodeId` selected in the column that lists it. The
  * columns before that one keep their selection, and so do the columns after
  * it, which list the same messages whatever it selects. A node that no
- * open column lists opens the levels it was asked from instead (see
+ * open column lists opens its source path instead (see
  * researchLevelPath). */
 export function researchSelectionWith(
   nodes: readonly ResearchNode[],
@@ -327,10 +327,10 @@ export function researchSelectionWith(
 }
 
 /** `selection` after messages were removed from the tree (`nodes` is what
- * remains): a removed selection becomes `survivor` of it (the nearest
- * remaining message it was asked from or followed), and the selection is
+ * remains): a removed selection becomes its `survivor` (the nearest
+ * remaining source or preceding message), and the selection is
  * then cut where a column does not list its entry. A column whose selected
- * branch was removed, with the message it was asked from, closes with the
+ * branch was removed along with its source message, closes with the
  * columns after it. */
 export function researchSelectionAfterRemoval(
   nodes: readonly ResearchNode[],
@@ -350,7 +350,7 @@ export function researchSelectionAfterRemoval(
 }
 
 /** The columns for `selection` (each column's selected message, root
- * column first; a single id opens the levels it was asked from, see
+ * column first; a single id opens its source path, see
  * researchLevelPath) and the unsent branch. A selection whose first message
  * is not in `nodes` yields an empty strip. A level whose column lists
  * messages with branches is followed by its branches column, and the
