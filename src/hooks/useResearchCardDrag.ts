@@ -5,7 +5,12 @@ import {
   researchPlaceIsReorderable,
   type ResearchDropPosition,
 } from "../lib/researchFolders";
-import { researchCardDropZone, researchChildCount } from "../lib/researchGroups";
+import {
+  researchCardDrop,
+  researchChildCount,
+  type ResearchCardHit,
+  type ResearchDraggedTree,
+} from "../lib/researchGroups";
 
 /** The draggable item: a tree card, a Drafts card, or a message row. */
 interface ResearchDragItem {
@@ -25,9 +30,9 @@ interface ResearchCardDragOptions {
   onMoveTree?: (treeId: string, place: string, position: ResearchDropPosition | null) => void;
   onMoveDraft?: (draftId: string, beforeId: string | null) => void;
   onMoveMessage?: (nodeId: string, place: string, beforeId: string | null) => void;
-  /** A drop on a question's or document's card, or within its group: lists
-   * the tree under `parentId`, before `beforeId` (one of its children) or at
-   * the end of the group for null. */
+  /** A drop on a parent card's nest port, or within its group: lists the
+   * tree under `parentId`, before `beforeId` (one of its children) or at the
+   * end of the group for null. */
   onNestTree?: (treeId: string, parentId: string, beforeId: string | null) => void;
   /** A collapsed tray held under the pointer opens after SPRING_MS. */
   onSpringOpen?: (place: string) => void;
@@ -52,10 +57,11 @@ const MARK_CLASSES = [
   "is-drop-same",
   "is-insert-before",
   "is-insert-after",
-  "is-drop-nest",
+  "is-drop-hover",
   "is-drop-invalid",
 ];
 const TREE_CARD = '.research-feed-card[data-research-card-kind="tree"]';
+const TOP_CARD = `${TREE_CARD}:not([data-research-parent])`;
 
 /** A card's short name for drop labels: its title, else its question. */
 function cardName(card: Element | null): string {
@@ -95,7 +101,10 @@ function zoneAccepts(zone: HTMLElement, place: string, item: ResearchDragItem): 
  * Over a card in a zone that keeps an order, an insertion line shows where
  * the item goes; a zone of another place is highlighted as a whole. A drop
  * in the item's own place needs a position (a reorder); elsewhere it moves
- * the item. Marks are set on the DOM directly so a drag re-renders nothing
+ * the item. While a tree is dragged, each card that can take it as a child
+ * shows a nest port, which nests; the rest of a card reorders (see
+ * `researchCardDrop`). A dragged child's group shows a Move out strip below
+ * it. Marks are set on the DOM directly so a drag re-renders nothing
  * until it ends. Pointer events are used instead of HTML drag and drop,
  * which the native window's file-drop handling can intercept.
  */
@@ -149,6 +158,14 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
     const itemChildCount = item.kind === "tree" ? Number(card.dataset.researchChildren ?? 0) : 0;
     const itemGroup =
       card.nextElementSibling?.classList.contains("research-feed-group") ? card.nextElementSibling : null;
+    const dragged: ResearchDraggedTree = { id: item.id, parentId: itemParentId };
+    // A child's group shows its Move out strip, and its parent hides its
+    // nest port, while the child is dragged.
+    const itemParentGroup =
+      itemParentId && card.parentElement?.classList.contains("research-feed-group") ? card.parentElement : null;
+    const itemParentCard = itemParentId
+      ? document.querySelector(`${TREE_CARD}[data-research-card="${CSS.escape(itemParentId)}"]`)
+      : null;
     const mark = (element: Element, className: string) => {
       element.classList.add(className);
       marked.add(element);
@@ -248,7 +265,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
      * drop position after it. */
     const positionAfter = (zone: HTMLElement, over: HTMLElement): ResearchDropPosition => {
       const overId = over.dataset.researchCard ?? "";
-      const cards = [...zone.querySelectorAll<HTMLElement>(`${TREE_CARD}:not([data-research-parent])`)].filter(
+      const cards = [...zone.querySelectorAll<HTMLElement>(TOP_CARD)].filter(
         (candidate) => candidate.dataset.researchCard !== item.id,
       );
       const following = cards[cards.indexOf(over) + 1]?.dataset.researchCard;
@@ -261,89 +278,143 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
           : { beforeId: null };
     };
 
-    /** A tree over a tree card in a place that keeps an order: between
-     * top-level cards, under a parent, or refused. Undefined when the
-     * pointer is not over a card (the place itself); null for a drop that
-     * does nothing. Marks the target and shows its label. */
+    const cardIn = (zone: HTMLElement, id: string) =>
+      zone.querySelector<HTMLElement>(`${TREE_CARD}[data-research-card="${CSS.escape(id)}"]`);
+
+    /** A tree over a tree card, a group's Move out strip, or the rest of a
+     * place that keeps an order: between top-level cards, under a parent, or
+     * refused. Undefined when the drop is on the place itself; null for a
+     * drop that does nothing. Marks the target and shows its label. */
     const evaluateTree = (
       zone: HTMLElement,
       place: string,
       hit: Element | null,
     ): ResearchDrop | null | undefined => {
-      const over = hit?.closest<HTMLElement>(TREE_CARD) ?? null;
-      const overId = over?.dataset.researchCard;
-      if (!over || !overId || !zone.contains(over)) return undefined;
-      const rect = over.getBoundingClientRect();
-      const refuse = (reason: string) => {
-        mark(over, "is-drop-invalid");
-        showLabel(over, reason, true);
-        return null;
-      };
-      const nest = (parentId: string, beforeId: string | null, target: HTMLElement): ResearchDrop => {
-        if (beforeId) mark(target, "is-insert-before");
-        else mark(target, "is-drop-nest");
-        const parent = zone.querySelector(`${TREE_CARD}[data-research-card="${CSS.escape(parentId)}"]`);
-        if (itemParentId !== parentId) showLabel(beforeId ? target : over, `Make child of “${cardName(parent)}”`);
-        return { place, nest: { parentId, beforeId } };
-      };
-      const between = (position: ResearchDropPosition, before: boolean): ResearchDrop => {
-        mark(over, before ? "is-insert-before" : "is-insert-after");
-        if (itemParentId) {
-          const parent = zone.querySelector(`${TREE_CARD}[data-research-card="${CSS.escape(itemParentId)}"]`);
-          showLabel(over, `Move out of “${cardName(parent)}”`);
-        }
-        return { place, position };
-      };
-      const overParentId = over.dataset.researchParent;
-      if (overParentId) {
-        // A child card splits at its midpoint and inserts within its group.
-        if (overParentId === item.id) return refuse("Can’t move a group into itself.");
-        if (overId === item.id) return null;
+      const exit = hit?.closest<HTMLElement>("[data-research-group-exit]") ?? null;
+      const over = exit ? null : (hit?.closest<HTMLElement>(TREE_CARD) ?? null);
+      let researchHit: ResearchCardHit;
+      if (exit && zone.contains(exit)) {
+        researchHit = { card: "group-exit", parentId: exit.dataset.researchGroupExit ?? "" };
+      } else if (over && zone.contains(over) && over.dataset.researchCard) {
+        const overId = over.dataset.researchCard;
+        const rect = over.getBoundingClientRect();
         const after = lastY > rect.top + rect.height / 2;
-        const siblings = [
-          ...(over.parentElement?.querySelectorAll<HTMLElement>(
-            `:scope > ${TREE_CARD}[data-research-parent]`,
-          ) ?? []),
-        ].filter((candidate) => candidate.dataset.researchCard !== item.id);
-        const next = siblings[siblings.indexOf(over) + 1];
-        if (after && !next) {
-          // Below the last child, left of its text: after the group, at the
-          // top level.
-          const textLeft =
-            over.querySelector(".research-row-glyph")?.getBoundingClientRect().left ?? rect.left;
-          const parent = zone.querySelector<HTMLElement>(
-            `${TREE_CARD}[data-research-card="${CSS.escape(overParentId)}"]`,
-          );
-          if (lastX < textLeft && parent) {
-            mark(over, "is-insert-after");
-            return { place, position: positionAfter(zone, parent) };
-          }
-          return nest(overParentId, null, over);
+        const overParentId = over.dataset.researchParent;
+        if (overParentId) {
+          const siblings = [
+            ...(over.parentElement?.querySelectorAll<HTMLElement>(`:scope > ${TREE_CARD}[data-research-parent]`) ??
+              []),
+          ].filter((candidate) => candidate.dataset.researchCard !== item.id);
+          const textLeft = over.querySelector(".research-row-glyph")?.getBoundingClientRect().left ?? rect.left;
+          researchHit = {
+            card: "child",
+            id: overId,
+            parentId: overParentId,
+            after,
+            nextId: siblings[siblings.indexOf(over) + 1]?.dataset.researchCard ?? null,
+            leftOfText: lastX < textLeft,
+          };
+        } else {
+          const expanded =
+            Number(over.dataset.researchChildren ?? 0) > 0 && !over.hasAttribute("data-research-group-collapsed");
+          const firstChild = expanded
+            ? [
+                ...(over.nextElementSibling?.querySelectorAll<HTMLElement>(
+                  `:scope > ${TREE_CARD}[data-research-parent]`,
+                ) ?? []),
+              ].find((candidate) => candidate.dataset.researchCard !== item.id)
+            : undefined;
+          const port = hit?.closest(".research-feed-nest-port") ?? null;
+          researchHit = {
+            card: "top",
+            id: overId,
+            holdsChildren: over.hasAttribute("data-research-holds-children"),
+            onPort: port !== null && over.contains(port),
+            after,
+            expanded,
+            firstChildId: firstChild?.dataset.researchCard ?? null,
+          };
         }
-        if (after) return nest(overParentId, next.dataset.researchCard ?? null, next);
-        return nest(overParentId, overId, over);
+      } else {
+        return evaluatePlaceEnd(zone, place, hit);
       }
-      const holds = over.hasAttribute("data-research-holds-children");
-      const zoneName = researchCardDropZone(rect.height, lastY - rect.top, holds);
-      if (overId === item.id) {
-        return zoneName === "nest" ? refuse("Can’t nest an item under itself.") : null;
+
+      const result = researchCardDrop(dragged, researchHit);
+      const target = exit ?? over;
+      if (!target) return undefined;
+      switch (result.kind) {
+        case "none":
+          return null;
+        case "refuse":
+          mark(target, "is-drop-invalid");
+          showLabel(target, result.reason, true);
+          return null;
+        case "nest": {
+          if (researchHit.card === "top" && researchHit.onPort) {
+            const port = over?.querySelector(".research-feed-nest-port");
+            if (port) mark(port, "is-drop-hover");
+          } else if (result.beforeId) {
+            const before = cardIn(zone, result.beforeId);
+            if (before) mark(before, "is-insert-before");
+          } else {
+            mark(target, "is-insert-after");
+          }
+          if (itemParentId !== result.parentId) {
+            showLabel(target, `Make child of “${cardName(cardIn(zone, result.parentId))}”`);
+          }
+          return { place, nest: { parentId: result.parentId, beforeId: result.beforeId } };
+        }
+        case "before":
+          mark(target, "is-insert-before");
+          showMoveOutLabel(zone, target);
+          return { place, position: { beforeId: result.id } };
+        case "after-group": {
+          const top = cardIn(zone, result.id);
+          if (!top) return null;
+          if (exit) mark(exit, "is-drop-hover");
+          else markAfterGroup(top);
+          showMoveOutLabel(zone, target);
+          return { place, position: positionAfter(zone, top) };
+        }
       }
-      if (zoneName === "before") return between({ beforeId: overId }, true);
-      // A child dropped on its own parent goes to the end of the group.
-      if (zoneName === "nest") return nest(overId, null, over);
-      // The bottom edge of an expanded parent inserts before its first child.
-      const expanded =
-        Number(over.dataset.researchChildren ?? 0) > 0 && !over.hasAttribute("data-research-group-collapsed");
-      if (expanded) {
-        const first = [
-          ...(over.nextElementSibling?.querySelectorAll<HTMLElement>(
-            `:scope > ${TREE_CARD}[data-research-parent]`,
-          ) ?? []),
-        ].find((candidate) => candidate.dataset.researchCard !== item.id);
-        if (first?.dataset.researchCard) return nest(overId, first.dataset.researchCard, first);
-        return nest(overId, null, over);
+    };
+
+    /** The insertion line after a top-level card's group: below its unit
+     * when its group is listed, else below the card. */
+    const markAfterGroup = (top: HTMLElement) => {
+      const unit = top.parentElement?.classList.contains("research-feed-unit") ? top.parentElement : null;
+      mark(unit && top.nextElementSibling ? unit : top, "is-insert-after");
+    };
+
+    /** A child's label for a drop at the top level. */
+    const showMoveOutLabel = (zone: HTMLElement, target: Element) => {
+      if (itemParentId) showLabel(target, `Move out of “${cardName(cardIn(zone, itemParentId))}”`);
+    };
+
+    /** A tree in its own place, off its cards: below the last card of a
+     * top-level card's unit (the end of its group), or below the last unit,
+     * is after that unit's group, at the top level. Undefined elsewhere (the
+     * place itself). */
+    const evaluatePlaceEnd = (
+      zone: HTMLElement,
+      place: string,
+      hit: Element | null,
+    ): ResearchDrop | null | undefined => {
+      if (place !== item.place) return undefined;
+      let unit = hit?.closest<HTMLElement>(".research-feed-unit") ?? null;
+      if (!unit || !zone.contains(unit)) {
+        const units = [...zone.querySelectorAll<HTMLElement>(".research-feed-unit")];
+        unit = units[units.length - 1] ?? null;
       }
-      return between(positionAfter(zone, over), false);
+      const cards = unit?.querySelectorAll<HTMLElement>(TREE_CARD);
+      const lastCard = cards?.[cards.length - 1];
+      if (!lastCard || lastY <= lastCard.getBoundingClientRect().bottom) return undefined;
+      const top = unit?.querySelector<HTMLElement>(`:scope > ${TOP_CARD}`) ?? null;
+      if (!top) return undefined;
+      if (top.dataset.researchCard === item.id) return null;
+      markAfterGroup(top);
+      showMoveOutLabel(zone, top);
+      return { place, position: positionAfter(zone, top) };
     };
 
     const autoScroll = () => {
@@ -388,7 +459,11 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       document.body.appendChild(ghost);
       card.classList.add("is-dragging");
       itemGroup?.classList.add("is-dragging");
+      itemParentGroup?.classList.add("has-dragged-child");
+      itemParentCard?.classList.add("is-drag-parent");
       root.classList.add("is-research-dragging");
+      // Nest ports show on the cards that can take the item.
+      if (item.kind === "tree") root.classList.add("is-research-nesting");
       window.getSelection()?.removeAllRanges();
       frame = requestAnimationFrame(autoScroll);
     };
@@ -408,7 +483,9 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       ghost?.remove();
       card.classList.remove("is-dragging");
       itemGroup?.classList.remove("is-dragging");
-      root.classList.remove("is-research-dragging", "is-research-drop-none");
+      itemParentGroup?.classList.remove("has-dragged-child");
+      itemParentCard?.classList.remove("is-drag-parent");
+      root.classList.remove("is-research-dragging", "is-research-nesting", "is-research-drop-none");
     };
 
     function onMove(moveEvent: PointerEvent) {

@@ -10,7 +10,7 @@ import { researchTreeDeleteDialogProps } from "../src/components/research/Resear
 import { ResearchDeleteDialogPanel } from "../src/components/research/ResearchDeleteDialog";
 import { emptyResearchFolderState, RESEARCH_DRAFTS_FOLDER_ID } from "../src/lib/researchFolders";
 import {
-  researchCardDropZone,
+  researchCardDrop,
   researchChildCount,
   researchChildIds,
   researchFolderStateWithGroupCollapsed,
@@ -18,6 +18,7 @@ import {
   researchGroupSummary,
   researchItemCount,
   researchNestCandidates,
+  researchNestPortShown,
   researchNestRefusal,
   researchOrderAfterMoveOut,
   researchOrderAfterNest,
@@ -44,10 +45,10 @@ function root(id: string, overrides: Partial<RecentResearchQuery> = {}): RecentR
 
 const ids = (trees: { id: string }[]) => trees.map((entry) => entry.id);
 
-test("questions and documents hold children; posts do not", () => {
+test("questions, documents and posts (notes, link posts, X posts) hold children", () => {
   assert.equal(researchTreeHoldsChildren("exchange"), true);
   assert.equal(researchTreeHoldsChildren("document"), true);
-  assert.equal(researchTreeHoldsChildren("post"), false);
+  assert.equal(researchTreeHoldsChildren("post"), true);
   assert.equal(researchTreeHoldsChildren(undefined), false);
 });
 
@@ -85,21 +86,68 @@ test("nesting takes the parent's folder; moving out keeps it; collapse is per pa
   assert.deepEqual(researchFolderStateWithGroupCollapsed(collapsed, "p", false).collapsedGroups, []);
 });
 
-test("a parent's card has reorder edges of a quarter of its height, 8 to 14px; other cards split at the midpoint", () => {
-  // 80px card: 14px edges (a quarter is 20).
-  assert.equal(researchCardDropZone(80, 13, true), "before");
-  assert.equal(researchCardDropZone(80, 14, true), "nest");
-  assert.equal(researchCardDropZone(80, 66, true), "nest");
-  assert.equal(researchCardDropZone(80, 67, true), "after");
-  // 24px card: 8px edges (a quarter is 6).
-  assert.equal(researchCardDropZone(24, 7, true), "before");
-  assert.equal(researchCardDropZone(24, 12, true), "nest");
-  assert.equal(researchCardDropZone(24, 17, true), "after");
-  // 48px card: 12px edges.
-  assert.equal(researchCardDropZone(48, 11, true), "before");
-  assert.equal(researchCardDropZone(48, 37, true), "after");
-  assert.equal(researchCardDropZone(80, 40, false), "before");
-  assert.equal(researchCardDropZone(80, 41, false), "after");
+test("a nest port shows on the top-level parents that can take the dragged item", () => {
+  const top = { id: "p", holdsChildren: true, parentId: null };
+  assert.equal(researchNestPortShown({ id: "a", parentId: null }, top), true);
+  // A group (a parent with children) may nest; the drop asks to flatten.
+  assert.equal(researchNestPortShown({ id: "g", parentId: null }, top), true);
+  // Not on the item itself, its current parent, a child, or a card that
+  // can't hold children.
+  assert.equal(researchNestPortShown({ id: "p", parentId: null }, top), false);
+  assert.equal(researchNestPortShown({ id: "c", parentId: "p" }, top), false);
+  assert.equal(researchNestPortShown({ id: "c", parentId: "q" }, top), true);
+  assert.equal(researchNestPortShown({ id: "a", parentId: null }, { ...top, parentId: "q" }), false);
+  assert.equal(researchNestPortShown({ id: "a", parentId: null }, { ...top, holdsChildren: false }), false);
+});
+
+test("only the port nests; the rest of a top-level card reorders by half", () => {
+  const item = { id: "a", parentId: null };
+  const card = {
+    card: "top" as const, id: "p", holdsChildren: true, onPort: false,
+    after: false, expanded: false, firstChildId: null,
+  };
+  assert.deepEqual(researchCardDrop(item, { ...card, onPort: true }), { kind: "nest", parentId: "p", beforeId: null });
+  // The middle of a parent no longer nests: top half before, bottom half after.
+  assert.deepEqual(researchCardDrop(item, card), { kind: "before", id: "p" });
+  assert.deepEqual(researchCardDrop(item, { ...card, after: true }), { kind: "after-group", id: "p" });
+  // After an expanded parent is before its first child.
+  assert.deepEqual(
+    researchCardDrop(item, { ...card, after: true, expanded: true, firstChildId: "c1" }),
+    { kind: "nest", parentId: "p", beforeId: "c1" },
+  );
+  // A card that can't hold children, or whose port is hidden (the item's
+  // parent, the item itself), reorders even under the pointer's port spot.
+  assert.deepEqual(researchCardDrop(item, { ...card, holdsChildren: false, onPort: true }), { kind: "before", id: "p" });
+  assert.deepEqual(
+    researchCardDrop({ id: "c", parentId: "p" }, { ...card, onPort: true, after: false }),
+    { kind: "before", id: "p" },
+  );
+  assert.deepEqual(researchCardDrop({ id: "p", parentId: null }, { ...card, onPort: true }), { kind: "none" });
+  assert.deepEqual(researchCardDrop({ id: "p", parentId: null }, { ...card, after: true }), { kind: "none" });
+});
+
+test("a child card inserts within its group; past the last child's glyph it leaves", () => {
+  const child = {
+    card: "child" as const, id: "c1", parentId: "p", after: false, nextId: "c2", leftOfText: false,
+  };
+  const item = { id: "a", parentId: null };
+  assert.deepEqual(researchCardDrop(item, child), { kind: "nest", parentId: "p", beforeId: "c1" });
+  assert.deepEqual(researchCardDrop(item, { ...child, after: true }), { kind: "nest", parentId: "p", beforeId: "c2" });
+  const last = { ...child, id: "c2", after: true, nextId: null };
+  assert.deepEqual(researchCardDrop(item, last), { kind: "nest", parentId: "p", beforeId: null });
+  assert.deepEqual(researchCardDrop(item, { ...last, leftOfText: true }), { kind: "after-group", id: "p" });
+  assert.deepEqual(researchCardDrop({ id: "c2", parentId: "p" }, last), { kind: "none" });
+  assert.deepEqual(researchCardDrop({ id: "p", parentId: null }, child), {
+    kind: "refuse",
+    reason: "Can’t move a group into itself.",
+  });
+});
+
+test("a group's Move out strip takes only its own children, after the group", () => {
+  const exit = { card: "group-exit" as const, parentId: "p" };
+  assert.deepEqual(researchCardDrop({ id: "c1", parentId: "p" }, exit), { kind: "after-group", id: "p" });
+  assert.deepEqual(researchCardDrop({ id: "c1", parentId: "q" }, exit), { kind: "none" });
+  assert.deepEqual(researchCardDrop({ id: "a", parentId: null }, exit), { kind: "none" });
 });
 
 test("an item can't nest under itself or into its own group", () => {
@@ -180,20 +228,30 @@ test("a parent's card has a toggle line and its children follow it as indented c
     tree("c1", { runningCount: 1 }),
     tree("c2", { hasUnseenUpdate: true }),
     tree("note", { type: "post" }),
+    tree("link", { type: "post" }),
   ];
-  const items = [root("p"), root("c1"), root("c2"), root("note", { type: "post", format: "text" })];
+  const items = [
+    root("p"), root("c1"), root("c2"),
+    root("note", { type: "post", format: "text" }),
+    root("link", { type: "post", format: "link", prompt: "https://example.com/a" }),
+  ];
   const folderState = { ...emptyResearchFolderState(), parents: { c1: "p", c2: "p" } };
   const html = renderFeed({ items, researchTrees: trees, folderState });
   assert.match(html, /aria-expanded="true" aria-label="Hide 2 items under “Title p”"/);
   assert.match(html, /<span>2 items<\/span>/);
   assert.match(html, /class="research-feed-group"/);
   // Children carry their parent for drag and drop and name it to assistive
-  // technology; the parent takes nest drops, a note does not.
+  // technology. Top-level questions, documents and posts (a note, a link
+  // post) have a nest port, shown only during a drag; a child does not.
   assert.match(html, /data-research-card="c1"[^>]*data-research-parent="p"/);
   assert.match(html, /aria-label="Title c1. Question c1, in “Title p”"/);
   assert.match(html, /data-research-card="p"[^>]*data-research-holds-children=""[^>]*data-research-children="2"/);
-  assert.doesNotMatch(html, /data-research-card="note"[^>]*data-research-holds-children/);
+  assert.match(html, /data-research-card="note"[^>]*data-research-holds-children/);
+  assert.match(html, /data-research-card="link"[^>]*data-research-holds-children/);
   assert.doesNotMatch(html, /data-research-card="c1"[^>]*data-research-holds-children/);
+  assert.equal(html.match(/class="research-feed-nest-port" aria-hidden="true">Make child</g)?.length, 3);
+  // The expanded group's Move out strip follows it.
+  assert.match(html, /class="research-feed-group"[\s\S]*<\/div><div class="research-feed-group-exit" data-research-group-exit="p" aria-hidden="true">Move out of group<\/div>/);
   // Expanded, the toggle shows no counts.
   assert.doesNotMatch(html, /research-feed-group-summary/);
   assert.ok(html.indexOf('data-research-card="p"') < html.indexOf('data-research-card="c1"'));

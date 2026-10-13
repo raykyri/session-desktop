@@ -212,7 +212,7 @@ export interface ResearchActivityFeedProps {
   /** The children archived, moved to the Trash or deleted with a tree, for
    * its confirmations. */
   groupChildren?: (treeId: string) => ResearchTreeSummary[];
-  /** Lists a tree under a question or document (Make child of…, ⌥→, and
+  /** Lists a tree under a question, document or post (Make child of…, ⌥→, and
    * ⌥↑/⌥↓ within a group), before `beforeId` or at the end for null. */
   onNestTree?: (treeId: string, parentId: string, beforeId: string | null) => void;
   /** Move out (⌥←): lists a child on its own after its former group. */
@@ -537,6 +537,8 @@ function ResearchActivityFeed({
     }
     return map;
   }, [items]);
+  /** Whether a tree can be a parent: a question, a document or a post. */
+  const treeHoldsChildren = (treeId: string) => researchTreeHoldsChildren(treeById.get(treeId)?.type);
   const placeOf = useCallback(
     (tree: ResearchTreeSummary | undefined) =>
       tree && folderState ? researchTreePlace(tree, folderState) : RESEARCH_UNFILED_FOLDER_ID,
@@ -1004,7 +1006,7 @@ function ResearchActivityFeed({
         title={title}
         label={parentName ? `${cardLabel}, in “${shortName(parentName)}”` : cardLabel}
         holdsChildren={
-          !parentId && tree !== undefined && tree.archivedAt == null && researchTreeHoldsChildren(tree.type)
+          !parentId && tree !== undefined && tree.archivedAt == null && treeHoldsChildren(tree.id)
         }
         parentId={parentId}
         group={group}
@@ -1384,7 +1386,8 @@ function ResearchActivityFeed({
     return { card, tree, place };
   }
 
-  /** ⌥→: lists the focused card under the question or document above it. */
+  /** ⌥→: lists the focused card under the question, document or post above
+   * it. */
   function nestFocusedCard(control: HTMLElement) {
     const focused = focusedTreeCard(control);
     if (!focused || !onNestTree) return;
@@ -1396,11 +1399,11 @@ function ResearchActivityFeed({
     const ids = topLevelIdsIn(place);
     const above = treeById.get(ids[ids.indexOf(tree.id) - 1] ?? "");
     if (!above) {
-      announce("No question or document above to nest under.");
+      announce("No question, document or post above to nest under.");
       return;
     }
-    if (!researchTreeHoldsChildren(above.type)) {
-      announce(`“${shortName(above.title)}” can’t hold children. Only questions and documents can.`);
+    if (!treeHoldsChildren(above.id)) {
+      announce(`“${shortName(above.title)}” can’t hold children.`);
       return;
     }
     onNestTree(tree.id, above.id, null);
@@ -1448,7 +1451,7 @@ function ResearchActivityFeed({
           (id) =>
             id !== menuGroupTree.id &&
             id !== menuGroupParent?.id &&
-            researchTreeHoldsChildren(treeById.get(id)?.type),
+            treeHoldsChildren(id),
         ).flatMap((id) => treeById.get(id) ?? [])
       : [];
   const menuGroupCollapsed = menuGroupTree ? collapsedGroups.has(menuGroupTree.id) : false;
@@ -1459,7 +1462,7 @@ function ResearchActivityFeed({
           icon={<IndentIncrease size={15} aria-hidden="true" />}
           label="Make child of…"
           disabled={nestCandidates.length === 0}
-          title={nestCandidates.length === 0 ? "No question or document to nest under" : undefined}
+          title={nestCandidates.length === 0 ? "No question, document or post to nest under" : undefined}
           onSelect={() => setMenu({ ...menu, mode: "nest" })}
         />
         {menuGroupParent && onMoveOutOfGroup ? (
