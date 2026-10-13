@@ -71,7 +71,9 @@ pub fn kill_all_sessions() {
 
 /// Starts a research run. `guidance` is an instruction block delivered through
 /// each agent's system-level channel rather than the prompt (see
-/// [`crate::research_widgets::AGENT_GUIDANCE`]).
+/// [`crate::research_widgets::AGENT_GUIDANCE`]). The images attached to the
+/// node's own message go with the prompt; earlier messages' images reach a
+/// follow-up through the forked session's history.
 pub fn launch(
     state: &AppState,
     node: &ResearchNode,
@@ -88,18 +90,36 @@ pub fn launch(
             let _ = state.fail_research_node(&node.id, err.clone());
             err
         })?;
+    let images =
+        crate::research_images::ensure_adapter_reads_images(node.adapter(), node.attachments())
+            .and_then(|()| {
+                crate::research_images::launch_images(
+                    &state.config().workspace_root,
+                    node.attachments(),
+                )
+            })
+            .map_err(|err| {
+                let _ = state.fail_research_node(&node.id, err.clone());
+                err
+            })?;
     match node.adapter() {
-        "claude" => launch_claude(state, node, workspace, prompt, resume, fork, guidance),
-        "codex" | "grok" => launch_jsonl(state, node, workspace, prompt, resume, fork, guidance),
+        "claude" => launch_claude(
+            state, node, workspace, prompt, images, resume, fork, guidance,
+        ),
+        "codex" | "grok" => launch_jsonl(
+            state, node, workspace, prompt, images, resume, fork, guidance,
+        ),
         adapter => Err(format!("'{adapter}' is not a supported research agent")),
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch_claude(
     state: &AppState,
     node: &ResearchNode,
     workspace: &crate::workspace::GroupInfo,
     prompt: String,
+    images: Vec<crate::research_images::LaunchImage>,
     resume: Option<String>,
     fork: bool,
     guidance: Option<&str>,
@@ -215,6 +235,7 @@ fn launch_claude(
                 node_id,
                 agent_id,
                 prompt,
+                images,
                 spec,
                 workspace_dir,
                 interrupt_rx,
@@ -252,11 +273,13 @@ impl JsonlFlavor {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch_jsonl(
     state: &AppState,
     node: &ResearchNode,
     workspace: &crate::workspace::GroupInfo,
     prompt: String,
+    images: Vec<crate::research_images::LaunchImage>,
     resume: Option<String>,
     fork: bool,
     guidance: Option<&str>,
@@ -266,6 +289,10 @@ fn launch_jsonl(
         "grok" => JsonlFlavor::Grok,
         adapter => return Err(format!("'{adapter}' has no JSONL research runtime")),
     };
+    let image_flags = codex_image_flags(&images).map_err(|err| {
+        let _ = state.fail_research_node(&node.id, err.clone());
+        err
+    })?;
     if fork && resume.as_deref().map(str::trim).is_none_or(str::is_empty) {
         let err = format!(
             "{} research parent has no session id to fork",
@@ -367,14 +394,18 @@ fn launch_jsonl(
         .join("research-logs")
         .join(format!("{}.log", node.id));
     let args = match flavor {
-        JsonlFlavor::Codex => build_codex_exec_args(
-            &prompt,
-            node.model(),
-            node.effort(),
-            resume.as_deref(),
-            fork,
-            guidance,
+        JsonlFlavor::Codex => with_codex_images(
+            build_codex_exec_args(
+                &prompt,
+                node.model(),
+                node.effort(),
+                resume.as_deref(),
+                fork,
+                guidance,
+            ),
+            image_flags,
         ),
+        // `launch` refuses images for Grok, which has no image input.
         JsonlFlavor::Grok => build_grok_headless_args(
             &cwd,
             &prompt,
@@ -478,6 +509,38 @@ fn build_codex_exec_args(
         }
     }
     args.extend(["--".to_string(), prompt.to_string()]);
+    args
+}
+
+/// One `--image=<path>` per image. `codex exec` splits an `--image` value
+/// at commas, so a path containing one is refused rather than sent as two
+/// missing files.
+fn codex_image_flags(
+    images: &[crate::research_images::LaunchImage],
+) -> Result<Vec<String>, String> {
+    images
+        .iter()
+        .map(|image| {
+            let path = image.path.display().to_string();
+            if path.contains(',') {
+                return Err(format!(
+                    "Codex can't attach the image at {path}: its path contains a comma."
+                ));
+            }
+            Ok(format!("--image={path}"))
+        })
+        .collect()
+}
+
+/// Puts the image flags just before the `--` that delimits the prompt,
+/// after `exec fork`'s session id, so the variadic `--image` of `codex exec`
+/// cannot take the id or the prompt as a file.
+fn with_codex_images(mut args: Vec<String>, image_flags: Vec<String>) -> Vec<String> {
+    let separator = args
+        .iter()
+        .rposition(|arg| arg == "--")
+        .unwrap_or(args.len());
+    args.splice(separator..separator, image_flags);
     args
 }
 
@@ -921,11 +984,13 @@ fn result_after_end_turn_stall() -> Duration {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_session(
     state: AppState,
     node_id: String,
     agent_id: String,
     prompt: String,
+    images: Vec<crate::research_images::LaunchImage>,
     spec: ClaudeSdkSpawnSpec,
     workspace_dir: PathBuf,
     interrupt_rx: std::sync::mpsc::Receiver<()>,
@@ -1084,7 +1149,12 @@ fn run_session(
                 }
                 if session.initialized && !sent_prompt && !cancelled {
                     initialize_deadline = None;
-                    if let Err(err) = session.send_user_prompt(&prompt) {
+                    let sent = images
+                        .iter()
+                        .map(crate::research_images::LaunchImage::claude_content_block)
+                        .collect::<Result<Vec<_>, _>>()
+                        .and_then(|blocks| session.send_user_message(&prompt, blocks));
+                    if let Err(err) = sent {
                         session.kill();
                         finish_failed(&state, &node_id, &agent_id, err, &stderr_log);
                         unregister(&node_id);
@@ -2263,6 +2333,54 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         );
         assert!(fork.iter().any(|arg| arg == "sandbox_mode=\"read-only\""));
         assert_eq!(&fork[fork.len() - 3..], ["parent-1", "--", "branch"]);
+    }
+
+    #[test]
+    fn codex_images_go_before_the_prompt_separator() {
+        let image = |path: &str| crate::research_images::LaunchImage {
+            path: PathBuf::from(path),
+            format: crate::research_images::ImageFormat::Png,
+        };
+        let flags = codex_image_flags(&[image("/store/a.png"), image("/store/b.png")]).unwrap();
+
+        let args = with_codex_images(
+            build_codex_exec_args("question", None, None, None, false, None),
+            flags.clone(),
+        );
+        assert_eq!(
+            &args[args.len() - 4..],
+            [
+                "--image=/store/a.png",
+                "--image=/store/b.png",
+                "--",
+                "question"
+            ]
+        );
+
+        // `exec fork` takes the session id positionally; the images follow it
+        // so the variadic `--image` cannot swallow it.
+        let fork = with_codex_images(
+            build_codex_exec_args("branch", None, None, Some("parent-1"), true, None),
+            flags,
+        );
+        assert_eq!(
+            &fork[fork.len() - 5..],
+            [
+                "parent-1",
+                "--image=/store/a.png",
+                "--image=/store/b.png",
+                "--",
+                "branch"
+            ]
+        );
+
+        let unchanged = build_codex_exec_args("q", None, None, None, false, None);
+        assert_eq!(with_codex_images(unchanged.clone(), Vec::new()), unchanged);
+        assert!(
+            codex_image_flags(&[image("/a,b/c.png")])
+                .unwrap_err()
+                .contains("comma")
+        );
     }
 
     #[test]

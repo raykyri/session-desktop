@@ -387,6 +387,26 @@ pub fn assistant_message_is_end_turn(raw: &Value) -> bool {
         == Some("end_turn")
 }
 
+/// A stream-json user message. Without images the content is the prompt
+/// string; with images it is a content array, images first, as the Messages
+/// API recommends. Claude Code resizes an image over the API's limits before
+/// sending it.
+pub fn user_message(prompt: &str, images: Vec<Value>) -> Value {
+    let content = if images.is_empty() {
+        Value::String(prompt.to_string())
+    } else {
+        let mut blocks = images;
+        blocks.push(json!({ "type": "text", "text": prompt }));
+        Value::Array(blocks)
+    };
+    json!({
+        "type": "user",
+        "session_id": "",
+        "parent_tool_use_id": null,
+        "message": { "role": "user", "content": content }
+    })
+}
+
 pub fn next_request_id(counter: &mut u64) -> String {
     *counter += 1;
     let mut bytes = [0u8; 4];
@@ -589,15 +609,16 @@ impl ClaudeSdkSession {
     }
 
     pub fn send_user_prompt(&mut self, prompt: &str) -> Result<(), String> {
+        self.send_user_message(prompt, Vec::new())
+    }
+
+    /// Sends the prompt with `images` (Messages API `image` content blocks)
+    /// before its text.
+    pub fn send_user_message(&mut self, prompt: &str, images: Vec<Value>) -> Result<(), String> {
         if !self.initialized {
             return Err("cannot send a user prompt before initialize succeeds".to_string());
         }
-        self.write_json(&json!({
-            "type": "user",
-            "session_id": "",
-            "parent_tool_use_id": null,
-            "message": { "role": "user", "content": prompt }
-        }))
+        self.write_json(&user_message(prompt, images))
     }
 
     pub fn write_interrupt(&mut self) -> Result<String, String> {
@@ -883,6 +904,27 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn user_messages_put_images_before_the_prompt_text() {
+        assert_eq!(
+            user_message("Question", Vec::new()),
+            json!({
+                "type": "user",
+                "session_id": "",
+                "parent_tool_use_id": null,
+                "message": { "role": "user", "content": "Question" }
+            })
+        );
+        let image = json!({
+            "type": "image",
+            "source": { "type": "base64", "media_type": "image/png", "data": "AAAA" }
+        });
+        assert_eq!(
+            user_message("Question", vec![image.clone()])["message"]["content"],
+            json!([image, { "type": "text", "text": "Question" }])
+        );
+    }
 
     #[test]
     fn parse_claude_version_reads_semver_prefix() {
