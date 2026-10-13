@@ -572,6 +572,31 @@
   color: var(--text-heading);
 }
 
+/* Home's New folder link, under the last tray, at the tray titles' inset. */
+.research-feed-new-folder {
+  display: block;
+  margin: 0 10px 12px 24px;
+  padding: 2px 0;
+  border: 0;
+  color: var(--text-faint);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.research-feed-new-folder:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+.research-feed-new-folder:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 /* — Trash — Rows don't open, so they have no hover fill; the actions sit at
    the end of each row. */
 

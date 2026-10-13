@@ -377,6 +377,15 @@ test("Home ends with a collapsed Trash tray that counts its items and takes no d
   assert.doesNotMatch(trash, /Old thread/);
 });
 
+test("Home has a New folder link directly below the Trash tray", () => {
+  const html = renderFeed({ trashEntries, onNewFolder: noop });
+  const trashTray = html.indexOf('aria-label="Trash"');
+  const link = html.indexOf('<button type="button" class="research-feed-new-folder">+ New folder</button>');
+  assert.ok(trashTray > 0 && link > trashTray);
+  assert.equal(html.slice(trashTray, link).match(/<section/g), null);
+  assert.doesNotMatch(renderFeed({ view: { kind: "archive" }, onNewFolder: noop }), /research-feed-new-folder/);
+});
+
 test("Trash lists its items newest first with Restore and Delete now, and empties from its header", () => {
   const html = renderFeed({ view: { kind: "trash" }, trashEntries, onEmptyTrash: asyncNoop });
   assert.match(html, /research-feed-header-title[^>]*>Trash</);

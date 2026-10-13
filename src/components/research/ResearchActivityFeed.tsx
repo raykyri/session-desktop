@@ -1533,6 +1533,16 @@ function ResearchActivityFeed({
               {renderPlaceCards(RESEARCH_TRASH_FOLDER_ID)}
             </ResearchFeedTray>
           ) : null}
+          {view.kind === "home" && onNewFolder ? (
+            // The sidebar's New folder, below the trays; focus returns here.
+            <button
+              type="button"
+              className="research-feed-new-folder"
+              onClick={(event) => onNewFolder(undefined, event.currentTarget)}
+            >
+              + New folder
+            </button>
+          ) : null}
           {soloPlace ? (
             <section
               className="research-feed-solo"
