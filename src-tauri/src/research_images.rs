@@ -50,6 +50,14 @@ const MAX_IMAGE_SIDE: u32 = 8000;
 const DOWNSCALED_IMAGE_SIDE: u32 = 2048;
 /// Largest decoded image, in bytes of pixel data.
 const MAX_DECODED_IMAGE_BYTES: u64 = 512 * 1024 * 1024;
+/// Longest side of the small JPEG kept beside a PNG or JPEG image for the
+/// thumbnails in messages and composers.
+const THUMBNAIL_SIDE: u32 = 256;
+/// A thumbnail is named after its image: `<id>.thumb.jpg`. It moves and is
+/// removed with the image.
+const THUMBNAIL_SUFFIX: &str = ".thumb.jpg";
+/// Largest thumbnail file read back.
+const MAX_THUMBNAIL_BYTES: u64 = 1024 * 1024;
 /// Most images one message can carry.
 pub const MAX_IMAGES_PER_MESSAGE: usize = 8;
 /// Longest kept original file name, in characters.
@@ -327,6 +335,37 @@ fn encode_jpeg(image: &image::DynamicImage, quality: u8) -> Result<Vec<u8>, Stri
     Ok(out)
 }
 
+fn thumbnail_name(id: &str) -> String {
+    format!("{id}{THUMBNAIL_SUFFIX}")
+}
+
+/// The image id a thumbnail file name belongs to.
+fn thumbnail_owner(name: &str) -> Option<&str> {
+    name.strip_suffix(THUMBNAIL_SUFFIX)
+        .filter(|id| is_image_id(id))
+}
+
+/// A small JPEG of a PNG or JPEG image, or None for other formats or an
+/// image that does not decode.
+fn make_thumbnail(format: ImageFormat, bytes: &[u8]) -> Option<Vec<u8>> {
+    if !decodes(format) {
+        return None;
+    }
+    let decoded = decode(format, bytes).ok()?;
+    encode_jpeg(&decoded.thumbnail(THUMBNAIL_SIDE, THUMBNAIL_SIDE), 80).ok()
+}
+
+/// Writes the thumbnail of the image at `image` beside it. Best effort: a
+/// strip without one shows the full image.
+fn write_thumbnail(image: &Path, id: &str, thumbnail: &[u8]) {
+    let path = image.with_file_name(thumbnail_name(id));
+    let partial = image.with_file_name(format!("{id}.thumb.tmp"));
+    if let Err(err) = fs::write(&partial, thumbnail).and_then(|()| fs::rename(&partial, &path)) {
+        let _ = fs::remove_file(&partial);
+        eprintln!("session: failed to save the thumbnail of research image {id}: {err}");
+    }
+}
+
 /// The bytes to store for a pasted or dropped image. A PNG or JPEG over
 /// [`MAX_IMAGE_BYTES`] or [`MAX_IMAGE_SIDE`] is downscaled to
 /// [`DOWNSCALED_IMAGE_SIDE`] and re-encoded as JPEG; the original is not
@@ -415,6 +454,9 @@ pub fn save_pending(
             let _ = fs::remove_file(&partial);
             format!("failed to save the image: {err}")
         })?;
+    if let Some(thumbnail) = make_thumbnail(format, bytes) {
+        write_thumbnail(&path, &id, &thumbnail);
+    }
     Ok(attachment_from_bytes(id, format, bytes, file_name))
 }
 
@@ -545,6 +587,46 @@ pub fn read_data_url(workspace_root: &Path, id: &str) -> Result<String, String> 
     ))
 }
 
+/// The image's thumbnail as a `data:` URL, for the strips in messages and
+/// composers. A PNG or JPEG image without one (saved before thumbnails, or
+/// copied back from a folder archive) gets one written now; a GIF or WebP
+/// image is returned whole.
+pub fn read_thumbnail_data_url(workspace_root: &Path, id: &str) -> Result<String, String> {
+    let path = image_path(workspace_root, id).ok_or_else(|| {
+        "An attached image is no longer available. Remove it and attach it again.".to_string()
+    })?;
+    let thumbnail_path = path.with_file_name(thumbnail_name(id));
+    if is_regular_file(&thumbnail_path)
+        && let Ok(file) = fs::File::open(&thumbnail_path)
+    {
+        let mut bytes = Vec::new();
+        if file
+            .take(MAX_THUMBNAIL_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .is_ok()
+            && bytes.len() as u64 <= MAX_THUMBNAIL_BYTES
+            && ImageFormat::sniff(&bytes) == Some(ImageFormat::Jpeg)
+        {
+            return Ok(format!("data:image/jpeg;base64,{}", STANDARD.encode(bytes)));
+        }
+    }
+    let (format, bytes) = read_image(workspace_root, id)?;
+    match make_thumbnail(format, &bytes) {
+        Some(thumbnail) => {
+            write_thumbnail(&path, id, &thumbnail);
+            Ok(format!(
+                "data:image/jpeg;base64,{}",
+                STANDARD.encode(thumbnail)
+            ))
+        }
+        None => Ok(format!(
+            "data:{};base64,{}",
+            format.mime_type(),
+            STANDARD.encode(bytes)
+        )),
+    }
+}
+
 pub fn image_ids(attachments: &[ResearchMessageAttachment]) -> impl Iterator<Item = &str> {
     attachments
         .iter()
@@ -558,21 +640,50 @@ fn is_regular_file(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
+/// Moves image `id` at `from`, and its thumbnail, into `to_dir`. A copy
+/// already there is kept and `from` is removed.
 fn move_file(from: &Path, to_dir: &Path, id: &str) {
     if !is_regular_file(from) {
         return;
     }
-    let target = to_dir.join(id);
-    let result = fs::create_dir_all(to_dir).and_then(|()| {
-        if is_regular_file(&target) {
-            fs::remove_file(from)
-        } else {
-            fs::rename(from, &target)
+    let thumbnail = thumbnail_name(id);
+    for (from, name) in [
+        (from.to_path_buf(), id),
+        (from.with_file_name(&thumbnail), thumbnail.as_str()),
+    ] {
+        if !is_regular_file(&from) {
+            continue;
         }
-    });
-    if let Err(err) = result {
-        eprintln!("session: failed to move research image {id}: {err}");
+        let target = to_dir.join(name);
+        let result = fs::create_dir_all(to_dir).and_then(|()| {
+            if is_regular_file(&target) {
+                fs::remove_file(&from)
+            } else {
+                fs::rename(&from, &target)
+            }
+        });
+        if let Err(err) = result {
+            eprintln!("session: failed to move research image {name}: {err}");
+        }
     }
+}
+
+/// Removes image `id` at `path` and its thumbnail.
+fn remove_image(path: &Path, id: &str) {
+    remove_logged(path);
+    remove_logged(&path.with_file_name(thumbnail_name(id)));
+}
+
+/// For a sweep of `dir`: whether `name` is a thumbnail, which is moved and
+/// removed with its image. One whose image is gone is removed.
+fn skip_thumbnail(dir: &Path, name: &str) -> bool {
+    let Some(owner) = thumbnail_owner(name) else {
+        return false;
+    };
+    if !is_regular_file(&dir.join(owner)) {
+        remove_logged(&dir.join(name));
+    }
+    true
 }
 
 /// Copies the image files of a detached research archive into the store, as
@@ -631,7 +742,7 @@ pub fn release<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>
     for id in ids.into_iter().filter(|id| is_image_id(id)) {
         let path = store.join(id);
         if file_older_than(&path, PENDING_LIFETIME) {
-            remove_logged(&path);
+            remove_image(&path, id);
         } else {
             move_file(&path, &pending, id);
         }
@@ -687,7 +798,8 @@ fn file_older_than(path: &Path, age: Duration) -> bool {
 /// and writing that) move to pending with a fresh lifetime instead of being
 /// removed. Never run off a degraded load, whose state may be missing nodes.
 pub fn reconcile_store(workspace_root: &Path, referenced: &HashSet<String>) {
-    let Ok(entries) = fs::read_dir(store_dir(workspace_root)) else {
+    let store = store_dir(workspace_root);
+    let Ok(entries) = fs::read_dir(&store) else {
         return;
     };
     let pending = pending_dir(workspace_root);
@@ -695,6 +807,9 @@ pub fn reconcile_store(workspace_root: &Path, referenced: &HashSet<String>) {
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
+        if skip_thumbnail(&store, name) {
+            continue;
+        }
         if is_image_id(name) && !referenced.contains(name) && is_regular_file(&path) {
             move_file(&path, &pending, name);
             touch(&pending.join(name));
@@ -706,7 +821,8 @@ pub fn reconcile_store(workspace_root: &Path, referenced: &HashSet<String>) {
 /// the store (a crash between saving a message and moving its images leaves
 /// them pending); others older than [`PENDING_LIFETIME`] are removed.
 pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
-    let Ok(entries) = fs::read_dir(pending_dir(workspace_root)) else {
+    let pending = pending_dir(workspace_root);
+    let Ok(entries) = fs::read_dir(&pending) else {
         return;
     };
     let store = store_dir(workspace_root);
@@ -714,10 +830,13 @@ pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
+        if skip_thumbnail(&pending, name) {
+            continue;
+        }
         if referenced.contains(name) {
             move_file(&path, &store, name);
         } else if file_older_than(&path, PENDING_LIFETIME) {
-            remove_logged(&path);
+            remove_image(&path, name);
         }
     }
 }
@@ -728,16 +847,19 @@ pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
 /// sends. Referenced pending images (after a crash, or a degraded load that
 /// skipped [`sweep_pending`]) are kept.
 pub fn sweep_stale_pending(workspace_root: &Path, in_use: &HashSet<String>) {
-    let Ok(entries) = fs::read_dir(pending_dir(workspace_root)) else {
+    let pending = pending_dir(workspace_root);
+    let Ok(entries) = fs::read_dir(&pending) else {
         return;
     };
     for path in entries.flatten().map(|entry| entry.path()) {
-        let referenced = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| in_use.contains(name));
-        if !referenced && file_older_than(&path, PENDING_LIFETIME) {
-            remove_logged(&path);
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if skip_thumbnail(&pending, name) {
+            continue;
+        }
+        if !in_use.contains(name) && file_older_than(&path, PENDING_LIFETIME) {
+            remove_image(&path, name);
         }
     }
 }
@@ -1252,6 +1374,58 @@ mod tests {
             panic!("expected an image attachment");
         };
         assert_eq!(fs::read(pending_dir(&root).join(id)).unwrap(), small);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn thumbnails_follow_their_image() {
+        let root = temp_root();
+        let attachment = save_pending(&root, &noise_png(600, 300), None).unwrap();
+        let ResearchMessageAttachment::Image { id, .. } = &attachment else {
+            panic!("expected an image attachment");
+        };
+        let thumbnail = pending_dir(&root).join(thumbnail_name(id));
+        let bytes = fs::read(&thumbnail).unwrap();
+        let decoded = decode(ImageFormat::Jpeg, &bytes).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (256, 128));
+        assert!(
+            read_thumbnail_data_url(&root, id)
+                .unwrap()
+                .starts_with("data:image/jpeg;base64,")
+        );
+        // A thumbnail is not an image id and never resolves as one.
+        assert!(image_path(&root, &thumbnail_name(id)).is_none());
+
+        commit(&root, [id.as_str()]);
+        assert!(store_dir(&root).join(thumbnail_name(id)).is_file());
+        assert!(!thumbnail.exists());
+        // A missing thumbnail is written again on read.
+        fs::remove_file(store_dir(&root).join(thumbnail_name(id))).unwrap();
+        read_thumbnail_data_url(&root, id).unwrap();
+        assert!(store_dir(&root).join(thumbnail_name(id)).is_file());
+        // The startup pass keeps a thumbnail with its image and moves it
+        // along.
+        reconcile_store(&root, &HashSet::new());
+        assert!(thumbnail.is_file());
+        age_file_for_test(&pending_dir(&root).join(id));
+        sweep_stale_pending(&root, &HashSet::new());
+        assert!(!thumbnail.exists());
+
+        // An orphaned thumbnail is removed; a GIF has none and its
+        // thumbnail is the image itself.
+        fs::create_dir_all(pending_dir(&root)).unwrap();
+        fs::write(&thumbnail, b"x").unwrap();
+        sweep_pending(&root, &HashSet::new());
+        assert!(!thumbnail.exists());
+        let gif = save_pending(&root, b"GIF89a\x40\x01\xf0\x00", None).unwrap();
+        let ResearchMessageAttachment::Image { id: gif_id, .. } = &gif else {
+            panic!("expected an image attachment");
+        };
+        assert!(
+            read_thumbnail_data_url(&root, gif_id)
+                .unwrap()
+                .starts_with("data:image/gif;base64,")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

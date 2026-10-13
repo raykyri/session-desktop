@@ -238,6 +238,12 @@ export function readResearchImage(id: string) {
   return invoke<string>("read_research_image", { id });
 }
 
+/** A small JPEG of a research message image (a GIF or WebP image whole) as
+ * a `data:` URL, for thumbnail strips. */
+export function readResearchImageThumbnail(id: string) {
+  return invoke<string>("read_research_image_thumbnail", { id });
+}
+
 export function deleteResearchDraft(draftId: string) {
   return invoke<void>("delete_research_draft", { draftId });
 }

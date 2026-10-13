@@ -1651,6 +1651,21 @@ async fn import_research_image(
     .map_err(|err| format!("import_research_image task failed: {err}"))?
 }
 
+/// The thumbnail of an image attached to a research message, as a `data:`
+/// URL, for message and composer strips.
+#[tauri::command]
+async fn read_research_image_thumbnail(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<String, String> {
+    let root = state.config().workspace_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        research_images::read_thumbnail_data_url(&root, &id)
+    })
+    .await
+    .map_err(|err| format!("read_research_image_thumbnail task failed: {err}"))?
+}
+
 /// An image attached to a research message, as a `data:` URL.
 #[tauri::command]
 async fn read_research_image(
@@ -3122,6 +3137,7 @@ fn main() {
             save_research_image,
             import_research_image,
             read_research_image,
+            read_research_image_thumbnail,
             get_research_node_content,
             fork_research_node,
             retry_research_node,

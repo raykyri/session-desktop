@@ -4,7 +4,12 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { LoaderCircle, X } from "lucide-react";
 import type { ResearchImageAttachment } from "../../types";
-import { importResearchImage, readResearchImage, saveResearchImage } from "../../lib/api";
+import {
+  importResearchImage,
+  readResearchImage,
+  readResearchImageThumbnail,
+  saveResearchImage,
+} from "../../lib/api";
 import { openImageLightbox } from "../../lib/imageLightbox";
 import {
   acceptResearchImageFiles,
@@ -23,26 +28,44 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
  * native drop; the second within this window is the same drop. */
 const DUPLICATE_DROP_MS = 1_000;
 
-// Data URLs of recently shown images, most recent last. The webview's
-// content security policy allows only data: and blob: image sources.
-const MAX_CACHED_IMAGES = 24;
-const imageUrls = new Map<string, Promise<string>>();
+// Data URLs of recently shown thumbnails and full images, most recent
+// last, kept to a total length. The webview's content security policy allows
+// only data: and blob: image sources.
+const MAX_CACHED_URL_LENGTH = 32 * 1024 * 1024;
+type ImageSize = "thumbnail" | "full";
+const imageUrls = new Map<string, { url: Promise<string>; length: number }>();
+let cachedLength = 0;
 
-function loadImageUrl(id: string): Promise<string> {
-  const cached = imageUrls.get(id);
+function evictImageUrls() {
+  for (const [key, entry] of imageUrls) {
+    if (cachedLength <= MAX_CACHED_URL_LENGTH || imageUrls.size <= 1) break;
+    imageUrls.delete(key);
+    cachedLength -= entry.length;
+  }
+}
+
+function loadImageUrl(id: string, size: ImageSize): Promise<string> {
+  const key = `${size}:${id}`;
+  const cached = imageUrls.get(key);
   if (cached) {
-    imageUrls.delete(id);
-    imageUrls.set(id, cached);
-    return cached;
+    imageUrls.delete(key);
+    imageUrls.set(key, cached);
+    return cached.url;
   }
-  const loading = readResearchImage(id);
-  imageUrls.set(id, loading);
-  loading.catch(() => imageUrls.delete(id));
-  while (imageUrls.size > MAX_CACHED_IMAGES) {
-    const oldest = imageUrls.keys().next().value;
-    if (oldest === undefined) break;
-    imageUrls.delete(oldest);
-  }
+  const loading = size === "thumbnail" ? readResearchImageThumbnail(id) : readResearchImage(id);
+  const entry = { url: loading, length: 0 };
+  imageUrls.set(key, entry);
+  loading.then(
+    (url) => {
+      if (imageUrls.get(key) !== entry) return;
+      entry.length = url.length;
+      cachedLength += url.length;
+      evictImageUrls();
+    },
+    () => {
+      if (imageUrls.get(key) === entry) imageUrls.delete(key);
+    },
+  );
   return loading;
 }
 
@@ -55,7 +78,7 @@ function useImageUrl(id: string) {
   useEffect(() => {
     let disposed = false;
     setState({ id, url: null, failed: false });
-    loadImageUrl(id).then(
+    loadImageUrl(id, "thumbnail").then(
       (url) => {
         if (!disposed) setState({ id, url, failed: false });
       },
@@ -70,8 +93,9 @@ function useImageUrl(id: string) {
   return state.id === id ? state : { url: null, failed: false };
 }
 
-/** One attached image: a thumbnail that opens the image lightbox, and, in
- * a composer, a × that removes it. A missing file shows "Unavailable". */
+/** One attached image: a thumbnail that opens the full image in the
+ * lightbox, and, in a composer, a × that removes it. A missing file shows
+ * "Unavailable". */
 function ResearchImageThumb({
   image,
   tabIndex,
@@ -98,11 +122,15 @@ function ResearchImageThumb({
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation();
-          if (url) openImageLightbox({ src: url, alt });
+          if (!url) return;
+          loadImageUrl(image.id, "full").then(
+            (src) => openImageLightbox({ src, alt }),
+            () => openImageLightbox({ src: url, alt }),
+          );
         }}
       >
         {url ? (
-          <img src={url} alt={alt} draggable={false} />
+          <img src={url} alt={alt} draggable={false} loading="lazy" decoding="async" />
         ) : (
           <span className="research-image-status">{failed ? "Unavailable" : null}</span>
         )}
