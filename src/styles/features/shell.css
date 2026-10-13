@@ -1178,5 +1178,5 @@ span.launcher-select-icon {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: var(--terminal-bg, var(--terminal-pane-bg));
+  background: var(--terminal-pane-bg);
 }
