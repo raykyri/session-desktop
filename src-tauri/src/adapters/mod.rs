@@ -260,17 +260,8 @@ pub trait AgentAdapter: Send + Sync {
             .collect()
     }
 
-    fn supports_fork(&self) -> bool {
-        false
-    }
-
-    /// Whether this adapter has a supported research runtime. This is
-    /// deliberately narrower than general terminal-session fork support.
+    /// Whether this adapter has a supported research runtime.
     fn supports_research(&self) -> bool {
-        false
-    }
-
-    fn supports_fork_at_message(&self) -> bool {
         false
     }
 }
@@ -311,10 +302,8 @@ impl AdapterRegistry {
                     id: adapter.id().to_string(),
                     label: adapter.display_name().to_string(),
                     default: adapter.id() == "claude",
-                    supports_fork: adapter.supports_fork(),
                     supports_research: adapter.supports_research(),
                     supports_recap_generation: matches!(adapter.id(), "claude" | "codex" | "grok"),
-                    supports_fork_at_message: adapter.supports_fork_at_message(),
                     configured_binary,
                     resolved_binary,
                     readiness: if installed {
@@ -373,18 +362,11 @@ pub struct AdapterMetadata {
     pub id: String,
     pub label: String,
     pub default: bool,
-    /// Whether the adapter has a native fork command for terminal-session
-    /// branching.
-    pub supports_fork: bool,
     /// Whether the adapter can run and branch through the research harness.
     pub supports_research: bool,
     /// Whether the adapter supports the isolated structured-output request used
     /// for research recap generation.
     pub supports_recap_generation: bool,
-    /// Whether the adapter can fork from a chosen message rather than the
-    /// session head. Gates the transcript's per-message fork action, which is
-    /// hidden rather than disabled for adapters without it.
-    pub supports_fork_at_message: bool,
     /// Executable name/path from session.config.json after home expansion.
     pub configured_binary: String,
     /// Resolved executable used for launch, absent when it cannot be found.
@@ -796,22 +778,8 @@ pub fn adapter_supports_research(config: &SessionConfig, adapter_id: &str) -> bo
         .is_ok_and(|adapter| adapter.supports_research())
 }
 
-/// Adapters that can fork from a chosen message rather than the session head.
-/// Neither CLI has a flag for this — `claude --fork-session` and `codex fork`
-/// both branch at the head — so the adapter synthesizes a truncated copy of the
-/// native transcript and resumes that instead. Only adapters whose transcript
-/// format we can safely truncate qualify; the rest inherit the trait's default
-/// `Err` and are filtered out of the UI by `supports_fork_at_message`.
-#[cfg(test)]
-pub fn adapter_supports_fork_at_message(config: &SessionConfig, adapter_id: &str) -> bool {
-    adapter_registry(config)
-        .get(adapter_id)
-        .is_ok_and(|adapter| adapter.supports_fork_at_message())
-}
-
-/// Mints a random v4 UUID. Both adapters name synthesized sessions this way:
-/// Claude derives the session id from the transcript filename, and Codex parses
-/// it out of the `rollout-<timestamp>-<id>.jsonl` convention.
+/// Mints a random v4 UUID: Grok research and metadata session ids, scratch
+/// file names and recap ids.
 pub(crate) fn new_uuid_v4() -> Result<String, String> {
     let mut bytes = [0u8; 16];
     getrandom::getrandom(&mut bytes)
@@ -831,9 +799,10 @@ pub(crate) fn new_uuid_v4() -> Result<String, String> {
 
 /// The adapter used when research must launch a run without an explicit
 /// choice — a follow-up on a document, which has no adapter of its own. The
-/// default adapter when it can fork (the new run's own follow-ups branch from
-/// its session), else the first fork-capable adapter. The frontend mirrors
-/// this preference to resolve adapter-specific composer affordances.
+/// default adapter when it is ready for research (the new run's own follow-ups
+/// branch from its session), else the first research-ready adapter. The
+/// frontend mirrors this preference to resolve adapter-specific composer
+/// affordances.
 pub fn default_fork_adapter(config: &SessionConfig) -> Result<String, String> {
     let base = adapter_registry(config).metadata();
     let key = adapter_probe_cache_key(&base);
@@ -920,8 +889,6 @@ mod tests {
                 .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "grok"))
                 .all(|adapter| adapter.supports_recap_generation)
         );
-        assert!(adapter_supports_fork_at_message(&config, "claude"));
-        assert!(adapter_supports_fork_at_message(&config, "codex"));
     }
 
     #[test]

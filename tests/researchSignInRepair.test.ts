@@ -25,10 +25,8 @@ function agent(
     id,
     label: id === "claude" ? "Claude Code" : id === "codex" ? "Codex" : id,
     default: id === "claude",
-    supportsFork: true,
     supportsResearch: true,
     supportsRecapGeneration: true,
-    supportsForkAtMessage: true,
     configuredBinary: id,
     resolvedBinary: `/bin/${id}`,
     readiness: "ready",
@@ -93,7 +91,7 @@ test("only a verified sign-in reports a successful repair", () => {
 
   const unavailable = signInRepairOutcome(
     "Codex",
-    agent("codex", { researchReadiness: "error", message: "Remote terminal ready; Research remains local-only." }),
+    agent("codex", { researchReadiness: "error", message: "Research is unavailable for this installation." }),
     null,
   );
   assert.equal(unavailable.kind, "blocked");

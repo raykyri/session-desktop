@@ -60,10 +60,6 @@ impl AgentAdapter for GrokAdapter {
         parse_transcript_line(agent_id, source_index, line)
     }
 
-    fn supports_fork(&self) -> bool {
-        true
-    }
-
     fn supports_research(&self) -> bool {
         true
     }

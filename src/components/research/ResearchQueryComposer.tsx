@@ -259,8 +259,6 @@ export default function ResearchQueryComposer({
   // for a retry.
   const [error, setError] = useState<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
-  // General terminal-session fork support is intentionally wider than the
-  // runtimes supported by research.
   const adapters = useMemo(
     () =>
       researchReadyAdaptersFirst(

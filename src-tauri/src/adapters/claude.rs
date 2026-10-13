@@ -65,15 +65,7 @@ impl AgentAdapter for ClaudeAdapter {
         resolve_transcript_turns_from(agent_id, source_index_offset, lines)
     }
 
-    fn supports_fork(&self) -> bool {
-        true
-    }
-
     fn supports_research(&self) -> bool {
-        true
-    }
-
-    fn supports_fork_at_message(&self) -> bool {
         true
     }
 }

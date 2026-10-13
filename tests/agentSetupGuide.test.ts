@@ -27,10 +27,8 @@ function adapter(
     id,
     label: id === "claude" ? "Claude Code" : "Codex",
     default: id === "claude",
-    supportsFork: true,
     supportsResearch: true,
     supportsRecapGeneration: true,
-    supportsForkAtMessage: true,
     configuredBinary: id,
     resolvedBinary: readiness === "missing" ? null : `/bin/${id}`,
     readiness,
@@ -349,12 +347,12 @@ test("an unverified agent shows a start action and remains incomplete", () => {
 });
 
 test("an agent that cannot run research shows no research action", () => {
-  const remote: AgentAdapterMetadata = {
+  const unavailable: AgentAdapterMetadata = {
     ...checked("codex", "ready"),
     researchReadiness: "error",
-    message: "Remote terminal ready; Research remains local-only.",
+    message: "Research is unavailable for this installation.",
   };
-  const html = renderGuide([remote], { onStartResearch: () => {} });
+  const html = renderGuide([unavailable], { onStartResearch: () => {} });
   assert.match(html, /Research unavailable/);
   assert.doesNotMatch(html, /Start research with|Try research with|ready for research/);
 });
