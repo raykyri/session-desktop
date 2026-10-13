@@ -1,18 +1,23 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ResearchQueuedAnswerColumn } from "../src/components/research/ResearchAnswerColumn";
-import {
-  ResearchBranchesColumn,
-  type ResearchBranchSourceProps,
-  type ResearchChainRowsShared,
+import type {
+  ResearchBranchSourceProps,
+  ResearchChainRowsShared,
 } from "../src/components/research/ResearchMessagesColumn";
 import { researchBranchesByParent } from "../src/lib/researchBranchView";
 import { researchStrip, type ResearchBranchesColumn as BranchesColumn } from "../src/lib/researchColumns";
 import { researchNodeLabel } from "../src/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
+
+// Registered before the columns are pulled in: the answer column reaches the
+// editor column, whose model menu imports adapter icons.
+register("./svgStubLoader.mjs", import.meta.url);
+const { ResearchQueuedAnswerColumn } = await import("../src/components/research/ResearchAnswerColumn");
+const { ResearchBranchesColumn } = await import("../src/components/research/ResearchMessagesColumn");
 
 const noop = () => {};
 
