@@ -1,4 +1,4 @@
-import type { AgentUiAdapter, ComposerPolicy } from ".";
+import type { AgentUiAdapter } from ".";
 import type { LauncherSelectOption } from "../components/LauncherSelect";
 
 // Mirrors CODEX_REASONING_EFFORT_LEVELS in src-tauri/src/adapters/codex.rs.
@@ -14,17 +14,7 @@ export const CODEX_REASONING_OPTIONS: LauncherSelectOption[] = [
 
 export const CODEX_ADAPTER_ID = "codex";
 
-const codexComposerPolicy: ComposerPolicy = {
-  readyStatuses: ["awaitingInput", "done", "idle"],
-  queueStatuses: ["starting", "running", "awaitingPermission"],
-  steerStatuses: ["starting", "running"],
-  permissionActions: [],
-};
-
 export const codexUiAdapter: AgentUiAdapter = {
   id: CODEX_ADAPTER_ID,
   label: "Codex",
-  composerPolicy: () => codexComposerPolicy,
-  supportsFork: true,
-  supportsForkAtMessage: true,
 };

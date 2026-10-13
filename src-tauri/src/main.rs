@@ -70,26 +70,15 @@ use show_hide_shortcut::{
 };
 use sleep::SleepGuard;
 use state::{
-    AppState, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ResearchRelaunch,
-    ShellAgentJobInfo,
+    AppState, PaneInfo, PaneLayoutEntry, PaneSplitInfo, ResearchRelaunch, ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
 use transcript::Turn;
-use turn_queue::{
-    AssignGlobalDraftRequest, AssignGlobalDraftResult, MoveQueuedAgentTurnRequest,
-    MoveQueuedAgentTurnResult, QueueDeliveryAgentTurnRequest, QueueWaitAgentTurnRequest,
-    RemoveQueuedAgentTurnRequest, RemoveQueuedAgentTurnResult, ReorderQueuedAgentTurnRequest,
-    ReorderQueuedAgentTurnResult, SendNextQueuedAgentTurnResult, SubmitAgentTurnRequest,
-    SubmitAgentTurnResult, move_queued_agent_turn, queue_delivery_agent_turn,
-    queue_wait_agent_turn, remove_queued_agent_turn, reorder_queued_agent_turn,
-    send_next_queued_agent_turn, set_agent_typing, submit_agent_turn, unpause_agent,
-};
 use workspace::{
     AgentInfo, AgentStatus, CreateGroupRequest, GroupInfo, LaunchOrigin, ResearchWorkspaceInfo,
-    WorktreeStatus, acknowledge_agent, agent_worktree_status, clear_agent_working_status,
-    create_group, create_research_workspace, ensure_default_research_workspace,
-    move_research_workspace, remove_agent_worktree, remove_research_workspace, rename_group,
-    rename_research_workspace, validate_launch_workspace,
+    WorktreeStatus, agent_worktree_status, create_group, create_research_workspace,
+    ensure_default_research_workspace, move_research_workspace, remove_agent_worktree,
+    remove_research_workspace, rename_group, rename_research_workspace, validate_launch_workspace,
 };
 
 fn handle_global_shortcut(
@@ -2272,14 +2261,6 @@ fn remove_research_branch(
 }
 
 #[tauri::command]
-fn list_agent_turn_queue(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<Vec<QueuedTurn>, String> {
-    state.agent_queued_turns(&agent_id)
-}
-
-#[tauri::command]
 async fn group_create(
     state: tauri::State<'_, AppState>,
     request: CreateGroupRequest,
@@ -2727,166 +2708,6 @@ fn pane_splits_set(
     state.set_pane_splits(splits)
 }
 
-#[tauri::command(async)]
-fn agent_submit_turn(
-    state: tauri::State<'_, AppState>,
-    request: SubmitAgentTurnRequest,
-) -> Result<SubmitAgentTurnResult, String> {
-    submit_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_queue_wait_turn(
-    state: tauri::State<'_, AppState>,
-    request: QueueWaitAgentTurnRequest,
-) -> Result<SubmitAgentTurnResult, String> {
-    queue_wait_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_queue_delivery_turn(
-    state: tauri::State<'_, AppState>,
-    request: QueueDeliveryAgentTurnRequest,
-) -> Result<SubmitAgentTurnResult, String> {
-    queue_delivery_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_remove_queued_turn(
-    state: tauri::State<'_, AppState>,
-    request: RemoveQueuedAgentTurnRequest,
-) -> Result<RemoveQueuedAgentTurnResult, String> {
-    remove_queued_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_reorder_queued_turn(
-    state: tauri::State<'_, AppState>,
-    request: ReorderQueuedAgentTurnRequest,
-) -> Result<ReorderQueuedAgentTurnResult, String> {
-    reorder_queued_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_move_queued_turn(
-    state: tauri::State<'_, AppState>,
-    request: MoveQueuedAgentTurnRequest,
-) -> Result<MoveQueuedAgentTurnResult, String> {
-    move_queued_agent_turn(&state, request)
-}
-
-#[tauri::command(async)]
-fn list_global_drafts(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<state::GlobalDraft>, String> {
-    state.global_drafts()
-}
-
-#[tauri::command(async)]
-fn create_global_draft(
-    state: tauri::State<'_, AppState>,
-    text: String,
-) -> Result<state::GlobalDraft, String> {
-    state.create_global_draft(text)
-}
-
-#[tauri::command(async)]
-fn update_global_draft(
-    state: tauri::State<'_, AppState>,
-    draft_id: String,
-    text: String,
-) -> Result<state::GlobalDraft, String> {
-    state.update_global_draft(&draft_id, text)
-}
-
-#[tauri::command(async)]
-fn delete_global_draft(
-    state: tauri::State<'_, AppState>,
-    draft_id: String,
-) -> Result<Vec<state::GlobalDraft>, String> {
-    state.delete_global_draft(&draft_id)
-}
-
-#[tauri::command(async)]
-fn assign_global_draft(
-    state: tauri::State<'_, AppState>,
-    request: AssignGlobalDraftRequest,
-) -> Result<AssignGlobalDraftResult, String> {
-    turn_queue::assign_global_draft(&state, request)
-}
-
-#[tauri::command(async)]
-fn agent_send_next_queued_turn(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<SendNextQueuedAgentTurnResult, String> {
-    send_next_queued_agent_turn(&state, &agent_id)
-}
-
-#[tauri::command(async)]
-fn agent_set_queued_turn_pause(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    index: usize,
-    pause_after: bool,
-    expected_data: Option<String>,
-    expected_id: Option<String>,
-) -> Result<Vec<QueuedTurn>, String> {
-    let queued_turns = state.set_queued_turn_pause(
-        &agent_id,
-        index,
-        pause_after,
-        expected_data.as_deref(),
-        expected_id.as_deref(),
-    )?;
-    if let Some(agent) = state.agent(&agent_id)? {
-        state.emit(events::SessionEvent::new(
-            "agent.queued_turn_reordered",
-            agent.pane_id.clone(),
-            Some(agent.id),
-            serde_json::json!({
-                "pendingTurns": queued_turns.len(),
-                "queuedTurns": queued_turns.clone(),
-            }),
-        ));
-    }
-    Ok(queued_turns)
-}
-
-#[tauri::command(async)]
-fn agent_unpause(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<SendNextQueuedAgentTurnResult, String> {
-    unpause_agent(&state, &agent_id)
-}
-
-#[tauri::command(async)]
-fn agent_set_typing(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    typing: bool,
-) -> Result<SendNextQueuedAgentTurnResult, String> {
-    set_agent_typing(&state, &agent_id, typing)
-}
-
-#[tauri::command]
-fn agent_set_draft(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    draft: String,
-) -> Result<(), String> {
-    state.set_agent_draft(&agent_id, draft)
-}
-
-#[tauri::command]
-fn agent_get_draft(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<Option<String>, String> {
-    state.agent_draft(&agent_id)
-}
-
 #[tauri::command]
 fn interface_draft_get(
     state: tauri::State<'_, AppState>,
@@ -2902,27 +2723,6 @@ fn interface_draft_set(
     value: Option<String>,
 ) -> Result<(), String> {
     state.set_interface_draft(&key, value)
-}
-
-// Async like the turn-queue commands above, and for the same send-lock
-// invariant: acknowledging releases waiters and clearing a working status
-// routes through advance_after_idle — both can drain a queued turn into a
-// pane, which takes its send lock.
-#[tauri::command(async)]
-fn agent_acknowledge(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    include_failed: bool,
-) -> Result<AgentInfo, String> {
-    acknowledge_agent(&state, &agent_id, include_failed)
-}
-
-#[tauri::command(async)]
-fn agent_clear_working_status(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<AgentInfo, String> {
-    clear_agent_working_status(&state, &agent_id)
 }
 
 #[tauri::command]
@@ -3670,7 +3470,6 @@ fn main() {
             list_research_trash,
             empty_research_trash,
             remove_research_branch,
-            list_agent_turn_queue,
             group_create,
             group_rename,
             group_reorder,
@@ -3709,27 +3508,8 @@ fn main() {
             native_support_set_browser_overlay_open,
             native_support_set_iframe_shortcut_fallback,
             native_support_set_browser_background,
-            agent_submit_turn,
-            agent_queue_wait_turn,
-            agent_queue_delivery_turn,
-            agent_remove_queued_turn,
-            agent_reorder_queued_turn,
-            agent_move_queued_turn,
-            list_global_drafts,
-            create_global_draft,
-            update_global_draft,
-            delete_global_draft,
-            assign_global_draft,
-            agent_send_next_queued_turn,
-            agent_set_queued_turn_pause,
-            agent_unpause,
-            agent_set_typing,
-            agent_set_draft,
-            agent_get_draft,
             interface_draft_get,
             interface_draft_set,
-            agent_acknowledge,
-            agent_clear_working_status,
             worktree_status,
             worktree_remove,
             worktree_close_pane,

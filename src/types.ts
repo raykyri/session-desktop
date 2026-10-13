@@ -741,49 +741,6 @@ export interface UpdateResearchPostResult {
   removedHighlightCount: number;
 }
 
-// Where a queued turn is delivered when it is reached: absent means the agent's
-// own composer; "fork" resumes the session into a new forked pane (optionally in a
-// fresh worktree); "newSession" starts a fresh session in the same directory.
-export type QueuedTurnDelivery =
-  | { kind: "fork"; useWorktree?: boolean }
-  | { kind: "newSession" };
-
-export interface QueuedTurn {
-  // Stable, unique identity assigned by the backend. Duplicate-text turns are
-  // otherwise indistinguishable, so drag/mutation code keys and targets turns by
-  // this id (and passes it as expectedId) rather than by index+text.
-  id: string;
-  text: string;
-  pauseAfter: boolean;
-  waitFor?: QueuedTurnWait | null;
-  delivery?: QueuedTurnDelivery | null;
-}
-
-// A prompt queued application-wide before it has an owner — the home view's
-// Drafts rail. Assigning it to an agent marks it consumed (kept as history)
-// rather than deleting it.
-export interface GlobalDraft {
-  id: string;
-  text: string;
-  createdAt: number;
-  consumed?: { agentId: string; at: number } | null;
-}
-
-export interface QueuedTurnWait {
-  agentId: string;
-  paneId?: string | null;
-  label?: string | null;
-}
-
-export interface WaitTarget {
-  agentId: string;
-  paneId: string;
-  label: string;
-  status: AgentInfo["status"];
-  queueCount?: number;
-  queueBlocked?: boolean;
-}
-
 export type TurnBlock =
   | { type: "text"; text: string }
   | { type: "toolUse"; id?: string | null; name: string; input: unknown }
@@ -863,37 +820,6 @@ export interface PromptLibrary {
 export interface WorktreeStatus {
   hasChanges: boolean;
   changedFiles: number;
-}
-
-export type SubmitAgentTurnMode = "auto" | "send" | "queue" | "steer";
-
-export interface SubmitAgentTurnResult {
-  queued: boolean;
-  pendingTurns: number;
-  queuedTurns: QueuedTurn[];
-}
-
-export interface RemoveQueuedAgentTurnResult {
-  removedTurn: string;
-  pendingTurns: number;
-  queuedTurns: QueuedTurn[];
-}
-
-export interface ReorderQueuedAgentTurnResult {
-  pendingTurns: number;
-  queuedTurns: QueuedTurn[];
-}
-
-export interface SendNextQueuedAgentTurnResult {
-  sent: boolean;
-  pendingTurns: number;
-  queuedTurns: QueuedTurn[];
-}
-
-export interface MoveQueuedAgentTurnResult {
-  sent: boolean;
-  sourceQueuedTurns: QueuedTurn[];
-  targetQueuedTurns: QueuedTurn[];
 }
 
 export interface TranscriptHookEvent {

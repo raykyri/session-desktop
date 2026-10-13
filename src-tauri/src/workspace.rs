@@ -1458,74 +1458,6 @@ pub fn mark_agent_failed(state: &AppState, agent_id: &str) -> Result<AgentInfo, 
         .ok_or_else(|| format!("agent {agent_id} was not found"))
 }
 
-pub fn acknowledge_agent(
-    state: &AppState,
-    agent_id: &str,
-    include_failed: bool,
-) -> Result<AgentInfo, String> {
-    // Only acknowledge a Done/Failed agent, so an unrelated snapshot doesn't trigger a
-    // no-op persist. Re-check the status inside the field-scoped mutation so the write
-    // is atomic and can't clobber a concurrent hook's session fields (cf.
-    // `mark_agent_failed`).
-    let snapshot = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    let should_ack = matches!(snapshot.status, AgentStatus::Done)
-        || (include_failed && matches!(snapshot.status, AgentStatus::Failed));
-    if !should_ack {
-        return Ok(snapshot);
-    }
-
-    let acked = std::cell::Cell::new(false);
-    let agent = state
-        .mutate_agent(agent_id, |agent| {
-            if matches!(agent.status, AgentStatus::Done)
-                || (include_failed && matches!(agent.status, AgentStatus::Failed))
-            {
-                agent.status = AgentStatus::Idle;
-                acked.set(true);
-            }
-        })?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    if acked.get() {
-        state.emit(crate::events::SessionEvent::new(
-            "agent.acknowledged",
-            agent.pane_id.clone(),
-            Some(agent.id.clone()),
-            serde_json::json!({ "agent": agent.clone() }),
-        ));
-        crate::turn_queue::release_waiters_for_agent(state, &agent.id)?;
-    }
-    Ok(agent)
-}
-
-pub fn clear_agent_working_status(state: &AppState, agent_id: &str) -> Result<AgentInfo, String> {
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    if !matches!(agent.status, AgentStatus::Starting | AgentStatus::Running) {
-        return Ok(agent);
-    }
-    // Treat a manual clear as the agent having gone idle and route it through the same
-    // completion path the adapters use, instead of blindly forcing a fresh Idle. Forcing
-    // Idle leaves a queued turn blocked (the next idle that would have drained it never
-    // fires), drops pending-pause handling, and persists a "ready to send" status that
-    // sends the user's next turn straight into the process rather than queuing it.
-    // advance_after_idle drains a queued turn, honors a pending pause / active typing, and
-    // reaches Done (or Running if a turn drained) with field-scoped writes.
-    crate::turn_queue::advance_after_idle(state, agent_id)?;
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    state.emit(crate::events::SessionEvent::new(
-        "agent.working_status_cleared",
-        agent.pane_id.clone(),
-        Some(agent.id.clone()),
-        serde_json::json!({ "agent": agent.clone() }),
-    ));
-    Ok(agent)
-}
-
 /// How long after a lone Esc keystroke into a working agent's pane Session waits for
 /// counter-evidence before concluding the user interrupted the turn.
 const ESC_INTERRUPT_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
@@ -4416,55 +4348,6 @@ mod tests {
             state.list_agent_turn_queue("agent-shell").unwrap(),
             vec!["queued turn".to_string()]
         );
-    }
-
-    #[test]
-    fn clear_agent_working_status_only_clears_running_states() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-running",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-        state
-            .insert_agent(sample_agent(
-                "agent-starting",
-                Some("pane-2"),
-                AgentStatus::Starting,
-            ))
-            .unwrap();
-        state
-            .insert_agent(sample_agent(
-                "agent-waiting",
-                Some("pane-3"),
-                AgentStatus::AwaitingInput,
-            ))
-            .unwrap();
-
-        let running = clear_agent_working_status(&state, "agent-running").unwrap();
-        let starting = clear_agent_working_status(&state, "agent-starting").unwrap();
-        let waiting = clear_agent_working_status(&state, "agent-waiting").unwrap();
-
-        // Working states are routed through the idle completion path, so with no queued
-        // turn they reach Done (a finished status), not a new Idle. A non-working
-        // state (AwaitingInput) is left untouched.
-        assert!(matches!(running.status, AgentStatus::Done));
-        assert!(matches!(starting.status, AgentStatus::Done));
-        assert!(matches!(waiting.status, AgentStatus::AwaitingInput));
-        assert!(matches!(
-            state.agent("agent-running").unwrap().unwrap().status,
-            AgentStatus::Done
-        ));
-        assert!(matches!(
-            state.agent("agent-starting").unwrap().unwrap().status,
-            AgentStatus::Done
-        ));
-        assert!(matches!(
-            state.agent("agent-waiting").unwrap().unwrap().status,
-            AgentStatus::AwaitingInput
-        ));
     }
 
     #[test]

@@ -1,38 +1,11 @@
 {
   "testOnlyModules": {
-    "src/lib/composerActions.ts": "Independent agent queue, fork, and capability contracts retained for process features even though the current research UI does not mount this composer.",
-    "src/lib/composerSlashCommands.ts": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
     "src/lib/handoff.ts": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
     "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
     "src/lib/paneSplits.ts": "Tested pane split layout and normalization helpers retained with the flat pane-order helpers; the backend normalizes persisted splits itself, and the app consumer was the removed terminal stage.",
     "src/lib/paneTree.ts": "Tested flat pane-order helpers retained for terminal pane infrastructure; the app consumer was the removed pane context menu."
   },
   "exports": {
-    "src/lib/composerActions.ts": {
-      "reason": "Independent agent queue, fork, and capability contracts retained for process features even though the current research UI does not mount this composer.",
-      "names": [
-        "agentTabStatusDotClass",
-        "agentTabStatusPill",
-        "ComposerGating",
-        "ComposerSlashCommandSubmitLabels",
-        "ComposerSubmissionPlan",
-        "deriveComposerGating",
-        "FORK_REQUIREMENT_TITLE",
-        "planComposerSubmission",
-        "QUEUE_DELIVERY_OPTIONS",
-        "queueWaitsOnOtherAgent",
-        "waitTargetStatusDotClass",
-        "waitTargetStatusLabel"
-      ]
-    },
-    "src/lib/composerSlashCommands.ts": {
-      "reason": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
-      "names": [
-        "COMPOSER_SLASH_COMMANDS",
-        "ComposerSlashCommandKind",
-        "ComposerSlashCommandName"
-      ]
-    },
     "src/lib/handoff.ts": {
       "reason": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
       "names": [
@@ -53,34 +26,26 @@
       "names": [
         "AgentReadiness",
         "ArtifactInfo",
-        "GlobalDraft",
         "HomeTurnHistoryPage",
         "HomeTurnSummary",
         "InitialPaneSize",
-        "MoveQueuedAgentTurnResult",
         "PaneActivity",
         "PaneKind",
         "PaneSplitPaneNode",
         "PostReplyAuthor",
         "PromptLibrary",
         "PromptScope",
-        "QueuedTurnWait",
         "RemoteConnectionState",
         "RemoteMultiplexer",
         "RemoteProbeCheck",
         "RemoteRef",
         "RemoteSessionIdentity",
-        "RemoveQueuedAgentTurnResult",
-        "ReorderQueuedAgentTurnResult",
         "ResearchDocumentNode",
         "ResearchExchangeNode",
         "ResearchPostNode",
         "SavedPrompt",
-        "SendNextQueuedAgentTurnResult",
         "ShellAgentJobInfo",
         "ShellAgentJobState",
-        "SubmitAgentTurnMode",
-        "SubmitAgentTurnResult",
         "TranscriptCopyPayload",
         "TranscriptHookEvent",
         "UserMessage",

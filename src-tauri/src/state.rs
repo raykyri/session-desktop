@@ -866,28 +866,6 @@ impl QueuedTurn {
             possibly_pasted: false,
         }
     }
-
-    pub fn waiting(text: String, wait_for: QueuedTurnWait) -> Self {
-        Self {
-            id: new_queued_turn_id(),
-            text,
-            pause_after: false,
-            wait_for: Some(wait_for),
-            delivery: None,
-            possibly_pasted: false,
-        }
-    }
-
-    pub fn delivering(text: String, delivery: QueuedTurnDelivery) -> Self {
-        Self {
-            id: new_queued_turn_id(),
-            text,
-            pause_after: false,
-            wait_for: None,
-            delivery: Some(delivery),
-            possibly_pasted: false,
-        }
-    }
 }
 
 impl<'de> Deserialize<'de> for QueuedTurn {
@@ -979,16 +957,6 @@ fn enqueue_queued_turn_locked(
     }
     queue.push_back(turn);
     Ok(queue.len())
-}
-
-fn wait_target_label_locked(model: &Model, target: &AgentInfo) -> Option<String> {
-    target
-        .pane_id
-        .as_deref()
-        .and_then(|pane_id| model.panes.get(pane_id))
-        .map(|pane| pane.info.title.clone())
-        .or_else(|| target.branch.clone())
-        .or_else(|| target.model.clone())
 }
 
 fn path_is_ancestor_or_equal(ancestor: &std::path::Path, descendant: &std::path::Path) -> bool {
@@ -1190,32 +1158,6 @@ fn migrate_thread_records_to_global(
         }
     }
     warnings
-}
-
-fn wait_dependency_would_cycle_locked(model: &Model, source: &str, target: &str) -> bool {
-    let mut seen = HashSet::new();
-    let mut stack = vec![target.to_string()];
-    while let Some(agent_id) = stack.pop() {
-        if agent_id == source {
-            return true;
-        }
-        if !seen.insert(agent_id.clone()) {
-            continue;
-        }
-        if let Some(queue) = model.agent_turn_queues.get(&agent_id) {
-            for turn in queue {
-                let Some(wait_for) = turn.wait_for.as_ref() else {
-                    continue;
-                };
-                if wait_for.agent_id == source
-                    || !queued_turn_wait_is_resolved_locked(model, wait_for)
-                {
-                    stack.push(wait_for.agent_id.clone());
-                }
-            }
-        }
-    }
-    false
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -9774,57 +9716,6 @@ impl AppState {
         self.enqueue_agent_queued_turn(agent_id, QueuedTurn::new(data))
     }
 
-    pub fn enqueue_agent_wait_turn_with_target_label(
-        &self,
-        agent_id: &str,
-        data: String,
-        wait_for_agent_id: &str,
-        wait_for_pane_id: Option<&str>,
-        wait_for_label: Option<&str>,
-    ) -> Result<usize, String> {
-        if agent_id == wait_for_agent_id {
-            return Err("a queued turn cannot wait on its own agent".to_string());
-        }
-
-        let len = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-
-            if !model.agents.contains_key(agent_id) {
-                return Err(format!("agent {agent_id} was not found"));
-            }
-            let target = model
-                .agents
-                .get(wait_for_agent_id)
-                .ok_or_else(|| format!("agent {wait_for_agent_id} was not found"))?;
-            if wait_dependency_would_cycle_locked(&model, agent_id, wait_for_agent_id) {
-                return Err("that wait would create a queue dependency cycle".to_string());
-            }
-
-            let supplied_label = wait_for_pane_id.and_then(|pane_id| {
-                if target.pane_id.as_deref() != Some(pane_id) {
-                    return None;
-                }
-                wait_for_label
-                    .map(str::trim)
-                    .filter(|label| !label.is_empty())
-                    .map(ToString::to_string)
-            });
-            let label = supplied_label.or_else(|| wait_target_label_locked(&model, target));
-            let wait_for = QueuedTurnWait {
-                agent_id: wait_for_agent_id.to_string(),
-                pane_id: target.pane_id.clone(),
-                label,
-            };
-            enqueue_queued_turn_locked(&mut model, agent_id, QueuedTurn::waiting(data, wait_for))?
-        };
-        self.persist();
-        Ok(len)
-    }
-
     /// Queues a fully-formed turn (text plus any pause/wait/delivery directives).
     pub fn enqueue_agent_queued_turn(
         &self,
@@ -9871,147 +9762,6 @@ impl AppState {
             .get(agent_id)
             .map(|queue| queue.iter().cloned().collect())
             .unwrap_or_default())
-    }
-
-    /// Toggles the pause-after-send flag on a single queued turn, guarding against a
-    /// stale index with the expected text. Returns the updated structured queue.
-    pub fn set_queued_turn_pause(
-        &self,
-        agent_id: &str,
-        index: usize,
-        pause_after: bool,
-        expected_text: Option<&str>,
-        expected_id: Option<&str>,
-    ) -> Result<Vec<QueuedTurn>, String> {
-        let queued_turns = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let queue = model
-                .agent_turn_queues
-                .get_mut(agent_id)
-                .ok_or_else(|| format!("agent {agent_id} does not have queued turns"))?;
-            let turn = queue
-                .get_mut(index)
-                .ok_or_else(|| format!("queued turn {index} was not found"))?;
-            // The id is the authoritative identity: duplicate-text turns are
-            // indistinguishable by text alone, so a shifted duplicate would pass
-            // the text guard. Both are checked when supplied.
-            if let Some(expected_id) = expected_id
-                && turn.id != expected_id
-            {
-                return Err("queued turn changed; refresh before updating".to_string());
-            }
-            if let Some(expected_text) = expected_text
-                && turn.text != expected_text
-            {
-                return Err("queued turn changed; refresh before updating".to_string());
-            }
-            turn.pause_after = pause_after;
-            queue.iter().cloned().collect::<Vec<_>>()
-        };
-        self.persist();
-        Ok(queued_turns)
-    }
-
-    pub fn remove_agent_turn_queue_item(
-        &self,
-        agent_id: &str,
-        index: usize,
-        expected_data: Option<&str>,
-        expected_id: Option<&str>,
-    ) -> Result<(QueuedTurn, Vec<QueuedTurn>), String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-
-        let (removed, queued_turns, is_empty) = {
-            let queue = model
-                .agent_turn_queues
-                .get_mut(agent_id)
-                .ok_or_else(|| format!("agent {agent_id} does not have queued turns"))?;
-            let current = queue
-                .get(index)
-                .ok_or_else(|| format!("queued turn {index} was not found"))?;
-            if let Some(expected_id) = expected_id
-                && current.id != expected_id
-            {
-                return Err("queued turn changed; refresh before editing".to_string());
-            }
-            if let Some(expected_data) = expected_data
-                && current.text != expected_data
-            {
-                return Err("queued turn changed; refresh before editing".to_string());
-            }
-
-            let removed = queue
-                .remove(index)
-                .ok_or_else(|| format!("queued turn {index} was not found"))?;
-            let queued_turns = queue.iter().cloned().collect::<Vec<_>>();
-            (removed, queued_turns, queue.is_empty())
-        };
-
-        if is_empty {
-            model.agent_turn_queues.remove(agent_id);
-            if let Some(agent) = model.agents.get_mut(agent_id) {
-                agent.orphaned_queue_pane_id = None;
-            }
-        }
-
-        drop(model);
-        self.persist();
-        Ok((removed, queued_turns))
-    }
-
-    pub fn reorder_agent_turn_queue_item(
-        &self,
-        agent_id: &str,
-        from: usize,
-        to: usize,
-        expected_data: Option<&str>,
-        expected_id: Option<&str>,
-    ) -> Result<Vec<QueuedTurn>, String> {
-        let queued_turns = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let queue = model
-                .agent_turn_queues
-                .get_mut(agent_id)
-                .ok_or_else(|| format!("agent {agent_id} does not have queued turns"))?;
-            let len = queue.len();
-            if from >= len || to >= len {
-                return Err(format!("queued turn index out of range (len {len})"));
-            }
-            if expected_id.is_some() || expected_data.is_some() {
-                let current = queue
-                    .get(from)
-                    .ok_or_else(|| format!("queued turn {from} was not found"))?;
-                if let Some(expected_id) = expected_id
-                    && current.id != expected_id
-                {
-                    return Err("queued turn changed; refresh before reordering".to_string());
-                }
-                if let Some(expected_data) = expected_data
-                    && current.text != expected_data
-                {
-                    return Err("queued turn changed; refresh before reordering".to_string());
-                }
-            }
-            let moved = queue
-                .remove(from)
-                .ok_or_else(|| format!("queued turn {from} was not found"))?;
-            queue.insert(to, moved);
-            queue.iter().cloned().collect::<Vec<_>>()
-        };
-        self.persist();
-        Ok(queued_turns)
     }
 
     /// Claims the next ready queued turn for draining, marking the agent as draining so
@@ -10439,28 +10189,6 @@ impl AppState {
         }
     }
 
-    /// Test-only direct pop of the next ready turn (no draining guard), used to assert
-    /// wait-resolution semantics without the serialized-drain bookkeeping.
-    #[cfg(test)]
-    pub fn pop_ready_agent_turn(
-        &self,
-        agent_id: &str,
-    ) -> Result<Option<(QueuedTurn, usize)>, String> {
-        let popped = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            match pop_ready_locked(&mut model, agent_id) {
-                Some(result) => result,
-                None => return Ok(None),
-            }
-        };
-        self.persist();
-        Ok(Some(popped))
-    }
-
     pub fn agents_with_front_wait_for(&self, target_agent_id: &str) -> Result<Vec<String>, String> {
         let model = self
             .inner
@@ -10478,33 +10206,6 @@ impl AppState {
                 waits_for_target.then(|| agent_id.clone())
             })
             .collect())
-    }
-
-    /// Inserts a turn into an agent's queue at `index` (clamped to the queue length),
-    /// returning the new length. Used to roll a moved turn back to its original spot
-    /// when handing it to another agent fails (preserving its queue directives).
-    pub fn insert_agent_turn_at(
-        &self,
-        agent_id: &str,
-        index: usize,
-        turn: QueuedTurn,
-    ) -> Result<usize, String> {
-        let len = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let queue = model
-                .agent_turn_queues
-                .entry(agent_id.to_string())
-                .or_default();
-            let at = index.min(queue.len());
-            queue.insert(at, turn);
-            queue.len()
-        };
-        self.persist();
-        Ok(len)
     }
 
     /// Sets an agent's paused flag without disturbing its other fields (a field-scoped
@@ -10569,22 +10270,6 @@ impl AppState {
             .unwrap_or(false))
     }
 
-    /// Records whether the user is actively typing for an agent; while set, the idle
-    /// handler holds off auto-draining the queue.
-    pub fn set_agent_typing(&self, agent_id: &str, typing: bool) -> Result<(), String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        if typing {
-            model.agent_typing.insert(agent_id.to_string());
-        } else {
-            model.agent_typing.remove(agent_id);
-        }
-        Ok(())
-    }
-
     pub fn agent_is_typing(&self, agent_id: &str) -> Result<bool, String> {
         let model = self
             .inner
@@ -10594,164 +10279,9 @@ impl AppState {
         Ok(model.agent_typing.contains(agent_id))
     }
 
-    /// The current millisecond wall clock, matching SessionEvent timestamps.
-    fn now_millis() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_millis() as u64)
-            .unwrap_or_default()
-    }
-
-    pub fn global_drafts(&self) -> Result<Vec<GlobalDraft>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.global_drafts.clone())
-    }
-
-    /// Emits the full drafts list — the store is small and global, so every
-    /// mutation broadcasts the whole truth instead of deltas.
-    fn emit_global_drafts(&self, drafts: &[GlobalDraft]) {
-        self.emit(SessionEvent::new(
-            "drafts.changed",
-            None,
-            None,
-            json!({ "drafts": drafts }),
-        ));
-    }
-
-    pub fn create_global_draft(&self, text: String) -> Result<GlobalDraft, String> {
-        let trimmed = text.trim();
-        if trimmed.is_empty() {
-            return Err("Draft text cannot be empty".to_string());
-        }
-        let draft = GlobalDraft {
-            id: self.next_id("draft"),
-            text: trimmed.to_string(),
-            created_at: Self::now_millis(),
-            consumed: None,
-        };
-        let drafts = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model.global_drafts.push(draft.clone());
-            model.global_drafts.clone()
-        };
-        self.persist();
-        self.emit_global_drafts(&drafts);
-        Ok(draft)
-    }
-
-    pub fn update_global_draft(&self, draft_id: &str, text: String) -> Result<GlobalDraft, String> {
-        let trimmed = text.trim();
-        if trimmed.is_empty() {
-            return Err("Draft text cannot be empty".to_string());
-        }
-        let (draft, drafts) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let draft = model
-                .global_drafts
-                .iter_mut()
-                .find(|draft| draft.id == draft_id)
-                .ok_or_else(|| format!("Draft {draft_id} was not found"))?;
-            if draft.consumed.is_some() {
-                return Err("Draft was already assigned".to_string());
-            }
-            draft.text = trimmed.to_string();
-            (draft.clone(), model.global_drafts.clone())
-        };
-        self.persist();
-        self.emit_global_drafts(&drafts);
-        Ok(draft)
-    }
-
-    pub fn delete_global_draft(&self, draft_id: &str) -> Result<Vec<GlobalDraft>, String> {
-        let drafts = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let before = model.global_drafts.len();
-            model.global_drafts.retain(|draft| draft.id != draft_id);
-            if model.global_drafts.len() == before {
-                return Err(format!("Draft {draft_id} was not found"));
-            }
-            model.global_drafts.clone()
-        };
-        self.persist();
-        self.emit_global_drafts(&drafts);
-        Ok(drafts)
-    }
-
-    /// Atomically claims a draft for assignment: marks it consumed only if it
-    /// wasn't already, so two concurrent assigns can't both deliver the text.
-    /// The claim happens before the submit; `unclaim_global_draft` rolls it
-    /// back if the submit fails (the move_queued_agent_turn shape).
-    pub fn claim_global_draft(
-        &self,
-        draft_id: &str,
-        agent_id: &str,
-    ) -> Result<GlobalDraft, String> {
-        let (draft, drafts) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let draft = model
-                .global_drafts
-                .iter_mut()
-                .find(|draft| draft.id == draft_id)
-                .ok_or_else(|| format!("Draft {draft_id} was not found"))?;
-            if draft.consumed.is_some() {
-                return Err("Draft was already assigned".to_string());
-            }
-            draft.consumed = Some(GlobalDraftConsumed {
-                agent_id: agent_id.to_string(),
-                at: Self::now_millis(),
-            });
-            (draft.clone(), model.global_drafts.clone())
-        };
-        self.persist();
-        self.emit_global_drafts(&drafts);
-        Ok(draft)
-    }
-
-    pub fn unclaim_global_draft(&self, draft_id: &str) -> Result<(), String> {
-        let drafts = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let Some(draft) = model
-                .global_drafts
-                .iter_mut()
-                .find(|draft| draft.id == draft_id)
-            else {
-                return Ok(());
-            };
-            draft.consumed = None;
-            model.global_drafts.clone()
-        };
-        self.persist();
-        self.emit_global_drafts(&drafts);
-        Ok(())
-    }
-
-    /// Stores the agent's composer draft and snapshots it to disk. A trimmed-empty
-    /// draft drops the entry so recovery never restores stray whitespace and the
-    /// map does not grow an entry per cleared composer.
+    /// Stores the agent's composer text. No command calls this any more; it
+    /// stays for the persistence tests of the legacy `agentComposerText` key.
+    #[cfg(test)]
     pub fn set_agent_draft(&self, agent_id: &str, draft: String) -> Result<(), String> {
         {
             let mut model = self
@@ -10769,6 +10299,7 @@ impl AppState {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn agent_draft(&self, agent_id: &str) -> Result<Option<String>, String> {
         let model = self
             .inner
@@ -12898,46 +12429,6 @@ mod tests {
         group.managed_dir = format!("/tmp/session-workspaces/{id}");
         group.agents.clear();
         group
-    }
-
-    #[test]
-    fn global_drafts_crud_and_claim() {
-        let state = AppState::new(test_config(PathBuf::from(
-            "/tmp/session-state-global-drafts",
-        )));
-
-        assert!(state.create_global_draft("   ".to_string()).is_err());
-        let draft = state
-            .create_global_draft("  review the diff  ".to_string())
-            .unwrap();
-        assert_eq!(draft.text, "review the diff");
-        assert!(draft.consumed.is_none());
-        assert_eq!(state.global_drafts().unwrap().len(), 1);
-
-        let updated = state
-            .update_global_draft(&draft.id, "review the whole diff".to_string())
-            .unwrap();
-        assert_eq!(updated.text, "review the whole diff");
-
-        // A claim marks the draft consumed exactly once; a second claim (the
-        // concurrent double-assign race) must fail rather than double-deliver.
-        let claimed = state.claim_global_draft(&draft.id, "agent-1").unwrap();
-        assert_eq!(claimed.consumed.as_ref().unwrap().agent_id, "agent-1");
-        assert!(state.claim_global_draft(&draft.id, "agent-2").is_err());
-        // A consumed draft is history: no edits.
-        assert!(
-            state
-                .update_global_draft(&draft.id, "too late".to_string())
-                .is_err()
-        );
-
-        // Unclaim (assign rollback) reopens it for a later assign.
-        state.unclaim_global_draft(&draft.id).unwrap();
-        assert!(state.global_drafts().unwrap()[0].consumed.is_none());
-        state.claim_global_draft(&draft.id, "agent-2").unwrap();
-
-        assert!(state.delete_global_draft("missing").is_err());
-        assert!(state.delete_global_draft(&draft.id).unwrap().is_empty());
     }
 
     #[test]
@@ -20315,53 +19806,6 @@ mod tests {
     }
 
     #[test]
-    fn queue_wait_turn_is_rejected_for_research_runs() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let mut agent = sample_agent("research-agent");
-        agent.status = AgentStatus::Running;
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-7")
-            .unwrap();
-        let mut target = sample_agent("target-agent");
-        target.pane_id = Some("pane-8".to_string());
-        state.insert_agent(target).unwrap();
-
-        // A research run never drains its queue, so a wait-for turn accepted
-        // here would leave the agent in the orphaned-queue state at retirement.
-        let err = crate::turn_queue::queue_wait_agent_turn(
-            &state,
-            crate::turn_queue::QueueWaitAgentTurnRequest {
-                agent_id: "research-agent".to_string(),
-                data: "after the other agent".to_string(),
-                wait_for_agent_id: "target-agent".to_string(),
-                wait_for_pane_id: None,
-                wait_for_label: None,
-            },
-        )
-        .unwrap_err();
-        assert!(err.contains("read-only"));
-        assert!(
-            state
-                .agent_queued_turns("research-agent")
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
     fn remove_research_tree_reaps_the_runs_thread_records() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
@@ -21198,21 +20642,6 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    fn enqueue_wait_turn(
-        state: &AppState,
-        agent_id: &str,
-        data: &str,
-        wait_for_agent_id: &str,
-    ) -> Result<usize, String> {
-        state.enqueue_agent_wait_turn_with_target_label(
-            agent_id,
-            data.to_string(),
-            wait_for_agent_id,
-            None,
-            None,
-        )
-    }
-
     #[test]
     fn owns_control_socket_tracks_the_bound_inode() {
         use std::os::unix::fs::MetadataExt;
@@ -21253,122 +20682,6 @@ mod tests {
     }
 
     #[test]
-    fn queued_turn_pause_flag_and_pending_pause() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .enqueue_agent_turn("agent-1", "a".to_string())
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "b".to_string())
-            .unwrap();
-
-        let items = state
-            .set_queued_turn_pause("agent-1", 1, true, Some("b"), None)
-            .unwrap();
-        assert!(!items[0].pause_after);
-        assert!(items[1].pause_after);
-        // The text list is unaffected by the flag.
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["a".to_string(), "b".to_string()]
-        );
-
-        // A stale expected-text guards against editing the wrong item.
-        assert!(
-            state
-                .set_queued_turn_pause("agent-1", 1, false, Some("wrong"), None)
-                .is_err()
-        );
-
-        // Pending-pause is a one-shot marker.
-        assert!(!state.take_agent_pending_pause("agent-1").unwrap());
-        state.mark_agent_pending_pause("agent-1").unwrap();
-        assert!(state.take_agent_pending_pause("agent-1").unwrap());
-        assert!(!state.take_agent_pending_pause("agent-1").unwrap());
-    }
-
-    #[test]
-    fn queue_mutations_round_trip_through_persistence() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // First process: build up a queue through enqueue/remove with persistence on.
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            state
-                .enqueue_agent_turn("agent-1", "first".to_string())
-                .unwrap();
-            state
-                .enqueue_agent_turn("agent-1", "second".to_string())
-                .unwrap();
-            state
-                .enqueue_agent_turn("agent-1", "third".to_string())
-                .unwrap();
-            // Drop "second" from the middle.
-            state
-                .remove_agent_turn_queue_item("agent-1", 1, Some("second"), None)
-                .unwrap();
-        }
-
-        // Second process: the surviving queue order must reload intact.
-        let popped = {
-            let state = AppState::new(config.clone());
-            state.restore_session();
-            assert_eq!(
-                state.list_agent_turn_queue("agent-1").unwrap(),
-                vec!["first".to_string(), "third".to_string()]
-            );
-            let (data, pending) = state.pop_ready_agent_turn("agent-1").unwrap().unwrap();
-            assert_eq!(data.text, "first");
-            assert_eq!(pending, 1);
-            data.text
-        };
-        assert_eq!(popped, "first");
-
-        // Third process: the pop must also have been persisted.
-        let state = AppState::new(config);
-        state.restore_session();
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["third".to_string()]
-        );
-    }
-
-    #[test]
-    fn queued_turn_id_guards_the_right_duplicate() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        assert!(state.restore_session().is_empty());
-        // Two queued turns with identical text but distinct identities.
-        state
-            .enqueue_agent_turn("agent-1", "same".to_string())
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "same".to_string())
-            .unwrap();
-        let queue = state.agent_queued_turns("agent-1").unwrap();
-        assert_eq!(queue.len(), 2);
-        assert_ne!(queue[0].id, queue[1].id);
-
-        // Text matches at index 0, but a wrong id is still rejected.
-        assert!(
-            state
-                .remove_agent_turn_queue_item("agent-1", 0, Some("same"), Some("does-not-exist"))
-                .is_err()
-        );
-        // The correct id removes exactly that turn, leaving the other duplicate.
-        let second_id = queue[1].id.clone();
-        let (removed, remaining) = state
-            .remove_agent_turn_queue_item("agent-1", 1, Some("same"), Some(&second_id))
-            .unwrap();
-        assert_eq!(removed.id, second_id);
-        assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].id, queue[0].id);
-    }
-
-    #[test]
     fn queued_turns_persisted_without_ids_are_migrated_on_load() {
         // A turn stored by an older build (no `id` field) still loads, gaining a
         // fresh id, so mutations can identify it afterward.
@@ -21381,253 +20694,6 @@ mod tests {
         let bare: QueuedTurn = serde_json::from_str(r#""just text""#).unwrap();
         assert_eq!(bare.text, "just text");
         assert!(bare.id.starts_with("qturn-"));
-    }
-
-    #[test]
-    fn queued_wait_turn_waits_until_target_is_done() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        source.pane_id = Some("source-pane".to_string());
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        enqueue_wait_turn(&state, "source", "after target", "target").unwrap();
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
-
-        state
-            .set_agent_status("target", AgentStatus::AwaitingInput)
-            .unwrap();
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
-
-        state
-            .set_agent_status("target", AgentStatus::AwaitingPermission)
-            .unwrap();
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
-
-        state.set_agent_status("target", AgentStatus::Done).unwrap();
-        let (turn, pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(turn.text, "after target");
-        assert_eq!(pending, 0);
-    }
-
-    #[test]
-    fn queued_wait_turn_blocks_later_turns_until_target_is_done() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        source.pane_id = Some("source-pane".to_string());
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        enqueue_wait_turn(&state, "source", "after target", "target").unwrap();
-        state
-            .enqueue_agent_turn("source", "then this".to_string())
-            .unwrap();
-
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
-
-        state.set_agent_status("target", AgentStatus::Done).unwrap();
-        let (first, first_pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(first.text, "after target");
-        assert_eq!(first_pending, 1);
-
-        let (second, second_pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(second.text, "then this");
-        assert_eq!(second_pending, 0);
-    }
-
-    #[test]
-    fn removing_front_wait_turn_drops_its_wait_dependency() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        source.pane_id = Some("source-pane".to_string());
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        enqueue_wait_turn(&state, "source", "remove me", "target").unwrap();
-        state
-            .enqueue_agent_turn("source", "keep waiting".to_string())
-            .unwrap();
-
-        let (removed, queued) = state
-            .remove_agent_turn_queue_item("source", 0, Some("remove me"), None)
-            .unwrap();
-        assert_eq!(removed.text, "remove me");
-        assert_eq!(queued.len(), 1);
-        assert_eq!(queued[0].text, "keep waiting");
-        assert!(queued[0].wait_for.is_none());
-
-        // A wait belongs to the removed message, not to the queue position.
-        // Edit and X both remove through this path, so the next message becomes
-        // ready immediately instead of inheriting an unrelated dependency.
-        let (turn, pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(turn.text, "keep waiting");
-        assert_eq!(pending, 0);
-    }
-
-    #[test]
-    fn queued_wait_turn_waits_for_target_queue_after_target_is_done() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        source.pane_id = Some("source-pane".to_string());
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Done;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        state
-            .enqueue_agent_turn("target", "target queued".to_string())
-            .unwrap();
-        enqueue_wait_turn(&state, "source", "after target", "target").unwrap();
-
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
-
-        let (target_turn, target_pending) = state.pop_ready_agent_turn("target").unwrap().unwrap();
-        assert_eq!(target_turn.text, "target queued");
-        assert_eq!(target_pending, 0);
-
-        let (source_turn, source_pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(source_turn.text, "after target");
-        assert_eq!(source_pending, 0);
-    }
-
-    #[test]
-    fn queued_wait_turn_uses_supplied_label_when_target_pane_matches() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.title = "Shell".to_string();
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        state
-            .enqueue_agent_wait_turn_with_target_label(
-                "source",
-                "after target".to_string(),
-                "target",
-                Some("target-pane"),
-                Some("Dynamic terminal title"),
-            )
-            .unwrap();
-
-        let queued = state.agent_queued_turns("source").unwrap();
-        let wait_for = queued[0].wait_for.as_ref().unwrap();
-        assert_eq!(wait_for.label.as_deref(), Some("Dynamic terminal title"));
-    }
-
-    #[test]
-    fn queued_wait_turn_ignores_supplied_label_when_target_pane_is_stale() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.title = "Backend title".to_string();
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        state
-            .enqueue_agent_wait_turn_with_target_label(
-                "source",
-                "after target".to_string(),
-                "target",
-                Some("stale-pane"),
-                Some("Dynamic terminal title"),
-            )
-            .unwrap();
-
-        let queued = state.agent_queued_turns("source").unwrap();
-        let wait_for = queued[0].wait_for.as_ref().unwrap();
-        assert_eq!(wait_for.label.as_deref(), Some("Backend title"));
-    }
-
-    #[test]
-    fn queued_wait_turn_resolves_when_target_pane_is_gone() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Running;
-        target.pane_id = Some("missing-pane".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-
-        enqueue_wait_turn(&state, "source", "after close", "target").unwrap();
-        let (turn, pending) = state.pop_ready_agent_turn("source").unwrap().unwrap();
-        assert_eq!(turn.text, "after close");
-        assert_eq!(pending, 0);
-    }
-
-    #[test]
-    fn queued_wait_turn_blocks_when_target_failed() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut source = sample_agent("source");
-        source.status = AgentStatus::Done;
-        source.pane_id = Some("source-pane".to_string());
-        let mut target = sample_agent("target");
-        target.status = AgentStatus::Failed;
-        target.pane_id = Some("target-pane".to_string());
-        let mut target_pane = sample_pane_runtime("target-pane");
-        target_pane.info.agent_id = Some("target".to_string());
-        state.insert_agent(source).unwrap();
-        state.insert_agent(target).unwrap();
-        state.insert_pane(target_pane).unwrap();
-
-        enqueue_wait_turn(&state, "source", "after target", "target").unwrap();
-
-        // A failed target intentionally keeps its waiters blocked.
-        assert!(state.pop_ready_agent_turn("source").unwrap().is_none());
     }
 
     #[test]
@@ -21720,124 +20786,6 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn claim_next_turn_or_settle_holds_for_typing_then_drains() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "queued".to_string())
-            .unwrap();
-        state.set_agent_typing("agent-1", true).unwrap();
-
-        // While the user is typing the idle advance settles to Done and holds the queue,
-        // setting the status atomically with reading the typing flag.
-        assert!(matches!(
-            state
-                .claim_next_turn_or_settle("agent-1", AgentStatus::Done)
-                .unwrap(),
-            IdleAdvance::Idle
-        ));
-        assert!(matches!(
-            state.agent("agent-1").unwrap().unwrap().status,
-            AgentStatus::Done
-        ));
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["queued".to_string()]
-        );
-
-        // Once typing clears, the next advance claims the held turn instead of stalling.
-        state.set_agent_typing("agent-1", false).unwrap();
-        match state
-            .claim_next_turn_or_settle("agent-1", AgentStatus::Done)
-            .unwrap()
-        {
-            IdleAdvance::Sent { turn, .. } => assert_eq!(turn.text, "queued"),
-            _ => panic!("expected the held turn to drain once typing cleared"),
-        }
-    }
-
-    #[test]
-    fn queued_wait_turn_rejects_dependency_cycles() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut agent_a = sample_agent("agent-a");
-        agent_a.pane_id = Some("pane-a".to_string());
-        let mut agent_b = sample_agent("agent-b");
-        agent_b.pane_id = Some("pane-b".to_string());
-        let mut pane_a = sample_pane_runtime("pane-a");
-        pane_a.info.agent_id = Some("agent-a".to_string());
-        let mut pane_b = sample_pane_runtime("pane-b");
-        pane_b.info.agent_id = Some("agent-b".to_string());
-        state.insert_agent(agent_a).unwrap();
-        state.insert_agent(agent_b).unwrap();
-        state.insert_pane(pane_a).unwrap();
-        state.insert_pane(pane_b).unwrap();
-
-        enqueue_wait_turn(&state, "agent-a", "wait a", "agent-b").unwrap();
-        let err = enqueue_wait_turn(&state, "agent-b", "wait b", "agent-a").unwrap_err();
-        assert!(err.contains("cycle"));
-    }
-
-    #[test]
-    fn queued_wait_turn_rejects_cycle_through_idle_target_queue() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let mut agent_a = sample_agent("agent-a");
-        agent_a.status = AgentStatus::Done;
-        agent_a.pane_id = Some("pane-a".to_string());
-        let mut agent_b = sample_agent("agent-b");
-        agent_b.status = AgentStatus::Done;
-        agent_b.pane_id = Some("pane-b".to_string());
-        let mut pane_a = sample_pane_runtime("pane-a");
-        pane_a.info.agent_id = Some("agent-a".to_string());
-        let mut pane_b = sample_pane_runtime("pane-b");
-        pane_b.info.agent_id = Some("agent-b".to_string());
-        state.insert_agent(agent_a).unwrap();
-        state.insert_agent(agent_b).unwrap();
-        state.insert_pane(pane_a).unwrap();
-        state.insert_pane(pane_b).unwrap();
-
-        enqueue_wait_turn(&state, "agent-b", "wait for a", "agent-a").unwrap();
-        let err = enqueue_wait_turn(&state, "agent-a", "wait for b", "agent-b").unwrap_err();
-        assert!(err.contains("cycle"));
-    }
-
-    #[test]
-    fn queued_wait_turn_round_trips_through_persistence() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            let mut source = sample_agent("source");
-            source.status = AgentStatus::Done;
-            let mut target = sample_agent("target");
-            target.status = AgentStatus::Running;
-            target.pane_id = Some("target-pane".to_string());
-            let mut target_pane = sample_pane_runtime("target-pane");
-            target_pane.info.title = "Target pane".to_string();
-            target_pane.info.agent_id = Some("target".to_string());
-            state.insert_agent(source).unwrap();
-            state.insert_agent(target).unwrap();
-            state.insert_pane(target_pane).unwrap();
-            enqueue_wait_turn(&state, "source", "persisted wait", "target").unwrap();
-        }
-
-        let state = AppState::new(config);
-        state.restore_session();
-        let queued = state.agent_queued_turns("source").unwrap();
-        assert_eq!(queued.len(), 1);
-        assert_eq!(queued[0].text, "persisted wait");
-        let wait_for = queued[0].wait_for.as_ref().unwrap();
-        assert_eq!(wait_for.agent_id, "target");
-        assert_eq!(wait_for.label.as_deref(), Some("Target pane"));
     }
 
     #[test]
@@ -23513,14 +22461,12 @@ mod tests {
         let state = AppState::new(test_config(workspace));
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
         state.insert_agent(sample_agent("agent-1")).unwrap();
-        state.set_agent_typing("agent-1", true).unwrap();
         state.mark_agent_pending_pause("agent-1").unwrap();
 
         state.remove_pane("pane-7").unwrap();
 
         // The closed pane's agent (no queued turns) is reclaimed with its runtime state.
         assert!(state.agent("agent-1").unwrap().is_none());
-        assert!(!state.agent_is_typing("agent-1").unwrap());
     }
 
     #[test]
@@ -24153,11 +23099,6 @@ mod tests {
             state.list_agent_turn_queue("agent-1").unwrap(),
             vec!["queued turn".to_string()]
         );
-        state
-            .remove_agent_turn_queue_item("agent-1", 0, Some("queued turn"), None)
-            .unwrap();
-        let agent = state.agent("agent-1").unwrap().expect("agent restored");
-        assert_eq!(agent.orphaned_queue_pane_id, None);
 
         // next_id is advanced past the persisted high-water mark so ids never alias.
         assert!(state.next_id("pane").starts_with("pane-"));

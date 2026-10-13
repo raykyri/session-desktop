@@ -277,25 +277,6 @@ export function isTerminalTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && target.closest(`.${TERMINAL_PANE_CLASS}`) !== null;
 }
 
-export function agentStatusLabel(status: AgentInfo["status"]) {
-  switch (status) {
-    case "starting":
-      return "Starting";
-    case "running":
-      return "Running";
-    case "awaitingInput":
-      return "Awaiting input";
-    case "awaitingPermission":
-      return "Waiting on approval";
-    case "done":
-      return "Done";
-    case "idle":
-      return null;
-    case "failed":
-      return "Failed";
-  }
-}
-
 /** Workspace metadata can arrive in a full AgentInfo payload, but it is not
  * evidence that the agent's execution lifecycle changed. */
 export function agentEventAffectsThinkingState(eventType: string): boolean {
@@ -465,28 +446,6 @@ export function desiredPreventSleepState(
     return null;
   }
   return settingEnabled && anyAgentBusy;
-}
-
-type AgentStatusTone = "active" | "pending" | "attention" | "done" | "error" | "idle";
-
-// Maps an agent status onto the status-dot tones used by the pane detail popover.
-export function agentStatusTone(status: AgentInfo["status"]): AgentStatusTone {
-  switch (status) {
-    case "running":
-      return "active";
-    case "starting":
-      return "pending";
-    case "awaitingInput":
-    case "awaitingPermission":
-      return "attention";
-    case "done":
-      return "done";
-    case "failed":
-      return "error";
-    case "idle":
-    default:
-      return "idle";
-  }
 }
 
 /** Resolves after the next frame has painted. */

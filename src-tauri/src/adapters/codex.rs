@@ -5119,34 +5119,6 @@ trusted_hash = "sha256:trusted"
     }
 
     #[test]
-    fn stop_does_not_release_codex_waiters() {
-        let state = test_state();
-        install_agent_pane(&state);
-        let mut source = sample_agent();
-        source.id = "agent-2".to_string();
-        source.pane_id = Some("pane-2".to_string());
-        source.status = AgentStatus::Done;
-        state.insert_agent(source).unwrap();
-        state
-            .enqueue_agent_wait_turn_with_target_label(
-                "agent-2",
-                "after target".to_string(),
-                "agent-1",
-                Some("pane-1"),
-                Some("Codex"),
-            )
-            .unwrap();
-
-        let event = ingest(&state, hook_for_agent("Stop", "agent-1", json!({})));
-        assert_eq!(event.event_type, "agent.stop_observed");
-        assert!(matches!(
-            state.agent("agent-1").unwrap().unwrap().status,
-            AgentStatus::Running
-        ));
-        assert!(state.pop_ready_agent_turn("agent-2").unwrap().is_none());
-    }
-
-    #[test]
     fn shell_escape_prompt_submit_preserves_ready_codex_status() {
         let state = test_state();
         state.insert_agent(sample_agent()).unwrap();

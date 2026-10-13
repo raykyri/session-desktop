@@ -1811,15 +1811,6 @@ fn fork_agent_in_shell(
     finish_fork_spawn(state, source, pane, agent)
 }
 
-/// Adapters with a native fork command. Owns the fork-eligibility check (and its
-/// error message) for both the dispatch below and the queue engine's fail-fast
-/// validation, so a new forkable adapter is added in one place.
-pub fn adapter_supports_fork(config: &SessionConfig, adapter_id: &str) -> bool {
-    adapter_registry(config)
-        .get(adapter_id)
-        .is_ok_and(|adapter| adapter.supports_fork())
-}
-
 pub fn adapter_supports_research(config: &SessionConfig, adapter_id: &str) -> bool {
     adapter_registry(config)
         .get(adapter_id)
@@ -2276,9 +2267,6 @@ mod tests {
                 .all(|adapter| adapter.target.kind == "local")
         );
         let config = test_config();
-        assert!(adapter_supports_fork(&config, "claude"));
-        assert!(adapter_supports_fork(&config, "codex"));
-        assert!(adapter_supports_fork(&config, "grok"));
         assert!(adapter_supports_research(&config, "claude"));
         assert!(adapter_supports_research(&config, "codex"));
         assert!(adapter_supports_research(&config, "grok"));
