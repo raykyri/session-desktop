@@ -517,7 +517,7 @@ fn codex_image_flags(
             let path = image.path.display().to_string();
             if path.contains(',') {
                 return Err(format!(
-                    "Codex can't attach the image at {path}: its path contains a comma."
+                    "Codex can't read the image at {path}: the path contains a comma."
                 ));
             }
             Ok(format!("--image={path}"))
@@ -2344,7 +2344,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         );
 
         // `exec fork` takes the session id positionally; the images follow it
-        // so the variadic `--image` cannot swallow it.
+        // so the variadic `--image` cannot consume it as a file.
         let fork = with_codex_images(
             build_codex_exec_args("branch", None, None, Some("parent-1"), true, None),
             flags,

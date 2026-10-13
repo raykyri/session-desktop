@@ -18,29 +18,37 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-/// Every archive is written at this version. Version 14 adds image
-/// attachments to messages, with the image files in the archive's `images`
-/// directory; builds that accept up to version 13 fail to parse a node with
-/// one and would drop it and the nodes below it. It also covers the Home
-/// nesting links between the archive's trees (`parents`), which those builds
-/// ignore. Version 13 adds a node's
-/// `chainOrder` (see `ResearchNode::chain_order`), which builds that accept
-/// up to version 12 would drop, and a tree order whose Unfiled trees list in
-/// that order; reads of an older archive put its Unfiled trees newest root
-/// first ([`order_unfiled_newest_first`]), the order Home showed. Version 12
-/// stores a node's star timestamp as `starredAt` (`promotedAt` before);
-/// builds that accept up to
-/// version 11 ignore the new key and would drop every star. Archives store
-/// research nodes as an envelope with a tagged body (see `ResearchNode`)
-/// since version 11; builds that accept versions 1 to 10 read flat records
-/// and would drop every node. Reads accept versions 1 to 14 and migrate older
-/// nodes (`migrate_research_node_values`). Version 10 denotes two shapes, both
-/// written only by unreleased builds: flat records with posts and one merged
-/// anchor, and, from later builds, the body shape; the shape-based migration
-/// reads either. Earlier versions were tiers for the newest feature an
-/// archive held (3 runs only, 4 documents, 5 terminal conversations, 6 inline
-/// follow-ups, 7 attachments, 8 notes, 9 imported documents), so older builds
-/// kept reading archives without those features.
+/// Every archive is written at this version. Reads accept versions 1 to 14
+/// and migrate older nodes (`migrate_research_node_values`).
+///
+/// Version 14 adds image attachments to messages, with the image files in the
+/// archive's `images` directory; builds that accept up to version 13 fail to
+/// parse a node with one and would drop it and the nodes below it. It also
+/// covers the Home nesting links between the archive's trees (`parents`),
+/// which those builds ignore.
+///
+/// Version 13 adds a node's `chainOrder` (see `ResearchNode::chain_order`),
+/// which builds that accept up to version 12 would drop, and a tree order
+/// whose Unfiled trees list in that order; reads of an older archive put its
+/// Unfiled trees newest root first ([`order_unfiled_newest_first`]), the
+/// order Home showed.
+///
+/// Version 12 stores a node's star timestamp as `starredAt` (`promotedAt`
+/// before); builds that accept up to version 11 ignore the new key and would
+/// drop every star.
+///
+/// Version 11 stores research nodes as an envelope with a tagged body (see
+/// `ResearchNode`); builds that accept versions 1 to 10 read flat records and
+/// would drop every node.
+///
+/// Version 10 denotes two shapes, both written only by unreleased builds:
+/// flat records with posts and one merged anchor, and, from later builds, the
+/// body shape; the shape-based migration reads either.
+///
+/// Earlier versions were tiers for the newest feature an archive held (3 runs
+/// only, 4 documents, 5 terminal conversations, 6 inline follow-ups, 7
+/// attachments, 8 notes, 9 imported documents), so older builds kept reading
+/// archives without those features.
 pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 14;
 const DETACHED_RESEARCH_DIR: &str = "research-v1";
 const DETACHED_RESEARCH_PENDING_DIR: &str = "research-v1.pending";
@@ -4199,12 +4207,12 @@ mod tests {
         let state: ResearchFolderState = serde_json::from_str(stored).unwrap();
         assert!(state.parents.is_empty());
         assert!(state.collapsed_groups.is_empty());
-        // Saved without groups, it is written as it was read.
+        // With no nesting links, it serializes back to the input unchanged.
         assert_eq!(serde_json::to_string(&state).unwrap(), stored);
     }
 
     #[test]
-    fn groups_round_trip_and_count_as_content() {
+    fn nesting_links_round_trip_and_make_the_state_non_empty() {
         let mut state = ResearchFolderState::default();
         state
             .parents

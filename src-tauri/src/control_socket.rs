@@ -16,8 +16,8 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const CONTROL_SOCKET_READ_TIMEOUT: Duration = Duration::from_secs(5);
-/// The streamed upload body is not part of this line. Keep request metadata
-/// bounded before authentication so a peer cannot grow a handler without limit.
+/// Cap on one request line, applied before authentication so a peer cannot
+/// grow a handler without limit.
 const MAX_CONTROL_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 /// Cap on concurrent client-handler threads. Connections are mostly one-shot
 /// (CLI invocations and external notifications). This covers simultaneous
@@ -220,8 +220,8 @@ fn bind_control_socket(socket_path: &Path) -> Result<(UnixListener, (u64, u64)),
     let listener = UnixListener::bind(socket_path)
         .map_err(|err| format!("failed to bind socket {}: {err}", socket_path.display()))?;
 
-    // Restrict the socket to the owning user so the same-user peer check is not the
-    // only thing standing between other local accounts and the control plane.
+    // Restrict the socket to the owning user so other local accounts are
+    // refused by file permissions as well as by the same-user peer check.
     if let Err(err) = fs::set_permissions(socket_path, fs::Permissions::from_mode(0o600)) {
         drop(listener);
         let _ = fs::remove_file(socket_path);
@@ -856,16 +856,19 @@ fn handle_line_with_peer(
 /// The socket serves only token-free requests from a same-user peer: `ping`
 /// and `notification.send` (`session ping` and `session send`). The socket and
 /// its parent directory are also 0600/0700, but checking the peer prevents a
-/// permissive-filesystem regression from widening access. Session no longer
-/// creates terminal panes, so no pane token exists and any non-empty token is
-/// rejected rather than falling through to peer authentication.
+/// permissive-filesystem regression from widening access. Any non-empty token
+/// (a pane token sent by an older client) is rejected rather than falling
+/// through to peer authentication.
 fn handle_request_with_peer(
     state: &AppState,
     request: ControlRequest,
     same_user_peer: bool,
 ) -> Result<Value, String> {
     if !request.token.is_empty() {
-        return Err("invalid SESSION_TOKEN".to_string());
+        return Err(
+            "SESSION_TOKEN is not accepted: this Session build has no terminal panes. Unset it and run the command again."
+                .to_string(),
+        );
     }
     if !same_user_peer {
         return Err("control requests require a same-user local peer".to_string());
@@ -1074,7 +1077,7 @@ mod tests {
         let state = test_state();
         let err = handle_line(&state, &request_line("nope", "ping", Value::Null)).unwrap_err();
         assert!(
-            err.contains("invalid SESSION_TOKEN"),
+            err.contains("SESSION_TOKEN is not accepted"),
             "unexpected error: {err}"
         );
     }
@@ -1126,7 +1129,7 @@ mod tests {
             true,
         )
         .unwrap_err();
-        assert!(err.contains("invalid SESSION_TOKEN"));
+        assert!(err.contains("SESSION_TOKEN is not accepted"));
     }
 
     #[test]
@@ -1154,7 +1157,7 @@ mod tests {
     #[test]
     fn handle_line_rejects_an_unknown_command() {
         let state = test_state();
-        // The commands of the removed pane-token surface are unknown now.
+        // Commands that only pane tokens could call are unknown commands.
         for command in [
             "bogus",
             "pane.write",
@@ -1179,7 +1182,7 @@ mod tests {
         let request = request_line("stale-pane-token", "ping", Value::Null);
         let err = handle_line_with_peer(&state, &request, true).unwrap_err();
         assert!(
-            err.contains("invalid SESSION_TOKEN"),
+            err.contains("SESSION_TOKEN is not accepted"),
             "unexpected error: {err}"
         );
     }

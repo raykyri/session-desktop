@@ -69,9 +69,9 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// kept reading states without those features; with every node in the body
 /// shape, a state holds either no research nodes or version-9 nodes.
 pub const STATE_VERSION: u32 = 12;
-/// Written when the state contains no research nodes (the data whose shape
-/// changed in versions 9 to 12), so it stays loadable by builds that accept
-/// versions 2 to 4. Version 10 also renamed the terminal agents' composer text,
+/// Written when the state contains no research nodes and no draft with image
+/// attachments (the data whose shape changed in versions 9 to 12), so it
+/// stays loadable by builds that accept versions 2 to 4. Version 10 also renamed the terminal agents' composer text,
 /// which this build neither reads nor writes.
 pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
 const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;

@@ -612,9 +612,9 @@ fn open_in_os_browser(url: &str) -> Result<(), String> {
 // reads are slow (each is a short clone under the model lock) but because sync
 // commands run on the macOS main thread: the frontend calls them in bursts on
 // every agent/research event, exactly while backend threads (research
-// settle, the persist snapshot) hold the model lock, so as sync commands they
-// parked the main thread on that mutex and extended every research start/stop
-// into a visible stall.
+// settle, the persist snapshot) hold the model lock, so a sync command would
+// block the main thread on that mutex and turn every research start/stop into
+// a visible stall.
 #[tauri::command]
 async fn list_groups(state: tauri::State<'_, AppState>) -> Result<Vec<GroupInfo>, String> {
     state.list_groups()
@@ -830,7 +830,9 @@ async fn get_research_tree(
     // A thread in the Trash does not open; Restore brings it back first.
     let detail = state.research_tree(&tree_id)?;
     if detail.tree.is_trashed() {
-        return Err(format!("research tree {tree_id} is in the Trash"));
+        return Err(format!(
+            "research tree {tree_id} is in the Trash; restore it to open it"
+        ));
     }
     Ok(detail)
 }
@@ -1255,7 +1257,7 @@ async fn fork_research_node(
 /// runs with saved content as context; exchanges fork the native session.
 /// Shared by the fork command and retry, which relaunches a reset child
 /// through the same dispatch. Every failure path settles the child as Failed
-/// before returning the error, exactly as the fork command always did.
+/// before returning the error.
 fn launch_research_child_run(
     state: &AppState,
     parent: &ResearchNode,

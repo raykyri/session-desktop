@@ -96,7 +96,7 @@ fn run_ping() -> Result<(), String> {
     } else {
         Err(response
             .error
-            .unwrap_or_else(|| "Session did not answer the ping".to_string()))
+            .unwrap_or_else(|| "Session rejected the ping without an error message".to_string()))
     }
 }
 

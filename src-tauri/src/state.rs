@@ -96,8 +96,8 @@ struct AppStateInner {
     file_tokens: Mutex<HashMap<String, String>>,
     exact_file_tokens: Mutex<HashMap<String, (String, std::path::PathBuf)>>,
     // Exact, canonical files outside a thread's roots that the trusted UI
-    // explicitly granted to its previews. Codex inline visualizations live
-    // under Session's private workspace metadata, so granting the whole root
+    // explicitly granted to its previews. Codex inline visualizations are
+    // stored under Session's private workspace metadata, so granting the whole root
     // would expose unrelated sessions to a leaked preview token.
     file_preview_grants: Mutex<HashMap<String, HashSet<std::path::PathBuf>>>,
     model: Mutex<Model>,
@@ -586,8 +586,9 @@ impl AppState {
             .unwrap_or_default()
     }
 
-    /// The native session ids of a research thread's Codex runs, which own
-    /// the inline visualizations its transcripts name.
+    /// The native session ids of a research thread's Codex runs. Each inline
+    /// visualization its transcripts name is stored under one of these
+    /// sessions.
     pub fn owner_codex_session_ids(&self, owner_id: &str) -> Result<Vec<String>, String> {
         let tree = self.research_tree_for_owner(owner_id)?;
         let model = self
@@ -757,8 +758,8 @@ impl AppState {
         // Session creates no terminal panes. The panes older builds saved
         // (shells, agent tabs, and the hidden panes of pane-hosted research
         // runs) are not loaded, and their scrollback is deleted at startup.
-        // An agent bound to one has nothing left to own: keeping the record
-        // would leave a dead AgentInfo in state.json that nothing reaps.
+        // An agent bound to one has no pane to run in: keeping the record
+        // would leave a dead AgentInfo in state.json that nothing removes.
         // Research runs never survive a restart either: every still-active
         // node is settled as failed below, since nothing that could finish it
         // remains.
@@ -2661,10 +2662,10 @@ impl AppState {
     /// As `create_research_child_with_attachments`, with the agent, model and
     /// effort the follow-up runs on chosen by the user. `None` keeps the
     /// agent the parent's type picks. A follow-up launched with the parent's
-    /// content as context (of a post or a document) can run on any research
-    /// agent, since it starts a fresh run; a follow-up of an exchange forks
-    /// the parent's native session, so it accepts a model or effort of the
-    /// parent's agent only.
+    /// content as context (a post, a document or a saved transcript) can run
+    /// on any research agent, since it starts a fresh run; a follow-up of an
+    /// exchange forks the parent's native session, so it accepts a model or
+    /// effort of the parent's agent only.
     pub fn create_research_child_with_agent(
         &self,
         parent_node_id: &str,
@@ -2842,7 +2843,8 @@ impl AppState {
                         .is_some_and(|chosen| chosen.adapter != inherited.adapter)
                     {
                         return Err(
-                            "a follow-up of an answer runs on the answer's agent".to_string()
+                            "a follow-up of an answer must use the answer's agent; choose another model of that agent"
+                                .to_string()
                         );
                     }
                     chosen.unwrap_or(inherited)
@@ -3762,7 +3764,7 @@ impl AppState {
                     crate::tweets::ResearchMessageAttachment::Image { .. }
                 )
             }) {
-                return Err("Research drafts keep only image attachments.".to_string());
+                return Err("A research draft can attach only images.".to_string());
             }
             crate::tweets::validate_research_message_attachments(images)?;
         }
@@ -4227,7 +4229,8 @@ impl AppState {
                 .any(|node| node.tree_id == tree_id && research_node_has_live_execution(node))
             {
                 return Err(
-                    "cannot move research to the Trash while it has active runs".to_string()
+                    "cannot move research to the Trash while it has active runs; stop them or wait for them to finish"
+                        .to_string()
                 );
             }
             let tree = model
@@ -4758,7 +4761,7 @@ impl AppState {
             })
             .map(|(tree_id, folder_id)| (tree_id.clone(), folder_id.clone()))
             .collect::<HashMap<_, _>>();
-        // Groups whose parent and child both travel.
+        // Nesting links whose parent and child are both in the archive.
         let parents = model
             .research_folders
             .parents
@@ -6060,8 +6063,8 @@ fn research_tree_summary(model: &Model, tree: &ResearchTree) -> ResearchTreeSumm
         archived_at: tree.archived_at,
         has_unseen_update: unseen(latest_settlement),
         // Viewing the tree acknowledges the failure; the lifetime
-        // failed_count stays for detail displays but must not brand the
-        // sidebar forever.
+        // failed_count stays for detail displays but must not keep the
+        // sidebar's failure flag set.
         has_unseen_failure: unseen(latest_failure),
         trashed_at: tree.trashed_at,
     }
@@ -6152,9 +6155,9 @@ fn chosen_research_agent(agent: research::AgentSpec) -> Result<research::AgentSp
     })
 }
 
-/// Refuses user edits to a tree in the Trash, which the app no longer shows,
-/// so Restore returns it unchanged. Run bookkeeping for runs that settle is
-/// not an edit; trashing is refused while a tree has active runs.
+/// Refuses user edits to a tree in the Trash, which the app lists only in the
+/// Trash, so Restore returns it unchanged. Run bookkeeping for runs that
+/// settle is not an edit; trashing is refused while a tree has active runs.
 fn reject_trashed_research_tree(model: &Model, tree_id: &str) -> Result<(), String> {
     if model
         .research_trees
@@ -6418,7 +6421,7 @@ fn research_node_has_live_execution(node: &ResearchNode) -> bool {
 }
 
 /// Maps an agent's status onto its research run. A research-capable adapter
-/// must report `Done`/`Idle` at end of turn; one that rested at
+/// must report `Done`/`Idle` at end of turn; one that stayed at
 /// `AwaitingInput` after a normal turn would leave its nodes running forever.
 fn research_status_for_agent(status: AgentStatus) -> ResearchNodeStatus {
     match status {
@@ -7518,7 +7521,7 @@ mod tests {
         assert!(
             ask(&root_id, spec("codex", None, None))
                 .unwrap_err()
-                .contains("runs on the answer's agent")
+                .contains("must use the answer's agent")
         );
     }
 
@@ -9580,7 +9583,7 @@ mod tests {
         state
             .reorder_research_trees("group-1", false, vec![middle.tree.id.clone()])
             .unwrap();
-        // Edits wait for Restore.
+        // Edits are refused until Restore.
         for err in [
             state
                 .rename_research_tree(&filed.tree.id, "Renamed".to_string())

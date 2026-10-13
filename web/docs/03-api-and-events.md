@@ -99,7 +99,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
 | `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent, in or out of the Trash) |
 | `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree`, `restore_research_tree_from_trash` |
-| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, newest first | `list_research_trash` |
+| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` |
 | `research.emptyTrash` | M | `{ workspaceId }` → deleted tree ids | `empty_research_trash` |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |

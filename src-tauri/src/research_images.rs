@@ -13,9 +13,9 @@
 //!
 //! The frontend keeps unsent images in composers, a thread's ask boxes, and
 //! its queue of follow-ups (the last two stored in the webview across
-//! restarts), which the backend cannot see. Pending images that no node or draft references are therefore
-//! removed once they are older than [`PENDING_LIFETIME`], at startup and
-//! whenever an image is saved. A clean startup also moves stored images that
+//! restarts), which the backend cannot see. Pending images that no node or
+//! draft references are therefore removed once they are older than
+//! [`PENDING_LIFETIME`], at startup and whenever an image is saved. A clean startup also moves stored images that
 //! nothing references to pending. Removing a workspace folder copies its
 //! messages' images into the folder's archive and releases them here; adding
 //! the folder back copies them into the store again.
@@ -399,7 +399,7 @@ fn prepare_image(
     let encoded = encode_jpeg(&scaled, 85)?;
     if encoded.len() as u64 > MAX_IMAGE_BYTES {
         return Err(format!(
-            "The image is still over {} MB after downscaling.",
+            "The image is still over {} MB after downscaling. Use a smaller image.",
             MAX_IMAGE_BYTES / (1024 * 1024)
         ));
     }
@@ -462,8 +462,8 @@ pub fn save_pending(
 
 /// Directories a dropped image file may come from: the home directory, the
 /// temporary directory, and on macOS `/Volumes`, where removable drives and
-/// disk images mount. The paths come from the webview, so they are confined
-/// the way transcript image reads are (`crate::image_files`).
+/// disk images mount. The paths come from the webview, so they are
+/// canonicalized and confined to these roots (see `import_pending_within`).
 fn import_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(home) = std::env::var_os("HOME")
@@ -968,7 +968,7 @@ pub fn ensure_adapter_reads_images(
     let store = store_dir(workspace_root);
     if adapter == "codex" && store.to_string_lossy().contains(',') {
         return Err(format!(
-            "Codex can't read images stored in {}: the path contains a comma.",
+            "Codex can't read images stored in {}: the path contains a comma. Ask with another agent, or remove the images.",
             store.display()
         ));
     }
@@ -1020,7 +1020,7 @@ pub fn launch_images(
         })
         .map(|(id, mime_type)| {
             let path = image_path(workspace_root, id).ok_or_else(|| {
-                "An attached image is no longer available, so the question cannot be sent."
+                "An attached image is no longer available. Remove it and attach it again."
                     .to_string()
             })?;
             let format = ImageFormat::from_mime_type(mime_type).ok_or_else(unsupported)?;
