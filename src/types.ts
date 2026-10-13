@@ -506,7 +506,7 @@ export interface UpdateResearchDocumentResult {
   responseRevision: string;
   markdownChanged: boolean;
   removedHighlightCount: number;
-  /** Branches asked from a passage whose quote is not in the new body; they
+  /** Branches created from a passage whose quote is not in the new body; they
    * keep their anchors. */
   unmatchedBranchCount: number;
 }

@@ -144,7 +144,7 @@ test("the branches column stacks the document's and the answer's branches, each 
   // Reading order: the document's branch, then the answer's passage branch,
   // then its whole-answer branch.
   assert.deepEqual(groupsOf(html), ["d1", "a1", "aw"]);
-  // Each group names the message it was asked from and quotes the passage.
+  // Each group names its source message and quotes the passage.
   assert.match(html, /research-branch-source-from" title="Survey of compute thresholds">Survey of compute thresholds</);
   assert.match(html, /research-branch-source-from" title="What do these thresholds leave out\?">/);
   assert.match(html, /<i>“Most proposals”<\/i>/);
@@ -171,8 +171,8 @@ test("only the group that holds the column's selection has the ask box, after it
   assert.match(html, /data-node-id="d1" aria-labelledby="[^"]+" tabindex="-1"/);
   assert.deepEqual([...html.matchAll(/class="test-composer">([^<]+)</g)].map((match) => match[1]), ["ask a1"]);
   assert.ok(html.indexOf('data-node-id="a1f"') < html.indexOf("ask a1"));
-  // The header's × clears the column's selection.
-  assert.match(html, /class="control-button research-head-button research-head-clear" aria-label="Clear the selection in this column"/);
+  // The header's × clears the branch selection.
+  assert.match(html, /class="control-button research-head-button research-head-clear" aria-label="Clear branch selection"/);
 });
 
 test("a row with branches shows an indicator: accent when one is selected in the next column, the running glyph while one runs", () => {

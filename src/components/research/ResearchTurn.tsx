@@ -753,6 +753,14 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   ) : null;
   const tabIndex = selected || focusable ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
+  const branchStatusLabel = [
+    `${branchLabel} from this answer.`,
+    branchOpen ? "One is selected." : null,
+    branchState === "running" ? "A branch is running." : branchState === "failed" ? "A branch failed." : null,
+    branchUnread ? "One has a new answer." : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" ");
   const showBranches = settled && branchCount > 0;
   // The row's context menu is its … menu, so a row without the … button (a
   // queued question) keeps the webview's menu.
@@ -847,13 +855,13 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
             branchState ? ` is-${branchState}` : ""
           }`}
           data-research-no-drag=""
-          aria-label={`${branchLabel} from this answer${branchOpen ? ", one selected in the next column" : ""}${
-            branchState ? `, ${branchState}` : ""
-          }${branchUnread ? ", one with a new answer" : ""}`}
+          aria-label={branchStatusLabel}
           title={
             branchOpen
               ? "Clear the branch selected in the next column"
-              : `${branchLabel}: select the first in the next column`
+              : branchCount === 1
+                ? "Open branch"
+                : `Open the first of ${branchCount} branches`
           }
           data-research-branch-trigger={node.id}
           tabIndex={tabIndex}

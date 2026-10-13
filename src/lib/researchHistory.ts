@@ -6,7 +6,7 @@
  * deepest selected message; null until the thread page reports the message
  * it restored on opening. `path`, when given, is each column's selected
  * message, root column first, ending with `nodeId`; without it the levels
- * `nodeId` was asked from open with it. */
+ * `nodeId`'s source path opens with it. */
 export type ResearchVisit =
   | { kind: "home" }
   | { kind: "node"; treeId: string; nodeId: string | null; path?: readonly string[] };

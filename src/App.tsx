@@ -871,7 +871,7 @@ function MainApp() {
     () => [...researchTrees, ...archivedResearchTrees],
     [researchTrees, archivedResearchTrees],
   );
-  // A question asked from a user folder's view is filed in that folder; from
+  // A question submitted from a user folder's view is filed in that folder; from
   // any other list it goes to Unfiled.
   const composerFolderId = feedPage.kind === "folder" ? feedPage.folderId : null;
   const composerFolderName = composerFolderId

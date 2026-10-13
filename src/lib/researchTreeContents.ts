@@ -14,7 +14,7 @@ export interface ResearchTreeContents {
    * document. */
   followUps: number;
   /** Branches: follow-ups of a question or document that open as a new level
-   * (asked from a passage or the whole answer, not inline), and a document
+   * (created from a passage or the whole answer, not inline), and a document
    * under a note. A branch's later messages count as follow-ups. */
   branches: number;
 }

@@ -236,7 +236,7 @@ export function researchBranchDeleteDialogProps({
       ? `This deletes the note and ${plural("follow-up")} under it.`
       : "This deletes the note."
     : node.inline && count > 0
-      ? `This deletes this follow-up and everything after it in the thread, ${plural("message")} in all, including any branches. Its parent answer keeps the freed inline slot.`
+      ? `This deletes this follow-up and everything after it in the thread, ${plural("message")} in all, including any branches. After deletion, you can add another follow-up directly to the parent answer.`
       : count > 0
         ? `This also deletes ${plural("follow-up")} under it.`
         : "This deletes the follow-up and its response.";

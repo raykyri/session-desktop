@@ -71,7 +71,7 @@ function ResearchBranchSource({
           ) : quote && (resolves || !parentLoaded) ? (
             <i>“{quote}”</i>
           ) : quote ? (
-            `The whole answer (was “${quote}”, before the answer was rerun)`
+            `Whole answer · selected text before rerun: “${quote}”`
           ) : from !== null ? null : (
             "The whole answer"
           )}
@@ -359,7 +359,7 @@ function ResearchChainRows({
   headId: string;
   displayIds: readonly string[];
   selectedId: string | null;
-  /** The message the branch selected in the next column was asked from. */
+  /** The source message for the branch selected in the next column. */
   openSourceId: string | null;
   /** The first row is in the tab order (no row of the column is selected). */
   firstFocusable: boolean;
@@ -446,7 +446,7 @@ export function ResearchMessagesColumn({
   /** Provenance: the root is a transcript from a terminal session. */
   imported: boolean;
   shared: ResearchChainRowsShared;
-  /** The message the branch selected in the next column was asked from. */
+  /** The source message for the branch selected in the next column. */
   openSourceId: string | null;
   /** Actions for the question that starts this pair. */
   menu: ComponentProps<typeof ResearchPairHeader>["menu"];
@@ -531,7 +531,7 @@ export function ResearchNewBranchComposer({
       ref={composerRef}
       value={value}
       placeholder={group.anchor ? "Ask about this passage" : "Ask about this answer"}
-      ariaLabel="First question of the new branch"
+      ariaLabel="New branch question"
       mode={{ label: <b>New branch</b>, cancelLabel: "Cancel branch", onCancel }}
       requireCmdEnter={requireCmdEnter}
       disabled={archived}
@@ -547,9 +547,9 @@ export function ResearchNewBranchComposer({
   );
 }
 
-/** The branches column (T{level}) after a level: every branch asked from
+/** The branches column (T{level}) after a level: every branch created from
  * a message the level's column lists, stacked in reading order, each as a
- * group with its source (the message it was asked from and the passage),
+ * group with its source message and passage,
  * its messages and its queue. The group that holds the column's selection
  * ends with the ask box; a column with no selection has none. The unsent
  * branch is a group with its source and the ask box for its first
@@ -568,8 +568,7 @@ export function ResearchBranchesColumn({
   column: ResearchBranchesColumnData;
   current: boolean;
   shared: ResearchChainRowsShared;
-  /** The message the branch selected in the column after this one was
-   * asked from. */
+  /** The source message for the branch selected in the next column. */
   openSourceId: string | null;
   /** What a group's branch was asked about. */
   sourceOf: (group: ResearchStackGroup) => ResearchBranchSourceProps;
@@ -596,7 +595,7 @@ export function ResearchBranchesColumn({
         title="Branches"
         count={branchCount}
         branchIcon
-        clear={column.level ? { label: "Clear the selection in this column", onClear } : null}
+        clear={column.level ? { label: "Clear branch selection", onClear } : null}
       />
       <div className="research-column-scroll" data-research-scroll onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">

@@ -201,8 +201,7 @@ async function noteMenuOutline(nodeId: string, options: { archived?: boolean; no
 
 test("a follow-up note's menu edits, copies and deletes the note (D); the root note's has no Delete", async () => {
   assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Copy note", "|", "Delete note [d]"]);
-  // An AI follow-up still answering under the note keeps it from being
-  // deleted.
+  // A running AI follow-up under the note prevents deleting the note by itself.
   const running = researchNode({
     ...postFields, id: "ask", parentNodeId: "net", type: "exchange", status: "running", createdAt: 160, delivery: null,
   });
@@ -213,6 +212,6 @@ test("a follow-up note's menu edits, copies and deletes the note (D); the root n
   assert.deepEqual(await noteMenuOutline("net", { archived: true }), [
     "Edit note (disabled)", "Copy note", "|", "Delete note [d]",
   ]);
-  // The root note stands for the thread, which is deleted from the feed.
+  // The root note represents the thread, which is deleted from the feed.
   assert.deepEqual(await noteMenuOutline("post"), ["Edit note", "Copy note"]);
 });

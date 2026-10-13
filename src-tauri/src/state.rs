@@ -2430,7 +2430,7 @@ impl AppState {
                 0
             };
             let node = node.clone();
-            // Branches asked from a passage of the document move with their
+            // Branches created from a passage of the document move with their
             // quote too. A branch whose quote is gone keeps its anchor: the
             // branch itself and its question stay as they were.
             let mut moved_branches = Vec::new();
@@ -11627,7 +11627,7 @@ mod tests {
     }
 
     /// A state with a shared post (with a member reply and a follow-up
-    /// asked about it), a saved link, a run tree with a branch asked from a
+    /// asked about it), a saved link, a run tree with a branch created from a
     /// passage of its answer, and an exported terminal conversation.
     fn state_with_posts_and_anchors(workspace: &std::path::Path) -> AppState {
         let state = AppState::new(test_config(workspace.to_path_buf()));

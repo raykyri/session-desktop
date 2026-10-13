@@ -331,9 +331,9 @@ function ResearchThreadPage({
   const treeId = detail?.tree.id ?? null;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
   // Each column's selected message, root column first; the strip keeps the
-  // part the tree lists (see researchStrip). A single id stands for the
-  // levels it was asked from, each with the message its branch was asked
-  // from selected (see researchLevelPath): a node opened from the feed, or
+  // part the tree lists (see researchStrip). A single id stands for its
+  // source path, with each branch's source message selected (see
+  // researchLevelPath): a node opened from the feed, or
   // one the tree detail does not hold yet. Back and Forward navigate these
   // selections.
   const [selection, setSelection] = useState<string | readonly string[] | null>(null);
@@ -840,7 +840,7 @@ function ResearchThreadPage({
     [navigate, selectionWith],
   );
 
-  /** Selects branch `headId`, asked from a message listed in column
+  /** Selects branch `headId`, whose source message is listed in column
    * `level`, in the branches column after it: the message last selected in
    * the branch (its last message the first time). The columns after keep
    * their selections. Selecting the branch already selected there changes
@@ -989,7 +989,7 @@ function ResearchThreadPage({
     const requested = selection === null ? [] : typeof selection === "string" ? [selection] : selection;
     if (requested.some((nodeId) => !validNodeIds.has(nodeId))) {
       // A selected message was removed: its column selects the nearest
-      // surviving message it was asked from or followed, and a column whose
+      // surviving source or preceding message, and a column whose
       // messages went with it closes. Move focus there if the removed
       // columns contained focus.
       const survivor = (nodeId: string) => researchSurvivingAncestor(parentByIdRef.current, nodeId, validNodeIds);
@@ -1045,8 +1045,8 @@ function ResearchThreadPage({
     [archived, navigationPersistence, persistSelection, requestFocus, selectionWith],
   );
 
-  /** Discards the new branch being written; focus returns to the answer it
-   * was asked from. */
+  /** Discards the new branch being written; focus returns to its source
+   * answer. */
   const cancelPending = useCallback(() => {
     const current = pendingRef.current;
     if (!current) {
@@ -1105,7 +1105,7 @@ function ResearchThreadPage({
 
   // Dialogs return focus to the control that opened them (the … menu's
   // button). A deleted message takes its button along: focus then goes to the
-  // row of the message it was asked from, else to the root's ask box.
+  // row of its source message, else to the root's ask box.
   const deletedParentIdRef = useRef<string | null>(null);
   const deleteReturnFocus = useCallback(() => {
     const parentId = deletedParentIdRef.current;
@@ -2142,8 +2142,8 @@ function ResearchThreadPage({
     for (const id of removedNodeIds) {
       createdNodeIdsRef.current.delete(id);
     }
-    // A removed message on the open path: its column selects the message it
-    // was asked from or followed, or closes (see
+    // A removed message on the open path: its column selects the nearest
+    // source or preceding message, or closes (see
     // researchSelectionAfterRemoval).
     const remaining = nodesRef.current.filter((candidate) => !removedNodeIds.has(candidate.id));
     const surviving = survivingSelection(new Set(remaining.map((candidate) => candidate.id)));

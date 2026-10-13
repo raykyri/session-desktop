@@ -55,7 +55,7 @@ test("the answer's … menu button appears in the row's corner pill after the br
   assert.doesNotMatch(html, /class="research-msg-meta"/);
   assert.match(html, /class="research-msg-row is-status-complete is-selected has-branches"/);
   const content = html.indexOf('class="research-msg-content"');
-  const branch = html.indexOf('aria-label="2 branches from this answer"');
+  const branch = html.indexOf('aria-label="2 branches from this answer."');
   const rail = html.indexOf('class="research-feed-rail"');
   assert.ok(content >= 0 && branch > content && rail > branch);
   const pill = html.slice(rail);
