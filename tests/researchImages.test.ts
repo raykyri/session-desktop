@@ -7,8 +7,11 @@ import {
   acceptResearchImageFiles,
   RESEARCH_IMAGE_COUNT_ERROR,
   RESEARCH_IMAGE_MAX_BYTES,
+  RESEARCH_IMAGE_MAX_UNSCALED_BYTES,
   RESEARCH_IMAGE_SIZE_ERROR,
   RESEARCH_IMAGE_TYPE_ERROR,
+  RESEARCH_IMAGE_UNSCALED_SIZE_ERROR,
+  RESEARCH_MESSAGE_IMAGE_SIZE_ERROR,
   researchImageAlt,
   researchImageBlockReason,
   pasteAttachesImages,
@@ -50,9 +53,16 @@ test("a composer takes PNG, JPEG, GIF and WebP files up to the size and count li
     accepted: [file("image/jpeg")],
     error: RESEARCH_IMAGE_TYPE_ERROR,
   });
-  assert.deepEqual(acceptResearchImageFiles([file("image/gif", RESEARCH_IMAGE_MAX_BYTES + 1)], 0), {
+  assert.deepEqual(acceptResearchImageFiles([file("image/png", RESEARCH_IMAGE_MAX_BYTES + 1)], 0), {
     accepted: [],
     error: RESEARCH_IMAGE_SIZE_ERROR,
+  });
+  // PNG and JPEG files over 5 MB are downscaled by the backend; GIF and
+  // WebP files are not.
+  const large = RESEARCH_IMAGE_MAX_UNSCALED_BYTES + 1;
+  assert.deepEqual(acceptResearchImageFiles([file("image/jpeg", large), file("image/gif", large)], 0), {
+    accepted: [file("image/jpeg", large)],
+    error: RESEARCH_IMAGE_UNSCALED_SIZE_ERROR,
   });
   assert.deepEqual(acceptResearchImageFiles([file("image/png"), file("image/png")], 7), {
     accepted: [file("image/png")],
@@ -82,12 +92,19 @@ test("images are labelled by count and named by file name", () => {
   assert.deepEqual(researchImages([unavailableTweet, image("2")]), [image("2")]);
 });
 
-test("only agents without image input block a message with images", () => {
-  assert.equal(researchImageBlockReason("claude", "Claude", 2), null);
-  assert.equal(researchImageBlockReason("codex", "Codex", 1), null);
-  assert.equal(researchImageBlockReason("grok", "Grok CLI", 1), "Grok CLI can't read images.");
-  assert.equal(researchImageBlockReason("grok", null, 1), "Grok can't read images.");
-  assert.equal(researchImageBlockReason("grok", "Grok", 0), null);
+test("agents without image input and oversized messages block a message with images", () => {
+  const two = [image("1"), image("2")];
+  assert.equal(researchImageBlockReason("claude", "Claude", two), null);
+  assert.equal(researchImageBlockReason("codex", "Codex", [image("1")]), null);
+  assert.equal(researchImageBlockReason("grok", "Grok CLI", [image("1")]), "Grok CLI can't read images.");
+  assert.equal(researchImageBlockReason("grok", null, [image("1")]), "Grok can't read images.");
+  assert.equal(researchImageBlockReason("grok", "Grok", []), null);
+  const big = (id: string) => ({ ...image(id), byteSize: 5 * 1024 * 1024 });
+  assert.equal(researchImageBlockReason("claude", "Claude", ["1", "2", "3", "4"].map(big)), null);
+  assert.equal(
+    researchImageBlockReason("claude", "Claude", ["1", "2", "3", "4", "5"].map(big)),
+    RESEARCH_MESSAGE_IMAGE_SIZE_ERROR,
+  );
 });
 
 test("a message shows its images as thumbnails, and a Home card as a label", () => {

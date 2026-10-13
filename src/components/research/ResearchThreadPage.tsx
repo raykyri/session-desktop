@@ -2427,7 +2427,7 @@ function ResearchThreadPage({
     researchImageBlockReason(
       adapter,
       questionAdapters.find((candidate) => candidate.id === adapter)?.label,
-      images?.length ?? 0,
+      images,
     );
   /** The agent a branch asked from `parentNodeId` runs on. */
   const parentAgentAdapter = (parentNodeId: string) => {

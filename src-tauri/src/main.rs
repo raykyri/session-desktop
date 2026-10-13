@@ -1612,10 +1612,10 @@ async fn save_research_image(
 ) -> Result<tweets::ResearchMessageAttachment, String> {
     let root = state.config().workspace_root.clone();
     // Refuse an oversized image before decoding it.
-    if data_base64.len() as u64 > research_images::MAX_IMAGE_BYTES.div_ceil(3) * 4 + 4 {
+    if data_base64.len() as u64 > research_images::MAX_INPUT_IMAGE_BYTES.div_ceil(3) * 4 + 4 {
         return Err(format!(
             "Images must be {} MB or smaller.",
-            research_images::MAX_IMAGE_BYTES / (1024 * 1024)
+            research_images::MAX_INPUT_IMAGE_BYTES / (1024 * 1024)
         ));
     }
     let state = state.inner().clone();

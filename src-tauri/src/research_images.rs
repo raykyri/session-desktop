@@ -20,9 +20,10 @@
 //! messages' images into the folder's archive and releases them here; adding
 //! the folder back copies them into the store again.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fs;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, SystemTime};
@@ -31,8 +32,24 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use crate::tweets::ResearchMessageAttachment;
 
-/// Largest image a message can carry.
-pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+/// Largest image a message can carry: the Claude API's limit per image.
+/// Larger PNG and JPEG images are downscaled when saved.
+pub const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+/// Largest image accepted from a paste or drop, before downscaling.
+pub const MAX_INPUT_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+/// Largest stored image that still loads: images saved before downscaling
+/// were kept up to 10 MB. Launches refuse anything over [`MAX_IMAGE_BYTES`].
+const MAX_STORED_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+/// Most image bytes one message can carry, which bounds the run's stdin
+/// (Claude Code takes them base64 encoded) and memory.
+pub const MAX_MESSAGE_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+/// Longest side an image keeps without downscaling; the Claude API refuses
+/// larger images.
+const MAX_IMAGE_SIDE: u32 = 8000;
+/// Longest side of a downscaled image.
+const DOWNSCALED_IMAGE_SIDE: u32 = 2048;
+/// Largest decoded image, in bytes of pixel data.
+const MAX_DECODED_IMAGE_BYTES: u64 = 512 * 1024 * 1024;
 /// Most images one message can carry.
 pub const MAX_IMAGES_PER_MESSAGE: usize = 8;
 /// Longest kept original file name, in characters.
@@ -240,8 +257,114 @@ pub fn clean_file_name(name: Option<&str>) -> Option<String> {
 fn too_large() -> String {
     format!(
         "Images must be {} MB or smaller.",
+        MAX_INPUT_IMAGE_BYTES / (1024 * 1024)
+    )
+}
+
+fn too_large_to_send() -> String {
+    format!(
+        "GIF and WebP images must be {} MB or smaller.",
         MAX_IMAGE_BYTES / (1024 * 1024)
     )
+}
+
+fn message_too_large() -> String {
+    format!(
+        "A message's images can total {} MB at most.",
+        MAX_MESSAGE_IMAGE_BYTES / (1024 * 1024)
+    )
+}
+
+/// Whether the image crate decodes this format here (PNG and JPEG).
+fn decodes(format: ImageFormat) -> bool {
+    matches!(format, ImageFormat::Png | ImageFormat::Jpeg)
+}
+
+/// Decodes a PNG or JPEG image, upright (a JPEG's EXIF orientation is
+/// applied, since re-encoding drops it). Width, height, and pixel memory are
+/// capped.
+fn decode(format: ImageFormat, bytes: &[u8]) -> Result<image::DynamicImage, String> {
+    use image::ImageDecoder as _;
+    let format = match format {
+        ImageFormat::Png => image::ImageFormat::Png,
+        ImageFormat::Jpeg => image::ImageFormat::Jpeg,
+        ImageFormat::Gif | ImageFormat::Webp => return Err(unsupported()),
+    };
+    let mut reader = image::ImageReader::with_format(Cursor::new(bytes), format);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(16_384);
+    limits.max_image_height = Some(16_384);
+    limits.max_alloc = Some(MAX_DECODED_IMAGE_BYTES);
+    reader.limits(limits);
+    let failed = |err: image::ImageError| format!("The image could not be read: {err}");
+    let mut decoder = reader.into_decoder().map_err(failed)?;
+    let orientation = decoder.orientation().map_err(failed)?;
+    let mut decoded = image::DynamicImage::from_decoder(decoder).map_err(failed)?;
+    decoded.apply_orientation(orientation);
+    Ok(decoded)
+}
+
+/// The image as a JPEG, with any transparency over white.
+fn encode_jpeg(image: &image::DynamicImage, quality: u8) -> Result<Vec<u8>, String> {
+    let rgb = if image.color().has_alpha() {
+        let rgba = image.to_rgba8();
+        let mut rgb = image::RgbImage::new(rgba.width(), rgba.height());
+        for (target, source) in rgb.pixels_mut().zip(rgba.pixels()) {
+            let [r, g, b, a] = source.0;
+            let over_white = |channel: u8| {
+                ((u16::from(channel) * u16::from(a) + 255 * (255 - u16::from(a))) / 255) as u8
+            };
+            *target = image::Rgb([over_white(r), over_white(g), over_white(b)]);
+        }
+        rgb
+    } else {
+        image.to_rgb8()
+    };
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality)
+        .encode_image(&rgb)
+        .map_err(|err| format!("failed to encode the image: {err}"))?;
+    Ok(out)
+}
+
+/// The bytes to store for a pasted or dropped image. A PNG or JPEG over
+/// [`MAX_IMAGE_BYTES`] or [`MAX_IMAGE_SIDE`] is downscaled to
+/// [`DOWNSCALED_IMAGE_SIDE`] and re-encoded as JPEG; the original is not
+/// kept. A GIF or WebP image (not decoded here) must already fit.
+fn prepare_image(
+    format: ImageFormat,
+    bytes: &[u8],
+) -> Result<(ImageFormat, Cow<'_, [u8]>), String> {
+    let oversized_side =
+        dimensions(format, bytes).is_some_and(|(width, height)| width.max(height) > MAX_IMAGE_SIDE);
+    if bytes.len() as u64 <= MAX_IMAGE_BYTES && !oversized_side {
+        return Ok((format, Cow::Borrowed(bytes)));
+    }
+    if !decodes(format) {
+        return Err(if oversized_side {
+            format!("GIF and WebP images must be at most {MAX_IMAGE_SIDE} pixels on each side.")
+        } else {
+            too_large_to_send()
+        });
+    }
+    let decoded = decode(format, bytes)?;
+    let scaled = if decoded.width().max(decoded.height()) > DOWNSCALED_IMAGE_SIDE {
+        decoded.resize(
+            DOWNSCALED_IMAGE_SIDE,
+            DOWNSCALED_IMAGE_SIDE,
+            image::imageops::FilterType::Triangle,
+        )
+    } else {
+        decoded
+    };
+    let encoded = encode_jpeg(&scaled, 85)?;
+    if encoded.len() as u64 > MAX_IMAGE_BYTES {
+        return Err(format!(
+            "The image is still over {} MB after downscaling.",
+            MAX_IMAGE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok((ImageFormat::Jpeg, Cow::Owned(encoded)))
 }
 
 fn unsupported() -> String {
@@ -275,10 +398,12 @@ pub fn save_pending(
     if bytes.is_empty() {
         return Err("The image is empty.".to_string());
     }
-    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+    if bytes.len() as u64 > MAX_INPUT_IMAGE_BYTES {
         return Err(too_large());
     }
     let format = ImageFormat::sniff(bytes).ok_or_else(unsupported)?;
+    let (format, bytes) = prepare_image(format, bytes)?;
+    let bytes = bytes.as_ref();
     let dir = pending_dir(workspace_root);
     fs::create_dir_all(&dir).map_err(|err| format!("failed to create {}: {err}", dir.display()))?;
     let id = new_image_id(format)?;
@@ -349,11 +474,11 @@ fn import_pending_within(
     if !metadata.is_file() {
         return Err(unsupported());
     }
-    if metadata.len() > MAX_IMAGE_BYTES {
+    if metadata.len() > MAX_INPUT_IMAGE_BYTES {
         return Err(too_large());
     }
     let mut bytes = Vec::new();
-    file.take(MAX_IMAGE_BYTES + 1)
+    file.take(MAX_INPUT_IMAGE_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     let name = path.file_name().and_then(|name| name.to_str());
@@ -379,10 +504,10 @@ fn read_image(workspace_root: &Path, id: &str) -> Result<(ImageFormat, Vec<u8>),
     })?;
     let file = fs::File::open(&path).map_err(|err| format!("failed to open the image: {err}"))?;
     let mut bytes = Vec::new();
-    file.take(MAX_IMAGE_BYTES + 1)
+    file.take(MAX_STORED_IMAGE_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|err| format!("failed to read the image: {err}"))?;
-    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+    if bytes.len() as u64 > MAX_STORED_IMAGE_BYTES {
         return Err(too_large());
     }
     let format = ImageFormat::sniff(&bytes).ok_or_else(unsupported)?;
@@ -648,11 +773,22 @@ pub fn attachments_for_inputs(
         ));
     }
     let mut seen = HashSet::new();
-    inputs
+    let attachments = inputs
         .iter()
         .filter(|input| seen.insert(input.id.as_str()))
         .map(|input| attachment_for(workspace_root, &input.id, input.file_name.as_deref()))
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    let total = attachments
+        .iter()
+        .map(|attachment| match attachment {
+            ResearchMessageAttachment::Image { byte_size, .. } => *byte_size,
+            _ => 0,
+        })
+        .sum::<u64>();
+    if total > MAX_MESSAGE_IMAGE_BYTES {
+        return Err(message_too_large());
+    }
+    Ok(attachments)
 }
 
 /// Field checks for a stored image attachment; the file itself is not
@@ -668,7 +804,7 @@ pub fn validate_attachment(
     if !is_image_id(id)
         || !matches_id
         || byte_size == 0
-        || byte_size > MAX_IMAGE_BYTES
+        || byte_size > MAX_STORED_IMAGE_BYTES
         || file_name.is_some_and(|name| clean_file_name(Some(name)).as_deref() != Some(name))
     {
         return Err("research message contains an invalid image attachment".to_string());
@@ -753,6 +889,7 @@ pub fn launch_images(
     attachments: &[ResearchMessageAttachment],
 ) -> Result<Vec<LaunchImage>, String> {
     ensure_adapter_reads_images(workspace_root, adapter, attachments)?;
+    let mut total = 0u64;
     attachments
         .iter()
         .filter_map(|attachment| match attachment {
@@ -765,6 +902,20 @@ pub fn launch_images(
                     .to_string()
             })?;
             let format = ImageFormat::from_mime_type(mime_type).ok_or_else(unsupported)?;
+            // The run reads each file whole, so check the size on disk.
+            let size = fs::metadata(&path)
+                .map_err(|err| format!("failed to read the attached image: {err}"))?
+                .len();
+            if size > MAX_IMAGE_BYTES {
+                return Err(format!(
+                    "An attached image is over {} MB. Remove it and attach it again to downscale it.",
+                    MAX_IMAGE_BYTES / (1024 * 1024)
+                ));
+            }
+            total += size;
+            if total > MAX_MESSAGE_IMAGE_BYTES {
+                return Err(message_too_large());
+            }
             Ok(LaunchImage { path, format })
         })
         .collect()
@@ -1036,11 +1187,134 @@ mod tests {
                 .contains("empty")
         );
         let mut huge = png(1, 1);
-        huge.resize(MAX_IMAGE_BYTES as usize + 1, 0);
+        huge.resize(MAX_INPUT_IMAGE_BYTES as usize + 1, 0);
         assert!(
             save_pending(&root, &huge, None)
                 .unwrap_err()
-                .contains("10 MB")
+                .contains("20 MB")
+        );
+        // GIF and WebP images are not downscaled.
+        let mut gif = b"GIF89a\x40\x01\xf0\x00".to_vec();
+        gif.resize(MAX_IMAGE_BYTES as usize + 1, 0);
+        assert!(
+            save_pending(&root, &gif, None)
+                .unwrap_err()
+                .contains("GIF and WebP images must be 5 MB")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A real PNG of noise, which does not compress.
+    fn noise_png(width: u32, height: u32) -> Vec<u8> {
+        let mut state = 0x2545_f491_u32;
+        let pixels = image::RgbaImage::from_fn(width, height, |_, _| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            image::Rgba(state.to_le_bytes())
+        });
+        let mut out = Vec::new();
+        image::DynamicImage::ImageRgba8(pixels)
+            .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn large_images_are_downscaled_to_jpeg_on_save() {
+        let root = temp_root();
+        let large = noise_png(1500, 1000);
+        assert!(large.len() as u64 > MAX_IMAGE_BYTES);
+        let attachment = save_pending(&root, &large, Some("big.png")).unwrap();
+        let ResearchMessageAttachment::Image {
+            id,
+            mime_type,
+            byte_size,
+            width,
+            height,
+            file_name,
+        } = &attachment
+        else {
+            panic!("expected an image attachment");
+        };
+        assert_eq!(mime_type, "image/jpeg");
+        assert!(id.ends_with(".jpg"));
+        assert!(*byte_size <= MAX_IMAGE_BYTES);
+        assert_eq!((*width, *height), (Some(1500), Some(1000)));
+        assert_eq!(file_name.as_deref(), Some("big.png"));
+        let stored = fs::read(pending_dir(&root).join(id)).unwrap();
+        assert_eq!(ImageFormat::sniff(&stored), Some(ImageFormat::Jpeg));
+
+        // A small image is kept as it is.
+        let small = noise_png(40, 30);
+        let kept = save_pending(&root, &small, None).unwrap();
+        let ResearchMessageAttachment::Image { id, .. } = &kept else {
+            panic!("expected an image attachment");
+        };
+        assert_eq!(fs::read(pending_dir(&root).join(id)).unwrap(), small);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transparency_is_flattened_over_white() {
+        let pixels = image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 0, 0]));
+        let jpeg = encode_jpeg(&image::DynamicImage::ImageRgba8(pixels), 95).unwrap();
+        let decoded = decode(ImageFormat::Jpeg, &jpeg).unwrap().to_rgb8();
+        assert!(
+            decoded
+                .pixels()
+                .all(|pixel| pixel.0.iter().all(|&c| c > 245))
+        );
+    }
+
+    #[test]
+    fn messages_and_launches_cap_image_bytes() {
+        let root = temp_root();
+        let ids = (0..5)
+            .map(|index| {
+                let attachment = save_pending(&root, &png(2, 2 + index), None).unwrap();
+                let ResearchMessageAttachment::Image { id, .. } = attachment else {
+                    panic!("expected an image attachment");
+                };
+                // Pad the stored file to just under the per-image limit.
+                let path = pending_dir(&root).join(&id);
+                let mut bytes = fs::read(&path).unwrap();
+                bytes.resize(MAX_IMAGE_BYTES as usize - 1, 0);
+                fs::write(&path, bytes).unwrap();
+                id
+            })
+            .collect::<Vec<_>>();
+        let inputs = ids
+            .iter()
+            .map(|id| ImageInput {
+                id: id.clone(),
+                file_name: None,
+            })
+            .collect::<Vec<_>>();
+        attachments_for_inputs(&root, &inputs[..4]).unwrap();
+        assert!(
+            attachments_for_inputs(&root, &inputs)
+                .unwrap_err()
+                .contains("20 MB")
+        );
+        let attachments = inputs[..4]
+            .iter()
+            .map(|input| attachment_for(&root, &input.id, None).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            launch_images(&root, "claude", &attachments).unwrap().len(),
+            4
+        );
+        // An image stored before downscaling still loads, but is not sent.
+        let path = pending_dir(&root).join(&ids[0]);
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.resize(MAX_IMAGE_BYTES as usize + 1, 0);
+        fs::write(&path, bytes).unwrap();
+        attachment_for(&root, &ids[0], None).unwrap();
+        assert!(
+            launch_images(&root, "claude", &attachments)
+                .unwrap_err()
+                .contains("over 5 MB")
         );
         fs::remove_dir_all(root).unwrap();
     }

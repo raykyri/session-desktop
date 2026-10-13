@@ -438,7 +438,7 @@ export default function ResearchQueryComposer({
       ? null
       : askMode === "note"
         ? RESEARCH_NOTE_IMAGE_ERROR
-        : researchImageBlockReason(adapter, selectedAdapter?.label, images.length);
+        : researchImageBlockReason(adapter, selectedAdapter?.label, images);
   const imageProblem = imageInput.error ?? imageBlock;
   const imageProblemId = useId();
 

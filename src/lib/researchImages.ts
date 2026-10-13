@@ -3,8 +3,15 @@
 // files (src-tauri/src/research_images.rs) and applies the same limits.
 import type { ResearchImageAttachment, ResearchMessageAttachment } from "../types";
 
-export const RESEARCH_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+/** Largest PNG or JPEG file a composer accepts; the backend downscales
+ * images over 5 MB (the Claude API's limit per image). */
+export const RESEARCH_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+/** Largest GIF or WebP file, which the backend does not downscale. */
+export const RESEARCH_IMAGE_MAX_UNSCALED_BYTES = 5 * 1024 * 1024;
+/** Most image bytes one message can carry, after downscaling. */
+export const RESEARCH_MESSAGE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 export const RESEARCH_IMAGE_MAX_COUNT = 8;
+const RESEARCH_DOWNSCALED_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg"]);
 const RESEARCH_IMAGE_TYPES: ReadonlySet<string> = new Set([
   "image/png",
   "image/jpeg",
@@ -13,7 +20,9 @@ const RESEARCH_IMAGE_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 export const RESEARCH_IMAGE_TYPE_ERROR = "Only PNG, JPEG, GIF, and WebP images can be attached.";
-export const RESEARCH_IMAGE_SIZE_ERROR = "Images must be 10 MB or smaller.";
+export const RESEARCH_IMAGE_SIZE_ERROR = "Images must be 20 MB or smaller.";
+export const RESEARCH_IMAGE_UNSCALED_SIZE_ERROR = "GIF and WebP images must be 5 MB or smaller.";
+export const RESEARCH_MESSAGE_IMAGE_SIZE_ERROR = "A message's images can total 20 MB at most.";
 export const RESEARCH_IMAGE_COUNT_ERROR = `A message can include up to ${RESEARCH_IMAGE_MAX_COUNT} images.`;
 export const RESEARCH_NOTE_IMAGE_ERROR = "Notes can't include images. Switch to Ask to send them with a question.";
 
@@ -46,15 +55,19 @@ function researchAgentReadsImages(adapterId: string): boolean {
 
 const AGENT_NAMES: Record<string, string> = { claude: "Claude", codex: "Codex", grok: "Grok" };
 
-/** Why a message with `imageCount` images cannot go to this agent, or null
- * when it can. The send stays blocked rather than dropping the images.
- * Without a label, the agent is named from its id. */
+/** Why a message with these images cannot go to this agent, or null when
+ * it can: their stored sizes total more than a message carries, or the
+ * agent can't read images. The send stays blocked rather than dropping the
+ * images. Without a label, the agent is named from its id. */
 export function researchImageBlockReason(
   adapterId: string | null | undefined,
   adapterLabel: string | null | undefined,
-  imageCount: number,
+  images: readonly ResearchImageAttachment[] | undefined,
 ): string | null {
-  if (imageCount === 0 || !adapterId || researchAgentReadsImages(adapterId)) return null;
+  if (!images || images.length === 0) return null;
+  const total = images.reduce((sum, image) => sum + (image.byteSize || 0), 0);
+  if (total > RESEARCH_MESSAGE_IMAGE_MAX_BYTES) return RESEARCH_MESSAGE_IMAGE_SIZE_ERROR;
+  if (!adapterId || researchAgentReadsImages(adapterId)) return null;
   return `${adapterLabel || AGENT_NAMES[adapterId] || adapterId} can't read images.`;
 }
 
@@ -64,8 +77,8 @@ interface ImageFileLike {
 }
 
 /** The files a composer attaches, in order, and the error to show for the
- * rest: an unsupported type, a file over the size limit, or more images
- * than a message can hold alongside the `existing` ones. */
+ * rest: an unsupported type, a file over the size limit for its type, or
+ * more images than a message can hold alongside the `existing` ones. */
 export function acceptResearchImageFiles<T extends ImageFileLike>(
   files: readonly T[],
   existing: number,
@@ -77,6 +90,8 @@ export function acceptResearchImageFiles<T extends ImageFileLike>(
       error ??= RESEARCH_IMAGE_TYPE_ERROR;
     } else if (file.size > RESEARCH_IMAGE_MAX_BYTES) {
       error ??= RESEARCH_IMAGE_SIZE_ERROR;
+    } else if (!RESEARCH_DOWNSCALED_TYPES.has(file.type) && file.size > RESEARCH_IMAGE_MAX_UNSCALED_BYTES) {
+      error ??= RESEARCH_IMAGE_UNSCALED_SIZE_ERROR;
     } else if (existing + accepted.length >= RESEARCH_IMAGE_MAX_COUNT) {
       error ??= RESEARCH_IMAGE_COUNT_ERROR;
     } else {

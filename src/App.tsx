@@ -964,7 +964,7 @@ function MainApp() {
       const imageBlock = researchImageBlockReason(
         choice.adapter,
         config?.adapters.find((adapter) => adapter.id === choice.adapter)?.label,
-        images.length,
+        images,
       );
       if (imageBlock) throw new Error(imageBlock);
       await submitNewResearch({ prompt, ...choice, workspaceId: draft.workspaceId, images });

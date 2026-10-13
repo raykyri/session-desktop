@@ -26,6 +26,9 @@ dirs = "6.0.0"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 getrandom = "0.2"
+# Decodes pasted PNG and JPEG images to downscale large ones and make
+# thumbnails. Already built for the clipboard plugin (arboard), with PNG.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 libc = "0.2"
 # Backend HTTP for the OpenRouter title proxy so the API key never enters the
 # webview. `default-features = false` + `json` keeps this additive to the reqwest

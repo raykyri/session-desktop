@@ -237,7 +237,7 @@ export function PostFollowUpField({
       ? null
       : asNote
         ? RESEARCH_NOTE_IMAGE_ERROR
-        : researchImageBlockReason(adapterId, null, images.length);
+        : researchImageBlockReason(adapterId, null, images);
   const imageProblem = imageInput.error ?? imageBlock;
   const ready = Boolean(draft.trim()) && !submitting && imageInput.saving === 0 && !imageBlock;
   const submit = () => {
