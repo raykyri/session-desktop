@@ -684,8 +684,7 @@
    fill, and keyboard focus adds an accent ring. Folder rows use smaller
    horizontal insets than top-level rows. */
 
-.research-feed-card,
-.research-feed-child {
+.research-feed-card {
   --research-row-inset: 8px;
   --research-row-text: 20px;
   position: relative;
@@ -695,8 +694,8 @@
   user-select: none;
 }
 
-.research-feed-tray-body > :is(.research-feed-card, .research-feed-child),
-.research-feed-tray-body > .research-feed-unit > :is(.research-feed-card, .research-feed-child) {
+.research-feed-tray-body > .research-feed-card,
+.research-feed-tray-body > .research-feed-unit > .research-feed-card {
   --research-row-inset: 6px;
   --research-row-text: 14px;
   border-radius: 8px;
@@ -713,22 +712,19 @@
   cursor: pointer;
 }
 
-:is(.research-feed-card, .research-feed-child) + :is(.research-feed-card, .research-feed-child) {
+.research-feed-card + .research-feed-card {
   margin-top: 2px;
 }
 
-.research-feed-card:hover,
-.research-feed-child:hover {
+.research-feed-card:hover {
   background: color-mix(in srgb, var(--research-card-selected-bg) 55%, transparent);
 }
 
-.research-feed-card.is-selected,
-.research-feed-child.is-selected {
+.research-feed-card.is-selected {
   background: var(--research-card-selected-bg);
 }
 
-.research-feed-card:has(> .research-feed-card-hit:focus),
-.research-feed-child:has(.research-feed-child-open:focus) {
+.research-feed-card:has(> .research-feed-card-hit:focus) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
 }
 
@@ -792,8 +788,7 @@
   line-height: 1.4;
 }
 
-.research-feed-card-layout > .research-row-glyph,
-.research-feed-child-open > .research-row-glyph {
+.research-feed-card-layout > .research-row-glyph {
   float: none;
   flex: 0 0 14px;
   margin-right: 0;
@@ -815,7 +810,7 @@
 /* — Row glyphs (ResearchRowGlyph) — */
 
 /* In a message row, the 14px glyph floats beside the first line and later
-   lines use the full width. Feed cards and child rows override the float and
+   lines use the full width. Feed cards override the float and
    place the glyph in its own flex column (above). The `1lh` margin centers it
    within the inherited line height; 3px is the fallback. */
 .research-row-glyph {
@@ -835,7 +830,7 @@
   stroke-width: 1.5px;
 }
 
-:is(.research-feed-card, .research-feed-child, .research-msg-row).is-selected {
+:is(.research-feed-card, .research-msg-row).is-selected {
   --research-row-glyph-color: var(--text-muted);
 }
 
@@ -902,8 +897,8 @@
   word-break: break-all;
 }
 
-/* Under a title, the question uses a lower-contrast color, as the starred child
-   rows' text is, and shows at most two lines. The clamp is on the text's own
+/* Under a title, the question uses a lower-contrast color and shows at most
+   two lines. The clamp is on the text's own
    block, so link cards and embeds after it are not clamped and keep their
    colors. */
 .research-feed-card-title ~ * .research-feed-card-question,
@@ -964,7 +959,7 @@
 
 /* Use 85% opacity to keep overlaid text visible. Message rows use the same
    control pill (see research.css). */
-:is(.research-feed-card, .research-feed-child, .research-msg-row):is(:hover, :focus-within, .has-open-menu)
+:is(.research-feed-card, .research-msg-row):is(:hover, :focus-within, .has-open-menu)
   > .research-feed-rail {
   opacity: 0.85;
 }
@@ -986,73 +981,8 @@
   pointer-events: auto;
 }
 
-/* — Starred children — */
-
-/* Rows of their own under the question, indented 16px per level, with no
-   rules between them. A row is selected while it is open: a branch while its
-   branch is open, a follow-up while its message is selected in the root
-   pair. */
-.research-feed-child {
-  display: flex;
-  min-height: 42px;
-  align-items: flex-start;
-  padding: 11px 12px 11px
-    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-indent, 1) * 16px);
-}
-
-.research-feed-child.is-group-end {
-  margin-bottom: 5px;
-}
-
-.research-feed-child-open {
-  display: flex;
-  flex: 1;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: calc(var(--research-compact-font-size) + 1px);
-  line-height: var(--research-compact-line-height);
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.research-feed-child-open::before {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  content: "";
-}
-
-.research-feed-child-open:focus,
-.research-feed-child-open:focus-visible {
-  outline: none;
-}
-
-.research-feed-child-text {
-  display: -webkit-box;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: calc(var(--research-compact-font-size) + 1px);
-  line-height: var(--research-compact-line-height);
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-}
-
-/* Keep the clamped child label in a single block. */
-.research-feed-child-label {
-  display: block;
-}
-
 /* — Groups —
-   A parent's starred rows and child cards follow its card, indented 24px,
+   A parent's child cards follow its card, indented 24px,
    beside a 1px guide in the parent's glyph column (the row text inset plus
    half the 14px glyph). */
 .research-feed-group {
@@ -1076,17 +1006,14 @@
   pointer-events: none;
 }
 
-.research-feed-tray-body .research-feed-group > :is(.research-feed-card, .research-feed-child) {
+.research-feed-tray-body .research-feed-group > .research-feed-card {
   --research-row-inset: 6px;
   --research-row-text: 14px;
+  padding-block: 8px;
   border-radius: 8px;
 }
 
-.research-feed-tray-body .research-feed-group > .research-feed-card {
-  padding-block: 8px;
-}
-
-.research-feed-group > :is(.research-feed-card, .research-feed-child) {
+.research-feed-group > .research-feed-card {
   margin-left: calc(var(--research-row-inset) + 24px);
 }
 

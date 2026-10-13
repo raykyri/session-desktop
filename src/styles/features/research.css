@@ -1049,9 +1049,9 @@
   color: var(--text-muted);
 }
 
-/* Provenance, the word Queued or Stopped, starred mark and branch count
-   with even gaps: the 22px button insets its 13px icon by 4.5px, and the
-   labels and the mark take the same margin. The row's glyph (feed.css)
+/* Provenance, the word Queued or Stopped, and branch count with even
+   gaps: the 22px button insets its 13px icon by 4.5px, and the labels take
+   the same margin. The row's glyph (feed.css)
    shows the run state. */
 .research-msg-meta {
   position: relative;
@@ -1074,15 +1074,6 @@
 .research-msg-provenance,
 .research-msg-state {
   margin-right: 4.5px;
-}
-
-.research-msg-starred {
-  display: inline-flex;
-  width: 22px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
 }
 
 .research-msg-row.is-selected .research-msg-meta {

@@ -65,7 +65,6 @@ test("a root alone is one messages column and its answer", () => {
     },
   ]);
   assert.equal(strip.endsWithAnswer, true);
-  assert.deepEqual(strip.openNodeIds, ["root"]);
   assert.deepEqual(columnAttributes(strip.columns[0]), {
     "data-research-column": "T0",
     "data-research-pair": "messages",
@@ -113,8 +112,6 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
   );
   assert.equal(strip.levels[1].anchor, anchor);
   assert.equal(strip.levels[2].anchor, null);
-  // The feed selects the root level's message and each branch's head.
-  assert.deepEqual(strip.openNodeIds, ["c2", "b1", "b2"]);
   assert.equal(strip.endsWithAnswer, true);
   assert.deepEqual(columnAttributes(strip.columns[5]), {
     "data-research-column": "A2",
@@ -317,8 +314,6 @@ test("a pending branch adds the branches column after the level that shows its p
   });
   assert.deepEqual(columnScrollKey(column), { kind: "branches", key: "b1" });
   assert.equal(columnKey(column), "T2:branches");
-  // The open nodes do not include the unsent branch.
-  assert.deepEqual(strip.openNodeIds, ["root", "b1"]);
   // A pending branch asked from a message that is not the deepest selection
   // is not shown.
   const elsewhere = researchStrip(nodes, "b1", { parentNodeId: "root", anchor: null });
@@ -367,7 +362,6 @@ test("a post root is a post column and its thread column; its follow-ups open as
   assert.deepEqual(ids(withRun), ["N0", "T0", "T1", "A1"]);
   assert.deepEqual(withRun.columns.map((column) => column.role), ["post", "thread", "messages", "answer"]);
   assert.equal(withRun.endsWithAnswer, true);
-  assert.deepEqual(withRun.openNodeIds, ["post", "run"]);
   // Closing the follow-up leaves the post and its thread.
   assert.equal(sameResearchStrip(root, researchStrip(nodes, "post", null)), true);
   assert.equal(sameResearchStrip(root, withRun), false);
@@ -533,7 +527,6 @@ test("each column keeps its own selection, and a branches column lists the branc
     strip.columns.flatMap((column) => (column.role === "answer" ? [column.nodeId] : [])),
     ["c2", "b1f", "y2"],
   );
-  assert.deepEqual(strip.openNodeIds, ["c2", "b1", "y2"]);
   // Changing a column's selection leaves the listing of the columns after it
   // unchanged.
   const other = researchStrip(nodes, ["root", "x1", "y2"], null);

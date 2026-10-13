@@ -129,41 +129,24 @@ test("a post's own column and an empty thread fall back to the feed", () => {
 });
 
 const lists = [
-  [
-    { key: "tree:a", children: [] },
-    { key: "tree:b", children: ["b1", "b2", "b3"] },
-    { key: "tree:c", children: [] },
-  ],
-  [
-    { key: "draft:d", children: [] },
-    { key: "tree:e", children: [] },
-  ],
+  ["tree:a", "tree:b", "tree:c"],
+  ["draft:d", "tree:e"],
 ];
 
 test("a feed card steps among the cards of its own list, wrapping", () => {
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:a", child: null }, 1), { key: "tree:b", child: null });
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:c", child: null }, 1), { key: "tree:a", child: null });
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:a", child: null }, -1), { key: "tree:c", child: null });
-  // A card with child rows steps to the next card, not into its children.
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:b", child: null }, 1), { key: "tree:c", child: null });
+  assert.equal(feedCycleStep(lists, "tree:a", 1), "tree:b");
+  assert.equal(feedCycleStep(lists, "tree:c", 1), "tree:a");
+  assert.equal(feedCycleStep(lists, "tree:a", -1), "tree:c");
   // The second list (a tray) keeps to itself.
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:e", child: null }, 1), { key: "draft:d", child: null });
-  assert.deepEqual(feedCycleStep(lists, { key: "draft:d", child: null }, -1), { key: "tree:e", child: null });
-});
-
-test("a feed child row steps among its card's child rows, wrapping", () => {
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:b", child: "b1" }, 1), { key: "tree:b", child: "b2" });
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:b", child: "b3" }, 1), { key: "tree:b", child: "b1" });
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:b", child: "b1" }, -1), { key: "tree:b", child: "b3" });
-  // A child row no longer listed: the card steps instead.
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:b", child: "gone" }, 1), { key: "tree:c", child: null });
+  assert.equal(feedCycleStep(lists, "tree:e", 1), "draft:d");
+  assert.equal(feedCycleStep(lists, "draft:d", -1), "tree:e");
 });
 
 test("with no current feed row, the step starts at an end of the first non-empty list", () => {
-  assert.deepEqual(feedCycleStep(lists, null, 1), { key: "tree:a", child: null });
-  assert.deepEqual(feedCycleStep(lists, null, -1), { key: "tree:c", child: null });
-  assert.deepEqual(feedCycleStep(lists, { key: "tree:unlisted", child: null }, 1), { key: "tree:a", child: null });
-  assert.deepEqual(feedCycleStep([[], lists[1]], null, 1), { key: "draft:d", child: null });
+  assert.equal(feedCycleStep(lists, null, 1), "tree:a");
+  assert.equal(feedCycleStep(lists, null, -1), "tree:c");
+  assert.equal(feedCycleStep(lists, "tree:unlisted", 1), "tree:a");
+  assert.equal(feedCycleStep([[], lists[1]], null, 1), "draft:d");
   assert.equal(feedCycleStep([[], []], null, 1), null);
-  assert.equal(feedCycleStep([], { key: "tree:a", child: null }, -1), null);
+  assert.equal(feedCycleStep([], "tree:a", -1), null);
 });

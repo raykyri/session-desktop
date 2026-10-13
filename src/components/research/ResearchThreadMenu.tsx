@@ -5,12 +5,11 @@ import {
   Pencil,
   RefreshCw,
   ScrollText,
-  Star,
   Trash2,
   X,
 } from "lucide-react";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { inlineChainFor, isActiveResearchStatus, researchMessageStarrable } from "../../lib/researchChains";
+import { inlineChainFor, isActiveResearchStatus } from "../../lib/researchChains";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import { researchNoteEditable } from "../../lib/researchNoteEdit";
 import {
@@ -93,7 +92,6 @@ export function ResearchThreadMenu({
   onEdit,
   onShowFullTrace,
   onToggleFullTrace,
-  onToggleStar,
   onCopyAnswer,
   onCopyNote,
   onCopyThread,
@@ -135,7 +133,6 @@ export function ResearchThreadMenu({
   onEdit: (nodeId: string, trigger: HTMLElement | null) => void;
   onShowFullTrace: (nodeId: string) => void;
   onToggleFullTrace: (nodeId: string) => void;
-  onToggleStar: (nodeId: string) => void;
   onCopyAnswer: (view: SegmentView) => void;
   /** Copies a note's text. */
   onCopyNote: (nodeId: string) => void;
@@ -201,8 +198,7 @@ export function ResearchThreadMenu({
   if (menu.kind === "post") {
     const post = menuNode;
     // The root note stands for the thread: it has the thread's Move to, and
-    // is deleted with the thread. A follow-up note is starred
-    // and deleted on its own.
+    // is deleted with the thread. A follow-up note is deleted on its own.
     const isRoot = post.id === rootNodeId;
     const info = isRoot ? null : researchBranchInfo(treeNodes, post.id);
     return (
@@ -230,17 +226,6 @@ export function ResearchThreadMenu({
             onEdit(post.id, trigger);
           }}
         />
-        {isRoot ? null : (
-          <ResearchMenuItem
-            icon={<Star size={15} aria-hidden="true" />}
-            label={post.starredAt ? "Remove star" : "Star"}
-            title={post.starredAt ? undefined : "List this note under its thread in the feed"}
-            onSelect={() => {
-              onClose();
-              onToggleStar(post.id);
-            }}
-          />
-        )}
         <ResearchMenuItem
           icon={<Copy size={15} aria-hidden="true" />}
           label="Copy note"
@@ -292,9 +277,6 @@ export function ResearchThreadMenu({
   }
   const isRoot = node.id === rootNodeId;
   const chainIds = inlineChainFor(nodes, node.id);
-  // As the message row offers it; a queued question has no answer menu.
-  const starrable =
-    nodeStatus(node) !== "queued" && researchMessageStarrable(node, nodeById.get(chainIds[0] ?? node.id));
   const deleteLabel = researchDeleteLabel(isRoot, node.inline, info.descendantCount);
   const canRegenerateRecap = Boolean(
     !archived && content?.responseRevision && nodeRecap(content.node)?.text.trim(),
@@ -363,17 +345,6 @@ export function ResearchThreadMenu({
         />
       ) : null}
       {stats || hiddenHighlights > 0 ? <ResearchMenuSeparator /> : null}
-      {starrable ? (
-        <ResearchMenuItem
-          icon={<Star size={15} aria-hidden="true" />}
-          label={node.starredAt ? "Remove star" : "Star"}
-          title={node.starredAt ? undefined : "List this under its question in the feed"}
-          onSelect={() => {
-            onClose();
-            onToggleStar(node.id);
-          }}
-        />
-      ) : null}
       <ResearchMenuItem
         icon={<ResearchBranchIcon size={15} />}
         label="Branch to right"

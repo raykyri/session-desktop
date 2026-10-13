@@ -110,9 +110,9 @@ interface ResearchColumnsLayout {
   /** Shows the feed and focuses its selected row (or its title). */
   focusFeed: () => void;
   /** After → on a feed row opened a thread: focuses the selected message
-   * of its first level (`deepest`: of its deepest level) once it has
-   * rendered. A draft's column keeps focus off its ask box. */
-  focusOpenedThread: (deepest: boolean) => void;
+   * of its first level once it has rendered. A draft's column keeps focus
+   * off its ask box. */
+  focusOpenedThread: () => void;
   /** Registers the handler for ⌃Tab / ⌃⇧Tab in the feed or in the open
    * thread; returns the function that removes it. A handler returns false
    * when the request is not its own (the thread's, when the column to
@@ -337,23 +337,22 @@ export default function ResearchColumns({
         revealResearchColumns(row, feedColumn);
         (
           feedColumn.querySelector<HTMLElement>(
-            ".research-feed-card.is-selected .research-feed-card-hit, .research-feed-child.is-selected .research-feed-child-open",
+            ".research-feed-card.is-selected .research-feed-card-hit",
           ) ?? feedColumn.querySelector<HTMLElement>(".research-feed-header-title")
         )?.focus({ preventScroll: true });
       },
-      focusOpenedThread: (deepest) => {
+      focusOpenedThread: () => {
         const started = performance.now();
         const attempt = () => {
-          // The messages-side columns (a level's messages, thread or
-          // branches column, or a draft), left to right. A branches column
-          // with no open branch has no selected row and is passed over, so a
-          // new branch restored with the thread is not focused.
-          const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter(
+          // The first messages-side column (a level's messages, thread or
+          // branches column, or a draft). A branches column with no open
+          // branch has no selected row and is passed over, so a new branch
+          // restored with the thread is not focused.
+          const column = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].find(
             (element) =>
               isMessagesColumnId(element.dataset.researchColumn) &&
               !(element.classList.contains("is-branches") && !element.querySelector(COLUMN_ROW_SELECTOR)),
           );
-          const column = deepest ? columns[columns.length - 1] : columns[0];
           const target = column?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR);
           if (target && column) {
             target.focus({ preventScroll: true });

@@ -247,7 +247,6 @@ function isResearchNode(value: unknown): value is ResearchNode {
     isFiniteNumber(value.createdAt) &&
     isOptionalString(value.parentNodeId) &&
     isOptionalString(value.title) &&
-    isOptionalFiniteNumber(value.starredAt) &&
     isOptionalBoolean(value.inline) &&
     (value.anchor == null || isRecord(value.anchor)) &&
     Array.isArray(value.highlights) &&

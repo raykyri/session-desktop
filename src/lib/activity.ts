@@ -144,45 +144,8 @@ export function upsertRecentActivityResearchNode(
   const existing = items.find((item) => item.nodeId === query.nodeId);
   if (existing) {
     query.children = existing.children;
-    query.starred = existing.starred;
   }
   return upsertRecentActivityItem(items, query);
-}
-
-/** Keeps a root's starred-children list in step with a node update: a
- * listed node takes the new prompt, title, and status, and an unstarred one
- * drops out. A newly starred node needs its depth and tree position from the
- * backend, so `stale` asks the caller to refetch the feed. */
-export function patchRecentActivityStarred(
-  items: RecentResearchQuery[],
-  node: ResearchNode & { starredAt?: number | null },
-): { items: RecentResearchQuery[]; stale: boolean } {
-  const starredAt = node.starredAt ?? null;
-  let stale = false;
-  let changed = false;
-  const next = items.map((item) => {
-    if (item.treeId !== node.treeId || item.parentNodeId || item.nodeId === node.id) return item;
-    const starred = item.starred ?? [];
-    const index = starred.findIndex((entry) => entry.nodeId === node.id);
-    if (index < 0) {
-      if (starredAt != null) stale = true;
-      return item;
-    }
-    changed = true;
-    if (starredAt == null) {
-      return { ...item, starred: starred.filter((entry) => entry.nodeId !== node.id) };
-    }
-    const entry = starred[index];
-    return {
-      ...item,
-      starred: starred.map((candidate, position) =>
-        position === index
-          ? { ...entry, prompt: nodePrompt(node), title: node.title, status: nodeStatus(node), starredAt }
-          : candidate,
-      ),
-    };
-  });
-  return { items: changed ? next : items, stale };
 }
 
 export function upsertRecentActivityItem(

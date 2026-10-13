@@ -89,7 +89,6 @@ import {
   researchTreePlace,
   treesWithWorkspaceOrder,
   type ResearchDropPosition,
-  type ResearchFeedChild,
 } from "./lib/researchFolders";
 import { useResearchToast } from "./hooks/useResearchToast";
 import { useResearchData } from "./hooks/useResearchData";
@@ -131,7 +130,6 @@ import {
 } from "./components/research/ResearchTreeMenu";
 import { researchTreeContents, type ResearchTreeContents } from "./lib/researchTreeContents";
 import {
-  setResearchNodeStarred,
   activatePane,
   emptyResearchTrash,
 } from "./lib/api";
@@ -785,20 +783,6 @@ function MainApp() {
     (draftId: string, beforeId: string | null) => void moveResearchDraft(draftId, beforeId),
     [moveResearchDraft],
   );
-  // Select feed child rows for the root message and each open branch head.
-  // Node ids are unique across trees, so stale ids from another tree have no
-  // effect.
-  const [openResearchNodeIds, setOpenResearchNodeIds] = useState<string[]>([]);
-  // Remove star on a feed child row; the node update event drops the row.
-  const unstarResearchFeedChild = useCallback(
-    (child: ResearchFeedChild) => {
-      void setResearchNodeStarred(child.nodeId, false).then(
-        () => showResearchToast(child.branch ? "Branch unstarred." : "Unstarred."),
-        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
-      );
-    },
-    [showResearchToast],
-  );
   // The open question's Move to, listed in its root answer menus with the
   // same state as its feed row's menu.
   const activeResearchTreeSummary = useMemo(
@@ -1286,7 +1270,6 @@ function MainApp() {
                     {...activityFeedState}
                     view={feedPage}
                     selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
-                    selectedChildNodeIds={openResearchNodeIds}
                     selectedDraftId={openResearchDraft?.id ?? null}
                     onImportReport={importReport}
                     composer={feedComposer}
@@ -1319,7 +1302,6 @@ function MainApp() {
                     onMoveTree={moveResearchTreeFromFeed}
                     onReorderTree={reorderResearchTreeFromFeed}
                     onReorderDraft={moveResearchDraftFromFeed}
-                    onUnstarChild={unstarResearchFeedChild}
                     onNewFolder={openNewResearchFolderDialog}
                     onRenameFolder={openRenameResearchFolderDialog}
                     onRequestDeleteFolder={requestResearchFolderDelete}
@@ -1385,7 +1367,6 @@ function MainApp() {
                     onToast={handleResearchThreadToast}
                     shortcutHintsShown={shortcutHintsShown}
                     requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                    onOpenNodesChange={setOpenResearchNodeIds}
                     treeMenu={activeResearchTreeMenu}
                     canGoBack={researchHistoryNav.canGoBack}
                     canGoForward={researchHistoryNav.canGoForward}

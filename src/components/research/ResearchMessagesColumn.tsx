@@ -1,6 +1,5 @@
 import type { ComponentProps, ReactNode, Ref, UIEvent } from "react";
 import { CornerDownRight, RefreshCw } from "lucide-react";
-import { researchMessageStarrable } from "../../lib/researchChains";
 import {
   columnAttributes,
   type ResearchBranchesColumn as ResearchBranchesColumnData,
@@ -378,7 +377,6 @@ function ResearchChainRows({
     expandedTiles,
     rowActions,
   } = shared;
-  const head = nodeById.get(headId);
   const dragPlace = !archived && displayIds.length > 1 ? chainDropPlace(headId) : null;
   // A selected queued message takes the selection's place in the list.
   const selectedRowId = queue.selectedId === null ? selectedId : null;
@@ -402,7 +400,6 @@ function ResearchChainRows({
             showPrompt={nodeMessage(node) !== null}
             selected={selected}
             focusable={firstFocusable && index === 0}
-            starrable={researchMessageStarrable(node, head)}
             retryQueued={queuedRetries.has(id)}
             branchCount={branches.length}
             branchOpen={openSourceId === id}

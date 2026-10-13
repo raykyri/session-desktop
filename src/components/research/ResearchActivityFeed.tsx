@@ -42,13 +42,11 @@ import {
   RESEARCH_TRASH_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
   researchCardTitle,
-  researchFeedChildren,
   researchPlaceIsReorderable,
   researchPlaceName,
   researchTreePlace,
   stepReorderTarget,
   type ResearchDropPosition,
-  type ResearchFeedChild,
 } from "../../lib/researchFolders";
 import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
 import {
@@ -62,8 +60,6 @@ import {
 import ResearchRowGlyph from "./ResearchRowGlyph";
 import {
   feedCycleStep,
-  type FeedCycleEntry,
-  type FeedCyclePosition,
   type ResearchCycleRequest,
 } from "../../lib/researchSiblingCycle";
 import { researchFeedPageKey, type ResearchFeedView } from "../../lib/sidebarMode";
@@ -126,12 +122,10 @@ const EMPTY_DRAFTS: ResearchDraft[] = [];
 const EMPTY_PARENTS: Readonly<Record<string, string>> = {};
 const EMPTY_GROUP_IDS: ReadonlySet<string> = new Set();
 const EMPTY_TRASH: ResearchTrashEntry[] = [];
-const EMPTY_NODE_IDS: readonly string[] = [];
+/** The feed's rows: the open buttons of its cards. */
+const FEED_ROW_SELECTOR = ".research-feed-card-hit";
 
-/** The feed's rows: questions, drafts and starred children. */
-const FEED_ROW_SELECTOR = ".research-feed-card-hit, .research-feed-child-open";
-
-/** What a key does on a focused feed row (a question or a child row).
+/** What a key does on a focused feed row.
  * "select": Enter selects the row's node, as a click does, and focus stays
  * on the row. "enter-thread": → selects it and moves focus into the opened
  * thread's messages column. Null for other keys and for modified keys. */
@@ -163,7 +157,7 @@ function applyFeedRoving(root: HTMLElement | null, last: HTMLElement | null) {
   for (const menu of root.querySelectorAll<HTMLElement>(
     ".research-feed-card-menu, .research-feed-group-toggle",
   )) {
-    menu.tabIndex = menu.closest(".research-feed-card, .research-feed-child")?.classList.contains("is-selected")
+    menu.tabIndex = menu.closest(".research-feed-card")?.classList.contains("is-selected")
       ? 0
       : -1;
   }
@@ -194,8 +188,7 @@ export interface ResearchActivityFeedProps {
   onOpenDraft?: (draft: ResearchDraft) => void;
   /** Opens a tree whose root is not in the loaded feed (archived, or paged out). */
   onOpenTree?: (treeId: string) => void;
-  /** Edits a note: a note card's note or a starred follow-up note, on a
-   * double-click of its row. */
+  /** Edits a note card's note, on a double-click of its card. */
   onEditNote?: (treeId: string, nodeId: string) => void;
   onOpenView?: (view: ResearchFeedView) => void;
   onResearchRecapApplied: (node: ResearchNode) => void;
@@ -216,8 +209,6 @@ export interface ResearchActivityFeedProps {
   /** Moves a card within its place (⌥↑ and ⌥↓). */
   onReorderTree?: (treeId: string, place: string, position: ResearchDropPosition) => void;
   onReorderDraft?: (draftId: string, beforeId: string | null) => void;
-  /** Remove star on a child row: unstars the follow-up or branch. */
-  onUnstarChild?: (child: ResearchFeedChild) => void;
   /** The children archived, moved to the Trash or deleted with a tree, for
    * its confirmations. */
   groupChildren?: (treeId: string) => ResearchTreeSummary[];
@@ -245,9 +236,6 @@ export interface ResearchActivityFeedProps {
   onRefresh?: () => void;
   /** The thread open in the content column beside the feed. */
   selectedTreeId?: string | null;
-  /** That thread's open nodes: the message selected in its root pair and
-   * the head of each open branch. Their child rows show selected. */
-  selectedChildNodeIds?: readonly string[];
   /** The draft open in the content column. */
   selectedDraftId?: string | null;
   onBack?: () => void;
@@ -307,13 +295,8 @@ export function researchFeedRows(
 }
 
 function estimatedActivityRowHeight(row: ResearchFeedRow): number {
-  const starred = (row.query?.starred?.length ?? 0) * 48;
-  if (row.collapsed) return 92 + (row.children.length > 0 ? 24 : starred);
-  return (
-    92 +
-    starred +
-    row.children.reduce((sum, child) => sum + 80 + (child.query?.starred?.length ?? 0) * 48, 0)
-  );
+  if (row.children.length === 0) return 92;
+  return 116 + (row.collapsed ? 0 : row.children.length * 80);
 }
 
 interface VirtualActivityRange {
@@ -409,14 +392,13 @@ function feedViewTitle(view: ResearchFeedView, folders: ResearchFolder[]): strin
  * for a context menu (`placement` set) the row's open button; `placement`
  * places a context menu, which returns focus to what had it on its own. A
  * tree's menu is a card's (`queryNodeId` names its loaded root, for
- * Generate recap) or, with `child`, a starred child row's. */
+ * Generate recap). */
 type FeedMenu =
   | {
       kind: "tree";
       treeId: string;
       anchor: HTMLElement;
       placement?: ResearchUnitMenuPlacement;
-      child?: ResearchFeedChild;
       queryNodeId?: string;
       /** Make child of…: the menu lists the parents to choose from. */
       mode?: "nest";
@@ -454,7 +436,6 @@ function ResearchActivityFeed({
   onMoveTree,
   onReorderTree,
   onReorderDraft,
-  onUnstarChild,
   groupChildren,
   onNestTree,
   onMoveOutOfGroup,
@@ -471,7 +452,6 @@ function ResearchActivityFeed({
   onDragStart,
   onRefresh,
   selectedTreeId = null,
-  selectedChildNodeIds = EMPTY_NODE_IDS,
   selectedDraftId = null,
   onBack,
   onForward,
@@ -907,19 +887,17 @@ function ResearchActivityFeed({
   }
 
   // The row whose … button opened the open menu (aria-expanded).
-  const menuTreeId = menu?.kind === "tree" && !menu.child && !menu.placement ? menu.treeId : null;
-  const menuChildNodeId =
-    menu?.kind === "tree" && !menu.placement ? (menu.child?.nodeId ?? null) : null;
+  const menuTreeId = menu?.kind === "tree" && !menu.placement ? menu.treeId : null;
   // A second click on the … button that opened a menu closes it.
   const openTreeMenu = (
     treeId: string,
     anchor: HTMLElement,
-    { child, queryNodeId }: { child?: ResearchFeedChild; queryNodeId?: string } = {},
+    { queryNodeId }: { queryNodeId?: string } = {},
   ) =>
     setMenu((current) =>
       current?.kind === "tree" && current.anchor === anchor && !current.placement
         ? null
-        : { kind: "tree", treeId, anchor, child, queryNodeId },
+        : { kind: "tree", treeId, anchor, queryNodeId },
     );
   // The right-click, Shift+F10 and ContextMenu key open the … menu at
   // `placement`; `control` is the row's open button.
@@ -927,8 +905,8 @@ function ResearchActivityFeed({
     treeId: string,
     placement: ResearchUnitMenuPlacement,
     control: HTMLElement,
-    { child, queryNodeId }: { child?: ResearchFeedChild; queryNodeId?: string } = {},
-  ) => setMenu({ kind: "tree", treeId, anchor: control, placement, child, queryNodeId });
+    { queryNodeId }: { queryNodeId?: string } = {},
+  ) => setMenu({ kind: "tree", treeId, anchor: control, placement, queryNodeId });
   const openDraftMenu = (draftId: string, anchor: HTMLElement) =>
     setMenu((current) =>
       current?.kind === "draft" && current.draftId === draftId
@@ -969,7 +947,6 @@ function ResearchActivityFeed({
     const awaitingTitle = !isPost && !(tree?.title ?? query?.title)?.trim();
     const selected = treeId === selectedTreeId;
     const state = researchThreadState(tree, query);
-    const childRows = query ? researchFeedChildren(query) : [];
     // The card shows the question as plain text, URLs in the link color; its
     // Markdown renders in the conversation. Link cards still show; a tweet
     // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
@@ -987,21 +964,18 @@ function ResearchActivityFeed({
     };
     const name = title ?? question;
     const groupCollapsed = collapsedGroups.has(treeId);
-    const groupCount = childRows.length + children.length;
     const group =
       children.length > 0
         ? {
-            count: groupCount,
-            childCount: children.length,
+            count: children.length,
             collapsed: groupCollapsed,
-            summary: researchGroupSummary([
-              ...childRows.map((row) => ({ state: row.state, unread: false })),
-              ...children.map((child) => ({
+            summary: researchGroupSummary(
+              children.map((child) => ({
                 state: researchThreadState(child.tree, child.query),
                 unread: child.tree.hasUnseenUpdate,
               })),
-            ]),
-            label: `${groupCollapsed ? "Show" : "Hide"} ${researchItemCount(groupCount)} under “${shortName(name)}”`,
+            ),
+            label: `${groupCollapsed ? "Show" : "Hide"} ${researchItemCount(children.length)} under “${shortName(name)}”`,
             onToggle: (all: boolean) => toggleGroup(treeId, name, all),
           }
         : undefined;
@@ -1064,39 +1038,21 @@ function ResearchActivityFeed({
         selected={selected}
         // Unread shows on an answered card only (researchRowGlyph).
         unread={Boolean(tree?.hasUnseenUpdate) && !selected}
-        childRows={childRows}
-        selectedChildNodeIds={selected ? selectedChildNodeIds : EMPTY_NODE_IDS}
-        childMenuNodeId={menuChildNodeId}
         menuOpen={menuTreeId === treeId}
         onOpen={() => openTreeCard(tree, query)}
-        onOpenChild={(child) => onOpenResearchQuery(child.query)}
-        // A double-click on a note's card or a follow-up note's row edits
-        // the note; the feed lists threads outside Archive.
+        // A double-click on a note's card edits the note; the feed lists
+        // threads outside Archive.
         onEdit={
           onEditNote && tree && query && researchNoteEditable(query, tree.archivedAt != null)
             ? () => onEditNote(tree.id, query.nodeId)
             : undefined
         }
-        childEdit={
-          onEditNote && tree
-            ? (child) =>
-                researchNoteEditable(child.query, tree.archivedAt != null)
-                  ? () => onEditNote(tree.id, child.nodeId)
-                  : undefined
-            : undefined
-        }
         // The … button and the context menu open the same menu.
         onMenu={tree ? (anchor) => openTreeMenu(tree.id, anchor, { queryNodeId: query?.nodeId }) : undefined}
-        onChildMenu={tree ? (child, anchor) => openTreeMenu(tree.id, anchor, { child }) : undefined}
         onContextMenu={
           tree
             ? (placement, control) =>
                 openTreeContextMenu(tree.id, placement, control, { queryNodeId: query?.nodeId })
-            : undefined
-        }
-        onChildContextMenu={
-          tree
-            ? (child, placement, control) => openTreeContextMenu(tree.id, placement, control, { child })
             : undefined
         }
         onDragStart={tree ? onDragStart : undefined}
@@ -1251,17 +1207,15 @@ function ResearchActivityFeed({
 
   // ⌃Tab / ⌃⇧Tab with the feed as the column last interacted with (see
   // ResearchColumns): opens the next or previous card of the list that holds
-  // the current row, as clicking it would, or the next or previous child row
-  // of the same card when the current row is a child row. The lists are
-  // Home's recent activity and each open tray, or the
-  // view's own cards. The current row is the focused feed row, else the open
-  // card, or the child row last opened in it while that row shows selected.
-  const openedChildRef = useRef<{ cardId: string; nodeId: string } | null>(null);
+  // the current card, as clicking it would. The lists are Home's recent
+  // activity and each open tray, or the view's own cards; an expanded
+  // group's children follow their parent. The current card is the focused
+  // one, else the open one.
   const cycleFeedRef = useRef<(request: ResearchCycleRequest) => boolean>(() => false);
   cycleFeedRef.current = (request) => {
-    interface FeedRowEntry extends FeedCycleEntry {
+    interface FeedRowEntry {
+      key: string;
       cardId: string;
-      childRows: ResearchFeedChild[];
       /** The card's row in the virtualized list, which may not be rendered. */
       virtualIndex: number | null;
       open: () => void;
@@ -1272,12 +1226,9 @@ function ResearchActivityFeed({
       virtualIndex: number | null = null,
     ): FeedRowEntry => {
       const cardId = tree?.id ?? query?.treeId ?? "";
-      const childRows = query ? researchFeedChildren(query) : [];
       return {
         key: `tree:${cardId}`,
         cardId,
-        children: childRows.map((child) => child.nodeId),
-        childRows,
         virtualIndex,
         open: () => openTreeCard(tree, query),
       };
@@ -1292,8 +1243,6 @@ function ResearchActivityFeed({
           (draft): FeedRowEntry => ({
             key: `draft:${draft.id}`,
             cardId: draft.id,
-            children: [],
-            childRows: [],
             virtualIndex: null,
             open: () => onOpenDraft?.(draft),
           }),
@@ -1324,53 +1273,38 @@ function ResearchActivityFeed({
     }
     if (soloPlace) lists.push(placeEntries(soloPlace));
 
-    const step = feedCycleStep(lists, currentFeedPosition(), request.direction);
-    const entry = step ? lists.flat().find((candidate) => candidate.key === step.key) : undefined;
-    if (!step || !entry) return true;
-    const child = step.child ? entry.childRows.find((candidate) => candidate.nodeId === step.child) : undefined;
-    if (child) {
-      openedChildRef.current = { cardId: entry.cardId, nodeId: child.nodeId };
-      onOpenResearchQuery(child.query);
-    } else {
-      openedChildRef.current = null;
-      entry.open();
-    }
-    revealFeedRow(entry.cardId, entry.virtualIndex, child?.nodeId ?? null, request.keepFocus);
+    const step = feedCycleStep(
+      lists.map((entries) => entries.map((entry) => entry.key)),
+      currentFeedCard(),
+      request.direction,
+    );
+    const entry = step ? lists.flat().find((candidate) => candidate.key === step) : undefined;
+    if (!entry) return true;
+    entry.open();
+    revealFeedRow(entry.cardId, entry.virtualIndex, request.keepFocus);
     return true;
   };
   useEffect(() => columns?.registerCycle("feed", (request) => cycleFeedRef.current(request)), [columns]);
 
-  /** The feed row ⌃Tab steps from (see cycleFeedRef). */
-  function currentFeedPosition(): FeedCyclePosition | null {
+  /** The key of the feed card ⌃Tab steps from (see cycleFeedRef). */
+  function currentFeedCard(): string | null {
     const active = document.activeElement;
     if (active instanceof HTMLElement && scrollRef.current?.contains(active)) {
       const card = active.matches(".research-feed-card-hit")
         ? active.closest<HTMLElement>(".research-feed-card")
         : null;
       if (card?.dataset.researchCard) {
-        return { key: `${card.dataset.researchCardKind ?? "tree"}:${card.dataset.researchCard}`, child: null };
-      }
-      const childOf = active.matches(".research-feed-child-open")
-        ? active.closest<HTMLElement>("[data-research-child-of]")?.dataset.researchChildOf
-        : undefined;
-      if (childOf) {
-        return { key: `tree:${childOf}`, child: active.dataset.nodeId ?? null };
+        return `${card.dataset.researchCardKind ?? "tree"}:${card.dataset.researchCard}`;
       }
     }
-    if (selectedDraftId) return { key: `draft:${selectedDraftId}`, child: null };
-    if (!selectedTreeId) return null;
-    const opened = openedChildRef.current;
-    return {
-      key: `tree:${selectedTreeId}`,
-      child:
-        opened?.cardId === selectedTreeId && selectedChildNodeIds.includes(opened.nodeId) ? opened.nodeId : null,
-    };
+    if (selectedDraftId) return `draft:${selectedDraftId}`;
+    return selectedTreeId ? `tree:${selectedTreeId}` : null;
   }
 
-  /** Scrolls a card (or one of its child rows) into view, rendering it first
-   * when it is a virtualized row outside the rendered range, and focuses it
-   * unless focus stays in a text field. */
-  function revealFeedRow(cardId: string, virtualIndex: number | null, childNodeId: string | null, keepFocus: boolean) {
+  /** Scrolls a card into view, rendering it first when it is in a
+   * virtualized row outside the rendered range, and focuses it unless focus
+   * stays in a text field. */
+  function revealFeedRow(cardId: string, virtualIndex: number | null, keepFocus: boolean) {
     const scroller = scrollRef.current;
     if (scroller && virtualIndex !== null) {
       const geometry = metricsRef.current;
@@ -1382,9 +1316,7 @@ function ResearchActivityFeed({
         scroller.scrollTop = Math.min(top, bottom - scroller.clientHeight);
       }
     }
-    const selector = childNodeId
-      ? `[data-research-child-of="${CSS.escape(cardId)}"] .research-feed-child-open[data-node-id="${CSS.escape(childNodeId)}"]`
-      : `.research-feed-card[data-research-card="${CSS.escape(cardId)}"] .research-feed-card-hit`;
+    const selector = `.research-feed-card[data-research-card="${CSS.escape(cardId)}"] .research-feed-card-hit`;
     const started = performance.now();
     const attempt = () => {
       const row = scrollRef.current?.querySelector<HTMLElement>(selector);
@@ -1490,9 +1422,9 @@ function ResearchActivityFeed({
   }
 
   // A card menu's group actions: Make child of…, Move out, and Collapse
-  // or Expand. An archived card, and a starred row's menu, have none.
+  // or Expand. An archived card's menu has none.
   const menuGroupTree =
-    menu?.kind === "tree" && menuTree && !menu.child && menuTree.archivedAt == null && onNestTree
+    menu?.kind === "tree" && menuTree && menuTree.archivedAt == null && onNestTree
       ? menuTree
       : null;
   const menuGroupParent = menuGroupTree ? listedParentOf(menuGroupTree) : null;
@@ -1664,29 +1596,15 @@ function ResearchActivityFeed({
           rovingRowRef.current = target;
           applyFeedRoving(event.currentTarget, target);
         }}
-        // The child row a click (or Enter) opened is the row ⌃Tab steps from
-        // while its thread is open; WebKit does not focus a clicked button.
-        onClickCapture={(event) => {
-          const target = event.target as HTMLElement;
-          const child = target.closest<HTMLElement>(".research-feed-child-open");
-          const cardId = child?.closest<HTMLElement>("[data-research-child-of]")?.dataset.researchChildOf;
-          if (child && cardId && child.dataset.nodeId) {
-            openedChildRef.current = { cardId, nodeId: child.dataset.nodeId };
-          } else if (target.closest(".research-feed-card-hit")) {
-            openedChildRef.current = null;
-          }
-        }}
         onKeyDown={(event) => {
           const target = event.target as HTMLElement;
-          // Enter and → open the focused question (or child row) as a click
-          // does; → also moves focus into its messages column.
+          // Enter and → open the focused card as a click does; → also moves
+          // focus into its messages column.
           const openKey = feedRowOpenKey(event);
-          if (openKey && target.matches(".research-feed-card-hit, .research-feed-child-open")) {
+          if (openKey && target.matches(FEED_ROW_SELECTOR)) {
             event.preventDefault();
             target.click();
-            if (openKey === "enter-thread") {
-              columns?.focusOpenedThread(target.matches(".research-feed-child-open"));
-            }
+            if (openKey === "enter-thread") columns?.focusOpenedThread();
             return;
           }
           // ⌥→ nests the focused card under the card above; ⌥← moves a
@@ -1711,7 +1629,7 @@ function ResearchActivityFeed({
             moveFocusedCard(target, event.key === "ArrowUp" ? -1 : 1);
             return;
           }
-          // ↑ and ↓ move between the rows, child rows included.
+          // ↑ and ↓ move between the cards, a group's children included.
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
           if (!target.matches(FEED_ROW_SELECTOR)) return;
@@ -1912,17 +1830,8 @@ function ResearchActivityFeed({
         <ResearchFeedRowMenu
           anchor={menu.placement?.anchor ?? menu.anchor}
           align={menu.placement?.align}
-          label={menu.child ? "Starred item actions" : `Actions for ${menuTree.title}`}
+          label={`Actions for ${menuTree.title}`}
           groupItems={groupMenuItems}
-          onRemoveStar={
-            menu.child && onUnstarChild
-              ? () => {
-                  const child = menu.child!;
-                  closeMenu();
-                  onUnstarChild(child);
-                }
-              : undefined
-          }
           currentPlace={placeOf(menuTree)}
           folders={folders}
           archiveShortcut={view.kind === "home"}
@@ -1946,24 +1855,22 @@ function ResearchActivityFeed({
           }
           onClose={() => closeMenu()}
         >
-          {menu.child ? null : (
-            <ResearchTreeLifecycleItems
-              tree={menuTree}
-              archived={menuTree.archivedAt != null}
-              onClose={() => closeMenu()}
-              onRename={(tree) => setRenamingTree(tree)}
-              onRestore={(treeId) => void onRestoreResearch(treeId)}
-              onDelete={(tree) => setDeletingTree(tree)}
-              onRegenerateRecap={
-                menuQuery &&
-                menuTree.archivedAt == null &&
-                menuQuery.status === "complete" &&
-                menuQuery.recap?.trim()
-                  ? () => openRecapDialog(menuQuery.nodeId)
-                  : undefined
-              }
-            />
-          )}
+          <ResearchTreeLifecycleItems
+            tree={menuTree}
+            archived={menuTree.archivedAt != null}
+            onClose={() => closeMenu()}
+            onRename={(tree) => setRenamingTree(tree)}
+            onRestore={(treeId) => void onRestoreResearch(treeId)}
+            onDelete={(tree) => setDeletingTree(tree)}
+            onRegenerateRecap={
+              menuQuery &&
+              menuTree.archivedAt == null &&
+              menuQuery.status === "complete" &&
+              menuQuery.recap?.trim()
+                ? () => openRecapDialog(menuQuery.nodeId)
+                : undefined
+            }
+          />
         </ResearchFeedRowMenu>
       ) : null}
       {menu?.kind === "draft" && menuDraft ? (

@@ -435,9 +435,6 @@ interface ResearchNodeBase {
   /** The workspace the node was created in; the tree's is authoritative. */
   groupId: string;
   createdAt: number;
-  /** Set when the node is starred: a starred follow-up or branch is listed
-   * under its question in the feed. Never set on a root node. */
-  starredAt?: number | null;
   highlights: ResearchHighlight[];
   /** On the first node of an inline chain: the order its messages column
    * lists the chain in, set by reordering the column. Display only; see
@@ -542,13 +539,6 @@ export interface RecentResearchQuery {
   createdAt: number;
   /** Current answer recap, when one has been generated. */
   recap?: string | null;
-  /** When the node was starred to be listed under its question in the feed. */
-  starredAt?: number | null;
-  /** Non-inline edges between the tree root and this node: 0 for the root and
-   * its inline follow-ups, 1 for a branch of the root, 2 for a branch of that. */
-  branchDepth?: number;
-  /** Root entries only: every starred node in the tree, in tree order. */
-  starred?: RecentResearchQuery[];
 }
 
 /** A user folder that groups research trees within one workspace. */

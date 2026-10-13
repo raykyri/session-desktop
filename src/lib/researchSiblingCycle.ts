@@ -1,6 +1,6 @@
 // ⌃Tab / ⌃⇧Tab in the research columns: select the next or previous row of
 // the column the person last interacted with, wrapping at both ends. The
-// feed cycles its cards (or a card's child rows), a messages column its
+// feed cycles its cards, a messages column its
 // chain, and a note's follow-ups column its rows. ResearchColumns tracks the
 // column and dispatches the key; the feed and the document perform the moves.
 // This module contains the DOM-independent logic.
@@ -92,41 +92,24 @@ export function researchCycleColumn(
   return best?.id ?? "feed";
 }
 
-/** A feed card as the cycle sees it: its key and its child rows' node ids. */
-export interface FeedCycleEntry {
-  key: string;
-  children: readonly string[];
-}
-
-/** A feed row: a card, or one of its child rows. */
-export interface FeedCyclePosition {
-  key: string;
-  child: string | null;
-}
-
-/** The feed row one step from `current`. A child row steps among its card's
- * child rows; a card steps among the cards of the list that holds it (the
- * feed's lists are separate: Home's recent activity and each open tray, or a
- * folder's cards). With no current row, or one no list holds, the step
- * starts in the first non-empty list. Null when every list is empty. */
+/** The key of the feed card one step from `current` among the cards of
+ * the list that holds it (the feed's lists are separate: Home's recent
+ * activity and each open tray, or a folder's cards; a group's children
+ * follow their parent in its list). With no current card, or one no list
+ * holds, the step starts in the first non-empty list. Null when every list
+ * is empty. */
 export function feedCycleStep(
-  lists: readonly (readonly FeedCycleEntry[])[],
-  current: FeedCyclePosition | null,
+  lists: readonly (readonly string[])[],
+  current: string | null,
   direction: ResearchCycleDirection,
-): FeedCyclePosition | null {
-  const list = (current && lists.find((entries) => entries.some((entry) => entry.key === current.key))) ?? null;
-  if (current && list) {
-    const index = list.findIndex((entry) => entry.key === current.key);
-    const children = list[index].children;
-    const childIndex = current.child === null ? -1 : children.indexOf(current.child);
-    if (childIndex >= 0) {
-      return { key: current.key, child: children[cycleIndex(children.length, childIndex, direction)] };
-    }
-    return { key: list[cycleIndex(list.length, index, direction)].key, child: null };
+): string | null {
+  const list = (current !== null && lists.find((keys) => keys.includes(current))) || null;
+  if (current !== null && list) {
+    return list[cycleIndex(list.length, list.indexOf(current), direction)];
   }
-  const first = lists.find((entries) => entries.length > 0);
+  const first = lists.find((keys) => keys.length > 0);
   if (!first) {
     return null;
   }
-  return { key: first[cycleIndex(first.length, -1, direction)].key, child: null };
+  return first[cycleIndex(first.length, -1, direction)];
 }

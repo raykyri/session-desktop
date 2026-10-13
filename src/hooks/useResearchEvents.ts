@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { ResearchData } from "./useResearchData";
 import type { ResearchNavigation } from "./useResearchNavigation";
 import { getResearchTree } from "../lib/api";
-import { patchRecentActivityStarred, upsertRecentActivityResearchNode } from "../lib/activity";
+import { upsertRecentActivityResearchNode } from "../lib/activity";
 import {
   addResearchNodeHighlight,
   parseResearchEvent,
@@ -341,13 +341,9 @@ export function useResearchEvents(
         invalidateVisibleDetailSnapshot(node.treeId);
         setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
         setResearchActivity((current) => upsertResearchActivity(current, node));
-        const starredPatch = patchRecentActivityStarred(
-          upsertRecentActivityResearchNode(recentActivityItemsRef.current, node),
-          node,
-        );
-        recentActivityItemsRef.current = starredPatch.items;
-        setRecentActivityItems(starredPatch.items);
-        if (starredPatch.stale) scheduleResearchRefresh();
+        const items = upsertRecentActivityResearchNode(recentActivityItemsRef.current, node);
+        recentActivityItemsRef.current = items;
+        setRecentActivityItems(items);
         if (previous) {
           const patchSummary = (summary: ResearchTreeSummary) =>
             patchResearchSummaryForNode(summary, previous, node, timestamp);

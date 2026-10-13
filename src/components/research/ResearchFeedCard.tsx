@@ -1,6 +1,5 @@
-import { useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import type { ResearchFeedChild } from "../../lib/researchFolders";
 import { researchItemCount } from "../../lib/researchGroups";
 import {
   researchRowGlyph,
@@ -39,39 +38,19 @@ interface ResearchFeedCardProps {
   selected?: boolean;
   /** The thread changed since it was last viewed. */
   unread?: boolean;
-  /** Starred follow-ups and branches listed under the question. */
-  childRows?: ResearchFeedChild[];
-  /** Child rows shown selected: the open branches' heads and the message
-   * selected in the root pair. */
-  selectedChildNodeIds?: readonly string[];
   menuOpen?: boolean;
-  /** The child row whose … menu is open. */
-  childMenuNodeId?: string | null;
   /** The … button's name: "Thread actions" by default. */
   menuLabel?: string;
   onOpen: () => void;
-  onOpenChild?: (child: ResearchFeedChild) => void;
   /** Edits the card's note on a double-click of the card; absent when the
    * card is not an editable note. */
   onEdit?: () => void;
-  /** A child row's edit, for a double-click of the row: undefined for a row
-   * that is not an editable note. */
-  childEdit?: (child: ResearchFeedChild) => (() => void) | undefined;
   /** Opens the card's menu below its … button (`anchor`). */
   onMenu?: (anchor: HTMLElement) => void;
-  /** Opens a child row's … menu below `anchor`. */
-  onChildMenu?: (child: ResearchFeedChild, anchor: HTMLElement) => void;
   /** Opens the card's menu, the one its … button opens, at `placement`: a
    * right-click on the card, or Shift+F10 or the ContextMenu key with focus
    * on it. `control` is the card's open button. */
   onContextMenu?: (placement: ResearchUnitMenuPlacement, control: HTMLElement) => void;
-  /** Opens a child row's context menu (its … menu) at `placement`. `control`
-   * is the row's open button. */
-  onChildContextMenu?: (
-    child: ResearchFeedChild,
-    placement: ResearchUnitMenuPlacement,
-    control: HTMLElement,
-  ) => void;
   onDragStart?: ResearchCardDragStart;
   /** A card of a virtualized list, which may not render its neighbors. */
   virtual?: boolean;
@@ -80,17 +59,15 @@ interface ResearchFeedCardProps {
   /** For a child card: its parent's tree id. */
   parentId?: string;
   /** For a parent with children: the toggle line in the card, and the child
-   * cards (`nested`) listed after it, with its starred rows, when expanded. */
+   * cards (`nested`) listed after it when expanded. */
   group?: ResearchFeedGroup;
   nested?: ReactNode;
 }
 
-/** A parent card's group: `count` is its starred rows and children, which
- * the toggle line shows and hides. */
+/** A parent card's group: `count` children, which the toggle line shows and
+ * hides. */
 interface ResearchFeedGroup {
   count: number;
-  /** Nested children only, for drag and drop. */
-  childCount: number;
   collapsed: boolean;
   /** Collapsed: the children's running, failed and updated counts. */
   summary: { running: number; failed: number; updated: number };
@@ -120,8 +97,8 @@ function GroupSummary({ summary }: { summary: ResearchFeedGroup["summary"] }) {
   );
 }
 
-/** The … button of a feed row (a card or a child row), for placing its
- * context menu when a key opens it. */
+/** The … button of a feed card, for placing its context menu when a key
+ * opens it. */
 const feedRowMenuButton = (row: HTMLElement) => ({
   element: row.querySelector<HTMLElement>(".research-feed-card-menu"),
   align: "end" as const,
@@ -158,9 +135,8 @@ export function researchCardRefocus(
 /** Feed card for a thread rooted in a question, post, or document. It shows
  * the title when distinct, the root content, a type/status glyph, and controls
  * on hover or focus. The card opens the thread while nested links and embeds
- * remain separate targets. Starred children appear as indented rows. A parent
- * card has a toggle line; its starred rows and child cards follow it, beside
- * a guide, while it is expanded. */
+ * remain separate targets. A parent card has a toggle line; its child cards
+ * follow it, beside a guide, while it is expanded. */
 export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",
@@ -174,19 +150,12 @@ export default function ResearchFeedCard({
   statusLabel,
   selected = false,
   unread = false,
-  childRows = [],
-  selectedChildNodeIds = [],
   menuOpen = false,
-  childMenuNodeId = null,
   menuLabel = "Thread actions",
   onOpen,
-  onOpenChild,
   onEdit,
-  childEdit,
   onMenu,
-  onChildMenu,
   onContextMenu,
-  onChildContextMenu,
   onDragStart,
   virtual = false,
   holdsChildren = false,
@@ -194,7 +163,6 @@ export default function ResearchFeedCard({
   group,
   nested,
 }: ResearchFeedCardProps) {
-  const cardRef = useRef<HTMLDivElement | null>(null);
   const glyphId = useId();
   // The glyph's state name describes the open button.
   const glyphNamed = researchRowGlyph({ kind, state, unread }).label !== null;
@@ -204,17 +172,16 @@ export default function ResearchFeedCard({
   return (
     <>
       <div
-        ref={cardRef}
         className={`research-feed-card${selected ? " is-selected" : ""}${
           menuOpen ? " has-open-menu" : ""
-        }${childRows.length > 0 ? " has-children" : ""}${parentId ? " is-child" : ""}`}
+        }${parentId ? " is-child" : ""}`}
         data-research-card={cardId}
         data-research-card-kind={dragKind}
         data-research-place={place}
         data-research-card-virtual={virtual ? "" : undefined}
         data-research-holds-children={holdsChildren ? "" : undefined}
         data-research-parent={parentId}
-        data-research-children={group && group.childCount > 0 ? group.childCount : undefined}
+        data-research-children={group ? group.count : undefined}
         data-research-group-collapsed={group?.collapsed ? "" : undefined}
         onPointerDown={onDragStart ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }) : undefined}
         {...(onContextMenu
@@ -269,73 +236,7 @@ export default function ResearchFeedCard({
           onMenu={onMenu}
         />
       </div>
-      {group?.collapsed ? null : (
-        <GroupRows nested={nested}>
-          {childRows.map((child, index) => {
-            const childSelected = selectedChildNodeIds.includes(child.nodeId);
-            const childMenuOpen = child.nodeId === childMenuNodeId;
-            const editChild = childEdit?.(child);
-            return (
-              <div
-                key={child.nodeId}
-                className={`research-feed-child${index === 0 ? " is-group-start" : ""}${
-                  index === childRows.length - 1 ? " is-group-end" : ""
-                }${childSelected ? " is-selected" : ""}${childMenuOpen ? " has-open-menu" : ""}`}
-                // In a group the rows sit 24px in already, one level less.
-                style={{ "--research-child-indent": nested ? child.indent - 1 : child.indent } as CSSProperties}
-                data-research-child-of={cardId}
-                onPointerDown={
-                  onDragStart
-                    ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }, cardRef.current)
-                    : undefined
-                }
-                {...(onChildContextMenu
-                  ? researchUnitMenuProps(
-                      (placement, row) =>
-                        onChildContextMenu(child, placement, rowControl(row, ".research-feed-child-open")),
-                      feedRowMenuButton,
-                    )
-                  : null)}
-              >
-                <button
-                  type="button"
-                  className="research-feed-child-open"
-                  data-node-id={child.nodeId}
-                  aria-current={childSelected ? "true" : undefined}
-                  onClick={(event) => {
-                    if (editChild && event.detail > 1) return;
-                    onOpenChild?.(child);
-                  }}
-                  {...researchNoteDoubleClickProps(editChild)}
-                >
-                  {child.branch ? (
-                    <span className="research-visually-hidden">Starred branch: </span>
-                  ) : null}
-                  <ResearchRowGlyph kind={child.kind} state={child.state} />
-                  <span className="research-feed-child-text">
-                    <span className="research-feed-child-label">
-                      {child.label}
-                    </span>
-                  </span>
-                </button>
-                <ResearchRowRail
-                  grip={Boolean(onDragStart)}
-                  menuLabel="Remove the star or move"
-                  menuOpen={childMenuOpen}
-                  onMenu={onChildMenu ? (anchor) => onChildMenu(child, anchor) : undefined}
-                />
-              </div>
-            );
-          })}
-          {nested}
-        </GroupRows>
-      )}
+      {group && !group.collapsed ? <div className="research-feed-group">{nested}</div> : null}
     </>
   );
-}
-
-/** A group's rows after the parent card: in a container with the guide when
- * the card has nested children, else (starred rows only) as they are. */
-function GroupRows({ nested, children }: { nested?: ReactNode; children: ReactNode }) {
-  return nested ? <div className="research-feed-group">{children}</div> : <>{children}</>;
 }

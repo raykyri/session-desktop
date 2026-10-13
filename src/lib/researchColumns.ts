@@ -134,9 +134,6 @@ interface ResearchStrip {
   pending: ResearchPendingGroup | null;
   /** The last column is an answer, so the filler after it shows its hint. */
   endsWithAnswer: boolean;
-  /** The feed's selection: the root level's selected message, then each
-   * open branch's head. */
-  openNodeIds: readonly string[];
 }
 
 /** An unsent branch: the message it is asked from, and the passage. */
@@ -424,7 +421,6 @@ export function researchStrip(
     columns,
     pending: pendingShown,
     endsWithAnswer: columns[columns.length - 1]?.role === "answer",
-    openNodeIds: levels.map((level, index) => (index === 0 ? level.selectedId : level.headId)),
   };
 }
 

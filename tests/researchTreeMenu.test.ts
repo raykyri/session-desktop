@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ResearchMenuItem } from "../src/components/research/ResearchMenu";
 import { ResearchFeedRowMenuItems } from "../src/components/research/ResearchMoveMenu";
 import { ResearchTreeLifecycleItems } from "../src/components/research/ResearchTreeMenu";
 import type { ResearchTreeSummary } from "../src/types";
@@ -198,25 +199,15 @@ test("a feed card's menu without Move to starts with the thread's actions", () =
   assert.deepEqual(menuOutline(html), ["Rename", "|", "Delete"]);
 });
 
-test("a starred child row's menu has Remove star and the question's actions, no thread actions", () => {
+test("a feed card's group actions come first, then Move to", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchFeedRowMenuItems, {
       currentPlace: "system:unfiled",
       folders,
-      onRemoveStar: noop,
+      groupItems: createElement(ResearchMenuItem, { label: "Make child of…", onSelect: noop }),
       onMove: noop,
       onNewFolder: noop,
     }),
   );
-  assert.deepEqual(menuOutline(html), [
-    "Remove star",
-    "|",
-    "Move to",
-    "Unfiled",
-    "Drafts",
-    "Reading list",
-    "Archive",
-    "|",
-    "New folder…",
-  ]);
+  assert.deepEqual(menuOutline(html).slice(0, 4), ["Make child of…", "|", "Move to", "Unfiled"]);
 });

@@ -1,15 +1,4 @@
-import type {
-  RecentResearchQuery,
-  ResearchFolder,
-  ResearchFolderState,
-  ResearchTreeSummary,
-} from "../types";
-import {
-  researchRowKind,
-  researchRowState,
-  type ResearchRowKind,
-  type ResearchRowState,
-} from "./researchRowGlyph";
+import type { ResearchFolder, ResearchFolderState, ResearchTreeSummary } from "../types";
 
 // Places a research tree can be filed in. Unfiled and Archive are derived
 // (no membership, and `archivedAt`); Drafts is a membership value with no
@@ -277,47 +266,6 @@ export function researchCardTitle(title: string | null | undefined, question: st
   return normalizedText(question).startsWith(normalizedText(trimmed).slice(0, 60))
     ? null
     : trimmed;
-}
-
-export interface ResearchFeedChild {
-  nodeId: string;
-  treeId: string;
-  label: string;
-  /** A non-inline child: opens as a branch pair with its ancestors. */
-  branch: boolean;
-  /** Indent: 1 under the question; 2 for a branch under another
-   * child (a branch of a branch, or a branch from a starred follow-up). */
-  indent: 1 | 2;
-  /** The child's own kind and run state, for its row's glyph. */
-  kind: ResearchRowKind;
-  state: ResearchRowState;
-  query: RecentResearchQuery;
-}
-
-/** Starred follow-ups and branches listed under a root question, in tree
- * order. Only follow-ups of the root level and branch heads can be
- * starred, so a branch head's parent is the message it was asked from. */
-export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
-  const starred = (root.starred ?? []).filter((child) => child.nodeId !== root.nodeId);
-  const starredFollowUps = new Set(
-    starred.filter((child) => child.inline).map((child) => child.nodeId),
-  );
-  return starred.map((child) => {
-    const depth = child.branchDepth ?? (child.inline ? 0 : 1);
-    const underChild =
-      !child.inline &&
-      (depth > 1 || (child.parentNodeId != null && starredFollowUps.has(child.parentNodeId)));
-    return {
-      nodeId: child.nodeId,
-      treeId: child.treeId,
-      label: (child.inline ? child.prompt : (child.title?.trim() || child.prompt)).trim(),
-      branch: !child.inline,
-      indent: underChild ? 2 : 1,
-      kind: researchRowKind(child),
-      state: researchRowState(child.status),
-      query: child,
-    };
-  });
 }
 
 /** Puts one workspace's trees in `orderedIds` order, in the slots they

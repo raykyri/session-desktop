@@ -422,9 +422,6 @@ export function setResearchChainOrder(headNodeId: string, nodeIds: string[]) {
   return invoke<ResearchNode>("set_research_chain_order", { headNodeId, nodeIds });
 }
 
-export function setResearchNodeStarred(nodeId: string, starred: boolean) {
-  return invoke<ResearchNode>("set_research_node_starred", { nodeId, starred });
-}
 
 export function createResearchHighlight(
   nodeId: string,

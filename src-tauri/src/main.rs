@@ -2098,17 +2098,6 @@ fn set_research_chain_order(
 }
 
 #[tauri::command]
-fn set_research_node_starred(
-    state: tauri::State<'_, AppState>,
-    node_id: String,
-    starred: bool,
-) -> Result<ResearchNodeView, String> {
-    state
-        .set_research_node_starred(&node_id, starred)
-        .map(|node| node.view())
-}
-
-#[tauri::command]
 async fn create_research_highlight(
     state: tauri::State<'_, AppState>,
     node_id: String,
@@ -3153,7 +3142,6 @@ fn main() {
             cancel_research_node,
             rename_research_tree,
             rename_research_node,
-            set_research_node_starred,
             set_research_chain_order,
             create_research_highlight,
             remove_research_highlights,

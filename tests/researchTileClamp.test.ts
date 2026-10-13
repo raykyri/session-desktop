@@ -77,7 +77,6 @@ const row = (overrides: Partial<Parameters<typeof ResearchMessageRow>[0]> = {}) 
       label: "A long question",
       showPrompt: true,
       selected: false,
-      starrable: false,
       branchCount: 0,
       branchOpen: false,
       branchUnread: false,

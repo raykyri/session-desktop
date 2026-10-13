@@ -10,7 +10,6 @@ import {
   inlineChildOf,
   isActiveResearchStatus,
   researchChainStopTarget,
-  researchMessageStarrable,
   chainComposerPlaceholder,
 } from "../src/lib/researchChains";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
@@ -260,16 +259,4 @@ test("a follow-up continues the chain's last message, wherever it lists", () => 
   assert.equal(tail.id, "c2");
   assert.equal(canContinueChain(nodes, tail), true);
   assert.equal(canContinueChain(nodes, nodes.find((candidate) => candidate.id === "c1")!), false);
-});
-
-test("a root follow-up and a branch's first message can be starred; the root and a branch's follow-ups cannot", () => {
-  const root = node("root");
-  const followUp = node("f1", { parentNodeId: "root", inline: true });
-  const branch = node("b1", { parentNodeId: "f1" });
-  const branchFollowUp = node("b2", { parentNodeId: "b1", inline: true });
-  assert.equal(researchMessageStarrable(root, root), false);
-  assert.equal(researchMessageStarrable(followUp, root), true);
-  assert.equal(researchMessageStarrable(branch, branch), true);
-  assert.equal(researchMessageStarrable(branchFollowUp, branch), false);
-  assert.equal(researchMessageStarrable(followUp, undefined), false);
 });

@@ -25,7 +25,6 @@ export interface NodeFixture {
   title?: string | null;
   groupId?: string;
   createdAt?: number;
-  starredAt?: number | null;
   highlights?: ResearchHighlight[];
   chainOrder?: string[];
   /** Defaults to "exchange". */
@@ -60,7 +59,6 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
     title: fields.title ?? null,
     groupId: fields.groupId ?? "group",
     createdAt: fields.createdAt ?? 1,
-    starredAt: fields.starredAt ?? null,
     highlights: fields.highlights ?? [],
     ...(fields.chainOrder ? { chainOrder: fields.chainOrder } : {}),
   };

@@ -6,7 +6,6 @@ import {
   LoaderCircle,
   RotateCcw,
   Square,
-  Star,
   Wrench,
 } from "lucide-react";
 import { ResearchBranchOpenGlyph } from "./ResearchIcons";
@@ -273,7 +272,6 @@ function sameTurnNode(a: ResearchNode, b: ResearchNode) {
     nodeRun(a)?.startedAt === nodeRun(b)?.startedAt &&
     nodeRun(a)?.completedAt === nodeRun(b)?.completedAt &&
     a.createdAt === b.createdAt &&
-    a.starredAt === b.starredAt &&
     nodeAdapter(a) === nodeAdapter(b) &&
     nodeAgent(a)?.model === nodeAgent(b)?.model &&
     documentSource(a) === documentSource(b)
@@ -342,7 +340,7 @@ const QUEUED_RETRY_TEXT = "Queued. Starts when the running answer in this conver
  * column scrolls), under a status line with the elapsed time and Stop while
  * it runs. A failed answer ends in "Error." and the error, with Retry and
  * Edit question; a stopped one in "Stopped after …" with Run again. Memoized
- * so the message rows (branch counts, star) can change without rebuilding
+ * so the message rows (branch counts) can change without rebuilding
  * the answer's timeline element tree. */
 export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   view,
@@ -663,8 +661,7 @@ export function researchMessageStateWord(state: ResearchRowState): string | null
 
 /** One message in a level's messages column: the user's message in full,
  * then a meta line, shown only when it has something to show: "Imported"
- * for an imported report, the word Queued or Stopped, a filled star when the
- * message is starred. A message whose answer has branches shows the branch
+ * for an imported report, or the word Queued or Stopped. A message whose answer has branches shows the branch
  * indicator at the right end of its first line. The first line starts with the row's glyph (ResearchRowGlyph)
  * unless the row is an answered exchange, the common case: a note, link, X
  * post or document shows its kind, and a queued, running, failed or stopped
@@ -686,7 +683,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   showPrompt,
   selected,
   focusable = false,
-  starrable,
   retryQueued = false,
   branchCount,
   branchOpen,
@@ -713,9 +709,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** In the tab order although not selected: the first row of a branches
    * column with no selected message. */
   focusable?: boolean;
-  /** The message can be starred (root follow-ups and a branch's first
-   * message); a starred one shows a filled star in its meta line. */
-  starrable: boolean;
   retryQueued?: boolean;
   branchCount: number;
   /** One of the answer's branches is selected in the next column. */
@@ -746,7 +739,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   const draggable = Boolean(dragPlace && onDragStart);
   const status = nodeStatus(node);
   const settled = status === "complete" || status === "failed" || status === "cancelled";
-  const starred = starrable && status !== "queued" && Boolean(node.starredAt);
   // Provenance: the document source records it.
   const imported = documentSource(node) === "imported";
   const state = researchMessageState(status, retryQueued);
@@ -841,7 +833,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           onToggle={() => onToggleExpanded(node.id)}
         />
       ) : null}
-      {stateWord || imported || starred ? (
+      {stateWord || imported ? (
         <div className="research-msg-meta">
           {imported ? (
             <span className="research-msg-provenance" title={new Date(node.createdAt).toLocaleString()}>
@@ -849,11 +841,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
             </span>
           ) : null}
           {stateWord ? <span className="research-msg-state">{stateWord}</span> : null}
-          {starred ? (
-            <span className="research-msg-starred" role="img" aria-label="Starred" title="Starred">
-              <Star size={13} aria-hidden="true" fill="currentColor" />
-            </span>
-          ) : null}
         </div>
       ) : null}
       {showBranches ? (

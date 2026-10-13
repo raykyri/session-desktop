@@ -36,7 +36,6 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
       label: "A question",
       showPrompt: true,
       selected: true,
-      starrable: true,
       retryQueued,
       branchCount: 2,
       branchOpen: false,
@@ -64,8 +63,6 @@ test("the answer's … menu button appears in the row's corner pill after the br
     pill,
     /^class="research-feed-rail"><button type="button" class="research-feed-icon-button research-feed-card-menu" title="Answer details and actions" aria-label="Answer actions" aria-haspopup="menu" aria-expanded="false" tabindex="0"/,
   );
-  // The star is an item of that menu, not a button in the row.
-  assert.doesNotMatch(html, /aria-label="Star"|aria-pressed/);
 });
 
 test("a row whose menu is open keeps its pill shown", () => {
@@ -76,7 +73,6 @@ test("a row whose menu is open keeps its pill shown", () => {
       label: "A question",
       showPrompt: true,
       selected: false,
-      starrable: false,
       branchCount: 0,
       branchOpen: false,
       branchUnread: false,

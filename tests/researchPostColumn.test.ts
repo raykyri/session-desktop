@@ -180,7 +180,7 @@ async function noteMenuOutline(nodeId: string, options: { archived?: boolean; no
           rootNodeId: "post", treeTitle: "Who ships component-model plugins?", archived: options.archived ?? false,
           content: null, view: null, hiddenHighlights: 0, fullTrace: false, openBranchIds: new Set<string>(),
           relaunchPending: false, isPassagePress: () => false, onClose: noop, onOpenBranch: noop, onBranch: noop,
-          onRemoveHighlight: noop, onEdit: noop, onShowFullTrace: noop, onToggleFullTrace: noop, onToggleStar: noop,
+          onRemoveHighlight: noop, onEdit: noop, onShowFullTrace: noop, onToggleFullTrace: noop,
           onCopyAnswer: noop, onCopyNote: noop, onCopyThread: noop, onRerun: noop, onGenerateRecap: noop,
           onRename: noop, onDelete: noop,
         }),
@@ -192,13 +192,8 @@ async function noteMenuOutline(nodeId: string, options: { archived?: boolean; no
   return outline;
 }
 
-test("a follow-up note's menu edits, stars, copies and deletes the note; the root note's has no Star or Delete", async () => {
-  assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Star", "Copy note", "|", "Delete note"]);
-  const starred = researchNode({ ...followUpNoteFields, starredAt: 150 });
-  assert.deepEqual(
-    await noteMenuOutline("net", { nodes: [post, starred] }),
-    ["Edit note", "Remove star", "Copy note", "|", "Delete note"],
-  );
+test("a follow-up note's menu edits, copies and deletes the note; the root note's has no Delete", async () => {
+  assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Copy note", "|", "Delete note"]);
   // An AI follow-up still answering under the note keeps it from being
   // deleted.
   const running = researchNode({
@@ -206,12 +201,11 @@ test("a follow-up note's menu edits, stars, copies and deletes the note; the roo
   });
   assert.deepEqual(
     await noteMenuOutline("net", { nodes: [post, followUpNote, running] }),
-    ["Edit note", "Star", "Copy note", "|", "Delete note (disabled)"],
+    ["Edit note", "Copy note", "|", "Delete note (disabled)"],
   );
   assert.deepEqual(await noteMenuOutline("net", { archived: true }), [
-    "Edit note (disabled)", "Star", "Copy note", "|", "Delete note",
+    "Edit note (disabled)", "Copy note", "|", "Delete note",
   ]);
-  // The root note stands for the thread, which is deleted from the feed; the
-  // backend refuses a star on a tree's root.
+  // The root note stands for the thread, which is deleted from the feed.
   assert.deepEqual(await noteMenuOutline("post"), ["Edit note", "Copy note"]);
 });

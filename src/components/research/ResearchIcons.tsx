@@ -4,7 +4,7 @@ import ResearchRowGlyph from "./ResearchRowGlyph";
 /** The research UI's branch glyph, drawn as in the design mock: a trunk, two
  * nodes and the curve between them (lucide's GitBranch draws the curve the
  * other way round). Used wherever a branch shows: the question meta row, the
- * branch actions, the branches column's header and feed child rows. */
+ * branch actions and the branches column's header. */
 export function ResearchBranchIcon({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <svg

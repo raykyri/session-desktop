@@ -162,17 +162,6 @@ export function inlineChainFor(nodes: readonly ResearchNode[], nodeId: string): 
   return chain;
 }
 
-/** Whether `node`, a message in the chain headed by `head`, can be starred
- * (listed under its question in the feed): a follow-up in the root
- * question's chain, or the first message of a branch. The root question and
- * a branch's later follow-ups cannot. */
-export function researchMessageStarrable(node: ResearchNode, head: ResearchNode | null | undefined): boolean {
-  if (!head) {
-    return false;
-  }
-  return head.parentNodeId ? node.id === head.id : node.id !== head.id && Boolean(node.inline);
-}
-
 /** The order a messages column lists its chain in (`chainIds`, oldest first,
  * as `inlineChainFor` returns it): the chain head's stored `chainOrder`, then
  * the chain nodes it does not list, oldest first. Those were added after the

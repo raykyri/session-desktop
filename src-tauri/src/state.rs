@@ -2799,8 +2799,8 @@ impl AppState {
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
-                // Research nodes (an envelope with a tagged body, `starredAt`,
-                // `chainOrder` and image attachments), `agentComposerText`, and
+                // Research nodes (an envelope with a tagged body, `chainOrder`
+                // and image attachments), `agentComposerText`, and
                 // drafts with image attachments are read only by builds that
                 // accept the current version; older builds would drop them. A
                 // state without any stays loadable by builds that accept 2 to 4.
@@ -3538,8 +3538,7 @@ impl AppState {
 
     /// Home's feed: every research root (exchanges, posts and documents) of a
     /// tree that is neither archived nor in the Trash, newest first, each
-    /// with its direct follow-ups oldest first and every starred node in its
-    /// tree.
+    /// with its direct follow-ups oldest first.
     pub fn list_recent_activity(
         &self,
         limit: usize,
@@ -6064,46 +6063,6 @@ impl AppState {
             None,
             json!({ "node": node.view() }),
         ));
-        Ok(node)
-    }
-
-    /// Stars a follow-up, listing it under its tree's Home feed entry, or
-    /// clears the star. Re-starring keeps the original timestamp; a no-op
-    /// persists and emits nothing.
-    pub fn set_research_node_starred(
-        &self,
-        node_id: &str,
-        starred: bool,
-    ) -> Result<ResearchNode, String> {
-        let (node, changed) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            reject_trashed_research_node(&model, node_id)?;
-            let node = model
-                .research_nodes
-                .get_mut(node_id)
-                .ok_or_else(|| format!("Research node {node_id} was not found."))?;
-            if node.parent_node_id.is_none() {
-                return Err("The root of a research tree cannot be starred.".to_string());
-            }
-            let changed = node.starred_at.is_some() != starred;
-            if changed {
-                node.starred_at = starred.then(now_millis);
-            }
-            (node.clone(), changed)
-        };
-        if changed {
-            self.persist();
-            self.emit(SessionEvent::new(
-                "research.node.updated",
-                None,
-                None,
-                json!({ "node": node.view() }),
-            ));
-        }
         Ok(node)
     }
 
@@ -10871,83 +10830,45 @@ fn research_chain_head(nodes: &HashMap<String, ResearchNode>, node_id: &str) -> 
 }
 
 /// Home's feed entries for `roots`, in order: each root with its direct
-/// follow-ups oldest first and every starred node in its tree. Nested
-/// documents are invalid, so they are excluded from child and starred rows.
+/// follow-ups oldest first. Nested documents are invalid, so they are
+/// excluded from child rows.
 fn recent_activity_entries(model: &Model, roots: Vec<&ResearchNode>) -> Vec<RecentResearchQuery> {
-    let is_feed_child = |node: &ResearchNode| node.node_type() != ResearchNodeType::Document;
     let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
-    let mut trees_with_stars = HashSet::new();
     for node in model.research_nodes.values() {
         if let Some(parent_id) = node.parent_node_id.as_deref() {
             children_by_parent.entry(parent_id).or_default().push(node);
         }
-        if node.starred_at.is_some() {
-            trees_with_stars.insert(node.tree_id.as_str());
-        }
     }
-    let sorted_children = |parent: &ResearchNode| {
-        let mut children = children_by_parent
-            .get(parent.id.as_str())
-            .map(|children| {
-                children
-                    .iter()
-                    .copied()
-                    .filter(|child| child.tree_id == parent.tree_id)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        children.sort_by(|left, right| {
-            left.created_at
-                .cmp(&right.created_at)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        children
-    };
-    let feed_entry = |parent: &ResearchNode, node: &ResearchNode, branch_depth: u32| {
-        let mut entry = RecentResearchQuery::from(node);
-        entry.reply_anchor_author = research::reply_anchor_author(parent, node);
-        entry.branch_depth = branch_depth;
-        entry
-    };
     roots
         .into_iter()
         .map(|root| {
             let mut query = RecentResearchQuery::from(root);
-            query.children = sorted_children(root)
-                .iter()
-                .filter(|child| is_feed_child(child))
-                .map(|child| feed_entry(root, child, u32::from(!child.inline)))
-                .collect();
-            if trees_with_stars.contains(root.tree_id.as_str()) {
-                // Depth-first. A node's branches (oldest first) come before
-                // its inline continuation, so each starred branch follows
-                // the turn it was asked from. Stray documents are skipped
-                // with their subtrees, matching `children`. The stack holds
-                // each level reversed so the next entry pops first.
-                let traversal_order = |parent: &ResearchNode| {
-                    let mut children = sorted_children(parent);
-                    children.retain(|child| is_feed_child(child));
-                    // Stable: keeps created_at order within each group.
-                    children.sort_by_key(|child| child.inline);
+            let mut children = children_by_parent
+                .get(root.id.as_str())
+                .map(|children| {
                     children
-                };
-                let mut stack = traversal_order(root)
-                    .into_iter()
-                    .rev()
-                    .map(|child| (root, child, u32::from(!child.inline)))
-                    .collect::<Vec<_>>();
-                while let Some((parent, node, depth)) = stack.pop() {
-                    if node.starred_at.is_some() {
-                        query.starred.push(feed_entry(parent, node, depth));
-                    }
-                    stack.extend(
-                        traversal_order(node)
-                            .into_iter()
-                            .rev()
-                            .map(|child| (node, child, depth + u32::from(!child.inline))),
-                    );
-                }
-            }
+                        .iter()
+                        .copied()
+                        .filter(|child| {
+                            child.tree_id == root.tree_id
+                                && child.node_type() != ResearchNodeType::Document
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            children.sort_by(|left, right| {
+                left.created_at
+                    .cmp(&right.created_at)
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            query.children = children
+                .into_iter()
+                .map(|child| {
+                    let mut entry = RecentResearchQuery::from(child);
+                    entry.reply_anchor_author = research::reply_anchor_author(root, child);
+                    entry
+                })
+                .collect();
             query
         })
         .collect()
@@ -12955,90 +12876,27 @@ mod tests {
         node.parent_node_id = Some(parent_id.to_string());
         node.inline = inline;
         node.created_at = created_at;
-        node.starred_at = None;
         model.research_nodes.insert(node.id.clone(), node);
     }
 
     #[test]
-    fn research_node_star_sets_clears_and_emits_node_updates() {
+    fn recent_activity_lists_direct_follow_ups_oldest_first() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
             .create_research_tree(research_root_request("Root"))
             .unwrap();
         let root_id = detail.tree.root_node_id.clone();
-        insert_research_test_child(&state, &root_id, "branch", false, 10);
-        state.take_emitted_events();
-
-        assert_eq!(
-            state.set_research_node_starred(&root_id, true).unwrap_err(),
-            "The root of a research tree cannot be starred."
-        );
-        assert!(state.set_research_node_starred("missing", true).is_err());
-        assert!(state.take_emitted_events().is_empty());
-
-        let starred = state.set_research_node_starred("branch", true).unwrap();
-        let starred_at = starred.starred_at.expect("star timestamp");
-        assert_eq!(
-            state.research_node("branch").unwrap().starred_at,
-            Some(starred_at)
-        );
-        let events = state.take_emitted_events();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].event_type, "research.node.updated");
-        assert_eq!(
-            events[0].payload["node"]["starredAt"],
-            serde_json::json!(starred_at)
-        );
-
-        // Re-starring keeps the original timestamp and emits nothing.
-        let again = state.set_research_node_starred("branch", true).unwrap();
-        assert_eq!(again.starred_at, Some(starred_at));
-        assert!(state.take_emitted_events().is_empty());
-
-        let cleared = state.set_research_node_starred("branch", false).unwrap();
-        assert_eq!(cleared.starred_at, None);
-        let events = state.take_emitted_events();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].event_type, "research.node.updated");
-        assert!(events[0].payload["node"].get("starredAt").is_none());
-    }
-
-    #[test]
-    fn recent_activity_lists_starred_nodes_in_tree_order_with_branch_depth() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        let detail = state
-            .create_research_tree(research_root_request("Root"))
-            .unwrap();
-        let other = state
-            .create_research_tree(research_root_request("Other"))
-            .unwrap();
-        let root_id = detail.tree.root_node_id.clone();
-        {
-            let mut model = state.inner.model.lock().unwrap();
-            model.research_nodes.get_mut(&root_id).unwrap().created_at = 100;
-            model
-                .research_nodes
-                .get_mut(&other.tree.root_node_id)
-                .unwrap()
-                .created_at = 50;
-        }
         // root ── C (branch, 105)
         //      ├─ A (inline, 110) ── A1 (branch, 120)
-        //      ├─ B (branch, 130) ┬─ B2 (inline, 135)
-        //      │                  └─ B1 (branch, 140)
-        //      └─ D (document, 150) ── D1 (branch, 160)
+        //      ├─ B (branch, 130)
+        //      └─ D (document, 150)
         insert_research_test_child(&state, &root_id, "c", false, 105);
         insert_research_test_child(&state, &root_id, "a", true, 110);
         insert_research_test_child(&state, "a", "a1", false, 120);
         insert_research_test_child(&state, &root_id, "b", false, 130);
-        insert_research_test_child(&state, "b", "b2", true, 135);
-        insert_research_test_child(&state, "b", "b1", false, 140);
-        // Documents are only ever roots; a stray one is skipped with its
-        // subtree, as `children` skips it.
+        // Documents are only ever roots; a stray one is not listed.
         insert_research_test_child(&state, &root_id, "d", false, 150);
-        insert_research_test_child(&state, "d", "d1", false, 160);
         state
             .inner
             .model
@@ -13048,64 +12906,22 @@ mod tests {
             .get_mut("d")
             .unwrap()
             .body = test_document_body(research::DocumentSource::Authored);
-        for id in ["b1", "a1", "c", "b2", "a", "d", "d1"] {
-            state.set_research_node_starred(id, true).unwrap();
-        }
 
         let page = state.list_recent_activity(10, None).unwrap();
-        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items.len(), 1);
         let root = &page.items[0];
         assert_eq!(root.node_id, root_id);
-        assert_eq!(root.branch_depth, 0);
-        let entries = |queries: &[RecentResearchQuery]| {
-            queries
-                .iter()
-                .map(|query| (query.node_id.clone(), query.branch_depth))
-                .collect::<Vec<_>>()
-        };
         assert_eq!(
-            entries(&root.children),
-            vec![
-                ("c".to_string(), 1),
-                ("a".to_string(), 0),
-                ("b".to_string(), 1)
-            ]
-        );
-        // Each node's branches precede its inline continuation: B1 (asked
-        // from B) comes before B2, and C and B (asked from the root) come
-        // before the root's continuation A.
-        assert_eq!(
-            entries(&root.starred),
-            vec![
-                ("c".to_string(), 1),
-                ("b1".to_string(), 2),
-                ("b2".to_string(), 1),
-                ("a".to_string(), 0),
-                ("a1".to_string(), 1),
-            ]
-        );
-        assert!(
-            root.starred
+            root.children
                 .iter()
-                .all(|entry| entry.starred_at.is_some() && entry.starred.is_empty())
+                .map(|child| child.node_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["c", "a", "b"]
         );
-        assert_eq!(root.starred[2].parent_node_id.as_deref(), Some("b"));
-        assert_eq!(root.starred[4].parent_node_id.as_deref(), Some("a"));
-
         let json = serde_json::to_value(&page.items).unwrap();
-        assert_eq!(json[0]["branchDepth"], serde_json::json!(0));
-        assert_eq!(json[0]["starred"][1]["nodeId"], serde_json::json!("b1"));
-        assert_eq!(json[0]["starred"][1]["branchDepth"], serde_json::json!(2));
-        assert!(json[0]["starred"][1]["starredAt"].is_number());
-        assert!(json[0]["starred"][1]["status"].is_string());
+        assert!(json[0].get("starred").is_none());
         assert!(json[0].get("starredAt").is_none());
-        // A tree without stars carries no `starred` key.
-        assert_eq!(
-            json[1]["nodeId"],
-            serde_json::json!(other.tree.root_node_id)
-        );
-        assert!(json[1].get("starred").is_none());
-        assert_eq!(json[1]["branchDepth"], serde_json::json!(0));
+        assert!(json[0].get("branchDepth").is_none());
     }
 
     #[test]
@@ -15351,7 +15167,6 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: now,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Document(crate::research::DocumentBody {
@@ -16596,7 +16411,6 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -16724,7 +16538,6 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -16829,7 +16642,6 @@ mod tests {
             title: None,
             group_id: group.id.clone(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -16944,7 +16756,6 @@ mod tests {
             title: None,
             group_id: group.id.clone(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -17034,7 +16845,6 @@ mod tests {
             title: None,
             group_id: "missing-group".to_string(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -17133,7 +16943,6 @@ mod tests {
                     title: None,
                     group_id: group_id,
                     created_at: 1,
-                    starred_at: None,
                     highlights: Vec::new(),
                     chain_order: Vec::new(),
                     body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -18194,9 +18003,9 @@ mod tests {
     }
 
     /// Rewrites `raw` (a saved state file) with the keys builds before
-    /// version 10 stored, at version 9: a node's star as `promotedAt`, the
-    /// agent composer text as `drafts` (always present, as those builds wrote
-    /// it), and a `starred` list in the folder state.
+    /// version 10 stored, at version 9: a star on each follow-up as
+    /// `promotedAt`, the agent composer text as `drafts` (always present, as
+    /// those builds wrote it), and a `starred` list in the folder state.
     fn rewrite_with_version_nine_keys(raw: &mut serde_json::Value) {
         raw["version"] = serde_json::json!(9);
         let state = raw.as_object_mut().unwrap();
@@ -18216,8 +18025,11 @@ mod tests {
         {
             for node in nodes.values_mut() {
                 let node = node.as_object_mut().unwrap();
-                if let Some(star) = node.remove("starredAt") {
-                    node.insert("promotedAt".into(), star);
+                if node
+                    .get("parentNodeId")
+                    .is_some_and(|parent| !parent.is_null())
+                {
+                    node.insert("promotedAt".into(), serde_json::json!(7));
                 }
             }
         }
@@ -18239,12 +18051,13 @@ mod tests {
     }
 
     /// Version 9 stored a star as `promotedAt`, the agent composer text as
-    /// `drafts`, and an unused `starred` list in the folder state. Version 10
-    /// builds keep the version-9 bytes as state.v9.bak, load the stars and the
-    /// composer text under their new keys, and save with only the new keys.
-    /// A second load changes nothing and writes no further backup.
+    /// `drafts`, and an unused `starred` list in the folder state. Current
+    /// builds keep the version-9 bytes as state.v9.bak, load the composer text
+    /// under its new key, drop the stars (stars were removed), and save with
+    /// only the current keys. A second load changes nothing and writes no
+    /// further backup.
     #[test]
-    fn version_nine_state_renames_stars_and_composer_text_at_version_ten() {
+    fn version_nine_state_renames_composer_text_and_drops_stars() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
         let follow_ups = research_nodes_by_id(&state)
@@ -18253,9 +18066,6 @@ mod tests {
             .map(|node| node.id)
             .collect::<Vec<_>>();
         assert_eq!(follow_ups.len(), 2);
-        for node_id in &follow_ups {
-            state.set_research_node_starred(node_id, true).unwrap();
-        }
         state.insert_agent(sample_agent("agent-1")).unwrap();
         state
             .set_agent_draft("agent-1", "half-written thought".to_string())
@@ -18270,13 +18080,6 @@ mod tests {
         state.set_research_folders(folders).unwrap();
         let original = research_nodes_by_id(&state);
         assert_eq!(original.len(), 6);
-        assert_eq!(
-            original
-                .values()
-                .filter(|node| node.starred_at.is_some())
-                .count(),
-            2
-        );
         state.finalize_persistence_for_exit();
         drop(state);
 
@@ -18302,13 +18105,6 @@ mod tests {
             restored.agent_draft("agent-1").unwrap().as_deref(),
             Some("half-written thought")
         );
-        let page = restored.list_recent_activity(10, None).unwrap();
-        let starred = page
-            .items
-            .iter()
-            .flat_map(|item| item.starred.iter().map(|entry| entry.node_id.clone()))
-            .collect::<HashSet<_>>();
-        assert_eq!(starred, follow_ups.iter().cloned().collect());
         restored.finalize_persistence_for_exit();
         drop(restored);
 
@@ -18316,8 +18112,7 @@ mod tests {
         let raw: serde_json::Value = serde_json::from_slice(&saved).unwrap();
         assert_eq!(raw["version"], persistence::STATE_VERSION);
         let text = String::from_utf8(saved.clone()).unwrap();
-        assert_eq!(text.matches("\"starredAt\"").count(), 2);
-        assert!(!text.contains("promotedAt"));
+        assert!(!text.contains("starredAt") && !text.contains("promotedAt"));
         assert!(raw.get("drafts").is_none());
         assert_eq!(
             raw["agentComposerText"],

@@ -23,7 +23,6 @@ import {
   removeResearchHighlights,
   renameResearchNode,
   setResearchChainOrder,
-  setResearchNodeStarred,
 } from "../../lib/api";
 import { useResearchCardDrag } from "../../hooks/useResearchCardDrag";
 import { useResearchAnnotations, type ResearchBranchMarker } from "../../hooks/useResearchAnnotations";
@@ -268,9 +267,6 @@ interface ResearchThreadPageProps {
     survivingPath: (path: readonly string[]) => readonly string[],
     selection: readonly string[] | null,
   ) => void;
-  /** Called with the open nodes whenever they change: the message selected
-   * in the root pair, then the head of each open branch. Empty on unmount. */
-  onOpenNodesChange?: (nodeIds: string[]) => void;
   /** The whole question's Move to actions, which the root level's answer
    * menus list below their own actions. */
   treeMenu?: ResearchThreadTreeMenu;
@@ -326,7 +322,6 @@ function ResearchThreadPage({
   onForward,
   onNavigate,
   onPruneVisits,
-  onOpenNodesChange,
   treeMenu,
   noteEditRequest = null,
   onNoteEditRequestHandled,
@@ -1232,7 +1227,7 @@ function ResearchThreadPage({
     fullTraceKey,
   });
 
-  // Node-open requests from the app shell (feed rows, child rows, the
+  // Node-open requests from the app shell (feed cards, the
   // Highlights view) while this tree's thread page is already mounted. Focus
   // stays where the request came from; the strip shows the opened level.
   useEffect(
@@ -1437,32 +1432,6 @@ function ResearchThreadPage({
     (nodeId: string) => setFullTraceNodes((current) => ({ ...current, [nodeId]: !current[nodeId] })),
     [],
   );
-  const toggleStarred = useCallback((nodeId: string) => {
-    const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
-    if (!node) {
-      return;
-    }
-    const starred = !node.starredAt;
-    const note = nodeType(node) === "post";
-    setResearchNodeStarred(nodeId, starred)
-      .then(() =>
-        onToastRef.current(
-          note
-            ? starred
-              ? "Starred. The note is listed under its thread in the feed."
-              : "Note unstarred."
-            : starred
-            ? node.inline
-              ? "Starred. It's listed under its question in the feed."
-              : "Starred. The branch is listed under its question in the feed."
-            : node.inline
-              ? "Unstarred."
-              : "Branch unstarred.",
-        ),
-      )
-      .catch((err) => onErrorRef.current(err instanceof Error ? err.message : String(err)));
-  }, []);
-
   const copyAnswer = useCallback(async (view: SegmentView) => {
     const text = view.conversationCopyText ?? view.rawAnswer;
     if (!text) {
@@ -1856,14 +1825,6 @@ function ResearchThreadPage({
       setSubmittingKey(null);
     }
   }, [addCreatedNode, archived, navigate, navigationPersistence, requestFocus, selectionWith]);
-
-  const onOpenNodesChangeRef = useRef(onOpenNodesChange);
-  onOpenNodesChangeRef.current = onOpenNodesChange;
-  const openNodesKey = strip.openNodeIds.join("\n");
-  useEffect(() => {
-    onOpenNodesChangeRef.current?.(openNodesKey.split("\n").filter(Boolean));
-  }, [openNodesKey]);
-  useEffect(() => () => onOpenNodesChangeRef.current?.([]), []);
 
   // The whole chain as one Markdown document: each message and its answer in
   // order, separated by rules. Answers not loaded yet are fetched first.
@@ -2810,7 +2771,6 @@ function ResearchThreadPage({
           onEdit={startEditing}
           onShowFullTrace={showFullTraceFor}
           onToggleFullTrace={toggleFullTrace}
-          onToggleStar={toggleStarred}
           onCopyAnswer={handleCopyAnswer}
           onCopyNote={(nodeId) => void copyNote(nodeId)}
           onCopyThread={(chainIds) => void copyThread(chainIds)}

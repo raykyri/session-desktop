@@ -104,7 +104,7 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
 });
 
-test("a message row's glyph floats beside its first line; feed cards and child rows put it in a flex column", () => {
+test("a message row's glyph floats beside its first line; feed cards put it in a flex column", () => {
   const glyph = ruleBody(feedCss, ".research-row-glyph");
   assert.match(glyph, /float:\s*left/);
   assert.match(glyph, /width:\s*14px;\s*height:\s*14px/);
@@ -115,7 +115,7 @@ test("a message row's glyph floats beside its first line; feed cards and child r
   assert.match(glyph, /color:\s*var\(--research-row-glyph-color, var\(--text-faint\)\)/);
   assert.match(ruleBody(feedCss, ".research-row-glyph > svg"), /stroke-width:\s*1\.5px/);
   assert.match(
-    ruleBody(feedCss, ":is(.research-feed-card, .research-feed-child, .research-msg-row).is-selected"),
+    ruleBody(feedCss, ":is(.research-feed-card, .research-msg-row).is-selected"),
     /--research-row-glyph-color:\s*var\(--text-muted\)/,
   );
   assert.match(ruleBody(feedCss, ".research-row-glyph.is-tone-running"), /color:\s*var\(--status-active-fg\)/);
@@ -124,20 +124,13 @@ test("a message row's glyph floats beside its first line; feed cards and child r
   // In a tweet's header (a flex row with its own gap) it is not floated.
   assert.match(ruleBody(feedCss, ".tweet-embed-head > .research-row-glyph"), /float:\s*none;\s*margin:\s*0/);
 
-  // Feed cards and child rows: the glyph is a fixed 14px flex item, the
-  // container's 6px gap replaces its right margin, and the text column beside
-  // it shrinks to fit.
-  for (const container of [".research-feed-card-layout", ".research-feed-child-open"]) {
-    const layout = ruleBody(feedCss, container);
-    assert.match(layout, /display:\s*flex/);
-    assert.match(layout, /align-items:\s*flex-start/);
-    assert.match(layout, /gap:\s*6px/);
-  }
-  assert.match(
-    feedCss,
-    /\.research-feed-card-layout > \.research-row-glyph,\n\.research-feed-child-open > \.research-row-glyph\s*\{/,
-  );
-  const flexGlyph = ruleBody(feedCss, ".research-feed-child-open > .research-row-glyph");
+  // Feed cards: the glyph is a fixed 14px flex item, the container's 6px gap
+  // replaces its right margin, and the text column beside it shrinks to fit.
+  const layout = ruleBody(feedCss, ".research-feed-card-layout");
+  assert.match(layout, /display:\s*flex/);
+  assert.match(layout, /align-items:\s*flex-start/);
+  assert.match(layout, /gap:\s*6px/);
+  const flexGlyph = ruleBody(feedCss, ".research-feed-card-layout > .research-row-glyph");
   assert.match(flexGlyph, /float:\s*none/);
   assert.match(flexGlyph, /flex:\s*0 0 14px/);
   assert.match(flexGlyph, /margin-right:\s*0/);
@@ -146,9 +139,6 @@ test("a message row's glyph floats beside its first line; feed cards and child r
   assert.match(content, /min-width:\s*0/);
   assert.doesNotMatch(content, /flow-root/);
   assert.match(ruleBody(feedCss, ".research-feed-card-content > * + *"), /margin-top:\s*2px/);
-  // A child row clamps its text, not the glyph beside it.
-  assert.match(ruleBody(feedCss, ".research-feed-child-label"), /display:\s*block/);
-  assert.match(ruleBody(feedCss, ".research-feed-child-text"), /display:\s*-webkit-box/);
 
   // Message rows keep the float: the content is a flow root, so the float
   // stays inside it, and later lines use the full width.
@@ -199,7 +189,7 @@ test("a saved link's URL and a card's URLs break anywhere, so they start on the 
   assert.match(url, /overflow-wrap:\s*anywhere/);
   assert.match(url, /word-break:\s*break-all/);
   assert.match(ruleBody(feedCss, ".research-feed-url"), /word-break:\s*break-all/);
-  for (const selector of [".research-feed-card-title", ".research-feed-card-question", ".research-feed-child-text"]) {
+  for (const selector of [".research-feed-card-title", ".research-feed-card-question"]) {
     assert.match(ruleBody(feedCss, selector), /overflow-wrap:\s*anywhere/, selector);
   }
   assert.match(

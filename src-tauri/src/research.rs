@@ -795,12 +795,9 @@ pub struct ResearchNode {
     /// authoritative; loads reconcile this copy to it.
     pub group_id: String,
     pub created_at: u128,
-    /// When the user starred this follow-up, listing it under its tree's Home
-    /// feed entry. Stored as `promotedAt` before state version 10 and archive
-    /// version 12.
-    /// Never set on a root.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub starred_at: Option<u128>,
+    // Builds with starred follow-ups stored the star as `starredAt`
+    // (`promotedAt` before state version 10 and archive version 12). Stars
+    // were removed; loads ignore the key and saves drop it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<ResearchHighlight>,
     /// On the first node of an inline chain: the chain's node ids in the
@@ -1108,8 +1105,6 @@ pub struct ResearchNodeView {
     pub title: Option<String>,
     pub group_id: String,
     pub created_at: u128,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub starred_at: Option<u128>,
     pub highlights: Vec<ResearchHighlight>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chain_order: Vec<String>,
@@ -1241,7 +1236,6 @@ impl ResearchNode {
             title: self.title.clone(),
             group_id: self.group_id.clone(),
             created_at: self.created_at,
-            starred_at: self.starred_at,
             highlights: self.highlights.clone(),
             chain_order: self.chain_order.clone(),
             body,
@@ -1313,16 +1307,6 @@ pub struct RecentResearchQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub created_at: u128,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub starred_at: Option<u128>,
-    /// Non-inline edges on the path from the tree's root to this node: 0 for
-    /// the root and its inline continuations, 1 for a branch of the root.
-    pub branch_depth: u32,
-    /// Root entries only: every starred feed-kind node in the tree,
-    /// depth-first, visiting a node's branches (oldest first) before its
-    /// inline continuation.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub starred: Vec<RecentResearchQuery>,
     /// Current answer recap, when one has been generated for this run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recap: Option<String>,
@@ -1358,9 +1342,6 @@ impl From<&ResearchNode> for RecentResearchQuery {
                 .run()
                 .and_then(|run| run_view_record(node.adapter(), run).error),
             created_at: node.created_at,
-            starred_at: node.starred_at,
-            branch_depth: 0,
-            starred: Vec::new(),
             recap: node.recap().and_then(|recap| {
                 let text = recap.text.trim();
                 (!text.is_empty()).then(|| text.to_string())
@@ -1480,7 +1461,6 @@ impl ResearchNode {
             title: None,
             group_id,
             created_at,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body,
@@ -4627,7 +4607,6 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            starred_at: None,
             highlights: Vec::new(),
             chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
@@ -5501,7 +5480,6 @@ mod tests {
         assert_eq!(run.binding.thread_id.as_deref(), Some("thread"));
         assert_eq!(run.recap.as_ref().unwrap().generated_at, Some(5));
         assert_eq!(typed[0].title.as_deref(), Some("Run"));
-        assert_eq!(typed[0].starred_at, Some(9));
         assert_eq!(typed[0].highlights.len(), 1);
 
         // The flat post's correction becomes its text (step five); its edit
@@ -5543,10 +5521,14 @@ mod tests {
         );
         assert_eq!(typed[4].highlights.len(), 1);
 
-        // Round trip: the typed nodes serialize to the migrated JSON, and the
-        // migration leaves that JSON alone.
+        // Round trip: the typed nodes serialize to the migrated JSON, less the
+        // star (`promotedAt` renamed to `starredAt`), which loads ignore since
+        // stars were removed; the migration leaves that JSON alone.
+        assert_eq!(nodes[0]["starredAt"], serde_json::json!(9));
         for (typed, raw) in typed.iter().zip(&nodes) {
-            assert_eq!(&serde_json::to_value(typed).unwrap(), raw);
+            let mut raw = raw.clone();
+            raw.as_object_mut().unwrap().remove("starredAt");
+            assert_eq!(serde_json::to_value(typed).unwrap(), raw);
         }
         let migrated = nodes.clone();
         assert!(!migrate_values(&mut nodes));
@@ -5666,48 +5648,40 @@ mod tests {
         std::fs::remove_dir_all(folder).unwrap();
     }
 
-    /// Version 11 stored a star as `promotedAt`. A version-11 archive reads
-    /// back with `starredAt`, is stamped the current version, and is
-    /// rewritten with only the new key; reading the rewritten archive changes
-    /// nothing.
+    /// Archives written while follow-ups could be starred stored the star as
+    /// `promotedAt` (version 11) or `starredAt` (versions 12 and 13). Both
+    /// read; the star is dropped, and a rewrite stores neither key.
     #[test]
-    fn version_eleven_archives_read_stars_as_starred_at() {
+    fn archives_with_stars_read_without_them() {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        let mut starred = root.clone();
-        starred.id = "research-node-2".to_string();
-        starred.parent_node_id = Some(root.id.clone());
-        starred.starred_at = Some(7);
-        let mut unstarred = starred.clone();
-        unstarred.id = "research-node-3".to_string();
-        unstarred.starred_at = None;
-        archive.nodes.extend([starred, unstarred]);
+        let mut follow_up = root.clone();
+        follow_up.id = "research-node-2".to_string();
+        follow_up.parent_node_id = Some(root.id.clone());
+        archive.nodes.push(follow_up);
         write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
         let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
         let current: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
-        assert_eq!(current["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
-        assert_eq!(current["nodes"][1]["starredAt"], serde_json::json!(7));
-        assert!(current["nodes"][1].get("promotedAt").is_none());
+        assert!(current["nodes"][1].get("starredAt").is_none());
 
-        let mut version_eleven = current.clone();
-        version_eleven["version"] = serde_json::json!(11);
-        let node = version_eleven["nodes"][1].as_object_mut().unwrap();
-        let star = node.remove("starredAt").unwrap();
-        node.insert("promotedAt".to_string(), star);
-        std::fs::write(&manifest, serde_json::to_vec(&version_eleven).unwrap()).unwrap();
-        let bundle = read_detached_research(&folder).unwrap().unwrap();
-        assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
-        assert_eq!(bundle.archive.nodes, archive.nodes);
-
-        write_detached_research_pending(&folder, &bundle.archive, &HashMap::new()).unwrap();
-        let rewritten: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
-        assert_eq!(rewritten["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
-        assert_eq!(rewritten["nodes"], current["nodes"]);
-        let again = read_detached_research(&folder).unwrap().unwrap();
-        assert_eq!(again.archive.nodes, archive.nodes);
+        for (version, key) in [(11, "promotedAt"), (12, "starredAt")] {
+            let mut starred = current.clone();
+            starred["version"] = serde_json::json!(version);
+            starred["nodes"][1]
+                .as_object_mut()
+                .unwrap()
+                .insert(key.to_string(), serde_json::json!(7));
+            std::fs::write(&manifest, serde_json::to_vec(&starred).unwrap()).unwrap();
+            let bundle = read_detached_research(&folder).unwrap().unwrap();
+            assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
+            assert_eq!(bundle.archive.nodes, archive.nodes);
+            write_detached_research_pending(&folder, &bundle.archive, &HashMap::new()).unwrap();
+            let rewritten: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+            assert_eq!(rewritten["nodes"], current["nodes"]);
+        }
         std::fs::remove_dir_all(folder).unwrap();
     }
 

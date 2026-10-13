@@ -88,7 +88,7 @@ test("cards have no metadata row: no time, counts or recap", () => {
     researchTrees: [tree],
   });
   assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
-  // Direct follow-ups are not rows of their own unless starred.
+  // Follow-ups are not rows of their own.
   assert.doesNotMatch(html, /Follow up question here/);
   // Moving and the thread's actions live in the card's … menu,
   // which its context menu also opens.
@@ -196,82 +196,6 @@ test("the glyph occupies its own column beside titled, untitled, link and tweet 
   assert.deepEqual(glyphOf(card("[Tweet: @example]")), ["xpost", undefined]);
   // Home shows the tweet as a label, not its embed.
   assert.doesNotMatch(card("[Tweet: @example]"), /tweet-embed|Tweet text/);
-});
-
-test("starred follow-ups and branches are indented rows under their question", () => {
-  const html = renderFeed({
-    items: [{
-      ...question,
-      starred: [
-        { ...question, nodeId: "follow", parentNodeId: "node", inline: true, prompt: "A starred follow-up", branchDepth: 0 },
-        { ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", title: "Branch title", branchDepth: 1 },
-        { ...question, nodeId: "deep", parentNodeId: "branch", inline: false, prompt: "Deep", branchDepth: 3, status: "running" as const },
-      ],
-    }],
-    researchTrees: [tree],
-    onDragStart: noop,
-  });
-  const rows = html
-    .split(/class="research-feed-child(?=[ "])/)
-    .slice(1)
-    .map((row) => row.slice(0, row.indexOf("</div>")));
-  assert.equal(rows.length, 3);
-  assert.ok(rows[0].startsWith(" is-group-start"));
-  assert.match(rows[0], /--research-child-indent:1/);
-  // Each child starts its label with a glyph for its own state; branch and
-  // follow-up differ only in the visually hidden prefix, not in a star.
-  assert.doesNotMatch(html, /lucide-star|research-feed-child-icon/);
-  assert.doesNotMatch(rows[0], /Starred branch: /);
-  assert.match(
-    rows[0],
-    /<span class="research-row-glyph is-answered" aria-hidden="true"><svg[^]*?<\/svg><\/span><span class="research-feed-child-text"><span class="research-feed-child-label">A starred follow-up</,
-  );
-  assert.match(
-    rows[1],
-    /Starred branch: <\/span><span class="research-row-glyph is-answered"[^]*?<\/span><span class="research-feed-child-text"><span class="research-feed-child-label">Branch title</,
-  );
-  // Levels cap at two; a running child's glyph names its state inside the
-  // open button.
-  assert.match(rows[2], /--research-child-indent:2/);
-  assert.ok(rows[2].startsWith(" is-group-end"));
-  assert.match(
-    rows[2],
-    /<button[^>]*class="research-feed-child-open"[^]*?<span class="research-row-glyph is-running is-tone-running" role="img" aria-label="Running" title="Running">[^]*?<\/button>/,
-  );
-  // Each child row has its open target and, in the right-hand margin, the
-  // drag handle above a … menu.
-  for (const row of rows) {
-    assert.equal((row.match(/<button/g) ?? []).length, 2);
-    assert.match(
-      row,
-      /class="research-feed-rail"><span class="research-feed-card-grip"[^]*class="research-feed-icon-button research-feed-card-menu" title="Remove the star or move"/,
-    );
-  }
-  assert.equal((html.match(/class="research-feed-child-open"/g) ?? []).length, 3);
-  // The question row has the same margin.
-  assert.match(html, /class="research-feed-rail"><span class="research-feed-card-grip"[^]*title="Thread actions"/);
-
-  // The open nodes' rows are marked (a follow-up whose message is selected
-  // in the root pair, an open branch); other cards' rows are not.
-  const starred = [
-    { ...question, nodeId: "follow", parentNodeId: "node", inline: true, prompt: "A starred follow-up", branchDepth: 0 },
-    { ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", branchDepth: 1 },
-  ];
-  const open = renderFeed({
-    items: [{ ...question, starred }],
-    researchTrees: [tree],
-    selectedTreeId: "tree",
-    selectedChildNodeIds: ["follow", "branch"],
-  });
-  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-row-glyph[^]*?<\/span><span class="research-feed-child-text"><span class="research-feed-child-label">A starred follow-up/);
-  assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><span class="research-visually-hidden">Starred branch: /);
-  assert.match(open, /research-feed-card is-selected/);
-  const elsewhere = renderFeed({
-    items: [{ ...question, starred }],
-    researchTrees: [tree],
-    selectedChildNodeIds: ["follow", "branch"],
-  });
-  assert.doesNotMatch(elsewhere, /is-selected/);
 });
 
 test("Home lists filed questions in their folder's tray, after Unfiled", () => {

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check, House, Plus, Star } from "lucide-react";
+import { Check, House, Plus } from "lucide-react";
 import type { ResearchFolder } from "../../types";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -120,8 +120,6 @@ function ResearchMoveItems({
 }
 
 interface ResearchFeedRowMenuItemsProps extends ResearchTreeMenuProps {
-  /** Given for a starred child row: unstars the follow-up or branch. */
-  onRemoveStar?: () => void;
   /** A card's group actions (Make child of…, Move out, Collapse or
    * Expand), before Move to. */
   groupItems?: ReactNode;
@@ -131,11 +129,9 @@ interface ResearchFeedRowMenuItemsProps extends ResearchTreeMenuProps {
 
 /** A feed row's menu items. A card's menu holds its group actions, its
  * question's actions (Move to), then after a separator the thread's actions
- * passed as `children` (Generate recap, Rename, Archive, Delete). A starred
- * child row's menu starts with Remove star, then its question's actions.
+ * passed as `children` (Generate recap, Rename, Archive, Delete).
  * Separators go only between groups that render. */
 export function ResearchFeedRowMenuItems({
-  onRemoveStar,
   groupItems,
   children,
   ...items
@@ -143,28 +139,16 @@ export function ResearchFeedRowMenuItems({
   const hasTreeItems = Boolean(items.onMove && items.onNewFolder);
   return (
     <>
-      {onRemoveStar ? (
-        <ResearchMenuItem
-          icon={<Star size={15} aria-hidden="true" />}
-          label="Remove star"
-          onSelect={onRemoveStar}
-        />
-      ) : null}
-      {groupItems ? (
-        <>
-          {onRemoveStar ? <ResearchMenuSeparator /> : null}
-          {groupItems}
-        </>
-      ) : null}
+      {groupItems}
       {hasTreeItems ? (
         <>
-          {onRemoveStar || groupItems ? <ResearchMenuSeparator /> : null}
+          {groupItems ? <ResearchMenuSeparator /> : null}
           <ResearchTreeMenuItems {...items} />
         </>
       ) : null}
       {children ? (
         <>
-          {onRemoveStar || groupItems || hasTreeItems ? <ResearchMenuSeparator /> : null}
+          {groupItems || hasTreeItems ? <ResearchMenuSeparator /> : null}
           {children}
         </>
       ) : null}

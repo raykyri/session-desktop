@@ -71,7 +71,6 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       label: nodePrompt(node),
       showPrompt: true,
       selected: false,
-      starrable: false,
       branchCount: 0,
       branchOpen: false,
       branchUnread: false,
@@ -96,17 +95,15 @@ test("research prompts preserve Markdown blockquotes", () => {
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("a message row's meta line shows the starred mark and branch count, with no time", () => {
-  const html = row(questionNode({ inline: true, parentNodeId: "root", starredAt: NOW }), {
+test("a message row shows its branch count, with no time", () => {
+  const html = row(questionNode({ inline: true, parentNodeId: "root" }), {
     selected: true,
-    starrable: true,
     branchCount: 3,
     branchOpen: true,
     branchUnread: true,
   });
 
   assert.doesNotMatch(html, /<time/);
-  assert.match(html, /research-msg-meta"><span class="research-msg-starred" role="img" aria-label="Starred"/);
   assert.match(html, /research-msg-branches is-open"/);
   // The unread dot is announced as part of the button's name.
   assert.match(
@@ -117,25 +114,21 @@ test("a message row's meta line shows the starred mark and branch count, with no
   assert.match(html, /research-msg-branches is-open"[^>]*>(?:(?!<\/button>).)*lucide-arrow-up-right/);
   assert.doesNotMatch(html, /research-tnum/);
   assert.match(html, /research-turn-unread" aria-hidden="true"/);
-  const starred = html.indexOf("research-msg-starred");
   const branches = html.indexOf("research-msg-branches");
   const more = html.indexOf('aria-label="Answer actions"');
-  assert.ok(starred >= 0 && branches > starred && more > branches);
+  assert.ok(branches >= 0 && more > branches);
   // Move to is in the feed row's … menu, not here.
   assert.doesNotMatch(html, /Move to/);
 });
 
-test("a settled row with nothing to show has no meta line; the starred mark shows only where offered", () => {
+test("a settled row with nothing to show has no meta line", () => {
   const settled = row(questionNode());
   assert.doesNotMatch(settled, /research-msg-meta/);
   assert.doesNotMatch(settled, /<time/);
   // A branch from the whole answer starts from the … menu.
   assert.match(settled, /aria-label="Answer actions"/);
-  // Starred, but not starrable here (a branch's later follow-up).
-  assert.doesNotMatch(row(questionNode({ starredAt: NOW })), /research-msg-starred|research-msg-meta/);
 
   const running = row(questionNode({ status: "running", createdAt: NOW - 31 * 60 * 1000 }), {
-    starrable: true,
     branchCount: 2,
   });
   assert.doesNotMatch(running, /<time/);

@@ -14,13 +14,10 @@ interface ResearchDragItem {
   place: string;
 }
 
-/** Starts a drag from a pointer down. `source` is the card being dragged
- * when the pointer went down elsewhere (a child row drags its question's
- * card); by default it is the element the handler is on. */
+/** Starts a drag of the element the handler is on from a pointer down. */
 export type ResearchCardDragStart = (
   event: ReactPointerEvent<HTMLElement>,
   item: ResearchDragItem,
-  source?: HTMLElement | null,
 ) => void;
 
 interface ResearchCardDragOptions {
@@ -108,11 +105,11 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
   const cancelRef = useRef<(() => void) | null>(null);
   useEffect(() => () => cancelRef.current?.(), []);
 
-  return useCallback((event: ReactPointerEvent<HTMLElement>, item: ResearchDragItem, source?: HTMLElement | null) => {
+  return useCallback((event: ReactPointerEvent<HTMLElement>, item: ResearchDragItem) => {
     if (event.button !== 0 || !event.isPrimary || cancelRef.current) return;
     const target = event.target as Element;
     if (target.closest("a, input, textarea, select, [data-research-no-drag]")) return;
-    const card = source ?? event.currentTarget;
+    const card = event.currentTarget;
     const startX = event.clientX;
     const startY = event.clientY;
     const scroller = card.closest<HTMLElement>("[data-research-scroll]");
@@ -273,13 +270,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       place: string,
       hit: Element | null,
     ): ResearchDrop | null | undefined => {
-      // A starred row under a card stands for the card's nest zone.
-      const starred = hit?.closest<HTMLElement>("[data-research-child-of]");
-      const over = starred
-        ? zone.querySelector<HTMLElement>(
-            `${TREE_CARD}[data-research-card="${CSS.escape(starred.dataset.researchChildOf ?? "")}"]`,
-          )
-        : (hit?.closest<HTMLElement>(TREE_CARD) ?? null);
+      const over = hit?.closest<HTMLElement>(TREE_CARD) ?? null;
       const overId = over?.dataset.researchCard;
       if (!over || !overId || !zone.contains(over)) return undefined;
       const rect = over.getBoundingClientRect();
@@ -303,15 +294,6 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
         }
         return { place, position };
       };
-      if (starred && over.dataset.researchParent === undefined) {
-        // A starred row nests in its card, or for a card that can't hold
-        // children, inserts after the card's group. A child card's starred
-        // row counts as the lower half of that card (below).
-        if (overId === item.id) return null;
-        return over.hasAttribute("data-research-holds-children")
-          ? nest(overId, null, over)
-          : between(positionAfter(zone, over), false);
-      }
       const overParentId = over.dataset.researchParent;
       if (overParentId) {
         // A child card splits at its midpoint and inserts within its group.
