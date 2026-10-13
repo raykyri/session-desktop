@@ -17,7 +17,6 @@ mod launch_path;
 mod mcp;
 mod native_support;
 mod persistence;
-mod prompt_library;
 mod pty;
 mod recovery;
 mod remote_cli;
@@ -694,81 +693,6 @@ async fn openrouter_chat_completion(
         .await
         .map_err(|err| format!("failed to read OpenRouter response: {err}"))?;
     Ok(OpenRouterProxyResponse { status, body })
-}
-
-/// The frontend passes the active pane's project directory (its group dir, or
-/// the group's base repo for worktrees) so project prompts follow the project
-/// being worked on rather than the app instance.
-fn prompt_project_path(project_dir: &Option<String>) -> Option<&std::path::Path> {
-    project_dir
-        .as_deref()
-        .map(str::trim)
-        .filter(|dir| !dir.is_empty())
-        .map(std::path::Path::new)
-}
-
-#[tauri::command(async)]
-fn prompt_library_list(
-    project_dir: Option<String>,
-) -> Result<prompt_library::PromptLibrary, String> {
-    prompt_library::list(prompt_project_path(&project_dir))
-}
-
-/// Creates or overwrites a saved prompt in `scope`. `previous_scope`/`previous_name`,
-/// when they name a different prompt location, make this a rename and/or a move
-/// between scopes (write new, then remove old).
-#[tauri::command(async)]
-fn prompt_library_save(
-    scope: prompt_library::PromptScope,
-    name: String,
-    content: String,
-    project_dir: Option<String>,
-    previous_scope: Option<prompt_library::PromptScope>,
-    previous_name: Option<String>,
-    expected_modified_ms: Option<u64>,
-) -> Result<prompt_library::SavedPrompt, String> {
-    let previous = match (&previous_scope, &previous_name) {
-        (Some(previous_scope), Some(previous_name)) => {
-            Some((*previous_scope, previous_name.as_str()))
-        }
-        (None, None) => None,
-        _ => return Err("previousScope and previousName must be passed together".to_string()),
-    };
-    prompt_library::save(
-        prompt_project_path(&project_dir),
-        scope,
-        &name,
-        &content,
-        previous,
-        expected_modified_ms,
-    )
-}
-
-#[tauri::command(async)]
-fn prompt_library_delete(
-    scope: prompt_library::PromptScope,
-    name: String,
-    project_dir: Option<String>,
-    expected_modified_ms: Option<u64>,
-) -> Result<(), String> {
-    prompt_library::delete(
-        prompt_project_path(&project_dir),
-        scope,
-        &name,
-        expected_modified_ms,
-    )
-}
-
-/// Reveals a scope's prompts folder in the OS file manager, creating it (and the
-/// project store's meta.json) first so a fresh library opens an empty folder
-/// instead of erroring.
-#[tauri::command(async)]
-fn prompt_library_reveal(
-    scope: prompt_library::PromptScope,
-    project_dir: Option<String>,
-) -> Result<(), String> {
-    let dir = prompt_library::materialize_scope_dir(prompt_project_path(&project_dir), scope)?;
-    open_path_in_file_manager(&dir)
 }
 
 #[cfg(target_os = "macos")]
@@ -3789,10 +3713,6 @@ fn main() {
             artifact_open_external,
             artifact_reveal,
             artifact_file_url,
-            prompt_library_list,
-            prompt_library_save,
-            prompt_library_delete,
-            prompt_library_reveal,
             list_panes,
             list_groups,
             list_research_workspaces,
