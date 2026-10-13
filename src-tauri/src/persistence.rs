@@ -35,6 +35,13 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
 ///
+/// Version 12 adds image attachments (`{"kind":"image"}`) to research
+/// messages and drafts. Builds that accept up to version 11 fail to parse a
+/// node or draft that carries one, drop it, and then drop the nodes and
+/// threads below it on their next save, so they must refuse the file. The
+/// shape of everything else is unchanged; loads of an older file need no
+/// migration.
+///
 /// Version 11 adds a research node's `chainOrder` (the display order of
 /// the messages column its inline chain starts) and makes Home's Unfiled
 /// list follow `researchTreeOrder` instead of creation time. Builds that
@@ -60,7 +67,7 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// conversations, message attachments, imported documents) so older builds
 /// kept reading states without those features; with every node in the body
 /// shape, a state holds either no research nodes or version-9 nodes.
-pub const STATE_VERSION: u32 = 11;
+pub const STATE_VERSION: u32 = 12;
 /// Written when the state contains no research nodes and no agent composer
 /// text (the data whose keys changed in versions 9 and 10), so it stays
 /// loadable by builds that accept versions 2 to 4.
@@ -86,14 +93,18 @@ const PRE_STARRED_AT_BACKUP_FILE: &str = "state.v9.bak";
 /// chain orders and the user-ordered Home), when it was written at version
 /// 10.
 const PRE_CHAIN_ORDER_BACKUP_FILE: &str = "state.v10.bak";
+/// The state file as it was before it was rewritten at version 12 (which
+/// may hold image attachments), when it was written at version 11.
+const PRE_IMAGE_ATTACHMENTS_BACKUP_FILE: &str = "state.v11.bak";
 /// Every migration backup name; their scratch files are named after them.
-const MIGRATION_BACKUP_FILES: [&str; 6] = [
+const MIGRATION_BACKUP_FILES: [&str; 7] = [
     V2_BACKUP_FILE,
     PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
     PRE_POSTS_BACKUP_FILE,
     PRE_BODY_VERSION_BACKUP_FILE,
     PRE_STARRED_AT_BACKUP_FILE,
     PRE_CHAIN_ORDER_BACKUP_FILE,
+    PRE_IMAGE_ATTACHMENTS_BACKUP_FILE,
 ];
 pub(crate) const STATE_DIR: &str = ".session";
 
@@ -974,12 +985,13 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
 }
 
 /// Preserves the bytes of a state file written at `source_version` (3 to
-/// 10) before a save rewrites state.json at the current version, which the
+/// 11) before a save rewrites state.json at the current version, which the
 /// source's builds refuse, the way `backup_v2_state_for_migration` does for
 /// version 2: versions 3 to 6 as `state.v6.bak`, version 7 as `state.v7.bak`,
-/// version 8 as `state.v8.bak`, version 9 as `state.v9.bak` and version 10
-/// as `state.v10.bak`. Each backup is readable by the builds its name gives.
-/// A current-version source needs none.
+/// version 8 as `state.v8.bak`, version 9 as `state.v9.bak`, version 10 as
+/// `state.v10.bak` and version 11 as `state.v11.bak`. Each backup is
+/// readable by the builds its name gives. A current-version source needs
+/// none.
 pub fn backup_state_for_current_version(
     workspace_root: &Path,
     source_version: u32,
@@ -994,6 +1006,11 @@ pub fn backup_state_for_current_version(
         8 => backup_state_for_migration(workspace_root, PRE_BODY_VERSION_BACKUP_FILE, "version-8"),
         9 => backup_state_for_migration(workspace_root, PRE_STARRED_AT_BACKUP_FILE, "version-9"),
         10 => backup_state_for_migration(workspace_root, PRE_CHAIN_ORDER_BACKUP_FILE, "version-10"),
+        11 => backup_state_for_migration(
+            workspace_root,
+            PRE_IMAGE_ATTACHMENTS_BACKUP_FILE,
+            "version-11",
+        ),
         _ => Ok(None),
     }
 }

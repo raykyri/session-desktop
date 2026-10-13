@@ -2796,12 +2796,18 @@ impl AppState {
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
-                // Research nodes (an envelope with a tagged body, `starredAt`
-                // and `chainOrder`) and `agentComposerText` are read only by
-                // builds that accept version 11; older builds would drop them.
-                // A state without either stays loadable by builds that accept
-                // 2 to 4.
-                version: if model.research_nodes.is_empty() && model.agent_drafts.is_empty() {
+                // Research nodes (an envelope with a tagged body, `starredAt`,
+                // `chainOrder` and image attachments), `agentComposerText`, and
+                // drafts with image attachments are read only by builds that
+                // accept the current version; older builds would drop them. A
+                // state without any stays loadable by builds that accept 2 to 4.
+                version: if model.research_nodes.is_empty()
+                    && model.agent_drafts.is_empty()
+                    && model
+                        .research_drafts
+                        .iter()
+                        .all(|draft| draft.attachments.is_empty())
+                {
                     persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
                 } else {
                     persistence::STATE_VERSION
@@ -13842,7 +13848,7 @@ mod tests {
         let save = || save_pending(&workspace, &png, Some("shot.png")).unwrap();
         let id_of = |attachment: &ResearchMessageAttachment| match attachment {
             ResearchMessageAttachment::Image { id, .. } => id.clone(),
-            ResearchMessageAttachment::Tweet { .. } => unreachable!(),
+            _ => unreachable!(),
         };
         let stored = |id: &str| store_dir(&workspace).join(id).is_file();
         let pending = |id: &str| store_dir(&workspace).join("pending").join(id).is_file();
@@ -13975,6 +13981,68 @@ mod tests {
         crate::research_images::age_file_for_test(&store_dir(&workspace).join(id_of(&second)));
         restarted.delete_research_draft(&draft.id).unwrap();
         assert!(!pending(&id_of(&second)) && !stored(&id_of(&second)));
+    }
+
+    /// Builds that accept up to version 11 drop nodes and drafts with image
+    /// attachments, so a state holding one is written at version 12, and a
+    /// version-11 state is kept as state.v11.bak before it is rewritten.
+    #[test]
+    fn image_attachments_are_written_at_version_twelve() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x02\0\0\0\x02\x08\x06\0\0\0".to_vec();
+        let state = AppState::new(config.clone());
+        assert!(state.restore_session().is_empty());
+        state.insert_group_after(sample_group(), None).unwrap();
+        let path = persistence::state_path(&workspace);
+        let version = || {
+            serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap()
+                ["version"]
+                .clone()
+        };
+        let draft = state
+            .save_research_draft(None, "group-1", "Draft".to_string())
+            .unwrap();
+        assert_eq!(version(), persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES);
+        let image = crate::research_images::save_pending(&workspace, &png, None).unwrap();
+        state
+            .save_research_draft_with_images(
+                Some(draft.id),
+                "group-1",
+                "Draft".to_string(),
+                Some(vec![image]),
+            )
+            .unwrap();
+        assert_eq!(version(), 12);
+        state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Root".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(11);
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let version_eleven_bytes = std::fs::read(&path).unwrap();
+        let restored = AppState::new(config);
+        restored.restore_session();
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        assert_eq!(backup_names(&workspace), vec!["state.v11.bak".to_string()]);
+        assert_eq!(
+            std::fs::read(path.with_file_name("state.v11.bak")).unwrap(),
+            version_eleven_bytes
+        );
+        assert_eq!(version(), 12);
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
@@ -18194,7 +18262,7 @@ mod tests {
             let raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             assert_eq!(raw["version"], persistence::STATE_VERSION);
-            assert_eq!(persistence::STATE_VERSION, 11);
+            assert_eq!(persistence::STATE_VERSION, 12);
             std::fs::remove_dir_all(workspace).unwrap();
         }
     }

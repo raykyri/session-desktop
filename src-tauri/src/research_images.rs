@@ -366,7 +366,7 @@ pub fn image_ids(attachments: &[ResearchMessageAttachment]) -> impl Iterator<Ite
         .iter()
         .filter_map(|attachment| match attachment {
             ResearchMessageAttachment::Image { id, .. } => Some(id.as_str()),
-            ResearchMessageAttachment::Tweet { .. } => None,
+            ResearchMessageAttachment::Tweet { .. } | ResearchMessageAttachment::Unknown(_) => None,
         })
 }
 
@@ -587,7 +587,7 @@ pub fn launch_images(
         .iter()
         .filter_map(|attachment| match attachment {
             ResearchMessageAttachment::Image { id, mime_type, .. } => Some((id, mime_type)),
-            ResearchMessageAttachment::Tweet { .. } => None,
+            ResearchMessageAttachment::Tweet { .. } | ResearchMessageAttachment::Unknown(_) => None,
         })
         .map(|(id, mime_type)| {
             let path = image_path(workspace_root, id).ok_or_else(|| {

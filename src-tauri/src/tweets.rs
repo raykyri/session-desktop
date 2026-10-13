@@ -81,6 +81,29 @@ pub enum ResearchMessageAttachment {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         file_name: Option<String>,
     },
+    /// An attachment of a kind this build does not know, written by a newer
+    /// build. It is kept and written back unchanged, and skipped by
+    /// validation, prompts, and launches. Only an unknown `kind` lands
+    /// here: a known kind with invalid fields still fails to parse.
+    #[serde(untagged, deserialize_with = "unknown_attachment")]
+    Unknown(Value),
+}
+
+/// Reads an attachment whose `kind` is not one of the known variants. Serde
+/// tries the untagged variant after a known variant fails, so a known kind
+/// is refused here to keep its parse error.
+fn unknown_attachment<'de, D>(deserializer: D) -> Result<Value, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value.get("kind").and_then(Value::as_str) {
+        Some(kind @ ("tweet" | "image")) => Err(serde::de::Error::custom(format!(
+            "invalid {kind} attachment"
+        ))),
+        Some(_) => Ok(value),
+        None => Err(serde::de::Error::custom("attachment has no kind")),
+    }
 }
 
 impl ResearchMessageAttachment {
@@ -106,13 +129,19 @@ pub fn validate_research_message_attachments(
     if tweet_count > MAX_TWEETS_PER_MESSAGE {
         return Err("research message contains too many tweet attachments".to_string());
     }
-    if attachments.len() - tweet_count > crate::research_images::MAX_IMAGES_PER_MESSAGE {
+    let image_count = attachments
+        .iter()
+        .filter(|attachment| matches!(attachment, ResearchMessageAttachment::Image { .. }))
+        .count();
+    if image_count > crate::research_images::MAX_IMAGES_PER_MESSAGE {
         return Err("research message contains too many image attachments".to_string());
     }
     let mut seen = HashSet::new();
     for attachment in attachments {
         validate_research_message_attachment(attachment)?;
-        if !seen.insert(attachment_identity(attachment)) {
+        if let Some(identity) = attachment_identity(attachment)
+            && !seen.insert(identity)
+        {
             return Err("research message contains a duplicate attachment".to_string());
         }
     }
@@ -120,11 +149,12 @@ pub fn validate_research_message_attachments(
 }
 
 /// What makes two attachments of one message the same: the tweet's id, or
-/// the image's file.
-fn attachment_identity(attachment: &ResearchMessageAttachment) -> (&'static str, &str) {
+/// the image's file. Unknown kinds have none.
+fn attachment_identity(attachment: &ResearchMessageAttachment) -> Option<(&'static str, &str)> {
     match attachment {
-        ResearchMessageAttachment::Tweet { tweet_id, .. } => ("tweet", tweet_id),
-        ResearchMessageAttachment::Image { id, .. } => ("image", id),
+        ResearchMessageAttachment::Tweet { tweet_id, .. } => Some(("tweet", tweet_id)),
+        ResearchMessageAttachment::Image { id, .. } => Some(("image", id)),
+        ResearchMessageAttachment::Unknown(_) => None,
     }
 }
 
@@ -200,6 +230,7 @@ fn validate_research_message_attachment(
             *byte_size,
             file_name.as_deref(),
         ),
+        ResearchMessageAttachment::Unknown(_) => Ok(()),
     }
 }
 
@@ -1201,6 +1232,39 @@ mod tests {
             .map(|index| image_attachment(&format!("b{index}")))
             .collect::<Vec<_>>();
         assert!(validate_research_message_attachments(&nine).is_err());
+    }
+
+    #[test]
+    fn attachments_of_unknown_kinds_are_kept_verbatim_and_skipped() {
+        let raw = serde_json::json!({
+            "kind": "audio",
+            "id": "clip-1",
+            "nested": { "seconds": 12 },
+        });
+        let decoded: ResearchMessageAttachment = serde_json::from_value(raw.clone()).unwrap();
+        assert_eq!(decoded, ResearchMessageAttachment::Unknown(raw.clone()));
+        assert_eq!(serde_json::to_value(&decoded).unwrap(), raw);
+
+        // Unknown attachments are neither validated, counted as images, nor
+        // compared for duplicates; the known ones beside them still are.
+        let mut attachments = vec![decoded.clone(), decoded.clone()];
+        attachments.extend((0..8).map(|index| image_attachment(&format!("d{index}"))));
+        validate_research_message_attachments(&attachments).unwrap();
+        assert!(!retain_valid_research_message_attachments(&mut attachments));
+        assert_eq!(
+            prompt_with_research_attachments("question".to_string(), &attachments),
+            "question"
+        );
+        assert_eq!(crate::research_images::image_ids(&attachments).count(), 8);
+
+        // A known kind with invalid fields does not fall back to Unknown.
+        assert!(
+            serde_json::from_value::<ResearchMessageAttachment>(serde_json::json!({
+                "kind": "image",
+                "id": 7,
+            }))
+            .is_err()
+        );
     }
 
     #[test]
