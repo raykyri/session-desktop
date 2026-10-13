@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashSet, VecDeque};
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
@@ -113,78 +113,6 @@ pub enum TurnBlock {
     Raw {
         value: Value,
     },
-}
-
-/// Caps one `transcript.append` so a pane cannot flood the tail thread or the
-/// agent's transcript file in a single request.
-pub const MAX_APPEND_LINES: usize = 512;
-pub const MAX_APPEND_LINE_BYTES: usize = 4 * 1024 * 1024;
-
-/// Appends JSONL records produced by an agent running somewhere Session cannot see
-/// the filesystem.
-///
-/// The local transcript file stays the single durable record and the single
-/// thing `start_transcript_tail` watches — a streamed line is written here and
-/// then read back by the tailer exactly like a locally-written one, so nothing
-/// downstream needs to know where the agent ran.
-///
-/// `path` is the caller's *own* recorded `transcript_path`, resolved by the
-/// control socket rather than accepted in an append request. SSH-forwarded
-/// credentials cannot invoke this writer; local bindings retain the adapter's
-/// path validation and run with the same filesystem authority as the agent.
-pub fn append_transcript_lines(path: &Path, lines: &[String]) -> Result<usize, String> {
-    if lines.len() > MAX_APPEND_LINES {
-        return Err(format!(
-            "too many transcript lines in one request ({} > {MAX_APPEND_LINES})",
-            lines.len()
-        ));
-    }
-    // A record is one line. An embedded newline would split into extra records
-    // the agent never wrote — a way to forge turns it did not produce.
-    for line in lines {
-        if line.len() > MAX_APPEND_LINE_BYTES {
-            return Err("transcript line is too large".to_string());
-        }
-        if line.contains('\n') || line.contains('\r') {
-            return Err("transcript lines must not contain newlines".to_string());
-        }
-    }
-    let usable: Vec<&String> = lines
-        .iter()
-        .filter(|line| !line.trim().is_empty())
-        .collect();
-    if usable.is_empty() {
-        return Ok(0);
-    }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("failed to create {}: {err}", parent.display()))?;
-    }
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|err| format!("failed to open {}: {err}", path.display()))?;
-    let mut buffer = String::new();
-    for line in &usable {
-        buffer.push_str(line);
-        buffer.push('\n');
-    }
-    // One write so the tailer, which reads whole lines, never observes a
-    // partially appended batch.
-    file.write_all(buffer.as_bytes())
-        .map_err(|err| format!("failed to append to {}: {err}", path.display()))?;
-    Ok(usable.len())
-}
-
-pub fn start_transcript_tail(
-    state: AppState,
-    agent_id: String,
-    transcript_path: String,
-    adapter_id: String,
-) {
-    start_transcript_tail_inner(state, agent_id, transcript_path, adapter_id, true, None);
 }
 
 /// Remote mirrors arrive in batches. Only records beyond the connection's
@@ -822,12 +750,6 @@ fn gather_transcript_candidates(dir: &Path) -> Result<Vec<TranscriptCandidate>, 
     gather_transcript_candidates_in(dir, false)
 }
 
-pub(crate) fn gather_transcript_candidates_recursive(
-    dir: &Path,
-) -> Result<Vec<TranscriptCandidate>, String> {
-    gather_transcript_candidates_in(dir, true)
-}
-
 fn gather_transcript_candidates_in(
     dir: &Path,
     recursive: bool,
@@ -917,45 +839,6 @@ fn select_newest_transcript_candidate(
                 .then(left.path.cmp(&right.path))
         })
         .cloned()
-}
-
-pub(crate) fn codex_transcript_session_id(path: &Path) -> Option<String> {
-    read_codex_transcript_session_id(path).ok().flatten()
-}
-
-pub(crate) fn read_codex_transcript_session_id(path: &Path) -> Result<Option<String>, String> {
-    let file = fs::File::open(path)
-        .map_err(|err| format!("failed to open Codex transcript {}: {err}", path.display()))?;
-    let mut reader = BufReader::new(file);
-    let mut first = String::new();
-    let bytes = reader
-        .read_line(&mut first)
-        .map_err(|err| format!("failed to read Codex transcript {}: {err}", path.display()))?;
-    if bytes == 0 {
-        return Ok(None);
-    }
-
-    let terminated = first.ends_with('\n');
-    let first = first.trim_end_matches(['\n', '\r']);
-    let value = match serde_json::from_str::<Value>(first) {
-        Ok(value) => value,
-        Err(_) if !terminated => return Ok(None),
-        Err(err) => {
-            return Err(format!(
-                "Codex transcript {} does not start with valid JSON: {err}",
-                path.display()
-            ));
-        }
-    };
-    if value.get("type").and_then(Value::as_str) != Some("session_meta") {
-        return Err(format!(
-            "Codex transcript {} does not start with session_meta",
-            path.display()
-        ));
-    }
-    Ok(value
-        .get("payload")
-        .and_then(|payload| string_field(payload, "id")))
 }
 
 pub(crate) fn string_field(value: &Value, key: &str) -> Option<String> {
@@ -1483,113 +1366,7 @@ mod timestamp_tests {
 }
 
 #[cfg(test)]
-mod append_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-
-    fn scratch() -> PathBuf {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "session-append-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, AtomicOrdering::Relaxed)
-        ));
-        fs::create_dir_all(&dir).expect("scratch dir");
-        dir.join("session.jsonl")
-    }
-
-    fn read(path: &Path) -> Vec<String> {
-        fs::read_to_string(path)
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_string)
-            .collect()
-    }
-
-    #[test]
-    fn streamed_lines_land_as_records_the_tailer_can_read() {
-        let path = scratch();
-        let appended = append_transcript_lines(
-            &path,
-            &[
-                r#"{"type":"turn"}"#.to_string(),
-                r#"{"type":"x"}"#.to_string(),
-            ],
-        )
-        .expect("appends");
-        assert_eq!(appended, 2);
-        assert_eq!(read(&path), [r#"{"type":"turn"}"#, r#"{"type":"x"}"#]);
-
-        // A second batch appends rather than replacing; the file is the one
-        // durable record for the session.
-        append_transcript_lines(&path, &[r#"{"type":"y"}"#.to_string()]).expect("appends");
-        assert_eq!(read(&path).len(), 3);
-    }
-
-    #[test]
-    fn the_parent_directory_is_created_for_a_first_write() {
-        let path = scratch()
-            .parent()
-            .unwrap()
-            .join("nested/deep/session.jsonl");
-        append_transcript_lines(&path, &[r#"{"type":"turn"}"#.to_string()]).expect("appends");
-        assert!(path.is_file());
-    }
-
-    #[test]
-    fn a_line_containing_a_newline_is_refused() {
-        // One record is one line. An embedded newline would split into extra
-        // records the agent never wrote — a way to forge turns.
-        let path = scratch();
-        for forged in [
-            "{\"a\":1}\n{\"forged\":true}",
-            "{\"a\":1}\r{\"forged\":true}",
-        ] {
-            let err =
-                append_transcript_lines(&path, &[forged.to_string()]).expect_err("should refuse");
-            assert!(err.contains("must not contain newlines"), "{err}");
-        }
-        assert!(read(&path).is_empty(), "nothing should have been written");
-    }
-
-    #[test]
-    fn oversized_batches_and_lines_are_refused() {
-        let path = scratch();
-        let many: Vec<String> = (0..MAX_APPEND_LINES + 1)
-            .map(|_| "{}".to_string())
-            .collect();
-        assert!(append_transcript_lines(&path, &many).is_err());
-
-        let huge = vec!["x".repeat(MAX_APPEND_LINE_BYTES + 1)];
-        assert!(append_transcript_lines(&path, &huge).is_err());
-        assert!(read(&path).is_empty());
-    }
-
-    #[test]
-    fn blank_lines_are_dropped_rather_than_written() {
-        let path = scratch();
-        let appended =
-            append_transcript_lines(&path, &[String::new(), "   ".to_string()]).expect("ok");
-        assert_eq!(appended, 0);
-        // An empty batch must not bring the file into existence: a transcript
-        // that exists but is empty reads as "the agent said nothing", where
-        // absent reads as "nothing has been recorded yet".
-        assert!(!path.exists(), "an empty batch should touch nothing");
-    }
-
-    #[test]
-    fn a_batch_is_written_whole_so_the_tailer_never_sees_half_of_it() {
-        let path = scratch();
-        let lines: Vec<String> = (0..50).map(|i| format!(r#"{{"n":{i}}}"#)).collect();
-        append_transcript_lines(&path, &lines).expect("appends");
-        let written = read(&path);
-        assert_eq!(written.len(), 50);
-        assert_eq!(written[49], r#"{"n":49}"#);
-        // Every line is terminated, so a reader splitting on newline gets whole
-        // records and never a truncated trailing one.
-        assert!(fs::read_to_string(&path).unwrap().ends_with('\n'));
-    }
-}
+mod append_tests {}
 
 #[cfg(test)]
 mod tests {
@@ -1833,35 +1610,6 @@ mod tests {
         let agent = state.agent("agent-1").unwrap().expect("agent exists");
         assert!(matches!(agent.status, AgentStatus::AwaitingInput));
         assert!(!agent.paused);
-    }
-
-    #[test]
-    fn transcript_lifecycle_interruption_holds_queued_turns() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(AgentStatus::Running))
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "follow up".to_string())
-            .unwrap();
-
-        let event = transcript_lifecycle_agent_event(
-            &state,
-            "agent-1",
-            "/tmp/session.jsonl",
-            TranscriptLifecycleEvent::Interrupted,
-        )
-        .unwrap()
-        .expect("interruption should emit an agent event");
-
-        assert_eq!(event.event_type, "agent.interrupted");
-        let agent = state.agent("agent-1").unwrap().expect("agent exists");
-        assert!(matches!(agent.status, AgentStatus::AwaitingInput));
-        assert!(agent.paused);
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["follow up".to_string()]
-        );
     }
 
     #[test]
@@ -2177,32 +1925,6 @@ mod tests {
             .expect("an unclaimed candidate remains");
 
         assert_eq!(selected.path, PathBuf::from("/tmp/a.jsonl"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn recursive_transcript_scan_ignores_symlink_cycles_and_files() {
-        use std::os::unix::fs::symlink;
-
-        let dir = std::env::temp_dir().join(format!(
-            "session-transcript-symlinks-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or_default()
-        ));
-        let nested = dir.join("nested");
-        fs::create_dir_all(&nested).unwrap();
-        let transcript = nested.join("session.jsonl");
-        fs::write(&transcript, "{}\n").unwrap();
-        symlink(&dir, nested.join("cycle")).unwrap();
-        symlink(&transcript, dir.join("linked.jsonl")).unwrap();
-
-        let candidates = gather_transcript_candidates_recursive(&dir).unwrap();
-        assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].path, transcript);
-
-        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

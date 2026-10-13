@@ -16,10 +16,7 @@ use crate::research::{
 use crate::scrollback::remove_pane_scrollback;
 use crate::thread_graph;
 use crate::transcript::Turn;
-use crate::workspace::{
-    ActiveWorkspace, ActiveWorkspaceKind, AgentInfo, AgentStatus, GroupInfo, WorkspaceScope,
-    group_recoverable_dir,
-};
+use crate::workspace::{ActiveWorkspace, AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
 use portable_pty::{Child, MasterPty};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -114,91 +111,6 @@ impl PaneBackend {
     }
 }
 
-/// Upper bound on a pane's reported working directory. Above the expected
-/// real filesystem path (PATH_MAX is typically 1024–4096) while bounding what an
-/// in-pane process can push into persisted state via the control socket.
-const MAX_PANE_CWD_LEN: usize = 8192;
-
-fn validate_workspace_path(label: &str, path: &str) -> Result<(), String> {
-    if path.len() > MAX_PANE_CWD_LEN || path.chars().any(char::is_control) {
-        return Err(format!("reported {label} is invalid; refusing to persist"));
-    }
-    if !std::path::Path::new(path).is_absolute() {
-        return Err(format!(
-            "reported {label} must be absolute; refusing to persist"
-        ));
-    }
-    Ok(())
-}
-
-fn validate_reported_workspace(cwd: &str, workspace: &ActiveWorkspace) -> Result<(), String> {
-    if workspace.cwd != cwd {
-        return Err("reported workspace cwd does not match pane cwd".to_string());
-    }
-    validate_workspace_path("workspace cwd", &workspace.cwd)?;
-    if let Some(root) = workspace.git_root.as_deref() {
-        validate_workspace_path("Git root", root)?;
-    }
-    if workspace.branch.as_ref().is_some_and(|branch| {
-        branch.len() > 4096 || branch.is_empty() || branch.chars().any(char::is_control)
-    }) {
-        return Err("reported Git branch is invalid; refusing to persist".to_string());
-    }
-    match workspace.kind {
-        ActiveWorkspaceKind::Directory
-            if workspace.git_root.is_some() || workspace.branch.is_some() =>
-        {
-            Err("directory workspace cannot contain Git metadata".to_string())
-        }
-        ActiveWorkspaceKind::GitCheckout
-        | ActiveWorkspaceKind::MainCheckout
-        | ActiveWorkspaceKind::LinkedWorktree
-            if workspace.git_root.is_none() =>
-        {
-            Err("Git workspace is missing its root".to_string())
-        }
-        _ => Ok(()),
-    }
-}
-
-/// Whether a freshly resolved shell workspace describes the same checkout scope
-/// as another pane or agent workspace. Exact cwd matching lets a first successful
-/// Git observation populate peers that do not have cached workspace metadata yet;
-/// matching canonical checkout roots extends the refresh to sibling directories.
-fn workspace_observation_matches(
-    target_cwd: &str,
-    target_workspace: Option<&ActiveWorkspace>,
-    observed_cwd: &str,
-    observed_workspace: &ActiveWorkspace,
-) -> bool {
-    if target_cwd == observed_cwd {
-        return true;
-    }
-    match (
-        target_workspace.and_then(|workspace| workspace.git_root.as_deref()),
-        observed_workspace.git_root.as_deref(),
-    ) {
-        (Some(target_root), Some(observed_root)) => target_root == observed_root,
-        _ => false,
-    }
-}
-
-/// Retarget a checkout-wide observation to one pane or agent without replacing
-/// adapter-specific provenance or Session ownership metadata already attached to it.
-fn propagated_workspace(
-    observed: &ActiveWorkspace,
-    current: Option<&ActiveWorkspace>,
-    target_cwd: &str,
-) -> ActiveWorkspace {
-    let mut next = observed.clone();
-    next.cwd = target_cwd.to_string();
-    if let Some(current) = current {
-        next.source = current.source;
-        next.managed_by_session = current.managed_by_session;
-    }
-    next
-}
-
 /// Upper bound on the parsed transcript turns retained in memory per agent. The
 /// store feeds the UI timeline on (re)connect and crash recovery; without a cap a
 /// long session — or selecting a large transcript, which reparses the whole file —
@@ -206,16 +118,6 @@ fn propagated_workspace(
 /// the cap the oldest turns are dropped (the live timeline still streams every new
 /// turn to the frontend as it arrives).
 const MAX_TURNS_PER_AGENT: usize = 200;
-
-/// Upper bound on pending turns queued for a single agent. This is a safety
-/// ceiling against unbounded growth (memory plus a larger `state.json` rewritten
-/// on every persist), not an expected limit — enqueue past it returns an error the
-/// UI surfaces rather than silently swallowing the turn.
-const MAX_QUEUED_TURNS_PER_AGENT: usize = 500;
-
-/// Upper bound on artifact-tray entries per workspace group; the oldest entries
-/// fall off first, so a long-running workspace can't grow state.json forever.
-const MAX_ARTIFACTS_PER_GROUP: usize = 50;
 
 /// How long the persister thread lets a burst of mutations settle before taking
 /// its snapshot. Long enough to fold an agent's status-hook storm (or a window
@@ -442,10 +344,6 @@ pub struct FinishedAgentForkDispatch {
 }
 
 impl ActiveSubagents {
-    fn count(&self) -> usize {
-        self.identified.len().saturating_add(self.anonymous)
-    }
-
     fn is_empty(&self) -> bool {
         self.identified.is_empty() && self.anonymous == 0
     }
@@ -792,18 +690,7 @@ pub struct QueuedTurn {
     pub possibly_pasted: bool,
 }
 
-impl QueuedTurn {
-    pub fn new(text: String) -> Self {
-        Self {
-            id: new_queued_turn_id(),
-            text,
-            pause_after: false,
-            wait_for: None,
-            delivery: None,
-            possibly_pasted: false,
-        }
-    }
-}
+impl QueuedTurn {}
 
 impl<'de> Deserialize<'de> for QueuedTurn {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -876,24 +763,6 @@ pub enum IdleAdvance {
     Busy,
     /// Nothing was sent; the agent has been settled to the requested ready status.
     Idle,
-}
-
-fn enqueue_queued_turn_locked(
-    model: &mut Model,
-    agent_id: &str,
-    turn: QueuedTurn,
-) -> Result<usize, String> {
-    let queue = model
-        .agent_turn_queues
-        .entry(agent_id.to_string())
-        .or_default();
-    if queue.len() >= MAX_QUEUED_TURNS_PER_AGENT {
-        return Err(format!(
-            "turn queue is full ({MAX_QUEUED_TURNS_PER_AGENT} pending turns); wait for the agent to drain before queueing more"
-        ));
-    }
-    queue.push_back(turn);
-    Ok(queue.len())
 }
 
 fn path_is_ancestor_or_equal(ancestor: &std::path::Path, descendant: &std::path::Path) -> bool {
@@ -1095,31 +964,6 @@ fn migrate_thread_records_to_global(
         }
     }
     warnings
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    tag = "status"
-)]
-pub enum AgentPromptSubmitMatch {
-    Matched {
-        source: AgentSendSource,
-        outstanding_sends: usize,
-    },
-    Mismatched {
-        expected: String,
-        actual: String,
-        outstanding_sends: usize,
-    },
-    Untracked {
-        actual: String,
-        outstanding_sends: usize,
-    },
-    MissingPrompt {
-        outstanding_sends: usize,
-    },
 }
 
 /// What a submit-confirmation watch observes when it re-checks a send it wrote to a
@@ -1663,38 +1507,6 @@ impl AppState {
         }
     }
 
-    pub fn register_shell_agent_job(
-        &self,
-        job_id: String,
-        agent_id: String,
-        pane_id: String,
-        supervisor_pid: u32,
-    ) -> Result<ShellAgentJobInfo, String> {
-        if job_id.trim().is_empty() || supervisor_pid == 0 {
-            return Err("shell agent job metadata is invalid".to_string());
-        }
-        let info = ShellAgentJobInfo {
-            job_id: job_id.clone(),
-            agent_id,
-            pane_id,
-            state: ShellAgentJobState::Foreground,
-        };
-        let mut jobs = self
-            .inner
-            .shell_agent_jobs
-            .lock()
-            .map_err(|_| "shell agent job lock poisoned".to_string())?;
-        jobs.insert(
-            job_id,
-            ShellAgentJob {
-                info: info.clone(),
-                supervisor_pid,
-                missing_samples: 0,
-            },
-        );
-        Ok(info)
-    }
-
     pub(crate) fn shell_agent_job_targets(&self) -> Vec<ShellAgentJobTarget> {
         self.inner
             .shell_agent_jobs
@@ -1736,23 +1548,6 @@ impl AppState {
             return None;
         }
         jobs.remove(job_id).map(|job| job.info)
-    }
-
-    pub fn unregister_shell_agent_job(
-        &self,
-        job_id: &str,
-        agent_id: Option<&str>,
-        pane_id: Option<&str>,
-    ) -> Option<ShellAgentJobInfo> {
-        let mut jobs = self.inner.shell_agent_jobs.lock().ok()?;
-        let matches = jobs.get(job_id).is_some_and(|job| {
-            agent_id.is_none_or(|agent_id| job.info.agent_id == agent_id)
-                && pane_id.is_none_or(|pane_id| job.info.pane_id == pane_id)
-        });
-        matches
-            .then(|| jobs.remove(job_id))
-            .flatten()
-            .map(|job| job.info)
     }
 
     pub fn unregister_shell_agent_jobs_for_pane(&self, pane_id: &str) -> Vec<ShellAgentJobInfo> {
@@ -1844,14 +1639,6 @@ impl AppState {
             .join("default")
     }
 
-    /// The working directory a newly opened shell should inherit from `pane_id`: the
-    /// live cwd of that pane when it is a shell whose directory still exists. Agent
-    /// panes (rooted in a worktree) and stale or missing directories yield `None`, so
-    /// the caller falls back to `default_open_dir`.
-    pub fn inheritable_shell_cwd(&self, pane_id: &str) -> Option<std::path::PathBuf> {
-        self.inheritable_cwd(pane_id, true)
-    }
-
     /// Live cwd of `pane_id` when that directory still exists, including agent
     /// panes. Used when a new tab should follow the current tab into a
     /// subdirectory of the target group.
@@ -1873,48 +1660,6 @@ impl AppState {
             .is_some_and(GroupInfo::is_remote);
         let cwd = std::path::PathBuf::from(&pane.info.cwd);
         (remote || cwd.is_dir()).then_some(cwd)
-    }
-
-    /// Directory a newly opened shell in `group` should start in.
-    ///
-    /// Preference order:
-    /// 1. `cwd_override` when it still exists
-    /// 2. The current tab's live cwd when that directory is inside `group.dir`
-    ///    (a tab that has `cd`'d into a subdirectory of the group)
-    /// 3. The current tab's cwd when it is a shell in this group ("new tab here",
-    ///    including when the shell has `cd`'d outside the group)
-    /// 4. The group's most-recently-active shell
-    /// 5. `group.dir`
-    /// 6. The default open dir
-    pub fn resolve_shell_spawn_cwd(
-        &self,
-        group: &GroupInfo,
-        source_pane_id: Option<&str>,
-        cwd_override: Option<&str>,
-    ) -> Result<std::path::PathBuf, String> {
-        if let Some(cwd) = cwd_override.map(str::trim).filter(|cwd| !cwd.is_empty()) {
-            return group_recoverable_dir(group.remote.as_ref(), cwd)
-                .ok_or_else(|| format!("shell working directory {cwd} does not exist"));
-        }
-
-        if let Some(cwd) = source_pane_id.and_then(|id| self.inheritable_pane_cwd(id))
-            && path_is_ancestor_or_equal(std::path::Path::new(&group.dir), &cwd)
-        {
-            return Ok(cwd);
-        }
-
-        let same_group_shell = source_pane_id
-            .filter(|&id| {
-                self.pane_group_id(id)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|gid| gid == group.id)
-            })
-            .and_then(|id| self.inheritable_shell_cwd(id));
-        Ok(same_group_shell
-            .or_else(|| self.group_spawn_cwd(&group.id))
-            .or_else(|| group_recoverable_dir(group.remote.as_ref(), &group.dir))
-            .unwrap_or_else(|| self.default_open_dir()))
     }
 
     /// The advisory cwd for spawning into `group_id`: the live cwd of the group's
@@ -3015,18 +2760,6 @@ impl AppState {
         Ok(())
     }
 
-    /// Resolves a restricted SSH-forwarded credential to its owning pane.
-    pub fn pane_for_remote_token(&self, token: &str) -> Option<String> {
-        let tokens = self
-            .inner
-            .remote_tokens
-            .lock()
-            .unwrap_or_else(|err| err.into_inner());
-        tokens
-            .iter()
-            .find_map(|(pane_id, pane_token)| (pane_token == token).then(|| pane_id.clone()))
-    }
-
     pub fn pane_user_token(&self, pane_id: &str) -> Result<String, String> {
         let mut tokens = self
             .inner
@@ -3171,39 +2904,6 @@ impl AppState {
         Ok(ordered_panes(&model))
     }
 
-    pub fn pane_splits(&self) -> Result<Vec<PaneSplitInfo>, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        normalize_pane_splits_locked(&mut model);
-        Ok(model.pane_splits.clone())
-    }
-
-    pub fn set_pane_splits(
-        &self,
-        splits: Vec<PaneSplitInfo>,
-    ) -> Result<Vec<PaneSplitInfo>, String> {
-        let normalized = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model.pane_splits = normalized_pane_splits(&model, splits, true)?;
-            model.pane_splits.clone()
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "pane.splits_changed",
-            None,
-            None,
-            serde_json::json!({ "splits": normalized }),
-        ));
-        Ok(normalized)
-    }
-
     pub fn list_groups(&self) -> Result<Vec<GroupInfo>, String> {
         let model = self
             .inner
@@ -3230,71 +2930,6 @@ impl AppState {
         Ok(model.agents.values().cloned().collect())
     }
 
-    /// Records an artifact-tray entry for `pane_id`, deduplicating on the target
-    /// within the pane's group (a re-open bumps the entry to newest instead of
-    /// duplicating it) and capping the group's tray at `MAX_ARTIFACTS_PER_GROUP`.
-    /// Emits `artifact.added` carrying the entry plus any ids it displaced.
-    pub fn record_artifact(
-        &self,
-        pane_id: &str,
-        path: Option<String>,
-        url: Option<String>,
-    ) -> Result<ArtifactInfo, String> {
-        let mut artifact = ArtifactInfo {
-            id: self.next_id("artifact"),
-            group_id: self.pane_group_id(pane_id)?,
-            pane_id: pane_id.to_string(),
-            path,
-            url,
-            created_at: now_millis(),
-        };
-        normalize_artifact_target(&mut artifact)
-            .ok_or_else(|| "an artifact needs a valid path or loopback URL".to_string())?;
-        let removed_ids = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let mut removed = Vec::new();
-            model.artifacts.retain(|existing| {
-                let duplicate = existing.group_id == artifact.group_id
-                    && existing.path == artifact.path
-                    && existing.url == artifact.url;
-                if duplicate {
-                    removed.push(existing.id.clone());
-                }
-                !duplicate
-            });
-            model.artifacts.push(artifact.clone());
-            // The vec is oldest-first, so trimming a too-large group from the
-            // front drops its oldest entries and can never evict the new one.
-            let in_group = model
-                .artifacts
-                .iter()
-                .filter(|entry| entry.group_id == artifact.group_id)
-                .count();
-            let mut to_drop = in_group.saturating_sub(MAX_ARTIFACTS_PER_GROUP);
-            model.artifacts.retain(|entry| {
-                if to_drop > 0 && entry.group_id == artifact.group_id {
-                    to_drop -= 1;
-                    removed.push(entry.id.clone());
-                    return false;
-                }
-                true
-            });
-            removed
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "artifact.added",
-            Some(pane_id.to_string()),
-            None,
-            serde_json::json!({ "artifact": artifact, "removedIds": removed_ids }),
-        ));
-        Ok(artifact)
-    }
-
     pub fn list_artifacts(&self) -> Result<Vec<ArtifactInfo>, String> {
         let model = self
             .inner
@@ -3316,23 +2951,6 @@ impl AppState {
             .find(|entry| entry.id == artifact_id)
             .cloned()
             .ok_or_else(|| format!("artifact {artifact_id} was not found"))
-    }
-
-    pub fn list_turns(&self, agent_id: Option<&str>) -> Result<Vec<Turn>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        if let Some(agent_id) = agent_id {
-            Ok(model.turns.get(agent_id).cloned().unwrap_or_default())
-        } else {
-            Ok(model
-                .turns
-                .values()
-                .flat_map(|turns| turns.iter().cloned())
-                .collect())
-        }
     }
 
     /// Snapshots the source side of a fork before the child process starts.
@@ -5743,30 +5361,6 @@ impl AppState {
         Ok(node)
     }
 
-    pub fn active_research_node_for_pane(
-        &self,
-        pane_id: &str,
-    ) -> Result<Option<ResearchNode>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .research_nodes
-            .values()
-            .find(|node| node.pane_id() == Some(pane_id) && node.status().is_active())
-            .cloned())
-    }
-
-    pub fn close_pane_for_user(&self, pane_id: &str) -> Result<(), String> {
-        if let Some(node) = self.active_research_node_for_pane(pane_id)? {
-            self.cancel_research_node(&node.id).map(|_| ())
-        } else {
-            crate::pty::kill_pane(self, pane_id.to_string())
-        }
-    }
-
     pub fn detach_research_pane(&self, pane_id: &str) -> Result<Option<ResearchNode>, String> {
         self.detach_research_pane_inner(pane_id, None)
     }
@@ -8038,111 +7632,6 @@ impl AppState {
         Ok(updated)
     }
 
-    /// Registers a provisional transcript identity for an agent. Repeated hooks
-    /// carrying the same candidate share the in-flight validator; a different
-    /// candidate supersedes it and receives a new generation.
-    pub(crate) fn begin_transcript_binding_candidate(
-        &self,
-        agent_id: &str,
-        session_id: Option<&str>,
-        transcript_path: Option<&str>,
-    ) -> Result<Option<u64>, String> {
-        let mut candidates = self
-            .inner
-            .transcript_binding_candidates
-            .lock()
-            .map_err(|_| "transcript binding candidate lock poisoned".to_string())?;
-        if candidates.get(agent_id).is_some_and(|candidate| {
-            candidate.session_id.as_deref() == session_id
-                && (candidate.transcript_path.as_deref() == transcript_path
-                    // A later lifecycle hook commonly repeats the same session id
-                    // without the explicit path from SessionStart. Keep the richer
-                    // validator instead of replacing it with directory discovery.
-                    || candidate.transcript_path.is_some() && transcript_path.is_none())
-        }) {
-            return Ok(None);
-        }
-        let generation = self
-            .inner
-            .next_transcript_binding_candidate
-            .fetch_add(1, Ordering::Relaxed);
-        candidates.insert(
-            agent_id.to_string(),
-            TranscriptBindingCandidate {
-                generation,
-                session_id: session_id.map(ToOwned::to_owned),
-                transcript_path: transcript_path.map(ToOwned::to_owned),
-            },
-        );
-        Ok(Some(generation))
-    }
-
-    pub(crate) fn transcript_binding_candidate_is_current(
-        &self,
-        agent_id: &str,
-        generation: u64,
-    ) -> bool {
-        self.inner
-            .transcript_binding_candidates
-            .lock()
-            .ok()
-            .and_then(|candidates| {
-                candidates
-                    .get(agent_id)
-                    .map(|candidate| candidate.generation)
-            })
-            == Some(generation)
-    }
-
-    /// Atomically promotes a validated transcript candidate to the agent's
-    /// canonical identity. Holding the candidate lock across the field-scoped
-    /// model mutation prevents a superseding SessionStart from racing between
-    /// the generation check and the commit.
-    pub(crate) fn commit_transcript_binding_candidate(
-        &self,
-        agent_id: &str,
-        generation: u64,
-        session_id: &str,
-        transcript_path: &str,
-    ) -> Result<Option<AgentInfo>, String> {
-        let mut candidates = self
-            .inner
-            .transcript_binding_candidates
-            .lock()
-            .map_err(|_| "transcript binding candidate lock poisoned".to_string())?;
-        if candidates
-            .get(agent_id)
-            .map(|candidate| candidate.generation)
-            != Some(generation)
-        {
-            return Ok(None);
-        }
-        let updated = self.mutate_agent(agent_id, |agent| {
-            agent.session_id = Some(session_id.to_string());
-            agent.transcript_path = Some(transcript_path.to_string());
-        })?;
-        if candidates
-            .get(agent_id)
-            .map(|candidate| candidate.generation)
-            == Some(generation)
-        {
-            candidates.remove(agent_id);
-        }
-        Ok(updated)
-    }
-
-    pub(crate) fn clear_transcript_binding_candidate(&self, agent_id: &str, generation: u64) {
-        if let Ok(mut candidates) = self.inner.transcript_binding_candidates.lock() {
-            if candidates
-                .get(agent_id)
-                .map(|candidate| candidate.generation)
-                == Some(generation)
-            {
-                candidates.remove(agent_id);
-            }
-        }
-    }
-
     /// Records display-only workspace metadata only while the reporting tail
     /// still owns the agent's transcript binding. Git resolution happens
     /// outside this lock, so the binding must be rechecked here to prevent an
@@ -8276,82 +7765,6 @@ impl AppState {
         Ok(updated)
     }
 
-    /// Records a background subagent starting under `agent_id`. The lifecycle
-    /// bump also invalidates a delayed parent-Stop resolver that raced this hook.
-    pub fn agent_subagent_started(
-        &self,
-        agent_id: &str,
-        subagent_id: Option<&str>,
-    ) -> Result<usize, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let active = model
-            .agent_active_subagents
-            .entry(agent_id.to_string())
-            .or_default();
-        match subagent_id.map(str::trim).filter(|id| !id.is_empty()) {
-            Some(id) => {
-                active.identified.insert(id.to_string());
-            }
-            None => active.anonymous = active.anonymous.saturating_add(1),
-        }
-        let count = active.count();
-        bump_agent_activity_locked(&mut model, agent_id);
-        bump_agent_status_activity_locked(&mut model, agent_id);
-        Ok(count)
-    }
-
-    /// Records one background subagent settling. Reaching zero does not finish
-    /// the parent: it still needs a synthesis turn and a later parent Stop.
-    ///
-    /// Returns `Some(remaining)` when the stop matched tracked work, `None` for
-    /// a stop with nothing tracked (late, duplicate, or never-started) so
-    /// callers can leave the parent's status alone. Start/stop id asymmetry —
-    /// one side of the pair carrying an id the other lacks — still settles one
-    /// tracked subagent rather than leaving the counter wedged above zero.
-    pub fn agent_subagent_stopped(
-        &self,
-        agent_id: &str,
-        subagent_id: Option<&str>,
-    ) -> Result<Option<usize>, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let remaining = match model.agent_active_subagents.get_mut(agent_id) {
-            Some(active) => {
-                match subagent_id.map(str::trim).filter(|id| !id.is_empty()) {
-                    Some(id) => {
-                        if !active.identified.remove(id) {
-                            active.anonymous = active.anonymous.saturating_sub(1);
-                        }
-                    }
-                    None => {
-                        if active.anonymous > 0 {
-                            active.anonymous -= 1;
-                        } else if let Some(any) = active.identified.iter().next().cloned() {
-                            // An anonymous stop still means one subagent settled;
-                            // which tracked id it was is unknowable, so retire any.
-                            active.identified.remove(&any);
-                        }
-                    }
-                }
-                Some(active.count())
-            }
-            None => None,
-        };
-        if remaining.is_none_or(|remaining| remaining == 0) {
-            model.agent_active_subagents.remove(agent_id);
-        }
-        bump_agent_activity_locked(&mut model, agent_id);
-        bump_agent_status_activity_locked(&mut model, agent_id);
-        Ok(remaining)
-    }
-
     pub fn agent_has_active_subagents(&self, agent_id: &str) -> Result<bool, String> {
         let model = self
             .inner
@@ -8362,46 +7775,6 @@ impl AppState {
             .agent_active_subagents
             .get(agent_id)
             .is_some_and(|active| !active.is_empty()))
-    }
-
-    pub fn clear_agent_subagents(&self, agent_id: &str) {
-        if let Ok(mut model) = self.inner.model.lock() {
-            model.agent_active_subagents.remove(agent_id);
-        }
-    }
-
-    /// Records whether the agent's most recent Stop reported still-running
-    /// background tasks, so the idle-prompt boundary can honor the same wait
-    /// the Stop handler established (see the field's doc for lifecycle).
-    pub fn set_agent_background_tasks_reported(
-        &self,
-        agent_id: &str,
-        reported: bool,
-    ) -> Result<(), String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        if reported {
-            model
-                .agents_with_reported_background_tasks
-                .insert(agent_id.to_string());
-        } else {
-            model.agents_with_reported_background_tasks.remove(agent_id);
-        }
-        Ok(())
-    }
-
-    pub fn agent_has_reported_background_tasks(&self, agent_id: &str) -> Result<bool, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .agents_with_reported_background_tasks
-            .contains(agent_id))
     }
 
     fn sync_research_node_from_agent(&self, agent: &AgentInfo) -> Result<bool, String> {
@@ -9033,31 +8406,6 @@ impl AppState {
         ));
     }
 
-    /// Test convenience: queues a plain text turn with no directives. Production
-    /// callers build a [`QueuedTurn`] and use [`Self::enqueue_agent_queued_turn`].
-    #[cfg(test)]
-    pub fn enqueue_agent_turn(&self, agent_id: &str, data: String) -> Result<usize, String> {
-        self.enqueue_agent_queued_turn(agent_id, QueuedTurn::new(data))
-    }
-
-    /// Queues a fully-formed turn (text plus any pause/wait/delivery directives).
-    pub fn enqueue_agent_queued_turn(
-        &self,
-        agent_id: &str,
-        turn: QueuedTurn,
-    ) -> Result<usize, String> {
-        let len = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            enqueue_queued_turn_locked(&mut model, agent_id, turn)?
-        };
-        self.persist();
-        Ok(len)
-    }
-
     /// Queued turn texts only — used by the drain path, expected-data matching, and
     /// tests. The structured view (with pause flags) is `agent_queued_turns`.
     pub fn list_agent_turn_queue(&self, agent_id: &str) -> Result<Vec<String>, String> {
@@ -9206,57 +8554,6 @@ impl AppState {
         false
     }
 
-    /// Reserves the draining guard for a direct (user-initiated) send, serializing it
-    /// against queue drains through the same `agent_draining` flag. Returns `false`
-    /// when a drain — or another direct send — already owns the agent, so the caller
-    /// should queue behind it instead of writing a second turn into the same pane
-    /// concurrently. Pair every `true` with [`finish_agent_drain`].
-    pub fn begin_direct_send(&self, agent_id: &str) -> Result<bool, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        if model.agent_draining.contains(agent_id)
-            || model.agent_fork_barriers.contains_key(agent_id)
-        {
-            return Ok(false);
-        }
-        model.agent_draining.insert(agent_id.to_string());
-        Ok(true)
-    }
-
-    /// Queues a direct send that lost the drain reservation race. Queue insertion and
-    /// its wakeup marker are one model-lock transaction: a fork-ready hook cannot
-    /// remove the barrier between those two operations, and a failed enqueue cannot
-    /// accidentally turn manual send-next into automatic queue draining.
-    pub fn enqueue_agent_queued_turn_after_direct_contention(
-        &self,
-        agent_id: &str,
-        turn: QueuedTurn,
-    ) -> Result<usize, String> {
-        let len = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let len = enqueue_queued_turn_locked(&mut model, agent_id, turn)?;
-            if let Some(barrier) = model.agent_fork_barriers.get_mut(agent_id) {
-                barrier.resume_queue = true;
-            } else if model.agent_draining.contains(agent_id) {
-                // The contending owner may be between popping `/fork` and installing
-                // its child barrier. begin_agent_fork_barrier consumes this marker.
-                model
-                    .agent_deferred_queue_resume
-                    .insert(agent_id.to_string());
-            }
-            len
-        };
-        self.persist();
-        Ok(len)
-    }
-
     /// Installs the live fork barrier after the child process has spawned but before
     /// the source's ordinary drain guard is released. The readiness check and insert
     /// share the model lock with prompt-hook accounting, closing both orderings of the
@@ -9360,70 +8657,6 @@ impl AppState {
             ready,
             resume_queue,
         })
-    }
-
-    pub fn agent_fork_barrier_active(&self, source_agent_id: &str) -> Result<bool, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.agent_fork_barriers.contains_key(source_agent_id))
-    }
-
-    /// Removes a barrier only when the child has both a distinct native-session id
-    /// and at least one authenticated prompt-submit hook. Either signal alone is too
-    /// early for native forks: startup may briefly report the source identity, while
-    /// merely allocating the child session does not prove its launch prompt was
-    /// accepted. Returns the source whose queue may now resume.
-    pub fn take_ready_agent_fork_barrier(
-        &self,
-        child_agent_id: &str,
-    ) -> Result<Option<ReleasedAgentForkBarrier>, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let Some(source_agent_id) =
-            model
-                .agent_fork_barriers
-                .iter()
-                .find_map(|(source_agent_id, barrier)| {
-                    (barrier.child_agent_id == child_agent_id).then(|| source_agent_id.clone())
-                })
-        else {
-            return Ok(None);
-        };
-        let Some(child) = model.agents.get(child_agent_id) else {
-            return Ok(None);
-        };
-        let has_independent_session = child
-            .session_id
-            .as_deref()
-            .zip(child.fork_point.as_deref())
-            .is_some_and(|(session_id, fork_point)| session_id != fork_point);
-        let accepted_initial_prompt = model
-            .agent_send_tracking
-            .get(child_agent_id)
-            .is_some_and(|tracking| tracking.ups_seq > 0);
-        if !has_independent_session || !accepted_initial_prompt {
-            return Ok(None);
-        }
-        if model.agent_draining.contains(&source_agent_id) {
-            if let Some(barrier) = model.agent_fork_barriers.get_mut(&source_agent_id) {
-                barrier.ready = true;
-            }
-            return Ok(None);
-        }
-        let barrier = model
-            .agent_fork_barriers
-            .remove(&source_agent_id)
-            .expect("barrier located above");
-        Ok(Some(ReleasedAgentForkBarrier {
-            source_agent_id,
-            resume_queue: barrier.resume_queue,
-        }))
     }
 
     /// Releases the barrier after the child process has definitively exited. Once the
@@ -9707,85 +8940,6 @@ impl AppState {
             source,
         });
         Ok(send_id)
-    }
-
-    pub fn match_agent_prompt_submit(
-        &self,
-        agent_id: &str,
-        prompt: Option<&str>,
-    ) -> Result<AgentPromptSubmitMatch, String> {
-        let mut model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let tracking = model
-            .agent_send_tracking
-            .entry(agent_id.to_string())
-            .or_default();
-        tracking.prune_expired(now_millis());
-        tracking.ups_seq = tracking.ups_seq.saturating_add(1);
-        let outstanding_count = tracking.outstanding_sends.len();
-
-        let Some(prompt) = prompt else {
-            return Ok(AgentPromptSubmitMatch::MissingPrompt {
-                outstanding_sends: outstanding_count,
-            });
-        };
-
-        if tracking.outstanding_sends.is_empty() {
-            return Ok(AgentPromptSubmitMatch::Untracked {
-                actual: prompt.to_string(),
-                outstanding_sends: 0,
-            });
-        }
-
-        if let Some(index) = tracking
-            .outstanding_sends
-            .iter()
-            .position(|send| prompts_match(prompt, &send.text))
-        {
-            let matched = tracking
-                .outstanding_sends
-                .remove(index)
-                .expect("matching index checked above");
-            drop(tracking.outstanding_sends.drain(..index));
-            Ok(AgentPromptSubmitMatch::Matched {
-                source: matched.source,
-                outstanding_sends: tracking.outstanding_sends.len(),
-            })
-        } else {
-            Ok(AgentPromptSubmitMatch::Mismatched {
-                expected: tracking
-                    .outstanding_sends
-                    .front()
-                    .expect("non-empty checked above")
-                    .text
-                    .clone(),
-                actual: prompt.to_string(),
-                outstanding_sends: outstanding_count,
-            })
-        }
-    }
-
-    // Only the test suite inspects the full outstanding-send queue; production
-    // code reads the count via match_agent_prompt_submit and clears it via
-    // clear_agent_outstanding_sends. Gated to keep it out of the release binary.
-    #[cfg(test)]
-    pub fn outstanding_agent_sends(
-        &self,
-        agent_id: &str,
-    ) -> Result<Vec<AgentOutstandingSend>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .agent_send_tracking
-            .get(agent_id)
-            .map(|tracking| tracking.outstanding_sends.iter().cloned().collect())
-            .unwrap_or_default())
     }
 
     // Rewinds recorded send times so tests can cross OUTSTANDING_SEND_TTL_MS without
@@ -10256,290 +9410,6 @@ impl AppState {
                 )
             });
         Ok(Some(allowed))
-    }
-
-    /// Whether the agent is (or was) the run behind a research node. Research
-    /// runs take exactly one prompt at launch; queued turns can never drain
-    /// into them and would park the agent past pane retirement.
-    pub fn agent_is_research_run(&self, agent_id: &str) -> Result<bool, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .research_nodes
-            .values()
-            .any(|node| node.agent_id() == Some(agent_id)))
-    }
-
-    /// Updates a pane's last-known working directory, reported by shell
-    /// integration on directory changes so a restarted shell reopens where it
-    /// left off rather than at its spawn-time cwd. No-op for unknown panes.
-    pub fn update_pane_cwd(&self, pane_id: &str, cwd: String) -> Result<(), String> {
-        self.update_pane_workspace_inner(pane_id, cwd, None)
-    }
-
-    /// Applies workspace metadata resolved by session-cli on the pane's host.
-    /// Local panes continue to use the desktop's authoritative filesystem/Git
-    /// probe; remote panes cannot be resolved against that filesystem and use
-    /// this authenticated, display-only observation instead.
-    pub fn update_pane_workspace(
-        &self,
-        pane_id: &str,
-        cwd: String,
-        workspace: ActiveWorkspace,
-    ) -> Result<(), String> {
-        self.update_pane_workspace_inner(pane_id, cwd, Some(workspace))
-    }
-
-    fn update_pane_workspace_inner(
-        &self,
-        pane_id: &str,
-        cwd: String,
-        reported_workspace: Option<ActiveWorkspace>,
-    ) -> Result<(), String> {
-        // This value arrives over the control socket from in-pane shell
-        // integration, so treat it as untrusted: reject control characters
-        // (newlines, NULs, escape sequences) and absurd lengths before letting
-        // it into persisted state and the UI. A legitimate working directory
-        // never contains them.
-        if cwd.len() > MAX_PANE_CWD_LEN {
-            return Err(format!(
-                "pane cwd exceeds {MAX_PANE_CWD_LEN} bytes; refusing to persist"
-            ));
-        }
-        if cwd.chars().any(|ch| ch.is_control()) {
-            return Err("pane cwd contains control characters; refusing to persist".to_string());
-        }
-        // A legitimate shell-integration report is always an existing absolute
-        // directory; rejecting anything else keeps malformed values out of
-        // persisted state and ensures recovery has a usable working directory.
-        let candidate = std::path::Path::new(&cwd);
-        if !candidate.is_absolute() {
-            return Err("pane cwd must be an absolute path; refusing to persist".to_string());
-        }
-        let is_remote = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model
-                .panes
-                .get(pane_id)
-                .and_then(|pane| model.groups.get(&pane.info.group_id))
-                .is_some_and(GroupInfo::is_remote)
-        };
-        if !is_remote && !candidate.is_dir() {
-            return Err("pane cwd is not an existing directory; refusing to persist".to_string());
-        }
-        if let Some(workspace) = reported_workspace.as_ref() {
-            validate_reported_workspace(&cwd, workspace)?;
-        }
-        let (observation_seq, cwd_changed, is_shell) = {
-            let _commit_guard = self
-                .inner
-                .pane_cwd_commit_lock
-                .lock()
-                .map_err(|_| "pane cwd commit lock poisoned".to_string())?;
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let Some(pane) = model.panes.get_mut(pane_id) else {
-                return Ok(());
-            };
-            let cwd_changed = pane.info.cwd != cwd;
-            let is_shell = matches!(pane.info.kind, PaneKind::Shell);
-            if !cwd_changed && !is_shell {
-                return Ok(());
-            }
-            pane.cwd_observation_seq = pane.cwd_observation_seq.wrapping_add(1);
-            let observation_seq = pane.cwd_observation_seq;
-            if cwd_changed {
-                pane.info.cwd = cwd.clone();
-                pane.info.active_workspace = None;
-            }
-            (observation_seq, cwd_changed, is_shell)
-        };
-
-        // Agent panes have no PaneInfo workspace observation, so an unchanged
-        // cwd remains a no-op for them. Shell panes probe at every prompt: a
-        // branch can change without the directory changing.
-        // Resolve outside both short commit sections: git can invoke hooks or
-        // otherwise take time, and must not pin the model or block other panes.
-        let active_workspace = if !is_shell {
-            None
-        } else if is_remote {
-            reported_workspace
-        } else {
-            crate::workspace::resolve_pane_workspace(&cwd)
-        };
-
-        let _commit_guard = self
-            .inner
-            .pane_cwd_commit_lock
-            .lock()
-            .map_err(|_| "pane cwd commit lock poisoned".to_string())?;
-        let (pane_updates, agent_updates) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let reporter_changed = {
-                let Some(pane) = model.panes.get_mut(pane_id) else {
-                    return Ok(());
-                };
-                // A newer cwd/prompt report supersedes this probe even when it is
-                // for the same directory. Never persist or emit its stale result.
-                if pane.cwd_observation_seq != observation_seq || pane.info.cwd != cwd {
-                    return Ok(());
-                }
-                let workspace_changed = is_shell && pane.info.active_workspace != active_workspace;
-                if workspace_changed {
-                    pane.info.active_workspace = active_workspace.clone();
-                }
-                cwd_changed || workspace_changed
-            };
-
-            let mut pane_updates = Vec::new();
-            if reporter_changed && let Some(pane) = model.panes.get(pane_id) {
-                pane_updates.push(pane.info.clone());
-            }
-            let mut agent_updates = Vec::new();
-
-            // A successful shell observation is authoritative for the checkout,
-            // not just the pane that happened to reach a prompt first. Refresh
-            // other local shell panes and agents when they are in the exact same
-            // directory or elsewhere under the same canonical checkout root.
-            // `git_root` is the worktree top-level, deliberately not the common
-            // Git directory: linked worktrees share the latter but have separate
-            // HEADs and therefore must not exchange branch observations.
-            if let Some(observed) = active_workspace.as_ref() {
-                let remote_group_ids = model
-                    .groups
-                    .iter()
-                    .filter(|(_, group)| group.is_remote())
-                    .map(|(group_id, _)| group_id.clone())
-                    .collect::<HashSet<_>>();
-
-                for (peer_id, peer) in model.panes.iter_mut() {
-                    if peer_id == pane_id
-                        || !matches!(peer.info.kind, PaneKind::Shell)
-                        || remote_group_ids.contains(&peer.info.group_id)
-                        || !workspace_observation_matches(
-                            &peer.info.cwd,
-                            peer.info.active_workspace.as_ref(),
-                            &cwd,
-                            observed,
-                        )
-                    {
-                        continue;
-                    }
-                    let next = propagated_workspace(
-                        observed,
-                        peer.info.active_workspace.as_ref(),
-                        &peer.info.cwd,
-                    );
-                    if peer.info.active_workspace.as_ref() == Some(&next) {
-                        continue;
-                    }
-                    peer.info.active_workspace = Some(next);
-                    pane_updates.push(peer.info.clone());
-                }
-
-                for agent in model.agents.values_mut() {
-                    if agent.pane_id.is_none() || remote_group_ids.contains(&agent.group_id) {
-                        continue;
-                    }
-                    let agent_cwd = agent
-                        .active_workspace
-                        .as_ref()
-                        .map(|workspace| workspace.cwd.as_str())
-                        .unwrap_or(agent.worktree_dir.as_str());
-                    if !workspace_observation_matches(
-                        agent_cwd,
-                        agent.active_workspace.as_ref(),
-                        &cwd,
-                        observed,
-                    ) {
-                        continue;
-                    }
-                    let mut next =
-                        propagated_workspace(observed, agent.active_workspace.as_ref(), agent_cwd);
-                    if agent.active_workspace.is_none() {
-                        // Before an adapter reports its first command cwd, a
-                        // locally launched agent may still be using its launch
-                        // workspace. Preserve the ownership meaning normally
-                        // assigned by record_agent_active_workspace.
-                        next.managed_by_session = agent.branch.is_some()
-                            && next.git_root.as_deref().is_some_and(|root| {
-                                crate::adapters::same_dir(root, &agent.worktree_dir)
-                            });
-                    }
-                    if agent.active_workspace.as_ref() == Some(&next) {
-                        continue;
-                    }
-                    agent.active_workspace = Some(next);
-                    agent_updates.push(agent.clone());
-                }
-            }
-
-            (pane_updates, agent_updates)
-        };
-        if pane_updates.is_empty() && agent_updates.is_empty() {
-            return Ok(());
-        }
-
-        self.persist();
-        for pane in pane_updates {
-            // Carry cwd and workspace together so the tab path, context-menu cwd,
-            // branch, and worktree badge advance as one ordered observation.
-            self.emit(SessionEvent::new(
-                "pane.cwd_changed",
-                Some(pane.id.clone()),
-                None,
-                json!({
-                    "paneId": pane.id,
-                    "cwd": pane.cwd,
-                    "activeWorkspace": pane.active_workspace,
-                }),
-            ));
-        }
-        for agent in agent_updates {
-            self.emit(SessionEvent::new(
-                "agent.workspace_changed",
-                agent.pane_id.clone(),
-                Some(agent.id.clone()),
-                json!({ "agent": agent }),
-            ));
-        }
-        Ok(())
-    }
-
-    pub fn rename_pane(&self, pane_id: &str, title: String) -> Result<PaneInfo, String> {
-        let title = title.trim().to_string();
-        if title.is_empty() {
-            return Err("tab name cannot be empty".to_string());
-        }
-        let info = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let pane = model
-                .panes
-                .get_mut(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            pane.info.title = title;
-            pane.info.clone()
-        };
-        self.persist();
-        Ok(info)
     }
 
     #[cfg(test)]
@@ -11465,16 +10335,6 @@ fn normalized_pane_splits(
     Ok(result)
 }
 
-fn prompts_match(actual: &str, expected: &str) -> bool {
-    let actual = normalize_prompt(actual);
-    let expected = normalize_prompt(expected);
-    actual == expected || (!expected.is_empty() && actual.contains(&expected))
-}
-
-fn normalize_prompt(prompt: &str) -> String {
-    prompt.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 fn random_token() -> Result<String, String> {
     // 256 bits from the OS CSPRNG (getentropy/getrandom on macOS and Linux). A
     // failure here is rare (no secure entropy source) but can be transient in some
@@ -11505,7 +10365,6 @@ mod tests {
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
     };
     use crate::persistence::PersistedState;
-    use crate::scrollback::{append_pane_scrollback, read_pane_scrollback};
     use crate::workspace::{AgentStatus, WorkspaceScope};
     use portable_pty::{Child, ChildKiller, ExitStatus, PtySize, native_pty_system};
     use std::io;
@@ -11628,65 +10487,6 @@ mod tests {
             .unwrap();
         let restarted = AppState::new(test_config(workspace));
         assert_eq!(restarted.interface_draft("home-launcher").unwrap(), None);
-    }
-
-    #[test]
-    fn artifact_tray_records_dedupes_caps_and_persists() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        assert!(state.restore_session().is_empty());
-        let mut group = sample_group();
-        group.dir = workspace.display().to_string();
-        group.managed_dir = workspace.join("managed").display().to_string();
-        group.agents.clear();
-        state.insert_group_after(group, None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-
-        let first = state
-            .record_artifact("pane-1", Some("/tmp/work/report.html".to_string()), None)
-            .unwrap();
-        assert_eq!(first.group_id.as_deref(), Some("group-1"));
-
-        // Re-opening the same target bumps the entry instead of duplicating it.
-        let bumped = state
-            .record_artifact("pane-1", Some("/tmp/work/report.html".to_string()), None)
-            .unwrap();
-        let listed = state.list_artifacts().unwrap();
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].id, bumped.id);
-
-        state
-            .record_artifact("pane-1", None, Some("http://localhost:5173/".to_string()))
-            .unwrap();
-
-        assert_eq!(state.list_artifacts().unwrap().len(), 2);
-
-        // The per-group cap evicts the oldest entries first.
-        for index in 0..MAX_ARTIFACTS_PER_GROUP {
-            state
-                .record_artifact("pane-1", Some(format!("/tmp/work/file-{index}.html")), None)
-                .unwrap();
-        }
-        let listed = state.list_artifacts().unwrap();
-        assert_eq!(listed.len(), MAX_ARTIFACTS_PER_GROUP);
-        assert!(listed.iter().all(|entry| entry.id != bumped.id));
-
-        // Test-mode mutations persist synchronously: the snapshot carries the
-        // tray, and a reload prunes entries whose group has been deleted.
-        let outcome = persistence::load_with_diagnostics(&workspace);
-        assert!(outcome.warning.is_none());
-        assert_eq!(outcome.state.artifacts.len(), MAX_ARTIFACTS_PER_GROUP);
-
-        let mut orphaned = outcome.state;
-        orphaned.artifacts[0].group_id = Some("group-deleted".to_string());
-        orphaned.panes.clear();
-        persistence::save(&workspace, &orphaned).unwrap();
-        let reloaded = AppState::new(test_config(workspace));
-        reloaded.restore_session();
-        assert_eq!(
-            reloaded.list_artifacts().unwrap().len(),
-            MAX_ARTIFACTS_PER_GROUP - 1
-        );
     }
 
     #[test]
@@ -14472,125 +13272,6 @@ mod tests {
     }
 
     #[test]
-    fn research_waits_for_subagents_and_a_later_parent_completion() {
-        let state = AppState::new(test_config(PathBuf::from(
-            "/tmp/session-state-research-subagents",
-        )));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Question".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root_id = detail.tree.root_node_id;
-        let agent = sample_agent("research-agent");
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&root_id, &agent, "pane-7")
-            .unwrap();
-
-        assert_eq!(
-            state
-                .agent_subagent_started("research-agent", Some(" child-1 "))
-                .unwrap(),
-            1
-        );
-        // Duplicate identified hooks are idempotent.
-        assert_eq!(
-            state
-                .agent_subagent_started("research-agent", Some("child-1"))
-                .unwrap(),
-            1
-        );
-        state
-            .set_agent_status("research-agent", AgentStatus::Done)
-            .unwrap();
-        let waiting = state.research_node(&root_id).unwrap();
-        assert_eq!(waiting.status(), ResearchNodeStatus::Running);
-        assert!(waiting.run().unwrap().completed_at.is_none());
-
-        assert_eq!(
-            state
-                .agent_subagent_stopped("research-agent", Some("child-1"))
-                .unwrap(),
-            Some(0)
-        );
-        // Child completion alone is not the parent completion boundary.
-        assert_eq!(
-            state.research_node(&root_id).unwrap().status(),
-            ResearchNodeStatus::Running
-        );
-
-        state
-            .set_agent_status("research-agent", AgentStatus::Running)
-            .unwrap();
-        state
-            .set_agent_status("research-agent", AgentStatus::Done)
-            .unwrap();
-        assert_eq!(
-            state.research_node(&root_id).unwrap().status(),
-            ResearchNodeStatus::Complete
-        );
-    }
-
-    #[test]
-    fn anonymous_subagent_tracking_saturates_and_is_parent_scoped() {
-        let state = AppState::new(test_config(temp_workspace()));
-        assert_eq!(state.agent_subagent_started("parent-1", None).unwrap(), 1);
-        assert_eq!(state.agent_subagent_started("parent-1", None).unwrap(), 2);
-        assert!(!state.agent_has_active_subagents("parent-2").unwrap());
-        assert_eq!(
-            state.agent_subagent_stopped("parent-1", None).unwrap(),
-            Some(1)
-        );
-        assert_eq!(
-            state.agent_subagent_stopped("parent-1", None).unwrap(),
-            Some(0)
-        );
-        // A stop with nothing tracked reports as such so callers leave the
-        // parent's status alone.
-        assert_eq!(
-            state.agent_subagent_stopped("parent-1", None).unwrap(),
-            None
-        );
-        assert!(!state.agent_has_active_subagents("parent-1").unwrap());
-    }
-
-    // A stop hook whose payload lost (or never had) the id its start carried
-    // must still settle one tracked subagent — a permanently non-zero counter
-    // suppresses every future parent Stop.
-    #[test]
-    fn asymmetric_subagent_ids_still_settle_tracked_work() {
-        let state = AppState::new(test_config(temp_workspace()));
-
-        // Identified start, anonymous stop.
-        state
-            .agent_subagent_started("parent-1", Some("child-1"))
-            .unwrap();
-        assert_eq!(
-            state.agent_subagent_stopped("parent-1", None).unwrap(),
-            Some(0)
-        );
-        assert!(!state.agent_has_active_subagents("parent-1").unwrap());
-
-        // Anonymous start, identified stop.
-        state.agent_subagent_started("parent-2", None).unwrap();
-        assert_eq!(
-            state
-                .agent_subagent_stopped("parent-2", Some("child-9"))
-                .unwrap(),
-            Some(0)
-        );
-        assert!(!state.agent_has_active_subagents("parent-2").unwrap());
-    }
-
-    #[test]
     fn research_child_inherits_parent_launch_context() {
         let state = AppState::new(test_config(PathBuf::from(
             "/tmp/session-state-research-child",
@@ -14904,48 +13585,6 @@ mod tests {
         );
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
         assert_eq!(node.status(), ResearchNodeStatus::Running);
-    }
-
-    #[test]
-    fn research_agents_reject_queued_turns() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let agent = sample_agent("research-agent");
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-7")
-            .unwrap();
-
-        // Queueing bypasses write_pane, so it must be rejected on its own: a
-        // research run never drains a queue, and an accepted turn would park
-        // the agent past retirement.
-        let err = crate::turn_queue::submit_agent_turn(
-            &state,
-            crate::turn_queue::SubmitAgentTurnRequest {
-                agent_id: "research-agent".to_string(),
-                data: "queued follow-up".to_string(),
-                mode: Some(crate::turn_queue::SubmitAgentTurnMode::Queue),
-            },
-        )
-        .unwrap_err();
-        assert!(err.contains("read-only"));
-        assert!(
-            state
-                .agent_queued_turns("research-agent")
-                .unwrap()
-                .is_empty()
-        );
     }
 
     /// Creates a transcript document (an exported terminal conversation)
@@ -16101,44 +14740,6 @@ mod tests {
     }
 
     #[test]
-    fn user_close_of_active_research_run_cancels_and_reclaims_the_pane() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let agent = sample_agent("research-agent");
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-7")
-            .unwrap();
-
-        state.close_pane_for_user("pane-7").unwrap();
-        let cancelled = state.research_node(&detail.tree.root_node_id).unwrap();
-        assert_eq!(cancelled.status(), ResearchNodeStatus::Cancelled);
-        assert_eq!(state.list_research_trees().unwrap()[0].cancelled_count, 1);
-        assert!(cancelled.pane_id().is_none());
-        assert!(cancelled.run().unwrap().completed_at.is_some());
-        assert!(state.list_panes().unwrap().is_empty());
-        // A settled tree is removable, and double-cancel is rejected cleanly.
-        assert!(
-            state
-                .cancel_research_node(&detail.tree.root_node_id)
-                .unwrap_err()
-                .contains("not active")
-        );
-        state.remove_research_tree(&detail.tree.id).unwrap();
-    }
-
-    #[test]
     fn cancelled_research_run_ignores_stale_agent_status_updates() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
@@ -16423,127 +15024,6 @@ mod tests {
         assert_eq!(recovered.response_snapshot_at(), Some(99));
         assert!(restored.agent("sdk-agent").unwrap().is_none());
         std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    fn restore_splits_legacy_research_runtime_out_of_a_terminal_group() {
-        let workspace = temp_workspace();
-        let managed = workspace.join("legacy-managed");
-        std::fs::create_dir_all(managed.join(".session")).unwrap();
-        let mut group = sample_terminal_group();
-        group.dir = workspace.display().to_string();
-        group.managed_dir = managed.display().to_string();
-        group.agents = vec!["research-agent".to_string()];
-
-        let terminal_pane = sample_pane("pane-terminal", None);
-        let mut research_pane = sample_pane("pane-research", Some("research-agent"));
-        research_pane.depth = 1;
-        let mut agent = sample_agent("research-agent");
-        agent.pane_id = Some(research_pane.id.clone());
-        agent.group_id = group.id.clone();
-        agent.worktree_dir = workspace.display().to_string();
-        let tree = ResearchTree {
-            id: "tree-1".to_string(),
-            title: "Legacy research".to_string(),
-            root_node_id: "node-1".to_string(),
-            workspace_id: String::new(),
-            created_at: 1,
-            updated_at: 1,
-            archived_at: None,
-            trashed_at: None,
-            last_viewed_at: None,
-        };
-        let node = ResearchNode {
-            id: "node-1".to_string(),
-            tree_id: tree.id.clone(),
-            parent_node_id: None,
-            inline: false,
-            anchor: None,
-            title: None,
-            group_id: group.id.clone(),
-            created_at: 1,
-            highlights: Vec::new(),
-            chain_order: Vec::new(),
-            body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
-                message: crate::research::UserMessage {
-                    text: "Question".to_string(),
-                    attachments: Vec::new(),
-                },
-                agent: crate::research::AgentSpec {
-                    adapter: "claude".to_string(),
-                    model: None,
-                    effort: None,
-                },
-                run: crate::research::RunRecord {
-                    status: ResearchNodeStatus::Running,
-                    error: None,
-                    started_at: Some(1).map(crate::research::body_millis),
-                    completed_at: None,
-                    response_snapshot_at: None,
-                },
-                binding: crate::research::RunBinding {
-                    worktree_dir: workspace.display().to_string(),
-                    native_session_id: Some("session-abc".to_string()),
-                    transcript_path: Some("/tmp/transcript.jsonl".to_string()),
-                    prompt_native_id: None,
-                    agent_id: Some(agent.id.clone()),
-                    pane_id: Some(research_pane.id.clone()),
-                    runtime: crate::research::ResearchRuntime::Pane,
-                    thread_id: None,
-                },
-                recap: None,
-            }),
-        };
-        let persisted = PersistedState {
-            next_id: 100,
-            panes: vec![terminal_pane.clone(), research_pane.clone()],
-            groups: vec![group],
-            group_order: vec!["group-1".to_string()],
-            agents: vec![agent],
-            pane_splits: vec![PaneSplitInfo {
-                id: "split-1".to_string(),
-                pane_ids: vec![terminal_pane.id.clone(), research_pane.id.clone()],
-                sizes: HashMap::new(),
-                intent: HashMap::new(),
-                axis: PaneSplitAxis::Vertical,
-                root: None,
-            }],
-            research_trees: HashMap::from([(tree.id.clone(), tree)]),
-            research_nodes: HashMap::from([(node.id.clone(), node)]),
-            ..PersistedState::default()
-        };
-        persistence::save(&workspace, &persisted).unwrap();
-
-        let restored = AppState::new(test_config(workspace.clone()));
-        let recovered_panes = restored.restore_session();
-        let detail = restored.research_tree("tree-1").unwrap();
-        let research_workspace = restored.group(&detail.tree.workspace_id).unwrap().unwrap();
-
-        assert_eq!(research_workspace.scope, WorkspaceScope::Research);
-        assert_ne!(research_workspace.id, "group-1");
-        assert_eq!(detail.nodes[0].group_id, research_workspace.id);
-        // The migrated run cannot resume across the restart: its pane is
-        // dropped from recovery (research panes never respawn) and the node
-        // settles Failed instead of being restored as a live run.
-        assert!(
-            recovered_panes
-                .iter()
-                .all(|pane| pane.id != "pane-research")
-        );
-        assert_eq!(detail.nodes[0].status(), ResearchNodeStatus::Failed);
-        assert!(detail.nodes[0].pane_id().is_none());
-        assert_eq!(
-            recovered_panes
-                .iter()
-                .find(|pane| pane.id == "pane-terminal")
-                .unwrap()
-                .group_id,
-            "group-1"
-        );
-        assert!(restored.pane_splits().unwrap().is_empty());
-        // The migrated run's agent is reclaimed along with its dropped pane;
-        // only the durable node (Failed) records that the run existed.
-        assert!(restored.agent("research-agent").unwrap().is_none());
     }
 
     #[test]
@@ -19619,72 +18099,6 @@ mod tests {
         }
     }
 
-    // A tail re-checks its binding inside the write: a rebind (rewind
-    // rotation, recovery) occurring between a tail's
-    // loop-top check and its write must not let the old file's parse overwrite
-    // over the new transcript's timeline.
-    #[test]
-    fn transcript_scoped_turn_writes_apply_only_while_bound() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        let mut agent = sample_agent("agent-1");
-        agent.worktree_dir = workspace.display().to_string();
-        agent.transcript_path = Some("/tmp/current.jsonl".to_string());
-        state.insert_agent(agent).unwrap();
-
-        assert!(
-            state
-                .append_turn_for_transcript(
-                    sample_user_turn("agent-1", "live"),
-                    "/tmp/current.jsonl"
-                )
-                .unwrap()
-        );
-
-        let mut stale = sample_user_turn("agent-1", "stale");
-        stale.id = "agent-1-9".to_string();
-        stale.source_index = 9;
-        assert!(
-            !state
-                .append_turn_for_transcript(stale, "/tmp/old.jsonl")
-                .unwrap()
-        );
-        assert!(
-            !state
-                .replace_turns_for_transcript(
-                    "agent-1",
-                    "/tmp/old.jsonl",
-                    vec![sample_user_turn("agent-1", "stale history")],
-                )
-                .unwrap()
-        );
-
-        let turns = state.list_turns(Some("agent-1")).unwrap();
-        assert_eq!(turns.len(), 1);
-        match turns[0].blocks.as_slice() {
-            [crate::transcript::TurnBlock::Text { text }] => assert_eq!(text, "live"),
-            blocks => panic!("unexpected blocks: {blocks:?}"),
-        }
-
-        assert!(
-            state
-                .replace_turns_for_transcript(
-                    "agent-1",
-                    "/tmp/current.jsonl",
-                    vec![sample_user_turn("agent-1", "refreshed")],
-                )
-                .unwrap()
-        );
-        let turns = state.list_turns(Some("agent-1")).unwrap();
-        assert_eq!(turns.len(), 1);
-        match turns[0].blocks.as_slice() {
-            [crate::transcript::TurnBlock::Text { text }] => assert_eq!(text, "refreshed"),
-            blocks => panic!("unexpected blocks: {blocks:?}"),
-        }
-
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
     #[test]
     fn shared_thread_turn_writes_use_global_storage_root() {
         let workspace = temp_workspace();
@@ -19915,98 +18329,6 @@ mod tests {
     }
 
     #[test]
-    fn claim_ready_agent_turn_serializes_concurrent_drains() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "first".to_string())
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "second".to_string())
-            .unwrap();
-
-        // First claim pops the front turn and marks the agent draining.
-        match state.claim_ready_agent_turn("agent-1").unwrap() {
-            AgentTurnClaim::Ready { turn, .. } => assert_eq!(turn.text, "first"),
-            _ => panic!("expected the first turn to be claimed"),
-        }
-        // A concurrent claim is refused while the first drain is in flight, even though
-        // "second" is itself ready — this is what prevents the double-send.
-        assert!(matches!(
-            state.claim_ready_agent_turn("agent-1").unwrap(),
-            AgentTurnClaim::Draining
-        ));
-        // Finishing the first drain lets the next one proceed.
-        state.finish_agent_drain("agent-1");
-        match state.claim_ready_agent_turn("agent-1").unwrap() {
-            AgentTurnClaim::Ready { turn, .. } => assert_eq!(turn.text, "second"),
-            _ => panic!("expected the second turn to be claimed"),
-        }
-    }
-
-    #[test]
-    fn begin_direct_send_is_refused_while_a_drain_owns_the_agent() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-
-        // With nothing draining, a direct send reserves the guard.
-        assert!(state.begin_direct_send("agent-1").unwrap());
-        // A second direct send is refused while the first still owns the agent...
-        assert!(!state.begin_direct_send("agent-1").unwrap());
-        // ...and a queue drain is refused too, so neither can write a second turn into
-        // the pane concurrently.
-        state
-            .enqueue_agent_turn("agent-1", "queued".to_string())
-            .unwrap();
-        assert!(matches!(
-            state.claim_ready_agent_turn("agent-1").unwrap(),
-            AgentTurnClaim::Draining
-        ));
-        // Releasing the guard lets the drain proceed.
-        state.finish_agent_drain("agent-1");
-        assert!(matches!(
-            state.claim_ready_agent_turn("agent-1").unwrap(),
-            AgentTurnClaim::Ready { .. }
-        ));
-        std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn in_flight_turn_is_recovered_to_the_front_of_the_queue_on_restart() {
-        let workspace = temp_workspace();
-        // First run: enqueue two turns, claim the front (an in-flight send that never
-        // confirms), then "crash" by dropping without delivering or clearing it.
-        {
-            let state = AppState::new(test_config(workspace.clone()));
-            state.restore_session();
-            state.insert_agent(sample_agent("agent-1")).unwrap();
-            state
-                .enqueue_agent_turn("agent-1", "first".to_string())
-                .unwrap();
-            state
-                .enqueue_agent_turn("agent-1", "second".to_string())
-                .unwrap();
-            match state.claim_ready_agent_turn("agent-1").unwrap() {
-                AgentTurnClaim::Ready { turn, .. } => assert_eq!(turn.text, "first"),
-                _ => panic!("expected the first turn to be claimed"),
-            }
-        }
-        // Second run: the in-flight "first" is re-queued ahead of "second" rather than
-        // lost, so it will be re-delivered.
-        {
-            let state = AppState::new(test_config(workspace.clone()));
-            state.restore_session();
-            assert_eq!(
-                state.list_agent_turn_queue("agent-1").unwrap(),
-                vec!["first".to_string(), "second".to_string()]
-            );
-        }
-        std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
     fn panes_list_in_inserted_order() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -20031,66 +18353,6 @@ mod tests {
     }
 
     #[test]
-    fn pane_splits_preserve_valid_intent_and_prune_stale_intent() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-2")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-3")).unwrap();
-
-        let splits = state
-            .set_pane_splits(vec![PaneSplitInfo {
-                id: "split-a".to_string(),
-                pane_ids: vec![
-                    "pane-1".to_string(),
-                    "pane-2".to_string(),
-                    "pane-3".to_string(),
-                ],
-                sizes: HashMap::new(),
-                intent: HashMap::from([
-                    (
-                        "pane-2".to_string(),
-                        PaneSplitIntent {
-                            kind: "inserted-relative".to_string(),
-                            anchor_pane_id: "pane-1".to_string(),
-                            position: "below".to_string(),
-                            source: "command".to_string(),
-                            created_at: 1.0,
-                        },
-                    ),
-                    (
-                        "pane-3".to_string(),
-                        PaneSplitIntent {
-                            kind: "inserted-relative".to_string(),
-                            anchor_pane_id: "pane-missing".to_string(),
-                            position: "below".to_string(),
-                            source: "drag-half".to_string(),
-                            created_at: 2.0,
-                        },
-                    ),
-                ]),
-                axis: PaneSplitAxis::Horizontal,
-                root: None,
-            }])
-            .unwrap();
-
-        assert_eq!(splits.len(), 1);
-        assert_eq!(splits[0].axis, PaneSplitAxis::Horizontal);
-        assert_eq!(
-            splits[0].intent.get("pane-2"),
-            Some(&PaneSplitIntent {
-                kind: "inserted-relative".to_string(),
-                anchor_pane_id: "pane-1".to_string(),
-                position: "below".to_string(),
-                source: "command".to_string(),
-                created_at: 1.0,
-            })
-        );
-        assert!(!splits[0].intent.contains_key("pane-3"));
-    }
-
-    #[test]
     fn pane_split_axis_omits_vertical_and_round_trips_horizontal() {
         let vertical: PaneSplitInfo =
             serde_json::from_str(r#"{"id":"split-1","paneIds":["a","b"],"sizes":{}}"#).unwrap();
@@ -20108,51 +18370,6 @@ mod tests {
             horizontal_json.get("axis").and_then(|value| value.as_str()),
             Some("horizontal")
         );
-    }
-
-    fn pane_node(pane_id: &str, size: f64) -> PaneSplitNode {
-        PaneSplitNode::Pane {
-            pane_id: pane_id.to_string(),
-            size: Some(size),
-        }
-    }
-
-    fn branch_node(
-        axis: PaneSplitAxis,
-        size: Option<f64>,
-        children: Vec<PaneSplitNode>,
-    ) -> PaneSplitNode {
-        PaneSplitNode::Split {
-            axis,
-            size,
-            children,
-        }
-    }
-
-    fn nested_split(id: &str, pane_ids: &[&str], root: PaneSplitNode) -> PaneSplitInfo {
-        let axis = match &root {
-            PaneSplitNode::Split { axis, .. } => *axis,
-            PaneSplitNode::Pane { .. } => PaneSplitAxis::Vertical,
-        };
-        PaneSplitInfo {
-            id: id.to_string(),
-            pane_ids: pane_ids.iter().map(|pane_id| pane_id.to_string()).collect(),
-            sizes: HashMap::new(),
-            intent: HashMap::new(),
-            axis,
-            root: Some(root),
-        }
-    }
-
-    fn split_state_with_panes(count: usize) -> AppState {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        for index in 1..=count {
-            state
-                .insert_pane(sample_pane_runtime(&format!("pane-{index}")))
-                .unwrap();
-        }
-        state
     }
 
     #[test]
@@ -20205,535 +18422,6 @@ mod tests {
     }
 
     #[test]
-    fn pane_splits_keep_a_nested_tree_and_derive_its_sizes() {
-        let state = split_state_with_panes(3);
-
-        let splits = state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2", "pane-3"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![
-                        pane_node("pane-1", 0.5),
-                        branch_node(
-                            PaneSplitAxis::Vertical,
-                            Some(0.5),
-                            vec![pane_node("pane-2", 0.25), pane_node("pane-3", 0.75)],
-                        ),
-                    ],
-                ),
-            )])
-            .unwrap();
-
-        assert_eq!(splits.len(), 1);
-        assert_eq!(splits[0].axis, PaneSplitAxis::Horizontal);
-        let root = splits[0].root.clone().unwrap();
-        assert_eq!(root.leaves(), vec!["pane-1", "pane-2", "pane-3"]);
-        // `sizes` mirrors each leaf's share of its own parent for older builds.
-        assert_eq!(splits[0].sizes.get("pane-1"), Some(&0.5));
-        assert_eq!(splits[0].sizes.get("pane-2"), Some(&0.25));
-        assert_eq!(splits[0].sizes.get("pane-3"), Some(&0.75));
-
-        // Re-normalizing must be a fixed point or the frontend and backend would
-        // disagree on every read.
-        assert_eq!(state.pane_splits().unwrap(), splits);
-    }
-
-    #[test]
-    fn pane_splits_prune_a_nested_tree_when_a_pane_closes() {
-        let state = split_state_with_panes(4);
-        state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2", "pane-3", "pane-4"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![
-                        branch_node(
-                            PaneSplitAxis::Vertical,
-                            Some(0.5),
-                            vec![pane_node("pane-1", 0.5), pane_node("pane-2", 0.5)],
-                        ),
-                        branch_node(
-                            PaneSplitAxis::Vertical,
-                            Some(0.5),
-                            vec![pane_node("pane-3", 0.5), pane_node("pane-4", 0.5)],
-                        ),
-                    ],
-                ),
-            )])
-            .unwrap();
-
-        // Closing one pane of the right column collapses that column to its
-        // survivor; the nesting on the left has to live on.
-        state.remove_pane("pane-4").unwrap();
-        let splits = state.pane_splits().unwrap();
-        assert_eq!(splits.len(), 1);
-        assert_eq!(splits[0].pane_ids, vec!["pane-1", "pane-2", "pane-3"]);
-        let root = splits[0].root.clone().unwrap();
-        assert_eq!(root.leaves(), vec!["pane-1", "pane-2", "pane-3"]);
-        assert_eq!(splits[0].axis, PaneSplitAxis::Horizontal);
-
-        // Closing the lone right pane leaves only the stack, which is flat — and
-        // the split's axis has to follow the collapsed tree, not the old root.
-        state.remove_pane("pane-3").unwrap();
-        let splits = state.pane_splits().unwrap();
-        assert_eq!(splits[0].pane_ids, vec!["pane-1", "pane-2"]);
-        assert!(splits[0].root.is_none());
-        assert_eq!(splits[0].axis, PaneSplitAxis::Vertical);
-    }
-
-    #[test]
-    fn pane_splits_merge_same_axis_nesting_into_one_branch() {
-        let state = split_state_with_panes(3);
-
-        let splits = state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2", "pane-3"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![
-                        pane_node("pane-1", 0.5),
-                        branch_node(
-                            PaneSplitAxis::Horizontal,
-                            Some(0.5),
-                            vec![pane_node("pane-2", 0.5), pane_node("pane-3", 0.5)],
-                        ),
-                    ],
-                ),
-            )])
-            .unwrap();
-
-        // Three columns have one representation, so the tree is stored flat.
-        assert!(splits[0].root.is_none());
-        assert_eq!(splits[0].axis, PaneSplitAxis::Horizontal);
-        assert_eq!(splits[0].sizes.get("pane-1"), Some(&0.5));
-        assert_eq!(splits[0].sizes.get("pane-2"), Some(&0.25));
-        assert_eq!(splits[0].sizes.get("pane-3"), Some(&0.25));
-    }
-
-    #[test]
-    fn pane_splits_repair_an_untrustworthy_tree_to_flat() {
-        let state = split_state_with_panes(3);
-
-        // Leaves out of tab order: geometry and the sidebar would disagree.
-        let splits = state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2", "pane-3"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![
-                        pane_node("pane-1", 0.5),
-                        branch_node(
-                            PaneSplitAxis::Vertical,
-                            Some(0.5),
-                            vec![pane_node("pane-3", 0.5), pane_node("pane-2", 0.5)],
-                        ),
-                    ],
-                ),
-            )])
-            .unwrap();
-        // Repaired, not rejected: a frontend bug must not make the layout
-        // unpersistable.
-        assert_eq!(splits.len(), 1);
-        assert!(splits[0].root.is_none());
-        assert_eq!(splits[0].pane_ids, vec!["pane-1", "pane-2", "pane-3"]);
-
-        // A tree naming a pane outside the split.
-        let splits = state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![
-                        pane_node("pane-1", 0.5),
-                        branch_node(
-                            PaneSplitAxis::Vertical,
-                            Some(0.5),
-                            vec![pane_node("pane-2", 0.5), pane_node("pane-9", 0.5)],
-                        ),
-                    ],
-                ),
-            )])
-            .unwrap();
-        assert!(splits[0].root.is_none());
-
-        // Past the depth ceiling.
-        let mut deep = pane_node("pane-2", 0.5);
-        for level in 0..20 {
-            deep = branch_node(
-                if level % 2 == 0 {
-                    PaneSplitAxis::Vertical
-                } else {
-                    PaneSplitAxis::Horizontal
-                },
-                Some(1.0),
-                vec![deep],
-            );
-        }
-        let splits = state
-            .set_pane_splits(vec![nested_split(
-                "split-a",
-                &["pane-1", "pane-2"],
-                branch_node(
-                    PaneSplitAxis::Horizontal,
-                    None,
-                    vec![pane_node("pane-1", 0.5), deep],
-                ),
-            )])
-            .unwrap();
-        assert!(splits[0].root.is_none());
-    }
-
-    #[test]
-    fn update_pane_cwd_rejects_untrusted_values() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-
-        // A normal path (an existing absolute directory) is accepted and stored.
-        let real_dir = std::env::temp_dir().display().to_string();
-        state.update_pane_cwd("pane-1", real_dir.clone()).unwrap();
-        assert_eq!(state.list_panes().unwrap()[0].cwd, real_dir);
-
-        // Control characters (here a newline) are rejected and leave the stored
-        // value untouched.
-        assert!(
-            state
-                .update_pane_cwd("pane-1", "/tmp/evil\nmalicious".to_string())
-                .is_err()
-        );
-        // An oversized value is rejected too.
-        assert!(
-            state
-                .update_pane_cwd("pane-1", "/".repeat(MAX_PANE_CWD_LEN + 1))
-                .is_err()
-        );
-        // A non-existent path and a relative path are rejected (an installed
-        // file-server root must be a real, absolute directory).
-        assert!(
-            state
-                .update_pane_cwd("pane-1", "/no/such/session/dir/at/all".to_string())
-                .is_err()
-        );
-        assert!(
-            state
-                .update_pane_cwd("pane-1", "relative/dir".to_string())
-                .is_err()
-        );
-        assert_eq!(state.list_panes().unwrap()[0].cwd, real_dir);
-    }
-
-    #[test]
-    fn remote_workspace_observation_accepts_remote_only_paths() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        let mut group = sample_group_with_id("group-1");
-        group.remote = Some(crate::workspace::RemoteRef {
-            id: "devbox".to_string(),
-            label: "Dev box".to_string(),
-            host: "devbox".to_string(),
-            multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: Some("/srv/session/workspaces".to_string()),
-        });
-        state.insert_group_after(group, None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-
-        let cwd = "/srv/code/project/feature".to_string();
-        state
-            .update_pane_workspace(
-                "pane-1",
-                cwd.clone(),
-                ActiveWorkspace {
-                    cwd: cwd.clone(),
-                    git_root: Some("/srv/code/project/feature".to_string()),
-                    branch: Some("feature/remote".to_string()),
-                    kind: ActiveWorkspaceKind::LinkedWorktree,
-                    source: crate::workspace::ActiveWorkspaceSource::Session,
-                    managed_by_session: false,
-                },
-            )
-            .unwrap();
-
-        let pane = state.list_panes().unwrap().remove(0);
-        assert_eq!(pane.cwd, cwd);
-        assert_eq!(
-            pane.active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("feature/remote")
-        );
-        assert_eq!(
-            pane.active_workspace.map(|workspace| workspace.kind),
-            Some(ActiveWorkspaceKind::LinkedWorktree)
-        );
-    }
-
-    #[test]
-    fn remote_workspace_observation_rejects_mismatched_or_relative_metadata() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        let mut group = sample_group_with_id("group-1");
-        group.remote = Some(crate::workspace::RemoteRef {
-            id: "devbox".to_string(),
-            label: "Dev box".to_string(),
-            host: "devbox".to_string(),
-            multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: None,
-        });
-        state.insert_group_after(group, None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-
-        let invalid = ActiveWorkspace {
-            cwd: "/srv/other".to_string(),
-            git_root: Some("relative/root".to_string()),
-            branch: Some("main".to_string()),
-            kind: ActiveWorkspaceKind::MainCheckout,
-            source: crate::workspace::ActiveWorkspaceSource::Session,
-            managed_by_session: false,
-        };
-        assert!(
-            state
-                .update_pane_workspace("pane-1", "/srv/code/project".to_string(), invalid)
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn update_pane_cwd_refreshes_branch_when_directory_is_unchanged() {
-        let workspace = temp_workspace();
-        let repo = workspace.join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&["init", "-b", "main"]);
-        git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "session test"]);
-        git(&["commit", "--allow-empty", "-m", "init"]);
-
-        let state = AppState::new(test_config(workspace.clone()));
-        let mut pane = sample_pane_runtime("pane-1");
-        pane.info.cwd = repo.display().to_string();
-        pane.info.active_workspace = crate::workspace::resolve_pane_workspace(&pane.info.cwd);
-        state.insert_pane(pane).unwrap();
-        assert_eq!(
-            state.list_panes().unwrap()[0]
-                .active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("main")
-        );
-
-        git(&["switch", "-c", "feature/prompt-refresh"]);
-        state
-            .update_pane_cwd("pane-1", repo.display().to_string())
-            .unwrap();
-        assert_eq!(
-            state.list_panes().unwrap()[0]
-                .active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("feature/prompt-refresh")
-        );
-
-        std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn update_pane_cwd_propagates_branch_across_the_checkout_and_agents() {
-        let workspace = temp_workspace();
-        let repo = workspace.join("repo");
-        let repo_alias = workspace.join("repo-alias");
-        let nested = repo.join("nested");
-        let linked = workspace.join("linked");
-        std::fs::create_dir_all(&nested).unwrap();
-        let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&["init", "-b", "main"]);
-        git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "session test"]);
-        git(&["commit", "--allow-empty", "-m", "init"]);
-        std::os::unix::fs::symlink(&repo, &repo_alias).unwrap();
-        git(&[
-            "worktree",
-            "add",
-            "-b",
-            "feature/linked",
-            linked.to_str().unwrap(),
-            "HEAD",
-        ]);
-
-        let state = AppState::new(test_config(workspace.clone()));
-        let repo_cwd = repo.display().to_string();
-        let repo_alias_cwd = repo_alias.display().to_string();
-        let nested_cwd = nested.display().to_string();
-        let linked_cwd = linked.display().to_string();
-
-        let mut reporter = sample_pane_runtime("pane-reporter");
-        reporter.info.cwd = repo_cwd.clone();
-        reporter.info.active_workspace = crate::workspace::resolve_pane_workspace(&repo_cwd);
-        state.insert_pane(reporter).unwrap();
-
-        // Exact-directory propagation also fills a peer whose workspace cache
-        // has not been populated yet.
-        let mut exact_peer = sample_pane_runtime("pane-exact");
-        exact_peer.info.cwd = repo_cwd.clone();
-        exact_peer.info.active_workspace = None;
-        state.insert_pane(exact_peer).unwrap();
-
-        let mut nested_peer = sample_pane_runtime("pane-nested");
-        nested_peer.info.cwd = nested_cwd.clone();
-        nested_peer.info.active_workspace = crate::workspace::resolve_pane_workspace(&nested_cwd);
-        state.insert_pane(nested_peer).unwrap();
-
-        // This checkout shares a common Git directory with the reporter but has
-        // its own HEAD, so checkout-root matching must leave it alone.
-        let mut linked_peer = sample_pane_runtime("pane-linked");
-        linked_peer.info.cwd = linked_cwd.clone();
-        linked_peer.info.active_workspace = crate::workspace::resolve_pane_workspace(&linked_cwd);
-        state.insert_pane(linked_peer).unwrap();
-
-        let mut observed_agent = sample_agent("agent-observed");
-        observed_agent.worktree_dir = repo_cwd.clone();
-        observed_agent.branch = Some("launch-branch-must-not-change".to_string());
-        observed_agent.active_workspace = crate::workspace::resolve_active_workspace(
-            &nested_cwd,
-            crate::workspace::ActiveWorkspaceSource::Codex,
-            true,
-        );
-        state.insert_agent(observed_agent).unwrap();
-
-        let mut launch_agent = sample_agent("agent-launch");
-        launch_agent.worktree_dir = repo_cwd.clone();
-        launch_agent.branch = Some("launch-main".to_string());
-        launch_agent.active_workspace = None;
-        state.insert_agent(launch_agent).unwrap();
-
-        let mut alias_agent = sample_agent("agent-alias");
-        alias_agent.worktree_dir = repo_alias_cwd.clone();
-        alias_agent.branch = Some("launch-alias".to_string());
-        alias_agent.active_workspace = None;
-        alias_agent.pane_id = Some("pane-agent-alias".to_string());
-        state.insert_agent(alias_agent).unwrap();
-
-        git(&["switch", "-c", "feature/shared"]);
-        state
-            .update_pane_cwd("pane-reporter", repo_cwd.clone())
-            .unwrap();
-        // Report the same checkout through a symlink spelling. The exact-cwd
-        // fallback reaches the not-yet-observed agent, while canonical identity
-        // still recognizes its session-managed launch root.
-        state
-            .update_pane_cwd("pane-reporter", repo_alias_cwd.clone())
-            .unwrap();
-
-        let panes = state
-            .list_panes()
-            .unwrap()
-            .into_iter()
-            .map(|pane| (pane.id.clone(), pane))
-            .collect::<HashMap<_, _>>();
-        for pane_id in ["pane-reporter", "pane-exact", "pane-nested"] {
-            assert_eq!(
-                panes[pane_id]
-                    .active_workspace
-                    .as_ref()
-                    .and_then(|workspace| workspace.branch.as_deref()),
-                Some("feature/shared"),
-                "{pane_id} did not receive the checkout branch"
-            );
-        }
-        assert_eq!(
-            panes["pane-nested"]
-                .active_workspace
-                .as_ref()
-                .map(|workspace| workspace.cwd.as_str()),
-            Some(nested_cwd.as_str())
-        );
-        assert_eq!(
-            panes["pane-linked"]
-                .active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("feature/linked")
-        );
-
-        let observed_agent = state.agent("agent-observed").unwrap().unwrap();
-        assert_eq!(
-            observed_agent
-                .active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("feature/shared")
-        );
-        assert_eq!(
-            observed_agent
-                .active_workspace
-                .as_ref()
-                .map(|workspace| workspace.source),
-            Some(crate::workspace::ActiveWorkspaceSource::Codex)
-        );
-        assert_eq!(
-            observed_agent.branch.as_deref(),
-            Some("launch-branch-must-not-change")
-        );
-
-        let launch_agent = state.agent("agent-launch").unwrap().unwrap();
-        assert_eq!(
-            launch_agent
-                .active_workspace
-                .as_ref()
-                .and_then(|workspace| workspace.branch.as_deref()),
-            Some("feature/shared")
-        );
-        assert_eq!(launch_agent.branch.as_deref(), Some("launch-main"));
-
-        let alias_agent = state.agent("agent-alias").unwrap().unwrap();
-        assert!(
-            alias_agent
-                .active_workspace
-                .as_ref()
-                .is_some_and(|workspace| workspace.managed_by_session)
-        );
-        assert_eq!(alias_agent.branch.as_deref(), Some("launch-alias"));
-
-        std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
     fn group_spawn_cwd_prefers_most_recent_shell_pane() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -20777,111 +18465,6 @@ mod tests {
 
         // A group with no shell panes (or no panes at all) yields None.
         assert_eq!(state.group_spawn_cwd("group-empty"), None);
-    }
-
-    #[test]
-    fn resolve_shell_spawn_cwd_uses_current_tab_when_inside_group_dir() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        let base = std::env::temp_dir().join(format!(
-            "session-spawn-cwd-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|duration| duration.as_nanos())
-                .unwrap_or_default()
-        ));
-        let group_dir = base.join("project");
-        let nested = group_dir.join("src");
-        let outside = base.join("other");
-        for dir in [&group_dir, &nested, &outside] {
-            std::fs::create_dir_all(dir).unwrap();
-        }
-
-        let mut group = sample_terminal_group();
-        group.dir = group_dir.display().to_string();
-        state.insert_group_after(group.clone(), None).unwrap();
-
-        // Root shell at the group dir: most recently active, so it is the group's
-        // advisory spawn cwd if the current tab is not used.
-        let mut root = sample_pane_runtime("pane-root");
-        root.info.group_id = group.id.clone();
-        root.info.cwd = group_dir.display().to_string();
-        root.info.last_active_at = 200;
-        state.insert_pane(root).unwrap();
-
-        let mut current = sample_pane_runtime("pane-current");
-        current.info.group_id = group.id.clone();
-        current.info.cwd = nested.display().to_string();
-        current.info.last_active_at = 50;
-        state.insert_pane(current).unwrap();
-
-        assert_eq!(
-            state
-                .resolve_shell_spawn_cwd(&group, Some("pane-current"), None)
-                .unwrap(),
-            nested
-        );
-
-        // A same-group shell that has cd'd outside the group still inherits
-        // ("new tab here").
-        let mut wanderer = sample_pane_runtime("pane-out");
-        wanderer.info.group_id = group.id.clone();
-        wanderer.info.cwd = outside.display().to_string();
-        state.insert_pane(wanderer).unwrap();
-        assert_eq!(
-            state
-                .resolve_shell_spawn_cwd(&group, Some("pane-out"), None)
-                .unwrap(),
-            outside
-        );
-
-        // An agent whose cwd is inside the group dir is followed too — new
-        // tabs from that tab should be placed next to its work, not at the group root.
-        let mut agent = sample_pane_runtime("pane-agent");
-        agent.info.group_id = group.id.clone();
-        agent.info.kind = PaneKind::Agent;
-        agent.info.agent_id = Some("agent-1".to_string());
-        agent.info.cwd = nested.display().to_string();
-        agent.info.last_active_at = 300;
-        state.insert_pane(agent).unwrap();
-        assert_eq!(
-            state
-                .resolve_shell_spawn_cwd(&group, Some("pane-agent"), None)
-                .unwrap(),
-            nested
-        );
-
-        // An agent outside the group dir is not selected: fall back to
-        // the group's most-recently-active shell.
-        let mut agent_out = sample_pane_runtime("pane-agent-out");
-        agent_out.info.group_id = group.id.clone();
-        agent_out.info.kind = PaneKind::Agent;
-        agent_out.info.agent_id = Some("agent-2".to_string());
-        agent_out.info.cwd = outside.display().to_string();
-        state.insert_pane(agent_out).unwrap();
-        assert_eq!(
-            state
-                .resolve_shell_spawn_cwd(&group, Some("pane-agent-out"), None)
-                .unwrap(),
-            group_dir
-        );
-
-        // A tab in another group still donates its cwd when that cwd sits
-        // inside the target group's directory.
-        let mut foreign = sample_pane_runtime("pane-foreign");
-        foreign.info.group_id = "group-other".to_string();
-        foreign.info.cwd = nested.display().to_string();
-        state.insert_pane(foreign).unwrap();
-        assert_eq!(
-            state
-                .resolve_shell_spawn_cwd(&group, Some("pane-foreign"), None)
-                .unwrap(),
-            nested
-        );
-
-        std::fs::remove_dir_all(base).ok();
     }
 
     #[test]
@@ -20993,42 +18576,6 @@ mod tests {
     }
 
     #[test]
-    fn pane_removal_deletes_scrollback_during_normal_runtime() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        append_pane_scrollback(&workspace, "pane-1", b"old output").unwrap();
-
-        state.remove_pane("pane-1").unwrap();
-
-        assert!(
-            read_pane_scrollback(&workspace, "pane-1")
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn exit_teardown_preserves_scrollback_for_the_frozen_session() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-        append_pane_scrollback(&workspace, "pane-1", b"old output").unwrap();
-
-        state.finalize_persistence_for_exit();
-        // This is the same removal the reader thread performs after kill_all_panes
-        // closes the PTY and delivers EOF during application shutdown.
-        state.remove_pane("pane-1").unwrap();
-
-        assert_eq!(
-            read_pane_scrollback(&workspace, "pane-1").unwrap(),
-            b"old output"
-        );
-    }
-
-    #[test]
     fn remove_pane_prunes_its_idle_agent_and_runtime_state() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -21040,30 +18587,6 @@ mod tests {
 
         // The closed pane's agent (no queued turns) is reclaimed with its runtime state.
         assert!(state.agent("agent-1").unwrap().is_none());
-    }
-
-    #[test]
-    fn remove_pane_keeps_queued_agent_while_sibling_pane_remains() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-8")).unwrap();
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "later".to_string())
-            .unwrap();
-
-        state.remove_pane("pane-7").unwrap();
-
-        // Kept so the queue stays restart-recoverable via the orphaned-queue panel.
-        assert!(state.agent("agent-1").unwrap().is_some());
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["later".to_string()]
-        );
     }
 
     #[test]
@@ -21109,60 +18632,6 @@ mod tests {
         // The captured SESSION_TOKEN must not outlive its pane.
         state.remove_pane("pane-1").unwrap();
         assert!(state.pane_for_token(&token).is_none());
-    }
-
-    #[test]
-    fn remote_control_token_is_distinct_and_reclaimed_with_its_pane() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
-
-        let local = state.pane_token("pane-1").unwrap();
-        let remote = state.pane_remote_token("pane-1").unwrap();
-        assert_ne!(remote, local);
-        assert_eq!(
-            state.pane_for_remote_token(&remote).as_deref(),
-            Some("pane-1")
-        );
-        assert!(state.pane_for_token(&remote).is_none());
-
-        state.remove_pane("pane-1").unwrap();
-        assert!(state.pane_for_remote_token(&remote).is_none());
-    }
-
-    #[test]
-    fn remote_hook_credential_recovery_preserves_scope_and_revocation() {
-        let state = AppState::new(test_config(temp_workspace()));
-        for id in ["pane-1", "pane-2"] {
-            let mut pane = sample_pane_runtime(id);
-            pane.info.recovered = true;
-            pane.info.remote_session = Some(RemoteSessionIdentity::new("remote", id).unwrap());
-            state.insert_pane(pane).unwrap();
-        }
-        // The old process retains this token after the app's map is lost.
-        let token = random_token().unwrap();
-        assert!(!state.has_pane_remote_token("pane-1"));
-        state.restore_pane_remote_token("pane-1", &token).unwrap();
-        state.restore_pane_remote_token("pane-1", &token).unwrap();
-        assert_eq!(
-            state.pane_for_remote_token(&token).as_deref(),
-            Some("pane-1")
-        );
-        assert!(state.pane_for_token(&token).is_none());
-        assert!(state.restore_pane_remote_token("pane-2", &token).is_err());
-        assert!(
-            state
-                .restore_pane_remote_token("pane-1", &random_token().unwrap())
-                .is_err()
-        );
-        let local = state.pane_token("pane-2").unwrap();
-        let user = state.pane_user_token("pane-2").unwrap();
-        for invalid in [&local, &user, "", "malformed"] {
-            assert!(state.restore_pane_remote_token("pane-2", invalid).is_err());
-        }
-        state.remove_pane("pane-1").unwrap();
-        assert!(state.pane_for_remote_token(&token).is_none());
-        assert!(state.restore_pane_remote_token("pane-1", &token).is_err());
     }
 
     #[test]
@@ -21338,77 +18807,6 @@ mod tests {
     }
 
     #[test]
-    fn stale_front_send_does_not_poison_prompt_matching() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        // An unacknowledged send at the front of the queue used to make every
-        // later prompt report Mismatched; once expired, the next real send matches.
-        state
-            .record_agent_send("agent-1", "/model".to_string(), AgentSendSource::DirectSend)
-            .unwrap();
-        state
-            .age_agent_outstanding_sends("agent-1", OUTSTANDING_SEND_TTL_MS + 1)
-            .unwrap();
-        state
-            .record_agent_send(
-                "agent-1",
-                "real prompt".to_string(),
-                AgentSendSource::DirectSend,
-            )
-            .unwrap();
-
-        let matched = state
-            .match_agent_prompt_submit("agent-1", Some("real prompt"))
-            .unwrap();
-        assert!(matches!(matched, AgentPromptSubmitMatch::Matched { .. }));
-    }
-
-    #[test]
-    fn later_prompt_match_retires_older_superseded_sends() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-
-        state
-            .record_agent_send(
-                "agent-1",
-                "canceled prompt".to_string(),
-                AgentSendSource::QueuedTurn,
-            )
-            .unwrap();
-        state
-            .record_agent_send(
-                "agent-1",
-                "submitted prompt".to_string(),
-                AgentSendSource::DirectSend,
-            )
-            .unwrap();
-        state
-            .record_agent_send(
-                "agent-1",
-                "future prompt".to_string(),
-                AgentSendSource::QueuedTurn,
-            )
-            .unwrap();
-
-        let matched = state
-            .match_agent_prompt_submit("agent-1", Some("existing composer textsubmitted prompt"))
-            .unwrap();
-        assert_eq!(
-            matched,
-            AgentPromptSubmitMatch::Matched {
-                source: AgentSendSource::DirectSend,
-                outstanding_sends: 1,
-            }
-        );
-        let outstanding = state.outstanding_agent_sends("agent-1").unwrap();
-        assert_eq!(outstanding.len(), 1);
-        assert_eq!(outstanding[0].id, 3);
-        assert_eq!(outstanding[0].text, "future prompt");
-        assert_eq!(outstanding[0].source, AgentSendSource::QueuedTurn);
-    }
-
-    #[test]
     fn mutate_agent_only_touches_fields_the_closure_writes() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -21473,84 +18871,6 @@ mod tests {
     }
 
     #[test]
-    fn restore_rehydrates_metadata_but_not_pane_runtimes() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // Stand in for a previous process having persisted a full session.
-        let mut legacy_pane = sample_pane("pane-7", Some("agent-1"));
-        legacy_pane.depth = 3;
-        legacy_pane.remote_session = Some(RemoteSessionIdentity {
-            remote_id: "devbox".to_string(),
-            tmux_server: "session".to_string(),
-            tmux_session: "session-pane-7-deadbeef".to_string(),
-            support_dir: None,
-        });
-        legacy_pane.remote_connection = Some(RemoteConnectionInfo {
-            state: RemoteConnectionState::Connected,
-            message: Some("stale live state".to_string()),
-            ..Default::default()
-        });
-        let persisted = PersistedState {
-            next_id: 99,
-            groups: vec![sample_terminal_group()],
-            agents: vec![sample_agent("agent-1")],
-            panes: vec![legacy_pane],
-            queues: HashMap::from([(
-                "agent-1".to_string(),
-                vec![QueuedTurn::new("queued turn".to_string())],
-            )]),
-            ..PersistedState::default()
-        };
-        crate::persistence::save(&workspace, &persisted).unwrap();
-
-        let state = AppState::new(config);
-        let recovered = state.restore_session();
-
-        // Pane metadata is returned for respawning, with fields intact...
-        assert_eq!(recovered.len(), 1);
-        let pane = &recovered[0];
-        assert_eq!(pane.id, "pane-7");
-        assert_eq!(pane.cwd, "/tmp/work/agent-1");
-        assert_eq!(pane.cols, 132);
-        assert_eq!(pane.rows, 43);
-        assert_eq!(pane.depth, 0);
-        assert_eq!(
-            pane.remote_session
-                .as_ref()
-                .map(|identity| identity.tmux_session.as_str()),
-            Some("session-pane-7-deadbeef")
-        );
-        assert_eq!(
-            pane.remote_connection,
-            Some(RemoteConnectionInfo::default()),
-            "restore must preserve session identity but distrust connection health"
-        );
-
-        // ...but the stale runtime is NOT trusted: no live pane exists until respawn.
-        assert!(state.list_panes().unwrap().is_empty());
-        assert!(state.pane_writer("pane-7").unwrap().is_none());
-
-        // Groups, agents and queues are hydrated directly into the live model.
-        assert_eq!(state.list_groups().unwrap().len(), 1);
-        let agent = state.agent("agent-1").unwrap().expect("agent restored");
-        assert_eq!(agent.session_id.as_deref(), Some("session-abc"));
-        assert_eq!(agent.pane_id, None);
-        assert_eq!(agent.orphaned_queue_pane_id.as_deref(), Some("pane-7"));
-        assert!(matches!(agent.status, AgentStatus::Idle));
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["queued turn".to_string()]
-        );
-
-        // next_id is advanced past the persisted high-water mark so ids never alias.
-        assert!(state.next_id("pane").starts_with("pane-"));
-        let raw = state.next_id("pane");
-        let seq: u64 = raw.rsplit('-').next().unwrap().parse().unwrap();
-        assert!(seq >= 99, "expected next_id >= persisted high-water mark");
-    }
-
-    #[test]
     fn remote_session_identity_is_unique_tmux_safe_and_carries_the_remote() {
         let first = RemoteSessionIdentity::new("devbox", "pane:unsafe/name").unwrap();
         let second = RemoteSessionIdentity::new("devbox", "pane:unsafe/name").unwrap();
@@ -21566,20 +18886,6 @@ mod tests {
                 .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         );
         assert!(RemoteSessionIdentity::new("  ", "pane-1").is_err());
-    }
-
-    #[test]
-    fn persistence_stays_off_until_restore() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        // Without restore_session(), mutations must not touch disk (keeps tests and
-        // ad-hoc AppState construction hermetic).
-        let state = AppState::new(config);
-        state
-            .enqueue_agent_turn("agent-1", "ghost".to_string())
-            .unwrap();
-        assert!(!crate::persistence::state_path(&workspace).exists());
     }
 
     #[test]

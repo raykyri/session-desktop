@@ -1,31 +1,28 @@
-//! The Session in-pane CLI. On the local machine the Session app binary doubles as
-//! the CLI (the app's `main` dispatches through [`run_cli_if_requested`]
-//! before starting Tauri); the standalone `session-cli` binary built from this
-//! crate provides the same commands without the app, so a host that never runs
-//! the app — a remote box reached over ssh — can still service hooks, cwd
-//! reporting, and forks once a transport exists.
+//! The Session command-line interface. The Session app binary doubles as the
+//! CLI (the app's `main` dispatches through [`run_cli_if_requested`] before
+//! starting Tauri); the standalone `session-cli` binary built from this crate
+//! provides the same commands without the app.
+//!
+//! Commands: `send` posts a notification to the running app, `ping` checks that
+//! the app's control socket answers, and `--version` prints the CLI version.
+//! Both socket commands use the token-free, same-user-peer path of the control
+//! socket.
 
-mod mcp;
-mod public_cli;
 pub mod transcript_stream;
 
 use serde_json::{Value, json};
 use session_proto::{
-    BrowserOpenFileHeader, ControlRequest, ControlResponse, MAX_REMOTE_OPEN_FILE_BYTES,
-    PreparedAgentLaunch, REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION,
-    WORKSPACE_OBSERVATION_VERSION, WorkspaceObservation, WorkspaceObservationKind,
+    ControlRequest, ControlResponse, REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION,
+    WORKSPACE_OBSERVATION_VERSION,
 };
 use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-const INITIAL_REMOTE_REPORT_TIMEOUT: Duration = Duration::from_secs(5);
-const INITIAL_REMOTE_REPORT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
-const MCP_USAGE_HINT: &str = "Add `session mcp` as a stdio MCP server in your agent CLI.\nRun it inside a session agent pane so it inherits the authenticated environment.";
+const USAGE: &str = "usage: session <send|ping|--version>";
+
 const SYNTAX_ERROR_PREFIX: &str = "\u{1d}session-syntax:";
 
 fn syntax_error(message: String) -> String {
@@ -59,33 +56,27 @@ pub fn parse_version_line(line: &str) -> Option<&str> {
 pub fn run_cli_if_requested() -> Result<bool, String> {
     let mut args = env::args().skip(1);
     let Some(command) = args.next() else {
-        if env::var_os("SESSION_SOCK").is_some() && env::var_os("SESSION_TOKEN").is_some() {
-            println!("{MCP_USAGE_HINT}");
-            return Ok(true);
-        }
         return Ok(false);
     };
-    if command == "--version" || command == "-V" {
-        println!("{}", version_line());
-        return Ok(true);
-    }
-    if command == "--skill" {
-        print!("{}", public_cli::SKILL);
-        return Ok(true);
-    }
     let remaining = args.collect::<Vec<_>>();
-    if command == "send" {
-        run_notification_send(remaining)?;
-        return Ok(true);
-    }
-    if public_cli::run(&command, remaining.clone())? {
-        return Ok(true);
-    }
-    let mut args = remaining.into_iter();
-
     match command.as_str() {
+        "--version" | "-V" => {
+            println!("{}", version_line());
+            Ok(true)
+        }
+        "send" => {
+            run_notification_send(remaining)?;
+            Ok(true)
+        }
+        "ping" => {
+            if !remaining.is_empty() {
+                return Err(syntax_error("usage: session ping".to_string()));
+            }
+            run_ping()?;
+            Ok(true)
+        }
         "transcript-stream" => {
-            transcript_stream::run(args.collect())?;
+            transcript_stream::run(remaining)?;
             Ok(true)
         }
         "--transcript-stream-version" => {
@@ -100,348 +91,33 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             println!("{WORKSPACE_OBSERVATION_VERSION}");
             Ok(true)
         }
-        "notify" => {
-            let event = args
-                .next()
-                .ok_or_else(|| "usage: session notify <event>".to_string())?;
-            let mut stdin = String::new();
-            std::io::stdin()
-                .read_to_string(&mut stdin)
-                .map_err(|err| format!("failed to read stdin: {err}"))?;
-            let mut payload = parse_payload(&stdin);
-            add_transcript_path(
-                &mut payload,
-                env::var("SESSION_TRANSCRIPT_PATH").ok().as_deref(),
-            );
-            request_silent(
-                "hook.notify",
-                json!({
-                    "event": event,
-                    "paneId": env::var("SESSION_PANE_ID").ok(),
-                    "agentId": env::var("SESSION_AGENT_ID").ok(),
-                    "adapterId": env::var("SESSION_ADAPTER_ID").ok(),
-                    "payload": payload,
-                }),
-            )?;
-            Ok(true)
-        }
-        "cwd" => {
-            // Reports the shell pane's current directory so a restart can reopen it
-            // where the user left off. The server binds the update to the pane that
-            // owns the presented token, so the claimed paneId is advisory only.
-            let initial = match args.next().as_deref() {
-                None => false,
-                Some("--initial") if args.next().is_none() => true,
-                _ => return Err(syntax_error("usage: session cwd [--initial]".to_string())),
-            };
-            let cwd = env::current_dir()
-                .map_err(|err| format!("failed to read current directory: {err}"))?;
-            let payload = json!({
-                "paneId": env::var("SESSION_PANE_ID").ok(),
-                "cwd": cwd.display().to_string(),
-                "activeWorkspace": inspect_workspace(&cwd),
-            });
-            if initial && env::var("SESSION_REMOTE").ok().as_deref() == Some("1") {
-                retry_initial_remote_report(|| {
-                    request_silent("pane.set_workspace", payload.clone())
-                })?;
-            } else {
-                request_silent("pane.set_workspace", payload)?;
-            }
-            Ok(true)
-        }
-        "pane-write" => {
-            let pane_id = args
-                .next()
-                .ok_or_else(|| "usage: session pane-write <pane-id> <text>".to_string())?;
-            let data = args.collect::<Vec<_>>().join(" ");
-            request_and_print(
-                "pane.write",
-                json!({
-                    "paneId": pane_id,
-                    "data": data,
-                    "paste": true,
-                    "submit": true,
-                }),
-            )?;
-            Ok(true)
-        }
-        "agent-exec" => {
-            let adapter_id = args
-                .next()
-                .ok_or_else(|| "usage: session agent-exec <adapter-id> [args...]".to_string())?;
-            run_agent_exec(adapter_id, args.collect())?;
-            Ok(true)
-        }
-        "agent-detach" => {
-            // Run by the shell wrapper once an in-shell agent process exits, so the tab
-            // reverts to a plain shell rather than keeping the agent's last status. The
-            // server detaches the agent bound to this pane's token; the claimed paneId is
-            // advisory. Failures (e.g. no agent attached) must not appear at the
-            // prompt, so the wrapper discards this command's output.
-            request_silent(
-                "agent.detach_pane",
-                json!({ "paneId": env::var("SESSION_PANE_ID").ok() }),
-            )?;
-            Ok(true)
-        }
-        "claude" => {
-            run_agent_exec("claude".to_string(), args.collect())?;
-            Ok(true)
-        }
-        "codex" => {
-            run_agent_exec("codex".to_string(), args.collect())?;
-            Ok(true)
-        }
-        "grok" => {
-            run_agent_exec("grok".to_string(), args.collect())?;
-            Ok(true)
-        }
-        "mcp" => {
-            mcp::run()?;
-            Ok(true)
-        }
-        "fork" => {
-            let mut use_worktree = false;
-            let mut prompt_parts = Vec::new();
-            let mut parse_options = true;
-            for arg in args {
-                if parse_options && arg == "--" {
-                    parse_options = false;
-                    continue;
-                }
-                if parse_options && (arg == "--worktree" || arg == "-w") {
-                    use_worktree = true;
-                    continue;
-                }
-                prompt_parts.push(arg);
-            }
-            let prompt = (!prompt_parts.is_empty()).then(|| prompt_parts.join(" "));
-            let pane = request_value(
-                "agent.fork",
-                json!({ "useWorktree": use_worktree, "prompt": prompt }),
-            )?;
-            let title = pane
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or("the session");
-            let suffix = if use_worktree {
-                " in a fresh worktree"
-            } else {
-                ""
-            };
-            let prompt_suffix = if prompt.is_some() {
-                " and submitted the launch message"
-            } else {
-                ""
-            };
-            println!("Forked {title} into a new tab after this one{suffix}{prompt_suffix}.");
-            Ok(true)
-        }
-        "open" => {
-            let target = args
-                .next()
-                .ok_or_else(|| "usage: session open <file|url>".to_string())?;
-            if args.next().is_some() {
-                return Err(syntax_error("usage: session open <file|url>".to_string()));
-            }
-            if env::var("SESSION_REMOTE").ok().as_deref() == Some("1") {
-                if target.starts_with("http://") || target.starts_with("https://") {
-                    return Err(
-                        "remote session open supports files only; remote URLs are not forwarded"
-                            .to_string(),
-                    );
-                }
-                request_remote_file_open(&target)?;
-                println!("Opened {target} in the session browser overlay.");
-                return Ok(true);
-            }
-            let cwd = env::current_dir()
-                .ok()
-                .map(|path| path.display().to_string());
-            let data = request_value("browser.open", json!({ "target": target, "cwd": cwd }))?;
-            let url = data
-                .get("url")
-                .and_then(Value::as_str)
-                .unwrap_or(target.as_str());
-            println!("Opened {url} in the session browser overlay.");
-            Ok(true)
-        }
-        "ping" => {
-            request_and_print("ping", json!({}))?;
-            Ok(true)
-        }
         "help" | "--help" | "-h" => {
-            println!("{}", public_cli::HELP);
+            println!("{USAGE}");
             Ok(true)
-        }
-        _ if env::var("SESSION_ENV").ok().as_deref() == Some("1") => {
-            Err(syntax_error(format!("unknown session command '{command}'")))
         }
         _ => Ok(false),
     }
 }
 
-fn retry_initial_remote_report(
-    mut report: impl FnMut() -> Result<(), String>,
-) -> Result<(), String> {
-    let deadline = Instant::now() + INITIAL_REMOTE_REPORT_TIMEOUT;
-    loop {
-        match report() {
-            Ok(()) => return Ok(()),
-            Err(error)
-                if error.starts_with("failed to connect to ") && Instant::now() < deadline =>
-            {
-                std::thread::sleep(INITIAL_REMOTE_REPORT_RETRY_INTERVAL);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-}
-
-/// Inspect the shell's cwd where the shell actually runs. In a remote pane this
-/// is deliberately done by session-cli on the remote host, not by the desktop.
-fn inspect_workspace(cwd: &Path) -> WorkspaceObservation {
-    let reported = cwd.display().to_string();
-    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let fields = Command::new("git")
-        .arg("-C")
-        .arg(&canonical)
-        .args([
-            "rev-parse",
-            "--show-toplevel",
-            "--absolute-git-dir",
-            "--git-common-dir",
-            "--abbrev-ref",
-            "HEAD",
-        ])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .and_then(|stdout| {
-            let mut lines = stdout.lines();
-            Some((
-                lines.next()?.trim().to_string(),
-                lines.next()?.trim().to_string(),
-                lines.next()?.trim().to_string(),
-                lines.next().map(str::trim).unwrap_or_default().to_string(),
-            ))
-        })
-        .filter(|(root, git_dir, common_dir, _)| {
-            !root.is_empty() && !git_dir.is_empty() && !common_dir.is_empty()
-        });
-    let Some((git_root, git_dir, common_dir, branch)) = fields else {
-        return WorkspaceObservation {
-            cwd: reported,
-            git_root: None,
-            branch: None,
-            kind: WorkspaceObservationKind::Directory,
-        };
-    };
-    let resolve = |raw: &str| {
-        let path = PathBuf::from(raw);
-        let path = if path.is_absolute() {
-            path
-        } else {
-            canonical.join(path)
-        };
-        std::fs::canonicalize(&path).unwrap_or(path)
-    };
-    let kind = if resolve(&git_dir) == resolve(&common_dir) {
-        WorkspaceObservationKind::MainCheckout
-    } else {
-        WorkspaceObservationKind::LinkedWorktree
-    };
-    WorkspaceObservation {
-        cwd: reported,
-        git_root: Some(resolve(&git_root).display().to_string()),
-        branch: (!branch.is_empty() && branch != "HEAD").then_some(branch),
-        kind,
-    }
-}
-
-fn request_remote_file_open(target: &str) -> Result<(), String> {
-    let requested = Path::new(target);
-    let requested = if requested.is_absolute() {
-        requested.to_path_buf()
-    } else {
-        env::current_dir()
-            .map_err(|err| format!("failed to read current directory: {err}"))?
-            .join(requested)
-    };
-    let canonical = std::fs::canonicalize(&requested)
-        .map_err(|err| format!("'{}' was not found: {err}", requested.display()))?;
-    let mut file = std::fs::File::open(&canonical)
-        .map_err(|err| format!("failed to open {}: {err}", canonical.display()))?;
-    let metadata = file
-        .metadata()
-        .map_err(|err| format!("failed to inspect {}: {err}", canonical.display()))?;
-    if !metadata.is_file() {
-        return Err(format!("'{}' is not a regular file", canonical.display()));
-    }
-    let size = metadata.len();
-    if size > MAX_REMOTE_OPEN_FILE_BYTES {
-        return Err(format!(
-            "'{}' is larger than the {} MiB remote preview limit",
-            canonical.display(),
-            MAX_REMOTE_OPEN_FILE_BYTES / (1024 * 1024)
-        ));
-    }
-    let name = canonical
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "remote preview filename is not valid UTF-8".to_string())?
-        .to_string();
-    if !session_proto::is_safe_browser_preview_name(&name) {
-        return Err(format!("'{name}' is not a browser-previewable file"));
-    }
-
-    let socket_path =
-        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
-    let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
-    let mut stream = UnixStream::connect(&socket_path)
-        .map_err(|err| format!("failed to connect to {socket_path}: {err}"))?;
-    let timeout = Some(Duration::from_secs(60));
-    let _ = stream.set_read_timeout(timeout);
-    let _ = stream.set_write_timeout(timeout);
-    let request = ControlRequest {
-        token,
-        command: "browser.open_file".to_string(),
-        payload: serde_json::to_value(BrowserOpenFileHeader { name, size })
-            .map_err(|err| format!("failed to encode remote preview header: {err}"))?,
-    };
-    serde_json::to_writer(&mut stream, &request)
-        .map_err(|err| format!("failed to encode remote preview request: {err}"))?;
-    stream
-        .write_all(b"\n")
-        .map_err(|err| format!("failed to send remote preview header: {err}"))?;
-    let copied = std::io::copy(&mut Read::by_ref(&mut file).take(size), &mut stream)
-        .map_err(|err| format!("failed to send remote preview: {err}"))?;
-    if copied != size {
-        return Err(format!(
-            "remote preview changed while reading: sent {copied} of {size} bytes"
-        ));
-    }
-    stream
-        .flush()
-        .map_err(|err| format!("failed to flush remote preview: {err}"))?;
-
-    let mut response = String::new();
-    let read = BufReader::new(stream)
-        .read_line(&mut response)
-        .map_err(|err| format!("failed to read remote preview response: {err}"))?;
-    if read == 0 {
-        return Err("Session closed the remote preview connection without a response".to_string());
-    }
-    let response = serde_json::from_str::<ControlResponse>(response.trim_end())
-        .map_err(|err| format!("invalid Session response: {err}"))?;
+/// Asks the running app's control socket for a liveness reply.
+fn run_ping() -> Result<(), String> {
+    let socket_path = notification_socket_path()?;
+    let raw = send_request_with_timeout(
+        socket_path.to_string_lossy().as_ref(),
+        "",
+        "ping",
+        json!({}),
+        Duration::from_secs(2),
+    )?;
+    let response = serde_json::from_str::<ControlResponse>(&raw)
+        .map_err(|error| format!("invalid Session response: {error}"))?;
     if response.ok {
+        println!("{}", response.data);
         Ok(())
     } else {
         Err(response
             .error
-            .unwrap_or_else(|| "Session remote preview failed".to_string()))
+            .unwrap_or_else(|| "Session did not answer the ping".to_string()))
     }
 }
 
@@ -471,12 +147,10 @@ fn run_notification_send(args: Vec<String>) -> Result<(), String> {
     })
     .map_err(syntax_error)?;
     let socket_path = notification_socket_path()?;
-    // A pane token gives the notification a trusted source pane. Outside Session
-    // the empty token selects the peer-credential-gated notification-only path.
-    let token = env::var("SESSION_TOKEN").unwrap_or_default();
+    // The empty token selects the control socket's same-user-peer path.
     let raw = send_request_with_timeout(
         socket_path.to_string_lossy().as_ref(),
-        &token,
+        "",
         "notification.send",
         json!({
             "title": parsed.title,
@@ -682,218 +356,6 @@ fn resolve_notification_socket_path(
         .unwrap_or_else(|| config_dir.join(configured))
 }
 
-fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
-    let pane_id = env::var("SESSION_PANE_ID").map_err(|_| {
-        "SESSION_PANE_ID is not set; run this from a Session shell pane".to_string()
-    })?;
-    let cwd = env::current_dir()
-        .map_err(|err| format!("failed to read current directory for agent launch: {err}"))?;
-    let supervisor_pid = std::process::id();
-    let shell_job_id = format!(
-        "shell-job-{supervisor_pid}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or_default()
-    );
-    let launch = request_value(
-        "agent.prepare_shell_launch",
-        json!({
-            "adapterId": adapter_id.clone(),
-            "paneId": pane_id,
-            "cwd": cwd.display().to_string(),
-            "args": args,
-            "shellJobId": shell_job_id,
-            "supervisorPid": supervisor_pid,
-            "preparedAgentId": env::var("SESSION_PREPARED_AGENT_ID").ok(),
-        }),
-    )?;
-    let launch = serde_json::from_value::<PreparedAgentLaunch>(launch)
-        .map_err(|err| format!("invalid prepared agent launch response: {err}"))?;
-
-    let agent_id = prepared_agent_id(&launch)?;
-    let mut command = Command::new(&launch.binary);
-    command.args(launch.args).current_dir(&launch.cwd);
-    for env in launch.envs {
-        command.env(env.key, env.value);
-    }
-    // The containing shell is a user principal. The agent process receives the
-    // pane token needed by hooks/MCP, but never inherits cross-pane user privileges.
-    if launch.supervised {
-        command.env_remove("SESSION_USER_TOKEN");
-    }
-    // Lifecycle notifications normally resolve their adapter through the bound
-    // agent id. Preserve an explicit hint as well so an authenticated SessionStart
-    // can reconstruct that binding if preparation state was lost.
-    if launch.supervised {
-        command.env("SESSION_ADAPTER_ID", &adapter_id);
-    }
-
-    // The agent must own Ctrl-C/Ctrl-\ itself, so restore the default disposition in the
-    // child after fork (it inherits the SIG_IGN we install below before exec). SIGTSTP is
-    // left untouched so a stop still suspends both processes together.
-    unsafe {
-        command.pre_exec(|| {
-            // Runs in the forked child before exec; only async-signal-safe calls allowed.
-            libc::signal(libc::SIGINT, libc::SIG_DFL);
-            libc::signal(libc::SIGQUIT, libc::SIG_DFL);
-            Ok(())
-        });
-    }
-
-    // Ignore SIGINT/SIGQUIT in the supervisor before spawning so a terminal-generated
-    // signal (delivered to the whole foreground process group during any cooked-mode
-    // window) can't kill us before wait() returns. Surviving the signal is what
-    // guarantees the detach cleanup below always runs.
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-        libc::signal(libc::SIGQUIT, libc::SIG_IGN);
-    }
-
-    let status = command
-        .spawn()
-        .and_then(|mut child| child.wait())
-        .map_err(|err| format!("failed to run agent binary '{}': {err}", launch.binary));
-
-    // Cleanup belongs to the runner, not the injected shell function. A suspended or
-    // backgrounded job can return control to the shell before exiting; detaching here,
-    // after wait() reports a real exit, keeps the pane-agent binding alive across
-    // job-control stop/continue cycles.
-    if let Some(agent_id) = agent_id {
-        let _ = request_silent(
-            "agent.detach_pane",
-            json!({
-                "paneId": env::var("SESSION_PANE_ID").ok(),
-                "jobId": shell_job_id,
-                "agentId": agent_id,
-            }),
-        );
-    }
-
-    let status = status?;
-    std::process::exit(exit_code_for_status(status));
-}
-
-fn prepared_agent_id(launch: &PreparedAgentLaunch) -> Result<Option<String>, String> {
-    if !launch.supervised {
-        return Ok(None);
-    }
-    launch
-        .envs
-        .iter()
-        .find(|env| env.key == "SESSION_AGENT_ID")
-        .map(|env| Some(env.value.clone()))
-        .ok_or_else(|| "prepared shell launch is missing its agent id".to_string())
-}
-
-fn exit_code_for_status(status: std::process::ExitStatus) -> i32 {
-    status
-        .code()
-        .unwrap_or_else(|| status.signal().map(|signal| 128 + signal).unwrap_or(1))
-}
-
-pub(crate) fn request_silent(command: &str, payload: Value) -> Result<(), String> {
-    request(command, payload).map(|_| ())
-}
-
-fn request_and_print(command: &str, payload: Value) -> Result<(), String> {
-    let response = request(command, payload)?;
-    println!("{response}");
-    Ok(())
-}
-
-fn request_value(command: &str, payload: Value) -> Result<Value, String> {
-    request_value_with_timeout(command, payload, Duration::from_secs(2))
-}
-
-pub(crate) fn request_value_with_timeout(
-    command: &str,
-    payload: Value,
-    timeout: Duration,
-) -> Result<Value, String> {
-    let raw = request_with_timeout(command, payload, timeout)?;
-    let response = serde_json::from_str::<ControlResponse>(&raw)
-        .map_err(|err| format!("invalid Session response: {err}"))?;
-    if response.ok {
-        Ok(response.data)
-    } else {
-        Err(response
-            .error
-            .unwrap_or_else(|| "Session request failed".to_string()))
-    }
-}
-
-pub(crate) fn request_public(
-    operation: &str,
-    arguments: Value,
-) -> Result<session_proto::PublicControlResponse, String> {
-    let socket_path =
-        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
-    let token = env::var("SESSION_USER_TOKEN")
-        .or_else(|_| env::var("SESSION_TOKEN"))
-        .map_err(|_| "neither SESSION_USER_TOKEN nor SESSION_TOKEN is set".to_string())?;
-    let timeout = public_request_timeout(operation, &arguments);
-    let raw = send_request_with_timeout(
-        &socket_path,
-        &token,
-        "cli.call",
-        json!({ "operation": operation, "arguments": arguments }),
-        timeout,
-    )?;
-    let outer = serde_json::from_str::<ControlResponse>(&raw)
-        .map_err(|error| format!("invalid Session response: {error}"))?;
-    if !outer.ok {
-        return Err(outer
-            .error
-            .unwrap_or_else(|| "Session request failed".to_string()));
-    }
-    decode_public_response(outer.data)
-}
-
-fn decode_public_response(data: Value) -> Result<session_proto::PublicControlResponse, String> {
-    let response = serde_json::from_value::<session_proto::PublicControlResponse>(data)
-        .map_err(|error| format!("invalid Session public response: {error}"))?;
-    if response.api_version != session_proto::PUBLIC_API_VERSION {
-        return Err(format!(
-            "unsupported Session public API version {}; this CLI supports version {}",
-            response.api_version,
-            session_proto::PUBLIC_API_VERSION
-        ));
-    }
-    Ok(response)
-}
-
-fn public_request_timeout(operation: &str, arguments: &Value) -> Duration {
-    const MAX_WAIT_MS: u64 = 600_000;
-    const RESPONSE_GRACE_MS: u64 = 5_000;
-    if matches!(operation, "pane.waitOutput" | "agent.wait") {
-        let wait_ms = arguments
-            .get("timeoutMs")
-            .and_then(Value::as_u64)
-            .unwrap_or(30_000)
-            .min(MAX_WAIT_MS);
-        return Duration::from_millis(wait_ms + RESPONSE_GRACE_MS);
-    }
-    // Agent launches and native-pane creation can legitimately take longer than
-    // the two-second hook/control fast path. Public calls still stay bounded.
-    Duration::from_secs(30)
-}
-
-fn request(command: &str, payload: Value) -> Result<String, String> {
-    request_with_timeout(command, payload, Duration::from_secs(2))
-}
-
-fn request_with_timeout(
-    command: &str,
-    payload: Value,
-    timeout: Duration,
-) -> Result<String, String> {
-    let socket_path =
-        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
-    let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
-    send_request_with_timeout(&socket_path, &token, command, payload, timeout)
-}
-
 fn send_request_with_timeout(
     socket_path: &str,
     token: &str,
@@ -929,85 +391,9 @@ fn send_request_with_timeout(
     Ok(response.trim_end().to_string())
 }
 
-fn parse_payload(input: &str) -> Value {
-    if input.trim().is_empty() {
-        Value::Null
-    } else {
-        serde_json::from_str(input).unwrap_or_else(|_| Value::String(input.to_string()))
-    }
-}
-
-fn add_transcript_path(payload: &mut Value, path: Option<&str>) {
-    if let Some(path) = path.filter(|path| path.len() <= 8192)
-        && let Some(payload) = payload.as_object_mut()
-        && !payload.contains_key("transcript_path")
-        && !payload.contains_key("transcriptPath")
-    {
-        payload.insert("transcript_path".to_string(), json!(path));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn hook_payload_adds_a_bounded_transcript_hint_without_overriding_native_metadata() {
-        let mut payload = json!({"session_id":"session"});
-        add_transcript_path(&mut payload, Some("/remote/transcript.json"));
-        assert_eq!(payload["transcript_path"], "/remote/transcript.json");
-        add_transcript_path(&mut payload, Some("/other"));
-        assert_eq!(payload["transcript_path"], "/remote/transcript.json");
-        let mut scalar = Value::Null;
-        add_transcript_path(&mut scalar, Some("/remote/transcript.json"));
-        assert!(scalar.is_null());
-    }
-
-    #[test]
-    fn mcp_usage_hint_is_at_most_two_lines_and_names_the_server_command() {
-        assert!(MCP_USAGE_HINT.lines().count() <= 2);
-        assert!(MCP_USAGE_HINT.contains("session mcp"));
-        assert!(MCP_USAGE_HINT.contains("stdio"));
-    }
-
-    fn prepared_launch(
-        supervised: bool,
-        envs: Vec<session_proto::LaunchEnv>,
-    ) -> PreparedAgentLaunch {
-        PreparedAgentLaunch {
-            binary: "/usr/bin/true".to_string(),
-            cwd: "/tmp".to_string(),
-            args: Vec::new(),
-            envs,
-            supervised,
-        }
-    }
-
-    #[test]
-    fn shell_passthrough_does_not_require_an_agent_binding() {
-        assert_eq!(
-            prepared_agent_id(&prepared_launch(false, Vec::new())).unwrap(),
-            None
-        );
-    }
-
-    #[test]
-    fn supervised_shell_launch_requires_an_agent_binding() {
-        let error = prepared_agent_id(&prepared_launch(true, Vec::new())).unwrap_err();
-        assert_eq!(error, "prepared shell launch is missing its agent id");
-
-        let launch = prepared_launch(
-            true,
-            vec![session_proto::LaunchEnv {
-                key: "SESSION_AGENT_ID".to_string(),
-                value: "agent-1".to_string(),
-            }],
-        );
-        assert_eq!(
-            prepared_agent_id(&launch).unwrap().as_deref(),
-            Some("agent-1")
-        );
-    }
 
     #[test]
     fn version_line_matches_package_and_parses() {
@@ -1018,125 +404,6 @@ mod tests {
         assert_eq!(parse_version_line("not-a-version"), None);
         // A matching version string alone does not mean an old helper binary supports SESSION_* env vars.
         assert_eq!(parse_version_line(&format!("qmux-cli {VERSION}")), None);
-    }
-
-    #[test]
-    fn initial_remote_workspace_report_retries_until_forward_is_ready() {
-        let attempts = std::cell::Cell::new(0);
-        retry_initial_remote_report(|| {
-            attempts.set(attempts.get() + 1);
-            (attempts.get() >= 3)
-                .then_some(())
-                .ok_or_else(|| "failed to connect to forwarded socket".to_string())
-        })
-        .unwrap();
-        assert_eq!(attempts.get(), 3);
-    }
-
-    #[test]
-    fn initial_remote_workspace_report_does_not_retry_server_errors() {
-        let attempts = std::cell::Cell::new(0);
-        let error = retry_initial_remote_report(|| {
-            attempts.set(attempts.get() + 1);
-            Err("pane token was rejected".to_string())
-        })
-        .unwrap_err();
-        assert_eq!(error, "pane token was rejected");
-        assert_eq!(attempts.get(), 1);
-    }
-
-    #[test]
-    fn workspace_inspection_distinguishes_directories_and_linked_worktrees() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("session-cli-workspace-{nonce}"));
-        let repo = root.join("repo");
-        let linked = root.join("linked");
-        std::fs::create_dir_all(&repo).unwrap();
-        let git = |cwd: &Path, args: &[&str]| {
-            let output = Command::new("git")
-                .arg("-C")
-                .arg(cwd)
-                .args(args)
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&repo, &["init", "-b", "main"]);
-        git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "session test"]);
-        git(&repo, &["commit", "--allow-empty", "-m", "init"]);
-        git(
-            &repo,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                "feature/remote",
-                linked.to_str().unwrap(),
-                "HEAD",
-            ],
-        );
-
-        let plain = inspect_workspace(&root);
-        assert_eq!(plain.kind, WorkspaceObservationKind::Directory);
-        assert_eq!(plain.git_root, None);
-
-        let main = inspect_workspace(&repo);
-        assert_eq!(main.kind, WorkspaceObservationKind::MainCheckout);
-        assert_eq!(main.branch.as_deref(), Some("main"));
-
-        let worktree = inspect_workspace(&linked);
-        assert_eq!(worktree.kind, WorkspaceObservationKind::LinkedWorktree);
-        assert_eq!(worktree.branch.as_deref(), Some("feature/remote"));
-        assert_eq!(
-            worktree.git_root.as_deref(),
-            std::fs::canonicalize(&linked).unwrap().to_str()
-        );
-
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn public_parser_failures_are_syntax_errors() {
-        let error = public_cli::run("pane", vec!["wat".into()]).unwrap_err();
-        let (message, exit_code) = error_report(&error);
-        assert_eq!(exit_code, 2);
-        assert_eq!(message, "unknown pane command 'wat'");
-    }
-
-    #[test]
-    fn public_wait_timeout_includes_the_requested_wait_and_response_grace() {
-        assert_eq!(
-            public_request_timeout("pane.waitOutput", &json!({ "timeoutMs": 120_000 })),
-            Duration::from_secs(125)
-        );
-        assert_eq!(
-            public_request_timeout("agent.wait", &json!({ "timeoutMs": 900_000 })),
-            Duration::from_secs(605)
-        );
-        assert_eq!(
-            public_request_timeout("pane.list", &json!({})),
-            Duration::from_secs(30)
-        );
-    }
-
-    #[test]
-    fn public_response_rejects_an_unknown_api_version() {
-        let error = decode_public_response(json!({
-            "ok": true,
-            "apiVersion": session_proto::PUBLIC_API_VERSION + 1,
-            "result": {},
-            "error": null
-        }))
-        .unwrap_err();
-        assert!(error.contains("unsupported Session public API version"));
     }
 
     #[test]

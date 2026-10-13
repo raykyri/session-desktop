@@ -4,19 +4,13 @@ pub mod grok;
 
 use crate::config::SessionConfig;
 use crate::events::SessionEvent;
-use crate::pty::{
-    InitialPaneSize, ensure_shell_agent_startup_supported, spawn_shell_agent_command_pane,
-};
+use crate::pty::InitialPaneSize;
 use crate::state::{AppState, PaneInfo};
 use crate::transcript::{Turn, TurnBlock};
 // The canonical JSON string-field extractor. Re-exported so the adapters can reach it
 // as `super::string_field` and share the one definition (see `transcript::string_field`).
 pub(crate) use crate::transcript::string_field;
-use crate::workspace::{
-    ActiveWorkspaceSource, AgentInfo, AgentStatus, PrepareAgentWorkspaceRequest, attach_agent_pane,
-    mark_agent_spawn_failed, prepare_agent_workspace_with_parent,
-    prepare_named_agent_workspace_with_parent,
-};
+use crate::workspace::{ActiveWorkspaceSource, AgentInfo, AgentStatus};
 use claude::ClaudeAdapter;
 use codex::CodexAdapter;
 use grok::GrokAdapter;
@@ -28,9 +22,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-pub use claude::PrepareShellClaudeLaunchRequest;
-pub use session_proto::{LaunchEnv, PreparedAgentLaunch as PreparedShellAgentLaunch};
 
 /// Single-quotes a path for safe interpolation into a POSIX shell command,
 /// escaping embedded single quotes. Shared by the Claude and Codex adapters,
@@ -83,98 +74,6 @@ pub(crate) fn hook_transcript_path_acceptable(current: Option<&str>, candidate: 
         Some(current) => Path::new(current).parent() == candidate.parent(),
         None => true,
     }
-}
-
-/// Finds the existing unbound agent for `session_id` running in `cwd`, so a shell
-/// resume (`claude --resume <id>` / `codex resume <id>`) rebinds the original agent
-/// instead of minting a duplicate every restart. Scoped to the same adapter, the
-/// same directory, and an agent not currently bound to a pane, so a manual resume
-/// of a live session (bound elsewhere) or a different project still starts fresh.
-pub(crate) fn reusable_session_agent(
-    state: &AppState,
-    adapter_id: &str,
-    session_id: Option<&str>,
-    cwd: &str,
-) -> Result<Option<AgentInfo>, String> {
-    let Some(session_id) = session_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return Ok(None);
-    };
-    Ok(state.list_agents()?.into_iter().find(|agent| {
-        agent.adapter == adapter_id
-            && agent.pane_id.is_none()
-            && same_dir(&agent.worktree_dir, cwd)
-            && native_session_selector_matches(agent, session_id, cwd)
-    }))
-}
-
-/// Records a concrete native session id supplied to a shell-level resume command.
-/// The CLI will keep this identity when it resumes, so make it visible before the
-/// later SessionStart hook arrives. Parsers deliberately pass `None` for selectors
-/// such as `--last` and for forks, whose live session gets a different identity.
-pub(crate) fn record_shell_resume_identity(
-    state: &AppState,
-    agent: AgentInfo,
-    session_id: Option<&str>,
-) -> Result<AgentInfo, String> {
-    let Some(session_id) = session_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return Ok(agent);
-    };
-    state
-        .mutate_agent(&agent.id, |agent| {
-            agent.session_id = Some(session_id.to_string());
-        })?
-        .ok_or_else(|| {
-            format!(
-                "agent {} disappeared while recording resumed session identity",
-                agent.id
-            )
-        })
-}
-
-/// Records the shell-launch lineage for a resolved agent in one step — fork
-/// provenance, then any concrete resumed session identity — so every adapter
-/// makes a single call and cannot skip half of the ritual.
-pub(crate) fn record_shell_session_lineage(
-    state: &AppState,
-    agent: AgentInfo,
-    adapter_id: &str,
-    fork_point: Option<&str>,
-    resume_session_id: Option<&str>,
-    cwd: &str,
-) -> Result<AgentInfo, String> {
-    let agent = record_shell_fork_lineage(state, agent, adapter_id, fork_point, cwd)?;
-    record_shell_resume_identity(state, agent, resume_session_id)
-}
-
-/// Value of a CLI flag from shell args: `--flag value` or `--flag=value`.
-/// Stops at a bare `--` so positional prompts after the separator are not
-/// mistaken for flag values.
-pub(crate) fn cli_flag_value(args: &[String], flag: &str) -> Option<String> {
-    let eq_prefix = format!("{flag}=");
-    let mut index = 0;
-    while index < args.len() {
-        let arg = &args[index];
-        if arg == "--" {
-            break;
-        }
-        if let Some(value) = arg.strip_prefix(&eq_prefix) {
-            let value = value.trim();
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
-        } else if arg == flag {
-            if let Some(value) = args.get(index + 1) {
-                if !value.starts_with('-') {
-                    let value = value.trim();
-                    if !value.is_empty() {
-                        return Some(value.to_string());
-                    }
-                }
-            }
-        }
-        index += 1;
-    }
-    None
 }
 
 /// Normalize a raw model id for storage/display. Maps Claude API-style ids
@@ -242,38 +141,6 @@ pub(crate) fn model_from_codex_transcript_line(line: &str) -> Option<String> {
     }
 }
 
-/// Model from shell CLI args (`--model`), already normalized. Used when minting
-/// a shell agent so the first `agent.spawned` event can carry it.
-pub(crate) fn shell_cli_model(args: &[String]) -> Option<String> {
-    cli_flag_value(args, "--model").and_then(|model| normalize_agent_model(&model))
-}
-
-/// Apply an explicit `--model` from shell args onto a resolved agent when it
-/// differs from the stored value (covers prepared/resumed agents that did not
-/// receive the model when the request is created).
-pub(crate) fn apply_shell_cli_model(
-    state: &AppState,
-    agent: AgentInfo,
-    args: &[String],
-) -> Result<AgentInfo, String> {
-    let Some(model) = shell_cli_model(args) else {
-        return Ok(agent);
-    };
-    if agent.model.as_deref() == Some(model.as_str()) {
-        return Ok(agent);
-    }
-    state
-        .mutate_agent(&agent.id, |agent| {
-            agent.model = Some(model);
-        })?
-        .ok_or_else(|| {
-            format!(
-                "agent {} disappeared while recording shell launch model",
-                agent.id
-            )
-        })
-}
-
 /// Record a model discovered from a tailed transcript line. Updates the agent
 /// only when the normalized value differs, and emits `agent.updated` so the UI
 /// can show it without a full agent-list refetch.
@@ -303,58 +170,6 @@ pub(crate) fn maybe_record_agent_model(
         ));
     }
     Ok(updated)
-}
-
-/// Resolves a session-reserved agent for an automatically started shell command.
-/// Ordinary commands typed by the user do not carry `prepared_agent_id` and keep
-/// the existing create/reuse behavior. A prepared id must describe an unbound
-/// agent for this adapter, pane group, and effective cwd so a forged environment
-/// value cannot claim another workspace's agent record.
-pub(crate) fn prepared_shell_agent(
-    state: &AppState,
-    adapter_id: &str,
-    prepared_agent_id: Option<&str>,
-    pane_id: &str,
-    pane_group_id: &str,
-    cwd: &str,
-) -> Result<Option<AgentInfo>, String> {
-    let Some(agent_id) = prepared_agent_id
-        .map(str::trim)
-        .filter(|agent_id| !agent_id.is_empty())
-    else {
-        return Ok(None);
-    };
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("prepared agent {agent_id} was not found"))?;
-    if agent.adapter != adapter_id {
-        return Err(format!(
-            "prepared agent {agent_id} uses adapter '{}', not '{adapter_id}'",
-            agent.adapter
-        ));
-    }
-    if agent.group_id != pane_group_id {
-        return Err(format!(
-            "prepared agent {agent_id} belongs to workspace {}, not {pane_group_id}",
-            agent.group_id
-        ));
-    }
-    if agent
-        .pane_id
-        .as_deref()
-        .is_some_and(|bound| bound != pane_id)
-    {
-        return Err(format!(
-            "prepared agent {agent_id} is already attached to a pane"
-        ));
-    }
-    if !same_dir(&agent.worktree_dir, cwd) {
-        return Err(format!(
-            "prepared agent {agent_id} expects working directory {}, not {cwd}",
-            agent.worktree_dir
-        ));
-    }
-    Ok(Some(agent))
 }
 
 /// Records native lineage on a fresh agent created by a shell-level fork command.
@@ -649,53 +464,6 @@ pub struct SpawnAgentRequest {
     pub fork_session: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PrepareShellAgentLaunchRequest {
-    pub adapter_id: String,
-    pub pane_id: String,
-    pub cwd: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub shell_job_id: Option<String>,
-    #[serde(default)]
-    pub supervisor_pid: Option<u32>,
-    #[serde(default)]
-    pub prepared_agent_id: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AdapterNotification {
-    pub adapter_id: Option<String>,
-    pub event: String,
-    pub pane_id: Option<String>,
-    pub agent_id: Option<String>,
-    #[serde(default)]
-    pub payload: Value,
-}
-
-pub(crate) fn subagent_id(payload: &Value) -> Option<&str> {
-    ["agent_id", "agentId", "subagent_id", "subagentId"]
-        .into_iter()
-        .find_map(|key| payload.get(key).and_then(Value::as_str))
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-}
-
-pub enum AdapterNotificationOutcome {
-    Event(SessionEvent),
-}
-
-impl AdapterNotificationOutcome {
-    pub fn into_events(self) -> Vec<SessionEvent> {
-        match self {
-            AdapterNotificationOutcome::Event(event) => vec![event],
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct ShellCommandIntegration {
     pub command_name: &'static str,
@@ -742,14 +510,6 @@ impl ComposerPolicy {
     pub fn can_send(&self, status: AgentStatus) -> bool {
         self.ready_statuses.contains(&status)
     }
-
-    pub fn should_queue(&self, status: AgentStatus) -> bool {
-        self.queue_statuses.contains(&status)
-    }
-
-    pub fn can_steer(&self, status: AgentStatus) -> bool {
-        self.steer_statuses.contains(&status)
-    }
 }
 
 pub trait AgentAdapter: Send + Sync {
@@ -759,24 +519,6 @@ pub trait AgentAdapter: Send + Sync {
     fn configured_binary(&self) -> &str;
 
     fn launch(&self, state: &AppState, request: SpawnAgentRequest) -> Result<PaneInfo, String>;
-
-    fn prepare_shell_launch(
-        &self,
-        state: &AppState,
-        request: PrepareShellAgentLaunchRequest,
-    ) -> Result<PreparedShellAgentLaunch, String>;
-
-    /// Gives an adapter the first chance to classify a wrapped shell command
-    /// as a utility invocation rather than an interactive agent. A returned
-    /// launch must set `supervised` to false and must not mutate workspace or
-    /// pane state. The default keeps every invocation on the normal supervised
-    /// path, preserving existing adapters' behavior.
-    fn prepare_shell_passthrough(
-        &self,
-        _request: &PrepareShellAgentLaunchRequest,
-    ) -> Result<Option<PreparedShellAgentLaunch>, String> {
-        Ok(None)
-    }
 
     fn shell_commands(&self) -> Vec<ShellCommandIntegration>;
 
@@ -791,12 +533,6 @@ pub trait AgentAdapter: Send + Sync {
     fn supports_remote(&self) -> bool {
         false
     }
-
-    fn ingest_notification(
-        &self,
-        state: &AppState,
-        notification: AdapterNotification,
-    ) -> Result<AdapterNotificationOutcome, String>;
 
     fn parse_transcript_line(
         &self,
@@ -856,21 +592,6 @@ pub trait AgentAdapter: Send + Sync {
         None
     }
 
-    /// Writes a copy of `transcript_path` truncated to exclude `anchor` and
-    /// everything after it, returning the new session's id. The copy is written
-    /// beside the source so the CLI discovers it the same way it finds its own
-    /// sessions — the id is the only handle a resume needs. Adapters that
-    /// cannot be truncated safely keep this default and are reported as such by
-    /// `adapter_supports_fork_at_message`.
-    fn synthesize_truncated_session(
-        &self,
-        _transcript_path: &Path,
-        _anchor: &MessageAnchor,
-        _target_cwd: &Path,
-    ) -> Result<String, String> {
-        Err(FORK_UNSUPPORTED_ERROR.to_string())
-    }
-
     fn supports_fork(&self) -> bool {
         false
     }
@@ -883,24 +604,6 @@ pub trait AgentAdapter: Send + Sync {
 
     fn supports_fork_at_message(&self) -> bool {
         false
-    }
-
-    fn shell_fork_args(
-        &self,
-        _source: &AgentInfo,
-        _cwd: &Path,
-        _prompt: Option<&str>,
-    ) -> Result<Vec<String>, String> {
-        Err(FORK_UNSUPPORTED_ERROR.to_string())
-    }
-
-    fn shell_fork_at_message_args(
-        &self,
-        _source: &AgentInfo,
-        _seed_session_id: &str,
-        _prompt: Option<&str>,
-    ) -> Result<Vec<String>, String> {
-        Err(FORK_AT_MESSAGE_UNSUPPORTED_ERROR.to_string())
     }
 
     fn fork_pane(
@@ -1624,179 +1327,6 @@ pub(crate) fn ensure_on_path(binary: &str) -> Option<PathBuf> {
     crate::launch_path::resolve_binary(binary)
 }
 
-pub fn agent_spawn(state: &AppState, request: SpawnAgentRequest) -> Result<PaneInfo, String> {
-    adapter_registry(state.config())
-        .get(&request.adapter_id)?
-        .launch(state, request)
-}
-
-/// Forks the agent running in `authed_pane` into a new tab immediately after it and
-/// resumes its session. The source is resolved from the
-/// authenticated pane (never caller input), so a pane can only fork its own session.
-/// When `prompt` is set, the fork is launched with that initial user message.
-pub fn agent_fork(
-    state: &AppState,
-    authed_pane: &str,
-    use_worktree: bool,
-    prompt: Option<String>,
-    anchor: Option<MessageAnchor>,
-    worktree_name: Option<String>,
-) -> Result<PaneInfo, String> {
-    let source = state
-        .agent_by_pane(authed_pane)?
-        .ok_or_else(|| "no agent is running in this pane to fork".to_string())?;
-    fork_agent_in_shell(
-        state,
-        &source,
-        use_worktree,
-        prompt.as_deref(),
-        anchor.as_ref(),
-        worktree_name.as_deref(),
-    )
-}
-
-/// Forks an ordinary terminal agent into a new persistent shell pane. The child
-/// agent/worktree is reserved up front, then the shell starts the adapter through
-/// the same `session agent-exec` path used when a user types the command manually.
-/// When the adapter exits, the supervisor detaches it and leaves the shell prompt.
-fn fork_agent_in_shell(
-    state: &AppState,
-    source: &AgentInfo,
-    use_worktree: bool,
-    prompt: Option<&str>,
-    anchor: Option<&MessageAnchor>,
-    worktree_name: Option<&str>,
-) -> Result<PaneInfo, String> {
-    if !use_worktree && worktree_name.is_some() {
-        return Err("a worktree name requires a worktree fork".to_string());
-    }
-    let registry = adapter_registry(state.config());
-    let adapter = registry
-        .get(&source.adapter)
-        .map_err(|_| FORK_UNSUPPORTED_ERROR.to_string())?;
-    if !adapter.supports_fork() {
-        return Err(FORK_UNSUPPORTED_ERROR.to_string());
-    }
-    if anchor.is_some() && !adapter.supports_fork_at_message() {
-        return Err(FORK_AT_MESSAGE_UNSUPPORTED_ERROR.to_string());
-    }
-    ensure_shell_agent_startup_supported()?;
-    let session_id = source
-        .session_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|session_id| !session_id.is_empty())
-        .ok_or_else(|| {
-            format!(
-                "this {} session isn't ready to fork yet (no session id); send a turn first",
-                source.adapter
-            )
-        })?
-        .to_string();
-    let conversation_history = match state.capture_conversation_history(source, anchor) {
-        Ok(history) => history,
-        Err(err) => {
-            eprintln!(
-                "session: could not capture conversation history for fork of {}: {err}",
-                source.id
-            );
-            None
-        }
-    };
-    let workspace_request = PrepareAgentWorkspaceRequest {
-        group_id: Some(source.group_id.clone()),
-        base_repo: if use_worktree && worktree_name.is_none() {
-            None
-        } else {
-            Some(source.worktree_dir.clone())
-        },
-        base_ref: Some("HEAD".to_string()),
-        adapter: source.adapter.clone(),
-        model: source.model.clone(),
-        effort: source.effort.clone(),
-        use_worktree,
-    };
-    let mut agent = match worktree_name {
-        Some(name) => prepare_named_agent_workspace_with_parent(
-            state,
-            workspace_request,
-            Some(&source.id),
-            name,
-        )?,
-        None => prepare_agent_workspace_with_parent(state, workspace_request, Some(&source.id))?,
-    };
-    agent.fork_point = Some(session_id.clone());
-    agent.root_session_id = source
-        .root_session_id
-        .clone()
-        .or_else(|| Some(session_id.clone()));
-    agent.status = AgentStatus::Idle;
-    state.update_agent(agent.clone())?;
-    if let Some(history) = conversation_history
-        && let Err(err) = state.record_conversation_history(&agent, history)
-    {
-        eprintln!(
-            "session: could not record conversation history for fork {}: {err}",
-            agent.id
-        );
-    }
-
-    let cwd = PathBuf::from(&agent.worktree_dir);
-    if !cwd.is_dir() {
-        return Err(format!(
-            "fork working directory {} does not exist",
-            cwd.display()
-        ));
-    }
-    let args = match (source.adapter.as_str(), anchor) {
-        // An anchored fork resumes a transcript synthesized from the source's
-        // own file. Resolving the path from `source` — never from the caller —
-        // keeps a forged anchor confined to the transcript of the pane that
-        // sent it.
-        (_, Some(anchor)) => {
-            let transcript_path = source
-                .transcript_path
-                .as_deref()
-                .map(str::trim)
-                .filter(|path| !path.is_empty())
-                .ok_or_else(|| {
-                    format!(
-                        "this {} session has no transcript yet; send a turn first",
-                        source.adapter
-                    )
-                })?;
-            let seed_session_id =
-                adapter.synthesize_truncated_session(Path::new(transcript_path), anchor, &cwd)?;
-            adapter.shell_fork_at_message_args(source, &seed_session_id, prompt)?
-        }
-        (_, None) => adapter.shell_fork_args(source, &cwd, prompt)?,
-    };
-    let pane_id = state.next_id("pane");
-    let agent = attach_agent_pane(state, &agent.id, pane_id.clone())?;
-    let pane = match spawn_shell_agent_command_pane(
-        state,
-        pane_id.clone(),
-        agent.group_id.clone(),
-        cwd,
-        &source.adapter,
-        &args,
-        &agent.id,
-    ) {
-        Ok(pane) => pane,
-        Err(err) => {
-            let failed = mark_agent_spawn_failed(state, &agent.id, &pane_id)?;
-            state.emit(SessionEvent::new(
-                "agent.spawn_failed",
-                Some(pane_id),
-                Some(failed.id.clone()),
-                json!({ "agent": failed, "error": err.clone() }),
-            ));
-            return Err(err);
-        }
-    };
-    finish_fork_spawn(state, source, pane, agent)
-}
-
 pub fn adapter_supports_research(config: &SessionConfig, adapter_id: &str) -> bool {
     adapter_registry(config)
         .get(adapter_id)
@@ -1829,26 +1359,6 @@ pub struct MessageAnchor {
     pub parent_native_id: Option<String>,
     /// Transcript line index of the message being forked from.
     pub source_index: usize,
-}
-
-/// Refused when the chosen message has no history before it. Truncating there
-/// would leave a transcript with no turns rather than a valid fork.
-pub const FORK_AT_MESSAGE_EMPTY_ERROR: &str =
-    "Cannot fork from the first message; select a later message instead";
-
-pub const FORK_AT_MESSAGE_UNSUPPORTED_ERROR: &str =
-    "Forking from a message is not supported for this agent adapter";
-
-/// Parses a native transcript into `(line, value)` pairs, skipping records that
-/// do not parse. Tolerating bad lines is deliberate: forking from a live session
-/// races the CLI's own writes, so the final line can be torn mid-write. Dropping
-/// it loses at most the in-flight record, which is after the fork point anyway.
-pub(crate) fn parse_transcript_records(contents: &str) -> Vec<(&str, Value)> {
-    contents
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok().map(|v| (line, v)))
-        .collect()
 }
 
 /// Mints a random v4 UUID. Both adapters name synthesized sessions this way:
@@ -2031,81 +1541,6 @@ pub fn spawn_sibling_agent_session(
     Ok(pane)
 }
 
-pub fn agent_prepare_shell_launch(
-    state: &AppState,
-    request: PrepareShellAgentLaunchRequest,
-) -> Result<PreparedShellAgentLaunch, String> {
-    let shell_job_id = request.shell_job_id.clone();
-    let supervisor_pid = request.supervisor_pid;
-    let pane_id = request.pane_id.clone();
-    let prepared_agent_id = request.prepared_agent_id.clone();
-    let registry = adapter_registry(state.config());
-    let adapter = registry.get(&request.adapter_id)?;
-    // Existing remote shells may still have wrappers for local-only adapters.
-    // Let the remote CLI resolve and run their configured binary directly,
-    // before adapter preparation can inspect local paths or install hooks.
-    if !adapter.supports_remote()
-        && state
-            .list_panes()?
-            .iter()
-            .any(|pane| pane.id == request.pane_id && pane.remote_session.is_some())
-    {
-        return Ok(PreparedShellAgentLaunch {
-            binary: adapter.configured_binary().to_string(),
-            cwd: request.cwd,
-            args: request.args,
-            envs: Vec::new(),
-            supervised: false,
-        });
-    }
-    if let Some(passthrough) = adapter.prepare_shell_passthrough(&request)? {
-        if passthrough.supervised {
-            return Err("adapter shell passthrough was incorrectly marked supervised".to_string());
-        }
-        return Ok(passthrough);
-    }
-    let prepared = match adapter.prepare_shell_launch(state, request) {
-        Ok(prepared) => prepared,
-        Err(err) => {
-            // The caller authenticated for this pane only, and `prepared_agent_id`
-            // is a caller-supplied environment value — the very thing
-            // `prepared_shell_agent` refuses to honor across workspaces or panes
-            // on the success path (and whose validation error may be exactly why
-            // we are here). Apply the same ownership scope before recording a
-            // failure, so one pane's token can't flip an unrelated agent to
-            // Failed by naming it in a failing prepare.
-            if let Some(agent_id) = prepared_agent_id
-                && let Some(agent) = state.agent(&agent_id)?
-                && state.pane_group_id(&pane_id)?.as_deref() == Some(agent.group_id.as_str())
-                && agent
-                    .pane_id
-                    .as_deref()
-                    .is_none_or(|bound| bound == pane_id)
-            {
-                let failed = mark_agent_spawn_failed(state, &agent_id, &pane_id)?;
-                state.emit(SessionEvent::new(
-                    "agent.spawn_failed",
-                    Some(pane_id),
-                    Some(failed.id.clone()),
-                    json!({ "agent": failed, "error": err.clone() }),
-                ));
-            }
-            return Err(err);
-        }
-    };
-    if let (Some(job_id), Some(supervisor_pid)) = (shell_job_id, supervisor_pid) {
-        let agent_id = prepared
-            .envs
-            .iter()
-            .find(|env| env.key == "SESSION_AGENT_ID")
-            .map(|env| env.value.clone())
-            .ok_or_else(|| "prepared shell launch is missing its agent id".to_string())?;
-        let info = state.register_shell_agent_job(job_id, agent_id, pane_id, supervisor_pid)?;
-        crate::shell_jobs::emit_job_state(state, &info);
-    }
-    Ok(prepared)
-}
-
 pub fn agent_composer_policy(
     state: &AppState,
     agent: &AgentInfo,
@@ -2113,67 +1548,6 @@ pub fn agent_composer_policy(
     Ok(adapter_registry(state.config())
         .get(&agent.adapter)?
         .composer_policy())
-}
-
-pub fn ingest_adapter_notification(
-    state: &AppState,
-    notification: AdapterNotification,
-) -> Result<AdapterNotificationOutcome, String> {
-    let adapter_id = notification_adapter_id(state, &notification)?;
-    adapter_registry(state.config())
-        .get(&adapter_id)?
-        .ingest_notification(state, notification)
-}
-
-fn notification_adapter_id(
-    state: &AppState,
-    notification: &AdapterNotification,
-) -> Result<String, String> {
-    if let Some(agent_id) = notification.agent_id.as_deref() {
-        let agent = state
-            .agent(agent_id)?
-            .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-        return Ok(agent.adapter);
-    }
-
-    notification_adapter_fallback(state, notification)?
-        .ok_or_else(|| "hook.notify could not resolve an agent adapter for this pane".to_string())
-}
-
-/// Like `notification_adapter_id`, but tolerant of a claimed agent id whose
-/// record no longer exists: SessionStart recovery resolves the adapter from
-/// the remaining hints instead of failing on the stale id. Kept beside the
-/// strict resolver so the two hint chains remain consistent.
-pub(crate) fn notification_adapter_hint(
-    state: &AppState,
-    notification: &AdapterNotification,
-) -> Result<Option<String>, String> {
-    if let Some(agent_id) = notification.agent_id.as_deref()
-        && let Some(agent) = state.agent(agent_id)?
-    {
-        return Ok(Some(agent.adapter));
-    }
-
-    notification_adapter_fallback(state, notification)
-}
-
-fn notification_adapter_fallback(
-    state: &AppState,
-    notification: &AdapterNotification,
-) -> Result<Option<String>, String> {
-    if let Some(pane_id) = notification.pane_id.as_deref()
-        && let Some(agent) = state.agent_by_pane(pane_id)?
-    {
-        return Ok(Some(agent.adapter));
-    }
-
-    Ok(notification.adapter_id.clone().or_else(|| {
-        notification
-            .payload
-            .get("adapterId")
-            .and_then(Value::as_str)
-            .map(ToString::to_string)
-    }))
 }
 
 #[cfg(test)]
@@ -2475,112 +1849,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn stale_remote_shell_wrappers_bypass_local_adapter_preparation() {
-        let mut config = test_config();
-        // This executable and cwd deliberately do not exist on the Mac.
-        config.adapters.grok.binary = Some("/remote/tools/grok".into());
-        let state = AppState::new(config);
-        let identity = crate::state::RemoteSessionIdentity::new("r", "p").unwrap();
-        let remote = serde_json::from_value(json!({
-            "id":"r", "label":"Remote", "host":"unreachable.invalid", "multiplexer":"tmux"
-        }))
-        .unwrap();
-        let commands = crate::host::for_group(Some(&remote))
-            .existing_tmux_session_commands(&identity, "/unused.sock")
-            .unwrap();
-        state
-            .insert_pane(crate::state::PaneRuntime {
-                info: serde_json::from_value(json!({
-                    "id":"p", "title":"Remote", "kind":"shell", "groupId":"g",
-                    "cwd":"/remote/project", "remoteSession":identity,
-                    "cols":80, "rows":24, "status":"running"
-                }))
-                .unwrap(),
-                backend: crate::state::PaneBackend::RemoteTmux(
-                    crate::state::RemoteTmuxBackend::new(
-                        crate::remote_terminal::RemoteAttachmentController::new(),
-                        crate::remote_terminal::RemoteHistoryCheckpoint::new(Vec::new()),
-                        std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
-                        commands,
-                    ),
-                ),
-                cwd_observation_seq: 0,
-            })
-            .unwrap();
-        let registry = adapter_registry(state.config());
-        for adapter in registry
-            .adapters
-            .iter()
-            .filter(|adapter| !adapter.supports_remote())
-        {
-            for args in [
-                vec![],
-                vec!["--help".to_string()],
-                vec!["a prompt with 'quotes'".to_string()],
-            ] {
-                let launch = agent_prepare_shell_launch(
-                    &state,
-                    PrepareShellAgentLaunchRequest {
-                        adapter_id: adapter.id().into(),
-                        pane_id: "p".into(),
-                        cwd: "/remote/project".into(),
-                        args: args.clone(),
-                        shell_job_id: Some("unused-job".into()),
-                        supervisor_pid: Some(123),
-                        prepared_agent_id: None,
-                    },
-                )
-                .unwrap();
-                assert_eq!(launch.binary, adapter.configured_binary());
-                assert_eq!(launch.cwd, "/remote/project");
-                assert_eq!(launch.args, args);
-                assert!(!launch.supervised);
-                assert!(launch.envs.is_empty());
-                assert!(state.agent_by_pane("p").unwrap().is_none());
-            }
-        }
-    }
-
-    #[test]
-    fn agent_fork_requires_a_supported_agent_in_the_pane() {
-        let state = AppState::new(test_config());
-
-        // No agent bound to the pane: nothing to fork.
-        let err = agent_fork(&state, "pane-1", false, None, None, None).unwrap_err();
-        assert!(err.contains("no agent"), "unexpected error: {err}");
-
-        // An adapter without a native fork command is rejected before any spawn is attempted.
-        state
-            .insert_agent(AgentInfo {
-                id: "agent-1".to_string(),
-                group_id: "group-1".to_string(),
-                adapter: "unsupported".to_string(),
-                worktree_dir: "/tmp/session-adapter-tests".to_string(),
-                branch: None,
-                active_workspace: None,
-                pane_id: Some("pane-1".to_string()),
-                orphaned_queue_pane_id: None,
-                session_id: Some("session-1".to_string()),
-                transcript_path: None,
-                status: AgentStatus::Running,
-                model: None,
-                effort: None,
-                approval_mode: None,
-                parent_id: None,
-                fork_point: None,
-                root_session_id: None,
-                thread_id: None,
-                branch_id: None,
-                native_leaf_id: None,
-                paused: false,
-                created_at: 1,
-            })
-            .unwrap();
-        let err = agent_fork(&state, "pane-1", false, None, None, None).unwrap_err();
-        assert_eq!(err, FORK_UNSUPPORTED_ERROR);
-    }
-
     fn session_agent(id: &str, pane_id: Option<&str>, dir: &str, session: &str) -> AgentInfo {
         AgentInfo {
             id: id.to_string(),
@@ -2606,179 +1874,6 @@ mod tests {
             paused: false,
             created_at: 1,
         }
-    }
-
-    // A failing prepare names its agent via a caller-controlled environment
-    // value. The failure path must apply the same ownership scope as the
-    // success path: one pane's token must not flip an agent bound elsewhere
-    // (or in another workspace) to Failed by naming it in a doomed prepare.
-    #[test]
-    fn failing_prepare_does_not_fail_an_out_of_scope_prepared_agent() {
-        let state = AppState::new(test_config());
-        state
-            .insert_agent(session_agent("agent-1", Some("pane-9"), "/work", "sess-1"))
-            .unwrap();
-
-        let err = agent_prepare_shell_launch(
-            &state,
-            PrepareShellAgentLaunchRequest {
-                adapter_id: "claude".to_string(),
-                pane_id: "pane-1".to_string(),
-                cwd: "/work".to_string(),
-                args: Vec::new(),
-                shell_job_id: None,
-                supervisor_pid: None,
-                prepared_agent_id: Some("agent-1".to_string()),
-            },
-        )
-        .unwrap_err();
-        assert!(!err.is_empty());
-
-        let agent = state.agent("agent-1").unwrap().expect("agent exists");
-        assert!(
-            matches!(agent.status, AgentStatus::Idle),
-            "an agent outside the failing pane's scope must keep its status"
-        );
-        assert_eq!(agent.pane_id.as_deref(), Some("pane-9"));
-    }
-
-    #[test]
-    fn reusable_session_agent_matches_an_unbound_same_dir_session() {
-        let state = AppState::new(test_config());
-        let mut existing = session_agent("agent-1", None, "/work", "sess-1");
-        existing.transcript_path = Some("/work/session.jsonl".to_string());
-        state.insert_agent(existing).unwrap();
-
-        let found = reusable_session_agent(&state, "claude", Some("sess-1"), "/work").unwrap();
-        assert_eq!(
-            found.as_ref().map(|agent| agent.id.as_str()),
-            Some("agent-1")
-        );
-        let found_by_path =
-            reusable_session_agent(&state, "claude", Some("session.jsonl"), "/work").unwrap();
-        assert_eq!(
-            found_by_path.as_ref().map(|agent| agent.id.as_str()),
-            Some("agent-1")
-        );
-
-        // No session id, a different session, a different dir, or a different adapter
-        // all start fresh instead of reusing.
-        assert!(
-            reusable_session_agent(&state, "claude", None, "/work")
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            reusable_session_agent(&state, "claude", Some("other"), "/work")
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            reusable_session_agent(&state, "claude", Some("sess-1"), "/elsewhere")
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            reusable_session_agent(&state, "codex", Some("sess-1"), "/work")
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn reusable_session_agent_rebinds_across_equivalent_dir_spellings() {
-        let state = AppState::new(test_config());
-        // A real directory so both the recorded launch dir and the shell's reported $PWD
-        // can be canonicalized to the same target.
-        let base = std::env::temp_dir().join(format!("session-reuse-{}", std::process::id()));
-        std::fs::create_dir_all(&base).unwrap();
-        let launch_dir = base.display().to_string();
-        state
-            .insert_agent(session_agent("agent-1", None, &launch_dir, "sess-1"))
-            .unwrap();
-
-        // A trailing `/.` (the kind of drift a `cd` round-trip can leave in $PWD) is not a
-        // byte-for-byte match, so the rebind now leans on canonicalization to recognize it
-        // as the same directory rather than minting a duplicate agent.
-        let equivalent_spelling = base.join(".").display().to_string();
-        assert_ne!(launch_dir, equivalent_spelling);
-        let found =
-            reusable_session_agent(&state, "claude", Some("sess-1"), &equivalent_spelling).unwrap();
-        assert_eq!(
-            found.as_ref().map(|agent| agent.id.as_str()),
-            Some("agent-1")
-        );
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn reusable_session_agent_never_hijacks_a_bound_session() {
-        let state = AppState::new(test_config());
-        state
-            .insert_agent(session_agent("agent-1", Some("pane-9"), "/work", "sess-1"))
-            .unwrap();
-
-        // A session still bound to a live pane must not be stolen by a resume.
-        assert!(
-            reusable_session_agent(&state, "claude", Some("sess-1"), "/work")
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn shell_resume_identity_is_visible_before_the_start_hook() {
-        let state = AppState::new(test_config());
-        let mut agent = session_agent("agent-1", None, "/work", "placeholder");
-        agent.session_id = None;
-        state.insert_agent(agent.clone()).unwrap();
-
-        let agent = record_shell_resume_identity(&state, agent, Some(" resumed-session ")).unwrap();
-
-        assert_eq!(agent.session_id.as_deref(), Some("resumed-session"));
-        assert_eq!(
-            state
-                .agent("agent-1")
-                .unwrap()
-                .unwrap()
-                .session_id
-                .as_deref(),
-            Some("resumed-session")
-        );
-    }
-
-    #[test]
-    fn shell_resume_identity_waits_for_hook_without_a_concrete_id() {
-        let state = AppState::new(test_config());
-        let agent = session_agent("agent-1", None, "/work", "known-session");
-        state.insert_agent(agent.clone()).unwrap();
-
-        let agent = record_shell_resume_identity(&state, agent, None).unwrap();
-
-        assert_eq!(agent.session_id.as_deref(), Some("known-session"));
-    }
-
-    #[test]
-    fn cli_flag_value_reads_space_and_equals_forms() {
-        assert_eq!(
-            cli_flag_value(
-                &["--model".into(), "fable".into(), "hello".into()],
-                "--model"
-            )
-            .as_deref(),
-            Some("fable")
-        );
-        assert_eq!(
-            cli_flag_value(&["--model=opus".into(), "hello".into()], "--model").as_deref(),
-            Some("opus")
-        );
-        // Values after `--` are positional, not flag args.
-        assert_eq!(
-            cli_flag_value(&["--".into(), "--model".into(), "fable".into()], "--model"),
-            None
-        );
-        assert_eq!(cli_flag_value(&["--model".into()], "--model"), None);
     }
 
     #[test]
@@ -2867,70 +1962,6 @@ mod tests {
             .unwrap()
             .expect("should update changed model");
         assert_eq!(switched.model.as_deref(), Some("opus"));
-    }
-
-    #[test]
-    fn prepared_shell_agent_requires_matching_unbound_identity() {
-        let state = AppState::new(test_config());
-        state
-            .insert_agent(session_agent(
-                "prepared-agent",
-                None,
-                "/tmp/session-adapter-tests",
-                "placeholder",
-            ))
-            .unwrap();
-
-        let prepared = prepared_shell_agent(
-            &state,
-            "claude",
-            Some("prepared-agent"),
-            "pane-new",
-            "group-1",
-            "/tmp/session-adapter-tests",
-        )
-        .unwrap()
-        .unwrap();
-        assert_eq!(prepared.id, "prepared-agent");
-
-        let err = prepared_shell_agent(
-            &state,
-            "codex",
-            Some("prepared-agent"),
-            "pane-new",
-            "group-1",
-            "/tmp/session-adapter-tests",
-        )
-        .unwrap_err();
-        assert!(err.contains("uses adapter"));
-
-        state
-            .mutate_agent("prepared-agent", |agent| {
-                agent.pane_id = Some("pane-live".to_string());
-            })
-            .unwrap();
-        assert!(
-            prepared_shell_agent(
-                &state,
-                "claude",
-                Some("prepared-agent"),
-                "pane-live",
-                "group-1",
-                "/tmp/session-adapter-tests",
-            )
-            .unwrap()
-            .is_some()
-        );
-        let err = prepared_shell_agent(
-            &state,
-            "claude",
-            Some("prepared-agent"),
-            "pane-new",
-            "group-1",
-            "/tmp/session-adapter-tests",
-        )
-        .unwrap_err();
-        assert!(err.contains("already attached"));
     }
 
     #[test]

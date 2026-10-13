@@ -1,21 +1,8 @@
-use crate::adapters::{
-    AdapterNotification, PrepareShellAgentLaunchRequest, PrepareShellClaudeLaunchRequest,
-    adapter_registry, agent_fork, agent_prepare_shell_launch, ingest_adapter_notification,
-    notification_adapter_hint,
-};
 use crate::connection_limit::ConnectionLimiter;
 use crate::events::SessionEvent;
-use crate::pty::{PaneWriteOptions, write_pane};
-use crate::state::{AppState, PaneKind, canonical_loopback_artifact_url};
-use crate::workspace::{
-    LaunchOrigin, recover_shell_agent_from_session_start, validate_launch_workspace,
-};
-use serde::Deserialize;
+use crate::state::{AppState, canonical_loopback_artifact_url};
 use serde_json::{Value, json};
-use session_proto::{
-    BrowserOpenFileHeader, ControlRequest, ControlResponse, PublicControlRequest,
-    WorkspaceObservation, WorkspaceObservationKind,
-};
+use session_proto::{ControlRequest, ControlResponse};
 use std::fs;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::os::fd::AsRawFd;
@@ -29,7 +16,6 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const CONTROL_SOCKET_READ_TIMEOUT: Duration = Duration::from_secs(5);
-const REMOTE_FILE_READ_TIMEOUT: Duration = Duration::from_secs(60);
 /// The streamed upload body is not part of this line. Keep request metadata
 /// bounded before authentication so a peer cannot grow a handler without limit.
 const MAX_CONTROL_HEADER_BYTES: u64 = 16 * 1024 * 1024;
@@ -68,13 +54,6 @@ enum PathCheck {
     Missing,
     Conflict,
     Unknown,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ControlCredential {
-    LocalPane,
-    RemotePane,
-    InteractiveUser,
 }
 
 enum GenerationEnd {
@@ -853,17 +832,8 @@ fn handle_client_with_timeout(state: AppState, mut stream: UnixStream, read_time
                 return;
             }
         };
-        let streamed_file = request.command == "browser.open_file";
-        let result = if streamed_file {
-            let _ = reader
-                .get_ref()
-                .set_read_timeout(Some(REMOTE_FILE_READ_TIMEOUT));
-            handle_browser_open_file(&state, request, &mut reader)
-        } else {
-            handle_request_with_peer(&state, request, same_user_peer)
-        };
-
-        if write_response(&mut stream, result).is_err() || streamed_file {
+        let result = handle_request_with_peer(&state, request, same_user_peer);
+        if write_response(&mut stream, result).is_err() {
             return;
         }
     }
@@ -885,53 +855,23 @@ fn handle_line_with_peer(
     handle_request_with_peer(state, request, same_user_peer)
 }
 
-fn pane_credential(state: &AppState, token: &str) -> Result<(String, ControlCredential), String> {
-    if let Some(pane) = state.pane_for_token(token) {
-        Ok((pane, ControlCredential::LocalPane))
-    } else if let Some(pane) = state.pane_for_remote_token(token) {
-        Ok((pane, ControlCredential::RemotePane))
-    } else if let Some(pane) = state.pane_for_user_token(token) {
-        Ok((pane, ControlCredential::InteractiveUser))
-    } else {
-        Err("invalid SESSION_TOKEN".to_string())
-    }
-}
-
+/// The socket serves only token-free requests from a same-user peer: `ping`
+/// and `notification.send` (`session ping` and `session send`). The socket and
+/// its parent directory are also 0600/0700, but checking the peer prevents a
+/// permissive-filesystem regression from widening access. Session no longer
+/// creates terminal panes, so no pane token exists and any non-empty token is
+/// rejected rather than falling through to peer authentication.
 fn handle_request_with_peer(
     state: &AppState,
     request: ControlRequest,
     same_user_peer: bool,
 ) -> Result<Value, String> {
-    // `session send` is intentionally usable outside Session panes. An empty token is
-    // accepted for this one non-mutating command only when the kernel says the
-    // Unix-socket peer has our uid. The socket and its parent are also 0600/0700,
-    // but checking the peer prevents a permissive-filesystem regression from
-    // silently widening this exception. A non-empty invalid token never falls
-    // through to peer auth: callers cannot probe with a guessed pane credential.
-    if request.command == "notification.send" && request.token.is_empty() {
-        if !same_user_peer {
-            return Err("external notifications require a same-user local peer".to_string());
-        }
-        let payload = serde_json::from_value::<crate::user_notifications::SendNotificationRequest>(
-            request.payload,
-        )
-        .map_err(|err| format!("invalid notification.send payload: {err}"))?;
-        return crate::user_notifications::dispatch(state, None, payload);
+    if !request.token.is_empty() {
+        return Err("invalid SESSION_TOKEN".to_string());
     }
-    // Local panes, SSH-forwarded panes, and interactive users have separate token
-    // namespaces. In particular, a remote process never receives a local pane or
-    // user credential: after pane scope is resolved below, the remote namespace is
-    // also checked against an explicit role-sensitive command allowlist.
-    let (authed_pane, credential) = pane_credential(state, &request.token)?;
-    let user_credential = credential == ControlCredential::InteractiveUser;
-
-    if user_credential && request.command != "cli.call" {
-        return Err("SESSION_USER_TOKEN is valid only for public CLI operations".to_string());
+    if !same_user_peer {
+        return Err("control requests require a same-user local peer".to_string());
     }
-    if credential == ControlCredential::RemotePane {
-        ensure_remote_command_allowed(state, &authed_pane, &request.command)?;
-    }
-
     match request.command.as_str() {
         "ping" => Ok(json!({ "status": "ok" })),
         "notification.send" => {
@@ -939,468 +879,10 @@ fn handle_request_with_peer(
                 crate::user_notifications::SendNotificationRequest,
             >(request.payload)
             .map_err(|err| format!("invalid notification.send payload: {err}"))?;
-            crate::user_notifications::dispatch(state, Some(&authed_pane), payload)
+            crate::user_notifications::dispatch(state, None, payload)
         }
-        "cli.call" => {
-            let payload = serde_json::from_value::<PublicControlRequest>(request.payload)
-                .map_err(|err| format!("invalid cli.call payload: {err}"))?;
-            Ok(crate::control::handle_call(
-                state,
-                &authed_pane,
-                user_credential,
-                &payload.operation,
-                payload.arguments,
-            ))
-        }
-        "pane.write" => {
-            let options = serde_json::from_value::<PaneWriteOptions>(request.payload)
-                .map_err(|err| format!("invalid pane.write payload: {err}"))?;
-            ensure_pane_scope(&authed_pane, &options.pane_id)?;
-            write_pane(state, options)?;
-            Ok(json!({ "written": true }))
-        }
-        "pane.set_cwd" => {
-            #[derive(Debug, Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            struct SetCwdPayload {
-                cwd: String,
-            }
-            let payload = serde_json::from_value::<SetCwdPayload>(request.payload)
-                .map_err(|err| format!("invalid pane.set_cwd payload: {err}"))?;
-            // Bind the cwd update to the authenticated pane regardless of any claimed
-            // paneId, mirroring hook.notify's scoping.
-            state.update_pane_cwd(&authed_pane, payload.cwd)?;
-            Ok(json!({ "updated": true }))
-        }
-        "pane.set_workspace" => {
-            #[derive(Debug, Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct SetWorkspacePayload {
-                #[allow(dead_code)]
-                #[serde(default)]
-                pane_id: Option<String>,
-                cwd: String,
-                active_workspace: WorkspaceObservation,
-            }
-            let payload = serde_json::from_value::<SetWorkspacePayload>(request.payload)
-                .map_err(|err| format!("invalid pane.set_workspace payload: {err}"))?;
-            let workspace = crate::workspace::ActiveWorkspace {
-                cwd: payload.active_workspace.cwd,
-                git_root: payload.active_workspace.git_root,
-                branch: payload.active_workspace.branch,
-                kind: match payload.active_workspace.kind {
-                    WorkspaceObservationKind::Directory => {
-                        crate::workspace::ActiveWorkspaceKind::Directory
-                    }
-                    WorkspaceObservationKind::GitCheckout => {
-                        crate::workspace::ActiveWorkspaceKind::GitCheckout
-                    }
-                    WorkspaceObservationKind::MainCheckout => {
-                        crate::workspace::ActiveWorkspaceKind::MainCheckout
-                    }
-                    WorkspaceObservationKind::LinkedWorktree => {
-                        crate::workspace::ActiveWorkspaceKind::LinkedWorktree
-                    }
-                },
-                source: crate::workspace::ActiveWorkspaceSource::Session,
-                managed_by_session: false,
-            };
-            // Bind the workspace update to the authenticated pane regardless of any claimed
-            // paneId, mirroring pane.set_cwd and hook.notify.
-            state.update_pane_workspace(&authed_pane, payload.cwd, workspace)?;
-            Ok(json!({ "updated": true }))
-        }
-        "agent.prepare_shell_launch" => {
-            let launch = serde_json::from_value::<PrepareShellAgentLaunchRequest>(request.payload)
-                .map_err(|err| format!("invalid agent.prepare_shell_launch payload: {err}"))?;
-            ensure_pane_scope(&authed_pane, &launch.pane_id)?;
-            validate_control_launch_workspace(state, &authed_pane)?;
-            let prepared = agent_prepare_shell_launch(state, launch)?;
-            serde_json::to_value(prepared)
-                .map_err(|err| format!("failed to encode prepared agent launch: {err}"))
-        }
-        "agent.detach_pane" => {
-            // A shell-launched agent's process has exited while its host shell and pane
-            // remain active. Detach the agent bound to the authenticated pane so the
-            // tab reverts to a plain shell instead of retaining a stale agent
-            // status. Scoped to the authed pane like pane.set_cwd; any claimed paneId is
-            // advisory, so the wrapper can only ever detach its own pane's agent.
-            #[derive(Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            struct DetachShellAgentPayload {
-                job_id: Option<String>,
-                agent_id: Option<String>,
-            }
-            let payload = serde_json::from_value::<DetachShellAgentPayload>(request.payload)
-                .map_err(|err| format!("invalid agent detach payload: {err}"))?;
-            let detached = match (payload.job_id.as_deref(), payload.agent_id.as_deref()) {
-                (Some(job_id), Some(agent_id)) => {
-                    let Some(info) = state.unregister_shell_agent_job(
-                        job_id,
-                        Some(agent_id),
-                        Some(&authed_pane),
-                    ) else {
-                        return Ok(json!({ "detached": false }));
-                    };
-                    crate::shell_jobs::emit_job_removed(state, &info);
-                    crate::workspace::detach_pane_agent_if_matches(state, &authed_pane, agent_id)?
-                }
-                // Compatibility for a shell wrapper launched by an older Session build.
-                _ => crate::workspace::detach_pane_agent(state, &authed_pane)?,
-            };
-            // The exited agent may have left its TUI's terminal modes active in
-            // the remaining shell's terminal state (kitty keyboard flags, mouse/focus
-            // reporting, the alternate screen) — this detach is the only moment
-            // the host learns the foreground program is gone, so clear them
-            // here. Failure to clear the modes does not undo the detach.
-            if detached.is_some()
-                && let Err(err) = crate::pty::reset_pane_terminal_modes(state, &authed_pane)
-            {
-                eprintln!("session: failed to reset terminal modes for pane {authed_pane}: {err}");
-            }
-            Ok(json!({ "detached": detached.is_some() }))
-        }
-        "claude.prepare_shell_launch" => {
-            let launch = serde_json::from_value::<PrepareShellClaudeLaunchRequest>(request.payload)
-                .map_err(|err| format!("invalid claude.prepare_shell_launch payload: {err}"))?;
-            ensure_pane_scope(&authed_pane, &launch.pane_id)?;
-            validate_control_launch_workspace(state, &authed_pane)?;
-            let prepared = agent_prepare_shell_launch(
-                state,
-                PrepareShellAgentLaunchRequest {
-                    adapter_id: "claude".to_string(),
-                    pane_id: launch.pane_id,
-                    cwd: launch.cwd,
-                    args: launch.args,
-                    shell_job_id: None,
-                    supervisor_pid: None,
-                    prepared_agent_id: None,
-                },
-            )?;
-            let settings_path = prepared
-                .args
-                .windows(2)
-                .find_map(|args| (args[0] == "--settings").then(|| args[1].clone()))
-                .ok_or_else(|| "prepared Claude launch did not include --settings".to_string())?;
-            Ok(json!({
-                "claudeBinary": prepared.binary,
-                "cwd": prepared.cwd,
-                "settingsPath": settings_path,
-                "envs": prepared.envs,
-            }))
-        }
-        "hook.notify" => {
-            let mut notification = serde_json::from_value::<AdapterNotification>(request.payload)
-                .map_err(|err| format!("invalid hook.notify payload: {err}"))?;
-            // Bind the notification to the authenticated pane regardless of what the
-            // caller claims, so hook status can only be reported for its own pane.
-            notification.pane_id = Some(authed_pane.clone());
-
-            if matches!(notification.event.as_str(), "SessionStart" | "sessionStart")
-                && state.agent_by_pane(&authed_pane)?.is_none()
-            {
-                let adapter_id =
-                    notification_adapter_hint(state, &notification)?.ok_or_else(|| {
-                        "SessionStart cannot recover a missing agent without an adapter id"
-                            .to_string()
-                    })?;
-                let pane = state
-                    .list_panes()?
-                    .into_iter()
-                    .find(|pane| pane.id == authed_pane)
-                    .ok_or_else(|| format!("pane {authed_pane} was not found"))?;
-                validate_recovered_adapter_for_pane(state, &pane, &adapter_id)?;
-                let recovered = recover_shell_agent_from_session_start(
-                    state,
-                    &pane,
-                    &adapter_id,
-                    notification.agent_id.as_deref(),
-                )?;
-                notification.agent_id = Some(recovered.id);
-            }
-
-            if let Some(agent_id) = notification.agent_id.as_deref() {
-                if state.agent(agent_id)?.is_some() {
-                    ensure_agent_scope(state, &authed_pane, agent_id)?;
-                } else if let Some(bound) = state.agent_by_pane(&authed_pane)? {
-                    // A recovered record may have a new Session id while the already
-                    // running process keeps reporting the stale/missing prepared id.
-                    // The pane token is the authority boundary, so route that unknown
-                    // id to the agent now bound to the same authenticated pane.
-                    notification.agent_id = Some(bound.id);
-                } else {
-                    return Err(format!("agent {agent_id} was not found"));
-                }
-            }
-            // Older hook shims may omit agentId and rely on their authenticated pane.
-            // Resolve the same fallback the adapter uses so those notifications can
-            // still complete a queued fork barrier.
-            let notified_agent_id = match notification.agent_id.clone() {
-                Some(agent_id) => Some(agent_id),
-                None => state.agent_by_pane(&authed_pane)?.map(|agent| agent.id),
-            };
-            let transcript_metadata = notification.payload.clone();
-            let outcome = ingest_adapter_notification(state, notification)?;
-            crate::remote_transcript::observe(state, &authed_pane, &transcript_metadata);
-            for event in outcome.into_events() {
-                state.emit(event);
-            }
-            // Adapter ingestion records session identity and UserPromptSubmit activity
-            // before returning. Re-check every hook so either arrival order (identity
-            // first or prompt first) can release a queued-fork barrier without a lost
-            // wakeup. A resume failure must not make the agent's best-effort hook call
-            // fail; surface it through the queue event/log path instead.
-            if let Some(agent_id) = notified_agent_id
-                && let Err(err) =
-                    crate::turn_queue::release_ready_fork_barrier_for_child(state, &agent_id)
-            {
-                eprintln!(
-                    "session: failed to release fork barrier after hook from agent {agent_id}: {err}"
-                );
-            }
-            Ok(json!({ "notified": true }))
-        }
-        "transcript.append" => {
-            #[derive(Debug, Deserialize)]
-            struct AppendPayload {
-                #[serde(default)]
-                lines: Vec<String>,
-            }
-            let payload = serde_json::from_value::<AppendPayload>(request.payload)
-                .map_err(|err| format!("invalid transcript.append payload: {err}"))?;
-
-            // The destination is Session's own record for the agent bound to the
-            // authenticated pane; this request cannot name a path. SSH-forwarded
-            // credentials are rejected before reaching this arm, so only a local
-            // pane process can append to its validated local transcript binding.
-            let agent = state
-                .agent_by_pane(&authed_pane)?
-                .ok_or_else(|| format!("no agent is bound to pane {authed_pane}"))?;
-            let path = agent
-                .transcript_path
-                .clone()
-                .ok_or_else(|| format!("agent {} has no transcript to append to", agent.id))?;
-            let appended =
-                crate::transcript::append_transcript_lines(Path::new(&path), &payload.lines)?;
-
-            // The tail may not be running yet on a recovered pane, and starting
-            // it is what turns these lines into turns. It is idempotent, but it
-            // also rebuilds the adapter registry to validate, so only pay for
-            // that after a line was appended.
-            if appended > 0 {
-                crate::transcript::start_transcript_tail(
-                    state.clone(),
-                    agent.id.clone(),
-                    path,
-                    agent.adapter.clone(),
-                );
-            }
-            Ok(json!({ "appended": appended }))
-        }
-        "agent.fork" => {
-            #[derive(Debug, Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            struct ForkPayload {
-                #[serde(default)]
-                use_worktree: bool,
-                #[serde(default)]
-                prompt: Option<String>,
-            }
-            let payload = serde_json::from_value::<ForkPayload>(request.payload)
-                .map_err(|err| format!("invalid agent.fork payload: {err}"))?;
-            validate_control_launch_workspace(state, &authed_pane)?;
-            // The one spawn the control plane allows: it forks ONLY the authenticated
-            // pane's own session (the source is resolved from the token, not the
-            // payload), so a token can never spawn off another pane's session. This is
-            // the same authority the user already has acting in their own terminal.
-            // Always forks at the session head: anchoring at a message is a UI
-            // action, and the payload includes no anchor. This prevents the
-            // control plane from requesting a synthesized
-            // transcript, so this path never writes into an agent's own state
-            // directory.
-            let pane = agent_fork(
-                state,
-                &authed_pane,
-                payload.use_worktree,
-                payload.prompt,
-                None,
-                None,
-            )?;
-            serde_json::to_value(pane).map_err(|err| format!("failed to encode forked pane: {err}"))
-        }
-        "mcp.call" => {
-            #[derive(Debug, Deserialize)]
-            struct McpCallPayload {
-                name: String,
-                #[serde(default)]
-                arguments: Value,
-            }
-            let payload = serde_json::from_value::<McpCallPayload>(request.payload)
-                .map_err(|err| format!("invalid mcp.call payload: {err}"))?;
-            crate::mcp::handle_call(state, &authed_pane, &payload.name, payload.arguments)
-        }
-        "browser.open" => {
-            #[derive(Debug, Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            struct BrowserOpen {
-                target: String,
-                #[serde(default)]
-                cwd: Option<String>,
-            }
-            let payload = serde_json::from_value::<BrowserOpen>(request.payload)
-                .map_err(|err| format!("invalid browser.open payload: {err}"))?;
-            let resolved = resolve_browser_target(
-                state,
-                &authed_pane,
-                payload.target.trim(),
-                payload.cwd.as_deref(),
-            )?;
-            state.emit(SessionEvent::new(
-                "browser.open",
-                Some(authed_pane.clone()),
-                None,
-                json!({ "url": resolved.url, "sandbox": resolved.sandbox }),
-            ));
-            // Panes with an attached agent also collect the target into the
-            // workspace artifact tray. This deliberately covers both callers a
-            // pane token can represent: the agent itself and the user typing
-            // `session open` while that agent is backgrounded. The PTY cannot
-            // distinguish them, and both belong in the tray. A tray failure
-            // must not fail the open.
-            if state.agent_by_pane(&authed_pane)?.is_some() {
-                let path = resolved
-                    .path
-                    .as_ref()
-                    .map(|path| path.to_string_lossy().into_owned());
-                let url = path.is_none().then(|| resolved.url.clone());
-                if let Err(err) = state.record_artifact(&authed_pane, path, url) {
-                    eprintln!("failed to record artifact for pane {authed_pane}: {err}");
-                }
-            }
-            Ok(json!({ "url": resolved.url, "sandbox": resolved.sandbox }))
-        }
-        "browser.open_file" => {
-            Err("browser.open_file requires a streamed request body".to_string())
-        }
-        // Other agent spawning and turn queueing are management operations that belong
-        // to the trusted GUI (Tauri commands), not to processes holding a pane token.
         other => Err(format!("unknown control command '{other}'")),
     }
-}
-
-fn handle_browser_open_file<R: Read>(
-    state: &AppState,
-    request: ControlRequest,
-    reader: &mut R,
-) -> Result<Value, String> {
-    let (authed_pane, credential) = pane_credential(state, &request.token)?;
-    if credential != ControlCredential::RemotePane {
-        return Err("browser.open_file requires a remote pane credential".to_string());
-    }
-    ensure_remote_command_allowed(state, &authed_pane, &request.command)?;
-    let header = serde_json::from_value::<BrowserOpenFileHeader>(request.payload)
-        .map_err(|err| format!("invalid browser.open_file payload: {err}"))?;
-    crate::remote_files::validate_name(&header.name)?;
-    let port = state
-        .file_server_port()
-        .ok_or_else(|| "the file server is not running".to_string())?;
-    let upload_id = state.next_id("remote-file");
-    let path = crate::remote_files::stage(
-        &state.config().workspace_root,
-        &upload_id,
-        &header.name,
-        header.size,
-        reader,
-    )?;
-    let canonical = match state.grant_pane_file_preview(&authed_pane, &path) {
-        Ok(path) => path,
-        Err(err) => {
-            if let Some(parent) = path.parent() {
-                let _ = fs::remove_dir_all(parent);
-            }
-            return Err(err);
-        }
-    };
-    let token = if crate::file_server::is_executable_preview_path(&canonical) {
-        state.exact_file_preview_token(&authed_pane, &canonical)?
-    } else {
-        state.pane_file_token(&authed_pane)?
-    };
-    let url = crate::file_server::file_url(port, &token, &canonical);
-    state.emit(SessionEvent::new(
-        "browser.open",
-        Some(authed_pane.clone()),
-        None,
-        json!({ "url": url, "sandbox": true }),
-    ));
-    if state.agent_by_pane(&authed_pane)?.is_some()
-        && let Err(err) = state.record_artifact(
-            &authed_pane,
-            Some(canonical.to_string_lossy().into_owned()),
-            None,
-        )
-    {
-        eprintln!("failed to record remote artifact for pane {authed_pane}: {err}");
-    }
-    Ok(json!({ "opened": true, "name": header.name }))
-}
-
-fn validate_recovered_adapter_for_pane(
-    state: &AppState,
-    pane: &crate::state::PaneInfo,
-    adapter_id: &str,
-) -> Result<(), String> {
-    // Validate before creating durable state. A remote SessionStart must not
-    // select an adapter that never opted into remote execution: those adapters
-    // may interpret hook paths against the local filesystem.
-    let registry = adapter_registry(state.config());
-    let adapter = registry.get(adapter_id)?;
-    if pane.remote_session.is_some() && !adapter.supports_remote() {
-        return Err(format!(
-            "the {adapter_id} adapter cannot recover from a remote pane"
-        ));
-    }
-    Ok(())
-}
-
-/// Restricts a token that crossed the SSH trust boundary to callbacks that the
-/// owning remote pane needs for its current role. Public shell-user authority,
-/// raw pane input, and local transcript writes are intentionally absent.
-fn ensure_remote_command_allowed(
-    state: &AppState,
-    pane_id: &str,
-    command: &str,
-) -> Result<(), String> {
-    let has_agent = state.agent_by_pane(pane_id)?.is_some();
-    let is_shell = state
-        .list_panes()?
-        .into_iter()
-        .find(|pane| pane.id == pane_id)
-        .is_some_and(|pane| matches!(pane.kind, PaneKind::Shell));
-    let allowed = match command {
-        // Transport health and user-visible completion notifications are valid in
-        // either a shell or an agent pane.
-        "ping" | "notification.send" => true,
-        // Shell integration may report cwd or prepare a supervised agent only
-        // while no agent currently owns the pane.
-        "pane.set_cwd"
-        | "pane.set_workspace"
-        | "agent.prepare_shell_launch"
-        | "claude.prepare_shell_launch" => is_shell && !has_agent,
-        // SessionStart itself is allowed to recover a lost shell-agent binding.
-        "hook.notify" => true,
-        // A remote shell or agent may stage one bounded preview file. The remaining
-        // agent capabilities retain their existing pane/workspace/lineage checks.
-        "browser.open_file" => true,
-        "agent.detach_pane" | "agent.fork" | "mcp.call" | "browser.open" | "cli.call" => has_agent,
-        // In particular: never accept pane.write or transcript.append from an
-        // SSH-forwarded credential. The latter writes local files and currently
-        // has no remote client producer.
-        _ => false,
-    };
-    allowed
-        .then_some(())
-        .ok_or_else(|| format!("remote pane credential is not authorized for '{command}'"))
 }
 
 #[cfg(any(
@@ -1454,14 +936,6 @@ fn peer_is_current_user(stream: &UnixStream) -> bool {
 )))]
 fn peer_is_current_user(_stream: &UnixStream) -> bool {
     false
-}
-
-fn validate_control_launch_workspace(state: &AppState, pane_id: &str) -> Result<(), String> {
-    let group_id = state
-        .pane_group_id(pane_id)?
-        .ok_or_else(|| format!("pane {pane_id} has no workspace"))?;
-    validate_launch_workspace(state, Some(&group_id), LaunchOrigin::Terminal)?;
-    Ok(())
 }
 
 /// A browser-overlay target resolved for one pane. `path` contains the canonical
@@ -1532,25 +1006,6 @@ pub(crate) fn resolve_browser_target(
     })
 }
 
-fn ensure_pane_scope(authed_pane: &str, requested_pane: &str) -> Result<(), String> {
-    if authed_pane == requested_pane {
-        Ok(())
-    } else {
-        Err("control token is not authorized for that pane".to_string())
-    }
-}
-
-fn ensure_agent_scope(state: &AppState, authed_pane: &str, agent_id: &str) -> Result<(), String> {
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    if agent.pane_id.as_deref() == Some(authed_pane) {
-        Ok(())
-    } else {
-        Err("control token is not authorized for that agent".to_string())
-    }
-}
-
 fn write_response(stream: &mut UnixStream, result: Result<Value, String>) -> std::io::Result<()> {
     let response = match result {
         Ok(data) => ControlResponse {
@@ -1576,16 +1031,10 @@ mod tests {
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
 
-    use crate::state::{HostPtyBackend, PaneBackend, PaneInfo, PaneRuntime, PaneStatus};
-    use crate::workspace::{
-        AgentInfo, AgentStatus, GroupInfo, RemoteMultiplexer, RemoteRef, WorkspaceScope,
-    };
-    use portable_pty::{Child, ChildKiller, ExitStatus, PtySize, native_pty_system};
-    use std::io::{self, Read};
+    use std::io::Read;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -1687,134 +1136,6 @@ mod tests {
         dir
     }
 
-    fn agent_bound_to(pane_id: &str) -> AgentInfo {
-        AgentInfo {
-            id: "agent-1".to_string(),
-            group_id: "group-1".to_string(),
-            adapter: "claude".to_string(),
-            worktree_dir: "/tmp/agent-1".to_string(),
-            branch: None,
-            active_workspace: None,
-            pane_id: Some(pane_id.to_string()),
-            orphaned_queue_pane_id: None,
-            session_id: None,
-            transcript_path: None,
-            status: AgentStatus::Running,
-            model: None,
-            effort: None,
-            approval_mode: None,
-            parent_id: None,
-            fork_point: None,
-            root_session_id: None,
-            thread_id: None,
-            branch_id: None,
-            native_leaf_id: None,
-            paused: false,
-            created_at: 0,
-        }
-    }
-
-    #[derive(Debug)]
-    struct FakeChild;
-
-    impl ChildKiller for FakeChild {
-        fn kill(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-
-        fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
-            Box::new(FakeChild)
-        }
-    }
-
-    impl Child for FakeChild {
-        fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-            Ok(None)
-        }
-
-        fn wait(&mut self) -> io::Result<ExitStatus> {
-            Ok(ExitStatus::with_exit_code(0))
-        }
-
-        fn process_id(&self) -> Option<u32> {
-            None
-        }
-    }
-
-    fn insert_remote_shell(state: &AppState, pane_id: &str) {
-        state
-            .update_group(GroupInfo {
-                id: "group-1".to_string(),
-                name: "Remote".to_string(),
-                name_override: None,
-                dir: "/srv/project".to_string(),
-                managed_dir: state
-                    .config()
-                    .workspace_root
-                    .join("group-1")
-                    .to_string_lossy()
-                    .into_owned(),
-                base_repo: None,
-                base_ref: None,
-                parent_id: None,
-                created_at: 0,
-                collapsed: false,
-                scope: WorkspaceScope::Terminal,
-                imported_research_archive_id: None,
-                remote: Some(RemoteRef {
-                    id: "remote-1".to_string(),
-                    label: "Remote".to_string(),
-                    host: "example.test".to_string(),
-                    multiplexer: RemoteMultiplexer::Tmux,
-                    session_cli: None,
-                    workspace_root: None,
-                }),
-                agents: Vec::new(),
-            })
-            .unwrap();
-        let pair = native_pty_system()
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
-        drop(pair.slave);
-        state
-            .insert_pane(PaneRuntime {
-                info: PaneInfo {
-                    id: pane_id.to_string(),
-                    title: "Remote shell".to_string(),
-                    last_osc_title: None,
-                    kind: PaneKind::Shell,
-                    agent_id: None,
-                    group_id: "group-1".to_string(),
-                    cwd: "/srv/project".to_string(),
-                    active_workspace: None,
-                    remote_session: Some(
-                        crate::state::RemoteSessionIdentity::new("remote-1", pane_id).unwrap(),
-                    ),
-                    remote_connection: Some(crate::state::RemoteConnectionInfo::default()),
-                    ssh_target: None,
-                    cols: 80,
-                    rows: 24,
-                    status: PaneStatus::Running,
-                    last_active_at: 0,
-                    recovered: false,
-                    depth: 0,
-                },
-                backend: PaneBackend::HostPty(HostPtyBackend {
-                    child: Arc::new(Mutex::new(Box::new(FakeChild))),
-                    master: Arc::new(Mutex::new(pair.master)),
-                    writer: Arc::new(Mutex::new(Box::new(io::sink()))),
-                    backlog: Default::default(),
-                }),
-                cwd_observation_seq: 0,
-            })
-            .unwrap();
-    }
-
     fn request_line(token: &str, command: &str, payload: Value) -> String {
         json!({ "token": token, "command": command, "payload": payload }).to_string()
     }
@@ -1884,115 +1205,20 @@ mod tests {
     }
 
     #[test]
-    fn handle_line_accepts_ping_from_a_valid_token() {
+    fn tokenless_ping_requires_a_same_user_peer() {
         let state = test_state();
-        let token = state.pane_token("pane-1").unwrap();
-        let data = handle_line(&state, &request_line(&token, "ping", Value::Null)).unwrap();
+        let ping = request_line("", "ping", Value::Null);
+        let data = handle_line_with_peer(&state, &ping, true).unwrap();
         assert_eq!(data, json!({ "status": "ok" }));
+        let err = handle_line(&state, &ping).unwrap_err();
+        assert!(
+            err.contains("same-user local peer"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
-    fn remote_token_allows_health_but_rejects_local_write_surfaces() {
-        let state = test_state();
-        let token = state.pane_remote_token("pane-1").unwrap();
-
-        let data = handle_line(&state, &request_line(&token, "ping", Value::Null)).unwrap();
-        assert_eq!(data, json!({ "status": "ok" }));
-
-        for (command, payload) in [
-            (
-                "pane.write",
-                json!({ "paneId": "pane-1", "data": "x", "paste": false, "submit": false }),
-            ),
-            ("transcript.append", json!({ "lines": ["{}"] })),
-            (
-                "cli.call",
-                json!({ "operation": "pane.list", "arguments": {} }),
-            ),
-        ] {
-            let err = handle_line(&state, &request_line(&token, command, payload)).unwrap_err();
-            assert!(
-                err.contains("remote pane credential is not authorized"),
-                "unexpected {command} error: {err}"
-            );
-        }
-    }
-
-    #[test]
-    fn remote_agent_token_retains_explicit_agent_capabilities() {
-        let state = test_state();
-        state.insert_agent(agent_bound_to("pane-2")).unwrap();
-        let token = state.pane_remote_token("pane-2").unwrap();
-
-        let value = handle_line(
-            &state,
-            &request_line(
-                &token,
-                "mcp.call",
-                json!({ "name": "whoami", "arguments": {} }),
-            ),
-        )
-        .unwrap();
-        assert_eq!(value["agent"]["id"], "agent-1");
-    }
-
-    #[test]
-    fn remote_agent_cannot_append_to_even_a_previously_bound_local_path() {
-        let state = test_state();
-        let target = temp_dir().join("remote-forged.jsonl");
-        let mut agent = agent_bound_to("pane-2");
-        agent.transcript_path = Some(target.display().to_string());
-        state.insert_agent(agent).unwrap();
-        let token = state.pane_remote_token("pane-2").unwrap();
-
-        let err = handle_line(
-            &state,
-            &request_line(
-                &token,
-                "transcript.append",
-                json!({ "lines": ["{\"type\":\"attacker\"}"] }),
-            ),
-        )
-        .unwrap_err();
-        assert!(err.contains("remote pane credential is not authorized"));
-        assert!(!target.exists());
-    }
-
-    #[test]
-    fn remote_session_recovery_rejects_adapters_without_remote_support() {
-        let state = test_state();
-        let mut pane = crate::state::PaneInfo {
-            id: "pane-1".to_string(),
-            title: "Remote shell".to_string(),
-            last_osc_title: None,
-            kind: PaneKind::Shell,
-            agent_id: None,
-            group_id: "group-1".to_string(),
-            cwd: "/srv/project".to_string(),
-            active_workspace: None,
-            remote_session: Some(
-                crate::state::RemoteSessionIdentity::new("remote-1", "pane-1").unwrap(),
-            ),
-            remote_connection: Some(crate::state::RemoteConnectionInfo::default()),
-            cols: 80,
-            rows: 24,
-            status: crate::state::PaneStatus::Running,
-            last_active_at: 0,
-            recovered: false,
-            ssh_target: None,
-            depth: 0,
-        };
-
-        validate_recovered_adapter_for_pane(&state, &pane, "claude").unwrap();
-        let err = validate_recovered_adapter_for_pane(&state, &pane, "grok").unwrap_err();
-        assert!(err.contains("cannot recover from a remote pane"));
-
-        pane.remote_session = None;
-        validate_recovered_adapter_for_pane(&state, &pane, "grok").unwrap();
-    }
-
-    #[test]
-    fn external_notification_is_the_only_same_user_tokenless_command() {
+    fn external_notification_requires_a_same_user_peer() {
         let state = test_state();
         let notification = request_line(
             "",
@@ -2007,10 +1233,6 @@ mod tests {
         let data = handle_line_with_peer(&state, &notification, true).unwrap();
         assert_eq!(data["accepted"], true);
         assert_eq!(data["delivery"], "overlay");
-
-        let err = handle_line_with_peer(&state, &request_line("", "ping", Value::Null), true)
-            .unwrap_err();
-        assert!(err.contains("invalid SESSION_TOKEN"));
 
         let err = handle_line_with_peer(&state, &notification, false).unwrap_err();
         assert!(err.contains("same-user local peer"));
@@ -2055,169 +1277,34 @@ mod tests {
     }
 
     #[test]
-    fn interactive_user_token_is_confined_to_the_public_cli() {
-        let state = test_state();
-        let token = state.pane_user_token("pane-1").unwrap();
-
-        let err = handle_line(&state, &request_line(&token, "ping", Value::Null)).unwrap_err();
-        assert!(err.contains("valid only for public CLI operations"));
-
-        let data = handle_line(
-            &state,
-            &request_line(
-                &token,
-                "cli.call",
-                json!({ "operation": "ping", "arguments": {} }),
-            ),
-        )
-        .unwrap();
-        // The token reaches the public dispatcher. This synthetic test pane is
-        // absent from the model, so context derivation then fails closed.
-        assert_eq!(data["ok"], false);
-        assert_eq!(data["error"]["code"], "pane_not_found");
-    }
-
-    #[test]
-    fn pane_write_rejects_a_cross_pane_token() {
-        let state = test_state();
-        // pane-1's token must not be able to drive pane-2.
-        let token = state.pane_token("pane-1").unwrap();
-        let payload = json!({ "paneId": "pane-2", "data": "x", "paste": false, "submit": false });
-        let err = handle_line(&state, &request_line(&token, "pane.write", payload)).unwrap_err();
-        assert!(
-            err.contains("not authorized for that pane"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn set_workspace_ignores_claimed_pane_id_but_rejects_other_unknown_fields() {
-        let state = test_state();
-        insert_remote_shell(&state, "pane-1");
-        let token = state.pane_remote_token("pane-1").unwrap();
-        let payload = json!({
-            "paneId": "pane-2",
-            "cwd": "/srv/next",
-            "activeWorkspace": {
-                "cwd": "/srv/next",
-                "gitRoot": "/srv/next",
-                "branch": "main",
-                "kind": "gitCheckout",
-            },
-        });
-
-        let data = handle_line(
-            &state,
-            &request_line(&token, "pane.set_workspace", payload.clone()),
-        )
-        .unwrap();
-        assert_eq!(data, json!({ "updated": true }));
-        let pane = state
-            .list_panes()
-            .unwrap()
-            .into_iter()
-            .find(|pane| pane.id == "pane-1")
-            .unwrap();
-        assert_eq!(pane.cwd, "/srv/next");
-        assert_eq!(
-            pane.active_workspace.unwrap().git_root.as_deref(),
-            Some("/srv/next")
-        );
-
-        let mut invalid = payload;
-        invalid["unexpected"] = json!(true);
-        let err =
-            handle_line(&state, &request_line(&token, "pane.set_workspace", invalid)).unwrap_err();
-        assert!(err.contains("unknown field"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn hook_notify_rejects_a_token_for_another_agents_pane() {
-        let state = test_state();
-        // The agent lives in pane-2, but the caller presents pane-1's token.
-        state.insert_agent(agent_bound_to("pane-2")).unwrap();
-        let token = state.pane_token("pane-1").unwrap();
-        let payload = json!({ "event": "Stop", "agentId": "agent-1", "payload": Value::Null });
-        let err = handle_line(&state, &request_line(&token, "hook.notify", payload)).unwrap_err();
-        assert!(
-            err.contains("not authorized for that agent"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn browser_open_records_an_artifact_only_for_agent_panes() {
-        let state = test_state();
-        let payload = json!({ "target": "http://localhost:5173/dash" });
-
-        // A plain terminal pane opens the overlay without feeding the tray.
-        let no_agent_token = state.pane_token("pane-1").unwrap();
-        handle_line(
-            &state,
-            &request_line(&no_agent_token, "browser.open", payload.clone()),
-        )
-        .unwrap();
-        assert!(state.list_artifacts().unwrap().is_empty());
-
-        // A pane with an attached agent records the target — whether the agent
-        // ran `session open` or the user did while the agent was backgrounded.
-        state.insert_agent(agent_bound_to("pane-2")).unwrap();
-        let agent_token = state.pane_token("pane-2").unwrap();
-        handle_line(&state, &request_line(&agent_token, "browser.open", payload)).unwrap();
-        let artifacts = state.list_artifacts().unwrap();
-        assert_eq!(artifacts.len(), 1);
-        assert_eq!(artifacts[0].pane_id, "pane-2");
-        assert_eq!(
-            artifacts[0].url.as_deref(),
-            Some("http://localhost:5173/dash")
-        );
-        assert!(artifacts[0].path.is_none());
-    }
-
-    #[test]
-    fn mcp_requires_an_agent_bound_to_the_authenticated_pane() {
-        let state = test_state();
-        let token = state.pane_token("pane-1").unwrap();
-        let err = handle_line(
-            &state,
-            &request_line(
-                &token,
-                "mcp.call",
-                json!({ "name": "whoami", "arguments": {} }),
-            ),
-        )
-        .unwrap_err();
-        assert!(err.contains("active agent pane"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn mcp_whoami_resolves_identity_from_the_authenticated_pane() {
-        let state = test_state();
-        state.insert_agent(agent_bound_to("pane-2")).unwrap();
-        let token = state.pane_token("pane-2").unwrap();
-        let value = handle_line(
-            &state,
-            &request_line(
-                &token,
-                "mcp.call",
-                json!({ "name": "whoami", "arguments": {} }),
-            ),
-        )
-        .unwrap();
-        assert_eq!(value["agent"]["id"], "agent-1");
-        assert_eq!(
-            value["capabilities"]["write"],
-            "direct parent and direct children only"
-        );
-    }
-
-    #[test]
     fn handle_line_rejects_an_unknown_command() {
         let state = test_state();
-        let token = state.pane_token("pane-1").unwrap();
-        let err = handle_line(&state, &request_line(&token, "bogus", Value::Null)).unwrap_err();
+        // The commands of the removed pane-token surface are unknown now.
+        for command in [
+            "bogus",
+            "pane.write",
+            "hook.notify",
+            "cli.call",
+            "browser.open",
+        ] {
+            let err = handle_line_with_peer(&state, &request_line("", command, Value::Null), true)
+                .unwrap_err();
+            assert!(
+                err.contains("unknown control command"),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn handle_line_rejects_any_token() {
+        let state = test_state();
+        // Pane tokens no longer exist; a stale one from an old pane's
+        // environment is refused rather than treated as tokenless.
+        let request = request_line("stale-pane-token", "ping", Value::Null);
+        let err = handle_line_with_peer(&state, &request, true).unwrap_err();
         assert!(
-            err.contains("unknown control command"),
+            err.contains("invalid SESSION_TOKEN"),
             "unexpected error: {err}"
         );
     }
@@ -2245,7 +1332,7 @@ mod tests {
     #[test]
     fn complete_request_still_receives_response() {
         let state = test_state();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let (mut client, server) = UnixStream::pair().unwrap();
         let (done_tx, done_rx) = mpsc::channel();
 
@@ -2275,75 +1362,6 @@ mod tests {
         done_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("server reader should exit after the client closes");
-    }
-
-    #[test]
-    fn remote_shell_streams_one_file_into_an_exact_preview_grant() {
-        let state = test_state();
-        insert_remote_shell(&state, "pane-remote");
-        state.set_file_server(45678);
-        let token = state.pane_remote_token("pane-remote").unwrap();
-        let (mut client, server) = UnixStream::pair().unwrap();
-        let server_state = state.clone();
-        let handle = thread::spawn(move || {
-            handle_client_with_timeout(server_state, server, Duration::from_secs(1));
-        });
-        let body = b"<!doctype html><p>remote snapshot</p>";
-        let request = ControlRequest {
-            token,
-            command: "browser.open_file".to_string(),
-            payload: serde_json::to_value(BrowserOpenFileHeader {
-                name: "report.html".to_string(),
-                size: body.len() as u64,
-            })
-            .unwrap(),
-        };
-        serde_json::to_writer(&mut client, &request).unwrap();
-        client.write_all(b"\n").unwrap();
-        client.write_all(body).unwrap();
-        client.flush().unwrap();
-
-        let mut response = String::new();
-        BufReader::new(client.try_clone().unwrap())
-            .read_line(&mut response)
-            .unwrap();
-        let response = serde_json::from_str::<ControlResponse>(&response).unwrap();
-        assert!(response.ok, "{:?}", response.error);
-        assert_eq!(
-            response.data,
-            json!({ "opened": true, "name": "report.html" })
-        );
-        let grants = state.pane_file_preview_grants("pane-remote");
-        assert_eq!(grants.len(), 1);
-        assert_eq!(fs::read(&grants[0]).unwrap(), body);
-        assert!(
-            state
-                .pane_file_roots("pane-remote")
-                .iter()
-                .all(|root| { !grants[0].starts_with(root) })
-        );
-        assert!(state.list_artifacts().unwrap().is_empty());
-
-        handle.join().unwrap();
-        fs::remove_dir_all(&state.config().workspace_root).unwrap();
-    }
-
-    #[test]
-    fn streamed_file_open_rejects_a_local_pane_token_before_reading_the_body() {
-        let state = test_state();
-        let request = ControlRequest {
-            token: state.pane_token("pane-local").unwrap(),
-            command: "browser.open_file".to_string(),
-            payload: serde_json::to_value(BrowserOpenFileHeader {
-                name: "report.html".to_string(),
-                size: 3,
-            })
-            .unwrap(),
-        };
-        let error = handle_browser_open_file(&state, request, &mut io::empty()).unwrap_err();
-        assert!(error.contains("requires a remote pane credential"));
-        assert!(!crate::remote_files::store_root(&state.config().workspace_root).exists());
-        fs::remove_dir_all(&state.config().workspace_root).unwrap();
     }
 
     #[test]
@@ -2385,7 +1403,7 @@ mod tests {
     #[test]
     fn supervisor_rebinds_after_the_socket_file_is_unlinked() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 
@@ -2437,7 +1455,7 @@ mod tests {
         }
 
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
         let before = fd_count();
@@ -2458,7 +1476,7 @@ mod tests {
     #[test]
     fn supervisor_reports_conflict_and_does_not_delete_a_replacement() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state.clone(), MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 
@@ -2503,7 +1521,7 @@ mod tests {
     #[test]
     fn supervisor_restarts_after_a_listener_panic() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 
@@ -2525,7 +1543,7 @@ mod tests {
     #[test]
     fn supervisor_does_not_recreate_the_socket_after_shutdown() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 
@@ -2542,7 +1560,7 @@ mod tests {
     #[test]
     fn accepted_connections_survive_a_listener_rebind() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 
@@ -2571,7 +1589,7 @@ mod tests {
     #[test]
     fn supervisor_still_recovers_while_the_client_cap_is_held() {
         let (state, socket_path) = runtime_fixture();
-        let token = state.pane_token("pane-1").unwrap();
+        let token = String::new();
         let runtime = start_control_socket_runtime(state, 2).unwrap();
         wait_for_ping(&socket_path, &token, Duration::from_secs(1));
 

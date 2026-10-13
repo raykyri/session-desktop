@@ -1,11 +1,7 @@
 //! Wire types for Session's control protocol: newline-delimited JSON requests and
-//! responses exchanged between in-pane processes (the `session` CLI, agent hooks)
-//! and the app's control listener. `browser.open_file` alone includes an exact,
-//! size-declared byte body after its JSON header. Shared by the server
-//! (`control_socket`) and the client (`session-cli`) to keep their definitions
-//! consistent. The types do not depend on a transport. Frames currently use a
-//! local Unix socket, but a forwarded socket or a
-//! network transport must be able to reuse these types unchanged.
+//! responses exchanged between the `session` CLI and the app's control listener.
+//! Shared by the server (`control_socket`) and the client (`session-cli`) to keep
+//! their definitions consistent.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -14,30 +10,9 @@ pub const TRANSCRIPT_STREAM_VERSION: &str = "4";
 pub const REMOTE_OPEN_FILE_VERSION: &str = "1";
 pub const WORKSPACE_OBSERVATION_VERSION: &str = "2";
 
-/// Prepared shell-agent invocation exchanged by the desktop and standalone CLI.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PreparedAgentLaunch {
-    pub binary: String,
-    pub cwd: String,
-    pub args: Vec<String>,
-    pub envs: Vec<LaunchEnv>,
-    /// False for utility invocations that must not create a supervised agent.
-    pub supervised: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LaunchEnv {
-    pub key: String,
-    pub value: String,
-}
-
-/// A single control request. `token` normally scopes the request to exactly one
-/// pane: the server resolves the pane from the token and treats any pane id
-/// inside `payload` as advisory only. The notification-only public entry point
-/// also accepts an empty token from a same-user Unix-socket peer; no other
-/// command may use that exception.
+/// A single control request. The server accepts only an empty `token` from a
+/// same-user Unix-socket peer; `token` stays on the wire so a client from an
+/// older build that still sends a pane token is refused rather than misparsed.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
@@ -56,50 +31,7 @@ pub struct ControlResponse {
     pub error: Option<String>,
 }
 
-/// Largest single file `session open` will transfer from a remote pane to the desktop.
-/// The transport streams exactly this many bytes at most; neither endpoint should
-/// allocate a buffer proportional to the file size.
-pub const MAX_REMOTE_OPEN_FILE_BYTES: u64 = 10 * 1024 * 1024;
-
-/// Metadata in the JSON header that precedes a streamed remote file body.
-/// `name` must be a safe basename; the desktop chooses every parent directory
-/// and never accepts a destination path from the remote caller.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BrowserOpenFileHeader {
-    pub name: String,
-    pub size: u64,
-}
-
-/// Git checkout classification produced beside a shell prompt on the machine
-/// that owns the shell. Keeping this on the wire avoids resolving a remote path
-/// against the desktop's filesystem.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum WorkspaceObservationKind {
-    Directory,
-    GitCheckout,
-    MainCheckout,
-    LinkedWorktree,
-}
-
-/// Display-only shell workspace metadata. The authenticated pane remains the
-/// authority for which pane is updated; these paths never grant lifecycle or
-/// deletion ownership.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspaceObservation {
-    pub cwd: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub git_root: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub branch: Option<String>,
-    pub kind: WorkspaceObservationKind,
-}
-
-/// Extensions the embedded browser handles as a top-level local preview. This
-/// is shared by the remote CLI's early validation and the desktop's authoritative
-/// MIME check so a file cannot pass one endpoint and fail only after transfer.
+/// Extensions the embedded browser handles as a top-level local preview.
 pub fn is_browser_preview_extension(extension: &str) -> bool {
     matches!(
         extension.to_ascii_lowercase().as_str(),
@@ -134,83 +66,9 @@ pub fn is_browser_preview_extension(extension: &str) -> bool {
     )
 }
 
-/// Whether an untrusted remote basename is safe to materialize and maps to one
-/// of the explicit embedded-browser preview types.
-pub fn is_safe_browser_preview_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 240
-        && !name.contains(['/', '\\'])
-        && !name.chars().any(char::is_control)
-        && !matches!(name, "." | "..")
-        && name
-            .rsplit_once('.')
-            .is_some_and(|(_, extension)| is_browser_preview_extension(extension))
-}
-
-pub const PUBLIC_API_VERSION: u32 = 1;
-
-/// Public command invocation included in `cli.call`. Authentication and
-/// caller identity stay in the outer control request and are never accepted
-/// from these arguments.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PublicControlRequest {
-    pub operation: String,
-    #[serde(default)]
-    pub arguments: Value,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PublicControlError {
-    pub code: String,
-    pub message: String,
-    #[serde(default)]
-    pub details: Value,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PublicControlResponse {
-    pub ok: bool,
-    pub api_version: u32,
-    #[serde(default)]
-    pub result: Value,
-    pub error: Option<PublicControlError>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn prepared_launch_preserves_the_existing_wire_shape() {
-        let wire = serde_json::json!({
-            "binary": "claude", "cwd": "/work", "args": ["--resume"],
-            "envs": [{"key": "SESSION_AGENT_ID", "value": "agent-1"}],
-            "supervised": true
-        });
-        let launch: PreparedAgentLaunch = serde_json::from_value(wire.clone()).unwrap();
-        assert_eq!(launch.envs[0].key, "SESSION_AGENT_ID");
-        assert_eq!(serde_json::to_value(&launch).unwrap(), wire);
-        assert!(
-            serde_json::from_value::<PreparedAgentLaunch>(serde_json::json!({
-                "binary": "claude", "cwd": "/work", "args": [], "envs": []
-            }))
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn public_requests_reject_unknown_envelope_fields() {
-        let error = serde_json::from_value::<PublicControlRequest>(serde_json::json!({
-            "operation": "pane.list",
-            "argument": {}
-        }))
-        .err()
-        .expect("unknown envelope fields must fail closed");
-        assert!(error.to_string().contains("unknown field `argument`"));
-    }
 
     #[test]
     fn browser_preview_extensions_are_explicit_and_case_insensitive() {
@@ -219,21 +77,5 @@ mod tests {
         assert!(is_browser_preview_extension("markdown"));
         assert!(!is_browser_preview_extension("zip"));
         assert!(!is_browser_preview_extension(""));
-        assert!(is_safe_browser_preview_name("report.HTML"));
-        assert!(!is_safe_browser_preview_name("../report.html"));
-        assert!(!is_safe_browser_preview_name("archive.zip"));
-    }
-
-    #[test]
-    fn workspace_observation_uses_the_frontend_wire_shape() {
-        let value = serde_json::to_value(WorkspaceObservation {
-            cwd: "/srv/code/project".to_string(),
-            git_root: Some("/srv/code/project".to_string()),
-            branch: Some("feature/remote".to_string()),
-            kind: WorkspaceObservationKind::LinkedWorktree,
-        })
-        .unwrap();
-        assert_eq!(value["gitRoot"], "/srv/code/project");
-        assert_eq!(value["kind"], "linkedWorktree");
     }
 }

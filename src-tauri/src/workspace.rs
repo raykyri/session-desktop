@@ -248,20 +248,7 @@ pub enum AgentStatus {
     Failed,
 }
 
-impl AgentStatus {
-    /// Whether the agent is between turns with its delivered content settled.
-    /// `AwaitingInput` counts as at rest: adapters assign it to agents that
-    /// are ready for a prompt (post-notification, post-interruption), and the
-    /// interrupted tail of such a timeline carries its own turn status. It is
-    /// distinct from `AwaitingPermission`, which always sits inside a pending
-    /// tool call. `Failed` is deliberately not at rest — a process that died
-    /// mid-answer leaves a half-streamed tail that must not read as delivered.
-    /// The allowlist runs in this direction so an unhandled future status
-    /// classifies as busy, the conservative side for content capture.
-    pub fn is_at_rest(self) -> bool {
-        matches!(self, Self::Done | Self::Idle | Self::AwaitingInput)
-    }
-}
+impl AgentStatus {}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -920,22 +907,6 @@ pub(crate) fn clone_group_record_for_scope(
     Ok(group)
 }
 
-pub fn rename_group(
-    state: &AppState,
-    group_id: &str,
-    name: Option<String>,
-) -> Result<GroupInfo, String> {
-    let group = state
-        .group(group_id)?
-        .ok_or_else(|| format!("group {group_id} was not found"))?;
-    if group.scope != WorkspaceScope::Terminal {
-        return Err(
-            "use the research workspace rename command for Research workspaces".to_string(),
-        );
-    }
-    rename_group_record(state, group, name)
-}
-
 fn rename_group_record(
     state: &AppState,
     mut group: GroupInfo,
@@ -975,18 +946,6 @@ pub fn prepare_agent_workspace_with_parent(
     parent_id: Option<&str>,
 ) -> Result<AgentInfo, String> {
     prepare_agent_workspace_with_parent_inner(state, request, parent_id, None)
-}
-
-/// Prepares a worktree-backed child using the exact user-provided directory and
-/// branch name. Terminal-tab worktree forks use this path after collecting the
-/// name in the same dialog as an ordinary shell worktree.
-pub fn prepare_named_agent_workspace_with_parent(
-    state: &AppState,
-    request: PrepareAgentWorkspaceRequest,
-    parent_id: Option<&str>,
-    worktree_name: &str,
-) -> Result<AgentInfo, String> {
-    prepare_agent_workspace_with_parent_inner(state, request, parent_id, Some(worktree_name))
 }
 
 fn prepare_agent_workspace_with_parent_inner(
@@ -1177,122 +1136,6 @@ fn prepare_agent_workspace_locked(
     Ok(agent)
 }
 
-/// Restores the pane-to-agent binding when an authenticated SessionStart is the
-/// first lifecycle signal Session can observe for a shell-launched agent.
-///
-/// Normally Session's injected `codex` / `claude` / `grok` shell
-/// function calls `agent.prepare_shell_launch` before exec. That creates and
-/// attaches the agent early enough for the right pane to exist before a fast
-/// SessionStart hook. If that preparation record is later lost or detached while
-/// the launched process still owns the pane token, its authenticated hook can
-/// arrive without a binding. Recover it here so SessionStart can bind the native
-/// session and load its transcript instead of silently becoming a no-op. This also
-/// covers other adapter integration paths that can emit an authenticated
-/// SessionStart without going through the injected shell function.
-pub fn recover_shell_agent_from_session_start(
-    state: &AppState,
-    pane: &crate::state::PaneInfo,
-    adapter_id: &str,
-    preferred_agent_id: Option<&str>,
-) -> Result<AgentInfo, String> {
-    let _guard = AGENT_WORKSPACE_CREATION_LOCK
-        .lock()
-        .map_err(|_| "agent workspace creation lock poisoned".to_string())?;
-
-    // Serialize with ordinary shell preparation and recheck under the shared
-    // guard: a nearly simultaneous prepare must win rather than minting a second
-    // agent for the same pane.
-    if let Some(agent) = state.agent_by_pane(&pane.id)? {
-        return Ok(agent);
-    }
-    if !matches!(pane.kind, crate::state::PaneKind::Shell) {
-        return Err(format!(
-            "cannot recover a shell agent in non-shell pane {}",
-            pane.id
-        ));
-    }
-
-    let preferred_agent_id = preferred_agent_id
-        .map(str::trim)
-        .filter(|agent_id| !agent_id.is_empty());
-    let agent = if let Some(agent_id) = preferred_agent_id
-        && let Some(existing) = state.agent(agent_id)?
-    {
-        if existing.pane_id.is_some()
-            || existing.group_id != pane.group_id
-            || existing.adapter != adapter_id
-            || existing.worktree_dir != pane.cwd
-        {
-            return Err(format!(
-                "agent {agent_id} cannot be recovered into pane {}",
-                pane.id
-            ));
-        }
-        existing
-    } else {
-        // Retain a Session-generated id when the record itself disappeared. The running
-        // shell supervisor and every later hook still carry that id; changing it
-        // here would prevent the supervisor from detaching this recovered binding
-        // when the native agent process exits. Never accept an arbitrary id as a
-        // durable key—the hook payload is pane-authenticated but can still be
-        // influenced by code running inside that pane.
-        let recovered_agent_id = preferred_agent_id
-            .filter(|agent_id| is_session_agent_id(agent_id))
-            .map(ToString::to_string);
-        prepare_agent_workspace_locked(
-            state,
-            PrepareAgentWorkspaceRequest {
-                group_id: Some(pane.group_id.clone()),
-                base_repo: Some(pane.cwd.clone()),
-                base_ref: Some("HEAD".to_string()),
-                adapter: adapter_id.to_string(),
-                model: None,
-                effort: None,
-                // This is an agent running inside the shell's own directory, not a
-                // session-managed isolated worktree.
-                use_worktree: false,
-            },
-            recovered_agent_id,
-            None,
-        )?
-    };
-    let attached = attach_agent_pane(state, &agent.id, pane.id.clone())?;
-    let recovered = state
-        .set_agent_status(&attached.id, AgentStatus::Idle)?
-        .ok_or_else(|| {
-            format!(
-                "agent {} disappeared during SessionStart recovery",
-                attached.id
-            )
-        })?;
-    // Emit the recovered binding before the caller ingests the notification and
-    // starts a transcript-tail thread. Its first read may immediately emit the
-    // full history, and the frontend must know which right pane owns those
-    // turns first.
-    state.emit(SessionEvent::new(
-        "agent.spawned",
-        Some(pane.id.clone()),
-        Some(recovered.id.clone()),
-        json!({ "agent": &recovered, "source": "session_start_recovery" }),
-    ));
-    Ok(recovered)
-}
-
-fn is_session_agent_id(value: &str) -> bool {
-    let Some(rest) = value.strip_prefix("agent-") else {
-        return false;
-    };
-    let mut parts = rest.split('-');
-    matches!(
-        (parts.next(), parts.next(), parts.next()),
-        (Some(millis), Some(sequence), None)
-            if !millis.is_empty()
-                && !sequence.is_empty()
-                && millis.bytes().all(|byte| byte.is_ascii_digit())
-                && sequence.bytes().all(|byte| byte.is_ascii_digit())
-    )
-}
-
 pub fn attach_agent_pane(
     state: &AppState,
     agent_id: &str,
@@ -1342,24 +1185,6 @@ pub fn attach_agent_pane(
             agent.status = AgentStatus::Running;
         })?
         .ok_or_else(|| format!("agent {agent_id} was not found"))
-}
-
-/// Detaches whatever agent is currently bound to `pane_id` (if any), reverting the
-/// pane to a plain shell. Used when a shell-launched agent's *process* exits but its
-/// host shell — and so the pane — lives on: there is no `pty.exit` to reap the agent
-/// in that case, so without this the agent would linger bound to the pane and the tab
-/// would keep showing its last status (e.g. a freshly launched, never-used agent's
-/// synthetic "Awaiting input") indefinitely. Mirrors the rebind detach in
-/// `attach_agent_pane`: the binding is cleared and the agent goes Idle, but an agent
-/// with queued turns keeps them parked as an orphaned queue (and paused, so a
-/// later resume or idle_prompt cannot auto-send them). Emits `agent.detached`
-/// with the updated agent and returns it;
-/// a no-op (`Ok(None)`) when no agent owns the pane.
-pub fn detach_pane_agent(state: &AppState, pane_id: &str) -> Result<Option<AgentInfo>, String> {
-    let Some(current) = state.agent_by_pane(pane_id)? else {
-        return Ok(None);
-    };
-    detach_known_pane_agent(state, pane_id, current)
 }
 
 fn detach_known_pane_agent(
@@ -1594,17 +1419,6 @@ pub fn group_canonical_dir(remote: Option<&RemoteRef>, path: &str) -> Result<Pat
             crate::host::for_group(Some(remote)).expand_home(path)?,
         )),
         None => canonical_dir(path),
-    }
-}
-
-/// Group-aware companion to `pty::recoverable_dir`: returns the path only when
-/// it still resolves for the host the group's processes run on. Local groups
-/// stat the local filesystem; remote groups pass the string through untouched
-/// because it cannot be validated locally.
-pub fn group_recoverable_dir(remote: Option<&RemoteRef>, path: &str) -> Option<PathBuf> {
-    match remote {
-        Some(_) => Some(PathBuf::from(path)),
-        None => crate::pty::recoverable_dir(path),
     }
 }
 
@@ -2443,27 +2257,6 @@ mod tests {
         }
     }
 
-    // The group-aware path helpers are the shared check keeping local stat calls away
-    // from remote paths: a remote group's directory must pass through
-    // unstatted, while local groups keep the strict canonicalize/exists
-    // behavior. A silent local fallback here is the failure mode the whole
-    // consolidation exists to prevent.
-    #[test]
-    fn group_path_helpers_never_stat_remote_paths_locally() {
-        let remote = test_remote();
-        let missing = "/no/such/dir/on/this/machine";
-        assert_eq!(
-            group_canonical_dir(Some(&remote), missing).unwrap(),
-            PathBuf::from(missing)
-        );
-        assert!(group_canonical_dir(None, missing).is_err());
-        assert_eq!(
-            group_recoverable_dir(Some(&remote), missing),
-            Some(PathBuf::from(missing))
-        );
-        assert_eq!(group_recoverable_dir(None, missing), None);
-    }
-
     #[test]
     fn remote_group_canonical_dir_expands_home() {
         crate::host::seed_remote_home("workbox", "/home/dev");
@@ -2891,70 +2684,6 @@ mod tests {
     }
 
     #[test]
-    fn named_agent_worktree_uses_the_exact_directory_and_branch_name() {
-        let workspace = temp_workspace("named-agent-worktree");
-        let repo = workspace.join("repo");
-        let managed = workspace.join("managed/group");
-        fs::create_dir_all(&repo).unwrap();
-        fs::create_dir_all(&managed).unwrap();
-        let git = |args: &[&str]| {
-            let output = Command::new("git")
-                .arg("-C")
-                .arg(&repo)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&["init", "-b", "main"]);
-        git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "session test"]);
-        git(&["commit", "--allow-empty", "-m", "init"]);
-
-        let state = test_state_with_workspace(workspace.join("state"));
-        persistence::save_preferences(
-            &state.config().workspace_root,
-            &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalSession),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        state
-            .insert_group_after(allocation_group(&repo, &managed), None)
-            .unwrap();
-
-        let agent = prepare_named_agent_workspace_with_parent(
-            &state,
-            PrepareAgentWorkspaceRequest {
-                group_id: Some("group-1".to_string()),
-                base_repo: Some(repo.display().to_string()),
-                base_ref: Some("HEAD".to_string()),
-                adapter: "codex".to_string(),
-                model: None,
-                effort: None,
-                use_worktree: true,
-            },
-            None,
-            "feature_name",
-        )
-        .unwrap();
-
-        assert_eq!(agent.branch.as_deref(), Some("feature_name"));
-        assert_eq!(
-            Path::new(&agent.worktree_dir)
-                .file_name()
-                .and_then(|name| name.to_str()),
-            Some("feature_name")
-        );
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
     fn active_workspace_keeps_non_git_command_directories_visible() {
         let directory = temp_workspace("active-directory");
         let current = resolve_active_workspace(
@@ -3169,145 +2898,6 @@ mod tests {
             None
         );
         fs::remove_dir_all(root).ok();
-    }
-
-    fn sample_shell_pane(id: &str, group_id: &str, cwd: &Path) -> crate::state::PaneInfo {
-        crate::state::PaneInfo {
-            id: id.to_string(),
-            title: "Shell".to_string(),
-            last_osc_title: None,
-            kind: crate::state::PaneKind::Shell,
-            agent_id: None,
-            group_id: group_id.to_string(),
-            cwd: cwd.display().to_string(),
-            active_workspace: None,
-            remote_session: None,
-            remote_connection: None,
-            cols: 80,
-            rows: 24,
-            status: crate::state::PaneStatus::Running,
-            last_active_at: 1,
-            recovered: false,
-            ssh_target: None,
-            depth: 0,
-        }
-    }
-
-    #[test]
-    fn session_start_recovery_creates_one_idle_shell_agent() {
-        let workspace = temp_workspace("session-start-recovery");
-        let project = workspace.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        let state = test_state_with_workspace(workspace.join("managed"));
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(project.display().to_string()),
-                after_group_id: None,
-                base_repo: Some(project.display().to_string()),
-                base_ref: Some("HEAD".to_string()),
-                remote: None,
-            },
-        )
-        .unwrap();
-        let pane = sample_shell_pane("pane-shell", &group.id, &project);
-
-        let first =
-            recover_shell_agent_from_session_start(&state, &pane, "codex", Some("agent-123-456"))
-                .unwrap();
-        let second = recover_shell_agent_from_session_start(
-            &state,
-            &pane,
-            "codex",
-            Some("stale-prepared-id"),
-        )
-        .unwrap();
-
-        assert_eq!(first.id, second.id);
-        assert_eq!(first.id, "agent-123-456");
-        assert_eq!(first.pane_id.as_deref(), Some("pane-shell"));
-        assert_eq!(first.status, AgentStatus::Idle);
-        assert_eq!(first.adapter, "codex");
-        assert_eq!(first.worktree_dir, project.display().to_string());
-        assert_eq!(state.list_agents().unwrap().len(), 1);
-        assert_eq!(
-            state.group(&group.id).unwrap().unwrap().agents,
-            vec![first.id]
-        );
-    }
-
-    #[test]
-    fn session_start_recovery_refuses_non_shell_panes() {
-        let workspace = temp_workspace("session-start-agent-pane");
-        let project = workspace.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        let state = test_state_with_workspace(workspace.join("managed"));
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(project.display().to_string()),
-                after_group_id: None,
-                base_repo: Some(project.display().to_string()),
-                base_ref: Some("HEAD".to_string()),
-                remote: None,
-            },
-        )
-        .unwrap();
-        let mut pane = sample_shell_pane("pane-agent", &group.id, &project);
-        pane.kind = crate::state::PaneKind::Agent;
-
-        let err = recover_shell_agent_from_session_start(&state, &pane, "codex", None).unwrap_err();
-
-        assert!(err.contains("non-shell pane"), "unexpected error: {err}");
-        assert!(state.list_agents().unwrap().is_empty());
-    }
-
-    #[test]
-    fn session_start_recovery_only_preserves_session_agent_ids() {
-        assert!(is_session_agent_id("agent-1784252381261-2616"));
-        assert!(!is_session_agent_id("agent-stale"));
-        assert!(!is_session_agent_id("../agent-1-2"));
-        assert!(!is_session_agent_id("agent-1-2-extra"));
-    }
-
-    #[test]
-    fn rename_group_sets_and_clears_name_override() {
-        let workspace = temp_workspace("rename");
-        let managed_root = workspace.join("managed");
-        let source_dir = workspace.join("dirs/project");
-        std::fs::create_dir_all(&source_dir).unwrap();
-        std::fs::create_dir_all(&managed_root).unwrap();
-        let state = test_state_with_workspace(managed_root);
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(source_dir.to_string_lossy().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-        )
-        .unwrap();
-
-        let renamed = rename_group(&state, &group.id, Some("  Research  ".to_string())).unwrap();
-
-        assert_eq!(renamed.name_override.as_deref(), Some("Research"));
-        let manifest_path = PathBuf::from(&renamed.managed_dir).join(".session/group.json");
-        let manifest: GroupInfo =
-            serde_json::from_str(&std::fs::read_to_string(manifest_path).unwrap()).unwrap();
-        assert_eq!(manifest.name_override.as_deref(), Some("Research"));
-
-        let cleared = rename_group(&state, &group.id, Some(" ".to_string())).unwrap();
-
-        assert_eq!(cleared.name_override, None);
-        std::fs::remove_dir_all(workspace).ok();
     }
 
     #[test]
@@ -4202,37 +3792,6 @@ mod tests {
     }
 
     #[test]
-    fn attach_agent_pane_detaches_previous_agent_for_same_pane() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-old",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-        state
-            .insert_agent(sample_agent("agent-new", None, AgentStatus::Starting))
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-old", "old queued turn".to_string())
-            .unwrap();
-
-        let attached = attach_agent_pane(&state, "agent-new", "pane-1".to_string()).unwrap();
-
-        assert_eq!(attached.pane_id.as_deref(), Some("pane-1"));
-        assert!(matches!(attached.status, AgentStatus::Running));
-        let old = state.agent("agent-old").unwrap().expect("old agent exists");
-        assert_eq!(old.pane_id, None);
-        assert_eq!(old.orphaned_queue_pane_id.as_deref(), Some("pane-1"));
-        assert!(matches!(old.status, AgentStatus::Idle));
-        assert_eq!(
-            state.list_agent_turn_queue("agent-old").unwrap(),
-            vec!["old queued turn".to_string()]
-        );
-    }
-
-    #[test]
     fn attach_agent_pane_preserves_session_id_and_transcript() {
         // attach binds the pane via a field-scoped write, so the session id/transcript a
         // freshly spawned agent's SessionStart hook records on another thread survive —
@@ -4251,90 +3810,6 @@ mod tests {
         assert!(matches!(attached.status, AgentStatus::Running));
         assert_eq!(attached.session_id.as_deref(), Some("sess-xyz"));
         assert_eq!(attached.transcript_path.as_deref(), Some("/tmp/new.jsonl"));
-    }
-
-    #[test]
-    fn detach_pane_agent_reverts_pane_to_plain_shell() {
-        // A shell-launched agent may still be carrying a prompt/notification status:
-        // once the agent process exits, detaching clears the pane binding and drops it
-        // to Idle so the tab stops advertising a stale status.
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-shell",
-                Some("pane-1"),
-                AgentStatus::AwaitingInput,
-            ))
-            .unwrap();
-
-        let detached = detach_pane_agent(&state, "pane-1")
-            .unwrap()
-            .expect("an agent was bound to the pane");
-
-        assert_eq!(detached.id, "agent-shell");
-        assert_eq!(detached.pane_id, None);
-        assert!(matches!(detached.status, AgentStatus::Idle));
-        let stored = state
-            .agent("agent-shell")
-            .unwrap()
-            .expect("agent still exists");
-        assert_eq!(stored.pane_id, None);
-        assert!(matches!(stored.status, AgentStatus::Idle));
-    }
-
-    #[test]
-    fn detach_pane_agent_parks_queued_turns_as_orphaned() {
-        // An agent with queued turns must stay restart-recoverable, so detaching parks its
-        // queue as an orphaned queue on the pane rather than discarding it.
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-shell",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-shell", "queued turn".to_string())
-            .unwrap();
-
-        let detached = detach_pane_agent(&state, "pane-1").unwrap().unwrap();
-
-        assert_eq!(detached.pane_id, None);
-        assert_eq!(detached.orphaned_queue_pane_id.as_deref(), Some("pane-1"));
-        assert!(detached.paused);
-        assert_eq!(
-            state.list_agent_turn_queue("agent-shell").unwrap(),
-            vec!["queued turn".to_string()]
-        );
-    }
-
-    #[test]
-    fn escape_watch_demotes_quiet_working_agent_without_draining_queue() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-1",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "queued turn".to_string())
-            .unwrap();
-        let baseline = state.agent_activity_seq("agent-1").unwrap();
-
-        let demoted = resolve_agent_escape_watch(&state, "agent-1", baseline)
-            .expect("quiet working agent is demoted");
-        assert!(matches!(demoted.status, AgentStatus::AwaitingInput));
-        assert!(demoted.paused);
-        // Unlike a successful Stop, the demotion must not auto-drain the queue:
-        // follow-ups were written for a finished turn. Pause so idle_prompt /
-        // typing-clear cannot send them either.
-        assert_eq!(
-            state.list_agent_turn_queue("agent-1").unwrap(),
-            vec!["queued turn".to_string()]
-        );
     }
 
     #[test]
@@ -4403,12 +3878,6 @@ mod tests {
         // Once the watcher resolves, the next burst may reserve again.
         state.end_agent_escape_watch("agent-1");
         assert!(state.begin_agent_escape_watch("agent-1"));
-    }
-
-    #[test]
-    fn detach_pane_agent_is_a_noop_for_an_unowned_pane() {
-        let state = test_state();
-        assert!(detach_pane_agent(&state, "pane-empty").unwrap().is_none());
     }
 
     #[test]
