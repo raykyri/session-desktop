@@ -195,7 +195,7 @@ function WidgetBlock({
       <p className="text-fg-muted text-xs">
         {complete
           ? "Widget exceeds the 64 KiB preview limit"
-          : "Widget preview awaits a complete closing fence"}
+          : "The preview appears after the closing fence"}
       </p>
       <pre>{children}</pre>
     </div>

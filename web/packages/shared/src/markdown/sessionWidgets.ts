@@ -129,9 +129,9 @@ export function remarkSessionWidgetFences() {
  * src-tauri/src/research_artifacts.rs. */
 export const MAX_SESSION_WIDGET_TITLE_CHARS = 120;
 
-/** One line of at most 120 characters: control characters and line breaks
- * become spaces and runs of whitespace collapse, so an agent-written title
- * cannot lay itself out as several rows of app chrome. Same rule as
+/** Normalize agent-generated titles to one line of at most 120 characters so
+ * they cannot create multiple rows in the interface. Control characters and
+ * line breaks become spaces, and runs of whitespace collapse. Same rule as
  * `normalize_title` in src-tauri/src/research_artifacts.rs. */
 export function sessionWidgetTitle(title: string): string {
   return [

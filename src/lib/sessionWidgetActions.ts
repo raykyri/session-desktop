@@ -34,14 +34,10 @@ function utf8Prefix(text: string, bytes: number): string {
   return text.slice(0, end);
 }
 
-/** A follow-up prompt asking for changes to one widget, joined after the
- * reader's existing draft (kept whole). The reader types after
- * "Requested changes:", which ends the prompt. Above it, the widget's source
- * and an excerpt of its answer are quoted between unique boundary lines and
- * labelled as material from the previous answer, not instructions, since the
- * agent wrote that HTML and it may carry text from pages the agent read. The
- * joined prompt fits the 120 KiB launch budget: the quoted source is
- * truncated, with a notice, never the reader's text. */
+/** Build a bounded follow-up prompt from the existing draft, an answer excerpt,
+ * and the widget source. Quote the excerpt and source as reference material
+ * because they may contain copied instructions. Truncate only the widget
+ * source. */
 export function widgetChangePrompt(answer: WidgetAnswer, html: string, draft = ""): string {
   let counter = 0;
   while (html.includes(`SESSION_WIDGET_SOURCE_${counter}`) || answer.answer.includes(`SESSION_WIDGET_SOURCE_${counter}`)) counter += 1;
