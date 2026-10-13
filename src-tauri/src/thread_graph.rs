@@ -1193,8 +1193,6 @@ mod tests {
             group_id: "group-1".to_string(),
             adapter: adapter.to_string(),
             worktree_dir,
-            branch: None,
-            active_workspace: None,
             session_id: Some(format!("{id}-session")),
             transcript_path: Some(format!("/tmp/{id}-session.jsonl")),
             status: AgentStatus::Done,

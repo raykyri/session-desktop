@@ -93,10 +93,6 @@ export interface AgentInfo {
   groupId: string;
   adapter: string;
   worktreeDir: string;
-  branch?: string | null;
-  /** Display-only command workspace observed from the live agent. Launch,
-   * resume, fork, and cleanup continue to use worktreeDir/branch. */
-  activeWorkspace?: ActiveWorkspace | null;
   sessionId?: string | null;
   transcriptPath?: string | null;
   threadId?: string | null;
@@ -113,15 +109,6 @@ export interface AgentInfo {
   /** Reasoning effort the session was launched with; absent for the default. */
   effort?: string | null;
   createdAt: number;
-}
-
-export interface ActiveWorkspace {
-  cwd: string;
-  gitRoot?: string | null;
-  branch?: string | null;
-  kind: "directory" | "gitCheckout" | "mainCheckout" | "linkedWorktree";
-  source: "session" | "claude" | "codex";
-  managedBySession: boolean;
 }
 
 export type ResearchNodeStatus =

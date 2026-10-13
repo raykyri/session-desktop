@@ -1699,7 +1699,8 @@ mod tests {
             value[key] = entry.clone();
         }
         // Agent fields those builds also wrote: tool-approval mode, fork
-        // lineage, the native session leaf and the queue pause.
+        // lineage, the native session leaf, the queue pause, the worktree
+        // branch and the command workspace observed from the agent.
         let agent_legacy_keys = [
             "approvalMode",
             "parentId",
@@ -1707,6 +1708,8 @@ mod tests {
             "rootSessionId",
             "nativeLeafId",
             "paused",
+            "branch",
+            "activeWorkspace",
         ];
         value["agents"] = serde_json::json!([{
             "id": "agent-1",
@@ -1720,7 +1723,14 @@ mod tests {
             "forkPoint": "turn-3",
             "rootSessionId": "session-0",
             "nativeLeafId": "leaf-1",
-            "paused": true
+            "paused": true,
+            "branch": "session/group-1/agent-1",
+            "activeWorkspace": {
+                "cwd": "/tmp/work",
+                "kind": "directory",
+                "source": "session",
+                "managedBySession": false
+            }
         }]);
         fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
 

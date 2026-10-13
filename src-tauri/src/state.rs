@@ -6502,8 +6502,6 @@ mod tests {
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
             worktree_dir: "/tmp/work/agent-1".to_string(),
-            branch: Some("session/group-1/agent-1".to_string()),
-            active_workspace: None,
             session_id: Some("session-abc".to_string()),
             transcript_path: Some("/tmp/transcript.jsonl".to_string()),
             status: AgentStatus::Running,

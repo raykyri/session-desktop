@@ -92,13 +92,6 @@ pub struct AgentInfo {
     pub group_id: String,
     pub adapter: String,
     pub worktree_dir: String,
-    pub branch: Option<String>,
-    /// Best-effort, display-only workspace most recently observed from this
-    /// agent's command stream. This is deliberately separate from
-    /// `worktree_dir` / `branch`: those fields describe the launch workspace
-    /// Session owns and are used by resume, fork, and cleanup.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub active_workspace: Option<ActiveWorkspace>,
     /// The terminal pane hosting the agent, in records saved by builds that
     /// had panes. Never set now and never written; restore drops a record
     /// that carries one.
@@ -118,38 +111,6 @@ pub struct AgentInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch_id: Option<String>,
     pub created_at: u128,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ActiveWorkspaceKind {
-    Directory,
-    GitCheckout,
-    MainCheckout,
-    LinkedWorktree,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ActiveWorkspaceSource {
-    Session,
-    Claude,
-    Codex,
-}
-
-/// Runtime location reported by an agent. It is informational only: no launch,
-/// fork, status, or deletion path may use it in place of `worktree_dir`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActiveWorkspace {
-    pub cwd: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub git_root: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub branch: Option<String>,
-    pub kind: ActiveWorkspaceKind,
-    pub source: ActiveWorkspaceSource,
-    pub managed_by_session: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -822,16 +783,12 @@ fn prepare_agent_workspace_locked(
         .base_repo
         .or_else(|| group.base_repo.clone())
         .unwrap_or_else(|| group.dir.clone());
-    let active_workspace =
-        resolve_active_workspace(&worktree_dir, ActiveWorkspaceSource::Session, false);
 
     let agent = AgentInfo {
         id: agent_id.clone(),
         group_id: group.id.clone(),
         adapter: request.adapter,
         worktree_dir,
-        branch: None,
-        active_workspace,
         session_id: None,
         transcript_path: None,
         status: AgentStatus::Starting,
@@ -925,86 +882,6 @@ fn sanitize_path_segment(value: &str) -> String {
     } else {
         sanitized
     }
-}
-
-/// Resolves a local command cwd into display-only workspace metadata. A cwd
-/// outside Git is still useful to show, while Git's own plumbing determines
-/// whether a checkout is the repository's primary tree or a linked worktree.
-pub fn resolve_active_workspace(
-    cwd: &str,
-    source: ActiveWorkspaceSource,
-    managed_by_session: bool,
-) -> Option<ActiveWorkspace> {
-    if !Path::new(cwd).is_absolute() {
-        return None;
-    }
-    let reported = cwd.to_string();
-    let canonical = fs::canonicalize(cwd).ok()?;
-    if !canonical.is_dir() {
-        return None;
-    }
-    let Some(git_root) = local_git_field(&canonical, &["rev-parse", "--show-toplevel"]) else {
-        return Some(ActiveWorkspace {
-            cwd: reported,
-            git_root: None,
-            branch: None,
-            kind: ActiveWorkspaceKind::Directory,
-            source,
-            managed_by_session,
-        });
-    };
-    let git_root = fs::canonicalize(&git_root).unwrap_or_else(|_| PathBuf::from(&git_root));
-    let branch = local_git_field(&canonical, &["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    let git_dir = local_git_path(&canonical, &["rev-parse", "--absolute-git-dir"]);
-    // Older Git releases do not support `--path-format=absolute`. Resolve the
-    // command's relative output against its cwd instead of turning a plumbing
-    // compatibility failure into a false linked-worktree claim.
-    let common_dir = local_git_path(&canonical, &["rev-parse", "--git-common-dir"]);
-    let kind = classify_git_checkout(git_dir.as_deref(), common_dir.as_deref());
-
-    Some(ActiveWorkspace {
-        cwd: reported,
-        git_root: Some(git_root.display().to_string()),
-        branch,
-        kind,
-        source,
-        managed_by_session,
-    })
-}
-
-fn classify_git_checkout(git_dir: Option<&Path>, common_dir: Option<&Path>) -> ActiveWorkspaceKind {
-    match (git_dir, common_dir) {
-        (Some(git_dir), Some(common_dir)) if git_dir == common_dir => {
-            ActiveWorkspaceKind::MainCheckout
-        }
-        (Some(_), Some(_)) => ActiveWorkspaceKind::LinkedWorktree,
-        _ => ActiveWorkspaceKind::GitCheckout,
-    }
-}
-
-fn local_git_field(cwd: &Path, args: &[&str]) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(cwd)
-        .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let value = String::from_utf8(output.stdout).ok()?;
-    let value = value.trim();
-    (!value.is_empty()).then(|| value.to_string())
-}
-
-fn local_git_path(cwd: &Path, args: &[&str]) -> Option<PathBuf> {
-    let path = PathBuf::from(local_git_field(cwd, args)?);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        cwd.join(path)
-    };
-    fs::canonicalize(path).ok()
 }
 
 pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
@@ -1124,60 +1001,12 @@ mod tests {
         dir
     }
 
-    #[test]
-    fn active_workspace_keeps_non_git_command_directories_visible() {
-        let directory = temp_workspace("active-directory");
-        let current = resolve_active_workspace(
-            directory.to_str().unwrap(),
-            ActiveWorkspaceSource::Claude,
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(current.kind, ActiveWorkspaceKind::Directory);
-        assert_eq!(current.cwd, directory.to_str().unwrap());
-        assert_eq!(current.git_root, None);
-        assert_eq!(current.branch, None);
-        fs::remove_dir_all(directory).ok();
-    }
-
-    #[test]
-    fn active_workspace_rejects_relative_or_missing_command_directories() {
-        assert_eq!(
-            resolve_active_workspace("relative/path", ActiveWorkspaceSource::Codex, false),
-            None
-        );
-        assert_eq!(
-            resolve_active_workspace(
-                "/definitely/missing/session-command-directory",
-                ActiveWorkspaceSource::Claude,
-                false,
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn incomplete_git_plumbing_never_claims_a_linked_worktree() {
-        let git_dir = Path::new("/repo/.git");
-        assert_eq!(
-            classify_git_checkout(Some(git_dir), None),
-            ActiveWorkspaceKind::GitCheckout
-        );
-        assert_eq!(
-            classify_git_checkout(None, Some(git_dir)),
-            ActiveWorkspaceKind::GitCheckout
-        );
-    }
-
     fn sample_agent(id: &str, pane_id: Option<&str>, status: AgentStatus) -> AgentInfo {
         AgentInfo {
             id: id.to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
             worktree_dir: "/tmp/session-workspace-tests".to_string(),
-            branch: None,
-            active_workspace: None,
             pane_id: pane_id.map(ToString::to_string),
             session_id: None,
             transcript_path: None,
@@ -1188,19 +1017,6 @@ mod tests {
             branch_id: None,
             created_at: 1,
         }
-    }
-
-    #[test]
-    fn agent_info_deserializes_without_active_workspace() {
-        let mut value = serde_json::to_value(sample_agent("agent-1", None, AgentStatus::Idle))
-            .expect("serializes");
-        value
-            .as_object_mut()
-            .expect("agent object")
-            .remove("activeWorkspace");
-
-        let restored: AgentInfo = serde_json::from_value(value).expect("legacy payload loads");
-        assert_eq!(restored.active_workspace, None);
     }
 
     #[test]

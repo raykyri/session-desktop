@@ -1337,8 +1337,6 @@ fn launch_research_child_run(
                 group_id: parent.group_id.clone(),
                 adapter: parent.adapter().to_string(),
                 worktree_dir: binding.worktree_dir.clone(),
-                branch: None,
-                active_workspace: None,
                 session_id: Some(session_id.clone()),
                 transcript_path: binding.transcript_path.clone(),
                 status: AgentStatus::Done,
