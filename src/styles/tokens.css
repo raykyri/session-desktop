@@ -229,15 +229,12 @@
   /* Extended text ramp. --text-max is the maximum-contrast state text used by
      selected rows and hovered actions; tertiary sits between secondary and
      muted; dim/ghost are for low-prominence hints. */
-  --text-max: #ffffff;
   --text-tertiary: #aab1ad;
   --text-dim: #5a615e;
   --text-ghost: #4b524e;
   --text-on-accent: #0f1413;
 
   /* Per-adapter identity colors in history and activity rows. */
-  --agent-claude-fg: #d9a07d;
-  --agent-codex-fg: #8fc7a6;
   /* Brand-blue link color for external embeds (tweets). */
   --link-external-fg: #1d9bf0;
 
@@ -245,27 +242,15 @@
   --status-attention-fg: #e0796d;
   /* Amber "agent is working / waiting on you" cues. */
   --status-active-fg: #d7a84f;
-  --status-active-border: rgba(215, 168, 79, 0.42);
-  --status-active-border-strong: rgba(215, 168, 79, 0.62);
   --status-warning-fg: #d8b878;
-  --status-info-fg: #6da7ec;
   /* Translucent so text over a ::selection keeps its own color and contrast. */
   --selection-bg: rgba(96, 156, 230, 0.45);
-  --status-info-bg: rgba(109, 167, 236, 0.08);
-  --status-info-bg-hover: rgba(109, 167, 236, 0.14);
-  --status-info-border: rgba(109, 167, 236, 0.25);
-  --status-info-border-strong: rgba(109, 167, 236, 0.5);
-  --wait-target-preview-border: rgba(109, 167, 236, 0.7);
   --status-success-fg: #81c784;
-  --status-success-fg-soft: #b9f0d6;
   --status-success-bg: rgba(129, 199, 132, 0.08);
   --status-success-border: rgba(129, 199, 132, 0.25);
   --status-error-fg: #e08a5f;
-  --status-pending-fg: #7f8884;
   --status-failed-bg: rgba(217, 135, 135, 0.13);
-  --status-info-fg-soft: #b8cfea;
   --status-info-fg-link: #79a7c8;
-  --status-info-bg-strong: rgba(90, 130, 178, 0.16);
   /* Toast tone borders and icons. */
   --toast-success-fg: #71d4a9;
   --toast-success-border: #56c596;
@@ -278,7 +263,6 @@
   --attention-badge-fg: #f4f4ef;
   --attention-badge-bg-strong: #a8842f;
   --attention-badge-fg-strong: #111315;
-  --attention-marker-bg: #e0a96d;
   /* Warning callout (composer capacity / stale-session notices). */
   --warning-callout-fg: #ffdca8;
   --warning-callout-bg: #241f18;
@@ -290,15 +274,12 @@
 
   --danger-bg: #2c1a17;
   --danger-bg-hover: #3a221d;
-  --danger-bg-strong: #3a2022;
   --danger-bg-banner: #2a211f;
   --danger-border: #7a3b34;
-  --danger-border-strong: #7a3030;
   --danger-border-banner: #755149;
   --danger-border-banner-hover: #8a5f55;
   --danger-focus-ring: #a55349;
   --danger-focus-shadow: rgba(224, 138, 95, 0.55);
-  --danger-outline: rgba(224, 138, 95, 0.55);
   --danger-fg: #ffd3c7;
   --danger-fg-strong: #ffb4a3;
   --danger-fg-muted: #e08a8a;
@@ -308,18 +289,12 @@
   /* White-alpha fills and hairlines composite the same over any dark theme. */
   --surface-fill-subtle: rgba(255, 255, 255, 0.05);
   --surface-fill-hover: rgba(255, 255, 255, 0.06);
-  --surface-highlight: rgba(255, 255, 255, 0.06);
   --surface-border-faint: rgba(255, 255, 255, 0.06);
   --surface-border-subtle: rgba(255, 255, 255, 0.075);
   --surface-border-default: rgba(255, 255, 255, 0.12);
   --surface-border-overlay-strong: rgba(255, 255, 255, 0.14);
-  --sidebar-switcher-bg: rgba(0, 0, 0, 0.18);
-  --sidebar-switcher-active-bg: rgba(255, 255, 255, 0.105);
-  --sidebar-group-bg: rgba(255, 255, 255, 0.013);
   --surface-fill-faint: rgba(255, 255, 255, 0.03);
   --surface-fill-medium: rgba(255, 255, 255, 0.09);
-  --surface-fill-strong: rgba(255, 255, 255, 0.18);
-  --surface-border-strong-alpha: rgba(255, 255, 255, 0.55);
   /* Text-colored underline for links inside body copy. */
   --link-underline: rgba(241, 240, 232, 0.8);
   /* Backdrop behind modal dialogs and the history overlay. */
@@ -335,9 +310,6 @@
   /* Amber split-focus indicators are deliberately theme-independent so the
      active-pane cue reads the same across themes. */
   --split-border-hover: rgba(215, 168, 79, 0.65);
-  --split-border-active: rgba(255, 220, 143, 0.78);
-  --split-border-active-muted: rgba(255, 220, 143, 0.28);
-  --split-active-indicator: rgba(215, 168, 79, 0.32);
   --split-drop-border: rgba(215, 168, 79, 0.74);
   --split-drop-bg: rgba(215, 168, 79, 0.12);
 
@@ -350,17 +322,12 @@
   --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 24px 70px rgba(0, 0, 0, 0.48);
   --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
-  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.35);
-  --shadow-glow-warm: inset 0 0 0 1px rgba(255, 239, 197, 0.12);
 
   /* Inline SVG glyphs for native form controls (select chevron, launcher lead
      icons, checkbox check). Stroke colors are baked into the data URI, so each
      appearance declares its own set. */
   --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 6.5L8 3.5' fill='none' stroke='%239ca6a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  --select-lead-folder: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>");
-  --select-lead-shield: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>");
   --checkbox-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.3 5.9 9.7 10.5 4.6' fill='none' stroke='%2310211c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
   color-scheme: dark;
@@ -378,7 +345,6 @@
      are mirrored as literals in research.css, where ::highlight() pseudos
      cannot resolve custom properties reliably. */
   --research-branch-tint: rgba(91, 164, 243, 0.14);
-  --research-highlight-flash: rgba(240, 178, 70, 0.39);
   --research-failed-border: rgba(217, 135, 135, 0.35);
   /* "Error." on the failed alert's tint (≥4.5:1). */
   --research-failed-text: #d98787;
@@ -397,7 +363,6 @@
   --left-pane-bg: #16171a;
   --terminal-pane-bg: #131417;
   --right-pane-bg: #1d1e22;
-  --right-pane-bg-transparent: rgba(29, 30, 34, 0);
 
   /* Secondary surfaces. Equal values remain separate when their visual roles
      may diverge in a future theme. */
@@ -431,14 +396,9 @@
   --dialog-border: #3d3e46;
   --chrome-control-bg: rgba(29, 30, 34, 0.9);
   --chrome-control-bg-hover: rgba(42, 43, 49, 0.95);
-  --chrome-control-bg-disabled: rgba(29, 30, 34, 0.65);
 
   /* Component surfaces with their own contrast relationships. */
-  --settings-tab-active-bg: #2a2b31;
-  --recovered-queue-divider: #2f3036;
-  --pane-status-active-dot: #a9a9b5;
   --folder-picker-status-border: #3a3b43;
-  --queued-turn-border: #3a3b43;
 
   --accent-color: #6890f5;
   --accent-shadow: rgba(104, 144, 245, 0.35);
@@ -451,7 +411,6 @@
   --control-bg-hover: #2c2d33;
   --control-border: #3a3b43;
   --control-border-hover: #474852;
-  --control-border-hover-accent: #4a5578;
   --focus-ring: #6890f5;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
@@ -490,15 +449,7 @@
   --text-ghost: #4d4d57;
   --text-on-accent: #0e1016;
   --selection-bg: rgba(77, 127, 242, 0.45);
-  --status-info-fg: #6890f5;
-  --status-info-bg: rgba(104, 144, 245, 0.08);
-  --status-info-bg-hover: rgba(104, 144, 245, 0.14);
-  --status-info-border: rgba(104, 144, 245, 0.25);
-  --status-info-border-strong: rgba(104, 144, 245, 0.5);
-  --wait-target-preview-border: rgba(104, 144, 245, 0.7);
-  --status-info-fg-soft: #b9cbf9;
   --status-info-fg-link: #8fb0ff;
-  --status-info-bg-strong: rgba(77, 127, 242, 0.16);
   --research-highlight-bg: rgba(240, 178, 70, 0.3);
   --research-highlight-bg-hover: rgba(240, 178, 70, 0.48);
 }
@@ -507,7 +458,6 @@
   --left-pane-bg: #171716;
   --terminal-pane-bg: #161514;
   --right-pane-bg: #1c1b1a;
-  --right-pane-bg-transparent: rgba(28, 27, 26, 0);
 
   --workspace-bg: #1c1b1a;
   --research-thread-page-bg: var(--right-pane-bg);
@@ -538,13 +488,8 @@
   --dialog-border: #3f3c37;
   --chrome-control-bg: rgba(31, 29, 27, 0.9);
   --chrome-control-bg-hover: rgba(44, 41, 37, 0.95);
-  --chrome-control-bg-disabled: rgba(31, 29, 26, 0.65);
 
-  --settings-tab-active-bg: #322f2b;
-  --recovered-queue-divider: #34312d;
-  --pane-status-active-dot: #b3ada3;
   --folder-picker-status-border: #49423a;
-  --queued-turn-border: #48413a;
 
   --accent-color: #33adff;
   --accent-shadow: rgba(51, 173, 255, 0.35);
@@ -557,7 +502,6 @@
   --control-bg-hover: #313130;
   --control-border: #3d3d3c;
   --control-border-hover: #4a4946;
-  --control-border-hover-accent: #57544f;
   --focus-ring: #33adff;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
@@ -587,8 +531,6 @@
      icons, checkbox check). Stroke colors are baked into the data URI, so each
      appearance declares its own set. */
   --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 6.5L8 3.5' fill='none' stroke='%236b746f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  --select-lead-folder: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b746f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>");
-  --select-lead-shield: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b746f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>");
   --checkbox-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.3 5.9 9.7 10.5 4.6' fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
   --text-primary: #23282a;
@@ -603,39 +545,24 @@
   --text-faint: #686e6b;
   --text-disabled: #8f9693;
   --placeholder-color: #8e958f;
-  --text-max: #000000;
   --text-tertiary: #5c655f;
   --text-dim: #9aa19d;
   --text-ghost: #adb3af;
   --text-on-accent: #ffffff;
 
-  --agent-claude-fg: #a85f2f;
-  --agent-codex-fg: #2f7f4f;
   --link-external-fg: #1a7fc9;
 
   --status-failed-fg: #b5484a;
   --status-attention-fg: #c0563f;
   --status-active-fg: #9a6b12;
-  --status-active-border: rgba(154, 107, 18, 0.42);
-  --status-active-border-strong: rgba(154, 107, 18, 0.62);
   --status-warning-fg: #9a6f16;
-  --status-info-fg: #2a6fc0;
   --selection-bg: rgba(42, 111, 192, 0.24);
-  --status-info-bg: rgba(42, 111, 192, 0.08);
-  --status-info-bg-hover: rgba(42, 111, 192, 0.14);
-  --status-info-border: rgba(42, 111, 192, 0.25);
-  --status-info-border-strong: rgba(42, 111, 192, 0.5);
-  --wait-target-preview-border: rgba(42, 111, 192, 0.7);
   --status-success-fg: #2f8a4d;
-  --status-success-fg-soft: #1f6d3f;
   --status-success-bg: rgba(47, 138, 77, 0.08);
   --status-success-border: rgba(47, 138, 77, 0.3);
   --status-error-fg: #b8582a;
-  --status-pending-fg: #767f7a;
   --status-failed-bg: rgba(181, 72, 74, 0.1);
-  --status-info-fg-soft: #245d9c;
   --status-info-fg-link: #2a6fc0;
-  --status-info-bg-strong: rgba(42, 111, 192, 0.12);
   --toast-success-fg: #24804f;
   --toast-success-border: #3fa36f;
   --toast-warning-fg: #9a6f16;
@@ -646,7 +573,6 @@
   --attention-badge-fg: #4a3a05;
   --attention-badge-bg-strong: #c9962c;
   --attention-badge-fg-strong: #ffffff;
-  --attention-marker-bg: #c98a3a;
   --warning-callout-fg: #6b4a12;
   --warning-callout-bg: #fdf4e3;
   --warning-callout-border: #e6cf9c;
@@ -655,15 +581,12 @@
 
   --danger-bg: #fdeae6;
   --danger-bg-hover: #fbdcd5;
-  --danger-bg-strong: #f9d3cc;
   --danger-bg-banner: #f8e9e5;
   --danger-border: #e3a79b;
-  --danger-border-strong: #d9958a;
   --danger-border-banner: #dfb0a6;
   --danger-border-banner-hover: #d09a8d;
   --danger-focus-ring: #c8574a;
   --danger-focus-shadow: rgba(184, 88, 42, 0.35);
-  --danger-outline: rgba(184, 88, 42, 0.45);
   --danger-fg: #8a2f22;
   --danger-fg-strong: #7a2418;
   --danger-fg-muted: #a94b4b;
@@ -673,27 +596,18 @@
   /* Black-alpha fills and hairlines composite the same over any light theme. */
   --surface-fill-subtle: rgba(0, 0, 0, 0.04);
   --surface-fill-hover: rgba(0, 0, 0, 0.05);
-  --surface-highlight: rgba(0, 0, 0, 0.05);
   --surface-border-faint: rgba(0, 0, 0, 0.06);
   --surface-border-subtle: rgba(0, 0, 0, 0.08);
   --surface-border-default: rgba(0, 0, 0, 0.12);
   --surface-border-overlay-strong: rgba(0, 0, 0, 0.14);
-  --sidebar-switcher-bg: rgba(0, 0, 0, 0.05);
-  --sidebar-switcher-active-bg: rgba(0, 0, 0, 0.09);
-  --sidebar-group-bg: rgba(0, 0, 0, 0.015);
   --surface-fill-faint: rgba(0, 0, 0, 0.025);
   --surface-fill-medium: rgba(0, 0, 0, 0.08);
-  --surface-fill-strong: rgba(0, 0, 0, 0.14);
-  --surface-border-strong-alpha: rgba(0, 0, 0, 0.45);
   --link-underline: rgba(21, 25, 26, 0.6);
   --scrim-bg: rgba(40, 44, 46, 0.42);
 
   --control-fg-muted: #4e5754;
 
   --split-border-hover: rgba(154, 107, 18, 0.65);
-  --split-border-active: rgba(154, 107, 18, 0.85);
-  --split-border-active-muted: rgba(154, 107, 18, 0.3);
-  --split-active-indicator: rgba(154, 107, 18, 0.32);
   --split-drop-border: rgba(154, 107, 18, 0.74);
   --split-drop-bg: rgba(154, 107, 18, 0.1);
 
@@ -705,14 +619,10 @@
   --shadow-sm: 0 4px 12px rgba(20, 24, 26, 0.12);
   --shadow-md: 0 8px 24px rgba(20, 24, 26, 0.16);
   --shadow-lg: 0 18px 48px rgba(20, 24, 26, 0.18);
-  --shadow-xl: 0 24px 70px rgba(20, 24, 26, 0.2);
   --shadow-inset: inset 0 1px 3px rgba(20, 24, 26, 0.1);
-  --shadow-ring: 0 0 0 1px rgba(20, 24, 26, 0.1);
-  --shadow-glow-warm: inset 0 0 0 1px rgba(154, 107, 18, 0.16);
 
   /* Conversation columns and passage tints (B2). */
   --research-branch-tint: rgba(51, 119, 205, 0.12);
-  --research-highlight-flash: rgba(240, 170, 40, 0.5);
   --research-failed-border: rgba(177, 74, 74, 0.35);
   --research-failed-text: #a94446;
 }
@@ -723,7 +633,6 @@
   --left-pane-bg: #f1f1f2;
   --terminal-pane-bg: #f8f8f9;
   --right-pane-bg: #fdfdfd;
-  --right-pane-bg-transparent: rgba(253, 253, 253, 0);
 
   --workspace-bg: #f8f8f9;
   --research-thread-page-bg: var(--right-pane-bg);
@@ -754,13 +663,8 @@
   --dialog-border: #d4d4d9;
   --chrome-control-bg: rgba(248, 248, 249, 0.9);
   --chrome-control-bg-hover: rgba(236, 236, 239, 0.95);
-  --chrome-control-bg-disabled: rgba(248, 248, 249, 0.65);
 
-  --settings-tab-active-bg: #e8e8eb;
-  --recovered-queue-divider: #dcdce0;
-  --pane-status-active-dot: #6b6e77;
   --folder-picker-status-border: #c9c9cf;
-  --queued-turn-border: #d0d0d5;
 
   /* White on the accent, and the accent as text on the light surfaces, are
      at least 4.5:1. */
@@ -775,7 +679,6 @@
   --control-bg-hover: #ececef;
   --control-border: #dcdce0;
   --control-border-hover: #c9c9cf;
-  --control-border-hover-accent: #b4b9e8;
   --focus-ring: #5e6ad2;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
@@ -811,15 +714,7 @@
   --text-dim: #a3a6ad;
   --text-ghost: #b6b8be;
   --selection-bg: rgba(94, 106, 210, 0.2);
-  --status-info-fg: #5e6ad2;
-  --status-info-bg: rgba(94, 106, 210, 0.08);
-  --status-info-bg-hover: rgba(94, 106, 210, 0.14);
-  --status-info-border: rgba(94, 106, 210, 0.25);
-  --status-info-border-strong: rgba(94, 106, 210, 0.5);
-  --wait-target-preview-border: rgba(94, 106, 210, 0.7);
-  --status-info-fg-soft: #3d46a8;
   --status-info-fg-link: #4a54bd;
-  --status-info-bg-strong: rgba(94, 106, 210, 0.12);
   --research-highlight-bg: rgba(245, 183, 49, 0.3);
   --research-highlight-bg-hover: rgba(245, 183, 49, 0.5);
 }
@@ -828,7 +723,6 @@
   --left-pane-bg: rgba(244, 242, 239, 0.72);
   --terminal-pane-bg: #f8f6f3;
   --right-pane-bg: #fcfbf9;
-  --right-pane-bg-transparent: rgba(252, 251, 249, 0);
 
   --workspace-bg: #f5f3f0;
   --research-thread-page-bg: var(--right-pane-bg);
@@ -859,13 +753,8 @@
   --dialog-border: #c8c1b9;
   --chrome-control-bg: rgba(244, 242, 239, 0.9);
   --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);
-  --chrome-control-bg-disabled: rgba(244, 242, 239, 0.65);
 
-  --settings-tab-active-bg: #e6e1da;
-  --recovered-queue-divider: #d8d2ca;
-  --pane-status-active-dot: #7d746a;
   --folder-picker-status-border: #cdc3b7;
-  --queued-turn-border: #cdc4ba;
 
   /* White on the accent, and the accent as text on the light surfaces, are
      at least 4.5:1. */
@@ -880,7 +769,6 @@
   --control-bg-hover: #e6e2dc;
   --control-border: #d3cdc5;
   --control-border-hover: #c1bab0;
-  --control-border-hover-accent: #a9c6dc;
   --focus-ring: #0a6fb8;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
