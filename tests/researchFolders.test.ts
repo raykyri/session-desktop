@@ -46,6 +46,8 @@ const state: ResearchFolderState = {
   ],
   membership: { a: "f-read", b: RESEARCH_DRAFTS_FOLDER_ID, c: "f-deleted" },
   collapsed: [],
+  parents: {},
+  collapsedGroups: [],
 };
 
 test("a tree's place: Archive by archivedAt, then its folder or Drafts, else Unfiled", () => {
@@ -236,6 +238,8 @@ test("a folder in the Trash leaves the lists, keeps its membership, and frees it
     ],
     membership: { a: "f1", b: "f2" },
     collapsed: ["f1"],
+    parents: {},
+    collapsedGroups: [],
   };
   const trashed = researchFolderStateWithFolderTrashed(filed, "f1", 40);
   assert.equal(trashed.folders[0].trashedAt, 40);

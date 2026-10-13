@@ -437,6 +437,7 @@ export function ResearchMessagesColumn({
   openSourceId,
   menu,
   source,
+  group = null,
   composer,
   queue,
   onScroll,
@@ -453,6 +454,8 @@ export function ResearchMessagesColumn({
   /** Actions for the question that starts this pair. */
   menu: ComponentProps<typeof ResearchPairHeader>["menu"];
   source: ResearchBranchSourceProps | null;
+  /** The thread's Home group (ResearchGroupPanel), above the messages. */
+  group?: ReactNode;
   composer: ReactNode;
   queue: ResearchQueueProps;
   onScroll: ((event: UIEvent<HTMLElement>) => void) | undefined;
@@ -475,6 +478,7 @@ export function ResearchMessagesColumn({
       <div className="research-column-scroll" data-research-scroll onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">
           {source ? <ResearchBranchSource {...source} /> : null}
+          {group}
           <ResearchChainRows
             shared={shared}
             level={level}

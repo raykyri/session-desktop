@@ -118,6 +118,7 @@ import { ResearchThreadPlaceholder } from "./ResearchColumnChrome";
 import { rangeForTextOffsets } from "./researchTextRanges";
 import { ResearchDeleteBranchDialog, ResearchRenameDialog, ResearchRerunDialog } from "./ResearchThreadDialogs";
 import { ResearchSelectionToolbar } from "./ResearchSelectionToolbar";
+import ResearchGroupPanel, { type ResearchThreadGroup } from "./ResearchGroupPanel";
 import {
   ResearchBranchesColumn,
   ResearchChainComposer,
@@ -193,9 +194,18 @@ interface ResearchThreadPageProps {
   /** Follow-ups in a note's follow-ups column (see ResearchPostThread). */
   postActions: PostActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
+  /** Deletes the research, and the children listed under it in Home. */
   onRemoveTree: (treeId: string) => Promise<void>;
-  /** Moves the research to the Trash (the root delete confirmation's default). */
+  /** Moves the research to the Trash (the root delete confirmation's
+   * default), with the children listed under it in Home. */
   onTrashTree: (treeId: string) => Promise<void>;
+  /** How many children are listed under the research in Home, for the
+   * delete confirmation. */
+  groupChildCount?: number;
+  /** The research's Home group, listed above its messages, and opening a
+   * thread from that list. */
+  group?: ResearchThreadGroup | null;
+  onOpenGroupTree?: (treeId: string) => void;
   onRenameTree: (treeId: string, title: string) => Promise<void>;
   onUpdateDocument: (input: {
     nodeId: string;
@@ -295,6 +305,9 @@ function ResearchThreadPage({
   onRemoveBranch,
   onRemoveTree,
   onTrashTree,
+  groupChildCount = 0,
+  group = null,
+  onOpenGroupTree,
   onRenameTree,
   onUpdateDocument,
   onUpdatePost,
@@ -2583,6 +2596,11 @@ function ResearchThreadPage({
             openSourceId={levels[level + 1]?.sourceId ?? null}
             menu={head ? headMenu(headId, level === 0 ? "Thread actions" : "Branch actions") : null}
             source={level > 0 && head?.parentNodeId ? branchSource(passageAnchor(head), head.parentNodeId, head) : null}
+            group={
+              level === 0 && group && onOpenGroupTree ? (
+                <ResearchGroupPanel group={group} onOpen={onOpenGroupTree} />
+              ) : null
+            }
             composer={chainComposer(headId, level, currentLevel === level)}
             queue={chainQueue(headId, column.level.chainIds)}
             onScroll={onColumnScroll(column)}
@@ -2887,6 +2905,7 @@ function ResearchThreadPage({
           nodeId={deletingBranchId}
           rootNodeId={rootNodeId}
           treeTitle={treeTitleText}
+          groupChildCount={groupChildCount}
           onTrashRoot={trashTree}
           onRemove={removeBranch}
           onClose={() => setDeletingBranchId(null)}

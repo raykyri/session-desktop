@@ -7136,6 +7136,16 @@ impl AppState {
             })
             .map(|(tree_id, folder_id)| (tree_id.clone(), folder_id.clone()))
             .collect::<HashMap<_, _>>();
+        // Groups whose parent and child both travel.
+        let parents = model
+            .research_folders
+            .parents
+            .iter()
+            .filter(|(child, parent)| {
+                tree_ids.contains(child.as_str()) && tree_ids.contains(parent.as_str())
+            })
+            .map(|(child, parent)| (child.clone(), parent.clone()))
+            .collect::<HashMap<_, _>>();
         Ok(research::DetachedResearchArchive {
             version: research::DETACHED_RESEARCH_ARCHIVE_VERSION,
             archive_id: research::new_detached_research_archive_id()?,
@@ -7144,6 +7154,7 @@ impl AppState {
             tree_order,
             folders,
             membership,
+            parents,
             nodes,
             exported_at: now_millis(),
         })
@@ -7396,6 +7407,7 @@ impl AppState {
         mut trees: Vec<ResearchTree>,
         folders: Vec<research::ResearchFolder>,
         membership: HashMap<String, String>,
+        parents: HashMap<String, String>,
         mut nodes: Vec<ResearchNode>,
         responses: HashMap<String, Vec<Turn>>,
     ) -> Result<GroupInfo, String> {
@@ -7530,6 +7542,15 @@ impl AppState {
                 ))
             })
             .collect::<Vec<_>>();
+        let imported_parents = parents
+            .into_iter()
+            .filter_map(|(child, parent)| {
+                Some((
+                    tree_map.get(&child)?.clone(),
+                    tree_map.get(&parent)?.clone(),
+                ))
+            })
+            .collect::<Vec<_>>();
         let mut node_map = HashMap::new();
         let mut reserved_node_ids = node_ids_in_use;
         for node in &nodes {
@@ -7654,6 +7675,12 @@ impl AppState {
                     .membership
                     .insert(tree_id.clone(), folder_id.clone());
             }
+            for (child, parent) in &imported_parents {
+                model
+                    .research_folders
+                    .parents
+                    .insert(child.clone(), parent.clone());
+            }
             Ok(())
         })();
         if let Err(err) = insert_result {
@@ -7685,6 +7712,9 @@ impl AppState {
                     .retain(|folder| !imported_folder_ids.contains(folder.id.as_str()));
                 for (tree_id, _) in &imported_membership {
                     model.research_folders.membership.remove(tree_id);
+                }
+                for (child, _) in &imported_parents {
+                    model.research_folders.parents.remove(child);
                 }
                 for tree in &trees {
                     model.research_trees.remove(&tree.id);
@@ -11867,6 +11897,7 @@ mod tests {
                 vec![imported_tree],
                 Vec::new(),
                 HashMap::new(),
+                HashMap::new(),
                 vec![imported_node],
                 HashMap::new(),
             )
@@ -13246,6 +13277,7 @@ mod tests {
                     "system:unfiled".to_string(),
                     "ghost".to_string(),
                 ],
+                ..research::ResearchFolderState::default()
             };
             state.take_emitted_events();
             let saved = state.set_research_folders(requested.clone()).unwrap();
@@ -17505,6 +17537,7 @@ mod tests {
                 bundle.archive.trees,
                 bundle.archive.folders,
                 bundle.archive.membership,
+                bundle.archive.parents,
                 bundle.archive.nodes,
                 bundle.responses,
             )

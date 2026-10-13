@@ -563,11 +563,16 @@ export interface ResearchFolder {
 
 /** Folder records plus the tree → folder membership. Membership values are a
  * folder id or RESEARCH_DRAFTS_FOLDER_ID; `collapsed` holds folder ids and
- * the system tray ids whose Home trays are collapsed. */
+ * the system tray ids whose Home trays are collapsed. `parents` maps a child
+ * tree to the question or document it is listed under (one level deep), and
+ * `collapsedGroups` holds the parents whose children are hidden. The backend
+ * omits the last two when empty; the API layer fills them in. */
 export interface ResearchFolderState {
   folders: ResearchFolder[];
   membership: Record<string, string>;
   collapsed: string[];
+  parents: Record<string, string>;
+  collapsedGroups: string[];
 }
 
 /** An unsent question saved from the composer, scoped to one workspace. */

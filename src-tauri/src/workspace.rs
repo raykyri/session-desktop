@@ -426,6 +426,7 @@ fn create_research_workspace_locked(
             bundle.archive.trees,
             bundle.archive.folders,
             bundle.archive.membership,
+            bundle.archive.parents,
             bundle.archive.nodes,
             bundle.responses,
         ) {
@@ -3614,6 +3615,7 @@ mod tests {
             tree_order: Vec::new(),
             folders: Vec::new(),
             membership: std::collections::HashMap::new(),
+            parents: std::collections::HashMap::new(),
             nodes: Vec::new(),
             exported_at: 1,
         }

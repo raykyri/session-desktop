@@ -1051,7 +1051,176 @@
   display: block;
 }
 
+/* — Groups —
+   A parent's starred rows and child cards follow its card, indented 24px,
+   beside a 1px guide in the parent's glyph column (the row text inset plus
+   half the 14px glyph). */
+.research-feed-group {
+  --research-group-guide-left: 27px;
+  position: relative;
+  padding-bottom: 4px;
+}
+
+.research-feed-tray-body .research-feed-group {
+  --research-group-guide-left: 21px;
+}
+
+.research-feed-group::before {
+  position: absolute;
+  top: 0;
+  bottom: 8px;
+  left: var(--research-group-guide-left);
+  width: 1px;
+  background: var(--surface-border-strong);
+  content: "";
+  pointer-events: none;
+}
+
+.research-feed-tray-body .research-feed-group > :is(.research-feed-card, .research-feed-child) {
+  --research-row-inset: 6px;
+  --research-row-text: 14px;
+  border-radius: 8px;
+}
+
+.research-feed-tray-body .research-feed-group > .research-feed-card {
+  padding-block: 8px;
+}
+
+.research-feed-group > :is(.research-feed-card, .research-feed-child) {
+  margin-left: calc(var(--research-row-inset) + 24px);
+}
+
+.research-feed-group.is-dragging {
+  opacity: 0.4;
+}
+
+/* The "N items" line in a parent card: it collapses and expands the group,
+   and while collapsed shows the children's running, failed and updated
+   counts. */
+.research-feed-group-toggle {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0 0 -4px;
+  padding: 0 7px 0 3px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: 22px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.research-feed-group-toggle:hover {
+  color: var(--text-heading);
+  background: var(--surface-fill-hover);
+}
+
+.research-feed-group-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.research-feed-group-chevron {
+  flex: none;
+  transition: transform 120ms;
+}
+
+.research-feed-group-toggle[aria-expanded="true"] .research-feed-group-chevron {
+  transform: rotate(90deg);
+}
+
+.research-feed-group-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.research-feed-group-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.research-feed-group-summary .research-row-glyph {
+  float: none;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.research-feed-group-summary .research-row-glyph > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.research-feed-group-summary > .is-running {
+  color: var(--status-active-fg);
+}
+
+.research-feed-group-summary > .is-failed {
+  color: var(--status-failed-fg);
+}
+
+.research-feed-group-summary > .is-updated {
+  color: var(--text-secondary);
+}
+
 /* — Drag — */
+
+/* The middle of a question's or document's card: the drop makes the item a
+   child. A refused drop (onto itself, into its own group) is outlined in the
+   failure color. */
+.research-feed-card.is-drop-nest {
+  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-color);
+}
+
+.research-feed-card.is-drop-invalid {
+  outline: 1.5px dashed var(--status-failed-fg);
+  outline-offset: -1.5px;
+  background: color-mix(in srgb, var(--status-failed-fg) 7%, transparent);
+}
+
+/* What a drop does, or why it is refused, above the target. */
+.research-drop-label {
+  position: fixed;
+  z-index: var(--z-context-menu);
+  max-width: 260px;
+  padding: 1px 7px;
+  overflow: hidden;
+  transform: translateY(-100%);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--research-feed-popover-bg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-heading) 8%, transparent);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.research-drop-label.is-invalid {
+  border-color: var(--status-failed-fg);
+  color: var(--status-failed-fg);
+  white-space: normal;
+}
+
+.research-drag-ghost-children {
+  display: block;
+  color: var(--text-muted);
+}
 
 /* A two-line label below and right of the pointer, translucent so the drop
    target's highlight shows through it. */

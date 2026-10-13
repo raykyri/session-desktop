@@ -1312,6 +1312,40 @@ mod tests {
     }
 
     #[test]
+    fn research_folders_saved_before_nesting_load_and_groups_round_trip() {
+        let root = temp_root();
+        // A state file written before nesting: the grouping has no `parents`
+        // or `collapsedGroups`.
+        fs::create_dir_all(state_path(&root).parent().unwrap()).unwrap();
+        let legacy = serde_json::json!({
+            "version": STATE_VERSION,
+            "nextId": 3,
+            "researchFolders": {
+                "folders": [{ "id": "f1", "name": "Reading", "workspaceId": "ws" }],
+                "membership": { "t1": "f1" },
+                "collapsed": ["f1"]
+            }
+        });
+        fs::write(state_path(&root), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let outcome = load_with_diagnostics(&root);
+        assert!(outcome.warning.is_none(), "{:?}", outcome.warning);
+        let folders = outcome.state.research_folders;
+        assert_eq!(folders.folders.len(), 1);
+        assert_eq!(folders.membership.get("t1").map(String::as_str), Some("f1"));
+        assert!(folders.parents.is_empty());
+        assert!(folders.collapsed_groups.is_empty());
+
+        let mut state = PersistedState::default();
+        state.research_folders.parents =
+            HashMap::from([("child".to_string(), "parent".to_string())]);
+        state.research_folders.collapsed_groups = vec!["parent".to_string()];
+        save(&root, &state).unwrap();
+        let reloaded = load_with_diagnostics(&root).state.research_folders;
+        assert_eq!(reloaded, state.research_folders);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn global_drafts_round_trip() {
         use crate::state::{GlobalDraft, GlobalDraftConsumed};
         let root = temp_root();

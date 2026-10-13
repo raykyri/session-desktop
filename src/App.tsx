@@ -117,6 +117,10 @@ import {
 import { useResearchFiling } from "./hooks/useResearchFiling";
 import { useResearchDrafts } from "./hooks/useResearchDrafts";
 import { useResearchCardDrag } from "./hooks/useResearchCardDrag";
+import { useResearchGroupActions } from "./hooks/useResearchGroupActions";
+import { researchTreeGroups } from "./lib/researchGroups";
+import { researchThreadKind, researchThreadState } from "./lib/researchRowGlyph";
+import type { ResearchThreadGroup } from "./components/research/ResearchGroupPanel";
 import {
   ResearchFolderNameDialog,
 } from "./components/research/ResearchFolderDialogs";
@@ -130,8 +134,6 @@ import {
   setResearchNodeStarred,
   activatePane,
   emptyResearchTrash,
-  removeResearchTree,
-  restoreResearchTreeFromTrash,
 } from "./lib/api";
 import { researchTrashEntries, type ResearchTrashEntry } from "./lib/researchTrash";
 import { useResearchTrash } from "./hooks/useResearchTrash";
@@ -461,7 +463,6 @@ function MainApp() {
   const {
     folderState: researchFolderState,
     folders: researchFolders,
-    moveTree: moveResearchTree,
     setTrayCollapsed: setResearchTrayCollapsed,
     fileNewTree: fileNewResearchTree,
     refreshFolders: refreshResearchFolders,
@@ -469,6 +470,8 @@ function MainApp() {
     retryFoldersLoad: retryResearchFoldersLoad,
     setFolderTrashed: setResearchFolderTrashed,
     deleteFolders: deleteResearchFolders,
+    moveOutOfGroup: moveResearchTreeOutOfGroup,
+    setGroupsCollapsed: setResearchGroupsCollapsed,
   } = researchFiling;
   const {
     drafts: researchDrafts,
@@ -485,11 +488,6 @@ function MainApp() {
       setResearchTrayCollapsed(place, !researchFolderStateRef.current.collapsed.includes(place)),
     [setResearchTrayCollapsed],
   );
-  const startResearchCardDrag = useResearchCardDrag({
-    onMoveTree: (treeId, place, position) => void moveResearchTree(treeId, place, position),
-    onMoveDraft: (draftId, beforeId) => void moveResearchDraft(draftId, beforeId),
-    onSpringOpen: (place) => setResearchTrayCollapsed(place, false),
-  });
   const {
     nameRequest: researchFolderNameRequest,
     openNew: openNewResearchFolderDialog,
@@ -525,10 +523,8 @@ function MainApp() {
     editResearchPost,
     cancelResearchRun,
     renameResearchTreeTitle,
-    restoreResearchTreeFromMenu,
     removeResearchTreeAndSelectFallback,
     trashResearchTreeAndSelectFallback,
-    removeResearchTreeFromMenu,
     createResearchFollowup,
     retryResearchRun,
     rerunResearchRun,
@@ -559,20 +555,48 @@ function MainApp() {
     [showResearchToast],
   );
 
-  // Delete's default for a thread, from every delete confirmation: it moves
-  // to the Trash, with Undo in the toast.
-  const trashResearchTreeWithUndo = useCallback(
+  // A parent's children go with it when it is archived, moved to the Trash,
+  // deleted or restored (see useResearchGroupActions).
+  const researchGroupActions = useResearchGroupActions({
+    filing: researchFiling,
+    activeTreesRef: researchTreesRef,
+    archivedTreesRef: archivedResearchTreesRef,
+    trashedTrees: researchTrash.trees,
+    trashTree: trashResearchTreeAndSelectFallback,
+    removeTree: removeResearchTreeAndSelectFallback,
+    onError: setError,
+    showToast: showResearchToast,
+  });
+  const {
+    groupChildren: researchGroupChildren,
+    moveTree: moveResearchTreeOrGroup,
+    nestTree: nestResearchTree,
+    trashGroup: trashResearchTreeWithUndo,
+    removeGroup: removeResearchGroup,
+    unarchiveGroup: unarchiveResearchGroup,
+    restoreGroupFromTrash: restoreResearchGroupFromTrash,
+  } = researchGroupActions;
+  // Delete now from a feed menu or the delete offer: the thread and its
+  // children. A failure is shown and keeps the dialog open.
+  const removeResearchGroupFromMenu = useCallback(
     async (treeId: string) => {
-      await trashResearchTreeAndSelectFallback(treeId);
-      showResearchToast("Moved to the Trash.", {
-        undo: () =>
-          void restoreResearchTreeFromTrash(treeId).catch((err: unknown) =>
-            setError(err instanceof Error ? err.message : String(err)),
-          ),
-      });
+      setError(null);
+      try {
+        await removeResearchGroup(treeId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     },
-    [showResearchToast, trashResearchTreeAndSelectFallback],
+    [removeResearchGroup],
   );
+  const startResearchCardDrag = useResearchCardDrag({
+    onMoveTree: (treeId, place, position) => moveResearchTreeOrGroup(treeId, place, position),
+    onNestTree: (treeId, parentId, beforeId) => nestResearchTree(treeId, parentId, beforeId),
+    onMoveDraft: (draftId, beforeId) => void moveResearchDraft(draftId, beforeId),
+    onSpringOpen: (place) => setResearchTrayCollapsed(place, false),
+    onSpringOpenGroup: (parentId) => setResearchGroupsCollapsed([parentId], false),
+  });
   // The scoped workspace's Trash: its trees and its folders.
   const researchTrashItems = useMemo(
     () => researchTrashEntries(researchTrash.trees, researchFolderState.folders, researchScope),
@@ -582,22 +606,23 @@ function MainApp() {
     (entry: ResearchTrashEntry) => {
       const restore =
         entry.kind === "tree"
-          ? restoreResearchTreeFromTrash(entry.id)
+          ? restoreResearchGroupFromTrash(entry.id)
           : setResearchFolderTrashed(entry.id, false);
       void restore.then(
         () => showResearchToast("Restored."),
         (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
       );
     },
-    [setResearchFolderTrashed, showResearchToast],
+    [restoreResearchGroupFromTrash, setResearchFolderTrashed, showResearchToast],
   );
-  // Permanent deletion from the Trash. Rejections keep the dialog open.
+  // Permanent deletion from the Trash, with the children in the Trash of a
+  // parent. Rejections keep the dialog open.
   const deleteResearchTrashEntry = useCallback(
     async (entry: ResearchTrashEntry) => {
-      if (entry.kind === "tree") await removeResearchTree(entry.id);
+      if (entry.kind === "tree") await removeResearchGroup(entry.id);
       else await deleteResearchFolders([entry.id]);
     },
-    [deleteResearchFolders],
+    [deleteResearchFolders, removeResearchGroup],
   );
   const emptyResearchTrashNow = useCallback(async () => {
     if (!researchScope) return;
@@ -748,13 +773,13 @@ function MainApp() {
     [cancelResearchFolderDelete, openFeedPage],
   );
   const moveResearchTreeFromFeed = useCallback(
-    (treeId: string, place: string) => void moveResearchTree(treeId, place),
-    [moveResearchTree],
+    (treeId: string, place: string) => moveResearchTreeOrGroup(treeId, place),
+    [moveResearchTreeOrGroup],
   );
   const reorderResearchTreeFromFeed = useCallback(
     (treeId: string, place: string, position: ResearchDropPosition) =>
-      void moveResearchTree(treeId, place, position),
-    [moveResearchTree],
+      moveResearchTreeOrGroup(treeId, place, position),
+    [moveResearchTreeOrGroup],
   );
   const moveResearchDraftFromFeed = useCallback(
     (draftId: string, beforeId: string | null) => void moveResearchDraft(draftId, beforeId),
@@ -805,6 +830,55 @@ function MainApp() {
     moveResearchTreeFromFeed,
     openNewResearchFolderDialog,
   ]);
+  // The open thread's Home group, for "In this group" above its messages:
+  // kept as the same object while its contents are unchanged, so the
+  // memoized thread page does not re-render for unrelated tree updates.
+  const activeResearchGroupRef = useRef<ResearchThreadGroup | null>(null);
+  const activeResearchGroup = useMemo(() => {
+    const tree = researchTrees.find((candidate) => candidate.id === activeResearchTreeId);
+    let next: ResearchThreadGroup | null = null;
+    if (tree && tree.archivedAt == null) {
+      const place = researchTreePlace(tree, researchFolderState);
+      const listed = researchTrees.filter(
+        (candidate) =>
+          candidate.workspaceId === tree.workspaceId &&
+          candidate.archivedAt == null &&
+          researchTreePlace(candidate, researchFolderState) === place,
+      );
+      const group = researchTreeGroups(listed, researchFolderState.parents).find(
+        (candidate) =>
+          candidate.tree.id === tree.id || candidate.children.some((child) => child.id === tree.id),
+      );
+      if (group && group.children.length > 0) {
+        next =
+          group.tree.id === tree.id
+            ? {
+                parent: null,
+                children: group.children.map((child) => ({
+                  id: child.id,
+                  title: child.title,
+                  kind: researchThreadKind(child, undefined),
+                  state: researchThreadState(child, undefined),
+                  unread: child.hasUnseenUpdate,
+                })),
+              }
+            : { parent: { id: group.tree.id, title: group.tree.title }, children: [] };
+      }
+    }
+    const previous = activeResearchGroupRef.current;
+    if (previous && next && JSON.stringify(previous) === JSON.stringify(next)) return previous;
+    activeResearchGroupRef.current = next;
+    return next;
+  }, [activeResearchTreeId, researchFolderState, researchTrees]);
+  // Opening a thread from "In this group" expands its group in Home.
+  const openResearchGroupTree = useCallback(
+    (treeId: string) => {
+      const parentId = researchFolderStateRef.current.parents[treeId];
+      if (parentId) setResearchGroupsCollapsed([parentId], false);
+      openFeedResearchTree(treeId);
+    },
+    [openFeedResearchTree, setResearchGroupsCollapsed],
+  );
   // Open a draft beside the current feed view. Opening a thread closes it.
   const [openResearchDraftId, setOpenResearchDraftId] = useState<string | null>(null);
   const openResearchDraft =
@@ -1231,9 +1305,13 @@ function MainApp() {
                     onResearchRecapApplied={handleResearchRecapApplied}
                     onError={setError}
                     onRenameResearch={renameResearchTreeTitle}
-                    onRestoreResearch={restoreResearchTreeFromMenu}
+                    onRestoreResearch={unarchiveResearchGroup}
                     onTrashResearch={trashResearchTreeWithUndo}
-                    onRemoveResearch={removeResearchTreeFromMenu}
+                    onRemoveResearch={removeResearchGroupFromMenu}
+                    groupChildren={researchGroupChildren}
+                    onNestTree={nestResearchTree}
+                    onMoveOutOfGroup={moveResearchTreeOutOfGroup}
+                    onSetGroupsCollapsed={setResearchGroupsCollapsed}
                     trashEntries={researchTrashItems}
                     onRestoreTrashEntry={restoreResearchTrashEntry}
                     onDeleteTrashEntry={deleteResearchTrashEntry}
@@ -1288,8 +1366,11 @@ function MainApp() {
                     onFork={createResearchFollowup}
                     postActions={postActions}
                     onRemoveBranch={removeResearchBranchFromThread}
-                    onRemoveTree={removeResearchTreeAndSelectFallback}
+                    onRemoveTree={removeResearchGroup}
                     onTrashTree={trashResearchTreeWithUndo}
+                    groupChildCount={researchGroupChildren(activeResearchTreeId).length}
+                    group={activeResearchGroup}
+                    onOpenGroupTree={openResearchGroupTree}
                     onRenameTree={renameResearchTreeTitle}
                     onUpdateDocument={editResearchDocument}
                     onUpdatePost={editResearchPost}
@@ -1379,12 +1460,14 @@ function MainApp() {
       {researchOfferDeletingTree ? (
         <ResearchTreeDeleteDialog
           tree={researchOfferDeletingTree}
+          groupChildren={researchGroupChildren(researchOfferDeletingTree.id)}
           fallbackFocus={askedResearchRow}
           onClose={() => setResearchOfferDeletingTreeId(null)}
           onTrash={trashResearchTreeWithUndo}
-          onRemove={removeResearchTreeFromMenu}
+          onRemove={removeResearchGroupFromMenu}
         />
       ) : null}
+      {researchGroupActions.dialog}
       {researchFolderNameRequest ? (
         <ResearchFolderNameDialog
           request={researchFolderNameRequest}

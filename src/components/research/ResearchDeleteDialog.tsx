@@ -13,6 +13,9 @@ interface ResearchDeleteStep {
   body?: ReactNode;
   label?: string;
   pendingLabel?: string;
+  /** The confirming button's style: danger for a permanent deletion (the
+   * default), primary for a confirmation that deletes nothing. */
+  tone?: "danger" | "primary";
   onConfirm: () => Promise<void> | void;
 }
 
@@ -172,7 +175,9 @@ export function ResearchDeleteDialogPanel({
         </button>
         <button
           type="button"
-          className={`control-button ${step === "trash" ? "primary" : "danger"}`}
+          className={`control-button ${
+            step === "trash" || current.tone === "primary" ? "primary" : "danger"
+          }`}
           autoFocus={disabledReason === null}
           disabled={busy || disabledReason !== null}
           onClick={() => void confirm()}

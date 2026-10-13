@@ -3,6 +3,7 @@ import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "../../lib/researchNodeTypes";
 import { researchNoteEditable } from "../../lib/researchNoteEdit";
 import {
+  Fragment,
   memo,
   useCallback,
   useContext,
@@ -14,7 +15,16 @@ import {
 } from "react";
 import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { FilePen, Pencil, RotateCw, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FilePen,
+  IndentDecrease,
+  IndentIncrease,
+  Pencil,
+  RotateCw,
+  Trash2,
+} from "lucide-react";
 import type {
   RecentResearchQuery,
   ResearchDraft,
@@ -42,6 +52,15 @@ import {
 } from "../../lib/researchFolders";
 import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
 import {
+  researchChildCount,
+  researchGroupSummary,
+  researchItemCount,
+  researchNestCandidates,
+  researchTreeGroups,
+  researchTreeHoldsChildren,
+} from "../../lib/researchGroups";
+import ResearchRowGlyph from "./ResearchRowGlyph";
+import {
   feedCycleStep,
   type FeedCycleEntry,
   type FeedCyclePosition,
@@ -62,7 +81,7 @@ import { ResearchDeleteDialog } from "./ResearchDeleteDialog";
 import { ResearchFolderDeleteDialog } from "./ResearchFolderDialogs";
 import ResearchTrashList from "./ResearchTrashList";
 import { researchTrashCount, type ResearchTrashEntry } from "../../lib/researchTrash";
-import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
+import { ResearchMenu, ResearchMenuItem, ResearchMenuTitle } from "./ResearchMenu";
 import ResearchFeedRowMenu from "./ResearchMoveMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import ResearchRecapDialog from "./ResearchRecapDialog";
@@ -104,6 +123,8 @@ export function recentActivityAnchorScrollTop(
 }
 
 const EMPTY_DRAFTS: ResearchDraft[] = [];
+const EMPTY_PARENTS: Readonly<Record<string, string>> = {};
+const EMPTY_GROUP_IDS: ReadonlySet<string> = new Set();
 const EMPTY_TRASH: ResearchTrashEntry[] = [];
 const EMPTY_NODE_IDS: readonly string[] = [];
 
@@ -139,7 +160,9 @@ function applyFeedRoving(root: HTMLElement | null, last: HTMLElement | null) {
     rows.find((row) => row.getAttribute("aria-current") === "true") ??
     rows[0];
   for (const row of rows) row.tabIndex = row === current ? 0 : -1;
-  for (const menu of root.querySelectorAll<HTMLElement>(".research-feed-card-menu")) {
+  for (const menu of root.querySelectorAll<HTMLElement>(
+    ".research-feed-card-menu, .research-feed-group-toggle",
+  )) {
     menu.tabIndex = menu.closest(".research-feed-card, .research-feed-child")?.classList.contains("is-selected")
       ? 0
       : -1;
@@ -195,6 +218,15 @@ export interface ResearchActivityFeedProps {
   onReorderDraft?: (draftId: string, beforeId: string | null) => void;
   /** Remove star on a child row: unstars the follow-up or branch. */
   onUnstarChild?: (child: ResearchFeedChild) => void;
+  /** The children archived, moved to the Trash or deleted with a tree, for
+   * its confirmations. */
+  groupChildren?: (treeId: string) => ResearchTreeSummary[];
+  /** Lists a tree under a question or document (Make child of…, ⌥→, and
+   * ⌥↑/⌥↓ within a group), before `beforeId` or at the end for null. */
+  onNestTree?: (treeId: string, parentId: string, beforeId: string | null) => void;
+  /** Move out (⌥←): lists a child on its own after its former group. */
+  onMoveOutOfGroup?: (treeId: string) => Promise<boolean>;
+  onSetGroupsCollapsed?: (parentIds: readonly string[], collapsed: boolean) => void;
   /** New folder…; with a tree id the tree moves into the new folder. Focus
    * returns to `trigger` when the dialog closes. */
   onNewFolder?: (moveTreeId?: string, trigger?: HTMLElement) => void;
@@ -222,41 +254,66 @@ export interface ResearchActivityFeedProps {
   onForward?: () => void;
 }
 
-/** A card of Home's virtualized list: a tree, and its root when loaded.
- * `treeId` keys the row. */
+/** A child card under a top-level card. */
+interface ResearchFeedRowChild {
+  tree: ResearchTreeSummary;
+  query?: RecentResearchQuery;
+}
+
+/** A card of Home's virtualized list: a top-level tree, and its root when
+ * loaded, with the children listed under it. `treeId` keys the row. */
 interface ResearchFeedRow {
   key: string;
   treeId: string;
   tree?: ResearchTreeSummary;
   query?: RecentResearchQuery;
+  children: ResearchFeedRowChild[];
+  /** Its children are hidden. */
+  collapsed: boolean;
   /** 1-based, for aria-posinset. */
   position: number;
 }
 
 /** Build Home's rows: Unfiled trees in tree order, after newly loaded roots
- * without a corresponding tree in newest-first order. */
+ * without a corresponding tree in newest-first order. A child (`parents`)
+ * is listed under its parent's row when the parent is listed. */
 export function researchFeedRows(
   roots: ReadonlyMap<string, RecentResearchQuery>,
   trees: readonly ResearchTreeSummary[],
   placeOf: (tree: ResearchTreeSummary) => string,
+  parents: Readonly<Record<string, string>> = EMPTY_PARENTS,
+  collapsedGroups: ReadonlySet<string> = EMPTY_GROUP_IDS,
 ): ResearchFeedRow[] {
   const known = new Set(trees.map((tree) => tree.id));
   const unknown = [...roots.values()]
     .filter((query) => !known.has(query.treeId))
     .sort((left, right) => right.createdAt - left.createdAt)
-    .map((query) => ({ treeId: query.treeId, query, tree: undefined }));
-  const listed = trees
-    .filter((tree) => tree.archivedAt == null && placeOf(tree) === RESEARCH_UNFILED_FOLDER_ID)
-    .map((tree) => ({ treeId: tree.id, tree, query: roots.get(tree.id) }));
+    .map((query) => ({ treeId: query.treeId, query, tree: undefined, children: [] }));
+  const listed = researchTreeGroups(
+    trees.filter((tree) => tree.archivedAt == null && placeOf(tree) === RESEARCH_UNFILED_FOLDER_ID),
+    parents,
+  ).map((group) => ({
+    treeId: group.tree.id,
+    tree: group.tree,
+    query: roots.get(group.tree.id),
+    children: group.children.map((child) => ({ tree: child, query: roots.get(child.id) })),
+  }));
   return [...unknown, ...listed].map((row, index) => ({
     key: `tree:${row.treeId}`,
     ...row,
+    collapsed: collapsedGroups.has(row.treeId),
     position: index + 1,
   }));
 }
 
 function estimatedActivityRowHeight(row: ResearchFeedRow): number {
-  return 92 + (row.query?.starred?.length ?? 0) * 48;
+  const starred = (row.query?.starred?.length ?? 0) * 48;
+  if (row.collapsed) return 92 + (row.children.length > 0 ? 24 : starred);
+  return (
+    92 +
+    starred +
+    row.children.reduce((sum, child) => sum + 80 + (child.query?.starred?.length ?? 0) * 48, 0)
+  );
 }
 
 interface VirtualActivityRange {
@@ -361,6 +418,8 @@ type FeedMenu =
       placement?: ResearchUnitMenuPlacement;
       child?: ResearchFeedChild;
       queryNodeId?: string;
+      /** Make child of…: the menu lists the parents to choose from. */
+      mode?: "nest";
     }
   | { kind: "draft"; draftId: string; anchor: HTMLElement; placement?: ResearchUnitMenuPlacement };
 
@@ -396,6 +455,10 @@ function ResearchActivityFeed({
   onReorderTree,
   onReorderDraft,
   onUnstarChild,
+  groupChildren,
+  onNestTree,
+  onMoveOutOfGroup,
+  onSetGroupsCollapsed,
   onNewFolder,
   onRenameFolder,
   onRequestDeleteFolder,
@@ -499,6 +562,12 @@ function ResearchActivityFeed({
       tree && folderState ? researchTreePlace(tree, folderState) : RESEARCH_UNFILED_FOLDER_ID,
     [folderState],
   );
+  const parents = folderState?.parents ?? EMPTY_PARENTS;
+  const collapsedGroupList = folderState?.collapsedGroups;
+  const collapsedGroups = useMemo(
+    () => (collapsedGroupList ? new Set(collapsedGroupList) : EMPTY_GROUP_IDS),
+    [collapsedGroupList],
+  );
 
   // The virtualized list: Unfiled on Home, in the tree order.
   const listed = view.kind === "home";
@@ -508,8 +577,10 @@ function ResearchActivityFeed({
   );
   const rows = useMemo(
     () =>
-      view.kind === "home" ? researchFeedRows(queryByTree, activeTrees, placeOf) : [],
-    [activeTrees, placeOf, queryByTree, view.kind],
+      view.kind === "home"
+        ? researchFeedRows(queryByTree, activeTrees, placeOf, parents, collapsedGroups)
+        : [],
+    [activeTrees, collapsedGroups, parents, placeOf, queryByTree, view.kind],
   );
   const viewTitle = feedViewTitle(view, folders);
   const rowsRef = useRef(rows);
@@ -737,9 +808,12 @@ function ResearchActivityFeed({
   const requestedRootsRef = useRef(new Set<string>());
   const [rootLoadError, setRootLoadError] = useState<string | null>(null);
   const [rootLoadAttempt, setRootLoadAttempt] = useState(0);
-  const missingRootIds = visibleRowEntries
-    .filter(({ row }) => row.tree && !row.query)
-    .map(({ row }) => row.treeId);
+  const missingRootIds = visibleRowEntries.flatMap(({ row }) => [
+    ...(row.tree && !row.query ? [row.treeId] : []),
+    ...(row.collapsed
+      ? []
+      : row.children.filter((child) => !child.query).map((child) => child.tree.id)),
+  ]);
   const missingRootKey = missingRootIds.join(",");
   useEffect(() => {
     const requested = requestedRootsRef.current;
@@ -870,11 +944,23 @@ function ResearchActivityFeed({
   }
 
   /** A thread's card: its root question when loaded, else its title.
-   * `virtual`: a card of the virtualized list. */
+   * `virtual`: a card of the virtualized list. A parent card lists
+   * `children` after it unless its group is collapsed; a child card names
+   * its parent (`parentName`). */
   function renderTreeCard(
     tree: ResearchTreeSummary | undefined,
     query: RecentResearchQuery | undefined,
-    { virtual = false }: { virtual?: boolean } = {},
+    {
+      virtual = false,
+      parentId,
+      parentName,
+      children = [],
+    }: {
+      virtual?: boolean;
+      parentId?: string;
+      parentName?: string;
+      children?: readonly ResearchFeedRowChild[];
+    } = {},
   ) {
     const treeId = tree?.id ?? query?.treeId ?? "";
     const isPost = query ? nodeType(query) === "post" : false;
@@ -899,12 +985,51 @@ function ResearchActivityFeed({
         ),
       );
     };
+    const name = title ?? question;
+    const groupCollapsed = collapsedGroups.has(treeId);
+    const groupCount = childRows.length + children.length;
+    const group =
+      children.length > 0
+        ? {
+            count: groupCount,
+            childCount: children.length,
+            collapsed: groupCollapsed,
+            summary: researchGroupSummary([
+              ...childRows.map((row) => ({ state: row.state, unread: false })),
+              ...children.map((child) => ({
+                state: researchThreadState(child.tree, child.query),
+                unread: child.tree.hasUnseenUpdate,
+              })),
+            ]),
+            label: `${groupCollapsed ? "Show" : "Hide"} ${researchItemCount(groupCount)} under “${shortName(name)}”`,
+            onToggle: (all: boolean) => toggleGroup(treeId, name, all),
+          }
+        : undefined;
+    const nested =
+      children.length > 0 && !groupCollapsed
+        ? children.map((child) => (
+            <Fragment key={child.tree.id}>
+              {renderTreeCard(child.tree, child.query, {
+                virtual,
+                parentId: treeId,
+                parentName: name,
+              })}
+            </Fragment>
+          ))
+        : undefined;
+    const cardLabel = title ? `${title}. ${question}` : question;
     return (
       <ResearchFeedCard
         cardId={treeId}
         place={placeOf(tree)}
         title={title}
-        label={title ? `${title}. ${question}` : question}
+        label={parentName ? `${cardLabel}, in “${shortName(parentName)}”` : cardLabel}
+        holdsChildren={
+          !parentId && tree !== undefined && tree.archivedAt == null && researchTreeHoldsChildren(tree.type)
+        }
+        parentId={parentId}
+        group={group}
+        nested={nested}
         renderBody={(asQuestion) =>
           query ? (
             <ResearchUserMessage className="research-feed-card-message">
@@ -978,6 +1103,45 @@ function ResearchActivityFeed({
         virtual={virtual}
       />
     );
+  }
+
+  /** Collapses or expands a group; with `all` (Alt+click), every group. */
+  function toggleGroup(parentId: string, name: string, all: boolean) {
+    const collapse = !collapsedGroups.has(parentId);
+    const ids = all ? [...new Set(Object.values(parents))] : [parentId];
+    onSetGroupsCollapsed?.(ids, collapse);
+    announce(
+      all
+        ? collapse
+          ? "Collapsed every group."
+          : "Expanded every group."
+        : `${collapse ? "Collapsed" : "Expanded"} “${shortName(name)}”.`,
+    );
+  }
+
+  /** A place's trees as top-level items with their children (Archive: one
+   * flat list). */
+  function groupsIn(place: string) {
+    return researchTreeGroups(treesIn(place), parents);
+  }
+
+  /** The top-level tree ids of the list a card is in. */
+  function topLevelIdsIn(place: string): string[] {
+    return place === RESEARCH_UNFILED_FOLDER_ID
+      ? rows.flatMap((row) => (row.tree ? [row.treeId] : []))
+      : groupsIn(place).map((group) => group.tree.id);
+  }
+
+  /** The parent a tree is listed under, or null when it is listed on its
+   * own. */
+  function listedParentOf(tree: ResearchTreeSummary): ResearchTreeSummary | null {
+    const parent = treeById.get(parents[tree.id] ?? "");
+    return parent &&
+      parent.archivedAt == null &&
+      parents[parent.id] === undefined &&
+      placeOf(parent) === placeOf(tree)
+      ? parent
+      : null;
   }
 
   /** A draft opens in the content column; its … menu has Open and Delete. */
@@ -1055,9 +1219,11 @@ function ResearchActivityFeed({
     return (
       <>
         {placeDrafts.map((draft) => renderDraftCard(draft))}
-        {trees.map((tree) => (
+        {researchTreeGroups(trees, parents).map(({ tree, children }) => (
           <div key={tree.id} className="research-feed-unit">
-            {renderTreeCard(tree, queryByTree.get(tree.id))}
+            {renderTreeCard(tree, queryByTree.get(tree.id), {
+              children: children.map((child) => ({ tree: child, query: queryByTree.get(child.id) })),
+            })}
           </div>
         ))}
       </>
@@ -1132,12 +1298,24 @@ function ResearchActivityFeed({
             open: () => onOpenDraft?.(draft),
           }),
         ),
-        ...treesIn(place).map((tree) => treeEntry(tree, queryByTree.get(tree.id))),
+        ...groupsIn(place).flatMap(({ tree, children }) => [
+          treeEntry(tree, queryByTree.get(tree.id)),
+          ...(collapsedGroups.has(tree.id)
+            ? []
+            : children.map((child) => treeEntry(child, queryByTree.get(child.id)))),
+        ]),
       ];
     };
     const lists: FeedRowEntry[][] = [];
     if (listed) {
-      lists.push(rows.map((row, index) => treeEntry(row.tree, row.query, index)));
+      lists.push(
+        rows.flatMap((row, index) => [
+          treeEntry(row.tree, row.query, index),
+          ...(row.collapsed
+            ? []
+            : row.children.map((child) => treeEntry(child.tree, child.query, index))),
+        ]),
+      );
     }
     if (view.kind === "home") {
       for (const place of trayPlaces) {
@@ -1233,23 +1411,156 @@ function ResearchActivityFeed({
       return;
     }
     const kind = card.dataset.researchCardKind === "draft" ? "draft" : "tree";
+    const parentId = card.dataset.researchParent;
     const ids =
       kind === "draft"
         ? drafts.map((draft) => draft.id)
-        : place === RESEARCH_UNFILED_FOLDER_ID
-          ? rows.flatMap((row) => (row.tree ? [row.treeId] : []))
-          : treesIn(place).map((tree) => tree.id);
+        : parentId
+          ? [
+              ...(card.parentElement?.querySelectorAll<HTMLElement>(
+                ":scope > .research-feed-card[data-research-parent]",
+              ) ?? []),
+            ].flatMap((sibling) => sibling.dataset.researchCard ?? [])
+          : topLevelIdsIn(place);
     const target = stepReorderTarget(ids, cardId, step);
     if (!target) {
       announce(step < 0 ? "Already first." : "Already last.");
       return;
     }
     if (kind === "draft") onReorderDraft?.(cardId, target.beforeId);
+    else if (parentId) onNestTree?.(cardId, parentId, target.beforeId);
     else onReorderTree?.(cardId, place, target);
     const index = ids.indexOf(cardId) + step;
     announce(`Moved to position ${index + 1} of ${ids.length}.`);
     keepCardFocus(cardId);
   }
+
+  /** The card a control is in, when it is listed in its own place and the
+   * place keeps an order (not Archive). */
+  function focusedTreeCard(control: HTMLElement) {
+    const card = control.closest<HTMLElement>(".research-feed-card");
+    const tree = treeById.get(card?.dataset.researchCard ?? "");
+    const place = card?.dataset.researchPlace;
+    const zonePlace = card?.closest<HTMLElement>("[data-research-drop]")?.dataset.researchDrop;
+    if (!card || !tree || card.dataset.researchCardKind !== "tree" || !place) return null;
+    if (place !== zonePlace || !researchPlaceIsReorderable(place)) return null;
+    return { card, tree, place };
+  }
+
+  /** ⌥→: lists the focused card under the question or document above it. */
+  function nestFocusedCard(control: HTMLElement) {
+    const focused = focusedTreeCard(control);
+    if (!focused || !onNestTree) return;
+    const { card, tree, place } = focused;
+    if (card.dataset.researchParent) {
+      announce("Already in a group. Nesting is one level deep.");
+      return;
+    }
+    const ids = topLevelIdsIn(place);
+    const above = treeById.get(ids[ids.indexOf(tree.id) - 1] ?? "");
+    if (!above) {
+      announce("No question or document above to nest under.");
+      return;
+    }
+    if (!researchTreeHoldsChildren(above.type)) {
+      announce(`“${shortName(above.title)}” can’t hold children. Only questions and documents can.`);
+      return;
+    }
+    onNestTree(tree.id, above.id, null);
+    // A card with children asks first; the dialog announces itself.
+    if (!card.dataset.researchChildren) {
+      announce(`Moved under “${shortName(above.title)}”.`);
+      keepCardFocus(tree.id);
+    }
+  }
+
+  /** ⌥←: lists the focused child on its own, after its former group. */
+  function moveFocusedCardOut(control: HTMLElement) {
+    const focused = focusedTreeCard(control);
+    if (!focused || !onMoveOutOfGroup) return;
+    const parent = listedParentOf(focused.tree);
+    if (!parent) {
+      announce("Not in a group.");
+      return;
+    }
+    keepCardFocus(focused.tree.id);
+    void onMoveOutOfGroup(focused.tree.id).then((moved) => {
+      if (moved) announce(`Moved out of “${shortName(parent.title)}”.`);
+    });
+  }
+
+  // A card menu's group actions: Make child of…, Move out, and Collapse
+  // or Expand. An archived card, and a starred row's menu, have none.
+  const menuGroupTree =
+    menu?.kind === "tree" && menuTree && !menu.child && menuTree.archivedAt == null && onNestTree
+      ? menuTree
+      : null;
+  const menuGroupParent = menuGroupTree ? listedParentOf(menuGroupTree) : null;
+  const menuGroupPlace = menuGroupTree ? placeOf(menuGroupTree) : null;
+  const menuGroupChildCount =
+    menuGroupTree && !menuGroupParent
+      ? activeTrees.filter(
+          (tree) => parents[tree.id] === menuGroupTree.id && placeOf(tree) === menuGroupPlace,
+        ).length
+      : 0;
+  const nestCandidates =
+    menuGroupTree && menuGroupPlace && researchPlaceIsReorderable(menuGroupPlace)
+      ? researchNestCandidates(
+          topLevelIdsIn(menuGroupPlace),
+          menuGroupParent?.id ?? menuGroupTree.id,
+          (id) =>
+            id !== menuGroupTree.id &&
+            id !== menuGroupParent?.id &&
+            researchTreeHoldsChildren(treeById.get(id)?.type),
+        ).flatMap((id) => treeById.get(id) ?? [])
+      : [];
+  const menuGroupCollapsed = menuGroupTree ? collapsedGroups.has(menuGroupTree.id) : false;
+  const groupMenuItems =
+    menu?.kind === "tree" && menuGroupTree ? (
+      <>
+        <ResearchMenuItem
+          icon={<IndentIncrease size={15} aria-hidden="true" />}
+          label="Make child of…"
+          disabled={nestCandidates.length === 0}
+          title={nestCandidates.length === 0 ? "No question or document to nest under" : undefined}
+          onSelect={() => setMenu({ ...menu, mode: "nest" })}
+        />
+        {menuGroupParent && onMoveOutOfGroup ? (
+          <ResearchMenuItem
+            icon={<IndentDecrease size={15} aria-hidden="true" />}
+            label="Move out"
+            onSelect={() => {
+              const parent = menuGroupParent;
+              closeMenu(true);
+              keepCardFocus(menuGroupTree.id);
+              void onMoveOutOfGroup(menuGroupTree.id).then((moved) => {
+                if (moved) announce(`Moved out of “${shortName(parent.title)}”.`);
+              });
+            }}
+          />
+        ) : null}
+        {menuGroupChildCount > 0 ? (
+          <ResearchMenuItem
+            icon={
+              menuGroupCollapsed ? (
+                <ChevronRight size={15} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={15} aria-hidden="true" />
+              )
+            }
+            label={menuGroupCollapsed ? "Expand" : "Collapse"}
+            onSelect={() => {
+              closeMenu(true);
+              toggleGroup(menuGroupTree.id, menuGroupTree.title, false);
+            }}
+          />
+        ) : null}
+      </>
+    ) : null;
+
+  // A parent in the Trash is deleted with its children there.
+  const deletingTrashChildCount =
+    deletingTrashEntry?.kind === "tree" ? (groupChildren?.(deletingTrashEntry.id).length ?? 0) : 0;
 
   const listEmpty = rows.length === 0;
   // The first-run text (or setup guide) shows only while nothing exists yet:
@@ -1378,6 +1689,18 @@ function ResearchActivityFeed({
             }
             return;
           }
+          // ⌥→ nests the focused card under the card above; ⌥← moves a
+          // child out of its group.
+          if (
+            (event.key === "ArrowRight" || event.key === "ArrowLeft") &&
+            event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey &&
+            target.matches(".research-feed-card-hit")
+          ) {
+            event.preventDefault();
+            if (event.key === "ArrowRight") nestFocusedCard(target);
+            else moveFocusedCardOut(target);
+            return;
+          }
           // ⌥↑ and ⌥↓ move the focused card up or down its list.
           if (
             (event.key === "ArrowDown" || event.key === "ArrowUp") &&
@@ -1458,7 +1781,7 @@ function ResearchActivityFeed({
                           aria-posinset={row.position}
                           aria-setsize={rows.length}
                         >
-                          {renderTreeCard(row.tree, row.query, { virtual: true })}
+                          {renderTreeCard(row.tree, row.query, { virtual: true, children: row.children })}
                         </div>
                       </MeasuredActivityRow>
                     );
@@ -1559,11 +1882,38 @@ function ResearchActivityFeed({
       <div className="research-visually-hidden" role="status" aria-live="polite">
         {announcement}
       </div>
-      {menu?.kind === "tree" && menuTree ? (
+      {menu?.kind === "tree" && menu.mode === "nest" && menuGroupTree ? (
+        <ResearchMenu
+          anchor={menu.placement?.anchor ?? menu.anchor}
+          align={menu.placement?.align}
+          label={`Make “${shortName(menuGroupTree.title)}” a child of`}
+          width={260}
+          onClose={() => closeMenu()}
+        >
+          <ResearchMenuTitle>Make child of</ResearchMenuTitle>
+          {nestCandidates.map((parent) => (
+            <ResearchMenuItem
+              key={parent.id}
+              icon={<ResearchRowGlyph kind={researchThreadKind(parent, undefined)} />}
+              label={parent.title}
+              onSelect={() => {
+                closeMenu(true);
+                onNestTree?.(menuGroupTree.id, parent.id, null);
+                if (menuGroupChildCount === 0) {
+                  announce(`Moved under “${shortName(parent.title)}”.`);
+                  keepCardFocus(menuGroupTree.id);
+                }
+              }}
+            />
+          ))}
+        </ResearchMenu>
+      ) : null}
+      {menu?.kind === "tree" && menuTree && menu.mode !== "nest" ? (
         <ResearchFeedRowMenu
           anchor={menu.placement?.anchor ?? menu.anchor}
           align={menu.placement?.align}
           label={menu.child ? "Starred item actions" : `Actions for ${menuTree.title}`}
+          groupItems={groupMenuItems}
           onRemoveStar={
             menu.child && onUnstarChild
               ? () => {
@@ -1652,6 +2002,7 @@ function ResearchActivityFeed({
       {deletingTree ? (
         <ResearchTreeDeleteDialog
           tree={deletingTree}
+          groupChildren={groupChildren?.(deletingTree.id)}
           onClose={() => setDeletingTree(null)}
           onTrash={onTrashResearch}
           onRemove={onRemoveResearch}
@@ -1663,7 +2014,15 @@ function ResearchActivityFeed({
             trashTriggerRef.current?.isConnected ? trashTriggerRef.current : titleRef.current
           }
           remove={{
-            body: <p>“{deletingTrashEntry.title}” will be deleted. This can’t be undone.</p>,
+            body: (
+              <p>
+                “{deletingTrashEntry.title}”
+                {deletingTrashChildCount > 0
+                  ? ` and its ${researchChildCount(deletingTrashChildCount)}`
+                  : ""}{" "}
+                will be deleted. This can’t be undone.
+              </p>
+            ),
             onConfirm: () => onDeleteTrashEntry(deletingTrashEntry),
           }}
           onClose={() => setDeletingTrashEntry(null)}
@@ -1721,4 +2080,10 @@ function feedText(text: string): ReactNode {
       run.text
     ),
   );
+}
+
+/** A card's name in labels and announcements, at most 60 characters. */
+function shortName(name: string): string {
+  const text = name.replace(/\s+/g, " ").trim();
+  return text.length > 60 ? `${text.slice(0, 59).trimEnd()}…` : text;
 }

@@ -26,7 +26,7 @@ const RESEARCH_FOLDER_NAME_MAX_LENGTH = 40;
 const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "trash", "highlights"];
 
 export function emptyResearchFolderState(): ResearchFolderState {
-  return { folders: [], membership: {}, collapsed: [] };
+  return { folders: [], membership: {}, collapsed: [], parents: {}, collapsedGroups: [] };
 }
 
 /** Unfiled (Home's list), Drafts and user folders keep a manual order;
@@ -150,6 +150,7 @@ export function researchFolderStateWithoutFolder(
   folderId: string,
 ): ResearchFolderState {
   return {
+    ...state,
     folders: state.folders.filter((folder) => folder.id !== folderId),
     membership: Object.fromEntries(
       Object.entries(state.membership).filter(([, member]) => member !== folderId),

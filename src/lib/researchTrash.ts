@@ -44,14 +44,21 @@ export function researchTrashCount(count: number): string {
 }
 
 /** The first delete confirmation's sentence for a thread: what moves to the
- * Trash with it. */
-export function researchTrashTreeSentence(followUpCount: number | null): string {
-  if (followUpCount == null || followUpCount === 0) {
-    return "It moves to the Trash, where you can restore it.";
+ * Trash with it (its follow-ups, and the children listed under it in Home). */
+export function researchTrashTreeSentence(followUpCount: number | null, childCount = 0): string {
+  const followUps =
+    followUpCount == null || followUpCount === 0
+      ? null
+      : `its ${followUpCount} follow-up${followUpCount === 1 ? "" : "s"}`;
+  if (childCount === 0) {
+    return followUps
+      ? `It moves to the Trash with ${followUps}, where you can restore it.`
+      : "It moves to the Trash, where you can restore it.";
   }
-  return `It moves to the Trash with its ${followUpCount} follow-up${
-    followUpCount === 1 ? "" : "s"
-  }, where you can restore it.`;
+  const children = `its ${childCount} ${childCount === 1 ? "child" : "children"}`;
+  return `It moves to the Trash with ${followUps ? `${followUps} and ` : ""}${children}. Restoring it restores ${
+    childCount === 1 ? "its child" : "its children"
+  } too.`;
 }
 
 /** The first delete confirmation's sentence for a folder. Its questions are

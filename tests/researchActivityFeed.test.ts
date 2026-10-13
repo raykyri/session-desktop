@@ -50,6 +50,8 @@ const folders: ResearchFolderState = {
   folders: [{ id: "f-read", name: "Reading list", workspaceId: "ws" }],
   membership: {},
   collapsed: [],
+  parents: {},
+  collapsedGroups: [],
 };
 
 const cards = (html: string) => html.split(/class="research-feed-card(?=[ "])/).slice(1);

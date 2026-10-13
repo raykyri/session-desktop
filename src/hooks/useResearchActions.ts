@@ -20,7 +20,6 @@ import {
   renameResearchNode,
   renameResearchTree,
   rerunResearchNode,
-  restoreResearchTree,
   retryResearchNode,
   updateResearchDocument,
   updateResearchPost,
@@ -294,15 +293,6 @@ export function useResearchActions(
   const renameResearchTreeTitle = useCallback(async (treeId: string, title: string) => {
     await renameResearchTree(treeId, title);
   }, []);
-  // Unarchiving leaves the selection alone, so several threads can be
-  // restored from the Archived list in a row; an open thread stays open.
-  const restoreResearchTreeFromMenu = useCallback(async (treeId: string) => {
-    try {
-      await restoreResearchTree(treeId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
   // Every delete entry point (thread menus, feed menus) reconciles the active
   // thread the same way: the deleted thread closes back to the feed.
   const removeResearchTreeAndSelectFallback = useCallback(
@@ -328,18 +318,6 @@ export function useResearchActions(
       pruneResearchTreeVisits((id) => id !== treeId);
     },
     [focusResearchHome, pruneResearchTreeVisits],
-  );
-  const removeResearchTreeFromMenu = useCallback(
-    async (treeId: string) => {
-      setError(null);
-      try {
-        await removeResearchTreeAndSelectFallback(treeId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        throw err;
-      }
-    },
-    [removeResearchTreeAndSelectFallback],
   );
   const createResearchFollowup = useCallback(
     async (
@@ -433,10 +411,8 @@ export function useResearchActions(
     editResearchPost,
     cancelResearchRun,
     renameResearchTreeTitle,
-    restoreResearchTreeFromMenu,
     removeResearchTreeAndSelectFallback,
     trashResearchTreeAndSelectFallback,
-    removeResearchTreeFromMenu,
     createResearchFollowup,
     retryResearchRun,
     rerunResearchRun,

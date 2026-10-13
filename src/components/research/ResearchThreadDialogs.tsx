@@ -176,6 +176,7 @@ export function researchBranchDeleteDialogProps({
   info,
   isRoot,
   treeTitle,
+  groupChildCount = 0,
   onTrashRoot,
   onRemove,
   onClose,
@@ -184,6 +185,9 @@ export function researchBranchDeleteDialogProps({
   info: { descendantCount: number; hasActiveRuns: boolean };
   isRoot: boolean;
   treeTitle: string;
+  /** For the root: the children listed under the research in Home, which
+   * are deleted with it. */
+  groupChildCount?: number;
   onTrashRoot: () => Promise<void>;
   onRemove: () => Promise<void>;
   onClose: () => void;
@@ -195,13 +199,25 @@ export function researchBranchDeleteDialogProps({
     ? "It has active runs, which must finish or be cancelled before it can be deleted."
     : null;
   if (isRoot) {
+    const children = `${groupChildCount} ${groupChildCount === 1 ? "child" : "children"}`;
     return {
       trash: {
-        title: `Delete “${name}”?`,
-        body: <p>{researchTrashTreeSentence(count)}</p>,
+        title: groupChildCount > 0 ? `Delete “${name}” and its ${children}?` : `Delete “${name}”?`,
+        body: <p>{researchTrashTreeSentence(count, groupChildCount)}</p>,
         onConfirm: onTrashRoot,
       },
-      remove: { onConfirm: onRemove },
+      remove: {
+        ...(groupChildCount > 0
+          ? {
+              body: (
+                <p>
+                  “{name}” and its {children} will be deleted. This can’t be undone.
+                </p>
+              ),
+            }
+          : null),
+        onConfirm: onRemove,
+      },
       disabledReason,
       onClose,
     };
@@ -250,6 +266,7 @@ export function ResearchDeleteBranchDialog({
   nodeId,
   rootNodeId,
   treeTitle,
+  groupChildCount,
   onTrashRoot,
   onRemove,
   onClose,
@@ -259,6 +276,7 @@ export function ResearchDeleteBranchDialog({
   nodeId: string;
   rootNodeId: string | null;
   treeTitle: string;
+  groupChildCount?: number;
   /** Moves the research to the Trash (the root's default). */
   onTrashRoot: () => Promise<void>;
   /** Deletes `node` permanently; a rejection keeps the dialog open with its
@@ -279,6 +297,7 @@ export function ResearchDeleteBranchDialog({
         info,
         isRoot: node.id === rootNodeId,
         treeTitle,
+        groupChildCount,
         onTrashRoot,
         onRemove: () => onRemove(node),
         onClose,

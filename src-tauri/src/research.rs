@@ -78,13 +78,29 @@ pub struct ResearchFolderState {
     /// Folder ids whose member rows are hidden in the sidebar.
     #[serde(default)]
     pub collapsed: Vec<String>,
+    /// childTreeId -> parentTreeId: Home and the folders list a child under
+    /// its parent's card. One level deep: a parent is never itself a child
+    /// ([`normalize_research_folder_state`]). A child keeps its own
+    /// membership, which the frontend keeps equal to its parent's; a child
+    /// whose parent is listed in another place (archived, in the Trash, or
+    /// filed elsewhere) is listed on its own. Absent before nesting existed,
+    /// and omitted when empty so older state files round-trip unchanged.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub parents: HashMap<String, String>,
+    /// Parent tree ids whose children are hidden in Home. Omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collapsed_groups: Vec<String>,
 }
 
 impl ResearchFolderState {
     /// serde skip guard: an untouched grouping serializes to nothing, so state
     /// files from builds that predate folders round-trip byte-identically.
     pub fn is_empty(&self) -> bool {
-        self.folders.is_empty() && self.membership.is_empty() && self.collapsed.is_empty()
+        self.folders.is_empty()
+            && self.membership.is_empty()
+            && self.collapsed.is_empty()
+            && self.parents.is_empty()
+            && self.collapsed_groups.is_empty()
     }
 }
 
@@ -222,6 +238,25 @@ pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
         (folder_ids.contains(id) || is_research_system_folder_id(id))
             && seen_collapsed.insert(id.clone())
     });
+    normalize_research_groups(state);
+}
+
+/// Keeps nesting one level deep: drops a link from a tree to itself and a
+/// link whose parent is itself a child (the deeper link goes; the parent's
+/// own link stays), and dedupes the collapsed groups.
+fn normalize_research_groups(state: &mut ResearchFolderState) {
+    state.parents.retain(|child, parent| child != parent);
+    let nested_parents = state
+        .parents
+        .values()
+        .filter(|parent| state.parents.contains_key(*parent))
+        .cloned()
+        .collect::<HashSet<_>>();
+    state
+        .parents
+        .retain(|_, parent| !nested_parents.contains(parent));
+    let mut seen = HashSet::new();
+    state.collapsed_groups.retain(|id| seen.insert(id.clone()));
 }
 
 /// Drops every part of the grouping that references a tree that no longer
@@ -237,6 +272,13 @@ pub fn reconcile_research_folder_state(
     state
         .membership
         .retain(|tree_id, _| known_tree_ids.contains(tree_id));
+    state
+        .parents
+        .retain(|child, parent| known_tree_ids.contains(child) && known_tree_ids.contains(parent));
+    state
+        .collapsed_groups
+        .retain(|id| known_tree_ids.contains(id));
+    normalize_research_groups(state);
     let folder_ids = state
         .folders
         .iter()
@@ -257,6 +299,11 @@ pub fn remove_trees_from_research_folders(
     state
         .membership
         .retain(|tree_id, _| !tree_ids.contains(tree_id));
+    // A removed parent's children stay where they are, listed on their own.
+    state
+        .parents
+        .retain(|child, parent| !tree_ids.contains(child) && !tree_ids.contains(parent));
+    state.collapsed_groups.retain(|id| !tree_ids.contains(id));
 }
 
 /// Removes every folder belonging to a workspace along with the memberships
@@ -320,6 +367,11 @@ pub struct DetachedResearchArchive {
     /// treeId -> folderId for the archive's trees. Same optionality as `folders`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub membership: HashMap<String, String>,
+    /// childTreeId -> parentTreeId among the archive's trees (see
+    /// `ResearchFolderState::parents`). Optional and dropped-if-empty, like
+    /// `membership`; a reader that ignores it imports the trees ungrouped.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub parents: HashMap<String, String>,
     pub nodes: Vec<ResearchNode>,
     pub exported_at: u128,
 }
@@ -4069,6 +4121,7 @@ mod tests {
                 .map(|(tree, folder)| (tree.to_string(), folder.to_string()))
                 .collect(),
             collapsed: collapsed.iter().map(|id| id.to_string()).collect(),
+            ..ResearchFolderState::default()
         }
     }
 
@@ -4113,6 +4166,103 @@ mod tests {
         let only_stars: ResearchFolderState =
             serde_json::from_str(r#"{"starred":["t1"]}"#).unwrap();
         assert!(only_stars.is_empty());
+    }
+
+    #[test]
+    fn a_state_saved_before_nesting_loads_without_groups() {
+        // Written by builds before nesting: no `parents` or `collapsedGroups`.
+        let stored = concat!(
+            r#"{"folders":[{"id":"f1","name":"f1","workspaceId":"ws"}],"#,
+            r#""membership":{"t1":"f1"},"collapsed":["f1"]}"#
+        );
+        let state: ResearchFolderState = serde_json::from_str(stored).unwrap();
+        assert!(state.parents.is_empty());
+        assert!(state.collapsed_groups.is_empty());
+        // Saved without groups, it is written as it was read.
+        assert_eq!(serde_json::to_string(&state).unwrap(), stored);
+    }
+
+    #[test]
+    fn groups_round_trip_and_count_as_content() {
+        let mut state = ResearchFolderState::default();
+        state
+            .parents
+            .insert("child".to_string(), "parent".to_string());
+        state.collapsed_groups.push("parent".to_string());
+        assert!(!state.is_empty());
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(
+            json,
+            concat!(
+                r#"{"folders":[],"membership":{},"collapsed":[],"#,
+                r#""parents":{"child":"parent"},"collapsedGroups":["parent"]}"#
+            )
+        );
+        assert_eq!(
+            serde_json::from_str::<ResearchFolderState>(&json).unwrap(),
+            state
+        );
+    }
+
+    #[test]
+    fn normalize_keeps_nesting_one_level_deep() {
+        let mut state = ResearchFolderState {
+            parents: HashMap::from([
+                ("self".to_string(), "self".to_string()),
+                // b is a child of c, so a cannot be a child of b.
+                ("a".to_string(), "b".to_string()),
+                ("b".to_string(), "c".to_string()),
+                // A cycle drops both links.
+                ("x".to_string(), "y".to_string()),
+                ("y".to_string(), "x".to_string()),
+                ("d".to_string(), "c".to_string()),
+            ]),
+            collapsed_groups: vec!["c".to_string(), "c".to_string()],
+            ..ResearchFolderState::default()
+        };
+        normalize_research_folder_state(&mut state);
+        assert_eq!(
+            state.parents,
+            HashMap::from([
+                ("b".to_string(), "c".to_string()),
+                ("d".to_string(), "c".to_string()),
+            ])
+        );
+        assert_eq!(state.collapsed_groups, vec!["c".to_string()]);
+    }
+
+    #[test]
+    fn removing_or_reconciling_a_tree_drops_its_group_links() {
+        let mut state = ResearchFolderState {
+            parents: HashMap::from([
+                ("c1".to_string(), "p".to_string()),
+                ("c2".to_string(), "p".to_string()),
+                ("c3".to_string(), "q".to_string()),
+            ]),
+            collapsed_groups: vec!["p".to_string(), "q".to_string()],
+            ..ResearchFolderState::default()
+        };
+        let mut removed = state.clone();
+        remove_trees_from_research_folders(
+            &mut removed,
+            &HashSet::from(["p".to_string(), "c3".to_string()]),
+        );
+        assert!(removed.parents.is_empty());
+        assert_eq!(removed.collapsed_groups, vec!["q".to_string()]);
+
+        let known = ["c1", "c2", "p", "c3"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<HashSet<_>>();
+        reconcile_research_folder_state(&mut state, &known);
+        assert_eq!(
+            state.parents,
+            HashMap::from([
+                ("c1".to_string(), "p".to_string()),
+                ("c2".to_string(), "p".to_string()),
+            ])
+        );
+        assert_eq!(state.collapsed_groups, vec!["p".to_string()]);
     }
 
     #[test]
@@ -4468,6 +4618,7 @@ mod tests {
                 trashed_at: None,
             }],
             membership: HashMap::from([("research-1".to_string(), "rf-1".to_string())]),
+            parents: HashMap::new(),
             nodes: vec![node],
             exported_at: 3,
         }

@@ -174,13 +174,26 @@ export function reorderResearchTrees(workspaceId: string, archived: boolean, tre
   return invoke<void>("reorder_research_trees", { workspaceId, archived, treeIds });
 }
 
+/** The folder state as the backend sends it: `parents` and
+ * `collapsedGroups` are omitted when empty. */
+type StoredResearchFolderState = Omit<ResearchFolderState, "parents" | "collapsedGroups"> &
+  Partial<Pick<ResearchFolderState, "parents" | "collapsedGroups">>;
+
+const withResearchGroups = (state: StoredResearchFolderState): ResearchFolderState => ({
+  ...state,
+  parents: state.parents ?? {},
+  collapsedGroups: state.collapsedGroups ?? [],
+});
+
 export function listResearchFolders() {
-  return invoke<ResearchFolderState>("list_research_folders");
+  return invoke<StoredResearchFolderState>("list_research_folders").then(withResearchGroups);
 }
 
 /** Persists the whole folder state and returns the backend-normalized copy. */
 export function setResearchFolders(folders: ResearchFolderState) {
-  return invoke<ResearchFolderState>("set_research_folders", { folders });
+  return invoke<StoredResearchFolderState>("set_research_folders", { folders }).then(
+    withResearchGroups,
+  );
 }
 
 export function listResearchDrafts(workspaceId: string) {

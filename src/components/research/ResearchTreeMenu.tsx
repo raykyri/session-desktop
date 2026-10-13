@@ -261,6 +261,8 @@ export function ResearchTreeDeleteOfferPanel({ tree, contents, onKeep, onDelete 
 
 interface ResearchTreeDeleteProps {
   tree: ResearchTreeSummary;
+  /** The children listed under it in Home, which are deleted with it. */
+  groupChildren?: readonly ResearchTreeSummary[];
   onClose: () => void;
   /** Moves the thread to the Trash (the default). */
   onTrash: (treeId: string) => Promise<void>;
@@ -272,21 +274,37 @@ interface ResearchTreeDeleteProps {
  * panel. */
 export function researchTreeDeleteDialogProps({
   tree,
+  groupChildren = [],
   onClose,
   onTrash,
   onRemove,
 }: ResearchTreeDeleteProps): ResearchDeleteDialogProps {
+  const count = groupChildren.length;
+  const children = `${count} ${count === 1 ? "child" : "children"}`;
   return {
     trash: {
-      title: `Delete “${tree.title}”?`,
-      body: <p>{researchTrashTreeSentence(null)}</p>,
+      title: count > 0 ? `Delete “${tree.title}” and its ${children}?` : `Delete “${tree.title}”?`,
+      body: <p>{researchTrashTreeSentence(null, count)}</p>,
       onConfirm: () => onTrash(tree.id),
     },
-    remove: { onConfirm: () => onRemove(tree.id) },
+    remove: {
+      ...(count > 0
+        ? {
+            body: (
+              <p>
+                “{tree.title}” and its {children} will be deleted. This can’t be undone.
+              </p>
+            ),
+          }
+        : null),
+      onConfirm: () => onRemove(tree.id),
+    },
     disabledReason:
       tree.runningCount > 0
         ? "It has active runs, which must finish or be cancelled before it can be deleted."
-        : null,
+        : groupChildren.some((child) => child.runningCount > 0)
+          ? `${count === 1 ? "Its child has" : "One of its children has"} active runs, which must finish or be cancelled before it can be deleted.`
+          : null,
     onClose,
   };
 }
