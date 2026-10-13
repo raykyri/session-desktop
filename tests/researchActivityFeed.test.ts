@@ -423,8 +423,16 @@ test("cards show the question as plain text, URLs in the link color but not as l
   assert.doesNotMatch(withLink, /turn-markdown|<a |<strong>/);
   assert.match(
     withLink,
-    /research-feed-card-question">what would \*\*solving\*\* it look like\?\n<span class="research-feed-url">https:\/\/x\.com\/example\/status\/2097801834224312595<\/span></,
+    /research-feed-card-question"><span class="research-feed-preview-text">what would \*\*solving\*\* it look like\?\n<span class="research-feed-url">https:\/\/x\.com\/example\/status\/2097801834224312595<\/span></,
   );
+});
+
+test("a question still waiting for its title shows in the clamped preview style; a titled one does not", () => {
+  const untitled = renderFeed({ items: [{ ...question, prompt: "First line\n\n\nSecond line" }] });
+  assert.match(untitled, /research-feed-card-question"><span class="research-feed-preview-text">First line\nSecond line<\/span>/);
+  const titled = renderFeed({ items: [question], researchTrees: [tree] });
+  assert.match(titled, /research-feed-card-title/);
+  assert.doesNotMatch(titled, /research-feed-preview-text/);
 });
 
 test("Home lists Unfiled trees in the tree order; a card whose root is not loaded shows its title", () => {

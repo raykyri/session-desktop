@@ -849,18 +849,20 @@ function ResearchActivityFeed({
     const isPost = query ? nodeType(query) === "post" : false;
     const question = query?.prompt ?? tree?.title ?? "";
     const title = isPost ? null : researchCardTitle(tree?.title ?? query?.title, question);
+    const awaitingTitle = !isPost && !(tree?.title ?? query?.title)?.trim();
     const selected = treeId === selectedTreeId;
     const state = researchThreadState(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
     // The card shows the question as plain text, URLs in the link color; its
     // Markdown renders in the conversation. Link cards still show; a tweet
     // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
-    // A note's text shows at most four lines, with blank lines removed.
+    // A note, and a question still waiting for its title, show at most four
+    // lines in the muted color, with blank lines removed.
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () => {
       const text = query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question;
       return asQuestion(
-        isPost ? (
-          <span className="research-feed-note-text">{feedText(collapseBlankLines(text))}</span>
+        isPost || awaitingTitle ? (
+          <span className="research-feed-preview-text">{feedText(collapseBlankLines(text))}</span>
         ) : (
           feedText(text)
         ),

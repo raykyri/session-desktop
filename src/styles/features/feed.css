@@ -884,10 +884,13 @@
   margin-top: 6px;
 }
 
-/* A note's text shows at most four lines, ending in an ellipsis. */
-.research-feed-note-text {
+/* A note's text, and a question still waiting for its title, show at most
+   four lines, ending in an ellipsis, in the muted color a question takes
+   under a card title. */
+.research-feed-preview-text {
   display: -webkit-box;
   overflow: hidden;
+  color: var(--text-muted);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
 }
