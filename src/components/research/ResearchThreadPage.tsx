@@ -1,4 +1,5 @@
 import { researchBranchBlocker } from "../../lib/researchThreadView";
+import { researchNoteEditable } from "../../lib/researchNoteEdit";
 import { WidgetChangeContext, widgetChangePrompt } from "../../lib/sessionWidgetActions";
 import {
   useResearchComposerDrafts,
@@ -238,6 +239,10 @@ interface ResearchThreadPageProps {
   /** The whole question's Move to actions, which the root level's answer
    * menus list below their own actions. */
   treeMenu?: ResearchThreadTreeMenu;
+  /** A note double-clicked in the feed, for this page to edit once it has
+   * the tree; `onNoteEditRequestHandled` clears it. */
+  noteEditRequest?: { treeId: string; nodeId: string } | null;
+  onNoteEditRequestHandled?: () => void;
 }
 
 export type { ResearchThreadTreeMenu };
@@ -283,6 +288,8 @@ function ResearchThreadPage({
   onPruneVisits,
   onOpenNodesChange,
   treeMenu,
+  noteEditRequest = null,
+  onNoteEditRequestHandled,
 }: ResearchThreadPageProps) {
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
@@ -1901,6 +1908,33 @@ function ResearchThreadPage({
     requestFocus({ kind: "editor" }, "settle");
   }
 
+  /** A double-click on a note (its column, or its row in a follow-ups
+   * column) edits it as the note menu's Edit note does. It does nothing
+   * while the editor is saving or asking, or for the note already being
+   * edited, whose unsaved text it would replace. */
+  function editNoteOnDoubleClick(nodeId: string, returnFocus: HTMLElement | null) {
+    if (editorSaving || editorAsking || editorRef.current?.nodeId === nodeId) {
+      return;
+    }
+    startEditing(nodeId, returnFocus);
+  }
+
+  // A note double-clicked in the feed is edited once this page has its
+  // tree's detail and has restored the open levels, which the feed's click
+  // set to the note, so editing adds no second visit. A note that cannot be
+  // edited is not.
+  useEffect(() => {
+    if (!noteEditRequest || detail?.tree.id !== noteEditRequest.treeId || selection === null) {
+      return;
+    }
+    onNoteEditRequestHandled?.();
+    if (researchNoteEditable(nodeById.get(noteEditRequest.nodeId), archived)) {
+      editNoteOnDoubleClick(noteEditRequest.nodeId, null);
+    }
+    // Runs for a new request, newly loaded detail, or the restored selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteEditRequest, detail, selection === null]);
+
   /** Closes the editor column; focus returns to the control that opened it,
    * else to the root's row (a document) or the note's column. The note
    * column returns in the editor's place as a new element, so the … button
@@ -2391,6 +2425,7 @@ function ResearchThreadPage({
             }}
             scrollRef={restoreNoteScroll}
             onSelectNode={navigate}
+            onEdit={researchNoteEditable(post, archived) ? () => editNoteOnDoubleClick(post.id, null) : undefined}
           />
         );
       }
@@ -2422,6 +2457,7 @@ function ResearchThreadPage({
               // follow-up's row, its answer menu.
               setMenu({ kind: nodeType(node) === "post" ? "post" : "answer", nodeId: node.id, ...placement })
             }
+            onEditNote={editNoteOnDoubleClick}
           />
         );
       }

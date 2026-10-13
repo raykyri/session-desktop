@@ -8,12 +8,16 @@ import type { PostActions } from "./ResearchPost";
 import ResearchPostColumn from "./ResearchPostColumn";
 import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
+import { NOTE_DOUBLE_CLICK_IGNORE_SELECTOR } from "../../lib/researchNoteEdit";
 
 type HistoryNav = ComponentProps<typeof ResearchPairHeader>["history"];
 
 /** A note level's note column (N{level}): the note itself. Every note, the
  * root note and each follow-up note, has a … menu in the header, which is
- * also the column's context menu. */
+ * also the column's context menu. A double-click on the note, outside its
+ * links, buttons and embeds, edits it (`onEdit`, absent when it cannot be
+ * edited). */
 export function ResearchNoteColumn({
   column,
   current,
@@ -25,6 +29,7 @@ export function ResearchNoteColumn({
   menu,
   scrollRef,
   onSelectNode,
+  onEdit,
 }: {
   column: Extract<ResearchColumn, { role: "post" }>;
   current: boolean;
@@ -43,7 +48,9 @@ export function ResearchNoteColumn({
   };
   scrollRef: Ref<HTMLDivElement> | undefined;
   onSelectNode: (nodeId: string) => void;
+  onEdit?: () => void;
 }) {
+  const editProps = researchNoteDoubleClickProps(onEdit, NOTE_DOUBLE_CLICK_IGNORE_SELECTOR);
   const menuProps = researchUnitMenuProps(menu.onContextMenu, (scroll) => ({
     element: scroll.closest("section")?.querySelector<HTMLElement>(".research-head-menu") ?? null,
     align: "end",
@@ -62,7 +69,7 @@ export function ResearchNoteColumn({
         archived={archived}
         menu={{ label: "Note actions", open: menu.open, onOpen: menu.onOpen }}
       />
-      <div ref={scrollRef} className="research-column-scroll" tabIndex={-1} {...menuProps}>
+      <div ref={scrollRef} className="research-column-scroll" tabIndex={-1} {...menuProps} {...editProps}>
         <div className="research-column-content research-reading-surface">
           <ResearchPostColumn detail={detail} post={post} onSelectNode={onSelectNode} />
         </div>
@@ -89,6 +96,7 @@ export function ResearchFollowUpsColumn({
   threadRef,
   onOpenFollowUp,
   onOpenContextMenu,
+  onEditNote,
 }: {
   column: Extract<ResearchColumn, { role: "thread" }>;
   current: boolean;
@@ -103,6 +111,7 @@ export function ResearchFollowUpsColumn({
   threadRef: Ref<ResearchPostThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
   onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
+  onEditNote?: (nodeId: string, row: HTMLElement) => void;
 }) {
   return (
     <section
@@ -124,6 +133,7 @@ export function ResearchFollowUpsColumn({
             threadRef={threadRef}
             onOpenFollowUp={onOpenFollowUp}
             onOpenContextMenu={onOpenContextMenu}
+            onEditNote={onEditNote}
           />
         </div>
       </div>

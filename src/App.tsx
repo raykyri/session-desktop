@@ -642,6 +642,28 @@ function MainApp() {
     onUserNotificationRequested: handleUserNotificationRequested,
   });
 
+  // A note double-clicked in the feed. The double-click's first click opened
+  // its thread at the note; the thread page edits it once it has the tree's
+  // detail, and clears the request. A request for a tree that is no longer
+  // open is dropped.
+  const [researchNoteEditRequest, setResearchNoteEditRequest] = useState<{
+    treeId: string;
+    nodeId: string;
+  } | null>(null);
+  const editResearchNoteFromFeed = useCallback(
+    (treeId: string, nodeId: string) => setResearchNoteEditRequest({ treeId, nodeId }),
+    [],
+  );
+  const shownResearchNoteEditRequest =
+    researchStageView === "thread" && researchNoteEditRequest?.treeId === activeResearchTreeId
+      ? researchNoteEditRequest
+      : null;
+  useEffect(() => {
+    setResearchNoteEditRequest((current) =>
+      current && current.treeId !== activeResearchTreeId ? null : current,
+    );
+  }, [activeResearchTreeId]);
+
   // Opening a card whose root isn't in the loaded feed (Archive, or a folder
   // member paged out of it) keeps the list in the feed column beside the thread.
   // Opening a card (a click, or Enter on it) selects its question in the
@@ -1142,6 +1164,7 @@ function MainApp() {
                     onOpenResearchQuery={openRecentResearchQuery}
                     onOpenDraft={openResearchDraftInColumn}
                     onOpenTree={openFeedResearchTree}
+                    onEditNote={editResearchNoteFromFeed}
                     onOpenView={openFeedView}
                     onResearchRecapApplied={handleResearchRecapApplied}
                     onError={setError}
@@ -1219,6 +1242,8 @@ function MainApp() {
                     onForward={goResearchForward}
                     onNavigate={reportResearchNavigation}
                     onPruneVisits={pruneResearchNodeVisits}
+                    noteEditRequest={shownResearchNoteEditRequest}
+                    onNoteEditRequestHandled={() => setResearchNoteEditRequest(null)}
                   />
                 </ResearchAgentRepairContext.Provider>
               </ResearchInlineWidgetsContext.Provider>

@@ -9,6 +9,8 @@ import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 import { PostFollowUpField, PostFollowUpStatus, type PostActions } from "./ResearchPost";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
+import { researchNoteEditable } from "../../lib/researchNoteEdit";
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is
@@ -34,7 +36,8 @@ export function postThreadEntries(nodes: readonly ResearchNode[], post: Research
  * follow-up's, else the row focused last, else the first. ResearchThreadPage
  * handles the column's keys. Each row carries its node id in
  * `data-thread-key`. A right-click on a row, or Shift+F10 or the ContextMenu
- * key in it, opens its follow-up's menu (`onOpenContextMenu`). */
+ * key in it, opens its follow-up's menu (`onOpenContextMenu`). A
+ * double-click on a follow-up note's row edits the note (`onEditNote`). */
 export default function ResearchPostThread({
   nodes,
   post,
@@ -46,6 +49,7 @@ export default function ResearchPostThread({
   threadRef,
   onOpenFollowUp,
   onOpenContextMenu,
+  onEditNote,
 }: {
   nodes: readonly ResearchNode[];
   post: ResearchNode;
@@ -61,6 +65,9 @@ export default function ResearchPostThread({
   /** Opens the menu of a row's follow-up at `placement`: a follow-up note's
    * note menu, an AI follow-up's answer menu. */
   onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
+  /** Edits a follow-up note on a double-click of its row; `row` is the
+   * row's button, which takes focus back when the editor closes. */
+  onEditNote?: (nodeId: string, row: HTMLElement) => void;
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
   // The row made current by makeCurrent, marked while focus stays elsewhere.
@@ -120,6 +127,11 @@ export default function ResearchPostThread({
               onRetry={actions.onRetry}
               onOpen={onOpenFollowUp}
               onOpenContextMenu={onOpenContextMenu}
+              onEdit={
+                onEditNote && researchNoteEditable(node, archived)
+                  ? (row) => onEditNote(node.id, row)
+                  : undefined
+              }
               onFocus={() => focusRow(node.id)}
             />
           ))}
@@ -143,6 +155,7 @@ function PostFollowUpRow({
   onRetry,
   onOpen,
   onOpenContextMenu,
+  onEdit,
   onFocus,
 }: {
   child: ResearchNode;
@@ -153,6 +166,9 @@ function PostFollowUpRow({
   onRetry: (nodeId: string) => Promise<void>;
   onOpen: (nodeId: string) => void;
   onOpenContextMenu: (node: ResearchNode, placement: ResearchUnitMenuPlacement) => void;
+  /** Edits the note; absent for an AI follow-up or a note that cannot be
+   * edited. */
+  onEdit?: (row: HTMLElement) => void;
   onFocus: () => void;
 }) {
   const labelId = useId();
@@ -186,8 +202,14 @@ function PostFollowUpRow({
         aria-labelledby={labelId}
         title={note ? "Open this note" : "Open this answer"}
         tabIndex={tabbable ? 0 : -1}
-        onClick={() => onOpen(child.id)}
+        onClick={(event) => {
+          // The second click of a double-click that edits the note does not
+          // open the follow-up again; the first click opened it.
+          if (onEdit && event.detail > 1) return;
+          onOpen(child.id);
+        }}
         onFocus={onFocus}
+        {...researchNoteDoubleClickProps(onEdit)}
       />
       <div className="post-thread-gutter">
         <span className="post-glyph" aria-hidden="true">

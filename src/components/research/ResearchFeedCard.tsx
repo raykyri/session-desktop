@@ -9,6 +9,7 @@ import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 import ResearchRowRail from "./ResearchRowRail";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
 
 interface ResearchFeedCardProps {
   /** Tree id, or draft id for a draft card. */
@@ -48,6 +49,12 @@ interface ResearchFeedCardProps {
   menuLabel?: string;
   onOpen: () => void;
   onOpenChild?: (child: ResearchFeedChild) => void;
+  /** Edits the card's note on a double-click of the card; absent when the
+   * card is not an editable note. */
+  onEdit?: () => void;
+  /** A child row's edit, for a double-click of the row: undefined for a row
+   * that is not an editable note. */
+  childEdit?: (child: ResearchFeedChild) => (() => void) | undefined;
   /** Opens the card's menu below its … button (`anchor`). */
   onMenu?: (anchor: HTMLElement) => void;
   /** Opens a child row's … menu below `anchor`. */
@@ -127,6 +134,8 @@ export default function ResearchFeedCard({
   menuLabel = "Thread actions",
   onOpen,
   onOpenChild,
+  onEdit,
+  childEdit,
   onMenu,
   onChildMenu,
   onContextMenu,
@@ -167,7 +176,13 @@ export default function ResearchFeedCard({
           aria-describedby={glyphNamed ? glyphId : undefined}
           aria-current={selected ? "true" : undefined}
           title={tooltip}
-          onClick={onOpen}
+          onClick={(event) => {
+            // The second click of a double-click that edits the note does
+            // not open the thread again; the first click opened it.
+            if (onEdit && event.detail > 1) return;
+            onOpen();
+          }}
+          {...researchNoteDoubleClickProps(onEdit)}
         />
         <div className={`research-feed-card-layout${title ? " has-title" : ""}`}>
           {glyph}
@@ -188,6 +203,7 @@ export default function ResearchFeedCard({
       {childRows.map((child, index) => {
         const childSelected = selectedChildNodeIds.includes(child.nodeId);
         const childMenuOpen = child.nodeId === childMenuNodeId;
+        const editChild = childEdit?.(child);
         return (
           <div
             key={child.nodeId}
@@ -214,7 +230,11 @@ export default function ResearchFeedCard({
               className="research-feed-child-open"
               data-node-id={child.nodeId}
               aria-current={childSelected ? "true" : undefined}
-              onClick={() => onOpenChild?.(child)}
+              onClick={(event) => {
+                if (editChild && event.detail > 1) return;
+                onOpenChild?.(child);
+              }}
+              {...researchNoteDoubleClickProps(editChild)}
             >
               {child.branch ? (
                 <span className="research-visually-hidden">Starred branch: </span>

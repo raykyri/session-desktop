@@ -12,6 +12,7 @@ import {
 import { researchBranchInfo } from "../../lib/researchBranches";
 import { inlineChainFor, isActiveResearchStatus, researchMessageStarrable } from "../../lib/researchChains";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
+import { researchNoteEditable } from "../../lib/researchNoteEdit";
 import {
   documentHoldsMarkdown,
   documentSource,
@@ -215,7 +216,7 @@ export function ResearchThreadMenu({
         <ResearchMenuItem
           icon={<Pencil size={15} aria-hidden="true" />}
           label="Edit note"
-          disabled={archived}
+          disabled={!researchNoteEditable(post, archived)}
           title={
             !archived
               ? undefined

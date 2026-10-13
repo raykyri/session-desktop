@@ -1,6 +1,7 @@
 import { collapseBlankLines, feedTextRuns } from "../../lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "../../lib/researchNodeTypes";
+import { researchNoteEditable } from "../../lib/researchNoteEdit";
 import {
   memo,
   useCallback,
@@ -165,6 +166,9 @@ export interface ResearchActivityFeedProps {
   onOpenDraft?: (draft: ResearchDraft) => void;
   /** Opens a tree whose root is not in the loaded feed (archived, or paged out). */
   onOpenTree?: (treeId: string) => void;
+  /** Edits a note: a note card's note or a starred follow-up note, on a
+   * double-click of its row. */
+  onEditNote?: (treeId: string, nodeId: string) => void;
   onOpenView?: (view: ResearchFeedView) => void;
   onResearchRecapApplied: (node: ResearchNode) => void;
   onError: (message: string) => void;
@@ -357,6 +361,7 @@ function ResearchActivityFeed({
   onOpenResearchQuery,
   onOpenDraft,
   onOpenTree,
+  onEditNote,
   onOpenView,
   onResearchRecapApplied,
   onError,
@@ -907,6 +912,21 @@ function ResearchActivityFeed({
         menuOpen={menuTreeId === treeId}
         onOpen={() => openTreeCard(tree, query)}
         onOpenChild={(child) => onOpenResearchQuery(child.query)}
+        // A double-click on a note's card or a follow-up note's row edits
+        // the note; the feed lists threads outside Archive.
+        onEdit={
+          onEditNote && tree && query && researchNoteEditable(query, tree.archivedAt != null)
+            ? () => onEditNote(tree.id, query.nodeId)
+            : undefined
+        }
+        childEdit={
+          onEditNote && tree
+            ? (child) =>
+                researchNoteEditable(child.query, tree.archivedAt != null)
+                  ? () => onEditNote(tree.id, child.nodeId)
+                  : undefined
+            : undefined
+        }
         // The … button and the context menu open the same menu.
         onMenu={tree ? (anchor) => openTreeMenu(tree.id, anchor, { queryNodeId: query?.nodeId }) : undefined}
         onChildMenu={tree ? (child, anchor) => openTreeMenu(tree.id, anchor, { child }) : undefined}
