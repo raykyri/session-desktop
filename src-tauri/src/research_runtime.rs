@@ -90,18 +90,15 @@ pub fn launch(
             let _ = state.fail_research_node(&node.id, err.clone());
             err
         })?;
-    let images =
-        crate::research_images::ensure_adapter_reads_images(node.adapter(), node.attachments())
-            .and_then(|()| {
-                crate::research_images::launch_images(
-                    &state.config().workspace_root,
-                    node.attachments(),
-                )
-            })
-            .map_err(|err| {
-                let _ = state.fail_research_node(&node.id, err.clone());
-                err
-            })?;
+    let images = crate::research_images::launch_images(
+        &state.config().workspace_root,
+        node.adapter(),
+        node.attachments(),
+    )
+    .map_err(|err| {
+        let _ = state.fail_research_node(&node.id, err.clone());
+        err
+    })?;
     match node.adapter() {
         "claude" => launch_claude(
             state, node, workspace, prompt, images, resume, fork, guidance,

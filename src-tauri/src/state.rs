@@ -3903,7 +3903,11 @@ impl AppState {
             return Err("research workspace cannot be empty".to_string());
         }
         crate::tweets::validate_research_message_attachments(&attachments)?;
-        crate::research_images::ensure_adapter_reads_images(&request.adapter, &attachments)?;
+        crate::research_images::ensure_adapter_reads_images(
+            &self.inner.config.workspace_root,
+            &request.adapter,
+            &attachments,
+        )?;
         let tree_id = self.next_id("research");
         let node_id = self.next_id("research-node");
         let now = now_millis();
@@ -5094,7 +5098,11 @@ impl AppState {
                     parent.agent().cloned().unwrap_or_default()
                 }
             };
-            crate::research_images::ensure_adapter_reads_images(&agent.adapter, &attachments)?;
+            crate::research_images::ensure_adapter_reads_images(
+                &self.inner.config.workspace_root,
+                &agent.adapter,
+                &attachments,
+            )?;
             let workspace = model
                 .groups
                 .get(&tree.workspace_id)
@@ -5831,6 +5839,14 @@ impl AppState {
             if crate::research_runtime::session_registered(node_id) {
                 return Err(format!("the previous run is still stopping; {retry_hint}"));
             }
+            // The launch refuses a message whose images are gone or that the
+            // agent cannot read. Check before the answer is removed, so a
+            // relaunch that cannot start keeps it.
+            crate::research_images::launch_images(
+                &self.inner.config.workspace_root,
+                node.adapter(),
+                node.attachments(),
+            )?;
             // A retry must never be allowed to inherit a response or stderr log
             // from the previous attempt. Keep the node terminal if cleanup fails.
             research::remove_response_snapshot(&self.inner.config.workspace_root, node_id)?;
@@ -16013,6 +16029,60 @@ mod tests {
         )
         .unwrap();
         (detail.tree.id, root_id)
+    }
+
+    /// Rerun and retry check the message's images before the answer is
+    /// removed, so one that cannot launch keeps it.
+    #[test]
+    fn relaunches_that_cannot_send_their_images_keep_the_answer() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        let (_, root_id) = completed_research_root(&state, &workspace);
+        let set_message = |adapter: &str| {
+            let mut model = state.inner.model.lock().unwrap();
+            let node = model.research_nodes.get_mut(&root_id).unwrap();
+            node.message_mut().unwrap().attachments =
+                vec![crate::tweets::ResearchMessageAttachment::Image {
+                    id: "0123456789abcdef0123456789abcdef.png".to_string(),
+                    mime_type: "image/png".to_string(),
+                    byte_size: 10,
+                    width: None,
+                    height: None,
+                    file_name: None,
+                }];
+            node.exchange_mut().unwrap().agent.adapter = adapter.to_string();
+        };
+        let snapshot = || research::read_response_snapshot_with_revision(&workspace, &root_id);
+
+        set_message("claude");
+        let err = state.reset_research_node_for_rerun(&root_id).unwrap_err();
+        assert!(err.contains("no longer available"), "{err}");
+        assert_eq!(
+            state.research_node(&root_id).unwrap().status(),
+            ResearchNodeStatus::Complete
+        );
+        assert!(snapshot().unwrap().is_some());
+
+        set_message("grok");
+        let err = state.reset_research_node_for_rerun(&root_id).unwrap_err();
+        assert_eq!(err, "Grok can't read images.");
+        assert!(snapshot().unwrap().is_some());
+
+        state
+            .inner
+            .model
+            .lock()
+            .unwrap()
+            .research_nodes
+            .get_mut(&root_id)
+            .unwrap()
+            .run_mut()
+            .unwrap()
+            .status = ResearchNodeStatus::Failed;
+        let err = state.reset_research_node_for_retry(&root_id).unwrap_err();
+        assert_eq!(err, "Grok can't read images.");
+        assert!(snapshot().unwrap().is_some());
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]

@@ -693,13 +693,26 @@ fn adapter_label(adapter: &str) -> &str {
 }
 
 /// Refuses a message with images for an agent that cannot read them,
-/// instead of sending the text without them.
+/// instead of sending the text without them. Checked when the message is
+/// created and again before each launch. `codex exec` splits an `--image`
+/// value at commas, so Codex is refused when the image store's path has one.
 pub fn ensure_adapter_reads_images(
+    workspace_root: &Path,
     adapter: &str,
     attachments: &[ResearchMessageAttachment],
 ) -> Result<(), String> {
-    if image_ids(attachments).next().is_some() && !adapter_reads_images(adapter) {
+    if image_ids(attachments).next().is_none() {
+        return Ok(());
+    }
+    if !adapter_reads_images(adapter) {
         return Err(format!("{} can't read images.", adapter_label(adapter)));
+    }
+    let store = store_dir(workspace_root);
+    if adapter == "codex" && store.to_string_lossy().contains(',') {
+        return Err(format!(
+            "Codex can't read images stored in {}: the path contains a comma.",
+            store.display()
+        ));
     }
     Ok(())
 }
@@ -731,12 +744,15 @@ impl LaunchImage {
     }
 }
 
-/// The images of the message a run sends, in message order. Every image
-/// must still exist: a run never goes out with some of its images missing.
+/// The images of the message a run sends, in message order, after
+/// [`ensure_adapter_reads_images`]. Every image must still exist: a run never
+/// goes out with some of its images missing.
 pub fn launch_images(
     workspace_root: &Path,
+    adapter: &str,
     attachments: &[ResearchMessageAttachment],
 ) -> Result<Vec<LaunchImage>, String> {
+    ensure_adapter_reads_images(workspace_root, adapter, attachments)?;
     attachments
         .iter()
         .filter_map(|attachment| match attachment {
@@ -1060,7 +1076,7 @@ mod tests {
     fn launch_images_require_every_file_and_a_reading_agent() {
         let root = temp_root();
         let attachment = save_pending(&root, &png(2, 2), None).unwrap();
-        let images = launch_images(&root, std::slice::from_ref(&attachment)).unwrap();
+        let images = launch_images(&root, "claude", std::slice::from_ref(&attachment)).unwrap();
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].format, ImageFormat::Png);
         let block = images[0].claude_content_block().unwrap();
@@ -1071,16 +1087,25 @@ mod tests {
             STANDARD.encode(fs::read(&images[0].path).unwrap())
         );
 
-        ensure_adapter_reads_images("claude", std::slice::from_ref(&attachment)).unwrap();
-        ensure_adapter_reads_images("codex", std::slice::from_ref(&attachment)).unwrap();
+        let one = std::slice::from_ref(&attachment);
+        ensure_adapter_reads_images(&root, "claude", one).unwrap();
+        ensure_adapter_reads_images(&root, "codex", one).unwrap();
         assert_eq!(
-            ensure_adapter_reads_images("grok", std::slice::from_ref(&attachment)).unwrap_err(),
+            ensure_adapter_reads_images(&root, "grok", one).unwrap_err(),
             "Grok can't read images."
         );
-        ensure_adapter_reads_images("grok", &[]).unwrap();
+        assert!(launch_images(&root, "grok", one).is_err());
+        ensure_adapter_reads_images(&root, "grok", &[]).unwrap();
+        let comma_root = root.join("a,b");
+        assert!(
+            ensure_adapter_reads_images(&comma_root, "codex", one)
+                .unwrap_err()
+                .contains("comma")
+        );
+        ensure_adapter_reads_images(&comma_root, "claude", one).unwrap();
 
         fs::remove_file(&images[0].path).unwrap();
-        assert!(launch_images(&root, &[attachment]).is_err());
+        assert!(launch_images(&root, "claude", &[attachment]).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 }
