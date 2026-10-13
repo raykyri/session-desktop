@@ -1,15 +1,6 @@
 {
-  "testOnlyModules": {
-    "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts."
-  },
+  "testOnlyModules": {},
   "exports": {
-    "src/lib/imageMarkers.ts": {
-      "reason": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
-      "names": [
-        "COLLAPSED_IMAGE_LABEL",
-        "ImageMarkerSegment"
-      ]
-    },
     "src/types.ts": {
       "reason": "Backend wire and persisted record mirrors remain explicit compatibility contracts even when current frontend consumers do not use every DTO.",
       "names": [

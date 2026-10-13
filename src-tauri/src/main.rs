@@ -12,7 +12,6 @@ mod github_auth;
 mod headless_process;
 mod host;
 mod human_browser;
-mod image_files;
 mod launch_path;
 mod mcp;
 mod native_support;
@@ -1103,31 +1102,6 @@ async fn update_research_document(
     })
     .await
     .map_err(|err| format!("update_research_document task failed: {err}"))?
-}
-
-/// Reads a pasted image referenced by a transcript "[Image: source: <path>]"
-/// marker and returns it as a data: URL (the webview CSP blocks file paths in
-/// <img> tags). The backend enforces the home-directory confinement, raster
-/// extension allowlist, regular-file requirement, and byte cap before any
-/// content reaches the webview.
-#[tauri::command]
-async fn read_transcript_image(path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        image_files::read_transcript_image(std::path::Path::new(&path))
-    })
-    .await
-    .map_err(|err| format!("read_transcript_image task failed: {err}"))?
-}
-
-/// Persists a base64-encoded image pasted into a composer/queue and returns its
-/// absolute path, so the prompt can reference it as `[Image: <path>]`.
-#[tauri::command]
-async fn save_pasted_image(data_base64: String, extension: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        image_files::save_pasted_image(&data_base64, &extension)
-    })
-    .await
-    .map_err(|err| format!("save_pasted_image task failed: {err}"))?
 }
 
 /// Saves an image pasted or dropped into a research composer and returns its
@@ -2595,8 +2569,6 @@ fn main() {
             create_research_post_follow_up,
             update_research_document,
             update_research_post,
-            read_transcript_image,
-            save_pasted_image,
             save_research_image,
             import_research_image,
             read_research_image,
