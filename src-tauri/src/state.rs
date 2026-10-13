@@ -15258,14 +15258,22 @@ mod tests {
         assert!(pending(&root_id));
         drop(state);
 
-        // A restart removes pending images nothing references and keeps the
-        // draft's stored image.
+        // A restart removes pending images nothing references once they are
+        // past the pending lifetime, and keeps the draft's stored image.
+        for id in [&root_id, &child_id] {
+            crate::research_images::age_file_for_test(
+                &store_dir(&workspace).join("pending").join(id),
+            );
+        }
         let restarted = AppState::new(config);
         assert!(restarted.restore_session().is_empty());
-        assert!(!pending(&root_id) && !pending(&child_id) && !pending(&id_of(&first)));
+        assert!(!pending(&root_id) && !pending(&child_id));
+        assert!(pending(&id_of(&first)));
         assert!(stored(&id_of(&second)));
+        // Deleting the draft removes its image, which is past the lifetime.
+        crate::research_images::age_file_for_test(&store_dir(&workspace).join(id_of(&second)));
         restarted.delete_research_draft(&draft.id).unwrap();
-        assert!(pending(&id_of(&second)));
+        assert!(!pending(&id_of(&second)) && !stored(&id_of(&second)));
     }
 
     #[test]

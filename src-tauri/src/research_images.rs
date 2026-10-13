@@ -6,15 +6,17 @@
 //! the workspace root alone. Creating a message or saving a draft that
 //! references an image moves it into `.session/research-images/`. When the
 //! last message or draft that references it is permanently deleted, the image
+//! is removed, unless it was attached within [`PENDING_LIFETIME`]: then it
 //! moves back to `pending/`, so a composer that still holds it (after a send
 //! whose launch failed and was rolled back) can send it again.
 //!
-//! Pending images are removed at startup unless state references them (an
-//! unsent composer does not outlive the process) and, while the app runs,
-//! once they are older than [`STALE_PENDING_AGE`]. A stored image is removed
-//! only by being released; images of research moved out with a removed
-//! workspace folder stay stored, so the research shows them again when the
-//! folder is added back on this machine.
+//! The frontend keeps unsent images in composers and in a thread's queue of
+//! follow-ups (stored in the webview across restarts), which the backend
+//! cannot see. Pending images are therefore removed once they are older than
+//! [`PENDING_LIFETIME`], at startup and whenever an image is saved. A stored
+//! image is removed only by being released; images of research moved out
+//! with a removed workspace folder stay stored, so the research shows them
+//! again when the folder is added back on this machine.
 
 use std::collections::HashSet;
 use std::fs;
@@ -32,8 +34,9 @@ pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 pub const MAX_IMAGES_PER_MESSAGE: usize = 8;
 /// Longest kept original file name, in characters.
 const MAX_FILE_NAME_CHARS: usize = 255;
-/// Age after which an unsent pending image is removed while the app runs.
-const STALE_PENDING_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+/// How long an image nothing references is kept for a composer or queue that
+/// may still send it.
+const PENDING_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -274,6 +277,30 @@ pub fn save_pending(
     Ok(attachment_from_bytes(id, format, bytes, file_name))
 }
 
+/// Copies an image file the user dropped on a composer into the pending
+/// store. The window receives native file drops as paths, not bytes.
+pub fn import_pending(
+    workspace_root: &Path,
+    path: &Path,
+) -> Result<ResearchMessageAttachment, String> {
+    let metadata =
+        fs::metadata(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    if !metadata.is_file() {
+        return Err(unsupported());
+    }
+    if metadata.len() > MAX_IMAGE_BYTES {
+        return Err(too_large());
+    }
+    let file =
+        fs::File::open(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.take(MAX_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
+    let name = path.file_name().and_then(|name| name.to_str());
+    save_pending(workspace_root, &bytes, name)
+}
+
 /// The file holding image `id`: stored, else pending.
 pub fn image_path(workspace_root: &Path, id: &str) -> Option<PathBuf> {
     if !is_image_id(id) {
@@ -369,13 +396,27 @@ pub fn commit<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>)
     }
 }
 
-/// Moves stored images nothing references any more back to pending, where
-/// they are removed at the next startup or once stale.
+/// Removes stored images nothing references any more. One attached within
+/// [`PENDING_LIFETIME`] moves back to pending instead, for a composer that
+/// may send it again.
 pub fn release<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>) {
     let store = store_dir(workspace_root);
     let pending = pending_dir(workspace_root);
     for id in ids.into_iter().filter(|id| is_image_id(id)) {
-        move_file(&store.join(id), &pending, id);
+        let path = store.join(id);
+        if file_older_than(&path, PENDING_LIFETIME) {
+            remove_logged(&path);
+        } else {
+            move_file(&path, &pending, id);
+        }
+    }
+}
+
+fn remove_logged(path: &Path) {
+    if let Err(err) = fs::remove_file(path)
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        eprintln!("session: failed to remove {}: {err}", path.display());
     }
 }
 
@@ -389,7 +430,7 @@ fn file_older_than(path: &Path, age: Duration) -> bool {
 
 /// Startup pass over the pending store: images state references move into
 /// the store (a crash between saving a message and moving its images leaves
-/// them pending); every other pending file is removed.
+/// them pending); others older than [`PENDING_LIFETIME`] are removed.
 pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
     let Ok(entries) = fs::read_dir(pending_dir(workspace_root)) else {
         return;
@@ -401,27 +442,35 @@ pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
         };
         if referenced.contains(name) {
             move_file(&path, &store, name);
-        } else if let Err(err) = fs::remove_file(&path)
-            && err.kind() != std::io::ErrorKind::NotFound
-        {
-            eprintln!("session: failed to remove {}: {err}", path.display());
+        } else if file_older_than(&path, PENDING_LIFETIME) {
+            remove_logged(&path);
         }
     }
 }
 
-/// Removes pending images older than [`STALE_PENDING_AGE`], other than the
-/// one just written. A composer that kept an image that long gets "no longer
-/// available" when it sends.
+/// Removes pending images older than [`PENDING_LIFETIME`], other than the
+/// one just written. A composer or queue that kept an image that long gets
+/// "no longer available" when it sends.
 fn sweep_stale_pending(workspace_root: &Path, keep: &str) {
     let Ok(entries) = fs::read_dir(pending_dir(workspace_root)) else {
         return;
     };
     for path in entries.flatten().map(|entry| entry.path()) {
         let is_kept = path.file_name().and_then(|name| name.to_str()) == Some(keep);
-        if !is_kept && file_older_than(&path, STALE_PENDING_AGE) {
-            let _ = fs::remove_file(&path);
+        if !is_kept && file_older_than(&path, PENDING_LIFETIME) {
+            remove_logged(&path);
         }
     }
+}
+
+/// Makes a file look older, for tests of the pending lifetime.
+#[cfg(test)]
+pub fn age_file_for_test(path: &Path) {
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .and_then(|file| file.set_modified(SystemTime::now() - PENDING_LIFETIME * 2))
+        .unwrap();
 }
 
 /// Image fields as the frontend sends them with a question or draft.
@@ -672,20 +721,58 @@ mod tests {
         assert!(!pending_dir(&root).join(id).exists());
         assert_eq!(image_path(&root, id), Some(store_dir(&root).join(id)));
 
+        // A recent image goes back to pending when released.
         release(&root, [id.as_str()]);
         assert!(pending_dir(&root).join(id).is_file());
 
-        // Startup keeps (and stores) referenced pending images and removes
-        // the rest.
-        let other = save_pending(&root, &png(1, 1), None).unwrap();
-        let ResearchMessageAttachment::Image { id: other_id, .. } = &other else {
-            panic!("expected an image attachment");
+        // Startup stores referenced pending images and removes the others
+        // once they are older than the pending lifetime.
+        let fresh = save_pending(&root, &png(1, 1), None).unwrap();
+        let stale = save_pending(&root, &png(1, 2), None).unwrap();
+        let (
+            ResearchMessageAttachment::Image { id: fresh_id, .. },
+            ResearchMessageAttachment::Image { id: stale_id, .. },
+        ) = (&fresh, &stale)
+        else {
+            panic!("expected image attachments");
         };
+        age_file_for_test(&pending_dir(&root).join(id));
+        age_file_for_test(&pending_dir(&root).join(stale_id));
         sweep_pending(&root, &HashSet::from([id.clone()]));
         assert!(store_dir(&root).join(id).is_file());
-        assert!(image_path(&root, other_id).is_none());
-        assert!(attachment_for(&root, other_id, None).is_err());
+        assert!(pending_dir(&root).join(fresh_id).is_file());
+        assert!(image_path(&root, stale_id).is_none());
+        assert!(attachment_for(&root, stale_id, None).is_err());
 
+        // An old image is removed when released.
+        age_file_for_test(&store_dir(&root).join(id));
+        release(&root, [id.as_str()]);
+        assert!(image_path(&root, id).is_none());
+
+        // Saving an image removes stale pending ones.
+        age_file_for_test(&pending_dir(&root).join(fresh_id));
+        save_pending(&root, &png(1, 3), None).unwrap();
+        assert!(image_path(&root, fresh_id).is_none());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn dropped_files_are_copied_with_their_name() {
+        let root = temp_root();
+        let source = root.join("Dropped shot.png");
+        fs::write(&source, png(5, 6)).unwrap();
+        let attachment = import_pending(&root, &source).unwrap();
+        assert!(matches!(
+            &attachment,
+            ResearchMessageAttachment::Image { file_name: Some(name), width: Some(5), .. }
+                if name == "Dropped shot.png"
+        ));
+        assert!(source.is_file());
+        let text = root.join("notes.txt");
+        fs::write(&text, "not an image").unwrap();
+        assert!(import_pending(&root, &text).unwrap_err().contains("PNG"));
+        assert!(import_pending(&root, &root).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 

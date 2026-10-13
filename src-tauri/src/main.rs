@@ -1895,6 +1895,22 @@ async fn save_research_image(
     .map_err(|err| format!("save_research_image task failed: {err}"))?
 }
 
+/// Copies an image file dropped on a research composer (the window receives
+/// native drops as paths) and returns its attachment, as
+/// `save_research_image` does.
+#[tauri::command]
+async fn import_research_image(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<tweets::ResearchMessageAttachment, String> {
+    let root = state.config().workspace_root.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        research_images::import_pending(&root, std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|err| format!("import_research_image task failed: {err}"))?
+}
+
 /// An image attached to a research message, as a `data:` URL.
 #[tauri::command]
 async fn read_research_image(
@@ -3804,6 +3820,7 @@ fn main() {
             read_transcript_image,
             save_pasted_image,
             save_research_image,
+            import_research_image,
             read_research_image,
             get_research_node_content,
             fork_research_node,
