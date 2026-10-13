@@ -2461,20 +2461,18 @@ impl AppState {
                 &surviving_research_node_ids,
                 crate::research_artifacts::MAX_STORE_BYTES,
             );
-            // No composer survives a restart, so pending images that no node
-            // or draft references were never sent.
-            let referenced_images = persisted
-                .research_nodes
-                .values()
-                .flat_map(|node| crate::research_images::image_ids(node.attachments()))
-                .chain(
-                    persisted
-                        .research_drafts
-                        .iter()
-                        .flat_map(|draft| crate::research_images::image_ids(&draft.attachments)),
-                )
-                .map(str::to_string)
-                .collect::<HashSet<_>>();
+            // Nodes (trashed trees' included) and drafts are every
+            // reference the backend holds. Composers and a thread's queue
+            // hold pending images the backend cannot see; those age out
+            // after the pending lifetime.
+            let referenced_images = research_image_ids(
+                persisted.research_nodes.values(),
+                &persisted.research_drafts,
+            );
+            crate::research_images::reconcile_store(
+                &self.inner.config.workspace_root,
+                &referenced_images,
+            );
             crate::research_images::sweep_pending(
                 &self.inner.config.workspace_root,
                 &referenced_images,
@@ -2693,7 +2691,7 @@ impl AppState {
             return;
         }
         if cfg!(test) {
-            self.persist_now();
+            let _ = self.persist_now();
             return;
         }
         let mut dirty = self
@@ -2755,8 +2753,9 @@ impl AppState {
         });
     }
 
-    /// Snapshots the model to disk when persistence is enabled.
-    fn persist_now(&self) {
+    /// Snapshots the model to disk when persistence is enabled. Returns
+    /// whether the current model was written.
+    fn persist_now(&self) -> bool {
         // Hold the persist lock across snapshot + write + rename so concurrent
         // persists commit in snapshot order. The snapshot must be taken *inside*
         // the lock: otherwise two threads could snapshot as S1,S2 but acquire the
@@ -2776,11 +2775,15 @@ impl AppState {
         // stripped — overwriting the final state with the tabs deleted. Reading the
         // flag here means such a persist observes the cleared flag and bails.
         if !self.inner.persist_enabled.load(Ordering::Relaxed) {
-            return;
+            return false;
         }
 
-        if let Err(err) = self.persist_snapshot_locked() {
-            eprintln!("session: failed to persist session state: {err}");
+        match self.persist_snapshot_locked() {
+            Ok(()) => true,
+            Err(err) => {
+                eprintln!("session: failed to persist session state: {err}");
+                false
+            }
         }
     }
 
@@ -3936,12 +3939,18 @@ impl AppState {
                 String::new(),
             )),
         );
+        let images = crate::research_images::lock_store();
+        crate::research_images::ensure_available(
+            &self.inner.config.workspace_root,
+            node.attachments(),
+        )?;
         self.admit_research_root(&tree, &mut node)?;
         self.persist();
         crate::research_images::commit(
             &self.inner.config.workspace_root,
             crate::research_images::image_ids(node.attachments()),
         );
+        drop(images);
         self.emit(SessionEvent::new(
             "research.tree.created",
             None,
@@ -4966,6 +4975,8 @@ impl AppState {
         crate::tweets::validate_research_message_attachments(&attachments)?;
         let node_id = self.next_id("research-node");
         let now = now_millis();
+        let images = crate::research_images::lock_store();
+        crate::research_images::ensure_available(&self.inner.config.workspace_root, &attachments)?;
         let node = {
             let mut model = self
                 .inner
@@ -5127,6 +5138,7 @@ impl AppState {
             &self.inner.config.workspace_root,
             crate::research_images::image_ids(node.attachments()),
         );
+        drop(images);
         self.emit(SessionEvent::new(
             "research.node.created",
             None,
@@ -6198,6 +6210,10 @@ impl AppState {
             crate::tweets::validate_research_message_attachments(images)?;
         }
         let mut replaced_images = Vec::new();
+        let store = crate::research_images::lock_store();
+        if let Some(images) = &images {
+            crate::research_images::ensure_available(&self.inner.config.workspace_root, images)?;
+        }
         let draft = {
             let mut model = self
                 .inner
@@ -6245,38 +6261,64 @@ impl AppState {
             &self.inner.config.workspace_root,
             crate::research_images::image_ids(&draft.attachments),
         );
+        drop(store);
         self.release_research_images(&replaced_images);
         self.emit_research_drafts_changed(workspace_id);
         Ok(draft)
     }
 
     /// Image ids that a research node or draft references.
-    pub fn research_image_ids_in_use(&self) -> Result<HashSet<String>, String> {
+    pub(crate) fn research_image_ids_in_use(&self) -> Result<HashSet<String>, String> {
         let model = self
             .inner
             .model
             .lock()
             .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(research_image_ids_locked(&model))
+        Ok(research_image_ids(
+            model.research_nodes.values(),
+            &model.research_drafts,
+        ))
     }
 
     /// Releases the images in `attachments` that no research node or draft
     /// references any more (see `crate::research_images`). Call after the
-    /// change that dropped the references.
+    /// change that dropped the references. The state is written first, so a
+    /// crash cannot leave a saved message whose image was removed; if the
+    /// write fails, the images stay and the next clean startup returns them
+    /// to pending.
     fn release_research_images(&self, attachments: &[crate::tweets::ResearchMessageAttachment]) {
+        self.release_research_images_as(attachments, ImageRelease::Release);
+    }
+
+    fn release_research_images_as(
+        &self,
+        attachments: &[crate::tweets::ResearchMessageAttachment],
+        mode: ImageRelease,
+    ) {
         if crate::research_images::image_ids(attachments)
             .next()
             .is_none()
         {
             return;
         }
+        let _images = crate::research_images::lock_store();
+        if !self.persist_now() {
+            return;
+        }
         let Ok(in_use) = self.research_image_ids_in_use() else {
             return;
         };
-        crate::research_images::release(
-            &self.inner.config.workspace_root,
-            crate::research_images::image_ids(attachments).filter(|id| !in_use.contains(*id)),
-        );
+        let released =
+            crate::research_images::image_ids(attachments).filter(|id| !in_use.contains(*id));
+        match mode {
+            ImageRelease::Release => {
+                crate::research_images::release(&self.inner.config.workspace_root, released)
+            }
+            ImageRelease::Rollback => crate::research_images::return_to_pending(
+                &self.inner.config.workspace_root,
+                released,
+            ),
+        }
     }
 
     pub fn delete_research_draft(&self, draft_id: &str) -> Result<(), String> {
@@ -6762,6 +6804,17 @@ impl AppState {
     }
 
     pub fn remove_research_tree(&self, tree_id: &str) -> Result<(), String> {
+        self.remove_research_tree_as(tree_id, ImageRelease::Release)
+    }
+
+    /// Removes a tree whose root run failed to launch. Its images go back to
+    /// pending whatever their age: the composer that sent them keeps them
+    /// for another try.
+    pub fn remove_unlaunched_research_tree(&self, tree_id: &str) -> Result<(), String> {
+        self.remove_research_tree_as(tree_id, ImageRelease::Rollback)
+    }
+
+    fn remove_research_tree_as(&self, tree_id: &str, images: ImageRelease) -> Result<(), String> {
         let _document_guard = self
             .inner
             .research_document_lock
@@ -6863,7 +6916,7 @@ impl AppState {
         }
         crate::research_artifacts::remove_tree(&self.inner.config.workspace_root, tree_id);
         self.persist();
-        self.release_research_images(&removed_images);
+        self.release_research_images_as(&removed_images, images);
         self.emit(SessionEvent::new(
             "research.tree.removed",
             None,
@@ -6897,6 +6950,24 @@ impl AppState {
     }
 
     pub fn remove_research_branch(&self, node_id: &str) -> Result<ResearchBranchRemoval, String> {
+        self.remove_research_branch_as(node_id, ImageRelease::Release)
+    }
+
+    /// Removes a just-created question whose send is being rolled back. Its
+    /// images go back to pending whatever their age, for the composer that
+    /// still holds them.
+    pub fn remove_unsent_research_branch(
+        &self,
+        node_id: &str,
+    ) -> Result<ResearchBranchRemoval, String> {
+        self.remove_research_branch_as(node_id, ImageRelease::Rollback)
+    }
+
+    fn remove_research_branch_as(
+        &self,
+        node_id: &str,
+        images: ImageRelease,
+    ) -> Result<ResearchBranchRemoval, String> {
         let (removal, removed_node_ids, reaped_thread_records, removed_images) = {
             let mut model = self
                 .inner
@@ -7008,7 +7079,7 @@ impl AppState {
             )
         };
         self.persist();
-        self.release_research_images(&removed_images);
+        self.release_research_images_as(&removed_images, images);
         self.emit(SessionEvent::new(
             "research.node.removed",
             None,
@@ -7175,7 +7246,7 @@ impl AppState {
         workspace_id: &str,
         expected: &research::DetachedResearchArchive,
     ) -> Result<Vec<String>, String> {
-        let _persist_guard = self
+        let persist_guard = self
             .inner
             .persist_lock
             .lock()
@@ -7373,6 +7444,22 @@ impl AppState {
             return Err(format!("failed to commit global research detach: {err}"));
         }
         let node_ids = nodes.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>();
+        // The archive holds copies of the nodes' images, and the folder's
+        // drafts are not carried, so release both once the commit is
+        // written. Release takes the store lock, which comes before the
+        // persistence lock.
+        drop(persist_guard);
+        let detached_images = nodes
+            .iter()
+            .flat_map(|(_, node)| node.attachments().iter().cloned())
+            .chain(
+                research_drafts
+                    .iter()
+                    .filter(|draft| draft.workspace_id == workspace_id)
+                    .flat_map(|draft| draft.attachments.iter().cloned()),
+            )
+            .collect::<Vec<_>>();
+        self.release_research_images(&detached_images);
         self.emit(SessionEvent::new(
             "group.removed",
             None,
@@ -10954,15 +11041,25 @@ fn ordered_groups(model: &Model) -> Vec<GroupInfo> {
         .collect()
 }
 
-/// Image ids that a research node or draft references.
-fn research_image_ids_locked(model: &Model) -> HashSet<String> {
-    model
-        .research_nodes
-        .values()
+/// What becomes of a removed message's images that nothing else references.
+#[derive(Clone, Copy)]
+enum ImageRelease {
+    /// See `crate::research_images::release`.
+    Release,
+    /// See `crate::research_images::return_to_pending`.
+    Rollback,
+}
+
+/// Image ids that the research nodes or drafts reference.
+fn research_image_ids<'a>(
+    nodes: impl IntoIterator<Item = &'a ResearchNode>,
+    drafts: &[research::ResearchDraft],
+) -> HashSet<String> {
+    nodes
+        .into_iter()
         .flat_map(|node| crate::research_images::image_ids(node.attachments()))
         .chain(
-            model
-                .research_drafts
+            drafts
                 .iter()
                 .flat_map(|draft| crate::research_images::image_ids(&draft.attachments)),
         )
@@ -13981,6 +14078,101 @@ mod tests {
         crate::research_images::age_file_for_test(&store_dir(&workspace).join(id_of(&second)));
         restarted.delete_research_draft(&draft.id).unwrap();
         assert!(!pending(&id_of(&second)) && !stored(&id_of(&second)));
+    }
+
+    #[test]
+    fn research_image_rollbacks_and_startup_keep_images_a_composer_may_resend() {
+        use crate::research_images::{age_file_for_test, save_pending, store_dir};
+        use crate::tweets::ResearchMessageAttachment;
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x02\0\0\0\x02\x08\x06\0\0\0".to_vec();
+        let id_of = |attachment: &ResearchMessageAttachment| match attachment {
+            ResearchMessageAttachment::Image { id, .. } => id.clone(),
+            _ => unreachable!(),
+        };
+        let stored_path = |id: &str| store_dir(&workspace).join(id);
+        let pending_path = |id: &str| store_dir(&workspace).join("pending").join(id);
+        let state = AppState::new(config.clone());
+        assert!(state.restore_session().is_empty());
+        state.insert_group_after(sample_group(), None).unwrap();
+
+        // An image kept in a draft for over a day, then sent: the launch
+        // fails and the tree is removed, but the composer still holds the
+        // image, so it returns to pending with a fresh lifetime.
+        let image = save_pending(&workspace, &png, None).unwrap();
+        let id = id_of(&image);
+        let draft = state
+            .save_research_draft_with_images(
+                None,
+                "group-1",
+                "Draft".to_string(),
+                Some(vec![image.clone()]),
+            )
+            .unwrap();
+        age_file_for_test(&stored_path(&id));
+        let detail = state
+            .create_research_tree_with_attachments(
+                CreateResearchTreeRequest {
+                    prompt: "Root".to_string(),
+                    title: None,
+                    adapter: "claude".to_string(),
+                    model: None,
+                    effort: None,
+                    group_id: "group-1".to_string(),
+                },
+                vec![image.clone()],
+            )
+            .unwrap();
+        state.delete_research_draft(&draft.id).unwrap();
+        assert!(stored_path(&id).is_file());
+        state
+            .fail_research_node(&detail.tree.root_node_id, "launch failed".to_string())
+            .unwrap();
+        state
+            .remove_unlaunched_research_tree(&detail.tree.id)
+            .unwrap();
+        assert!(pending_path(&id).is_file());
+        crate::research_images::sweep_stale_pending(&workspace, &HashSet::new());
+        assert!(pending_path(&id).is_file());
+
+        // A message cannot attach an image that is gone.
+        std::fs::remove_file(pending_path(&id)).unwrap();
+        assert!(
+            state
+                .save_research_draft_with_images(
+                    None,
+                    "group-1",
+                    "Draft".to_string(),
+                    Some(vec![image]),
+                )
+                .unwrap_err()
+                .contains("no longer available")
+        );
+
+        // A stored image nothing references (a crash after it was moved into
+        // the store and before the message was written) moves to pending at
+        // a clean startup instead of being removed.
+        let orphan = save_pending(&workspace, &png, None).unwrap();
+        let orphan_id = id_of(&orphan);
+        crate::research_images::commit(&workspace, [orphan_id.as_str()]);
+        age_file_for_test(&stored_path(&orphan_id));
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let restarted = AppState::new(config.clone());
+        assert!(restarted.restore_session().is_empty());
+        assert!(pending_path(&orphan_id).is_file());
+        restarted.finalize_persistence_for_exit();
+        drop(restarted);
+
+        // A degraded load leaves the store alone.
+        crate::research_images::commit(&workspace, [orphan_id.as_str()]);
+        std::fs::write(persistence::state_path(&workspace), b"{not json").unwrap();
+        let degraded = AppState::new(config);
+        degraded.restore_session();
+        assert!(stored_path(&orphan_id).is_file());
+        drop(degraded);
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     /// Builds that accept up to version 11 drop nodes and drafts with image

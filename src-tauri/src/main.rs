@@ -1618,12 +1618,15 @@ async fn save_research_image(
             research_images::MAX_IMAGE_BYTES / (1024 * 1024)
         ));
     }
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         use base64::Engine as _;
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(data_base64.trim())
             .map_err(|err| format!("failed to decode the image: {err}"))?;
-        research_images::save_pending(&root, &bytes, file_name.as_deref())
+        let image = research_images::save_pending(&root, &bytes, file_name.as_deref())?;
+        research_images::sweep_stale_pending(&root, &state.research_image_ids_in_use()?);
+        Ok(image)
     })
     .await
     .map_err(|err| format!("save_research_image task failed: {err}"))?
@@ -1638,8 +1641,11 @@ async fn import_research_image(
     path: String,
 ) -> Result<tweets::ResearchMessageAttachment, String> {
     let root = state.config().workspace_root.clone();
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        research_images::import_pending(&root, std::path::Path::new(&path))
+        let image = research_images::import_pending(&root, std::path::Path::new(&path))?;
+        research_images::sweep_stale_pending(&root, &state.research_image_ids_in_use()?);
+        Ok(image)
     })
     .await
     .map_err(|err| format!("import_research_image task failed: {err}"))?
@@ -1664,7 +1670,7 @@ async fn read_research_image(
 /// dialog keeps the prompt for a retry. Best-effort: if the removal itself
 /// fails, the failed tree remains visible (and removable) in the sidebar.
 fn remove_unlaunched_research_tree(state: &AppState, tree_id: &str) {
-    if let Err(err) = state.remove_research_tree(tree_id) {
+    if let Err(err) = state.remove_unlaunched_research_tree(tree_id) {
         eprintln!("session: failed to remove unlaunched research tree {tree_id}: {err}");
     }
 }
@@ -1776,7 +1782,7 @@ async fn fork_research_node(
                         replaced,
                     )?;
                     if let Err(err) = state.remove_research_branch(replaced) {
-                        let _ = state.remove_research_branch(&child.id);
+                        let _ = state.remove_unsent_research_branch(&child.id);
                         return Err(err);
                     }
                     child

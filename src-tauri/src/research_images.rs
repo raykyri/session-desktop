@@ -5,23 +5,26 @@
 //! drafts store the id, never a path, so the store can be found again from
 //! the workspace root alone. Creating a message or saving a draft that
 //! references an image moves it into `.session/research-images/`. When the
-//! last message or draft that references it is permanently deleted, the image
-//! is removed, unless it was attached within [`PENDING_LIFETIME`]: then it
-//! moves back to `pending/`, so a composer that still holds it (after a send
-//! whose launch failed and was rolled back) can send it again.
+//! last message or draft that references it is permanently deleted, and that
+//! state is written, the image is removed, unless it was attached within
+//! [`PENDING_LIFETIME`]: then it moves back to `pending/` for a composer that
+//! may still hold it. A message removed because its run failed to launch
+//! returns its images to pending whatever their age.
 //!
 //! The frontend keeps unsent images in composers and in a thread's queue of
 //! follow-ups (stored in the webview across restarts), which the backend
-//! cannot see. Pending images are therefore removed once they are older than
-//! [`PENDING_LIFETIME`], at startup and whenever an image is saved. A stored
-//! image is removed only by being released; images of research moved out
-//! with a removed workspace folder stay stored, so the research shows them
-//! again when the folder is added back on this machine.
+//! cannot see. Pending images that no node or draft references are therefore
+//! removed once they are older than [`PENDING_LIFETIME`], at startup and
+//! whenever an image is saved. A clean startup also moves stored images that
+//! nothing references to pending. Removing a workspace folder copies its
+//! messages' images into the folder's archive and releases them here; adding
+//! the folder back copies them into the store again.
 
 use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, SystemTime};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -37,6 +40,20 @@ const MAX_FILE_NAME_CHARS: usize = 255;
 /// How long an image nothing references is kept for a composer or queue that
 /// may still send it.
 const PENDING_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Held from checking that a message's images exist through inserting the
+/// message and moving its images into the store, and from reading which
+/// images are referenced through releasing the others, so a release cannot
+/// remove an image a message being created is about to reference.
+static STORE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Takes [`STORE_LOCK`]. Lock order: the research document lock, then this
+/// lock, then the persistence lock, then the model lock.
+pub fn lock_store() -> MutexGuard<'static, ()> {
+    STORE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -273,7 +290,6 @@ pub fn save_pending(
             let _ = fs::remove_file(&partial);
             format!("failed to save the image: {err}")
         })?;
-    sweep_stale_pending(workspace_root, &id);
     Ok(attachment_from_bytes(id, format, bytes, file_name))
 }
 
@@ -413,13 +429,17 @@ pub fn image_ids(attachments: &[ResearchMessageAttachment]) -> impl Iterator<Ite
         })
 }
 
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
 fn move_file(from: &Path, to_dir: &Path, id: &str) {
-    if !from.is_file() {
+    if !is_regular_file(from) {
         return;
     }
     let target = to_dir.join(id);
     let result = fs::create_dir_all(to_dir).and_then(|()| {
-        if target.is_file() {
+        if is_regular_file(&target) {
             fs::remove_file(from)
         } else {
             fs::rename(from, &target)
@@ -462,9 +482,24 @@ pub fn commit<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>)
     }
 }
 
+/// Errors unless every image in `attachments` is stored or pending. Checked
+/// under [`lock_store`] just before a message that attaches them is
+/// inserted.
+pub fn ensure_available(
+    workspace_root: &Path,
+    attachments: &[ResearchMessageAttachment],
+) -> Result<(), String> {
+    if image_ids(attachments).all(|id| image_path(workspace_root, id).is_some()) {
+        Ok(())
+    } else {
+        Err("An attached image is no longer available. Remove it and attach it again.".to_string())
+    }
+}
+
 /// Removes stored images nothing references any more. One attached within
 /// [`PENDING_LIFETIME`] moves back to pending instead, for a composer that
-/// may send it again.
+/// may send it again. Call only after the state without the references is
+/// written.
 pub fn release<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>) {
     let store = store_dir(workspace_root);
     let pending = pending_dir(workspace_root);
@@ -475,6 +510,33 @@ pub fn release<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>
         } else {
             move_file(&path, &pending, id);
         }
+    }
+}
+
+/// Moves stored images back to pending whatever their age, and restarts
+/// their pending lifetime: for a message removed because its run failed to
+/// launch, whose composer still holds its images to send again.
+pub fn return_to_pending<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>) {
+    let store = store_dir(workspace_root);
+    let pending = pending_dir(workspace_root);
+    for id in ids.into_iter().filter(|id| is_image_id(id)) {
+        move_file(&store.join(id), &pending, id);
+        touch(&pending.join(id));
+    }
+}
+
+/// Sets the file's modification time to now, which starts its pending
+/// lifetime again.
+fn touch(path: &Path) {
+    if !is_regular_file(path) {
+        return;
+    }
+    if let Err(err) = fs::File::options()
+        .write(true)
+        .open(path)
+        .and_then(|file| file.set_modified(SystemTime::now()))
+    {
+        eprintln!("session: failed to touch {}: {err}", path.display());
     }
 }
 
@@ -492,6 +554,27 @@ fn file_older_than(path: &Path, age: Duration) -> bool {
         .ok()
         .and_then(|modified| SystemTime::now().duration_since(modified).ok())
         .is_some_and(|elapsed| elapsed > age)
+}
+
+/// Startup pass over the store after a clean load: stored images that no
+/// node or draft references (left by a crash between moving them into the
+/// store and writing the message, or between removing the last reference
+/// and writing that) move to pending with a fresh lifetime instead of being
+/// removed. Never run off a degraded load, whose state may be missing nodes.
+pub fn reconcile_store(workspace_root: &Path, referenced: &HashSet<String>) {
+    let Ok(entries) = fs::read_dir(store_dir(workspace_root)) else {
+        return;
+    };
+    let pending = pending_dir(workspace_root);
+    for path in entries.flatten().map(|entry| entry.path()) {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if is_image_id(name) && !referenced.contains(name) && is_regular_file(&path) {
+            move_file(&path, &pending, name);
+            touch(&pending.join(name));
+        }
+    }
 }
 
 /// Startup pass over the pending store: images state references move into
@@ -514,16 +597,21 @@ pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
     }
 }
 
-/// Removes pending images older than [`PENDING_LIFETIME`], other than the
-/// one just written. A composer or queue that kept an image that long gets
-/// "no longer available" when it sends.
-fn sweep_stale_pending(workspace_root: &Path, keep: &str) {
+/// Removes pending images older than [`PENDING_LIFETIME`] that no node or
+/// draft references (`in_use`), run whenever an image is saved. A composer or
+/// queue that kept an image that long gets "no longer available" when it
+/// sends. Referenced pending images (after a crash, or a degraded load that
+/// skipped [`sweep_pending`]) are kept.
+pub fn sweep_stale_pending(workspace_root: &Path, in_use: &HashSet<String>) {
     let Ok(entries) = fs::read_dir(pending_dir(workspace_root)) else {
         return;
     };
     for path in entries.flatten().map(|entry| entry.path()) {
-        let is_kept = path.file_name().and_then(|name| name.to_str()) == Some(keep);
-        if !is_kept && file_older_than(&path, PENDING_LIFETIME) {
+        let referenced = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| in_use.contains(name));
+        if !referenced && file_older_than(&path, PENDING_LIFETIME) {
             remove_logged(&path);
         }
     }
@@ -815,10 +903,48 @@ mod tests {
         release(&root, [id.as_str()]);
         assert!(image_path(&root, id).is_none());
 
-        // Saving an image removes stale pending ones.
+        // The stale sweep removes old pending images unless state
+        // references them.
+        let referenced = save_pending(&root, &png(1, 3), None).unwrap();
+        let ResearchMessageAttachment::Image {
+            id: referenced_id, ..
+        } = &referenced
+        else {
+            panic!("expected an image attachment");
+        };
         age_file_for_test(&pending_dir(&root).join(fresh_id));
-        save_pending(&root, &png(1, 3), None).unwrap();
+        age_file_for_test(&pending_dir(&root).join(referenced_id));
+        sweep_stale_pending(&root, &HashSet::from([referenced_id.clone()]));
         assert!(image_path(&root, fresh_id).is_none());
+        assert!(pending_dir(&root).join(referenced_id).is_file());
+
+        // A launch rollback returns an old stored image to pending with a
+        // fresh lifetime instead of removing it.
+        commit(&root, [referenced_id.as_str()]);
+        age_file_for_test(&store_dir(&root).join(referenced_id));
+        return_to_pending(&root, [referenced_id.as_str()]);
+        assert!(pending_dir(&root).join(referenced_id).is_file());
+        sweep_stale_pending(&root, &HashSet::new());
+        assert!(pending_dir(&root).join(referenced_id).is_file());
+
+        // Startup moves unreferenced stored images to pending, fresh.
+        commit(&root, [referenced_id.as_str()]);
+        let kept = save_pending(&root, &png(1, 4), None).unwrap();
+        let ResearchMessageAttachment::Image { id: kept_id, .. } = &kept else {
+            panic!("expected an image attachment");
+        };
+        commit(&root, [kept_id.as_str()]);
+        age_file_for_test(&store_dir(&root).join(referenced_id));
+        reconcile_store(&root, &HashSet::from([kept_id.clone()]));
+        assert!(store_dir(&root).join(kept_id).is_file());
+        assert!(pending_dir(&root).join(referenced_id).is_file());
+        assert!(!file_older_than(
+            &pending_dir(&root).join(referenced_id),
+            PENDING_LIFETIME
+        ));
+        assert!(ensure_available(&root, &[kept.clone()]).is_ok());
+        fs::remove_file(store_dir(&root).join(kept_id)).unwrap();
+        assert!(ensure_available(&root, &[kept]).is_err());
 
         fs::remove_dir_all(root).unwrap();
     }

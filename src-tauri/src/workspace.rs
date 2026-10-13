@@ -3455,7 +3455,27 @@ mod tests {
             )
             .unwrap();
 
+        // The folder's drafts are not carried; their images are released.
+        let draft_image = crate::research_images::save_pending(&managed, &png, None).unwrap();
+        let crate::tweets::ResearchMessageAttachment::Image { id: draft_id, .. } = &draft_image
+        else {
+            panic!("expected an image attachment");
+        };
+        let draft_id = draft_id.clone();
+        state
+            .save_research_draft_with_images(
+                None,
+                &workspace.id,
+                "Draft".to_string(),
+                Some(vec![draft_image]),
+            )
+            .unwrap();
+        let store = crate::research_images::store_dir(&managed);
+        assert!(store.join(&draft_id).is_file());
+
         remove_research_workspace(&state, &workspace.id).unwrap();
+        assert!(!store.join(&draft_id).exists());
+        assert!(store.join("pending").join(&draft_id).is_file());
         let bundle = crate::research::read_detached_research(&project)
             .unwrap()
             .expect("detached archive");
