@@ -8,13 +8,8 @@
 //! Both socket commands use the token-free, same-user-peer path of the control
 //! socket.
 
-pub mod transcript_stream;
-
 use serde_json::{Value, json};
-use session_proto::{
-    ControlRequest, ControlResponse, REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION,
-    WORKSPACE_OBSERVATION_VERSION,
-};
+use session_proto::{ControlRequest, ControlResponse};
 use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
@@ -73,22 +68,6 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
                 return Err(syntax_error("usage: session ping".to_string()));
             }
             run_ping()?;
-            Ok(true)
-        }
-        "transcript-stream" => {
-            transcript_stream::run(remaining)?;
-            Ok(true)
-        }
-        "--transcript-stream-version" => {
-            println!("{TRANSCRIPT_STREAM_VERSION}");
-            Ok(true)
-        }
-        "--remote-open-file-version" => {
-            println!("{REMOTE_OPEN_FILE_VERSION}");
-            Ok(true)
-        }
-        "--workspace-observation-version" => {
-            println!("{WORKSPACE_OBSERVATION_VERSION}");
             Ok(true)
         }
         "help" | "--help" | "-h" => {

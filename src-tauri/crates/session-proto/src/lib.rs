@@ -6,10 +6,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const TRANSCRIPT_STREAM_VERSION: &str = "4";
-pub const REMOTE_OPEN_FILE_VERSION: &str = "1";
-pub const WORKSPACE_OBSERVATION_VERSION: &str = "2";
-
 /// A single control request. The server accepts only an empty `token` from a
 /// same-user Unix-socket peer; `token` stays on the wire so a client from an
 /// older build that still sends a pane token is refused rather than misparsed.
