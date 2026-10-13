@@ -243,6 +243,7 @@ function PostFollowUpRow({
         <ResearchImageStrip
           className="post-thread-images"
           images={researchImages(nodeAttachments(child))}
+          tabIndex={tabbable ? 0 : -1}
         />
         {state}
       </div>

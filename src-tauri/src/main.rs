@@ -1611,6 +1611,13 @@ async fn save_research_image(
     file_name: Option<String>,
 ) -> Result<tweets::ResearchMessageAttachment, String> {
     let root = state.config().workspace_root.clone();
+    // Refuse an oversized image before decoding it.
+    if data_base64.len() as u64 > research_images::MAX_IMAGE_BYTES.div_ceil(3) * 4 + 4 {
+        return Err(format!(
+            "Images must be {} MB or smaller.",
+            research_images::MAX_IMAGE_BYTES / (1024 * 1024)
+        ));
+    }
     tauri::async_runtime::spawn_blocking(move || {
         use base64::Engine as _;
         let bytes = base64::engine::general_purpose::STANDARD

@@ -157,7 +157,15 @@ const ResearchConversationComposer = forwardRef<
         className="research-composer-images"
         images={images}
         saving={imageInput.saving}
-        onRemove={onImagesChange && !disabled ? imageInput.remove : undefined}
+        onRemove={
+          onImagesChange && !disabled
+            ? (id) => {
+                imageInput.remove(id);
+                // The removed × had focus.
+                textareaRef.current?.focus({ preventScroll: true });
+              }
+            : undefined
+        }
       />
       <form
         className={`research-composer${ready ? " is-ready" : ""}${disabled ? " is-disabled" : ""}`}

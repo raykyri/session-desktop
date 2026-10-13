@@ -11,12 +11,17 @@ import {
   blobToBase64,
   dragCarriesFiles,
   filesFromDataTransfer,
+  pasteAttachesImages,
   RESEARCH_IMAGE_COUNT_ERROR,
   RESEARCH_IMAGE_MAX_COUNT,
   researchImageAlt,
 } from "../../lib/researchImages";
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** A file drop can reach the page both as a DOM drop and as the window's
+ * native drop; the second within this window is the same drop. */
+const DUPLICATE_DROP_MS = 1_000;
 
 // Data URLs of recently shown images, most recent last. The webview's
 // content security policy allows only data: and blob: image sources.
@@ -69,9 +74,11 @@ function useImageUrl(id: string) {
  * a composer, a × that removes it. A missing file shows "Unavailable". */
 function ResearchImageThumb({
   image,
+  tabIndex,
   onRemove,
 }: {
   image: ResearchImageAttachment;
+  tabIndex?: number;
   onRemove?: () => void;
 }) {
   const { url, failed } = useImageUrl(image.id);
@@ -84,6 +91,7 @@ function ResearchImageThumb({
         className="research-image-open"
         aria-label={`Open image: ${alt}`}
         disabled={!url}
+        tabIndex={tabIndex}
         style={aspect ? { aspectRatio: String(Math.min(Math.max(aspect, 0.5), 2)) } : undefined}
         // The thumbnail sits in clickable rows; opening the image does not
         // also select the row.
@@ -115,17 +123,20 @@ function ResearchImageThumb({
 }
 
 /** The images of a message, or of a composer (with remove buttons and a
- * placeholder for each image still being saved). Null without either. */
+ * placeholder for each image still being saved). Null without either.
+ * `tabIndex` follows the row's tab stop in a list with one. */
 export function ResearchImageStrip({
   images,
   saving = 0,
   onRemove,
   className,
+  tabIndex,
 }: {
   images: readonly ResearchImageAttachment[];
   saving?: number;
   onRemove?: (id: string) => void;
   className?: string;
+  tabIndex?: number;
 }) {
   if (images.length === 0 && saving === 0) return null;
   return (
@@ -135,7 +146,11 @@ export function ResearchImageStrip({
     >
       {images.map((image) => (
         <li key={image.id}>
-          <ResearchImageThumb image={image} onRemove={onRemove ? () => onRemove(image.id) : undefined} />
+          <ResearchImageThumb
+            image={image}
+            tabIndex={tabIndex}
+            onRemove={onRemove ? () => onRemove(image.id) : undefined}
+          />
         </li>
       ))}
       {Array.from({ length: saving }, (_, index) => (
@@ -176,6 +191,7 @@ export function useResearchImageInput({
   countRef.current = images.length + saving;
   const onChangeRef = useRef(onImagesChange);
   onChangeRef.current = onImagesChange;
+  const lastDropRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -239,6 +255,8 @@ export function useResearchImageInput({
         const x = payload.position.x / window.devicePixelRatio;
         const y = payload.position.y / window.devicePixelRatio;
         if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+        if (Date.now() - lastDropRef.current < DUPLICATE_DROP_MS) return;
+        lastDropRef.current = Date.now();
         addPaths(payload.paths);
       })
       .then((cleanup) => {
@@ -257,9 +275,9 @@ export function useResearchImageInput({
       if (!enabled) return;
       const files = filesFromDataTransfer(event.clipboardData);
       if (files.length === 0) return;
-      // An image copied from a page also carries its URL or markup as text;
-      // the image replaces that text. Text copied with an image keeps both.
-      if (!event.clipboardData.types.includes("text/plain")) event.preventDefault();
+      const text = event.clipboardData.getData("text/plain");
+      if (!pasteAttachesImages(text, files.map((file) => file.name))) return;
+      event.preventDefault();
       addFiles(files);
     },
     [addFiles, enabled],
@@ -278,6 +296,8 @@ export function useResearchImageInput({
       const files = filesFromDataTransfer(event.dataTransfer);
       if (files.length === 0) return;
       event.preventDefault();
+      if (Date.now() - lastDropRef.current < DUPLICATE_DROP_MS) return;
+      lastDropRef.current = Date.now();
       addFiles(files);
     },
     [addFiles, enabled],

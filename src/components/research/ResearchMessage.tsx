@@ -107,6 +107,7 @@ export function ResearchMessageBody({
   lead,
   renderPrompt,
   tweetLabels = false,
+  imageTabIndex,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
@@ -122,6 +123,8 @@ export function ResearchMessageBody({
    * `renderPrompt`, the prompt's renderer places it instead. */
   lead?: ReactNode;
   renderPrompt?: (content: ReactNode) => ReactNode;
+  /** The image thumbnails' tab stop, following the message row's. */
+  imageTabIndex?: number;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
   const resolved = resolvedTweets(attachments);
@@ -158,6 +161,7 @@ export function ResearchMessageBody({
       <ResearchImageStrip
         className={`research-message-images${visiblePrompt ? " has-prompt" : ""}`}
         images={images}
+        tabIndex={imageTabIndex}
       />
       {tweets.length > 0 ? (
         <div

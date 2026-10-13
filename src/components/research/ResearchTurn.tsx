@@ -791,6 +791,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           prompt={nodePrompt(node)}
           attachments={nodeAttachments(node)}
           lead={glyph}
+          imageTabIndex={tabIndex}
           renderPrompt={(content) => (
             <div ref={clamp.ref} id={clamp.id} className={clamp.className}>
               <div className="research-msg-clamp-text">

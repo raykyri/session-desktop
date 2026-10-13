@@ -86,6 +86,21 @@ export function acceptResearchImageFiles<T extends ImageFileLike>(
   return { accepted, error };
 }
 
+/** Whether a paste that carries image files attaches them instead of
+ * pasting its text. A copied image comes with its URL (one word) or, from
+ * Finder, its file names; copied cells or a document also carry a rendered
+ * image of the selection, and those paste as text. */
+export function pasteAttachesImages(text: string, fileNames: readonly string[]): boolean {
+  const lines = text
+    .split(/\r?\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return true;
+  const names = new Set(fileNames.filter(Boolean));
+  if (lines.every((line) => names.has(line))) return true;
+  return lines.length === 1 && !/\s/.test(lines[0]);
+}
+
 /** The files of a paste or drop. Clipboard images appear only as items. */
 export function filesFromDataTransfer(data: DataTransfer | null): File[] {
   if (!data) return [];

@@ -150,6 +150,11 @@ const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_MARKERS: ResearchBranchMarker[] = [];
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
 
+/** Each tree's ask box images, kept while the app runs so they survive the
+ * page remounting for another tree (the text is kept by the navigation
+ * store). */
+const threadComposerImages = new Map<string, Record<string, ResearchImageAttachment[]>>();
+
 /** The ask boxes' images with `images` as box `key`'s; an empty list
  * removes the key. */
 function withImages(
@@ -343,7 +348,14 @@ function ResearchThreadPage({
   const [composerText, setComposerText] = useState<Record<string, string>>({});
   // The images in each ask box, keyed as `composerText`. They stay while the
   // page is open; a sent or queued question takes them along.
-  const [composerImages, setComposerImages] = useState<Record<string, ResearchImageAttachment[]>>({});
+  const [composerImages, setComposerImages] = useState<Record<string, ResearchImageAttachment[]>>(
+    () => (treeId ? threadComposerImages.get(treeId) : undefined) ?? {},
+  );
+  useEffect(() => {
+    if (!treeId) return;
+    if (Object.keys(composerImages).length > 0) threadComposerImages.set(treeId, composerImages);
+    else threadComposerImages.delete(treeId);
+  }, [composerImages, treeId]);
   // The selected queued message (an item of a chain's client-side queue):
   // its column's answer column shows it. Any other selection clears it.
   const [queuedView, setQueuedView] = useState<{ headId: string; itemId: string } | null>(null);
@@ -1690,7 +1702,11 @@ function ResearchThreadPage({
         (headId === replacedId || stripRef.current.levels.some((level) => level.headId === headId));
       const clearComposer = () => {
         setComposerText((current) => ({ ...current, [headId]: "" }));
-        setComposerImages((current) => withImages(current, headId, []));
+        // Images added while the question was being sent stay in the box.
+        const sent = new Set(images.map((image) => image.id));
+        setComposerImages((current) =>
+          withImages(current, headId, (current[headId] ?? []).filter((image) => !sent.has(image.id))),
+        );
         if (headId === mainComposerKey && treeIdRef.current) {
           navigationPersistence.recordDraft(treeIdRef.current, "");
           navigationPersistence.flush();
@@ -1815,7 +1831,10 @@ function ResearchThreadPage({
         navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
       }
       setComposerText((text) => withoutKeys(text, [key]));
-      setComposerImages((current) => withoutKeys(current, [key]));
+      const sent = new Set(images.map((image) => image.id));
+      setComposerImages((current) =>
+        withImages(current, key, (current[key] ?? []).filter((image) => !sent.has(image.id))),
+      );
       if (pendingRef.current === current) {
         addCreatedNode(child);
         navigate(selectionWith(child.id, child));

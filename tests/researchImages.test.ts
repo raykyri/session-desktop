@@ -11,6 +11,7 @@ import {
   RESEARCH_IMAGE_TYPE_ERROR,
   researchImageAlt,
   researchImageBlockReason,
+  pasteAttachesImages,
   researchImageLabel,
   researchImages,
 } from "../src/lib/researchImages";
@@ -57,6 +58,19 @@ test("a composer takes PNG, JPEG, GIF and WebP files up to the size and count li
     accepted: [file("image/png")],
     error: RESEARCH_IMAGE_COUNT_ERROR,
   });
+});
+
+test("a paste attaches its images unless it carries text of its own", () => {
+  // A screenshot, an image copied with its URL, and Finder files.
+  assert.equal(pasteAttachesImages("", ["image.png"]), true);
+  assert.equal(pasteAttachesImages("https://example.com/a.png", ["image.png"]), true);
+  assert.equal(
+    pasteAttachesImages("Screen Shot 1.png\nScreen Shot 2.png", ["Screen Shot 1.png", "Screen Shot 2.png"]),
+    true,
+  );
+  // Cells or a document paste as text even with their rendered image.
+  assert.equal(pasteAttachesImages("Revenue\t2024\n12\t14", ["image.png"]), false);
+  assert.equal(pasteAttachesImages("A sentence copied from a page", ["image.png"]), false);
 });
 
 test("images are labelled by count and named by file name", () => {

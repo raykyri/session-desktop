@@ -283,7 +283,15 @@ export function PostFollowUpField({
         className="research-composer-images"
         images={images}
         saving={imageInput.saving}
-        onRemove={submitting ? undefined : imageInput.remove}
+        onRemove={
+          submitting
+            ? undefined
+            : (id) => {
+                imageInput.remove(id);
+                // The removed × had focus.
+                textareaRef.current?.focus();
+              }
+        }
       />
       <form
         className={`research-composer${ready ? " is-ready" : ""}`}

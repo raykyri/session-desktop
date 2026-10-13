@@ -253,7 +253,11 @@ function ResearchQueuedFollowup({
           </div>
         </div>
         {/* Images follow the clamp box, as tweet cards do in message rows. */}
-        <ResearchImageStrip className="research-message-images has-prompt" images={item.images ?? []} />
+        <ResearchImageStrip
+          className="research-message-images has-prompt"
+          images={item.images ?? []}
+          tabIndex={selected ? 0 : -1}
+        />
       </div>
       {onToggleExpanded && clamp.overflows ? (
         <ResearchTileToggle

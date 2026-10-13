@@ -649,7 +649,15 @@ export default function ResearchQueryComposer({
           className="new-research-images"
           images={images}
           saving={imageInput.saving}
-          onRemove={submitting ? undefined : imageInput.remove}
+          onRemove={
+            submitting
+              ? undefined
+              : (id) => {
+                  imageInput.remove(id);
+                  // The removed × had focus.
+                  promptRef.current?.focus();
+                }
+          }
         />
         <textarea
           ref={promptRef}
