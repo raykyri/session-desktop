@@ -179,8 +179,9 @@ function enabledItems(menu: HTMLElement | null) {
   return [...(menu?.querySelectorAll<HTMLElement>(ENABLED_ITEM_SELECTOR) ?? [])];
 }
 
-/** A research menu: portaled, placed against its anchor, with the checked
- * item (or the first) focused when it opens. ↑, ↓, Home and End move between
+/** A research menu: portaled, placed against its anchor, and placed again
+ * when its items change. The checked option (a menuitemradio), or else the
+ * first item, has focus when it opens. ↑, ↓, Home and End move between
  * items, and an item's shortcut letter selects it. Escape is captured and
  * stopped, so it closes only the menu (never what is open behind it),
  * and returns focus to the trigger; a modal dialog opened from the menu keeps
@@ -203,6 +204,7 @@ export function ResearchMenu({
   compact = false,
   footer,
   fallbackFocus,
+  className,
   onClose,
   children,
 }: {
@@ -232,6 +234,8 @@ export function ResearchMenu({
   /** Where focus goes when the menu closed and its trigger is gone, such as
    * after an action that removed the trigger's row. */
   fallbackFocus?: () => HTMLElement | null | undefined;
+  /** An extra class on the popover, for a menu with its own item styles. */
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -267,33 +271,43 @@ export function ResearchMenu({
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     if (!popover) return;
-    // Measured at its natural height, without a limit set for an earlier
-    // position.
-    const limit = popover.style.maxHeight;
-    popover.style.maxHeight = "none";
-    const size = popover.getBoundingClientRect();
-    popover.style.maxHeight = limit;
-    const next = researchMenuPosition(
-      isElementAnchor(anchor) ? anchor.getBoundingClientRect() : anchor,
-      size,
-      { width: window.innerWidth, height: window.innerHeight },
-      align,
-    );
-    // A rect anchor may be a new object on every render; an unchanged
-    // position must not re-render.
-    setPosition((current) =>
-      current &&
-      current.left === next.left &&
-      current.top === next.top &&
-      current.maxHeight === next.maxHeight
-        ? current
-        : next,
-    );
+    const place = () => {
+      // Measured at its natural height, without a limit set for an earlier
+      // position.
+      const limit = popover.style.maxHeight;
+      popover.style.maxHeight = "none";
+      const size = popover.getBoundingClientRect();
+      popover.style.maxHeight = limit;
+      const next = researchMenuPosition(
+        isElementAnchor(anchor) ? anchor.getBoundingClientRect() : anchor,
+        size,
+        { width: window.innerWidth, height: window.innerHeight },
+        align,
+      );
+      // A rect anchor may be a new object on every render; an unchanged
+      // position must not re-render.
+      setPosition((current) =>
+        current &&
+        current.left === next.left &&
+        current.top === next.top &&
+        current.maxHeight === next.maxHeight
+          ? current
+          : next,
+      );
+    };
+    place();
+    // Items added or removed while the menu is open (such as rows loaded
+    // after it opened) change its size, so it is placed again.
+    const observer = new window.MutationObserver(place);
+    if (menuRef.current) {
+      observer.observe(menuRef.current, { childList: true, subtree: true, characterData: true });
+    }
+    return () => observer.disconnect();
   }, [align, anchor]);
 
   useLayoutEffect(() => {
     const items = enabledItems(menuRef.current);
-    (items.find((item) => item.getAttribute("aria-checked") === "true") ?? items[0])?.focus({
+    (items.find((item) => item.getAttribute("role") === "menuitemradio" && item.getAttribute("aria-checked") === "true") ?? items[0])?.focus({
       preventScroll: true,
     });
   }, []);
@@ -394,7 +408,7 @@ export function ResearchMenu({
   return createPortal(
     <div
       ref={popoverRef}
-      className={`research-menu${compact ? " is-compact" : ""}`}
+      className={`research-menu${compact ? " is-compact" : ""}${className ? ` ${className}` : ""}`}
       // Keep the menu off-screen until measured to avoid briefly displaying
       // it at the viewport origin.
       style={{
@@ -428,10 +442,12 @@ export function ResearchMenuItem({
   trailing,
   shortcut,
   checked,
+  checkbox = false,
   current = false,
   danger = false,
   disabled = false,
   title,
+  className,
   onSelect,
 }: {
   icon?: ReactNode;
@@ -443,24 +459,29 @@ export function ResearchMenuItem({
   trailing?: ReactNode;
   /** A letter that selects the item while the menu is open, shown as a keycap. */
   shortcut?: string;
-  /** Set for a choice among options: the item becomes a menuitemradio. */
+  /** Set for a choice among options: the item becomes a menuitemradio, or
+   * a menuitemcheckbox with `checkbox`. */
   checked?: boolean;
+  /** With `checked`, the item is an on/off setting rather than one of
+   * several options. */
+  checkbox?: boolean;
   /** The item is what is open now, such as the open branch. */
   current?: boolean;
   danger?: boolean;
   disabled?: boolean;
   /** For a disabled item, the reason it is disabled. */
   title?: string;
+  className?: string;
   onSelect: () => void;
 }) {
   return (
     <button
       type="button"
-      role={checked === undefined ? "menuitem" : "menuitemradio"}
+      role={checked === undefined ? "menuitem" : checkbox ? "menuitemcheckbox" : "menuitemradio"}
       aria-checked={checked}
       aria-current={current ? "true" : undefined}
       aria-keyshortcuts={shortcut?.toUpperCase()}
-      className={`research-menu-item${danger ? " is-danger" : ""}${detail ? " has-detail" : ""}`}
+      className={`research-menu-item${danger ? " is-danger" : ""}${detail ? " has-detail" : ""}${className ? ` ${className}` : ""}`}
       disabled={disabled}
       title={title}
       data-shortcut={shortcut?.toLowerCase()}

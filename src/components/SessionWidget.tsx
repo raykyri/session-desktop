@@ -1,11 +1,10 @@
 import { useSessionArtifactState } from "../hooks/useSessionArtifactState";
-import { withArtifactState } from "../lib/sessionArtifactState";
-import SessionArtifactStateControls from "./SessionArtifactStateControls";
+import { changeArtifactState, loadArtifactState, withArtifactState } from "../lib/sessionArtifactState";
 import { useResearchArtifact } from "../hooks/useResearchArtifact";
-import SessionArtifactDetails from "./SessionArtifactDetails";
-import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
-import { Copy, Download, MessageSquare, ExternalLink, Play, RotateCcw } from "lucide-react";
-import { downloadResearchWidget, prepareResearchWidget, type ResearchWidgetUrls } from "../lib/api";
+import SessionWidgetMenu, { useArtifactHistory } from "./SessionWidgetMenu";
+import { createContext, useContext, useEffect, useId, useReducer, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
+import { Ellipsis, MessageSquare, Play, RotateCcw } from "lucide-react";
+import { downloadResearchWidget, prepareResearchWidget, type ResearchArtifactRevision, type ResearchWidgetUrls } from "../lib/api";
 import { writeClipboardText } from "../lib/clipboard";
 import { WidgetAnswerContext, WidgetChangeContext } from "../lib/sessionWidgetActions";
 import { useSessionWidgetGuards } from "../hooks/useSessionWidgetGuards";
@@ -53,6 +52,11 @@ function prepareWidget(html: string): Promise<ResearchWidgetUrls> {
   return prepared;
 }
 
+/** Shown on "Scripts off" when the backend withholds the run page
+ * (src-tauri/src/research_widgets.rs, `scripts_allowed`). */
+const SCRIPTS_OFF_TITLE =
+  "Widget scripts are off. Session runs them only on macOS, after it turns off WebRTC in the app's web view.";
+
 /** Time after Run or Reload during which frame focus counts as app-initiated. */
 const PROGRAMMATIC_FOCUS_MS = 1500;
 
@@ -91,6 +95,10 @@ export default function SessionWidget({
   const askForChanges = useContext(WidgetChangeContext);
   const [source, setSource] = useState(false);
   const [actionStatus, setActionStatus] = useState("");
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  const revision = artifact.revision;
+  const artifactHistory = useArtifactHistory(revision);
   const action = async (work: () => Promise<unknown>, success: string) => {
     try { const result = await work(); setActionStatus(result === false ? "" : success); }
     catch { setActionStatus("Action failed. Try again."); }
@@ -140,10 +148,26 @@ export default function SessionWidget({
   const pageUrl = sessionWidgetFrameUrl(frame);
   const frameUrl = pageUrl ? withBodyFont(pageUrl) : null;
   const rawOpenUrl = sessionWidgetOpenUrl(frame);
-  const openUrl = rawOpenUrl ? withArtifactState(rawOpenUrl, artifact.revision) : null;
-  const artifactState = useSessionArtifactState(artifact.revision, frameRef, frameUrl, frame.loads >= 1);
+  const openUrl = rawOpenUrl ? withArtifactState(rawOpenUrl, revision) : null;
+  const artifactState = useSessionArtifactState(revision, frameRef, frameUrl, frame.loads >= 1);
   const canRun = frame.phase === "ready" && hasScripts && !frame.running && Boolean(frame.urls?.runUrl);
   const scriptsUnavailable = hasScripts && frame.urls !== null && frame.urls.runUrl === null;
+  const scriptStatus = scriptsUnavailable
+    ? { key: "off", label: "Scripts off", title: SCRIPTS_OFF_TITLE }
+    : frame.stopped
+      ? { key: "stopped", label: "Stopped", title: "Scripts stopped: the widget kept taking keyboard focus" }
+      : frame.running
+        ? { key: "running", label: "Running", title: "The widget's scripts are running" }
+        : null;
+  const previewRevision = async (entry: ResearchArtifactRevision) => {
+    try {
+      const urls = registerWidgetUrls(await prepareResearchWidget(entry.html));
+      setActionStatus("");
+      onOpen(withArtifactState(urls.staticUrl, entry));
+    } catch {
+      setActionStatus("Revision preview unavailable. Try again.");
+    }
+  };
 
   useEffect(() => {
     if (focusFrameRef.current && frameUrl) {
@@ -174,70 +198,109 @@ export default function SessionWidget({
       data-scripts={scriptsUnavailable ? "unavailable" : frame.stopped ? "stopped" : undefined}
       aria-label="Answer widget"
     >
-      {artifact.revision ? <SessionArtifactDetails key={`${artifact.revision.artifactId}:${artifact.revision.revision}`} revision={artifact.revision} onOpen={onOpen} /> : null}
-      {artifact.error ? <div className="session-widget-feedback" data-widget-chrome="" role="status">{artifact.error} <button type="button" onClick={artifact.retry}>Retry saving revision</button></div> : null}
       <div className="session-widget-bar" data-widget-chrome="">
-        <button type="button" className="session-widget-run" aria-pressed={!source} onClick={() => setSource(false)}>Preview</button>
-        <button type="button" className="session-widget-run" aria-pressed={source} onClick={() => setSource(true)}>Source</button>
-        <button type="button" className="icon-button session-widget-action" title="Copy HTML" aria-label="Copy widget HTML" onClick={() => void action(() => writeClipboardText(html), "HTML copied")}><Copy /></button>
-        <button type="button" className="icon-button session-widget-action" title="Download HTML" aria-label="Download widget HTML" onClick={() => void action(() => downloadResearchWidget(html), "HTML downloaded")}><Download /></button>
-        {answer && askForChanges ? <button type="button" className="icon-button session-widget-action" disabled={Boolean(answer.blocked) || Boolean(answer.treeId && !artifact.revision)} title={answer.blocked ?? (answer.treeId && !artifact.revision ? "Waiting for the revision to be saved" : "Ask for changes")} aria-label="Ask for widget changes" onClick={() => askForChanges(artifact.revision ? { ...answer, artifact: artifact.revision } : answer, html)}><MessageSquare /></button> : null}
-        {frame.phase === "failed" ? (
+        <div className="session-widget-heading">
+          {revision ? (
+            <span className="session-widget-title" title={revision.title}>{revision.title}</span>
+          ) : (
+            <span className="session-widget-title" data-placeholder="">Widget</span>
+          )}
+          {scriptStatus ? (
+            <span className="session-widget-status" data-status={scriptStatus.key} title={scriptStatus.title}>{scriptStatus.label}</span>
+          ) : null}
+        </div>
+        <div className="session-widget-controls">
+          <div className="session-widget-view" role="group" aria-label="Widget view">
+            <button type="button" className="session-widget-segment" aria-pressed={!source} onClick={() => setSource(false)}>Preview</button>
+            <button type="button" className="session-widget-segment" aria-pressed={source} onClick={() => setSource(true)}>Source</button>
+          </div>
+          {answer && askForChanges ? <button type="button" className="icon-button session-widget-action" disabled={Boolean(answer.blocked) || Boolean(answer.treeId && !revision)} title={answer.blocked ?? (answer.treeId && !revision ? "Waiting for the revision to be saved" : "Ask for changes")} aria-label="Ask for widget changes" onClick={() => askForChanges(revision ? { ...answer, artifact: revision } : answer, html)}><MessageSquare aria-hidden="true" /></button> : null}
+          {frame.phase === "failed" ? (
+            <button
+              type="button"
+              className="icon-button session-widget-action"
+              title="Retry loading widget"
+              aria-label="Retry loading widget"
+              onClick={() => setPrepareAttempt((attempt) => attempt + 1)}
+            >
+              <RotateCcw aria-hidden="true" />
+            </button>
+          ) : null}
+          {canRun ? (
+            <button
+              type="button"
+              className="session-widget-run"
+              title="Run the widget's scripts"
+              aria-label="Run the widget's scripts"
+              onClick={() => {
+                if (frame.urls) {
+                  rememberWidgetExecution(frame.urls.staticUrl, "running");
+                }
+                focusFrameRef.current = true;
+                dispatch({ type: "run" });
+              }}
+            >
+              <Play aria-hidden="true" />
+              <span className="session-widget-run-label">Run scripts</span>
+            </button>
+          ) : null}
+          {frame.phase === "navigated" || (frame.phase === "ready" && frame.running) ? (
+            <button
+              type="button"
+              className="icon-button session-widget-action"
+              title="Reload widget"
+              aria-label="Reload widget"
+              onClick={() => {
+                focusFrameRef.current = true;
+                dispatch({ type: "reload" });
+              }}
+            >
+              <RotateCcw aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="icon-button session-widget-action"
-            title="Retry loading widget"
-            aria-label="Retry loading widget"
-            onClick={() => setPrepareAttempt((attempt) => attempt + 1)}
-          >
-            <RotateCcw aria-hidden="true" />
-          </button>
-        ) : null}
-        {canRun ? (
-          <button
-            type="button"
-            className="session-widget-run"
-            data-label="Run scripts"
-            title="Run the widget's scripts"
-            aria-label="Run the widget's scripts"
-            onClick={() => {
-              if (frame.urls) {
-                rememberWidgetExecution(frame.urls.staticUrl, "running");
-              }
-              focusFrameRef.current = true;
-              dispatch({ type: "run" });
+            title="Widget actions"
+            aria-label="Widget actions"
+            aria-haspopup="menu"
+            aria-expanded={menuAnchor !== null}
+            onClick={(event) => {
+              // WebKit does not focus a clicked button; focus returns here
+              // when the menu closes.
+              event.currentTarget.focus({ preventScroll: true });
+              setMenuAnchor(event.currentTarget);
+              artifactHistory.load();
             }}
           >
-            <Play aria-hidden="true" />
+            <Ellipsis aria-hidden="true" />
           </button>
-        ) : null}
-        {frame.phase === "navigated" || (frame.phase === "ready" && frame.running) ? (
-          <button
-            type="button"
-            className="icon-button session-widget-action"
-            title="Reload widget"
-            aria-label="Reload widget"
-            onClick={() => {
-              focusFrameRef.current = true;
-              dispatch({ type: "reload" });
-            }}
-          >
-            <RotateCcw aria-hidden="true" />
-          </button>
-        ) : null}
-        {openUrl ? (
-          <button
-            type="button"
-            className="icon-button session-widget-action"
-            title="Open in browser"
-            aria-label="Open widget in browser"
-            onClick={() => onOpen(openUrl)}
-          >
-            <ExternalLink aria-hidden="true" />
-          </button>
-        ) : null}
+        </div>
       </div>
-      {artifact.revision && hasScripts ? <SessionArtifactStateControls revision={artifact.revision} entry={artifactState} /> : null}
+      {menuAnchor ? (
+        <SessionWidgetMenu
+          anchor={menuAnchor}
+          idPrefix={menuId}
+          revision={revision}
+          hasScripts={hasScripts}
+          stateEntry={artifactState}
+          history={artifactHistory.history}
+          onLoadHistory={artifactHistory.load}
+          onCopy={() => void action(() => writeClipboardText(html), "HTML copied")}
+          onDownload={() => void action(() => downloadResearchWidget(html), "HTML downloaded")}
+          onOpenInBrowser={openUrl ? () => onOpen(openUrl) : null}
+          onPreviewRevision={(entry) => void previewRevision(entry)}
+          onClose={() => setMenuAnchor(null)}
+        />
+      ) : null}
+      {artifact.error ? <div className="session-widget-feedback" data-widget-chrome="" role="status">{artifact.error} <button type="button" className="research-link-button" onClick={artifact.retry}>Retry saving revision</button></div> : null}
+      {revision && hasScripts && artifactState.error ? (
+        <div className="session-widget-feedback" data-widget-chrome="" role="status">
+          {artifactState.error}
+          {artifactState.config?.enabled ? <> <button type="button" className="research-link-button" disabled={artifactState.pending > 0} onClick={() => void changeArtifactState(revision, "save", artifactState.config?.value)}>Retry saving</button></> : null}
+          {!artifactState.config ? <> <button type="button" className="research-link-button" onClick={() => void loadArtifactState(revision)}>Retry</button></> : null}
+        </div>
+      ) : null}
       {actionStatus ? <div className="session-widget-feedback" data-widget-chrome="" role="status">{actionStatus}</div> : null}
       {source ? <pre className="session-widget-source" onPointerDown={allowSourceSelection}><code>{html}</code></pre> : null}
       <div hidden={source}>

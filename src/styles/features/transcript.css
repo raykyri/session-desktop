@@ -283,10 +283,14 @@
   background: var(--surface-fill-hover);
 }
 
-/* A `session-html` block in a research answer: a sandboxed frame under a slim
-   control bar. Labels are generated content (data-label) so the frame's chrome
-   adds no text to the answer's highlight projection or find-in-page. */
+/* A `session-html` block in a research answer: a sandboxed frame under one
+   header bar (SessionWidget.tsx). The bar shows the widget's title and script
+   status on the left and its controls on the right; the controls wrap under
+   the title as one group when the widget is narrow. The bar's text is chrome
+   (data-widget-chrome), which find-in-page and the answer's highlight
+   projection skip. */
 .session-widget {
+  container: session-widget / inline-size;
   margin: 0 0 0.72em;
   overflow: hidden;
   border: 1px solid var(--surface-border-subtle);
@@ -297,43 +301,88 @@
 .session-widget-bar {
   display: flex;
   min-height: 26px;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
+  gap: 2px 8px;
   padding: 2px 4px;
   border-bottom: 1px solid var(--surface-border-subtle);
 }
 
-.session-widget-bar::before {
-  margin-right: auto;
+/* A 120px basis: the controls move to a second line only when the title
+   would get less than that. */
+.session-widget-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 120px;
+  align-items: center;
+  gap: 8px;
   padding-left: 4px;
-  color: var(--text-faint);
-  content: "Widget";
   font-size: var(--fs-sm);
 }
 
-.session-widget[data-running] .session-widget-bar::before {
-  content: "Widget · scripts running";
+.session-widget-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-body-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.session-widget[data-scripts="unavailable"] .session-widget-bar::before {
-  content: "Widget · scripts off";
+.session-widget-title[data-placeholder] {
+  color: var(--text-faint);
 }
 
-.session-widget[data-scripts="stopped"] .session-widget-bar::before {
-  content: "Widget · scripts stopped: it kept taking keyboard focus";
-}
-
-.session-widget-run {
-  appearance: none;
+.session-widget-status {
   display: inline-flex;
-  min-height: 0;
-  height: 20px;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  padding: 0 8px 0 6px;
+  gap: 5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.session-widget-status::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.session-widget-status[data-status="running"] {
+  color: var(--status-success-fg);
+}
+
+.session-widget-status[data-status="stopped"] {
+  color: var(--status-warning-fg);
+}
+
+.session-widget-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-left: auto;
+}
+
+/* Preview and Source: one control with two segments. */
+.session-widget-view {
+  display: inline-flex;
+  height: 20px;
+  margin-right: 2px;
+  overflow: hidden;
   border: 1px solid var(--surface-border-default);
   border-radius: var(--radius-sm);
+}
+
+.session-widget-segment {
+  appearance: none;
+  min-height: 0;
+  height: 100%;
+  padding: 0 7px;
+  border: 0;
   color: var(--text-body-soft);
   background: transparent;
   cursor: pointer;
@@ -341,8 +390,54 @@
   font-size: var(--fs-sm);
 }
 
-.session-widget-run::after {
-  content: attr(data-label);
+.session-widget-segment + .session-widget-segment {
+  border-left: 1px solid var(--surface-border-default);
+}
+
+.session-widget-segment[aria-pressed="true"] {
+  color: var(--text-body);
+  background: var(--surface-fill-hover);
+}
+
+.session-widget-segment:hover {
+  color: var(--accent-color);
+}
+
+.session-widget-segment:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+  box-shadow: none;
+}
+
+.session-widget-run {
+  appearance: none;
+  display: inline-flex;
+  min-height: 0;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: 999px;
+  color: var(--text-body-soft);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+/* Below 400px the Run pill shows only its icon; its aria-label and title
+   still name it. */
+@container session-widget (max-width: 399px) {
+  .session-widget-run {
+    padding: 0 5px;
+  }
+
+  .session-widget-run-label {
+    display: none;
+  }
 }
 
 .session-widget-run svg,
@@ -362,6 +457,7 @@
   width: 20px;
   min-height: 0;
   height: 20px;
+  flex: none;
   padding: 2px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -370,7 +466,8 @@
 }
 
 .session-widget-action:hover,
-.session-widget-action:focus-visible {
+.session-widget-action:focus-visible,
+.session-widget-action[aria-expanded="true"] {
   color: var(--text-body-soft);
   background: var(--surface-fill-hover);
 }
@@ -380,6 +477,58 @@
   outline: 1px solid var(--focus-ring);
   outline-offset: 1px;
   box-shadow: none;
+}
+
+/* The "…" menu (SessionWidgetMenu.tsx). Every row has a 16px leading column
+   (an icon, a check mark, or nothing) in the muted text color. */
+.research-menu.session-widget-menu {
+  max-width: 340px;
+}
+
+.session-widget-menu-lead {
+  display: inline-flex;
+  width: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.session-widget-menu-section {
+  padding: 6px 8px 3px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+/* Text rows (loading, errors, notes) start at the item labels' edge. */
+.session-widget-menu-note {
+  padding: 4px 8px 4px 32px;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+/* The current revision has a check mark, not the open-branch tint. */
+.session-widget-menu .research-menu-item[aria-current="true"]:not(:hover, :focus-visible) {
+  background: transparent;
+}
+
+.session-widget-menu-revision .research-menu-label {
+  flex: none;
+}
+
+.session-widget-menu-hash {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.session-widget-menu-lineage {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-widget-frame {
@@ -1062,23 +1211,10 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   padding-left: 10px;
 }
 
-.session-widget-bar { flex-wrap: wrap; }
 /* Widget chrome is interface, not answer text: it is never part of a copied
    selection. The Source view joins a selection only when the selection starts
    inside it (SessionWidget.tsx, allowSourceSelection). */
 .session-widget [data-widget-chrome] { -webkit-user-select: none; user-select: none; }
 .session-widget-source:not([data-selectable]) { -webkit-user-select: none; user-select: none; }
-.session-artifact-title { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-artifact-label { color: var(--text-faint); }
 .session-widget-source { margin: 0; padding: 12px; max-height: 440px; overflow: auto; white-space: pre; font-size: var(--fs-sm); }
 .session-widget-feedback { padding: 4px 10px; font-size: var(--fs-sm); color: var(--text-body-soft); }
-.session-widget-run[aria-pressed="true"] { background: var(--surface-fill-hover); color: var(--text-body); }
-
-.session-artifact-details { border-bottom: 1px solid var(--surface-border-subtle); padding: 8px 10px; font-size: var(--fs-sm); }
-.session-artifact-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.session-artifact-heading span, .session-artifact-details li span { color: var(--text-faint); }
-.session-artifact-details ul { margin: 8px 0 0; padding: 0; list-style: none; }
-.session-artifact-details li { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
-
-.session-artifact-state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; font-size: var(--fs-sm); color: var(--text-body-soft); border-bottom: 1px solid var(--surface-border-subtle); }
-.session-artifact-state label { display: inline-flex; align-items: center; gap: 5px; }

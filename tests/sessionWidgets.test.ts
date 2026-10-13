@@ -130,7 +130,7 @@ test("inline previews drop widget HTML entirely", () => {
   assert.ok(render("Use `npm test`.", true, true).includes("npm test"));
 });
 
-test("widget chrome stays out of the projection, find and copy, and labels the generated title", async () => {
+test("widget chrome stays out of the projection, find and copy, and shows the generated title as plain text", async () => {
   const { withWidgetDom } = await import("./widgetDom");
   const { act } = await import("react");
   const { createRoot } = await import("react-dom/client");
@@ -158,21 +158,23 @@ test("widget chrome stays out of the projection, find and copy, and labels the g
         createElement(TranscriptMarkdown, { text: markdown, widgets: true }))));
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
       const figure = container.querySelector(".session-widget")!;
-      const heading = figure.querySelector(".session-artifact-title")!;
-      assert.equal(heading.textContent, "Widget: Settings Saved ✓ Your session expired, sign in again");
-      assert.equal(heading.querySelector(".session-artifact-label")?.textContent, "Widget:");
+      const heading = figure.querySelector(".session-widget-title")!;
+      assert.equal(heading.textContent, "Settings Saved ✓ Your session expired, sign in again");
+      assert.equal(heading.getAttribute("title"), "Settings Saved ✓ Your session expired, sign in again");
+      assert.equal(heading.children.length, 0, "the title is one text node");
+      assert.equal(figure.textContent!.includes("Widget:"), false);
       // Every text node of the widget is chrome; the answer's prose is not.
       const walker = document.createTreeWalker(figure, NodeFilter.SHOW_TEXT);
       const texts: Text[] = [];
       for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
-      assert.ok(texts.some((node) => node.data.includes("Pinned")) && texts.some((node) => node.data === "Preview"));
+      assert.ok(texts.some((node) => node.data.includes("Settings Saved")) && texts.some((node) => node.data === "Preview"));
       for (const node of texts) {
         assert.ok(node.parentElement!.closest("[data-widget-chrome]"), `chrome text ${JSON.stringify(node.data)}`);
         assert.equal(isSearchableText(node), false, node.data);
       }
       const prose = [...container.querySelectorAll("p")].find((p) => p.textContent === "After.")!.firstChild!;
       assert.equal(isSearchableText(prose), true);
-      assert.equal(researchTextProjection(container).includes("Pinned"), false);
+      assert.equal(researchTextProjection(container).includes("Settings Saved"), false);
       // The Source view is answer content (searchable) but joins a copied
       // selection only when the selection starts inside it.
       const sourceButton = [...figure.querySelectorAll("button")].find((button) => button.textContent === "Source")!;

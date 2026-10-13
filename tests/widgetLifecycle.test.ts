@@ -175,8 +175,11 @@ test("widget actions preserve the preview and pass the selected source and answe
       assert.equal(frame?.parentElement?.hidden, true);
       await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Ask for widget changes"]')!.click());
       assert.deepEqual(selected, { context: answer, source: html });
-      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Download widget HTML"]')!.click());
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Widget actions"]')!.click());
+      const download = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')].find((item) => item.textContent === 'Download HTML')!;
+      await act(async () => download.click());
       assert.deepEqual(exported, { html });
+      assert.equal(document.querySelector('[role="menu"]'), null, 'the menu closes before the action');
     } finally { await act(async () => root.unmount()); }
   });
 });
