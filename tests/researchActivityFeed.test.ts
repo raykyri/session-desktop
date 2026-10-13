@@ -3,6 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchActivityFeed, {
+  feedRowOpenKey,
   recentActivityAnchorOffset,
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
@@ -470,6 +471,19 @@ test("the feed scroll anchor round-trips correctly", () => {
   assert.equal(recentActivityAnchorScrollTop(0, 500, -60), 560);
   // Scroll position clamps to zero if calculated offset is negative.
   assert.equal(recentActivityAnchorScrollTop(0, 40, 400), 0);
+});
+
+test("Enter on a feed row only selects it; → also moves into the opened thread", () => {
+  const key = (name: string, modifiers: Partial<Record<"metaKey" | "ctrlKey" | "altKey" | "shiftKey", boolean>> = {}) =>
+    feedRowOpenKey({ key: name, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...modifiers });
+  assert.equal(key("Enter"), "select");
+  assert.equal(key("ArrowRight"), "enter-thread");
+  assert.equal(key("ArrowDown"), null);
+  assert.equal(key(" "), null);
+  // ⌥→ is Forward; modified Enter is not a row key.
+  assert.equal(key("ArrowRight", { altKey: true }), null);
+  assert.equal(key("Enter", { metaKey: true }), null);
+  assert.equal(key("Enter", { shiftKey: true }), null);
 });
 
 test("Home offers report import", () => {

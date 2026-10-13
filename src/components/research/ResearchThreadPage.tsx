@@ -63,6 +63,7 @@ import {
   researchBranchesInPassageOrder,
   researchEditedQuestionFork,
   researchLevelPath,
+  researchLevelPathShows,
   researchQueueStep,
   researchQueueWithout,
   researchSurvivingAncestor,
@@ -1180,7 +1181,13 @@ function ResearchThreadPage({
         }
         const target =
           request.path && request.path[request.path.length - 1] === request.nodeId ? request.path : request.nodeId;
-        const shown = applyVisit(target);
+        // Opening the selection already on screen (a feed card of this
+        // thread with its question selected) leaves it as it is, including
+        // an unsent branch after it.
+        const shown =
+          typeof target === "string" && researchLevelPathShows(nodesRef.current, levelPathRef.current, target)
+            ? { nodeId: target, path: levelPathRef.current }
+            : applyVisit(target);
         if (!shown) {
           return false;
         }

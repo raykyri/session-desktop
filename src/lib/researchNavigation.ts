@@ -100,15 +100,14 @@ export function isResearchNodeSelectionChange(
   return selectedNodeId !== nextNodeId;
 }
 
-export function isResearchTreeSelectionChange(
-  selectedTreeId: string | null,
-  threadVisible: boolean,
-  nextTreeId: string,
-): boolean {
-  // Re-selecting the visible thread would clear its detail while the same
-  // tree is fetched again, producing a needless loading blink. The same tree
-  // remains selectable when one of its terminal panes is currently visible.
-  return !threadVisible || selectedTreeId !== nextTreeId;
+/** The node a thread's feed card opens at: the tree's root question. Null
+ * when `trees` does not list the tree; the thread then opens at the
+ * selection it restores. */
+export function researchFeedCardNodeId(
+  trees: readonly { id: string; rootNodeId: string }[],
+  treeId: string,
+): string | null {
+  return trees.find((tree) => tree.id === treeId)?.rootNodeId ?? null;
 }
 
 function isSavedAnchor(value: unknown): value is ResearchHighlightAnchor {

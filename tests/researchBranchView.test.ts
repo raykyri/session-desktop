@@ -7,6 +7,7 @@ import {
   researchBranchesOf,
   researchEditedQuestionFork,
   researchLevelPath,
+  researchLevelPathShows,
   researchQueueAction,
   researchQueueWithout,
   researchSurvivingAncestor,
@@ -61,6 +62,20 @@ test("one selection determines every open level: a branch's level follows the me
   assert.deepEqual(researchLevelPath(nodes, "b2"), ["c2", "b1f", "b2"]);
   assert.deepEqual(researchLevelPath(nodes, "b4"), ["c3", "b4"]);
   assert.deepEqual(researchLevelPath(nodes, "missing"), []);
+});
+
+test("opening a node changes nothing only when it is selected last and nothing is selected after it", () => {
+  // The root selected with no level after it: opening the root again is a no-op.
+  assert.equal(researchLevelPathShows(nodes, ["root"], "root"), true);
+  // A follow-up of the root's chain selected in its column: opening the root
+  // selects the root.
+  assert.equal(researchLevelPathShows(nodes, ["c3"], "root"), false);
+  // A branch selected after the root's column: opening the root closes it.
+  assert.equal(researchLevelPathShows(nodes, ["c2", "b1f"], "root"), false);
+  assert.equal(researchLevelPathShows(nodes, ["c2", "b1f"], "b1f"), true);
+  // A deeper level open after the node.
+  assert.equal(researchLevelPathShows(nodes, ["c2", "b1f", "b2"], "b1f"), false);
+  assert.equal(researchLevelPathShows(nodes, [], "missing"), false);
 });
 
 test("an answer's branches read in passage order, then whole-answer branches, oldest first", () => {

@@ -59,6 +59,18 @@ export function researchLevelPath(nodes: readonly ResearchNode[], nodeId: string
   return path;
 }
 
+/** Whether opening `nodeId` (its levels, see researchLevelPath) shows the
+ * selection `levelPath` already shows: `nodeId` selected in the last open
+ * column and nothing selected after it. */
+export function researchLevelPathShows(
+  nodes: readonly ResearchNode[],
+  levelPath: readonly string[],
+  nodeId: string,
+): boolean {
+  const path = researchLevelPath(nodes, nodeId);
+  return path.length > 0 && path.length === levelPath.length && path.every((id, index) => id === levelPath[index]);
+}
+
 /** The nearest node on `nodeId`'s ancestry (itself included) that still
  * exists, from the parents recorded before a removal: the message a removed
  * branch was asked from, or null when nothing on the way survives. */

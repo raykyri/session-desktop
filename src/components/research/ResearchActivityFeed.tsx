@@ -104,6 +104,23 @@ const EMPTY_NODE_IDS: readonly string[] = [];
 /** The feed's rows: questions, drafts and starred children. */
 const FEED_ROW_SELECTOR = ".research-feed-card-hit, .research-feed-child-open";
 
+/** What a key does on a focused feed row (a question or a child row).
+ * "select": Enter selects the row's node, as a click does, and focus stays
+ * on the row. "enter-thread": → selects it and moves focus into the opened
+ * thread's messages column. Null for other keys and for modified keys. */
+export function feedRowOpenKey(event: {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}): "select" | "enter-thread" | null {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+  if (event.key === "Enter") return "select";
+  if (event.key === "ArrowRight") return "enter-thread";
+  return null;
+}
+
 /** A roving tab stop over the feed's rows: one row is in the Tab order (the
  * last focused row while it is listed, else the selected one, else the
  * first), and only the selected rows' … buttons are. ↑ and ↓ move between
@@ -1266,16 +1283,15 @@ function ResearchActivityFeed({
         }}
         onKeyDown={(event) => {
           const target = event.target as HTMLElement;
-          // → and Enter open the focused question (or child row) and move
-          // into its messages column.
-          if (
-            (event.key === "ArrowRight" || event.key === "Enter") &&
-            !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey &&
-            target.matches(".research-feed-card-hit, .research-feed-child-open")
-          ) {
+          // Enter and → open the focused question (or child row) as a click
+          // does; → also moves focus into its messages column.
+          const openKey = feedRowOpenKey(event);
+          if (openKey && target.matches(".research-feed-card-hit, .research-feed-child-open")) {
             event.preventDefault();
             target.click();
-            columns?.focusOpenedThread(target.matches(".research-feed-child-open"));
+            if (openKey === "enter-thread") {
+              columns?.focusOpenedThread(target.matches(".research-feed-child-open"));
+            }
             return;
           }
           // ⌥↑ and ⌥↓ move the focused card up or down its list.

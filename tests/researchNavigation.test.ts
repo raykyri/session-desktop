@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isResearchNodeSelectionChange,
-  isResearchTreeSelectionChange,
   recordResearchFollowupDraft,
   recordResearchScrollPosition,
   RESEARCH_SCROLL_POSITION_TTL_MS,
+  researchFeedCardNodeId,
   restoreResearchScrollPosition,
   savedResearchSelection,
   type SavedResearchNavigation,
@@ -93,13 +93,15 @@ test("clicking a different research breadcrumb changes the selection", () => {
   assert.equal(isResearchNodeSelectionChange(null, "root-node"), true);
 });
 
-test("clicking the research tree already displayed is a no-op", () => {
-  assert.equal(isResearchTreeSelectionChange("tree", true, "tree"), false);
-});
-
-test("a research tree remains selectable when its thread is not displayed", () => {
-  assert.equal(isResearchTreeSelectionChange("tree", false, "tree"), true);
-  assert.equal(isResearchTreeSelectionChange("tree", true, "other-tree"), true);
+test("a feed card opens at its tree's root question, for active and archived trees", () => {
+  const trees = [
+    { id: "active", rootNodeId: "active-root" },
+    { id: "archived", rootNodeId: "archived-root" },
+  ];
+  assert.equal(researchFeedCardNodeId(trees, "active"), "active-root");
+  assert.equal(researchFeedCardNodeId(trees, "archived"), "archived-root");
+  // A tree no list holds opens at the selection its thread restores.
+  assert.equal(researchFeedCardNodeId(trees, "missing"), null);
 });
 
 test("research scroll positions remain available for 15 minutes", () => {

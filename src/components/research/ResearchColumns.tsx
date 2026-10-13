@@ -109,9 +109,9 @@ interface ResearchColumnsLayout {
   feedCurrent: boolean;
   /** Shows the feed and focuses its selected row (or its title). */
   focusFeed: () => void;
-  /** After a feed row opened a thread from the keyboard: focuses the
-   * selected message of its first level (`deepest`: of its deepest level)
-   * once it has rendered. A draft's column keeps focus off its ask box. */
+  /** After → on a feed row opened a thread: focuses the selected message
+   * of its first level (`deepest`: of its deepest level) once it has
+   * rendered. A draft's column keeps focus off its ask box. */
   focusOpenedThread: (deepest: boolean) => void;
   /** Registers the handler for ⌃Tab / ⌃⇧Tab in the feed or in the open
    * thread; returns the function that removes it. A handler returns false

@@ -74,7 +74,7 @@ import {
   APP_TEXT_SIZE,
 } from "./lib/appearance";
 import {
-  isResearchTreeSelectionChange,
+  researchFeedCardNodeId,
 } from "./lib/researchNavigation";
 import {
   groupsForScope,
@@ -644,30 +644,17 @@ function MainApp() {
 
   // Opening a card whose root isn't in the loaded feed (Archive, or a folder
   // member paged out of it) keeps the list in the feed column beside the thread.
-  // Opening a question selects the clicked row and replaces any saved
-  // branch selection. Clicking the already-open thread keeps its selection.
+  // Opening a card (a click, or Enter on it) selects its question in the
+  // column that lists it, with nothing selected after it, also when the
+  // thread is already open and for an archived thread's card. A thread
+  // already showing that selection keeps it as it is.
   const openFeedResearchTree = useCallback(
     (treeId: string) => {
-      if (
-        !isResearchTreeSelectionChange(
-          activeResearchTreeId,
-          researchStageView === "thread",
-          treeId,
-        )
-      ) {
-        return;
-      }
-      const rootNodeId = researchTrees.find((tree) => tree.id === treeId)?.rootNodeId;
+      const rootNodeId = researchFeedCardNodeId([...researchTrees, ...archivedResearchTrees], treeId);
       if (rootNodeId) openResearchNode(treeId, rootNodeId);
       else navigateToResearchThread(treeId);
     },
-    [
-      activeResearchTreeId,
-      navigateToResearchThread,
-      openResearchNode,
-      researchStageView,
-      researchTrees,
-    ],
+    [archivedResearchTrees, navigateToResearchThread, openResearchNode, researchTrees],
   );
   const openFeedView = useCallback(
     (view: ResearchFeedView) => {
