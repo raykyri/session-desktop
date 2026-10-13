@@ -113,29 +113,10 @@ pub struct AgentInfo {
     /// effort. Absent when the adapter default applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
-    /// Tool-approval policy the session was launched with, persisted like
-    /// `effort` so a respawn does not silently fall back to the CLI's default —
-    /// which would be a quieter, more permissive session than the user chose.
-    /// Absent when the adapter default applies.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub approval_mode: Option<String>,
-    pub parent_id: Option<String>,
-    pub fork_point: Option<String>,
-    pub root_session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch_id: Option<String>,
-    /// Adapter-owned leaf within a native session tree. This is intentionally
-    /// separate from `branch_id`, which identifies Session's own thread-graph
-    /// branch and must remain stable when an agent rewinds or switches leaves.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_leaf_id: Option<String>,
-    /// True when auto-drain is held: a pause-after turn finished, or the last
-    /// turn failed/interrupted/disconnected. The backend stops draining until
-    /// the user unpauses.
-    #[serde(default)]
-    pub paused: bool,
     pub created_at: u128,
 }
 
@@ -856,14 +837,8 @@ fn prepare_agent_workspace_locked(
         status: AgentStatus::Starting,
         model: request.model,
         effort: request.effort,
-        approval_mode: None,
-        parent_id: None,
-        fork_point: None,
-        root_session_id: None,
         thread_id: Some(state.next_id("thread")),
         branch_id: Some(state.next_id("branch")),
-        native_leaf_id: None,
-        paused: false,
         created_at: now_millis(),
         pane_id: None,
     };
@@ -1210,14 +1185,8 @@ mod tests {
             status,
             model: None,
             effort: None,
-            approval_mode: None,
-            parent_id: None,
-            fork_point: None,
-            root_session_id: None,
             thread_id: None,
             branch_id: None,
-            native_leaf_id: None,
-            paused: false,
             created_at: 1,
         }
     }

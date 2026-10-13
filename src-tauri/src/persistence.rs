@@ -1698,18 +1698,50 @@ mod tests {
         for (key, entry) in legacy.as_object().unwrap() {
             value[key] = entry.clone();
         }
+        // Agent fields those builds also wrote: tool-approval mode, fork
+        // lineage, the native session leaf and the queue pause.
+        let agent_legacy_keys = [
+            "approvalMode",
+            "parentId",
+            "forkPoint",
+            "rootSessionId",
+            "nativeLeafId",
+            "paused",
+        ];
+        value["agents"] = serde_json::json!([{
+            "id": "agent-1",
+            "groupId": "group-1",
+            "adapter": "claude",
+            "worktreeDir": "/tmp/work",
+            "status": "idle",
+            "createdAt": 1,
+            "approvalMode": "plan",
+            "parentId": "agent-0",
+            "forkPoint": "turn-3",
+            "rootSessionId": "session-0",
+            "nativeLeafId": "leaf-1",
+            "paused": true
+        }]);
         fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
 
         let outcome = load_with_diagnostics(&root);
         assert!(outcome.warning.is_none(), "{:?}", outcome.warning);
         assert_eq!(outcome.state.next_id, 17);
         assert_eq!(outcome.state.groups.len(), 1);
+        assert_eq!(outcome.state.agents.len(), 1);
 
         save(&root, &outcome.state).unwrap();
         let saved: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         for key in legacy.as_object().unwrap().keys() {
             assert!(saved.get(key).is_none(), "{key} was written back");
         }
+        for key in agent_legacy_keys {
+            assert!(
+                saved["agents"][0].get(key).is_none(),
+                "agent {key} was written back"
+            );
+        }
+        assert_eq!(saved["agents"][0]["id"], "agent-1");
         assert_eq!(saved["groups"][0]["id"], "group-1");
         fs::remove_dir_all(root).unwrap();
     }

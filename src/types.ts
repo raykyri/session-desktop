@@ -107,9 +107,6 @@ export interface AgentInfo {
   transcriptPath?: string | null;
   threadId?: string | null;
   branchId?: string | null;
-  /** Adapter-owned leaf within the agent's native session tree. This is not
-   * session's thread-graph branch id and may change when the native agent forks. */
-  nativeLeafId?: string | null;
   status:
     | "starting"
     | "running"
@@ -121,9 +118,6 @@ export interface AgentInfo {
   model?: string | null;
   /** Reasoning effort the session was launched with; absent for the default. */
   effort?: string | null;
-  // True when auto-drain is held: pause-after, or the last turn failed /
-  // interrupted / disconnected. Clears when the user unpauses.
-  paused?: boolean;
   createdAt: number;
 }
 
