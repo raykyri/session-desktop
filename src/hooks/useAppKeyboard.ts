@@ -2,7 +2,7 @@
 // hints, and the app shortcuts (from the DOM and from the native menu).
 // App calls these in this order, which is also the order of their
 // capture-phase window listeners.
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { closeDiagramLightbox, getDiagramLightbox } from "../lib/diagramLightbox";
 import { closeImageLightbox, getImageLightbox } from "../lib/imageLightbox";
 import { isTerminalTarget } from "../lib/appHelpers";
@@ -27,8 +27,6 @@ interface EscapeOverlayState {
 interface EscapeHandlers {
   /** Closes the browser overlay's top layer; true when it handled Escape. */
   closeBrowserOnEscape: () => boolean;
-  /** Set by SettingsDialog: closes the Remotes menu or confirmation first. */
-  settingsEscapeHandlerRef: RefObject<(() => boolean) | null>;
   closeResearchFolderRemoval: () => void;
   cancelExit: () => void;
   closeSettings: () => void;
@@ -90,14 +88,6 @@ export function useEscapeDispatcher(overlays: EscapeOverlayState, handlers: Esca
         if (browserEscapeDisposition === "exclusive") {
           event.stopImmediatePropagation();
         }
-        return;
-      }
-
-      // The Remotes Add menu and removal confirmation close before Settings.
-      if (actions.settingsEscapeHandlerRef.current?.()) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
         return;
       }
 

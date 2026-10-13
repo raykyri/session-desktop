@@ -40,7 +40,6 @@ interface AppSidebarProps {
   shortcutHintsShown: boolean;
 
   appearance: "light" | "dark";
-  codeMode: boolean;
   settingsOpen: boolean;
   onToggleAppearance: () => void;
   onOpenSettings: () => void;
@@ -90,7 +89,6 @@ function AppSidebar(props: AppSidebarProps) {
     onDeleteFolder,
     shortcutHintsShown,
     appearance,
-    codeMode,
     settingsOpen,
     onToggleAppearance,
     onOpenSettings,
@@ -176,7 +174,7 @@ function AppSidebar(props: AppSidebarProps) {
         onPointerDown={onResizeStart}
         onKeyDown={onResizeKey}
       />
-      <aside className={`sidebar is-research-mode${codeMode ? " is-code-mode" : ""}`}>
+      <aside className="sidebar is-research-mode">
         <div className="titlebar-drag" data-tauri-drag-region aria-hidden="true" />
         {/* Keep the collapse and expand buttons at the same position beside
             the traffic lights. */}

@@ -33,7 +33,6 @@ mod scrollback;
 mod shell_jobs;
 mod show_hide_shortcut;
 mod sleep;
-mod ssh_config;
 mod state;
 mod thread_graph;
 mod title_generation;
@@ -183,11 +182,6 @@ fn handle_app_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
     }
 }
 
-fn effective_remote_choices(state: &AppState) -> Result<Vec<config::RemoteChoice>, String> {
-    let preferences = persistence::load_preferences(&state.config().workspace_root)?;
-    Ok(state.config().remote_choices_with(&preferences.remotes))
-}
-
 #[tauri::command(async)]
 fn get_runtime_config(state: tauri::State<'_, AppState>) -> Result<RuntimeConfig, String> {
     // A damaged preferences file should not prevent the entire interface from
@@ -199,348 +193,6 @@ fn get_runtime_config(state: tauri::State<'_, AppState>) -> Result<RuntimeConfig
     let mut runtime = state.config().runtime_with(&remotes);
     runtime.file_server_port = state.file_server_port();
     Ok(runtime)
-}
-
-#[tauri::command(async)]
-fn list_ssh_config_aliases() -> Result<Vec<String>, String> {
-    ssh_config::aliases()
-}
-
-fn validate_ui_remote(id: &str, remote: &config::SavedRemote) -> Result<(), String> {
-    if id.is_empty()
-        || id.len() > 64
-        || !id.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
-        })
-    {
-        return Err(
-            "remote id must be 1-64 lowercase ASCII letters, digits, '-' or '_'".to_string(),
-        );
-    }
-    if remote.host.is_empty() {
-        return Err("SSH host is required".to_string());
-    }
-    if remote.host.starts_with('-') || remote.host.chars().any(char::is_control) {
-        return Err("SSH host is invalid".to_string());
-    }
-    if remote
-        .label
-        .as_deref()
-        .is_some_and(|label| label.chars().any(char::is_control))
-    {
-        return Err("remote label is invalid".to_string());
-    }
-    if remote
-        .session_cli
-        .as_deref()
-        .is_some_and(|path| path.chars().any(char::is_control))
-    {
-        return Err("Session CLI path is invalid".to_string());
-    }
-    if let Some(root) = remote.workspace_root.as_deref()
-        && (!root.starts_with('/') && !root.starts_with("~/"))
-    {
-        return Err("workspace root must be an absolute path or start with ~/".to_string());
-    }
-    Ok(())
-}
-
-fn normalize_ui_remote(mut remote: config::SavedRemote) -> config::SavedRemote {
-    remote.host = remote.host.trim().to_string();
-    remote.label = remote
-        .label
-        .take()
-        .map(|label| label.trim().to_string())
-        .filter(|label| !label.is_empty());
-    remote.session_cli = remote
-        .session_cli
-        .take()
-        .map(|path| path.trim().to_string())
-        .filter(|path| !path.is_empty());
-    remote.workspace_root = remote
-        .workspace_root
-        .take()
-        .map(|path| path.trim().to_string())
-        .filter(|path| !path.is_empty());
-    remote
-}
-
-#[tauri::command(async)]
-fn upsert_remote(
-    state: tauri::State<'_, AppState>,
-    id: String,
-    remote: config::SavedRemote,
-) -> Result<Vec<config::RemoteChoice>, String> {
-    let id = id.trim().to_string();
-    let remote = normalize_ui_remote(remote);
-    validate_ui_remote(&id, &remote)?;
-    if state.config().remotes.contains_key(&id) {
-        return Err(format!(
-            "remote '{id}' is declared in session.config.json and cannot be changed here"
-        ));
-    }
-    persistence::update_preferences(&state.config().workspace_root, move |preferences| {
-        preferences.remotes.insert(id, remote);
-    })?;
-    effective_remote_choices(&state)
-}
-
-#[tauri::command(async)]
-fn delete_remote(
-    state: tauri::State<'_, AppState>,
-    id: String,
-) -> Result<Vec<config::RemoteChoice>, String> {
-    let id = id.trim().to_string();
-    if state.config().remotes.contains_key(&id) {
-        return Err(format!(
-            "remote '{id}' is declared in session.config.json and cannot be removed here"
-        ));
-    }
-    let mut removed = false;
-    persistence::update_preferences(&state.config().workspace_root, |preferences| {
-        removed = preferences.remotes.remove(&id).is_some();
-    })?;
-    if !removed {
-        return Err(format!("remote '{}' was not found", id));
-    }
-    effective_remote_choices(&state)
-}
-
-#[derive(Clone, Copy, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-enum RemoteProbeStatus {
-    Passed,
-    Failed,
-    Skipped,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RemoteProbeCheck {
-    id: &'static str,
-    label: &'static str,
-    status: RemoteProbeStatus,
-    message: String,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RemoteProbeResult {
-    checks: Vec<RemoteProbeCheck>,
-    adapters: Vec<adapters::AdapterMetadata>,
-}
-
-fn remote_probe_output(
-    host: &host::Host,
-    program: &str,
-    args: Vec<String>,
-) -> Result<std::process::Output, String> {
-    use std::process::Stdio;
-    host.command(host::RemoteCommand {
-        program,
-        args,
-        ..Default::default()
-    })
-    .stdin(Stdio::null())
-    .output()
-    .map_err(|err| format!("failed to run remote check: {err}"))
-}
-
-fn remote_probe_failure(output: &std::process::Output, fallback: &str) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if stderr.is_empty() {
-        fallback.to_string()
-    } else {
-        stderr
-    }
-}
-
-#[tauri::command]
-async fn probe_remote(
-    state: tauri::State<'_, AppState>,
-    remote: config::SavedRemote,
-) -> Result<RemoteProbeResult, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || probe_remote_blocking(&state, remote))
-        .await
-        .map_err(|err| format!("probe_remote task failed: {err}"))?
-}
-
-fn probe_remote_blocking(
-    state: &AppState,
-    remote: config::SavedRemote,
-) -> Result<RemoteProbeResult, String> {
-    let remote = normalize_ui_remote(remote);
-    validate_ui_remote("probe", &remote)?;
-    let remote_ref = remote.to_ref("probe");
-    let host = host::for_group(Some(&remote_ref));
-    let mut checks = Vec::with_capacity(3);
-
-    let connection = remote_probe_output(&host, "true", Vec::new());
-    let connection_ok = connection
-        .as_ref()
-        .is_ok_and(|output| output.status.success());
-    checks.push(match connection {
-        Ok(output) if output.status.success() => RemoteProbeCheck {
-            id: "ssh",
-            label: "SSH connection",
-            status: RemoteProbeStatus::Passed,
-            message: format!(
-                "Connected to {} without an interactive prompt.",
-                remote_ref.host
-            ),
-        },
-        Ok(output) => RemoteProbeCheck {
-            id: "ssh",
-            label: "SSH connection",
-            status: RemoteProbeStatus::Failed,
-            message: remote_probe_failure(
-                &output,
-                "Non-interactive SSH authentication was rejected.",
-            ),
-        },
-        Err(error) => RemoteProbeCheck {
-            id: "ssh",
-            label: "SSH connection",
-            status: RemoteProbeStatus::Failed,
-            message: error,
-        },
-    });
-
-    if !connection_ok {
-        checks.extend([
-            RemoteProbeCheck {
-                id: "tmux",
-                label: "tmux 3.2+",
-                status: RemoteProbeStatus::Skipped,
-                message: "Connect successfully before checking tmux.".to_string(),
-            },
-            RemoteProbeCheck {
-                id: "sessionCli",
-                label: "Session CLI",
-                status: RemoteProbeStatus::Skipped,
-                message: "Connect successfully before checking session-cli.".to_string(),
-            },
-        ]);
-        return Ok(RemoteProbeResult {
-            checks,
-            adapters: Vec::new(),
-        });
-    }
-
-    let tmux = remote_probe_output(&host, "tmux", vec!["-V".to_string()]);
-    checks.push(match tmux {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            match pty::validate_remote_tmux_version(&version) {
-                Ok(()) => RemoteProbeCheck {
-                    id: "tmux",
-                    label: "tmux 3.2+",
-                    status: RemoteProbeStatus::Passed,
-                    message: version,
-                },
-                Err(error) => RemoteProbeCheck {
-                    id: "tmux",
-                    label: "tmux 3.2+",
-                    status: RemoteProbeStatus::Failed,
-                    message: error,
-                },
-            }
-        }
-        Ok(output) => RemoteProbeCheck {
-            id: "tmux",
-            label: "tmux 3.2+",
-            status: RemoteProbeStatus::Failed,
-            message: remote_probe_failure(&output, "tmux was not found on the remote machine."),
-        },
-        Err(error) => RemoteProbeCheck {
-            id: "tmux",
-            label: "tmux 3.2+",
-            status: RemoteProbeStatus::Failed,
-            message: error,
-        },
-    });
-
-    let (cli_ok, cli_remote) = match remote_cli::ensure_cli(&host) {
-        Ok(result)
-            if matches!(
-                result.skipped,
-                Some(remote_cli::EnsureSkip::CustomCli | remote_cli::EnsureSkip::UnsupportedHost)
-            ) =>
-        {
-            let session_cli = host
-                .remote()
-                .map(|target| target.session_cli.clone())
-                .unwrap_or_else(|| "session-cli".to_string());
-            let cli = remote_probe_output(
-                &host,
-                "sh",
-                vec![
-                    "-c".to_string(),
-                    "command -v \"$1\"".to_string(),
-                    "session-remote-probe".to_string(),
-                    session_cli.clone(),
-                ],
-            );
-            let cli_ok = cli.as_ref().is_ok_and(|output| output.status.success());
-            checks.push(match cli {
-                Ok(output) if output.status.success() => RemoteProbeCheck {
-                    id: "sessionCli",
-                    label: "Session CLI",
-                    status: RemoteProbeStatus::Passed,
-                    message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-                },
-                Ok(output) => RemoteProbeCheck {
-                    id: "sessionCli",
-                    label: "Session CLI",
-                    status: RemoteProbeStatus::Failed,
-                    message: remote_probe_failure(
-                        &output,
-                        &format!("'{session_cli}' was not found on the remote machine."),
-                    ),
-                },
-                Err(error) => RemoteProbeCheck {
-                    id: "sessionCli",
-                    label: "Session CLI",
-                    status: RemoteProbeStatus::Failed,
-                    message: error,
-                },
-            });
-            (cli_ok, remote_ref.clone())
-        }
-        Ok(result) => {
-            let message = if result.installed {
-                format!("Installed session-cli {} → {}", result.version, result.path)
-            } else {
-                format!("session-cli {} at {}", result.version, result.path)
-            };
-            checks.push(RemoteProbeCheck {
-                id: "sessionCli",
-                label: "Session CLI",
-                status: RemoteProbeStatus::Passed,
-                message,
-            });
-            let mut cli_remote = remote_ref.clone();
-            cli_remote.session_cli = Some(result.path);
-            (true, cli_remote)
-        }
-        Err(error) => {
-            checks.push(RemoteProbeCheck {
-                id: "sessionCli",
-                label: "Session CLI",
-                status: RemoteProbeStatus::Failed,
-                message: error,
-            });
-            (false, remote_ref.clone())
-        }
-    };
-
-    let adapters = if cli_ok {
-        adapters::probe_adapter_metadata_for_config(state.config(), Some(&cli_remote), true)?
-    } else {
-        Vec::new()
-    };
-    Ok(RemoteProbeResult { checks, adapters })
 }
 
 #[tauri::command(async)]
@@ -563,99 +215,6 @@ fn probe_agent_adapters(
         remote_target,
         force.unwrap_or(false),
     )
-}
-
-// Commands below are marked `async` when they block: on this Tauri version a
-// plain synchronous command runs on the macOS main thread, so any file I/O,
-// subprocess spawn (git, pgrep/ps, pmset, open), PTY teardown, or sleep inside
-// one freezes the entire UI — webview rendering, keyboard dispatch, and the
-// native terminal surfaces — for its duration. `(async)` moves the same body to
-// a worker thread; cheap in-memory getters/setters stay synchronous, and the
-// native_support_* commands stay synchronous because their work must run on
-// the main thread anyway (going async would only add a round-trip).
-/// Returns the stored OpenRouter API key (empty string when none is set). Kept in the
-/// owner-only preferences file rather than webview localStorage — see AppPreferences.
-#[tauri::command(async)]
-fn openrouter_key_get(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    Ok(
-        persistence::load_preferences(&state.config().workspace_root)?
-            .open_router_key
-            .unwrap_or_default(),
-    )
-}
-
-/// Persists the OpenRouter API key. An empty/whitespace key clears it.
-#[tauri::command(async)]
-fn openrouter_key_set(state: tauri::State<'_, AppState>, key: String) -> Result<(), String> {
-    let workspace_root = &state.config().workspace_root;
-    let trimmed = key.trim();
-    let open_router_key = if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    };
-    persistence::update_preferences(workspace_root, move |preferences| {
-        preferences.open_router_key = open_router_key;
-    })
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OpenRouterProxyResponse {
-    status: u16,
-    body: String,
-}
-
-/// Proxies an OpenRouter chat-completion request through the backend so the API key
-/// never leaves the owner-only preferences file / the Rust process. The renderer
-/// passes only the (non-secret) request payload; the key is read here and attached as
-/// the `Authorization` header. The upstream status + raw body are returned so the
-/// frontend keeps its existing response parsing and reasoning-effort retry logic.
-/// Doing the request here rather than as a webview `fetch` keeps the key out of the
-/// renderer heap on the request path and lets the webview CSP drop `openrouter.ai`
-/// from `connect-src`.
-#[tauri::command]
-async fn openrouter_chat_completion(
-    app: tauri::AppHandle,
-    payload: serde_json::Value,
-) -> Result<OpenRouterProxyResponse, String> {
-    // Read the key under the state guard, then drop it before the await below.
-    let key = {
-        let state = app.state::<AppState>();
-        persistence::load_preferences(&state.config().workspace_root)?
-            .open_router_key
-            .unwrap_or_default()
-    };
-    let key = key.trim().to_string();
-    if key.is_empty() {
-        return Err("No OpenRouter API key is configured.".to_string());
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|err| format!("failed to build HTTP client: {err}"))?;
-    let response = client
-        .post("https://openrouter.ai/api/v1/chat/completions")
-        .header("Authorization", format!("Bearer {key}"))
-        .header("Content-Type", "application/json")
-        .header("X-Title", "Session")
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|err| {
-            if err.is_timeout() {
-                "OpenRouter request timed out.".to_string()
-            } else {
-                format!("OpenRouter request failed: {err}")
-            }
-        })?;
-    let status = response.status().as_u16();
-    let body = response
-        .text()
-        .await
-        .map_err(|err| format!("failed to read OpenRouter response: {err}"))?;
-    Ok(OpenRouterProxyResponse { status, body })
 }
 
 #[cfg(target_os = "macos")]
@@ -2155,43 +1714,6 @@ fn remove_research_branch(
     state.remove_research_branch(&node_id)
 }
 
-#[tauri::command(async)]
-fn use_login_shell_get(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    Ok(
-        persistence::load_preferences(&state.config().workspace_root)?
-            .use_login_shell
-            .unwrap_or(true),
-    )
-}
-
-#[tauri::command(async)]
-fn use_login_shell_set(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
-    persistence::update_preferences(&state.config().workspace_root, |preferences| {
-        preferences.use_login_shell = Some(enabled);
-    })
-}
-
-#[tauri::command(async)]
-fn worktree_location_get(
-    state: tauri::State<'_, AppState>,
-) -> Result<persistence::WorktreeLocation, String> {
-    Ok(
-        persistence::load_preferences(&state.config().workspace_root)?
-            .worktree_location
-            .unwrap_or_default(),
-    )
-}
-
-#[tauri::command(async)]
-fn worktree_location_set(
-    state: tauri::State<'_, AppState>,
-    location: persistence::WorktreeLocation,
-) -> Result<(), String> {
-    persistence::update_preferences(&state.config().workspace_root, |preferences| {
-        preferences.worktree_location = Some(location);
-    })
-}
-
 /// Returns the stored research launch instruction (empty string when unset).
 /// The backend owns this preference — see AppPreferences — because research
 /// launch prompts are assembled on the Rust side.
@@ -2385,15 +1907,6 @@ fn mark_events_listener_ready() {
 #[tauri::command]
 fn pane_activate(state: tauri::State<'_, AppState>, pane_id: String) {
     state.touch_pane_active(&pane_id);
-}
-
-#[tauri::command]
-fn pane_rename(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    title: String,
-) -> Result<PaneInfo, String> {
-    state.rename_pane(&pane_id, title)
 }
 
 #[tauri::command]
@@ -3024,14 +2537,7 @@ fn main() {
             app_window_ready,
             acknowledge_interface_health_probe,
             get_runtime_config,
-            list_ssh_config_aliases,
-            upsert_remote,
-            delete_remote,
-            probe_remote,
             probe_agent_adapters,
-            openrouter_key_get,
-            openrouter_key_set,
-            openrouter_chat_completion,
             github_auth::github_account_get,
             github_auth::github_login_start,
             github_auth::github_login_poll,
@@ -3114,8 +2620,6 @@ fn main() {
             list_research_trash,
             empty_research_trash,
             remove_research_branch,
-            use_login_shell_get,
-            use_login_shell_set,
             research_launch_instruction_get,
             research_launch_instruction_set,
             research_inline_widgets_get,
@@ -3126,11 +2630,8 @@ fn main() {
             research_artifact_history,
             research_artifact_state_get,
             research_artifact_state_update,
-            worktree_location_get,
-            worktree_location_set,
             mark_events_listener_ready,
             pane_activate,
-            pane_rename,
             native_support_set_browser_overlay_open,
             native_support_set_iframe_shortcut_fallback,
             native_support_set_browser_background,
@@ -3218,44 +2719,6 @@ mod interface_health_tests {
         assert!(tracker.claim_reload(generation));
         assert!(!tracker.claim_reload(generation));
         assert!(!tracker.claim_unanswered_reload(generation));
-    }
-}
-
-#[cfg(test)]
-mod remote_settings_tests {
-    use super::{normalize_ui_remote, validate_ui_remote};
-    use crate::config::SavedRemote;
-
-    #[test]
-    fn ui_remote_normalization_trims_optional_fields() {
-        let remote = normalize_ui_remote(SavedRemote {
-            host: "  user@devbox  ".to_string(),
-            label: Some("  Dev box  ".to_string()),
-            session_cli: Some("   ".to_string()),
-            workspace_root: Some("  ~/.session/workspaces  ".to_string()),
-            ..Default::default()
-        });
-        assert_eq!(remote.host, "user@devbox");
-        assert_eq!(remote.label.as_deref(), Some("Dev box"));
-        assert_eq!(remote.session_cli, None);
-        assert_eq!(
-            remote.workspace_root.as_deref(),
-            Some("~/.session/workspaces")
-        );
-        validate_ui_remote("devbox", &remote).unwrap();
-    }
-
-    #[test]
-    fn ui_remote_validation_rejects_ssh_options_and_relative_roots() {
-        let mut remote = SavedRemote {
-            host: "-oProxyCommand=bad".to_string(),
-            ..Default::default()
-        };
-        assert!(validate_ui_remote("devbox", &remote).is_err());
-        remote.host = "devbox".to_string();
-        remote.workspace_root = Some("relative/workspaces".to_string());
-        assert!(validate_ui_remote("devbox", &remote).is_err());
-        assert!(validate_ui_remote("Dev Box", &SavedRemote::default()).is_err());
     }
 }
 

@@ -6,9 +6,6 @@ export interface RuntimeConfig {
   workspaceRoot: string;
   socketPath: string;
   adapters: AgentAdapterMetadata[];
-  /** Machines a workspace can be created on. Empty means local-only. Pass a
-   * choice's `id` as `remoteId` when creating a group to bind it there. */
-  remotes: RemoteChoice[];
   // The user's home directory (empty if HOME is unset), used to render
   // home-relative paths as ~/… rather than bare relative segments.
   homeDir: string;
@@ -150,40 +147,6 @@ export interface RemoteConnectionInfo {
 }
 
 export type RemoteMultiplexer = "tmux" | "herdr";
-
-/** An effective saved machine, from config or the UI-owned preferences store. */
-export interface RemoteChoice {
-  id: string;
-  label: string;
-  host: string;
-  multiplexer: RemoteMultiplexer;
-  sessionCli?: string | null;
-  workspaceRoot?: string | null;
-  source: "config" | "preferences";
-  /** False for a multiplexer session cannot drive yet — list it, but don't offer
-   * a launch that is going to fail. */
-  usable: boolean;
-}
-
-export interface SavedRemote {
-  host: string;
-  label?: string | null;
-  multiplexer: RemoteMultiplexer;
-  sessionCli?: string | null;
-  workspaceRoot?: string | null;
-}
-
-export interface RemoteProbeCheck {
-  id: "ssh" | "tmux" | "sessionCli";
-  label: string;
-  status: "passed" | "failed" | "skipped";
-  message: string;
-}
-
-export interface RemoteProbeResult {
-  checks: RemoteProbeCheck[];
-  adapters: AgentAdapterMetadata[];
-}
 
 /** The remote host a group is bound to. Mirrors Rust's `RemoteRef`. */
 export interface RemoteRef {

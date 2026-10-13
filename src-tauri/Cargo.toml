@@ -30,14 +30,14 @@ getrandom = "0.2"
 # thumbnails. Already built for the clipboard plugin (arboard), with PNG.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 libc = "0.2"
-# Backend HTTP for the OpenRouter title proxy so the API key never enters the
-# webview. `default-features = false` + `json` keeps this additive to the reqwest
-# (rustls) build already pulled in transitively by tauri-plugin-updater.
+# Backend HTTP for GitHub sign-in and tweet snapshots. `default-features = false`
+# + `json` keeps this additive to the reqwest (rustls) build already pulled in
+# transitively by tauri-plugin-updater.
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 regex = "1"
 # The updater intentionally enables reqwest's provider-neutral rustls feature.
 # Select one provider for every reqwest client in the process; otherwise client
-# construction panics before title generation or tweet requests can connect.
+# construction panics before GitHub or tweet requests can connect.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 names = { version = "0.14", default-features = false }
 portable-pty = "0.9"

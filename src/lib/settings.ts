@@ -78,8 +78,6 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
 
 type ColorTheme = "green-blob" | "orange-blob";
 type Appearance = "dark" | "light";
-type TabTitleProvider = "openRouter" | "disabled";
-export type WorktreeLocation = "global" | "localSession" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
   { id: "green-blob", label: "Cool" },
@@ -89,17 +87,6 @@ export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
 export const APPEARANCE_OPTIONS: { id: Appearance; label: string }[] = [
   { id: "dark", label: "Dark" },
   { id: "light", label: "Light" },
-];
-
-export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }[] = [
-  { id: "openRouter", label: "OpenRouter" },
-  { id: "disabled", label: "Disable" },
-];
-
-const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[] = [
-  { id: "global", label: "Global (default)" },
-  { id: "localSession", label: "Local .session/" },
-  { id: "localClaude", label: "Local .claude/" },
 ];
 
 /**
@@ -151,30 +138,8 @@ export interface AppSettings {
   showShortcutHints: boolean;
   /** disable decorative/status pulse animations */
   reduceMotion: boolean;
-  /** provider used to summarize first user messages into tab titles */
-  tabTitleProvider: TabTitleProvider;
-  /**
-   * OpenRouter API key. Held in memory for the session but NOT persisted to
-   * localStorage (saveSettings strips it) — the durable copy lives in the
-   * backend's owner-only preferences file, loaded/saved via the openrouter_key_*
-   * commands. A key found in a pre-existing localStorage blob is still read here
-   * once so it can be migrated to the backend.
-   */
-  openRouterKey: string;
-  /** OpenRouter model id */
-  openRouterModel: string;
   /** keep the machine awake while any agent is running */
   preventSleep: boolean;
-  /**
-   * Run shells as login shells, sourcing the user's login profile files
-   * (~/.zprofile + ~/.zlogin, or ~/.bash_profile/~/.profile) in addition to the
-   * interactive rc. On by default so spawned shells match how terminal emulators
-   * launch them. The backend persists its own copy (read on the spawn path,
-   * including startup recovery); this mirror keeps the dialog in sync.
-   */
-  useLoginShell: boolean;
-  /** root used for newly-created isolated worktrees */
-  worktreeLocation: WorktreeLocation;
   /**
    * Custom instruction text sent with every research launch (fresh runs and
    * all follow-up kinds). Empty means launches send prompts unchanged. The
@@ -189,12 +154,6 @@ export interface AppSettings {
    * dialog in sync.
    */
   researchInlineWidgets: boolean;
-  /**
-   * Show code-oriented context in tabs and the launcher: per-tab paths, git
-   * worktree metadata, and the "New worktree" launcher option. When off, tabs
-   * collapse to a single aligned row (status dot · title · status).
-   */
-  codeMode: boolean;
   /** Overlay toasts for `session send` notifications. */
   showNotifications: boolean;
   /** require Command+Enter instead of bare Enter for composer submit shortcuts */
@@ -208,15 +167,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   textSize: APP_TEXT_SIZE,
   showShortcutHints: true,
   reduceMotion: false,
-  tabTitleProvider: "disabled",
-  openRouterKey: "",
-  openRouterModel: "",
   preventSleep: true,
-  useLoginShell: true,
-  worktreeLocation: "global",
   researchLaunchInstruction: "",
   researchInlineWidgets: true,
-  codeMode: true,
   showNotifications: true,
   requireCmdEnterToSend: true,
 };
@@ -254,7 +207,8 @@ export function loadSettings(): AppSettings {
       colorTheme?: unknown;
       appearance?: unknown;
       fontSize?: unknown;
-      openRouterTitlesEnabled?: boolean;
+      /** Removed setting; a stored value still seeds requireCmdEnterToSend. */
+      codeMode?: unknown;
     };
     const storedColorTheme = typeof parsed.colorTheme === "string" ? parsed.colorTheme : null;
     const colorTheme =
@@ -274,15 +228,6 @@ export function loadSettings(): AppSettings {
       typeof parsed.preventSleep === "boolean"
         ? parsed.preventSleep
         : DEFAULT_SETTINGS.preventSleep;
-    const useLoginShell =
-      typeof parsed.useLoginShell === "boolean"
-        ? parsed.useLoginShell
-        : DEFAULT_SETTINGS.useLoginShell;
-    const worktreeLocation =
-      typeof parsed.worktreeLocation === "string" &&
-      WORKTREE_LOCATION_OPTIONS.some((option) => option.id === parsed.worktreeLocation)
-        ? parsed.worktreeLocation
-        : DEFAULT_SETTINGS.worktreeLocation;
     const researchLaunchInstruction =
       typeof parsed.researchLaunchInstruction === "string"
         ? clampResearchLaunchInstruction(parsed.researchLaunchInstruction)
@@ -299,33 +244,18 @@ export function loadSettings(): AppSettings {
       typeof parsed.reduceMotion === "boolean"
         ? parsed.reduceMotion
         : DEFAULT_SETTINGS.reduceMotion;
-    // A retired provider must not revive a stale OpenRouter opt-in. Only use the
-    // legacy flag when no provider selection has ever been saved.
-    const tabTitleProvider =
-      typeof parsed.tabTitleProvider === "string" &&
-      TAB_TITLE_PROVIDER_OPTIONS.some((option) => option.id === parsed.tabTitleProvider)
-        ? parsed.tabTitleProvider
-        : parsed.tabTitleProvider == null && parsed.openRouterTitlesEnabled === true
-          ? "openRouter"
-          : DEFAULT_SETTINGS.tabTitleProvider;
-    const codeMode =
-      typeof parsed.codeMode === "boolean" ? parsed.codeMode : DEFAULT_SETTINGS.codeMode;
     const showNotifications =
       typeof parsed.showNotifications === "boolean"
         ? parsed.showNotifications
         : DEFAULT_SETTINGS.showNotifications;
+    // Blobs saved before this setting existed take it from the removed
+    // codeMode flag, which it replaced.
     const requireCmdEnterToSend =
       typeof parsed.requireCmdEnterToSend === "boolean"
         ? parsed.requireCmdEnterToSend
-        : codeMode;
-    const openRouterKey =
-      typeof parsed.openRouterKey === "string"
-        ? parsed.openRouterKey
-        : DEFAULT_SETTINGS.openRouterKey;
-    const openRouterModel =
-      typeof parsed.openRouterModel === "string"
-        ? parsed.openRouterModel
-        : DEFAULT_SETTINGS.openRouterModel;
+        : typeof parsed.codeMode === "boolean"
+          ? parsed.codeMode
+          : DEFAULT_SETTINGS.requireCmdEnterToSend;
     return {
       colorTheme,
       appearance,
@@ -333,15 +263,9 @@ export function loadSettings(): AppSettings {
       textSize,
       showShortcutHints,
       reduceMotion,
-      tabTitleProvider,
-      openRouterKey,
-      openRouterModel,
       preventSleep,
-      useLoginShell,
-      worktreeLocation,
       researchLaunchInstruction,
       researchInlineWidgets,
-      codeMode,
       showNotifications,
       requireCmdEnterToSend,
     };
@@ -356,10 +280,7 @@ export function loadSettings(): AppSettings {
  */
 export function saveSettings(settings: AppSettings): void {
   try {
-    // Store the OpenRouter key only in the backend's owner-only preferences file
-    // so scripts cannot read it from webview storage.
-    const { openRouterKey: _omitted, ...persistable } = settings;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
     // Storage unavailable; preferences remain in-memory for this session only.
   }

@@ -2,11 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   setNativeBrowserBackground,
-  setOpenRouterKey,
   setResearchInlineWidgets,
   setResearchLaunchInstruction,
-  setUseLoginShell,
-  setWorktreeLocation,
 } from "../lib/api";
 import { IS_MAC } from "../lib/appHelpers";
 import {
@@ -19,14 +16,10 @@ import {
   SYSTEM_BODY_FONT_ID,
   type AppSettings,
   type BodyFontOption,
-  type WorktreeLocation,
 } from "../lib/settings";
 
 /** The preferences whose durable copy lives in the backend, read at startup. */
 interface StoredPreferences {
-  storedOpenRouterKey: string;
-  storedUseLoginShell: boolean | null;
-  storedWorktreeLocation: WorktreeLocation | null;
   storedResearchLaunchInstruction: string | null;
   storedResearchInlineWidgets: boolean | null;
 }
@@ -37,24 +30,17 @@ function errorMessage(err: unknown): string {
 
 /**
  * Application settings: loaded from localStorage on mount and saved on every
- * change. The OpenRouter key, the login-shell choice, the worktree location
- * and the research instructions are also mirrored to the backend, which owns
- * their durable copy, once `applyStoredPreferences` has hydrated them from it.
+ * change. The research instructions and the widget preference are also
+ * mirrored to the backend, which owns their durable copy, once `applyStoredPreferences` has hydrated them from it.
  * Also applies the appearance, color theme and body font to the document.
  */
 export function useAppSettings(onError: (message: string) => void) {
-  const [settings, setSettings] = useState<AppSettings>(() => ({
-    ...loadSettings(),
-    codeMode: false,
-  }));
+  const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [availableBodyFonts, setAvailableBodyFonts] = useState<BodyFontOption[] | null>(null);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
   // Set once the backend copies are loaded, so the synchronization effects do not write
   // the pre-hydration localStorage values back over them.
-  const openRouterKeyHydratedRef = useRef(false);
-  const useLoginShellHydratedRef = useRef(false);
-  const worktreeLocationHydratedRef = useRef(false);
   const researchLaunchInstructionHydratedRef = useRef(false);
   const researchInlineWidgetsHydratedRef = useRef(false);
 
@@ -149,36 +135,6 @@ export function useAppSettings(onError: (message: string) => void) {
     saveSettings(settings);
   }, [settings]);
 
-  // The OpenRouter key's durable, owner-only home is the backend.
-  useEffect(() => {
-    if (!openRouterKeyHydratedRef.current) {
-      return;
-    }
-    void setOpenRouterKey(settings.openRouterKey).catch(() => undefined);
-  }, [settings.openRouterKey]);
-
-  // The backend stores the login-shell preference for the spawn path, including
-  // startup recovery that runs before this fires.
-  useEffect(() => {
-    if (!useLoginShellHydratedRef.current) {
-      return;
-    }
-    void setUseLoginShell(settings.useLoginShell).catch((err) => {
-      onErrorRef.current(`Could not save the login-shell setting: ${errorMessage(err)}`);
-    });
-  }, [settings.useLoginShell]);
-
-  // The backend owns this preference because worktrees can also be created by
-  // CLI/control-socket and queued forks without a frontend request in flight.
-  useEffect(() => {
-    if (!worktreeLocationHydratedRef.current) {
-      return;
-    }
-    void setWorktreeLocation(settings.worktreeLocation).catch((err) => {
-      onErrorRef.current(`Could not save the worktree-location setting: ${errorMessage(err)}`);
-    });
-  }, [settings.worktreeLocation]);
-
   // Research launch prompts (fresh runs and every follow-up kind) are
   // assembled on the Rust side.
   useEffect(() => {
@@ -203,23 +159,13 @@ export function useAppSettings(onError: (message: string) => void) {
     });
   }, [settings.researchInlineWidgets]);
 
-  // Hydrates the backend-owned preferences. If the backend has no OpenRouter
-  // key but one survives in an old localStorage settings blob, that value is
-  // migrated into the backend once; either way the in-memory settings track it.
+  // Hydrates the backend-owned preferences.
   const applyStoredPreferences = useCallback(
     ({
-      storedOpenRouterKey,
-      storedUseLoginShell,
-      storedWorktreeLocation,
       storedResearchLaunchInstruction,
       storedResearchInlineWidgets,
     }: StoredPreferences) => {
       setSettings((current) => {
-        const backendKey = storedOpenRouterKey.trim();
-        const migratedKey = current.openRouterKey.trim();
-        const effectiveKey = backendKey || migratedKey;
-        const effectiveUseLoginShell = storedUseLoginShell ?? current.useLoginShell;
-        const effectiveWorktreeLocation = storedWorktreeLocation ?? current.worktreeLocation;
         const effectiveResearchLaunchInstruction = clampResearchLaunchInstruction(
           storedResearchLaunchInstruction ?? current.researchLaunchInstruction,
         );
@@ -230,25 +176,13 @@ export function useAppSettings(onError: (message: string) => void) {
         if (storedResearchInlineWidgets === null) {
           void setResearchInlineWidgets(effectiveResearchInlineWidgets).catch(() => undefined);
         }
-        if (!backendKey && migratedKey) {
-          void setOpenRouterKey(migratedKey).catch(() => undefined);
-        }
-        openRouterKeyHydratedRef.current = true;
-        useLoginShellHydratedRef.current = true;
-        worktreeLocationHydratedRef.current = true;
         researchLaunchInstructionHydratedRef.current = true;
         researchInlineWidgetsHydratedRef.current = true;
-        return current.openRouterKey === effectiveKey &&
-          current.useLoginShell === effectiveUseLoginShell &&
-          current.worktreeLocation === effectiveWorktreeLocation &&
-          current.researchLaunchInstruction === effectiveResearchLaunchInstruction &&
+        return current.researchLaunchInstruction === effectiveResearchLaunchInstruction &&
           current.researchInlineWidgets === effectiveResearchInlineWidgets
           ? current
           : {
               ...current,
-              openRouterKey: effectiveKey,
-              useLoginShell: effectiveUseLoginShell,
-              worktreeLocation: effectiveWorktreeLocation,
               researchLaunchInstruction: effectiveResearchLaunchInstruction,
               researchInlineWidgets: effectiveResearchInlineWidgets,
             };

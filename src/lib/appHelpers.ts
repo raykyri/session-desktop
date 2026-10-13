@@ -1,35 +1,7 @@
-import { findAgentUiAdapter } from "../adapters";
-import type {
-  AgentInfo,
-  PaneInfo,
-  RuntimeConfig,
-} from "../types";
+import type { AgentInfo } from "../types";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-const DEFAULT_SHELL_TITLE = "Shell";
-
-/** The title a pane is created with ("Shell" or the adapter's label). A pane
- * whose stored title differs has been renamed or auto-titled; shared by the
- * sidebar and the quick launcher so both resolve tab names by the same rule. */
-export function defaultPaneTitle(
-  pane: PaneInfo,
-  agent: AgentInfo | undefined,
-  config: RuntimeConfig | null,
-): string | null {
-  if (pane.kind === "shell") {
-    return DEFAULT_SHELL_TITLE;
-  }
-  if (!agent) {
-    return null;
-  }
-  return (
-    config?.adapters.find((adapter) => adapter.id === agent.adapter)?.label ??
-    findAgentUiAdapter(agent.adapter)?.label ??
-    null
-  );
 }
 
 /** Fixed-position placement for a popover anchored to a control inside a pane. */

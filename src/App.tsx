@@ -24,7 +24,6 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
-import { useFirstMessageTitles } from "./hooks/useFirstMessageTitles";
 import {
   adapterCanLaunchResearch,
 } from "./lib/adapterReadiness";
@@ -140,7 +139,6 @@ import type {
   ResearchDraft,
   ResearchImageAttachment,
   RuntimeConfig,
-  RemoteChoice,
 } from "./types";
 
 const BROWSER_OVERLAY_LEFT_MARGIN = 64;
@@ -158,10 +156,6 @@ function MainApp() {
     forceRefresh: forceRefreshAdapterReadiness,
   } = useAdapterReadiness(config, setConfig);
 
-  const configRemotes = useMemo(() => config?.remotes ?? [], [config?.remotes]);
-  const updateConfigRemotes = useCallback((remotes: RemoteChoice[]) => {
-    setConfig((current) => (current ? { ...current, remotes } : current));
-  }, []);
   const researchData = useResearchData();
   const {
     researchTrees,
@@ -210,12 +204,9 @@ function MainApp() {
     panes,
     panesRef,
     setPanes: setPanesReconciled,
-    agents,
     setAgents,
     hydrateAgents,
   } = useSessionProcesses(settings.preventSleep);
-  // Remotes menu and confirmation Escape handling, set by SettingsDialog.
-  const settingsEscapeHandlerRef = useRef<(() => boolean) | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const openSettings = useCallback(() => {
@@ -536,14 +527,6 @@ function MainApp() {
     refreshAdapterReadiness,
     setError,
   });
-  const { handleAgentSpawned, handleAgentPromptSubmitted } = useFirstMessageTitles({
-    panes,
-    agents,
-    config,
-    settings,
-    setPanes: setPanesReconciled,
-    onToast: showAppToast,
-  });
 
   // The thread page's toasts use the research toast: its live region is
   // mounted before any text arrives, and it pauses under the pointer or focus.
@@ -692,7 +675,6 @@ function MainApp() {
     },
     {
       closeBrowserOnEscape: browser.closeOnEscape,
-      settingsEscapeHandlerRef,
       closeResearchFolderRemoval,
       cancelExit,
       closeSettings,
@@ -717,8 +699,6 @@ function MainApp() {
     setAgents,
     setGroups,
     openBrowserOverlay: browser.openBrowserOverlay,
-    onAgentSpawned: handleAgentSpawned,
-    onAgentPromptSubmitted: handleAgentPromptSubmitted,
     onAppShortcut: handleNativeAppShortcut,
     onBrowserEscapeRequested: () => {
       dispatchBrowserEscape();
@@ -1148,7 +1128,6 @@ function MainApp() {
         onDeleteFolder={requestResearchFolderDelete}
         shortcutHintsShown={shortcutHintsShown}
         appearance={settings.appearance}
-        codeMode={settings.codeMode}
         settingsOpen={settingsOpen}
         onToggleAppearance={toggleAppearance}
         onOpenSettings={openSettings}
@@ -1195,10 +1174,6 @@ function MainApp() {
         settings={settings}
         setSettings={setSettings}
         availableBodyFonts={availableBodyFonts}
-        remotes={configRemotes}
-        onRemotesChange={updateConfigRemotes}
-        onToast={showAppToast}
-        escapeHandlerRef={settingsEscapeHandlerRef}
       />
 
       {researchFolderRemoval ? (

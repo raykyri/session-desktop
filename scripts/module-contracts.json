@@ -21,7 +21,6 @@
         "PromptScope",
         "RemoteConnectionState",
         "RemoteMultiplexer",
-        "RemoteProbeCheck",
         "RemoteRef",
         "RemoteSessionIdentity",
         "ResearchDocumentNode",

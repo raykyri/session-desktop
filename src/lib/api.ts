@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { RecentActivityPage } from "./activity";
-import type { WorktreeLocation } from "./settings";
 import {
   HumanBrowserLifecycleQueue,
   retryHumanBrowserLifecycle,
@@ -33,30 +32,15 @@ import type {
   UpdateResearchDocumentResult,
   UpdateResearchPostResult,
   RuntimeConfig,
-  RemoteChoice,
-  RemoteProbeResult,
-  SavedRemote,
 } from "../types";
 
 export function getRuntimeConfig() {
   return invoke<RuntimeConfig>("get_runtime_config");
 }
 
-export function listSshConfigAliases() {
-  return invoke<string[]>("list_ssh_config_aliases");
-}
 
-export function upsertRemote(id: string, remote: SavedRemote) {
-  return invoke<RemoteChoice[]>("upsert_remote", { id, remote });
-}
 
-export function deleteRemote(id: string) {
-  return invoke<RemoteChoice[]>("delete_remote", { id });
-}
 
-export function probeRemote(remote: SavedRemote) {
-  return invoke<RemoteProbeResult>("probe_remote", { remote });
-}
 
 export function probeAgentAdapters(options?: { groupId?: string | null; force?: boolean }) {
   return invoke<RuntimeConfig["adapters"]>("probe_agent_adapters", {
@@ -72,15 +56,7 @@ export function markAppWindowReady() {
   return invoke<void>("app_window_ready");
 }
 
-// The OpenRouter API key lives in the backend's owner-only preferences file, not in
-// webview localStorage, so the secret isn't readable at rest by injected scripts.
-export function getOpenRouterKey() {
-  return invoke<string>("openrouter_key_get");
-}
 
-export function setOpenRouterKey(key: string) {
-  return invoke<void>("openrouter_key_set", { key });
-}
 
 export function getGithubAccount() {
   return invoke<GithubAccount | null>("github_account_get");
@@ -102,11 +78,6 @@ export function logoutGithub() {
   return invoke<void>("github_logout");
 }
 
-export function openRouterChatCompletion(payload: unknown) {
-  return invoke<{ status: number; body: string }>("openrouter_chat_completion", {
-    payload,
-  });
-}
 
 export interface ShowHideShortcutSetting {
   accelerator: string | null;
@@ -479,21 +450,9 @@ export function removeResearchBranch(nodeId: string) {
   return invoke<ResearchBranchRemoval>("remove_research_branch", { nodeId });
 }
 
-export function getUseLoginShell() {
-  return invoke<boolean>("use_login_shell_get");
-}
 
-export function setUseLoginShell(enabled: boolean) {
-  return invoke<void>("use_login_shell_set", { enabled });
-}
 
-export function getWorktreeLocation() {
-  return invoke<WorktreeLocation>("worktree_location_get");
-}
 
-export function setWorktreeLocation(location: WorktreeLocation) {
-  return invoke<void>("worktree_location_set", { location });
-}
 
 export function getResearchLaunchInstruction() {
   return invoke<string>("research_launch_instruction_get");
@@ -854,9 +813,6 @@ export function activatePane(paneId: string) {
   return invoke<void>("pane_activate", { paneId });
 }
 
-export function renamePane(paneId: string, title: string) {
-  return invoke<PaneInfo>("pane_rename", { paneId, title });
-}
 
 export function confirmAppExit() {
   return invoke<void>("app_confirm_exit");
