@@ -841,6 +841,7 @@ test("tool activity labels are short and plain", () => {
   });
   assert.equal(toolActivityLabel(entry("WebFetch", { url: "not a url" })), "reading a page");
   assert.equal(toolActivityLabel(entry("web_search")), "searching the web");
+  assert.equal(toolActivityLabel(entry("x_search")), "searching X");
   assert.equal(toolActivityLabel(entry("Read", { file_path: "/a/b/notes.md" })), "reading notes.md");
   assert.equal(toolActivityLabel(entry("Grep")), "searching files");
   assert.equal(toolActivityLabel(entry("functions.exec_command")), "running a command");

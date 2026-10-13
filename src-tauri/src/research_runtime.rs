@@ -566,12 +566,13 @@ fn build_grok_headless_args(
         "--sandbox".to_string(),
         "read-only".to_string(),
         "--tools".to_string(),
-        "read_file,grep,list_dir,web_search,web_fetch".to_string(),
+        "read_file,grep,list_dir,web_search,web_fetch,x_search".to_string(),
         "--no-subagents".to_string(),
     ];
     // Permission rules use Claude-compatible prefixes, which are distinct
     // from the internal ids accepted by `--tools`. List/search are covered by
-    // Read/Grep; web_search is intrinsically read-only in Grok.
+    // Read/Grep; web_search and x_search are read-only and run on xAI's
+    // servers. Grok drops its hosted x_search tool unless `--tools` names it.
     for tool in ["Read", "Grep", "WebFetch"] {
         args.extend(["--allow".to_string(), tool.to_string()]);
     }
@@ -1956,7 +1957,7 @@ assert "--no-auto-update" in args
 assert args[args.index("--output-format") + 1] == "streaming-messages-json"
 assert args[args.index("--permission-mode") + 1] == "dontAsk"
 assert args[args.index("--sandbox") + 1] == "read-only"
-assert args[args.index("--tools") + 1] == "read_file,grep,list_dir,web_search,web_fetch"
+assert args[args.index("--tools") + 1] == "read_file,grep,list_dir,web_search,web_fetch,x_search"
 assert "Bash" in args and "Edit" in args and "MCPTool" in args
 assert args[args.index("-p") + 1] == "hello"
 session_id = args[args.index("--session-id") + 1]

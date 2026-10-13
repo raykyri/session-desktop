@@ -246,6 +246,8 @@ export function toolActivityLabel(entry: ToolEntry): string {
     case "web_search":
     case "search":
       return "searching the web";
+    case "x_search":
+      return "searching X";
     case "read":
     case "read_file": {
       const file = pathName(toolActivityInput(entry, "file_path") ?? toolActivityInput(entry, "path"));
