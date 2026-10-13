@@ -9,7 +9,7 @@ export const RESEARCH_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 /** Largest GIF or WebP file, which the backend does not downscale. */
 export const RESEARCH_IMAGE_MAX_UNSCALED_BYTES = 5 * 1024 * 1024;
 /** Most image bytes one message can carry, after downscaling. */
-export const RESEARCH_MESSAGE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+const RESEARCH_MESSAGE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 export const RESEARCH_IMAGE_MAX_COUNT = 8;
 const RESEARCH_DOWNSCALED_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg"]);
 const RESEARCH_IMAGE_TYPES: ReadonlySet<string> = new Set([
