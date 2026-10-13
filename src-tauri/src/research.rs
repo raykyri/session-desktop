@@ -21,7 +21,9 @@ pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
 /// Every archive is written at this version. Version 14 adds image
 /// attachments to messages, with the image files in the archive's `images`
 /// directory; builds that accept up to version 13 fail to parse a node with
-/// one and would drop it and the nodes below it. Version 13 adds a node's
+/// one and would drop it and the nodes below it. It also covers the Home
+/// nesting links between the archive's trees (`parents`), which those builds
+/// ignore. Version 13 adds a node's
 /// `chainOrder` (see `ResearchNode::chain_order`), which builds that accept
 /// up to version 12 would drop, and a tree order whose Unfiled trees list in
 /// that order; reads of an older archive put its Unfiled trees newest root

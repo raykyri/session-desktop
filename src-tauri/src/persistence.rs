@@ -38,9 +38,11 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// Version 12 adds image attachments (`{"kind":"image"}`) to research
 /// messages and drafts. Builds that accept up to version 11 fail to parse a
 /// node or draft that carries one, drop it, and then drop the nodes and
-/// threads below it on their next save, so they must refuse the file. The
-/// shape of everything else is unchanged; loads of an older file need no
-/// migration.
+/// threads below it on their next save, so they must refuse the file. It
+/// also covers Home nesting (`researchFolders.parents` and
+/// `collapsedGroups`), which those builds ignore and would drop on their
+/// next save. The shape of everything else is unchanged; loads of an older
+/// file need no migration.
 ///
 /// Version 11 adds a research node's `chainOrder` (the display order of
 /// the messages column its inline chain starts) and makes Home's Unfiled
