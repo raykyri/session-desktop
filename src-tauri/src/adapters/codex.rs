@@ -1079,10 +1079,10 @@ impl CodexAdapter {
                     .map_err(|err| format!("failed to encode send tracking: {err}"))?,
             );
         }
-        // Status/paused writes go straight to the store without touching this
-        // local snapshot, so re-read the agent before attaching it — otherwise
-        // the event ships a stale copy and the per-agent upsert below hides the
-        // change from the UI.
+        // Status/paused writes go directly to the store without updating this local
+        // snapshot. Re-read the agent before attaching it so the emitted event
+        // contains the current state. Otherwise, the subsequent per-agent upsert
+        // prevents the UI from receiving the change.
         let agent = match agent {
             Some(agent) => state.agent(&agent.id)?.or(Some(agent)),
             None => None,
@@ -2038,9 +2038,10 @@ fn start_codex_transcript_binding(
             .as_deref()
             .is_some_and(looks_like_codex_session_id)
     {
-        // No usable session id and no explicit transcript path, so directory
-        // discovery can't run. An already-bound pane may receive such a hook from
-        // a transient side conversation; keep its canonical binding without a notice.
+        // Directory discovery requires a usable session ID or an explicit transcript
+        // path. A hook without either may come from a secondary conversation in an
+        // already-bound pane. Preserve the existing binding and do not emit a failure
+        // notice.
         emit_codex_transcript_failure_if_unbound(
             &state,
             &agent_id,

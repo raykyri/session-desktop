@@ -901,10 +901,10 @@ impl GrokAdapter {
                     .map_err(|err| format!("failed to encode send tracking: {err}"))?,
             );
         }
-        // The idle handler (advance_after_idle) writes status/paused straight to the
-        // store without touching this local snapshot, so re-read the agent before
-        // attaching it — otherwise the event ships a stale (e.g. not-yet-paused) copy
-        // and the per-agent upsert below hides the change from the UI.
+        // The idle handler (advance_after_idle) writes status/paused directly to the
+        // store without updating this local snapshot. Re-read the agent before
+        // attaching it so the emitted event contains the current state. Otherwise,
+        // the subsequent per-agent upsert prevents the UI from receiving the change.
         let agent = match agent {
             Some(agent) => state.agent(&agent.id)?.or(Some(agent)),
             None => None,

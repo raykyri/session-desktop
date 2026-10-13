@@ -86,9 +86,9 @@ struct HumanBrowserInner {
     /// delayed show from the previously active pane unable to cover the pane
     /// the user switched to while the first command was crossing the bridge.
     latest_surface_revision: u64,
-    /// Lifecycle ordering is per owner. A destroy for pane A must not be
-    /// discarded merely because a newer geometry update for pane B arrived
-    /// first, while a stale destroy must not remove a reopened A.
+    /// Lifecycle ordering is per owner. Process the close for pane A even if a
+    /// newer geometry update for pane B arrived first. A delayed close event
+    /// must not remove pane A after it reopens.
     owner_revisions: HashMap<String, u64>,
     generation: u64,
 }
