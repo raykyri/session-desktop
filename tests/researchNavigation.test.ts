@@ -93,7 +93,7 @@ test("clicking a different research breadcrumb changes the selection", () => {
   assert.equal(isResearchNodeSelectionChange(null, "root-node"), true);
 });
 
-test("a feed card opens at its tree's root question, for active and archived trees", () => {
+test("a feed card opens at its tree's root node, for active and archived trees", () => {
   const trees = [
     { id: "active", rootNodeId: "active-root" },
     { id: "archived", rootNodeId: "archived-root" },

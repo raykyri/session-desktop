@@ -2,7 +2,7 @@ import type { ResearchNodeType } from "../types";
 import { nodeType } from "./researchNodeTypes";
 
 /** Whether a note can be edited: a post node (a text note or a link post,
- * the root note or a follow-up note) in a thread outside Archive. The note
+ * the root note or a follow-up note) in a thread outside the Archive. The note
  * menu's "Edit note" item and double-clicking a note use this rule. */
 export function researchNoteEditable(node: { type?: ResearchNodeType } | null | undefined, archived: boolean): boolean {
   return node != null && !archived && nodeType(node) === "post";

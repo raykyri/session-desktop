@@ -53,7 +53,7 @@ test("a tree's place: Archive by archivedAt, then its folder or Drafts, else Unf
   // A membership whose folder no longer exists is classified as Unfiled.
   assert.equal(researchTreePlace(tree("c"), state), RESEARCH_UNFILED_FOLDER_ID);
   assert.equal(researchTreePlace(tree("d"), state), RESEARCH_UNFILED_FOLDER_ID);
-  // Archived trees show only in Archive, even while they keep a folder.
+  // Archived trees show only in the Archive, even while they keep a folder.
   assert.equal(researchTreePlace(tree("a", { archivedAt: 5 }), state), RESEARCH_ARCHIVE_FOLDER_ID);
   assert.deepEqual(workspaceResearchFolders(state, "ws").map((folder) => folder.id), ["f-read"]);
   assert.deepEqual(workspaceResearchFolders(state, null), []);
@@ -195,7 +195,7 @@ test("a folder in the Trash leaves the lists, keeps its membership, and frees it
   assert.deepEqual(trashed.membership, filed.membership);
   assert.deepEqual(trashed.collapsed, ["f1"]);
   assert.deepEqual(workspaceResearchFolders(trashed, "ws").map((folder) => folder.id), ["f2"]);
-  // Its questions show as Unfiled until it is restored.
+  // Its trees show as Unfiled until it is restored.
   assert.equal(researchTreePlace(tree("a"), trashed), RESEARCH_UNFILED_FOLDER_ID);
   assert.equal(researchTreePlace(tree("b"), trashed), "f2");
   assert.equal(

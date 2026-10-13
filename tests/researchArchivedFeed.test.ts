@@ -62,8 +62,8 @@ test("Archive renders one card per archived thread, newest archived first", () =
   assert.equal((html.match(/class="research-feed-card(?=[ "])/g) ?? []).length, 2);
   assert.equal((html.match(/research-feed-card is-selected/g) ?? []).length, 1);
   assert.ok(html.indexOf("Terminal session") < html.indexOf("Thread run"));
-  // Archived cards are drop sources for moving out of Archive, and include the
-  // … menu (the thread's actions).
+  // Archived cards are drop sources for moving out of the Archive, and
+  // include the … menu (the thread's actions).
   assert.match(html, /data-research-card="run"/);
   assert.match(html, /aria-label="Thread actions"/);
   // The archive time is in the card's tooltip.

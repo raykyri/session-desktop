@@ -41,7 +41,7 @@ export function archivedFeedTrees(trees: ResearchTreeSummary[]): ResearchTreeSum
     );
 }
 
-/** The cards of Archive, in its Home tray and in its own view. Each card
+/** The cards of the Archive, in its Home tray and in its own view. Each card
  * opens its thread; its … button and its context menu open the same menu
  * (Move to, Unarchive, Delete), which the feed owns. */
 function ResearchArchivedFeed({

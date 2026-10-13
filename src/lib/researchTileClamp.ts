@@ -3,8 +3,9 @@
 // Show more expands it. These are the clamp's measurement and the thread's
 // set of expanded rows.
 
-/** The clamped text is cut off: its content is taller than its clamped box.
- * One pixel of slack absorbs subpixel rounding of the two heights. */
+/** Whether the clamped text is cut off: its content is taller than its
+ * clamped box. One pixel of slack absorbs subpixel rounding of the two
+ * heights. */
 export function researchTileOverflows(scrollHeight: number, clientHeight: number): boolean {
   return scrollHeight - clientHeight > 1;
 }

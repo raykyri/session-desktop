@@ -143,8 +143,9 @@ test("a message row's glyph floats beside its first line; feed cards put it in a
   // Message rows keep the float: the content is a flow root, so the float
   // stays inside it, and later lines use the full width.
   assert.match(ruleBody(researchCss, ".research-msg-content"), /display:\s*flow-root;\s*padding:\s*10px 12px 2px;/);
-  // A message's Markdown sets its own type, which the glyph before it (in
-  // the 12-line clamp box with the Markdown) takes.
+  // A message's Markdown sets its own font size and line height; the glyph
+  // before it (in the 12-line clamp box with the Markdown) uses the same
+  // values.
   const messageGlyph = ruleBody(researchCss, ".research-msg-clamp-text > .research-row-glyph");
   assert.match(
     messageGlyph,

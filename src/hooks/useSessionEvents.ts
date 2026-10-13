@@ -29,7 +29,8 @@ interface UseSessionEventsHandlers {
   setExitPreflightRequest: Dispatch<SetStateAction<ExitPreflightRequest | null>>;
   setAgents: Dispatch<SetStateAction<AgentInfo[]>>;
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
-  // Binds a browser-overlay URL to its owner (the backend emits the fully-formed URL).
+  // Opens `url` in `ownerId`'s browser overlay; browser.open events carry the
+  // complete URL.
   openBrowserOverlay: (ownerId: string, url: string, sandbox?: boolean) => void;
   onAppShortcut?: (command: AppShortcutCommand, repeat: boolean) => void;
   onBrowserEscapeRequested?: () => void;

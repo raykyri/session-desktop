@@ -23,9 +23,9 @@ interface ResearchGroupActionsOptions {
   archivedTreesRef: RefObject<ResearchTreeSummary[]>;
   /** The trees in the Trash (every workspace). */
   trashedTrees: ResearchTreeSummary[];
-  /** Moves one thread to the Trash and closes it when it is open. */
+  /** Moves one tree to the Trash and closes its thread when it is open. */
   trashTree: (treeId: string) => Promise<void>;
-  /** Deletes one thread permanently; rejects with the reason. */
+  /** Deletes one tree permanently; rejects with the reason. */
   removeTree: (treeId: string) => Promise<void>;
   onError: (message: string) => void;
   showToast: (message: ReactNode, options?: { undo?: () => void }) => void;
@@ -123,8 +123,8 @@ export function useResearchGroupActions({
     [findTree, groupChildren],
   );
 
-  /** Moves a thread and its children to the Trash, with Undo in the toast.
-   * Rejects when the thread itself can't be moved. */
+  /** Moves a tree and its children to the Trash, with Undo in the toast.
+   * Rejects when the tree itself can't be moved. */
   const trashGroup = useCallback(
     async (treeId: string) => {
       const children = groupChildren(treeId);
@@ -155,7 +155,7 @@ export function useResearchGroupActions({
     [groupChildren],
   );
 
-  /** Deletes a thread and its children permanently: the children first, so
+  /** Deletes a tree and its children permanently: the children first, so
    * a failure leaves the parent and the rest of its group. Rejects with the
    * reason. */
   const removeGroup = useCallback(
@@ -167,8 +167,8 @@ export function useResearchGroupActions({
     [groupChildren],
   );
 
-  /** Restores a tree and its children from `restore`'s place (the Archive
-   * or the Trash). A child restored without its parent rejoins its group
+  /** Restores a tree and its children with `restore` (from the Archive or
+   * the Trash). A child restored without its parent rejoins its group
    * when the parent is listed, else it is listed on its own. */
   const restoreWith = useCallback(
     async (treeId: string, restore: (id: string) => Promise<unknown>) => {

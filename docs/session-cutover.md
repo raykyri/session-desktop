@@ -15,7 +15,8 @@ Rename app-owned `QMUX_*` settings to `SESSION_*` in local build configuration,
 external scripts, and deployment secrets. Examples include `SESSION_CONFIG` and
 `SESSION_BUILD_TARGET`. `SESSION_PUBLIC_ORIGIN` now configures the web
 application at `https://session.dev` (`web/.env.example`), not a landing page.
-The `session` CLI (`send`, `ping`, `--version`) finds the control socket through
+The CLI (`session send|ping|--version`, or the same commands through
+`session-cli`) finds the control socket through
 `SESSION_SOCK`, the configured `socketPath`, or the default runtime location, and
 authenticates as a same-user socket peer; it takes no token.
 

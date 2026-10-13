@@ -66,7 +66,7 @@ function render(props: Parameters<typeof ResearchDeleteDialogPanel>[0]) {
   return renderToStaticMarkup(createElement(ResearchDeleteDialogPanel, props));
 }
 
-test("a thread's delete confirmation defaults to Move to Trash with Delete now left of the buttons", () => {
+test("a thread's delete confirmation defaults to Move to Trash with Delete now before Cancel and Move to Trash", () => {
   const props = researchTreeDeleteDialogProps({
     tree: summary("t", { title: "Memory" }),
     onClose: noop,
@@ -105,7 +105,7 @@ test("a thread's delete confirmation defaults to Move to Trash with Delete now l
   assert.match(running, /class="control-button primary" disabled="">Move to Trash/);
 });
 
-test("the root moves the research to the Trash; a message inside a thread is deleted at once", () => {
+test("deleting the root moves the thread to the Trash; deleting a branch or note inside it is permanent", () => {
   const root = researchNode({ id: "root", treeId: "t", prompt: "Root question", title: null });
   const rootHtml = render(
     researchBranchDeleteDialogProps({

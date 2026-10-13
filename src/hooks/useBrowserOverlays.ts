@@ -106,7 +106,8 @@ export function useBrowserOverlays({
     [],
   );
 
-  // Drop overlay state only when its research tree disappears.
+  // Drops the overlay state of owners whose research tree is no longer listed
+  // (active or archived).
   useEffect(() => {
     const ownerIds = new Set<string>();
     for (const tree of [...researchTrees, ...archivedResearchTrees]) {

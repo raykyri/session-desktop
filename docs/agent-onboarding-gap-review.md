@@ -54,9 +54,9 @@ T3's [WelcomeWizard](https://github.com/pingdotgg/t3code/blob/8d199b4f7b91807916
 
 [Provider probing](../src-tauri/src/adapters/mod.rs) initializes an installed CLI as generally ready. Unrecognized authentication output produces `Unknown`; an auth-probe error is ignored. [Setup completion](../src/lib/agentSetup.ts) requires a check timestamp and general readiness, rather than authenticated evidence. It can therefore mark Sign in complete without verifying sign-in.
 
-A second mismatch, remote probing reporting general readiness with research readiness set to Error, no longer applies: remote targets were removed, and every probed adapter is local.
+A second mismatch no longer applies: remote probing reported general readiness while setting research readiness to Error, but remote targets were removed and every probed adapter is local.
 
-**Done when:** installed, authentication verified, authentication unverified, and research-compatible are distinct states. A failed or unsupported auth probe cannot claim verified sign-in. Preserve an explicit attempt path for valid configurations that cannot be probed. Only research-capable targets count toward research setup completion; remote limitations are stated accurately.
+**Done when:** installed, authentication verified, authentication unverified, and research-compatible are distinct states. A failed or unsupported auth probe cannot claim verified sign-in. Preserve an explicit attempt path for valid configurations that cannot be probed. Only research-capable adapters count toward research setup completion.
 
 ### G3 Connect failures to repair and return to the investigation
 

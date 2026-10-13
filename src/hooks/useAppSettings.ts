@@ -30,8 +30,9 @@ function errorMessage(err: unknown): string {
 
 /**
  * Application settings: loaded from localStorage on mount and saved on every
- * change. The research instructions and the widget preference are also
- * mirrored to the backend, which owns their durable copy, once `applyStoredPreferences` has hydrated them from it.
+ * change. The research launch instruction and the inline-widgets setting are
+ * also written to the backend, which stores their durable copy, once
+ * `applyStoredPreferences` has loaded them from it.
  * Also applies the appearance, color theme and body font to the document.
  */
 export function useAppSettings(onError: (message: string) => void) {
@@ -159,7 +160,9 @@ export function useAppSettings(onError: (message: string) => void) {
     });
   }, [settings.researchInlineWidgets]);
 
-  // Hydrates the backend-owned preferences.
+  // Applies the backend's launch instruction and inline-widgets setting over
+  // the localStorage values (writing the local widget choice when the backend
+  // has none), then enables the sync effects.
   const applyStoredPreferences = useCallback(
     ({
       storedResearchLaunchInstruction,

@@ -68,8 +68,8 @@ Use `npm run test:node -- tests/example.test.ts` for focused TypeScript tests.
 The runner uses `tsconfig.runtime.json`, so JSX uses the same automatic React
 transform as the builds. The module reachability check recognizes the app
 entrypoint and tests, including literal lazy imports and type-only imports, and
-reports exports nothing outside their module consumes; it does not audit Rust
-command registration.
+reports exports that no other module uses, unless listed in
+scripts/module-contracts.json; it does not audit Rust command registration.
 
 The Tauri product name is `Session`; the executable is `session`, with standalone
 `session-cli` and shared `session-proto` crates. Apple bundle/Keychain identity,

@@ -118,9 +118,9 @@ export function followUpLaunch(node: Typed): "fork" | "context" {
 /** The adapter a follow-up of `parent` runs on, as the backend picks it
  * (create_research_child in state.rs): an exchange's own agent; a post's,
  * an imported report's, or a transcript's follow-up agent when it supports
- * research; otherwise, and always for an authored document, the default
- * adapter that supports research and is ready (`default_fork_adapter`).
- * Null when none is. */
+ * research; otherwise, and always for an authored document, the ready
+ * research adapter marked default, else the first ready research adapter
+ * (`default_fork_adapter`). Null when no adapter is ready for research. */
 export function followUpAdapter(
   parent: ResearchNode,
   adapters: readonly AgentAdapterMetadata[],

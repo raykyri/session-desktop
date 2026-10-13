@@ -113,7 +113,7 @@ export function isResearchNodeSelectionChange(
   return selectedNodeId !== nextNodeId;
 }
 
-/** The node a thread's feed card opens at: the tree's root question. Null
+/** The node a thread's feed card opens at: the tree's root node. Null
  * when `trees` does not list the tree; the thread then opens at the
  * selection it restores. */
 export function researchFeedCardNodeId(
@@ -393,7 +393,8 @@ export function savedResearchComposerImages(
   return saved && now - saved.updatedAt < RESEARCH_COMPOSER_IMAGES_TTL_MS ? saved.images : {};
 }
 
-/** Stores the images in a tree's ask boxes; none removes them. */
+/** Stores the images in a tree's ask boxes; an empty record removes the
+ * stored entry. */
 export function recordResearchComposerImages(
   treeId: string,
   images: Record<string, ResearchImageAttachment[]>,

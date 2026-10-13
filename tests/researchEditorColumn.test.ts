@@ -14,7 +14,8 @@ import {
 } from "../src/lib/researchEditor";
 import { withWidgetDom } from "./widgetDom";
 
-// Registered before the editor is pulled in: its model menu reaches adapter icons.
+// Registered before the editor is imported: its model menu imports adapter
+// SVG icons.
 register("./svgStubLoader.mjs", import.meta.url);
 const { ResearchEditorColumn, ResearchEditPreview } = await import(
   "../src/components/research/ResearchEditorColumn"

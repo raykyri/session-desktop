@@ -98,8 +98,8 @@ export function useResearchFolderDialogs({
     },
     [openFeedPage],
   );
-  // The confirmation's default: the folder moves to the Trash and keeps its
-  // membership, so Undo or Restore puts its questions back.
+  // The confirmation's default: the folder moves to the Trash and its trees
+  // keep their membership, so Undo or Restore lists them in it again.
   const confirmDelete = useCallback(
     (folderId: string) => {
       setPendingDelete(null);
@@ -116,7 +116,7 @@ export function useResearchFolderDialogs({
     },
     [openFeedPage, setFolderTrashed, showToast],
   );
-  // Delete now: the folder is deleted and its questions move to Unfiled.
+  // Delete now: the folder is deleted and its trees move to Unfiled.
   const deleteNow = useCallback(
     (folderId: string) => {
       const moved = [...researchTreesRef.current, ...archivedResearchTreesRef.current].filter(

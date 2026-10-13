@@ -48,7 +48,8 @@ export function researchImageAlt(image: ResearchImageAttachment): string {
 }
 
 /** Agents whose research runs send images with the prompt (Claude Code as
- * content blocks, Codex as image files). Grok's headless mode has none. */
+ * content blocks, Codex as image files). Grok's headless mode takes no image
+ * input. */
 function researchAgentReadsImages(adapterId: string): boolean {
   return adapterId === "claude" || adapterId === "codex";
 }
@@ -132,9 +133,9 @@ export function pasteAttachesImages(text: string, fileNames: readonly string[], 
   return lines.length === 1 && /^(https?:\/\/|file:\/\/|data:image\/)\S+$/i.test(lines[0]);
 }
 
-/** The files of a drop by name (the last path component), in order, so a
- * DOM drop (file names) and the window's native drop (paths) of the same
- * files compare equal. */
+/** A key for a drop's files: their names (last path components), sorted
+ * and newline-joined, so a DOM drop (file names) and the window's native
+ * drop (paths) of the same files produce the same key. */
 export function researchDropKey(namesOrPaths: readonly string[]): string {
   return namesOrPaths
     .map((name) => name.split(/[\\/]/).pop() ?? name)

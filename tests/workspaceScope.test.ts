@@ -22,7 +22,7 @@ function group(id: string, scope: GroupInfo["scope"]): GroupInfo {
   };
 }
 
-test("scope selectors partition groups without relying on research node bindings", () => {
+test("groupsForScope returns one scope's groups in order", () => {
   const terminalA = group("terminal-a", "terminal");
   const research = group("research-a", "research");
   const terminalB = group("terminal-b", "terminal");

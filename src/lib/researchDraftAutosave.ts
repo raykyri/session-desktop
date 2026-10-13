@@ -76,9 +76,10 @@ export function createResearchDraftAutosave({
   };
 }
 
-/** Saves a draft's text with its images only when they differ from the
- * images last saved, so text autosaves do not make the backend read every
- * image file again. `save` gets undefined to keep the stored images. */
+/** Wraps `save` so it receives the draft's images only when the array
+ * differs (by identity) from the one last saved successfully, and undefined
+ * otherwise, which keeps the stored images; text autosaves then do not make
+ * the backend read every image file again. */
 export function createResearchDraftImageSave<Image>(
   initial: readonly Image[],
   save: (prompt: string, images: readonly Image[] | undefined) => Promise<unknown>,

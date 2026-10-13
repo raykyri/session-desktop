@@ -166,7 +166,8 @@ export function listResearchDrafts(workspaceId: string) {
   return invoke<ResearchDraft[]>("list_research_drafts", { workspaceId });
 }
 
-/** Creates a draft (first in order) without an id, or updates its prompt.
+/** Without an id, creates a draft (first in order); with one, updates that
+ * draft's prompt.
  * `images` replaces the draft's images; omitted, they are kept. */
 export function saveResearchDraft(draft: {
   id?: string | null;
@@ -204,8 +205,8 @@ export function readResearchImage(id: string) {
   return invoke<string>("read_research_image", { id });
 }
 
-/** A small JPEG of a research message image (a GIF or WebP image whole) as
- * a `data:` URL, for thumbnail strips. */
+/** A research message image's thumbnail as a `data:` URL: a small JPEG, or
+ * for a GIF or WebP image the whole file, for thumbnail strips. */
 export function readResearchImageThumbnail(id: string) {
   return invoke<string>("read_research_image_thumbnail", { id });
 }

@@ -392,8 +392,9 @@ export interface ResearchFolder {
   id: string;
   name: string;
   workspaceId: string;
-  /** When the folder was moved to the Trash. It keeps its membership, so its
-   * questions return to it on Restore; until then they show as Unfiled. */
+  /** When the folder was moved to the Trash. Trees filed in it keep their
+   * membership, so they return to it on Restore; until then they show as
+   * Unfiled. */
   trashedAt?: number | null;
 }
 

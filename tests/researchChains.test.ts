@@ -174,7 +174,7 @@ test("canFollowUpFrom gates on completion and the run checkpoint", () => {
   );
 });
 
-test("canRetryResearchNode allows settled failures", () => {
+test("canRetryResearchNode allows failed and cancelled nodes only", () => {
   assert.equal(canRetryResearchNode(node("failed", { status: "failed" })), true);
   assert.equal(
     canRetryResearchNode(node("cancelled", { status: "cancelled" })),

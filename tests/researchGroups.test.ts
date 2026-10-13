@@ -100,14 +100,14 @@ test("a nest port shows on the top-level parents that can take the dragged item"
   assert.equal(researchNestPortShown({ id: "a", parentId: null }, { ...top, holdsChildren: false }), false);
 });
 
-test("only the port nests; the rest of a top-level card reorders by half", () => {
+test("a top-level card nests on its port and otherwise reorders by half; below an expanded parent's midpoint is before its first child", () => {
   const item = { id: "a", parentId: null };
   const card = {
     card: "top" as const, id: "p", holdsChildren: true, onPort: false,
     after: false, expanded: false, firstChildId: null,
   };
   assert.deepEqual(researchCardDrop(item, { ...card, onPort: true }), { kind: "nest", parentId: "p", beforeId: null });
-  // The middle of a parent no longer nests: top half before, bottom half after.
+  // Off the port, a parent does not nest: top half before, bottom half after.
   assert.deepEqual(researchCardDrop(item, card), { kind: "before", id: "p" });
   assert.deepEqual(researchCardDrop(item, { ...card, after: true }), { kind: "after-group", id: "p" });
   // After an expanded parent is before its first child.
@@ -115,8 +115,9 @@ test("only the port nests; the rest of a top-level card reorders by half", () =>
     researchCardDrop(item, { ...card, after: true, expanded: true, firstChildId: "c1" }),
     { kind: "nest", parentId: "p", beforeId: "c1" },
   );
-  // A card that can't hold children, or whose port is hidden (the item's
-  // parent, the item itself), reorders even under the pointer's port spot.
+  // A card that can't hold children, or the item's parent (port hidden),
+  // reorders even with the pointer on the port spot; the item itself is no
+  // drop.
   assert.deepEqual(researchCardDrop(item, { ...card, holdsChildren: false, onPort: true }), { kind: "before", id: "p" });
   assert.deepEqual(
     researchCardDrop({ id: "c", parentId: "p" }, { ...card, onPort: true, after: false }),

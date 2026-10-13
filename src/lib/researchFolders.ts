@@ -43,8 +43,8 @@ export function researchPlaceName(place: string, folders: ResearchFolder[]): str
   return folders.find((folder) => folder.id === place)?.name ?? "Unfiled";
 }
 
-/** Where a tree is listed. An archived tree appears only in Archive even if it
- * retains a folder membership. A missing folder, or one in the Trash, is
+/** Where a tree is listed. An archived tree appears only in the Archive even
+ * if it retains a folder membership. A missing folder, or one in the Trash, is
  * treated as Unfiled; the membership stays for the folder's Restore. */
 export function researchTreePlace(
   tree: Pick<ResearchTreeSummary, "id" | "archivedAt">,
@@ -148,8 +148,8 @@ export function researchFolderStateWithoutFolder(
   };
 }
 
-/** Moves a folder to the Trash at `trashedAt`, or out of it with null. Its
- * membership and collapsed state stay. */
+/** Moves a folder to the Trash at `trashedAt`, or out of it with null. Trees
+ * filed in it keep their membership, and its collapsed state is kept. */
 export function researchFolderStateWithFolderTrashed(
   state: ResearchFolderState,
   folderId: string,

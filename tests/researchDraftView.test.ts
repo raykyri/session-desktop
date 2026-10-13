@@ -93,7 +93,7 @@ test("closing the draft flushes a pending edit at once", (t) => {
   assert.deepEqual(saves, ["Draft, edited"]);
 });
 
-test("⌘S saves a pending edit at once and says whether it saved", async (t) => {
+test("⌘S saves a pending edit at once and resolves whether it saved", async (t) => {
   const { autosave, saves, errors, failSave } = autosaveHarness(t);
   assert.equal(await autosave.saveNow(), false, "nothing to save");
   autosave.edit("Draft, edited");

@@ -23,8 +23,9 @@ interface ResearchTreeGroup<T> {
   children: T[];
 }
 
-/** The parent `id` is listed under in a list of `ids`, or null when it is
- * listed on its own. */
+/** The parent that `id` is listed under among `ids`: its recorded parent
+ * when that parent is in `ids` and is not itself a child, else null (listed
+ * on its own). */
 function listedParent(
   id: string,
   ids: ReadonlySet<string>,
@@ -160,12 +161,13 @@ type ResearchCardDrop =
   | { kind: "before"; id: string }
   | { kind: "after-group"; id: string };
 
-/** The drop for a tree over a card. Only a card's nest port nests under the
- * card; elsewhere a top-level card reorders: before it in its top half,
- * after it in its bottom half, where after an expanded parent is before its
- * first child. A child card inserts within its group; below the last child,
- * left of its glyph, is after the group at the top level. The Move out strip
- * takes only the group's own children. */
+/** The drop for a tree over a card. A top-level card's nest port nests under
+ * the card. Elsewhere on a top-level card the drop goes before it in its top
+ * half and after its group in its bottom half; below an expanded parent's
+ * midpoint it goes before the parent's first child (a nest). A child card
+ * inserts within its group; below the last child, left of its glyph, is after
+ * the group at the top level. The Move out strip takes only the group's own
+ * children. */
 export function researchCardDrop(item: ResearchDraggedTree, hit: ResearchCardHit): ResearchCardDrop {
   if (hit.card === "group-exit") {
     return item.parentId === hit.parentId ? { kind: "after-group", id: hit.parentId } : { kind: "none" };

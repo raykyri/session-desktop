@@ -3,8 +3,9 @@
 Historical record: the subsequent Foundation Models removal supersedes this
 plan’s instructions to retain the independent title bridge. See
 [the current title-generation behavior](session-cutover.md#title-generation-after-foundation-models-removal).
-The PTY, remote-terminal, and control-socket surfaces this plan kept were removed
-later; see [native support after terminal removal](session-cutover.md#native-support-after-terminal-removal).
+The PTYs, remote terminals, and pane control-socket commands this plan kept
+were removed later (the control socket now serves only `ping` and
+`notification.send`); see [native support after terminal removal](session-cutover.md#native-support-after-terminal-removal).
 
 Status: source implementation completed; macOS release/runtime validation pending.
 Baseline: `02b832a`. The staged plan below records the source review before

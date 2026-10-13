@@ -19,7 +19,8 @@ interface ResearchDragItem {
   place: string;
 }
 
-/** Starts a drag of the element the handler is on from a pointer down. */
+/** Pointer-down handler that starts dragging `event.currentTarget` as `item`
+ * once the pointer moves past the threshold. */
 export type ResearchCardDragStart = (
   event: ReactPointerEvent<HTMLElement>,
   item: ResearchDragItem,
@@ -41,7 +42,7 @@ interface ResearchCardDragOptions {
 }
 
 /** Where a drop puts the dragged item: in a place (between cards, or on the
- * place), under a parent, or nowhere with the reason shown. */
+ * place), or under a parent. A drop that does nothing is null. */
 type ResearchDrop =
   | { place: string; position: ResearchDropPosition | null }
   | { place: string; nest: { parentId: string; beforeId: string | null } };
@@ -102,11 +103,12 @@ function zoneAccepts(zone: HTMLElement, place: string, item: ResearchDragItem): 
  * the item goes; a zone of another place is highlighted as a whole. A drop
  * in the item's own place needs a position (a reorder); elsewhere it moves
  * the item. While a tree is dragged, each card that can take it as a child
- * shows a nest port, which nests; the rest of a card reorders (see
- * `researchCardDrop`). A dragged child's group shows a Move out strip below
- * it. Marks are set on the DOM directly so a drag re-renders nothing
- * until it ends. Pointer events are used instead of HTML drag and drop,
- * which the native window's file-drop handling can intercept.
+ * shows a nest port; a drop on the port nests the tree under that card, and a
+ * drop elsewhere on the card reorders (see `researchCardDrop`). A dragged
+ * child's group shows a Move out strip below it. Marks are set on the DOM
+ * directly so a drag re-renders nothing until it ends. Pointer events are
+ * used instead of HTML drag and drop, which the native window's file-drop
+ * handling can intercept.
  */
 export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchCardDragStart {
   const optionsRef = useRef(options);
@@ -261,8 +263,9 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       if (!none) drop = { place, position };
     };
 
-    /** The id of the top-level card after `over`'s group in `zone`, as a
-     * drop position after it. */
+    /** The drop position after `over`'s group in `zone`: before the next
+     * top-level card, after `over` when that card is not rendered
+     * (virtualized list), or at the end. */
     const positionAfter = (zone: HTMLElement, over: HTMLElement): ResearchDropPosition => {
       const overId = over.dataset.researchCard ?? "";
       const cards = [...zone.querySelectorAll<HTMLElement>(TOP_CARD)].filter(
@@ -281,10 +284,11 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
     const cardIn = (zone: HTMLElement, id: string) =>
       zone.querySelector<HTMLElement>(`${TREE_CARD}[data-research-card="${CSS.escape(id)}"]`);
 
-    /** A tree over a tree card, a group's Move out strip, or the rest of a
-     * place that keeps an order: between top-level cards, under a parent, or
-     * refused. Undefined when the drop is on the place itself; null for a
-     * drop that does nothing. Marks the target and shows its label. */
+    /** Resolves a tree drop in a place that keeps an order (over a tree card,
+     * a group's Move out strip, or below the cards; see evaluatePlaceEnd) to
+     * a position between top-level cards or under a parent. Null for a
+     * refused drop or one that changes nothing; undefined when the pointer is
+     * on the place itself. Marks the target and shows its label. */
     const evaluateTree = (
       zone: HTMLElement,
       place: string,
@@ -386,15 +390,16 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       mark(unit && top.nextElementSibling ? unit : top, "is-insert-after");
     };
 
-    /** A child's label for a drop at the top level. */
+    /** Shows the "Move out of …" label when the dragged tree is a child. */
     const showMoveOutLabel = (zone: HTMLElement, target: Element) => {
       if (itemParentId) showLabel(target, `Move out of “${cardName(cardIn(zone, itemParentId))}”`);
     };
 
-    /** A tree in its own place, off its cards: below the last card of a
-     * top-level card's unit (the end of its group), or below the last unit,
-     * is after that unit's group, at the top level. Undefined elsewhere (the
-     * place itself). */
+    /** A tree dropped in its own place below the cards: below the last card
+     * of a unit (a top-level card and its group), or below the last unit,
+     * drops it at the top level after that unit's group. Null when that unit
+     * is the dragged tree's own; undefined elsewhere (a drop on the place
+     * itself). */
     const evaluatePlaceEnd = (
       zone: HTMLElement,
       place: string,

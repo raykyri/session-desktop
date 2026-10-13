@@ -1,6 +1,7 @@
-// Keys of the editors that save (the editor column for documents and notes,
-// and a draft's view). They are handled where the editor is focused, not by
-// the app-level dispatcher (appShortcuts.ts), which binds no S chord.
+// The save shortcut of the editors that save explicitly (the editor column
+// for documents and notes, and a draft's view). They are handled where the
+// editor is focused, not by the app-level dispatcher (appShortcuts.ts), which
+// binds no S chord.
 
 /** The hint shown for isSaveShortcut. Like the app's other hints it names ⌘;
  * Ctrl+S does the same. */
@@ -17,9 +18,9 @@ interface SaveShortcutInput {
 }
 
 /** ⌘S, or Ctrl+S: saves the open editor's text and keeps the editor open.
- * Exactly one of ⌘ and Ctrl, as Settings' ⌘, (Ctrl+,) accepts, so the key
- * works outside macOS; Shift and Option variants are not it. A key pressed
- * while an input method composes belongs to the composition. */
+ * Exactly one of ⌘ and Ctrl must be held, as for Settings' ⌘, (Ctrl+,), so
+ * the shortcut also works outside macOS; with Shift or Option held it does
+ * not match. Keys pressed during input-method composition never match. */
 export function isSaveShortcut(event: SaveShortcutInput): boolean {
   if (event.nativeEvent?.isComposing) {
     return false;

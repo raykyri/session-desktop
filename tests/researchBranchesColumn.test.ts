@@ -13,8 +13,8 @@ import { researchNodeLabel } from "../src/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 
-// Registered before the columns are pulled in: the answer column reaches the
-// editor column, whose model menu imports adapter icons.
+// Registered before the columns are imported: the answer column imports the
+// editor column, whose model menu imports adapter SVG icons.
 register("./svgStubLoader.mjs", import.meta.url);
 const { ResearchQueuedAnswerColumn } = await import("../src/components/research/ResearchAnswerColumn");
 const { ResearchBranchesColumn } = await import("../src/components/research/ResearchMessagesColumn");

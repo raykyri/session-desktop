@@ -1,6 +1,6 @@
 import type { ResearchFolder, ResearchTreeSummary } from "../types";
 
-/** A row of the Trash: a tree (question, note, link or document) or a folder. */
+/** A row of the Trash: a tree (question, post or document) or a folder. */
 export type ResearchTrashEntry =
   | { kind: "tree"; id: string; title: string; trashedAt: number; tree: ResearchTreeSummary }
   | { kind: "folder"; id: string; title: string; trashedAt: number; folder: ResearchFolder };
@@ -61,7 +61,7 @@ export function researchTrashTreeSentence(followUpCount: number | null, childCou
   } too.`;
 }
 
-/** The first delete confirmation's sentence for a folder. Its questions are
+/** The first delete confirmation's sentence for a folder. Its trees are
  * not trashed; they show in Unfiled until the folder is restored. */
 export function researchTrashFolderSentence(questionCount: number): string {
   if (questionCount === 0) return "The folder is empty. It moves to the Trash.";

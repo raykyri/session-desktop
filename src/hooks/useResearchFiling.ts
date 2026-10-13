@@ -166,8 +166,8 @@ export function useResearchFiling({
    * its link, so Unarchive lists it under its parent again. A move to another
    * place shows a toast with Undo; a reorder within the same place shows
    * none. With `newFolderName`, `place` is the id of a folder created by the
-   * same write. A failure is reported, or with `rejects` passed to the
-   * caller. */
+   * same write. A failure is reported through `onError`, or, with `rejects`,
+   * rethrown to the caller. */
   const moveTree = useCallback(
     async (
       treeId: string,
@@ -308,10 +308,10 @@ export function useResearchFiling({
 
   /** Lists `treeId` under `parentId`, before `beforeId` (one of the parent's
    * children) or at the end of the group for null. The tree takes the
-   * parent's folder, and an archived tree is unarchived. A tree with
-   * children of its own is nested only with `flatten`: its children become
-   * children of `parentId` after it. The group expands. A tree that changes
-   * parent shows a toast with Undo. Resolves false when nothing changed. */
+   * parent's folder, and an archived tree is unarchived. A tree with children
+   * of its own is nested only with `flatten`: its children become children of
+   * `parentId` after it. The group expands. A tree that changes parent shows
+   * a toast with Undo. Resolves false when the nest is refused or fails. */
   const nestTree = useCallback(
     async (
       treeId: string,
