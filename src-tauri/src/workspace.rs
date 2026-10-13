@@ -420,6 +420,10 @@ fn create_research_workspace_locked(
             let _ = fs::remove_dir_all(&group.managed_dir);
             return Err(err);
         }
+        // Before the nodes that attach them. If the import then fails, the
+        // copies are unreferenced and the next clean startup returns them to
+        // pending.
+        crate::research_images::import_archived(&state.config().workspace_root, &bundle.images);
         let imported = match state.import_detached_research(
             group.clone(),
             bundle.archive.tree_order,
@@ -625,6 +629,7 @@ pub fn move_research_workspace(
                 &bundle.archive,
                 &bundle.responses,
             )?;
+            crate::research::write_detached_research_images(&canonical, &bundle.images)?;
             if !bundle.pending {
                 crate::research::commit_detached_research(&canonical)?;
             }
@@ -740,6 +745,19 @@ pub fn remove_research_workspace(
     }
     let folder = Path::new(&workspace.dir);
     crate::research::write_detached_research_pending(folder, &archive, &responses)?;
+    let image_ids = archive
+        .nodes
+        .iter()
+        .flat_map(|node| crate::research_images::image_ids(node.attachments()))
+        .collect::<std::collections::BTreeSet<_>>();
+    let images = image_ids
+        .into_iter()
+        .filter_map(|id| {
+            let path = crate::research_images::image_path(&state.config().workspace_root, id)?;
+            Some((id.to_string(), path))
+        })
+        .collect::<Vec<_>>();
+    crate::research::write_detached_research_images(folder, &images)?;
     let node_ids = state.commit_research_workspace_detach(workspace_id, &archive)?;
     // The pending archive is already complete and importable. Promotion is the
     // second phase; if it fails, reopening the folder deliberately recovers it.
@@ -3402,6 +3420,71 @@ mod tests {
         let post = restored_detail.nodes[0].post().expect("a post");
         assert_eq!(post.message.text, "Who has tried X?");
         assert!(post.delivery.is_some());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn removed_research_folders_carry_their_images() {
+        let root = temp_workspace("remove-images-research");
+        let project = root.join("project");
+        let moved = root.join("moved");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(&moved).unwrap();
+        let managed = root.join("managed");
+        let state = test_state_with_workspace(managed.clone());
+        state.restore_session();
+        let workspace =
+            create_research_workspace(&state, None, project.display().to_string()).unwrap();
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x02\0\0\0\x02\x08\x06\0\0\0".to_vec();
+        let image = crate::research_images::save_pending(&managed, &png, None).unwrap();
+        let crate::tweets::ResearchMessageAttachment::Image { id, .. } = &image else {
+            panic!("expected an image attachment");
+        };
+        let id = id.clone();
+        state
+            .create_research_post(
+                crate::research::CreateResearchPostRequest {
+                    body: "What is in this picture?".to_string(),
+                    adapter: "claude".to_string(),
+                    model: None,
+                    effort: None,
+                    workspace_id: workspace.id.clone(),
+                    share: false,
+                },
+                vec![image],
+            )
+            .unwrap();
+
+        remove_research_workspace(&state, &workspace.id).unwrap();
+        let bundle = crate::research::read_detached_research(&project)
+            .unwrap()
+            .expect("detached archive");
+        assert_eq!(bundle.archive.version, 14);
+        assert_eq!(bundle.images.len(), 1);
+        assert_eq!(bundle.images[0].0, id);
+        assert_eq!(std::fs::read(&bundle.images[0].1).unwrap(), png);
+
+        // The archive moves with the folder, images included, and restores
+        // them on a machine whose store does not have them.
+        std::fs::rename(project.join(".session"), moved.join(".session")).unwrap();
+        for path in [
+            crate::research_images::store_dir(&managed).join(&id),
+            crate::research_images::store_dir(&managed)
+                .join("pending")
+                .join(&id),
+        ] {
+            let _ = std::fs::remove_file(path);
+        }
+        assert!(crate::research_images::image_path(&managed, &id).is_none());
+        create_research_workspace(&state, None, moved.display().to_string()).unwrap();
+        assert_eq!(
+            crate::research_images::image_path(&managed, &id),
+            Some(crate::research_images::store_dir(&managed).join(&id))
+        );
+        assert_eq!(
+            std::fs::read(crate::research_images::store_dir(&managed).join(&id)).unwrap(),
+            png
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

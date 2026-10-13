@@ -18,7 +18,10 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-/// Every archive is written at this version. Version 13 adds a node's
+/// Every archive is written at this version. Version 14 adds image
+/// attachments to messages, with the image files in the archive's `images`
+/// directory; builds that accept up to version 13 fail to parse a node with
+/// one and would drop it and the nodes below it. Version 13 adds a node's
 /// `chainOrder` (see `ResearchNode::chain_order`), which builds that accept
 /// up to version 12 would drop, and a tree order whose Unfiled trees list in
 /// that order; reads of an older archive put its Unfiled trees newest root
@@ -28,7 +31,7 @@ pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
 /// version 11 ignore the new key and would drop every star. Archives store
 /// research nodes as an envelope with a tagged body (see `ResearchNode`)
 /// since version 11; builds that accept versions 1 to 10 read flat records
-/// and would drop every node. Reads accept versions 1 to 13 and migrate older
+/// and would drop every node. Reads accept versions 1 to 14 and migrate older
 /// nodes (`migrate_research_node_values`). Version 10 denotes two shapes, both
 /// written only by unreleased builds: flat records with posts and one merged
 /// anchor, and, from later builds, the body shape; the shape-based migration
@@ -36,10 +39,13 @@ pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
 /// archive held (3 runs only, 4 documents, 5 terminal conversations, 6 inline
 /// follow-ups, 7 attachments, 8 notes, 9 imported documents), so older builds
 /// kept reading archives without those features.
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 13;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 14;
 const DETACHED_RESEARCH_DIR: &str = "research-v1";
 const DETACHED_RESEARCH_PENDING_DIR: &str = "research-v1.pending";
 const DETACHED_RESEARCH_MANIFEST: &str = "manifest.json";
+/// The archive's copies of the image files its messages attach, named by
+/// image id (see `crate::research_images`).
+const DETACHED_RESEARCH_IMAGES_DIR: &str = "images";
 const MAX_DETACHED_RESEARCH_MANIFEST_BYTES: u64 = 32 * 1024 * 1024;
 
 /// A client-authored organizational grouping of research trees, layered over
@@ -380,6 +386,9 @@ pub struct DetachedResearchArchive {
 pub struct DetachedResearchBundle {
     pub archive: DetachedResearchArchive,
     pub responses: HashMap<String, Vec<crate::transcript::Turn>>,
+    /// The image files in the archive that its messages attach, by image
+    /// id. Archives before version 14 have none.
+    pub images: Vec<(String, PathBuf)>,
     pub pending: bool,
 }
 
@@ -2777,11 +2786,70 @@ fn read_detached_research_from_path(
         };
         responses.insert(node.id.clone(), snapshot.turns);
     }
+    let images = archived_images(archive_path, &archive)?;
     Ok(DetachedResearchBundle {
         archive,
         responses,
+        images,
         pending,
     })
+}
+
+/// The image files in the archive at `archive_path` that its nodes attach.
+/// A referenced image missing from the archive is left out; the message
+/// then shows it as unavailable.
+fn archived_images(
+    archive_path: &Path,
+    archive: &DetachedResearchArchive,
+) -> Result<Vec<(String, PathBuf)>, String> {
+    let dir = archive_path.join(DETACHED_RESEARCH_IMAGES_DIR);
+    reject_symlink(&dir)?;
+    let ids = archive
+        .nodes
+        .iter()
+        .flat_map(|node| crate::research_images::image_ids(node.attachments()))
+        .filter(|id| crate::research_images::is_image_id(id))
+        .collect::<std::collections::BTreeSet<_>>();
+    Ok(ids
+        .into_iter()
+        .map(|id| (id.to_string(), dir.join(id)))
+        .filter(|(_, path)| {
+            fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+        })
+        .collect())
+}
+
+/// Copies image files into the folder's pending archive, written by
+/// [`write_detached_research_pending`] just before, so the research keeps
+/// its images when the folder is added back, on this machine or another.
+/// `images` pairs each image id with the file to copy.
+pub fn write_detached_research_images(
+    folder: &Path,
+    images: &[(String, PathBuf)],
+) -> Result<(), String> {
+    if images.is_empty() {
+        return Ok(());
+    }
+    let pending_path = detached_archive_path(folder, true);
+    reject_symlink(&pending_path)?;
+    let dir = pending_path.join(DETACHED_RESEARCH_IMAGES_DIR);
+    reject_symlink(&dir)?;
+    fs::create_dir_all(&dir).map_err(|err| format!("failed to create {}: {err}", dir.display()))?;
+    let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+    for (id, source) in images {
+        if !crate::research_images::is_image_id(id) {
+            return Err(format!("invalid research image id {id}"));
+        }
+        let bytes = fs::read(source)
+            .map_err(|err| format!("failed to read research image {}: {err}", source.display()))?;
+        let path = dir.join(id);
+        crate::persistence::write_synced(&path, &bytes)
+            .map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+    }
+    if let Ok(handle) = fs::File::open(&dir) {
+        let _ = handle.sync_all();
+    }
+    Ok(())
 }
 
 /// Archives before version 13 were written while Home listed Unfiled by

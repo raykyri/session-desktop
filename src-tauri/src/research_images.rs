@@ -387,6 +387,29 @@ fn move_file(from: &Path, to_dir: &Path, id: &str) {
     }
 }
 
+/// Copies the image files of a detached research archive into the store, as
+/// the folder is added back. An image already here is kept (and moved into
+/// the store if pending). Failures are logged; the message then shows the
+/// image as unavailable.
+pub fn import_archived(workspace_root: &Path, images: &[(String, PathBuf)]) {
+    let store = store_dir(workspace_root);
+    for (id, source) in images.iter().filter(|(id, _)| is_image_id(id)) {
+        if image_path(workspace_root, id).is_some() {
+            commit(workspace_root, [id.as_str()]);
+            continue;
+        }
+        let target = store.join(id);
+        let partial = store.join(format!("{id}.tmp"));
+        let result = fs::create_dir_all(&store)
+            .and_then(|()| fs::copy(source, &partial))
+            .and_then(|_| fs::rename(&partial, &target));
+        if let Err(err) = result {
+            let _ = fs::remove_file(&partial);
+            eprintln!("session: failed to import research image {id}: {err}");
+        }
+    }
+}
+
 /// Moves pending images a message or draft now references into the store.
 pub fn commit<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>) {
     let store = store_dir(workspace_root);
