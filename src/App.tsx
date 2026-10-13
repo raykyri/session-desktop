@@ -326,10 +326,22 @@ function MainApp() {
     confirmExit,
     cancelExit,
   } = useQuitFlow({ runningResearchCount, researchActivity, onError: setError });
+  // A research thread's relative local links resolve against its workspace
+  // folder, as the backend resolves them.
+  const researchOwnerWorkingDir = useCallback(
+    (ownerId: string) => {
+      const tree = [...researchTrees, ...archivedResearchTrees].find(
+        (candidate) => researchBrowserOwnerId(candidate.id) === ownerId,
+      );
+      return tree ? (groupById.get(tree.workspaceId)?.dir ?? null) : null;
+    },
+    [archivedResearchTrees, groupById, researchTrees],
+  );
   const browser = useBrowserOverlays({
     researchTrees,
     archivedResearchTrees,
     activeOwnerId: activeResearchTreeId ? researchBrowserOwnerId(activeResearchTreeId) : null,
+    ownerWorkingDir: researchOwnerWorkingDir,
     fileServerPort: config?.fileServerPort ?? null,
     onError: setError,
   });

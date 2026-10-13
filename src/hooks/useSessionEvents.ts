@@ -30,12 +30,7 @@ interface UseSessionEventsHandlers {
   setAgents: Dispatch<SetStateAction<AgentInfo[]>>;
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
   // Binds a browser-overlay URL to its owner (the backend emits the fully-formed URL).
-  openBrowserOverlay: (
-    ownerId: string,
-    url: string,
-    sandbox?: boolean,
-    artifactId?: string | null,
-  ) => void;
+  openBrowserOverlay: (ownerId: string, url: string, sandbox?: boolean) => void;
   onAppShortcut?: (command: AppShortcutCommand, repeat: boolean) => void;
   onBrowserEscapeRequested?: () => void;
   onResearchChanged?: (event: SessionEvent) => void;
@@ -138,13 +133,7 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
       if (event.type === "browser.open" && event.paneId) {
         const url = event.payload.url;
         if (typeof url === "string") {
-          const artifactId = event.payload.artifactId;
-          openBrowserOverlay(
-            event.paneId,
-            url,
-            event.payload.sandbox === true,
-            typeof artifactId === "string" ? artifactId : null,
-          );
+          openBrowserOverlay(event.paneId, url, event.payload.sandbox === true);
         }
       }
       if (

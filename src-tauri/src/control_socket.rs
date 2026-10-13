@@ -936,17 +936,6 @@ fn peer_is_current_user(_stream: &UnixStream) -> bool {
     false
 }
 
-/// A browser-overlay target resolved for one pane. `path` contains the canonical
-/// filesystem path for file targets — the artifact tray persists that instead of
-/// `url`, whose file-server token goes stale across runs — and is None for
-/// loopback http(s) URLs.
-#[derive(Debug)]
-pub(crate) struct ResolvedBrowserTarget {
-    pub url: String,
-    pub sandbox: bool,
-    pub path: Option<std::path::PathBuf>,
-}
-
 fn write_response(stream: &mut UnixStream, result: Result<Value, String>) -> std::io::Result<()> {
     let response = match result {
         Ok(data) => ControlResponse {

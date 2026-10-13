@@ -59,6 +59,30 @@ pub enum ResearchRelaunch {
     Rerun,
 }
 
+/// Prefix of the browser-overlay owner id of a research tree's thread page,
+/// followed by the tree id. Mirrors `researchBrowserOwnerId` in the frontend.
+pub const RESEARCH_THREAD_OWNER_PREFIX: &str = "__research_thread__:";
+
+/// 256 bits from the OS CSPRNG for a file-preview capability. A failure is
+/// rare but can be transient in some sandboxes, so retry before giving up;
+/// never fall back to a predictable secret.
+fn preview_token() -> Result<String, String> {
+    let mut bytes = [0u8; 32];
+    let mut last_err = None;
+    for _ in 0..3 {
+        match getrandom::getrandom(&mut bytes) {
+            Ok(()) => return Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect()),
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(format!(
+        "OS CSPRNG unavailable; cannot mint a preview token: {}",
+        last_err
+            .map(|err| err.to_string())
+            .unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
 #[derive(Clone)]
 pub struct AppState {
     inner: Arc<AppStateInner>,
@@ -66,7 +90,16 @@ pub struct AppState {
 
 struct AppStateInner {
     config: SessionConfig,
+    // Read-only file-preview credentials, one per research thread that opened
+    // a local link, keyed by browser-overlay owner id. Executable previews get
+    // a narrower token that can only re-read their exact source.
+    file_tokens: Mutex<HashMap<String, String>>,
     exact_file_tokens: Mutex<HashMap<String, (String, std::path::PathBuf)>>,
+    // Exact, canonical files outside a thread's roots that the trusted UI
+    // explicitly granted to its previews. Codex inline visualizations live
+    // under Session's private workspace metadata, so granting the whole root
+    // would expose unrelated sessions to a leaked preview token.
+    file_preview_grants: Mutex<HashMap<String, HashSet<std::path::PathBuf>>>,
     model: Mutex<Model>,
     next_id: AtomicU64,
     app_handle: Mutex<Option<AppHandle>>,
@@ -260,7 +293,9 @@ impl AppState {
         Self {
             inner: Arc::new(AppStateInner {
                 config,
+                file_tokens: Mutex::new(HashMap::new()),
                 exact_file_tokens: Mutex::new(HashMap::new()),
+                file_preview_grants: Mutex::new(HashMap::new()),
                 model: Mutex::new(Model::default()),
                 next_id: AtomicU64::new(1),
                 app_handle: Mutex::new(None),
@@ -356,6 +391,148 @@ impl AppState {
             .join("default")
     }
 
+    /// The research tree a browser-overlay owner id names. Owner ids come from
+    /// the frontend, so an id that names no existing tree is refused.
+    fn research_tree_for_owner(&self, owner_id: &str) -> Result<ResearchTree, String> {
+        let tree_id = owner_id
+            .strip_prefix(RESEARCH_THREAD_OWNER_PREFIX)
+            .filter(|tree_id| !tree_id.is_empty())
+            .ok_or_else(|| format!("{owner_id} is not a research thread"))?;
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        model
+            .research_trees
+            .get(tree_id)
+            .cloned()
+            .ok_or_else(|| format!("research thread {tree_id} was not found"))
+    }
+
+    /// The directory a research thread's relative local links resolve
+    /// against: the folder of the thread's workspace.
+    pub fn owner_working_dir(&self, owner_id: &str) -> Result<std::path::PathBuf, String> {
+        let tree = self.research_tree_for_owner(owner_id)?;
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        model
+            .groups
+            .get(&tree.workspace_id)
+            .map(|group| std::path::PathBuf::from(&group.dir))
+            .ok_or_else(|| format!("research workspace {} was not found", tree.workspace_id))
+    }
+
+    /// Roots a preview opened from a research thread may read: the thread's
+    /// workspace folder, the directories its runs worked in, and the local
+    /// temporary directories, where agents commonly write disposable HTML
+    /// artifacts. Session's private state directory is excluded separately by
+    /// `file_server`, since a workspace folder may contain it. An unknown
+    /// thread has no roots.
+    pub fn owner_file_roots(&self, owner_id: &str) -> Vec<std::path::PathBuf> {
+        let Ok(tree) = self.research_tree_for_owner(owner_id) else {
+            return Vec::new();
+        };
+        let model = self
+            .inner
+            .model
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let mut roots = Vec::new();
+        if let Some(group) = model.groups.get(&tree.workspace_id) {
+            roots.push(std::path::PathBuf::from(&group.dir));
+        }
+        for node in model.research_nodes.values() {
+            if node.tree_id == tree.id
+                && let Some(binding) = node.binding()
+                && !binding.worktree_dir.trim().is_empty()
+            {
+                let dir = std::path::PathBuf::from(&binding.worktree_dir);
+                if !roots.contains(&dir) {
+                    roots.push(dir);
+                }
+            }
+        }
+        // Include both conventional macOS spellings even though `/tmp`
+        // normally canonicalizes to `/private/tmp`; `temp_dir` also covers a
+        // host whose configured temporary directory lives elsewhere.
+        for temp_root in [
+            std::env::temp_dir(),
+            std::path::PathBuf::from("/tmp"),
+            std::path::PathBuf::from("/private/tmp"),
+        ] {
+            if !roots.contains(&temp_root) {
+                roots.push(temp_root);
+            }
+        }
+        roots
+    }
+
+    /// Session's private state directory (state, preferences and thread
+    /// graphs). No preview may read beneath it.
+    pub fn private_state_dir(&self) -> std::path::PathBuf {
+        self.inner
+            .config
+            .workspace_root
+            .join(persistence::STATE_DIR)
+    }
+
+    /// Returns the read-only file-preview token for one research thread.
+    pub fn owner_file_token(&self, owner_id: &str) -> Result<String, String> {
+        self.research_tree_for_owner(owner_id)?;
+        let mut tokens = self
+            .inner
+            .file_tokens
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        if let Some(existing) = tokens.get(owner_id) {
+            return Ok(existing.clone());
+        }
+        let token = preview_token()?;
+        Ok(tokens.entry(owner_id.to_string()).or_insert(token).clone())
+    }
+
+    pub fn owner_for_file_token(&self, token: &str) -> Option<String> {
+        let tokens = self
+            .inner
+            .file_tokens
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        tokens
+            .iter()
+            .find_map(|(owner_id, owner_token)| (owner_token == token).then(|| owner_id.clone()))
+    }
+
+    /// A token that serves only `path`, for previews that run scripts.
+    pub fn exact_file_preview_token(
+        &self,
+        owner_id: &str,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
+        self.research_tree_for_owner(owner_id)?;
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|err| format!("failed to resolve {}: {err}", path.display()))?;
+        if !canonical.is_file() {
+            return Err(format!("{} is not a file", canonical.display()));
+        }
+        let mut tokens = self
+            .inner
+            .exact_file_tokens
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        if let Some(existing) = tokens.iter().find_map(|(token, (owner, source))| {
+            (owner == owner_id && source == &canonical).then(|| token.clone())
+        }) {
+            return Ok(existing);
+        }
+        let token = preview_token()?;
+        tokens.insert(token.clone(), (owner_id.to_string(), canonical));
+        Ok(token)
+    }
+
     pub fn exact_file_for_preview_token(
         &self,
         token: &str,
@@ -366,6 +543,68 @@ impl AppState {
             .unwrap_or_else(|err| err.into_inner())
             .get(token)
             .cloned()
+    }
+
+    /// Adds one exact file to a research thread's read-only preview
+    /// capability. The caller must perform its own semantic authorization
+    /// first (for example, proving a Codex visualization belongs to one of the
+    /// thread's sessions); canonicalizing here makes the eventual file-server
+    /// comparison resistant to `..` and symlink swaps.
+    pub fn grant_owner_file_preview(
+        &self,
+        owner_id: &str,
+        path: &std::path::Path,
+    ) -> Result<std::path::PathBuf, String> {
+        self.research_tree_for_owner(owner_id)?;
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|err| format!("failed to resolve {}: {err}", path.display()))?;
+        if !canonical.is_file() {
+            return Err(format!("{} is not a file", canonical.display()));
+        }
+        self.inner
+            .file_preview_grants
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .entry(owner_id.to_string())
+            .or_default()
+            .insert(canonical.clone());
+        Ok(canonical)
+    }
+
+    /// The files explicitly granted to a research thread's previews. An
+    /// unknown thread has none, so a removed tree's grants stop serving.
+    pub fn owner_file_preview_grants(&self, owner_id: &str) -> Vec<std::path::PathBuf> {
+        if self.research_tree_for_owner(owner_id).is_err() {
+            return Vec::new();
+        }
+        self.inner
+            .file_preview_grants
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .get(owner_id)
+            .map(|paths| paths.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The native session ids of a research thread's Codex runs, which own
+    /// the inline visualizations its transcripts name.
+    pub fn owner_codex_session_ids(&self, owner_id: &str) -> Result<Vec<String>, String> {
+        let tree = self.research_tree_for_owner(owner_id)?;
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        let mut session_ids = model
+            .research_nodes
+            .values()
+            .filter(|node| node.tree_id == tree.id && node.adapter() == "codex")
+            .filter_map(|node| node.binding()?.native_session_id.clone())
+            .filter(|session_id| !session_id.trim().is_empty())
+            .collect::<Vec<_>>();
+        session_ids.sort();
+        session_ids.dedup();
+        Ok(session_ids)
     }
 
     pub fn config(&self) -> &SessionConfig {

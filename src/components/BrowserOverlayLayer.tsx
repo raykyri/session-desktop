@@ -40,7 +40,7 @@ export default function BrowserOverlayLayer({
 }: BrowserOverlayLayerProps) {
   const { activeOwnerId: ownerId, activeOverlay: overlay, linkMenu } = browser;
   const linkMenuLocalPath = linkMenu ? pathFromSessionFileHref(linkMenu.url) : undefined;
-  const linkMenuPaneId = linkMenu?.paneId ?? null;
+  const linkMenuOwnerId = linkMenu?.ownerId ?? null;
   return (
     <>
       {ownerId && overlay?.open ? (
@@ -82,17 +82,17 @@ export default function BrowserOverlayLayer({
           x={linkMenu.x}
           y={linkMenu.y}
           canOpenInternal={
-            linkMenuPaneId !== null &&
+            linkMenuOwnerId !== null &&
             (canRenderInInternalBrowser(linkMenu.url) ||
               (linkMenuLocalPath !== undefined && canPreviewLocalFilePath(linkMenuLocalPath)))
           }
           onOpenInternal={() => {
-            browser.openLink(linkMenu.paneId, linkMenu.url);
+            browser.openLink(linkMenu.ownerId, linkMenu.url);
             browser.closeLinkMenu();
           }}
           onOpenExternal={() => {
-            if (linkMenuLocalPath !== undefined && linkMenuPaneId !== null) {
-              void browserRevealLocalPath(linkMenuPaneId, linkMenuLocalPath).catch((err) => {
+            if (linkMenuLocalPath !== undefined && linkMenuOwnerId !== null) {
+              void browserRevealLocalPath(linkMenuOwnerId, linkMenuLocalPath).catch((err) => {
                 onError(errorMessage(err));
               });
             } else {
@@ -111,9 +111,9 @@ export default function BrowserOverlayLayer({
           }
           externalKind={linkMenuLocalPath !== undefined ? "reveal" : undefined}
           onOpenWithDefaultApp={
-            linkMenuLocalPath !== undefined && linkMenuPaneId !== null
+            linkMenuLocalPath !== undefined && linkMenuOwnerId !== null
               ? () => {
-                  void browserOpenLocalPathExternal(linkMenuPaneId, linkMenuLocalPath).catch(
+                  void browserOpenLocalPathExternal(linkMenuOwnerId, linkMenuLocalPath).catch(
                     (err) => {
                       onError(errorMessage(err));
                     },

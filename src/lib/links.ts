@@ -165,8 +165,9 @@ export function pathFromSessionFileHref(url: string): string | undefined {
   return path.length > 0 ? withoutTrailingPathDecoration(path) : undefined;
 }
 
-/** Resolve a transcript or terminal local path against a pane cwd. Absolute
- *  paths are returned as-is; relative ones join like a filesystem URL. */
+/** Resolve a transcript local path against a directory (a research
+ *  thread's workspace folder). Absolute paths are returned as-is; relative
+ *  ones join like a filesystem URL. */
 export function resolveLocalLinkPath(path: string, cwd?: string | null): string {
   if (path.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(path)) {
     return path;

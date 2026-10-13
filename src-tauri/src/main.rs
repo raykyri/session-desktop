@@ -302,7 +302,7 @@ fn validated_preview_url(url: &str, file_server_port: u16) -> Result<Url, String
 
 /// Opens the source file behind a protected Session preview without disclosing the
 /// preview capability to the external application. The URL is validated against
-/// the live file-server port and resolved through the same pane roots/exact grants
+/// the live file-server port and resolved through the same thread roots/exact grants
 /// enforced by the server before it becomes a file:// URL.
 #[tauri::command(async)]
 fn browser_open_preview_external(
@@ -325,27 +325,58 @@ fn browser_open_preview_external(
     open_in_os_browser(file_url.as_str())
 }
 
-/// Local file links were resolved against the clicked pane's working
-/// directory and file roots. Session creates no panes, so no owner exists to
-/// resolve against.
+/// A local link from a research thread, resolved and authorized for preview.
+/// `path` is the canonical source file; `url` is its token-scoped preview URL.
+struct ResolvedLocalLink {
+    url: String,
+    sandbox: bool,
+    path: std::path::PathBuf,
+}
+
+/// Resolves a local link in a research thread. Absolute paths resolve as-is;
+/// relative ones resolve against the thread's workspace folder. Either way the
+/// canonical result must lie under the thread's roots and outside Session's
+/// private state (`file_server::resolve_under_thread_roots`).
 fn resolve_local_link_target(
-    _state: &AppState,
-    pane_id: &str,
-    _path: &str,
-) -> Result<control_socket::ResolvedBrowserTarget, String> {
-    Err(format!("pane {pane_id} was not found"))
+    state: &AppState,
+    owner_id: &str,
+    path: &str,
+) -> Result<ResolvedLocalLink, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("nothing to open".to_string());
+    }
+    let requested = std::path::Path::new(trimmed);
+    let requested = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        state.owner_working_dir(owner_id)?.join(requested)
+    };
+    // Checks the owner before the path, so an unknown owner is reported as such.
+    let token = state.owner_file_token(owner_id)?;
+    let canonical = file_server::resolve_under_thread_roots(state, owner_id, &requested)
+        .ok_or_else(|| format!("'{trimmed}' was not found"))?;
+    let port = state
+        .file_server_port()
+        .ok_or_else(|| "the file server is not running".to_string())?;
+    let token = if file_server::is_executable_preview_path(&canonical) {
+        state.exact_file_preview_token(owner_id, &canonical)?
+    } else {
+        token
+    };
+    Ok(ResolvedLocalLink {
+        url: file_server::file_url(port, &token, &canonical),
+        sandbox: true,
+        path: canonical,
+    })
 }
 
 fn open_local_link(
     state: &AppState,
-    pane_id: &str,
-    resolved: control_socket::ResolvedBrowserTarget,
-    artifact_id: Option<String>,
+    owner_id: &str,
+    resolved: ResolvedLocalLink,
 ) -> Result<serde_json::Value, String> {
-    let source = resolved
-        .path
-        .as_deref()
-        .ok_or_else(|| "local path resolution returned no source file".to_string())?;
+    let source = &resolved.path;
     if !source.is_file() || !file_server::is_browser_previewable_path(source) {
         reveal_path_in_file_manager(source)?;
         return Ok(serde_json::json!({
@@ -356,12 +387,11 @@ fn open_local_link(
     }
     state.emit(events::SessionEvent::new(
         "browser.open",
-        Some(pane_id.to_string()),
+        Some(owner_id.to_string()),
         None,
         serde_json::json!({
             "url": resolved.url,
             "sandbox": resolved.sandbox,
-            "artifactId": artifact_id,
         }),
     ));
     Ok(serde_json::json!({
@@ -379,27 +409,22 @@ fn open_local_link(
 #[tauri::command(async)]
 fn browser_open_local_path(
     state: tauri::State<'_, AppState>,
-    pane_id: String,
+    owner_id: String,
     path: String,
-    artifact_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
-    open_local_link(&state, &pane_id, resolved, artifact_id)
+    let resolved = resolve_local_link_target(&state, &owner_id, &path)?;
+    open_local_link(&state, &owner_id, resolved)
 }
 
 /// Reveal a validated local link without opening or executing it.
 #[tauri::command(async)]
 fn browser_reveal_local_path(
     state: tauri::State<'_, AppState>,
-    pane_id: String,
+    owner_id: String,
     path: String,
 ) -> Result<(), String> {
-    let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
-    let source = resolved
-        .path
-        .as_deref()
-        .ok_or_else(|| "local path resolution returned no source file".to_string())?;
-    reveal_path_in_file_manager(source)
+    let resolved = resolve_local_link_target(&state, &owner_id, &path)?;
+    reveal_path_in_file_manager(&resolved.path)
 }
 
 /// Deliberate context-menu action for handing a validated local link to its OS
@@ -408,15 +433,11 @@ fn browser_reveal_local_path(
 #[tauri::command(async)]
 fn browser_open_local_path_external(
     state: tauri::State<'_, AppState>,
-    pane_id: String,
+    owner_id: String,
     path: String,
 ) -> Result<(), String> {
-    let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
-    let source = resolved
-        .path
-        .as_deref()
-        .ok_or_else(|| "local path resolution returned no source file".to_string())?;
-    open_path_with_default_app(source)
+    let resolved = resolve_local_link_target(&state, &owner_id, &path)?;
+    open_path_with_default_app(&resolved.path)
 }
 
 #[cfg(target_os = "macos")]
@@ -449,35 +470,106 @@ fn reveal_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
     open_path_in_file_manager(parent)
 }
 
+/// Grants `path` to a research thread's previews and opens it in the thread's
+/// sandboxed browser overlay with the Codex fragment renderer.
+fn open_codex_visualization(
+    state: &AppState,
+    owner_id: String,
+    path: &std::path::Path,
+) -> Result<serde_json::Value, String> {
+    let canonical = state.grant_owner_file_preview(&owner_id, path)?;
+    let port = state
+        .file_server_port()
+        .ok_or_else(|| "the file server is not running".to_string())?;
+    let token = state.exact_file_preview_token(&owner_id, &canonical)?;
+    let url = format!(
+        "{}?codex-inline-vis=1",
+        file_server::file_url(port, &token, &canonical)
+    );
+    state.emit(events::SessionEvent::new(
+        "browser.open",
+        Some(owner_id),
+        None,
+        serde_json::json!({ "url": url, "sandbox": true }),
+    ));
+    Ok(serde_json::json!({ "url": url, "sandbox": true }))
+}
+
 /// Resolve and open the HTML fragment named by a transcript
 /// `::codex-inline-vis` directive. The file name is untrusted transcript text;
-/// the owning session and visualization root come only from Session state.
+/// the sessions and the visualization root come only from Session state: the
+/// file must belong to exactly one of the thread's Codex sessions.
 #[tauri::command(async)]
 async fn browser_open_codex_inline_visualization(
     state: tauri::State<'_, AppState>,
-    pane_id: String,
+    owner_id: String,
     file: String,
 ) -> Result<serde_json::Value, String> {
-    // Visualizations resolved against the pane's attached Codex agent;
-    // Session creates no panes.
-    let _ = (state, file);
-    Err(format!("pane {pane_id} was not found"))
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session_ids = state.owner_codex_session_ids(&owner_id)?;
+        if session_ids.is_empty() {
+            return Err("this thread has no Codex session with visualizations".to_string());
+        }
+        let visualization_root = state
+            .config()
+            .workspace_root
+            .join(".codex")
+            .join("visualizations");
+        let file = file.trim();
+        let mut matches = Vec::new();
+        let mut last_error = None;
+        for session_id in &session_ids {
+            match file_server::resolve_codex_inline_visualization(
+                &visualization_root,
+                session_id,
+                file,
+            ) {
+                Ok(path) => matches.push(path),
+                Err(err) => last_error = Some(err),
+            }
+        }
+        let path = match matches.as_slice() {
+            [only] => only.clone(),
+            [] => {
+                return Err(last_error
+                    .unwrap_or_else(|| format!("Codex visualization '{file}' was not found")));
+            }
+            _ => return Err(format!("Codex visualization '{file}' is ambiguous")),
+        };
+        open_codex_visualization(&state, owner_id, &path)
+    })
+    .await
+    .map_err(|err| format!("browser_open_codex_inline_visualization task failed: {err}"))?
 }
 
 /// Resolve and open an absolute HTML-fragment path from the current Codex
 /// `visualize` content-reference contract. The transcript path is untrusted:
-/// it must resolve beneath this pane's own roots or Session's durable designs
+/// it must resolve beneath the thread's roots or Session's durable designs
 /// directory before it receives an exact preview grant.
 #[tauri::command(async)]
 async fn browser_open_codex_visualization_reference(
     state: tauri::State<'_, AppState>,
-    pane_id: String,
+    owner_id: String,
     path: String,
 ) -> Result<serde_json::Value, String> {
-    // Visualizations resolved against the pane's attached Codex agent;
-    // Session creates no panes.
-    let _ = (state, path);
-    Err(format!("pane {pane_id} was not found"))
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if state.owner_codex_session_ids(&owner_id)?.is_empty() {
+            return Err(
+                "visualization references can only be opened for a Codex session".to_string(),
+            );
+        }
+        let designs_root = state.config().workspace_root.join("designs");
+        let path = file_server::resolve_codex_visualization_reference(
+            &designs_root,
+            &state.owner_file_roots(&owner_id),
+            std::path::Path::new(path.trim()),
+        )?;
+        open_codex_visualization(&state, owner_id, &path)
+    })
+    .await
+    .map_err(|err| format!("browser_open_codex_visualization_reference task failed: {err}"))?
 }
 
 fn is_file_server_url(url: &str, port: u16) -> bool {
@@ -2496,5 +2588,146 @@ mod browser_preview_url_tests {
         assert!(validated_preview_url("http://localhost:5173/", 8123).is_err());
         assert!(validated_preview_url("https://localhost:8123/token/file", 8123).is_err());
         assert!(validated_preview_url("http://example.com:8123/token/file", 8123).is_err());
+    }
+}
+
+#[cfg(test)]
+mod local_link_tests {
+    use super::resolve_local_link_target;
+    use crate::config::{
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
+    };
+    use crate::state::{AppState, RESEARCH_THREAD_OWNER_PREFIX};
+    use crate::workspace::{GroupInfo, WorkspaceScope};
+    use std::path::{Path, PathBuf};
+
+    /// A research thread whose workspace folder is `folder`, with the file
+    /// server port recorded so link resolution can build preview URLs.
+    fn thread_in(folder: &Path, base: &Path) -> (AppState, String) {
+        let state = AppState::new(SessionConfig {
+            workspace_root: base.join("state"),
+            socket_path: base.join("x.sock"),
+            adapters: AdapterConfigs {
+                claude: ClaudeAdapterConfig {
+                    binary: Some("claude".to_string()),
+                },
+                codex: CodexAdapterConfig {
+                    binary: Some("codex".to_string()),
+                },
+                grok: GrokAdapterConfig {
+                    binary: Some("grok".to_string()),
+                },
+            },
+            legacy_claude_binary: None,
+            claude_plugin_dir: PathBuf::new(),
+        });
+        state
+            .insert_group_after(
+                GroupInfo {
+                    id: "group-1".to_string(),
+                    name: "project".to_string(),
+                    name_override: None,
+                    dir: folder.display().to_string(),
+                    managed_dir: base.join("managed").display().to_string(),
+                    base_repo: None,
+                    base_ref: None,
+                    parent_id: None,
+                    created_at: 1,
+                    collapsed: false,
+                    scope: WorkspaceScope::Research,
+                    imported_research_archive_id: None,
+                    agents: Vec::new(),
+                },
+                None,
+            )
+            .unwrap();
+        let detail = state
+            .create_research_tree(crate::research::CreateResearchTreeRequest {
+                prompt: "Question".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        state.set_file_server(8123);
+        (
+            state,
+            format!("{RESEARCH_THREAD_OWNER_PREFIX}{}", detail.tree.id),
+        )
+    }
+
+    fn scratch(label: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target/session-local-link-tests")
+            .join(format!("{label}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn relative_links_resolve_against_the_thread_workspace_folder() {
+        let base = scratch("relative");
+        let folder = base.join("project");
+        std::fs::create_dir_all(folder.join("docs")).unwrap();
+        std::fs::write(folder.join("docs/notes.md"), "# Notes").unwrap();
+        std::fs::write(folder.join("report.html"), "<p>report</p>").unwrap();
+        let (state, owner) = thread_in(&folder, &base);
+
+        let notes = resolve_local_link_target(&state, &owner, "docs/notes.md").unwrap();
+        assert_eq!(
+            notes.path,
+            std::fs::canonicalize(folder.join("docs/notes.md")).unwrap()
+        );
+        assert!(notes.sandbox);
+        let thread_token = state.owner_file_token(&owner).unwrap();
+        assert!(
+            notes
+                .url
+                .starts_with(&format!("http://127.0.0.1:8123/{thread_token}/")),
+            "{}",
+            notes.url
+        );
+
+        // Executable content gets a token for its exact file only.
+        let report = resolve_local_link_target(&state, &owner, "./report.html").unwrap();
+        assert!(!report.url.contains(&thread_token), "{}", report.url);
+
+        // Absolute paths inside the folder resolve as they are.
+        let absolute = folder.join("docs/notes.md").display().to_string();
+        assert_eq!(
+            resolve_local_link_target(&state, &owner, &absolute)
+                .unwrap()
+                .path,
+            notes.path
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn links_outside_the_thread_roots_or_from_unknown_owners_are_refused() {
+        let base = scratch("refused");
+        let folder = base.join("project");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.md"), "secret").unwrap();
+        std::fs::write(folder.join("notes.md"), "notes").unwrap();
+        let (state, owner) = thread_in(&folder, &base);
+
+        for path in [
+            "../outside/secret.md".to_string(),
+            outside.join("secret.md").display().to_string(),
+            "missing.md".to_string(),
+            "  ".to_string(),
+        ] {
+            assert!(
+                resolve_local_link_target(&state, &owner, &path).is_err(),
+                "{path}"
+            );
+        }
+        for unknown in ["pane-1", "__research_thread__:missing"] {
+            assert!(resolve_local_link_target(&state, unknown, "notes.md").is_err());
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

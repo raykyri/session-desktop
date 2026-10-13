@@ -24,7 +24,7 @@ import type { ResearchTreeSummary } from "../types";
 
 // Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
-// into another tree.
+// into another tree. Mirrors `RESEARCH_THREAD_OWNER_PREFIX` in the backend.
 const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 export function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
@@ -36,7 +36,7 @@ interface LinkMenuState {
   url: string;
   x: number;
   y: number;
-  paneId: string | null;
+  ownerId: string | null;
 }
 
 interface BrowserOverlayOptions {
@@ -44,6 +44,8 @@ interface BrowserOverlayOptions {
   archivedResearchTrees: ResearchTreeSummary[];
   /** The owner whose overlay is shown: the open research tree, if any. */
   activeOwnerId: string | null;
+  /** The folder an owner's relative local links resolve against. */
+  ownerWorkingDir: (ownerId: string) => string | null;
   fileServerPort: number | null;
   onError: (message: string | null) => void;
 }
@@ -73,6 +75,7 @@ export function useBrowserOverlays({
   researchTrees,
   archivedResearchTrees,
   activeOwnerId,
+  ownerWorkingDir,
   fileServerPort,
   onError,
 }: BrowserOverlayOptions) {
@@ -82,6 +85,8 @@ export function useBrowserOverlays({
   overlaysRef.current = overlays;
   const activeOwnerIdRef = useRef(activeOwnerId);
   activeOwnerIdRef.current = activeOwnerId;
+  const ownerWorkingDirRef = useRef(ownerWorkingDir);
+  ownerWorkingDirRef.current = ownerWorkingDir;
   const fileServerPortRef = useRef(fileServerPort);
   fileServerPortRef.current = fileServerPort;
   const onErrorRef = useRef(onError);
@@ -149,7 +154,7 @@ export function useBrowserOverlays({
   // `sandbox` is set for token-bearing file-server URLs so the iframe loads them in an
   // opaque origin (see BrowserOverlay); plain http(s) URLs are not sandboxed.
   const openBrowserOverlay = useCallback(
-    (ownerId: string, url: string, sandbox = false, artifactId: string | null = null) => {
+    (ownerId: string, url: string, sandbox = false) => {
       // Force the sandbox on for any token-bearing file-server URL regardless of the
       // caller's flag: only the backend browser.open event passes sandbox=true, so typed
       // navigation and link opens would otherwise load a file-server URL as a trusted
@@ -161,7 +166,6 @@ export function useBrowserOverlays({
         [ownerId]: {
           url,
           open: true,
-          artifactId,
           reloadNonce: (current[ownerId]?.reloadNonce ?? 0) + 1,
           sandbox: effectiveSandbox,
           mode: effectiveSandbox ? "webkit" : (current[ownerId]?.mode ?? "webkit"),
@@ -182,7 +186,7 @@ export function useBrowserOverlays({
           onErrorRef.current(`Cannot open local file without an open thread: ${localPath}`);
           return;
         }
-        const resolvedPath = resolveLocalLinkPath(localPath);
+        const resolvedPath = resolveLocalLinkPath(localPath, ownerWorkingDirRef.current(ownerId));
         if (browserOverlayShowsLink(overlaysRef.current[ownerId], { path: resolvedPath }, port)) {
           setOverlays((current) => closeBrowserOverlayState(current, ownerId));
           return;
@@ -220,7 +224,7 @@ export function useBrowserOverlays({
       if (!actions) {
         actions = {
           openLink: (url) => openLink(ownerId, url),
-          openLinkMenu: (url, x, y) => setLinkMenu({ url, x, y, paneId: ownerId }),
+          openLinkMenu: (url, x, y) => setLinkMenu({ url, x, y, ownerId }),
           openCodexInlineVisualization: (file) => {
             void browserOpenCodexInlineVisualization(ownerId, file).catch((err) => {
               onErrorRef.current(errorMessage(err));
@@ -286,7 +290,6 @@ export function useBrowserOverlays({
           [ownerId]: {
             url: prev?.url ?? null,
             open: !(prev?.open ?? false),
-            artifactId: prev?.artifactId ?? null,
             reloadNonce: prev?.reloadNonce ?? 0,
             sandbox: prev?.sandbox ?? false,
             mode: prev?.mode ?? "webkit",
@@ -335,7 +338,6 @@ export function useBrowserOverlays({
           ...prev,
           mode,
           url: nextUrl,
-          artifactId: nextUrl === prev.url ? prev.artifactId : null,
           reloadNonce:
             mode === "webkit" && nextUrl !== prev.url ? prev.reloadNonce + 1 : prev.reloadNonce,
         };
@@ -353,7 +355,7 @@ export function useBrowserOverlays({
       patchOverlay(ownerId, (prev) =>
         !prev.open || prev.mode !== "webkit" || prev.sandbox || prev.url === normalized
           ? prev
-          : { ...prev, url: normalized, artifactId: null },
+          : { ...prev, url: normalized },
       );
     },
     [patchOverlay],

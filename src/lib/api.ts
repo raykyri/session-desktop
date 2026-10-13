@@ -496,42 +496,40 @@ type BrowserOpenLocalPathResult = {
   sandbox: boolean;
 };
 
-/** Safely open a local path: preview known renderable files in the sandboxed
- * overlay and reveal unknown/binary formats in the OS file manager. Relative
- * paths resolve against the pane's live cwd. */
-export function browserOpenLocalPath(paneId: string, path: string, artifactId?: string) {
-  return invoke<BrowserOpenLocalPathResult>("browser_open_local_path", {
-    paneId,
-    path,
-    artifactId,
-  });
+/** Safely open a local path from a research thread (`ownerId`, its browser
+ * owner id): preview known renderable files in the sandboxed overlay and
+ * reveal unknown/binary formats in the OS file manager. Relative paths
+ * resolve against the thread's workspace folder. */
+export function browserOpenLocalPath(ownerId: string, path: string) {
+  return invoke<BrowserOpenLocalPathResult>("browser_open_local_path", { ownerId, path });
 }
 
 /** Reveal a root-confined local path without opening or executing it. */
-export function browserRevealLocalPath(paneId: string, path: string) {
-  return invoke<void>("browser_reveal_local_path", { paneId, path });
+export function browserRevealLocalPath(ownerId: string, path: string) {
+  return invoke<void>("browser_reveal_local_path", { ownerId, path });
 }
 
 /** Deliberately hand a root-confined local path to its OS default app. */
-export function browserOpenLocalPathExternal(paneId: string, path: string) {
-  return invoke<void>("browser_open_local_path_external", { paneId, path });
+export function browserOpenLocalPathExternal(ownerId: string, path: string) {
+  return invoke<void>("browser_open_local_path_external", { ownerId, path });
 }
 
-/** Resolve a Codex inline-visualization basename within the pane's own session
- * directory and open its fragment in the sandboxed browser overlay. */
-export function browserOpenCodexInlineVisualization(paneId: string, file: string) {
+/** Resolve a Codex inline-visualization basename within the session
+ * directories of the thread's Codex runs and open its fragment in the
+ * sandboxed browser overlay. */
+export function browserOpenCodexInlineVisualization(ownerId: string, file: string) {
   return invoke<{ url: string; sandbox: boolean }>(
     "browser_open_codex_inline_visualization",
-    { paneId, file },
+    { ownerId, file },
   );
 }
 
 /** Open an absolute fragment path from the current Codex visualization
  * content-reference contract after backend root confinement. */
-export function browserOpenCodexVisualizationReference(paneId: string, path: string) {
+export function browserOpenCodexVisualizationReference(ownerId: string, path: string) {
   return invoke<{ url: string; sandbox: boolean }>(
     "browser_open_codex_visualization_reference",
-    { paneId, path },
+    { ownerId, path },
   );
 }
 

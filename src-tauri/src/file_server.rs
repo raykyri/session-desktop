@@ -3,12 +3,13 @@
 //! Binds `127.0.0.1:0` (ephemeral, loopback-only) at startup and serves files via
 //! `http://127.0.0.1:<port>/<token>/<percent-encoded-abs-path>`. Because any local
 //! process can reach a loopback port, a random `token` (not loopback alone) is what
-//! gates access. Inert content uses a pane token restricted to that pane's roots;
-//! executable content receives a token restricted to its exact source file. The server
-//! canonicalizes every requested path, including the local temporary directories where
-//! agents commonly write artifacts. A pane token cannot reach another pane's workspace,
-//! an executable preview cannot read sibling files, and `..`/symlinks cannot escape into
-//! other locations such as `~/.ssh/id_rsa`.
+//! gates access. Inert content uses a research-thread token restricted to that thread's
+//! roots (its workspace folder, its runs' directories and the local temporary
+//! directories, where agents commonly write artifacts); executable content receives a
+//! token restricted to its exact source file. The server canonicalizes every requested
+//! path. A thread token cannot reach another workspace or Session's private state
+//! directory, an executable preview cannot read sibling files, and `..`/symlinks cannot
+//! escape into other locations such as `~/.ssh/id_rsa`.
 //!
 //! Hand-rolled GET/HEAD + Range over `TcpListener` to keep the dependency posture of
 //! the rest of the backend (cf. the hand-rolled base64 in events.rs). Each connection
@@ -19,7 +20,7 @@ use crate::research_widgets::{self, WidgetMode};
 use crate::state::AppState;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha2::{Digest, Sha256};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -80,8 +81,8 @@ pub struct FileServerInfo {
 /// Starts the loopback file server and returns its port. The caller stores it in
 /// `AppState` so the control socket can build URLs; the frontend never sees the port
 /// or any token directly (it only receives fully-formed URLs in `browser.open`).
-/// Access is gated by the per-pane tokens carried in each URL's path, resolved against
-/// live state per request — so no token needs capturing at startup.
+/// Access is gated by the tokens carried in each URL's path, resolved against live
+/// state per request — so no token needs capturing at startup.
 pub fn start_file_server(state: AppState) -> Result<FileServerInfo, String> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
         .map_err(|err| format!("failed to bind file server: {err}"))?;
@@ -109,7 +110,44 @@ pub fn start_file_server(state: AppState) -> Result<FileServerInfo, String> {
     Ok(FileServerInfo { port })
 }
 
-/// Resolve one of the exact canonical files granted to a pane. This is kept
+/// Builds the loopback URL for an absolute file path. `abs_path` must be absolute
+/// (start with `/`), so the encoded form sits directly after the token.
+pub fn file_url(port: u16, token: &str, abs_path: &Path) -> String {
+    format!(
+        "http://127.0.0.1:{port}/{token}{}",
+        percent_encode_path(&abs_path.to_string_lossy())
+    )
+}
+
+/// Canonicalizes `requested` (resolving `..` and symlinks) and returns it only if it
+/// lives under one of `roots`. This is the trust boundary for what may be served.
+pub fn resolve_under_roots(requested: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let canonical = std::fs::canonicalize(requested).ok()?;
+    for root in roots {
+        if let Ok(root_canonical) = std::fs::canonicalize(root)
+            && canonical.starts_with(&root_canonical)
+        {
+            return Some(canonical);
+        }
+    }
+    None
+}
+
+/// `resolve_under_roots` for a research thread, refusing anything beneath
+/// Session's private state directory even when a root (a workspace folder
+/// such as the home directory) contains it.
+pub fn resolve_under_thread_roots(
+    state: &AppState,
+    owner_id: &str,
+    requested: &Path,
+) -> Option<PathBuf> {
+    let canonical = resolve_under_roots(requested, &state.owner_file_roots(owner_id))?;
+    let private = std::fs::canonicalize(state.private_state_dir())
+        .unwrap_or_else(|_| state.private_state_dir());
+    (!canonical.starts_with(&private)).then_some(canonical)
+}
+
+/// Resolve one of the exact canonical files granted to a thread. This is kept
 /// separate from directory roots so a visualization under Session's private
 /// workspace metadata does not grant the preview token access to sibling
 /// sessions, state, or credentials.
@@ -143,8 +181,137 @@ pub fn resolve_tokenized_file_path(
 }
 
 fn resolve_file_token_path(state: &AppState, token: &str, requested: &Path) -> Option<PathBuf> {
+    if let Some(owner_id) = state.owner_for_file_token(token) {
+        let grants = state.owner_file_preview_grants(&owner_id);
+        return resolve_under_thread_roots(state, &owner_id, requested)
+            .or_else(|| resolve_exact_file(requested, &grants));
+    }
     let (_, exact) = state.exact_file_for_preview_token(token)?;
     resolve_exact_file(requested, &[exact])
+}
+
+fn valid_codex_inline_vis_filename(file: &str) -> bool {
+    let Some(stem) = file.strip_suffix(".html") else {
+        return false;
+    };
+    !stem.is_empty()
+        && stem.split('-').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        })
+}
+
+fn valid_visualization_session_id(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= 128
+        && session_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+fn dated_directories(root: &Path, digits: usize) -> Result<Vec<PathBuf>, String> {
+    let entries = fs::read_dir(root).map_err(|err| {
+        format!(
+            "failed to read visualization directory {}: {err}",
+            root.display()
+        )
+    })?;
+    let mut directories = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| {
+            format!(
+                "failed to inspect visualization directory {}: {err}",
+                root.display()
+            )
+        })?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.len() == digits
+            && name.bytes().all(|byte| byte.is_ascii_digit())
+            && entry.file_type().is_ok_and(|kind| kind.is_dir())
+        {
+            directories.push(entry.path());
+        }
+    }
+    directories.sort();
+    Ok(directories)
+}
+
+/// Resolve the file named by a `codex-inline-vis` directive inside the owning
+/// Codex session's dated visualization directory. The directive supplies only
+/// a contract-valid basename; the session id comes from Session's own record
+/// of the research run.
+pub fn resolve_codex_inline_visualization(
+    visualization_root: &Path,
+    session_id: &str,
+    file: &str,
+) -> Result<PathBuf, String> {
+    if !valid_visualization_session_id(session_id) {
+        return Err("the attached Codex session has an invalid id".to_string());
+    }
+    if !valid_codex_inline_vis_filename(file) {
+        return Err(format!("invalid codex-inline-vis file '{file}'"));
+    }
+    let canonical_root = fs::canonicalize(visualization_root).map_err(|_| {
+        format!(
+            "Codex visualization storage {} was not found",
+            visualization_root.display()
+        )
+    })?;
+    let mut matches = Vec::new();
+    for year in dated_directories(&canonical_root, 4)? {
+        for month in dated_directories(&year, 2)? {
+            for day in dated_directories(&month, 2)? {
+                let candidate = day.join(session_id).join(file);
+                let Ok(canonical) = fs::canonicalize(&candidate) else {
+                    continue;
+                };
+                if canonical.starts_with(&canonical_root) && canonical.is_file() {
+                    matches.push(canonical);
+                }
+            }
+        }
+    }
+    matches.sort();
+    matches.dedup();
+    match matches.as_slice() {
+        [only] => Ok(only.clone()),
+        [] => Err(format!(
+            "Codex visualization '{file}' was not found for session {session_id}"
+        )),
+        _ => Err(format!(
+            "Codex visualization '{file}' is ambiguous for session {session_id}"
+        )),
+    }
+}
+
+/// Resolves an absolute path carried by the current Codex visualization
+/// content-reference contract. A research thread's roots cover its workspace
+/// folder and temporary output; Session's durable designs directory is added
+/// explicitly because it sits inside private workspace metadata that must not
+/// become a general preview root.
+pub fn resolve_codex_visualization_reference(
+    designs_root: &Path,
+    thread_roots: &[PathBuf],
+    reference: &Path,
+) -> Result<PathBuf, String> {
+    if !reference.is_absolute() {
+        return Err("Codex visualization references must use an absolute path".to_string());
+    }
+    if !reference
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("html"))
+    {
+        return Err("Codex visualization references must target an HTML fragment".to_string());
+    }
+    let mut allowed_roots = thread_roots.to_vec();
+    allowed_roots.push(designs_root.to_path_buf());
+    resolve_under_roots(reference, &allowed_roots)
+        .filter(|path| path.is_file())
+        .ok_or_else(|| "Codex visualization is outside this thread's approved roots".to_string())
 }
 
 struct RequestHead {
@@ -270,7 +437,7 @@ fn query_parameter<'a>(query: Option<&'a str>, name: &str) -> Option<&'a str> {
 
 fn build_response(state: &AppState, head: &RequestHead) -> Response {
     // Reject a non-loopback Host (DNS-rebinding defense-in-depth). A missing Host
-    // (e.g. a bare HTTP/1.0 client) is allowed — the per-pane token still gates access
+    // (e.g. a bare HTTP/1.0 client) is allowed — the capability token still gates access
     // — but a browser rebinding attack always carries the attacker's hostname here.
     if let Some(host) = &head.host
         && !is_loopback_host_header(host)
@@ -289,7 +456,7 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
         Some((path, query)) => (path, Some(query)),
         None => (without_fragment, None),
     };
-    // These public, bundled assets contain no pane data and need no capability token.
+    // These public, bundled assets contain no session data and need no capability token.
     // Rendered Markdown lives in an opaque-origin iframe, so allow font CORS explicitly.
     if let Some(response) = embedded_font_response(path, is_head) {
         return response;
@@ -301,7 +468,7 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
     });
     let body_font_id = query_parameter(query, "session-body-font");
     // Research answer widgets carry their own capability tokens and live in
-    // Session's widget store rather than under any pane root.
+    // Session's widget store rather than under any thread root.
     if let Some(rest) = path.strip_prefix(research_widgets::URL_PREFIX) {
         return widget_response(state, rest, is_head, body_font_id);
     }
@@ -315,9 +482,12 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
         return Response::error(404, "Not Found");
     };
     let (token, encoded_path) = after_root.split_at(slash);
-    // A preview token can only re-read its exact source file. Unknown tokens and
-    // paths outside the capability fail without exposing whether the path exists.
-    if state.exact_file_for_preview_token(token).is_none() {
+    // Resolve thread tokens beneath that thread's roots, while tokens exposed to
+    // executable previews can only re-read the exact source file. Unknown tokens and
+    // paths outside either capability fail without exposing whether the path exists.
+    if state.owner_for_file_token(token).is_none()
+        && state.exact_file_for_preview_token(token).is_none()
+    {
         return Response::error(404, "Not Found");
     }
     let Some(decoded) = percent_decode(encoded_path) else {
@@ -678,7 +848,7 @@ fn is_markdown(path: &Path) -> bool {
 // `::codex-inline-vis`. Fragment-specific CSS owns the visualization itself;
 // these are the shared theme and utility classes the Codex contract expects.
 // External resources deliberately remain blocked by file_content_csp: unlike
-// Codex's standalone renderer, this page's URL carries a pane capability token.
+// Codex's standalone renderer, this page's URL carries an exact-file capability token.
 const CODEX_INLINE_VIS_CSS: &str = "\
 __SESSION_FONT_FACE__\
 :root { color-scheme: light dark; --font-size-base: 14px; --background: #f7f8f7; --foreground: #1d2421; --card: #ffffff; --card-foreground: #1d2421; --popover: #ffffff; --popover-foreground: #1d2421; --primary: #26322d; --primary-foreground: #ffffff; --secondary: #e8eeeb; --secondary-foreground: #1d2421; --muted: #edf1ef; --muted-foreground: #5e6d66; --accent: #e1e9e5; --accent-foreground: #1d2421; --destructive: #a63d40; --border: #ccd6d1; --input: #aebcb5; --ring: #42554c; --viz-series-1: #187a54; --viz-series-2: #8a5d15; --viz-series-3: #496aa0; --viz-series-4: #8a4e86; --viz-series-5: #ad4e35; --viz-series-6: #4f7777; }\
@@ -1052,6 +1222,27 @@ pub(crate) fn is_browser_previewable_path(path: &Path) -> bool {
         .is_some_and(session_proto::is_browser_preview_extension)
 }
 
+pub(crate) fn is_executable_preview_path(path: &Path) -> bool {
+    let content_type = mime_type(path);
+    content_type.starts_with("text/html") || content_type.starts_with("image/svg")
+}
+
+/// Percent-encodes a path, leaving `/` (the separator) and the RFC 3986 unreserved
+/// set intact so the encoded form is a normal multi-segment URL path.
+fn percent_encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
+            out.push(byte as char);
+        } else {
+            out.push('%');
+            out.push(hex_digit(byte >> 4));
+            out.push(hex_digit(byte & 0x0f));
+        }
+    }
+    out
+}
+
 fn percent_decode(input: &str) -> Option<String> {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -1074,6 +1265,13 @@ fn percent_decode(input: &str) -> Option<String> {
         }
     }
     String::from_utf8(out).ok()
+}
+
+fn hex_digit(nibble: u8) -> char {
+    match nibble {
+        0..=9 => (b'0' + nibble) as char,
+        _ => (b'A' + (nibble - 10)) as char,
+    }
 }
 
 fn hex_value(byte: u8) -> Option<u8> {
@@ -1275,17 +1473,25 @@ mod tests {
         (status, body)
     }
 
+    fn url_path(port: u16, token: &str, abs: &Path) -> String {
+        file_url(port, token, abs)
+            .strip_prefix(&format!("http://127.0.0.1:{port}"))
+            .unwrap()
+            .to_string()
+    }
+
     /// Scratch space outside the production temp-directory allowlist, used by
-    /// tests that need to distinguish a pane root from a forbidden sibling.
+    /// tests that need to distinguish a thread root from a forbidden sibling.
     fn non_temp_test_dir(label: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("target/session-file-server-tests")
             .join(format!("{label}-{}", std::process::id()))
     }
 
-    /// Builds an `AppState` with a live pane scoped to `root`, matching the
-    /// production invariant required before a pane file token may serve files.
-    fn test_state(root: &Path, base: &Path) -> AppState {
+    /// Builds an `AppState` with one research thread whose workspace folder is
+    /// `root`, and returns the thread's browser-overlay owner id: a thread
+    /// file token serves only while that thread exists.
+    fn test_state(root: &Path, base: &Path) -> (AppState, String) {
         use crate::config::{
             AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
             SessionConfig,
@@ -1321,15 +1527,29 @@ mod tests {
                     parent_id: None,
                     created_at: 1,
                     collapsed: false,
-                    scope: WorkspaceScope::Terminal,
+                    scope: WorkspaceScope::Research,
                     imported_research_archive_id: None,
                     agents: Vec::new(),
                 },
                 None,
             )
             .unwrap();
-
-        state
+        let detail = state
+            .create_research_tree(crate::research::CreateResearchTreeRequest {
+                prompt: "Question".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        let owner = format!(
+            "{}{}",
+            crate::state::RESEARCH_THREAD_OWNER_PREFIX,
+            detail.tree.id
+        );
+        (state, owner)
     }
 
     fn csp_directive<'a>(head: &'a str, name: &str) -> Option<&'a str> {
@@ -1370,7 +1590,7 @@ mod tests {
         let base = non_temp_test_dir("widgets");
         let root = base.join("ws");
         std::fs::create_dir_all(&root).unwrap();
-        let state = test_state(&root, &base);
+        let (state, _) = test_state(&root, &base);
         let info = start_file_server(state.clone()).unwrap();
         state.set_file_server(info.port);
         // Startup allows scripts once WebRTC is off in the app web view; tests
@@ -1502,6 +1722,404 @@ mod tests {
         std::fs::write(&stored, "x".repeat(research_widgets::MAX_WIDGET_BYTES + 1)).unwrap();
         let (status, _) = http_get(info.port, &path_of(&urls.static_url), None);
         assert!(status.contains("413"), "{status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+    #[test]
+    fn browser_previewability_is_an_explicit_mime_allowlist() {
+        assert!(is_browser_previewable_path(Path::new("report.HTML")));
+        assert!(is_browser_previewable_path(Path::new("notes.md")));
+        assert!(is_browser_previewable_path(Path::new("diagram.svg")));
+        assert!(is_executable_preview_path(Path::new("report.html")));
+        assert!(is_executable_preview_path(Path::new("diagram.svg")));
+        assert!(!is_executable_preview_path(Path::new("notes.md")));
+        assert!(!is_browser_previewable_path(Path::new("release.dmg")));
+        assert!(!is_browser_previewable_path(Path::new("installer.pkg")));
+        assert!(!is_browser_previewable_path(Path::new("archive.zip")));
+        assert!(!is_browser_previewable_path(Path::new("unknown")));
+    }
+
+    #[test]
+    fn percent_round_trips_paths_with_spaces_and_specials() {
+        let original = "/Users/x/my proj/réport (1).md";
+        let encoded = percent_encode_path(original);
+        assert!(!encoded.contains(' '));
+        assert!(encoded.contains('/'));
+        assert_eq!(percent_decode(&encoded).as_deref(), Some(original));
+    }
+
+    #[test]
+    fn serves_files_under_root_with_range_and_blocks_the_rest() {
+        let base = non_temp_test_dir("serve");
+        let root = base.join("ws");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(root.join("hello.txt"), b"hello world").unwrap();
+        std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
+
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        let token = state.owner_file_token(&owner).unwrap();
+
+        let hello = std::fs::canonicalize(root.join("hello.txt")).unwrap();
+
+        // Full GET returns the file.
+        let (status, body) = http_get(info.port, &url_path(info.port, &token, &hello), None);
+        assert!(status.contains("200"), "status: {status}");
+        assert_eq!(body, b"hello world");
+
+        // Range GET returns the requested slice with 206.
+        let (status, body) = http_get(
+            info.port,
+            &url_path(info.port, &token, &hello),
+            Some("bytes=0-4"),
+        );
+        assert!(status.contains("206"), "status: {status}");
+        assert_eq!(body, b"hello");
+
+        // A file outside every root is forbidden (even though it exists).
+        let (status, _) = http_get(
+            info.port,
+            &url_path(info.port, &token, &outside.join("secret.txt")),
+            None,
+        );
+        assert!(status.contains("403"), "status: {status}");
+
+        // An unknown token can't reach any file.
+        let correct = url_path(info.port, &token, &hello);
+        let wrong = format!(
+            "/deadbeef{}",
+            correct.strip_prefix(&format!("/{token}")).unwrap()
+        );
+        let (status, _) = http_get(info.port, &wrong, None);
+        assert!(status.contains("404"), "status: {status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn html_previews_include_the_scroll_bridge() {
+        let base = non_temp_test_dir("html-scroll");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("page.html"), b"<!doctype html><p>hello</p>").unwrap();
+
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        let token = state.owner_file_token(&owner).unwrap();
+        let page = std::fs::canonicalize(root.join("page.html")).unwrap();
+        let (head, body) = http_get_full(info.port, &url_path(info.port, &token, &page), None);
+        let body = String::from_utf8(body).unwrap();
+
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(body.contains("<p>hello</p>"));
+        assert!(body.contains("session-preview-scroll"));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn renders_markdown_as_html_unless_raw_is_requested() {
+        let base = std::env::temp_dir().join(format!("session-fs-md-{}", std::process::id()));
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        let source = "# Hello\n\nSome *text* in a table:\n\n| a | b |\n| - | - |\n| 1 | 2 |\n";
+        std::fs::write(root.join("doc.md"), source).unwrap();
+
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        let token = state.owner_file_token(&owner).unwrap();
+        let doc = std::fs::canonicalize(root.join("doc.md")).unwrap();
+        let path = url_path(info.port, &token, &doc);
+
+        // A plain GET returns a rendered HTML page.
+        let (head, body) = http_get_full(info.port, &path, None);
+        let body_text = String::from_utf8(body).unwrap();
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(head.contains("Content-Type: text/html"), "head: {head}");
+        assert!(body_text.contains("<h1>Hello</h1>"), "body: {body_text}");
+        assert!(body_text.contains("<table>"), "body: {body_text}");
+        assert!(
+            body_text.contains("session-preview-scroll"),
+            "body: {body_text}"
+        );
+
+        // `?raw=1` opts out and serves the source as plain text.
+        let (head, body) = http_get_full(info.port, &format!("{path}?raw=1"), None);
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(head.contains("Content-Type: text/plain"), "head: {head}");
+        assert_eq!(body, source.as_bytes());
+
+        // Range on Markdown is ignored: the full rendered page comes back as a 200.
+        let (head, body) = http_get_full(info.port, &path, Some("bytes=0-4"));
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(
+            String::from_utf8(body).unwrap().contains("<h1>Hello</h1>"),
+            "range response should carry the full rendered page"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolves_only_thread_scoped_codex_inline_visualizations() {
+        let base = std::env::temp_dir().join(format!(
+            "session-fs-inline-vis-resolve-{}",
+            std::process::id()
+        ));
+        let root = base.join("visualizations");
+        let thread = root
+            .join("2026")
+            .join("08")
+            .join("08")
+            .join("019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391");
+        std::fs::create_dir_all(&thread).unwrap();
+        let visual = thread.join("artifact-tray-options.html");
+        std::fs::write(&visual, "<div>preview</div>").unwrap();
+
+        assert_eq!(
+            resolve_codex_inline_visualization(
+                &root,
+                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
+                "artifact-tray-options.html",
+            )
+            .unwrap(),
+            std::fs::canonicalize(&visual).unwrap()
+        );
+        assert!(
+            resolve_codex_inline_visualization(
+                &root,
+                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
+                "../artifact.html",
+            )
+            .is_err()
+        );
+        assert!(resolve_codex_inline_visualization(&root, "../../other", "artifact.html").is_err());
+
+        let duplicate = root
+            .join("2026")
+            .join("08")
+            .join("09")
+            .join("019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391");
+        std::fs::create_dir_all(&duplicate).unwrap();
+        std::fs::write(duplicate.join("artifact-tray-options.html"), "duplicate").unwrap();
+        assert!(
+            resolve_codex_inline_visualization(
+                &root,
+                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
+                "artifact-tray-options.html",
+            )
+            .unwrap_err()
+            .contains("ambiguous")
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolves_current_codex_visualization_references_only_under_approved_roots() {
+        let base = std::env::temp_dir().join(format!(
+            "session-fs-visualization-reference-{}",
+            std::process::id()
+        ));
+        let designs = base.join("workspace-metadata/designs");
+        let thread_root = base.join("thread");
+        let outside = base.join("outside");
+        for directory in [&designs, &thread_root, &outside] {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        let durable = designs.join("activity/recent-activity.fragment.html");
+        std::fs::create_dir_all(durable.parent().unwrap()).unwrap();
+        std::fs::write(&durable, "<div>durable</div>").unwrap();
+        let temporary = thread_root.join("chart.html");
+        std::fs::write(&temporary, "<div>temporary</div>").unwrap();
+        let secret = outside.join("secret.html");
+        std::fs::write(&secret, "<div>secret</div>").unwrap();
+
+        let thread_roots = vec![thread_root.clone()];
+        assert_eq!(
+            resolve_codex_visualization_reference(&designs, &thread_roots, &durable).unwrap(),
+            std::fs::canonicalize(&durable).unwrap()
+        );
+        assert_eq!(
+            resolve_codex_visualization_reference(&designs, &thread_roots, &temporary).unwrap(),
+            std::fs::canonicalize(&temporary).unwrap()
+        );
+        assert!(resolve_codex_visualization_reference(&designs, &thread_roots, &secret).is_err());
+        assert!(
+            resolve_codex_visualization_reference(
+                &designs,
+                &thread_roots,
+                Path::new("relative.html")
+            )
+            .is_err()
+        );
+        assert!(
+            resolve_codex_visualization_reference(
+                &designs,
+                &thread_roots,
+                &thread_root.join("chart.svg")
+            )
+            .is_err()
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn exact_preview_token_serves_executable_content_but_not_siblings() {
+        let base = non_temp_test_dir("inline-vis");
+        let root = base.join("ws");
+        let visuals = base.join("private-visuals");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&visuals).unwrap();
+        let visual = visuals.join("preview.html");
+        let sibling = visuals.join("other.html");
+        std::fs::write(&visual, "<div class=\"card\">preview</div>").unwrap();
+        std::fs::write(&sibling, "private sibling").unwrap();
+
+        let (state, owner) = test_state(&root, &base);
+        let canonical = state.grant_owner_file_preview(&owner, &visual).unwrap();
+        let info = start_file_server(state.clone()).unwrap();
+        state.set_file_server(info.port);
+        let token = state.exact_file_preview_token(&owner, &canonical).unwrap();
+        let path = format!(
+            "{}?codex-inline-vis=1",
+            url_path(info.port, &token, &canonical)
+        );
+        let (head, body) = http_get_full(info.port, &path, None);
+        let body = String::from_utf8(body).unwrap();
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(head.contains("Content-Security-Policy"), "head: {head}");
+        assert!(head.contains("script-src 'unsafe-inline'"), "head: {head}");
+        assert!(body.starts_with("<!doctype html>"), "body: {body}");
+        assert!(body.contains("--background:"), "body: {body}");
+        assert!(body.contains("<div class=\"card\">preview</div>"));
+
+        let (status, _) = http_get(info.port, &url_path(info.port, &token, &sibling), None);
+        assert!(status.contains("403"), "status: {status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn tokenized_url_paths_resolve_only_authorized_source_files() {
+        let base = non_temp_test_dir("external-source");
+        let root = base.join("ws");
+        let outside = base.join("outside");
+        let granted_dir = base.join("private-visuals");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::create_dir_all(&granted_dir).unwrap();
+        let report = root.join("report with spaces.html");
+        let secret = outside.join("secret.html");
+        let granted = granted_dir.join("visual.html");
+        std::fs::write(&report, "report").unwrap();
+        std::fs::write(&secret, "secret").unwrap();
+        std::fs::write(&granted, "visual").unwrap();
+
+        let (state, owner) = test_state(&root, &base);
+        let token = state.owner_file_token(&owner).unwrap();
+        let report = std::fs::canonicalize(report).unwrap();
+        let secret = std::fs::canonicalize(secret).unwrap();
+        let granted = state.grant_owner_file_preview(&owner, &granted).unwrap();
+
+        assert_eq!(
+            resolve_tokenized_file_path(&state, &url_path(8123, &token, &report)).unwrap(),
+            report
+        );
+        assert_eq!(
+            resolve_tokenized_file_path(&state, &url_path(8123, &token, &granted)).unwrap(),
+            granted
+        );
+        assert!(resolve_tokenized_file_path(&state, &url_path(8123, &token, &secret)).is_err());
+        assert!(resolve_tokenized_file_path(&state, &url_path(8123, "unknown", &report)).is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_under_roots_blocks_traversal_outside_roots() {
+        let base = std::env::temp_dir().join(format!("session-fs-{}", std::process::id()));
+        let root = base.join("root");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(root.join("ok.txt"), b"ok").unwrap();
+        std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
+
+        let roots = vec![root.clone()];
+        assert!(resolve_under_roots(&root.join("ok.txt"), &roots).is_some());
+        // A path that resolves outside every root is rejected, including via `..`.
+        assert!(resolve_under_roots(&outside.join("secret.txt"), &roots).is_none());
+        assert!(resolve_under_roots(&root.join("../outside/secret.txt"), &roots).is_none());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn thread_tokens_never_serve_session_private_state() {
+        // A workspace folder may contain Session's state directory (for
+        // example, a research folder at the home directory).
+        let base = non_temp_test_dir("private-state");
+        std::fs::create_dir_all(base.join("state/.session")).unwrap();
+        std::fs::write(base.join("state/.session/preferences.json"), b"{}").unwrap();
+        std::fs::write(base.join("notes.txt"), b"notes").unwrap();
+        let (state, owner) = test_state(&base, &base);
+
+        assert_eq!(
+            resolve_under_thread_roots(&state, &owner, &base.join("notes.txt")),
+            Some(std::fs::canonicalize(base.join("notes.txt")).unwrap())
+        );
+        assert!(
+            resolve_under_thread_roots(
+                &state,
+                &owner,
+                &base.join("state/.session/preferences.json")
+            )
+            .is_none()
+        );
+        let token = state.owner_file_token(&owner).unwrap();
+        let preferences =
+            std::fs::canonicalize(base.join("state/.session/preferences.json")).unwrap();
+        assert!(
+            resolve_tokenized_file_path(&state, &url_path(8123, &token, &preferences)).is_err()
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn thread_tokens_require_an_existing_research_thread() {
+        let base = non_temp_test_dir("thread-owner");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("report.md"), b"report").unwrap();
+        let (state, owner) = test_state(&root, &base);
+
+        for unknown in [
+            "pane-1",
+            "__research_thread__:",
+            "__research_thread__:missing",
+        ] {
+            assert!(state.owner_file_token(unknown).is_err(), "{unknown}");
+            assert!(state.owner_working_dir(unknown).is_err(), "{unknown}");
+            assert!(state.owner_file_roots(unknown).is_empty(), "{unknown}");
+        }
+        assert_eq!(state.owner_working_dir(&owner).unwrap(), root);
+
+        // Removing the tree revokes what its token can read.
+        let token = state.owner_file_token(&owner).unwrap();
+        let report = std::fs::canonicalize(root.join("report.md")).unwrap();
+        assert!(resolve_tokenized_file_path(&state, &url_path(8123, &token, &report)).is_ok());
+        let tree_id = owner
+            .strip_prefix(crate::state::RESEARCH_THREAD_OWNER_PREFIX)
+            .unwrap();
+        let root_node_id = state.research_tree(tree_id).unwrap().tree.root_node_id;
+        state.cancel_research_node(&root_node_id).unwrap();
+        state.remove_research_tree(tree_id).unwrap();
+        assert!(resolve_tokenized_file_path(&state, &url_path(8123, &token, &report)).is_err());
 
         let _ = std::fs::remove_dir_all(&base);
     }
