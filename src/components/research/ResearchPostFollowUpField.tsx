@@ -7,6 +7,7 @@ import { ResearchImageStrip, useResearchImageInput } from "./ResearchImages";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
+import { useMarkdownDashGuard } from "../../hooks/useMarkdownDashGuard";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 import { OptionIcon } from "../LauncherSelect";
@@ -155,6 +156,7 @@ export function PostFollowUpField({
   const [chosen, setChosen] = useState<ResearchQuestionChoice | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useMarkdownDashGuard(textareaRef);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const askSegmentRef = useRef<HTMLButtonElement | null>(null);
   const imageInput = useResearchImageInput({

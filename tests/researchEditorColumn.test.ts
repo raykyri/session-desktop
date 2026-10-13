@@ -326,3 +326,66 @@ test("⌘S while the footer asks whether to discard saves and drops the question
     assert.equal(column.querySelector("[aria-label='Discard changes']"), null);
   });
 });
+
+test("the note field cancels a smart-dash replacement of a line of hyphens and lets prose dashes through", async () => {
+  await withMountedEditor(editorProps("Title\n---\nA -- B"), async ({ field }) => {
+    const window = field.ownerDocument.defaultView!;
+    const replace = (data: string) => {
+      const event = new window.InputEvent("beforeinput", {
+        inputType: "insertReplacementText",
+        data,
+        bubbles: true,
+        cancelable: true,
+      });
+      field.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    // The caret at the end of "---", and at the end of "A -- B".
+    field.setSelectionRange(9, 9);
+    assert.equal(replace("—"), true);
+    field.setSelectionRange(16, 16);
+    assert.equal(replace("—"), false);
+  });
+});
+
+test("the note field restores hyphens a substitution replaced and stores them through onChange", async () => {
+  await withWidgetDom(async (window) => {
+    const { createRoot } = await import("react-dom/client");
+    const { useState } = await import("react");
+    const changes: string[] = [];
+    function Editor() {
+      const [value, setValue] = useState("Title\n---");
+      return createElement(
+        ResearchEditorColumn,
+        editorProps(value, {
+          onChange: (next) => {
+            changes.push(next);
+            setValue(next);
+          },
+        }),
+      );
+    }
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(Editor)));
+    const field = container.querySelector("textarea")!;
+    try {
+      await act(async () => {
+        field.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+      // The text WebKit leaves when the substitution and Enter's newline
+      // arrive in one input event, set without going through React.
+      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Title\n—\n");
+      field.setSelectionRange(8, 8);
+      await act(async () => {
+        field.dispatchEvent(new window.InputEvent("input", { inputType: "insertParagraph", bubbles: true }));
+      });
+      assert.deepEqual(changes, ["Title\n---\n"]);
+      assert.equal(field.value, "Title\n---\n");
+      assert.equal(field.selectionStart, 10);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+});

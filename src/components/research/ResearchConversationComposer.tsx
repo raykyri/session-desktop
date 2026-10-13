@@ -2,6 +2,7 @@ import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef } from 
 import { ArrowRight, LoaderCircle, X } from "lucide-react";
 import type { ResearchImageAttachment } from "../../types";
 import { growComposerTextarea } from "../../lib/composerTextarea";
+import { useMarkdownDashGuard } from "../../hooks/useMarkdownDashGuard";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { ResearchImageStrip, useResearchImageInput, type ResearchImagesUpdate } from "./ResearchImages";
 
@@ -95,6 +96,7 @@ const ResearchConversationComposer = forwardRef<
   ref,
 ) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useMarkdownDashGuard(textareaRef);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const imageInput = useResearchImageInput({
     images,

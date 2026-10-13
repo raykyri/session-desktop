@@ -34,6 +34,7 @@ import { postFormatOf } from "../../lib/researchNodeTypes";
 import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
 import { ResearchModelNameDialog } from "./ResearchModelNameDialog";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
+import { useMarkdownDashGuard } from "../../hooks/useMarkdownDashGuard";
 import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages";
 import { ResearchImageStrip, useResearchImageInput } from "./ResearchImages";
 
@@ -259,6 +260,7 @@ export default function ResearchQueryComposer({
   // for a retry.
   const [error, setError] = useState<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  useMarkdownDashGuard(promptRef);
   const adapters = useMemo(
     () =>
       researchReadyAdaptersFirst(

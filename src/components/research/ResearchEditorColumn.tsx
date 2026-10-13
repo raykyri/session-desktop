@@ -2,6 +2,7 @@ import { memo, useId, useMemo, useRef, useState } from "react";
 import type { ComponentProps, KeyboardEvent, ReactNode, Ref } from "react";
 import { Eye, MessageSquarePlus } from "lucide-react";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
+import { useMarkdownDashGuard } from "../../hooks/useMarkdownDashGuard";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchMarkdown } from "./ResearchMessage";
@@ -89,6 +90,7 @@ export function ResearchEditorColumn({
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const keepEditingRef = useRef<HTMLButtonElement | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
+  useMarkdownDashGuard(fieldRef);
   const questionNoteId = useId();
   // The menu's choice applies to this column's ask only; until one is made
   // it follows the Home ask box's selection.
