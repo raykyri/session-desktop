@@ -552,7 +552,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         .catch((error: unknown) => pushErrorToast("The highlight could not be saved", error))
         .finally(() => setSavingHighlight(false));
     },
-    [savingHighlight, toast],
+    [savingHighlight],
   );
 
   const applyHighlight = useCallback(() => {
@@ -924,7 +924,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       setFollowup,
       submitting,
       tailNode,
-      toast,
     ],
   );
 
@@ -935,7 +934,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         .catch((error: unknown) => pushErrorToast("The run could not be cancelled", error))
         .finally(() => setCancelling(false));
     },
-    [cancelMutate, toast],
+    [cancelMutate],
   );
 
   const handleRetry = useCallback(

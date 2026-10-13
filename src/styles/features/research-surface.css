@@ -271,17 +271,6 @@
   cursor: pointer;
 }
 
-/* In Home the embed opens nothing; a click belongs to the feed row. */
-.tweet-embed.is-static,
-.tweet-embed.is-static .tweet-embed-quote {
-  cursor: inherit;
-}
-
-.tweet-embed.is-static .tweet-embed-quote:hover,
-.tweet-embed.is-static .tweet-embed-card:hover {
-  background: none;
-}
-
 .tweet-embed-avatar-link {
   display: block;
   flex: none;

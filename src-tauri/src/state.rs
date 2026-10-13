@@ -3732,8 +3732,8 @@ impl AppState {
             .collect())
     }
 
-    /// Creates a draft at the top of its workspace's list when `id` is
-    /// absent; otherwise replaces that draft's prompt in place.
+    /// `save_research_draft_with_images` without image changes, for tests.
+    #[cfg(test)]
     pub fn save_research_draft(
         &self,
         id: Option<String>,
@@ -3743,9 +3743,11 @@ impl AppState {
         self.save_research_draft_with_images(id, workspace_id, prompt, None)
     }
 
-    /// As `save_research_draft`; `images` (image attachments only) replaces
-    /// the draft's images, and None keeps them. Images no longer attached are
-    /// released when nothing else references them.
+    /// Creates a draft at the top of its workspace's list when `id` is
+    /// absent; otherwise replaces that draft's prompt in place. `images`
+    /// (image attachments only) replaces the draft's images, and None keeps
+    /// them. Images no longer attached are released when nothing else
+    /// references them.
     pub fn save_research_draft_with_images(
         &self,
         id: Option<String>,

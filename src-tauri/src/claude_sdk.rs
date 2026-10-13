@@ -608,10 +608,6 @@ impl ClaudeSdkSession {
         Ok(request_id)
     }
 
-    pub fn send_user_prompt(&mut self, prompt: &str) -> Result<(), String> {
-        self.send_user_message(prompt, Vec::new())
-    }
-
     /// Sends the prompt with `images` (Messages API `image` content blocks)
     /// before its text.
     pub fn send_user_message(&mut self, prompt: &str, images: Vec<Value>) -> Result<(), String> {
@@ -1267,7 +1263,7 @@ print(json.dumps({
             match message {
                 SdkMessage::ControlResponse { subtype, .. } if subtype == "success" => {
                     saw_init_ok = true;
-                    session.send_user_prompt("hello").unwrap();
+                    session.send_user_message("hello", Vec::new()).unwrap();
                 }
                 SdkMessage::ControlRequest {
                     request_id,
@@ -1311,7 +1307,9 @@ print(json.dumps({
             stderr_log: dir.join("stderr.log"),
         })
         .unwrap();
-        let err = session.send_user_prompt("too soon").unwrap_err();
+        let err = session
+            .send_user_message("too soon", Vec::new())
+            .unwrap_err();
         assert!(err.contains("before initialize"));
         session.kill();
         fs::remove_dir_all(dir).ok();
@@ -1386,7 +1384,7 @@ time.sleep(8)
                 SdkMessage::ControlResponse { subtype, .. } if subtype == "success" => {
                     if !saw_init_ok {
                         saw_init_ok = true;
-                        session.send_user_prompt("hello").unwrap();
+                        session.send_user_message("hello", Vec::new()).unwrap();
                         session.write_interrupt().unwrap();
                     } else {
                         saw_interrupt_ack = true;

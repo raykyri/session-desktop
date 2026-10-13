@@ -49,6 +49,8 @@ struct BrowserBackend {
     engine: Option<Arc<BrowserEngine>>,
     engine_error: Option<String>,
     app_state: Option<AppState>,
+    /// Keyed by browser overlay owner id (`__research_thread__:<tree id>`),
+    /// which the frontend sends as `paneId`.
     tab_by_pane: Mutex<HashMap<String, u64>>,
     pane_by_tab: Mutex<HashMap<u64, String>>,
     viewport_by_pane: Mutex<HashMap<String, BrowserViewport>>,
@@ -491,7 +493,7 @@ fn browser_scale_factor(scale_factor: f64) -> f64 {
     }
 }
 
-/// The mirrored tab a pane is currently looking at, with Chromium already
+/// The mirrored tab currently shown for an overlay owner, with Chromium already
 /// emulating the overlay's size and the display's scale.
 struct AgentMirrorTarget {
     viewport: BrowserViewport,
@@ -518,7 +520,7 @@ impl AgentMirrorTarget {
     }
 }
 
-/// Resolve the pane's tab and make Chromium render at `width`x`height` CSS
+/// Resolve the owner's tab and make Chromium render at `width`x`height` CSS
 /// pixels with `scale_factor` device pixels each. The metrics override is only
 /// re-sent when something actually changed, so this is cheap to call on a
 /// heartbeat.
@@ -650,7 +652,7 @@ fn screencast_max_dimensions(viewport: BrowserViewport) -> (u64, u64) {
     (width.round() as u64, height.round() as u64)
 }
 
-/// Start — or reconfigure — the pane's screencast and report the mirrored tab.
+/// Start — or reconfigure — the owner's screencast and report the mirrored tab.
 ///
 /// Chromium is only touched when the tab, overlay size, or display scale
 /// changed, so the overlay can call this on a slow heartbeat to keep its
@@ -683,7 +685,7 @@ pub fn browser_automation_start_screencast(
             .copied();
         if streaming != Some(viewport) {
             if let Some(previous) = streaming {
-                // Stop a pane's previous tab (or previous size configuration)
+                // Stop the owner's previous tab (or previous size configuration)
                 // before replacing the only record that can address it.
                 match browser.execute_for_tab(previous.tab_id, "Page.stopScreencast", json!({})) {
                     Ok(_) => {
@@ -737,8 +739,8 @@ pub fn browser_automation_stop_screencast(
     else {
         return Ok(());
     };
-    // Address the recorded tab rather than the pane: resolving a pane with no
-    // tab left would open one, and closing an overlay must never do that.
+    // Address the recorded tab rather than the owner: resolving an owner with
+    // no tab left would open one, and closing an overlay must never do that.
     stop_recorded_screencast(&browser._backend, &pane_id, streaming)
 }
 
@@ -753,7 +755,7 @@ fn browser_tab_no_longer_exists(error: &str) -> bool {
     error.contains(" does not exist")
 }
 
-/// Forward screencast frames from the CDP controller to the pane that owns the
+/// Forward screencast frames from the CDP controller to the overlay owner of the
 /// streaming tab. Frames are dropped rather than queued when no mirror is
 /// subscribed, so a closed overlay costs nothing until its screencast is stopped.
 fn start_screencast_pump(backend: &Arc<BrowserBackend>) -> Result<(), String> {
@@ -766,8 +768,8 @@ fn start_screencast_pump(backend: &Arc<BrowserBackend>) -> Result<(), String> {
     thread::Builder::new()
         .name("session-browser-screencast".to_string())
         .spawn(move || {
-            // One budget across every mirrored pane, so the bridge's total
-            // cost is bounded however many panes are streaming at once.
+            // One budget across every mirrored owner, so the bridge's total
+            // cost is bounded however many owners are streaming at once.
             let mut emitted_at: Option<Instant> = None;
             while let Ok(frame) = frames_rx.recv() {
                 let now = Instant::now();
@@ -785,7 +787,7 @@ fn start_screencast_pump(backend: &Arc<BrowserBackend>) -> Result<(), String> {
     Ok(())
 }
 
-/// Returns whether the frame reached a pane that wanted it.
+/// Returns whether the frame reached an owner that wanted it.
 fn emit_screencast_frame(backend: &BrowserBackend, frame: &ScreencastFrame) -> bool {
     let Some(pane_id) = lock_or_recover(&backend.pane_by_tab)
         .get(&frame.tab_id)

@@ -51,22 +51,6 @@ test("tweet card offers Show more on a long post", () => {
   assert.match(html, /…/);
 });
 
-test("a tweet card that is not openable opens nothing on X", () => {
-  const long = renderToStaticMarkup(
-    createElement(TweetEmbed, { tweet: snapshot("1623411400545632256"), openable: false }),
-  );
-  assert.match(long, /<article class="tweet-embed is-static" aria-label="Tweet by @/);
-  assert.doesNotMatch(long, /role="link"|tabindex|<a /);
-  // A cut-off text ends at its ellipsis; Show more would open X.
-  assert.doesNotMatch(long, /Show more/);
-  assert.match(long, /…/);
-  const quote = renderToStaticMarkup(
-    createElement(TweetEmbed, { tweet: snapshot("1599367266448994304"), openable: false }),
-  );
-  assert.match(quote, /tweet-embed-quote/);
-  assert.doesNotMatch(quote, /role="link"|<a /);
-});
-
 test("tweet card lays out one compact header line, full-width text, and a footer of timestamp and counts", () => {
   const html = renderTweet(snapshot("20"));
   // The header is one line: a 20px avatar, the name (its tooltip contains the

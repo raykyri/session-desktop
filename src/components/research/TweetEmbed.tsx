@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { Play } from "lucide-react";
 import { openExternalUrl } from "../../lib/api";
@@ -16,12 +16,8 @@ function externalLinkClick(url: string) {
   };
 }
 
-/** Whether the embed's parts open on X. Off in Home, where a click on a
- * tweet belongs to its feed row. */
-const TweetLinksOpen = createContext(true);
-
-/** A link to X, or, where the embed does not open links, the same content in
- * a span so a click falls through to what holds the embed. */
+/** A link to X, or, without a URL, the same content in a span so a click
+ * falls through to the embed. */
 function TweetLink({
   url,
   className,
@@ -36,8 +32,7 @@ function TweetLink({
   hidden?: boolean;
   children: ReactNode;
 }) {
-  const open = useContext(TweetLinksOpen);
-  if (!open || !url) {
+  if (!url) {
     return (
       <span className={className} title={title} aria-hidden={hidden || undefined}>
         {children}
@@ -311,65 +306,44 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
  * single header row with a 20px avatar, name, and badge. The handle is
  * available in the name's tooltip and accessible label. Full-width text with
  * Show more under it, media, and the quote follow; the timestamp and
- * engagement counts share the footer. With `openable` off, no part of the
- * embed opens X, so a click reaches the element around it, and cut-off text
- * ends at its ellipsis without Show more. Exported for static-markup tests. */
+ * engagement counts share the footer. Exported for static-markup tests. */
 export function TweetEmbed({
   tweet,
-  openable = true,
   lead,
 }: {
   tweet: TweetSnapshot;
-  openable?: boolean;
   /** A row glyph at the start of the header, when the tweet is the row's
    * first line. */
   lead?: ReactNode;
 }) {
-  return (
-    <TweetLinksOpen.Provider value={openable}>
-      <TweetEmbedBody tweet={tweet} lead={lead} />
-    </TweetLinksOpen.Provider>
-  );
-}
-
-function TweetEmbedBody({ tweet, lead }: { tweet: TweetSnapshot; lead?: ReactNode }) {
-  const openable = useContext(TweetLinksOpen);
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
   const age = formatTweetAge(tweet.createdAt);
   const hasStats = tweet.replies !== undefined || tweet.likes !== undefined;
   return (
     <article
-      className={`tweet-embed${openable ? "" : " is-static"}`}
-      aria-label={`${openable ? "Open tweet" : "Tweet"} by @${tweet.author.handle}`}
-      role={openable ? "link" : undefined}
-      tabIndex={openable ? 0 : undefined}
-      onClick={
-        openable
-          ? (event) => {
-              // Descendant links and controls prevent their handled click from
-              // reaching here. Everything else on the embed opens this tweet.
-              if (event.defaultPrevented) {
-                return;
-              }
-              event.preventDefault();
-              event.stopPropagation();
-              void openExternalUrl(tweet.url);
-            }
-          : undefined
-      }
-      onKeyDown={
-        openable
-          ? (event) => {
-              if (event.target !== event.currentTarget || event.key !== "Enter") {
-                return;
-              }
-              event.preventDefault();
-              event.stopPropagation();
-              void openExternalUrl(tweet.url);
-            }
-          : undefined
-      }
+      className="tweet-embed"
+      aria-label={`Open tweet by @${tweet.author.handle}`}
+      role="link"
+      tabIndex={0}
+      onClick={(event) => {
+        // Descendant links and controls prevent their handled click from
+        // reaching here. Everything else on the embed opens this tweet.
+        if (event.defaultPrevented) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternalUrl(tweet.url);
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || event.key !== "Enter") {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternalUrl(tweet.url);
+      }}
     >
       <div className="tweet-embed-main">
         <div className="tweet-embed-head">
@@ -400,7 +374,7 @@ function TweetEmbedBody({ tweet, lead }: { tweet: TweetSnapshot; lead?: ReactNod
           </p>
         ) : null}
         <TweetText runs={tweet.runs} className="tweet-embed-text" />
-        {tweet.partial && openable ? (
+        {tweet.partial ? (
           <TweetLink url={tweet.url} className="tweet-embed-more">
             Show more
           </TweetLink>
@@ -410,31 +384,23 @@ function TweetEmbedBody({ tweet, lead }: { tweet: TweetSnapshot; lead?: ReactNod
         {quoted ? (
           <div
             className="tweet-embed-quote"
-            role={openable ? "link" : undefined}
-            tabIndex={openable ? 0 : undefined}
-            onClick={
-              openable
-                ? (event) => {
-                    event.stopPropagation();
-                    // Links inside the quoted text keep their own targets.
-                    if ((event.target as HTMLElement).closest("a")) {
-                      return;
-                    }
-                    void openExternalUrl(quoted.url);
-                  }
-                : undefined
-            }
-            onKeyDown={
-              openable
-                ? (event) => {
-                    if (event.target === event.currentTarget && event.key === "Enter") {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void openExternalUrl(quoted.url);
-                    }
-                  }
-                : undefined
-            }
+            role="link"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              // Links inside the quoted text keep their own targets.
+              if ((event.target as HTMLElement).closest("a")) {
+                return;
+              }
+              void openExternalUrl(quoted.url);
+            }}
+            onKeyDown={(event) => {
+              if (event.target === event.currentTarget && event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                void openExternalUrl(quoted.url);
+              }
+            }}
           >
             <div className="tweet-embed-quote-head">
               <TweetAvatar

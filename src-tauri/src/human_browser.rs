@@ -82,13 +82,14 @@ struct HumanBrowserView {
 struct HumanBrowserInner {
     views: HashMap<String, HumanBrowserView>,
     active_owner: Option<String>,
-    /// Frontend surface revisions are app-global, not per owner. That makes a
-    /// delayed show from the previously active pane unable to cover the pane
-    /// the user switched to while the first command was crossing the bridge.
+    /// Frontend surface revisions are app-global, not per owner. A delayed
+    /// show for the previously active owner therefore cannot cover the
+    /// overlay of the owner the user switched to while the first command was
+    /// crossing the bridge.
     latest_surface_revision: u64,
-    /// Lifecycle ordering is per owner. Process the close for pane A even if a
-    /// newer geometry update for pane B arrived first. A delayed close event
-    /// must not remove pane A after it reopens.
+    /// Lifecycle ordering is per owner. Process the close for owner A even if
+    /// a newer geometry update for owner B arrived first. A delayed close
+    /// event must not remove owner A's view after it reopens.
     owner_revisions: HashMap<String, u64>,
     generation: u64,
 }
