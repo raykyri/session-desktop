@@ -167,9 +167,9 @@ export function ResearchRenameDialog({
 }
 
 
-/** The steps of the thread page's delete confirmation for `node`. The root
- * stands for the research: it moves to the Trash, or with Delete now is
- * deleted. A message inside a thread is deleted at once with what follows it
+/** The steps of the thread page's delete confirmation for `node`. Deleting
+ * the root deletes the whole research: it moves to the Trash, or with Delete
+ * now is deleted permanently. A message inside a thread is deleted at once with what follows it
  * (messages have no Trash), so its dialog is the permanent step alone. */
 export function researchBranchDeleteDialogProps({
   node,
@@ -186,7 +186,7 @@ export function researchBranchDeleteDialogProps({
   isRoot: boolean;
   treeTitle: string;
   /** For the root: the children listed under the research in Home, which
-   * are deleted with it. */
+   * move to the Trash or are deleted with it. */
   groupChildCount?: number;
   onTrashRoot: () => Promise<void>;
   onRemove: () => Promise<void>;
@@ -236,7 +236,7 @@ export function researchBranchDeleteDialogProps({
       ? `This deletes the note and ${plural("follow-up")} under it.`
       : "This deletes the note."
     : node.inline && count > 0
-      ? `This deletes this follow-up and everything after it in the thread, ${plural("message")} in all, including any branches. After deletion, you can add another follow-up directly to the parent answer.`
+      ? `This deletes this follow-up and everything after it in the thread, ${plural("message")} in all, including any branches. A new follow-up can then be asked from the answer before it.`
       : count > 0
         ? `This also deletes ${plural("follow-up")} under it.`
         : "This deletes the follow-up and its response.";

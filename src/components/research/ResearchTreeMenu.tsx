@@ -261,7 +261,8 @@ export function ResearchTreeDeleteOfferPanel({ tree, contents, onKeep, onDelete 
 
 interface ResearchTreeDeleteProps {
   tree: ResearchTreeSummary;
-  /** The children listed under it in Home, which are deleted with it. */
+  /** The children listed under it in Home, which move to the Trash or are
+   * deleted with it. */
   groupChildren?: readonly ResearchTreeSummary[];
   onClose: () => void;
   /** Moves the thread to the Trash (the default). */
@@ -303,7 +304,7 @@ export function researchTreeDeleteDialogProps({
       tree.runningCount > 0
         ? "It has active runs, which must finish or be cancelled before it can be deleted."
         : groupChildren.some((child) => child.runningCount > 0)
-          ? `${count === 1 ? "Its child has" : "One of its children has"} active runs, which must finish or be cancelled before it can be deleted.`
+          ? `${count === 1 ? "Its child has" : "At least one of its children has"} active runs, which must finish or be cancelled before this thread can be deleted.`
           : null,
     onClose,
   };

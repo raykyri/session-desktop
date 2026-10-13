@@ -59,7 +59,7 @@ interface ResearchEditorColumnProps {
  * text, in a plain field, with Cancel, Save and "Ask as a question" (with
  * the model menu it asks with) in its footer. A document's editor follows its
  * answer column, which previews the text; a note's editor is shown in place
- * of the note column. ⌘↵ (Ctrl↵) saves and closes the column; ⌘S (Ctrl+S)
+ * of the note column. ⌘↵ (Ctrl+↵) saves and closes the column; ⌘S (Ctrl+S)
  * saves and keeps it open. Both do nothing while Save is disabled. Esc closes
  * the column when nothing changed, and otherwise asks in the footer whether
  * to discard the changes. */
@@ -127,8 +127,8 @@ export function ResearchEditorColumn({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    // Keys in the model menu and its Custom model dialog, which are portaled
-    // out of the column, are theirs.
+    // Ignore keys from the model menu and its Custom model dialog: they are
+    // portaled out of the column, but React still bubbles their events here.
     if (!event.currentTarget.contains(event.target as Node)) return;
     if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey) {
       if (event.nativeEvent.isComposing) return;
@@ -144,8 +144,8 @@ export function ResearchEditorColumn({
       // ⌘S does not run.
       event.preventDefault();
       if (canSave && !saving) {
-        // Saved changes are not discarded: the question goes, and focus
-        // returns from its Keep editing button to the field.
+        // ⌘S during the discard prompt saves instead: the prompt closes and
+        // focus moves from its Keep editing button back to the field.
         if (confirmingDiscard) keepEditing();
         onSaveInPlace();
       }

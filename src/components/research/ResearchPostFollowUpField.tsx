@@ -95,8 +95,8 @@ export function postFollowUpAskLabel(launch: ResearchLaunchChoice | null): strin
   return ["Ask", agent, model].filter(Boolean).join(" ");
 }
 
-/** Why the box's images cannot go, or null: a note keeps none, and an AI
- * follow-up's are checked against the agent it runs on (`adapter`, the one
+/** Why the box's images cannot be sent, or null: notes can't include images,
+ * and an AI follow-up's are checked against the agent it runs on (`adapter`, the one
  * the Ask segment shows). */
 export function postFollowUpImageBlock(
   asNote: boolean,
@@ -116,9 +116,9 @@ export function postFollowUpImageBlock(
  * agent, or the agent, model and effort chosen for this box in the model
  * menu, which a press on the selected Ask segment opens. Each AI follow-up
  * of a note is a fresh run with the note as context, so any ready research
- * agent can take it. "Add a note" adds a follow-up note instead.
- * The send shortcut follows the "Require ⌘↵ to send" setting. Images pasted
- * or dropped on the box go with an AI follow-up; a note keeps none. */
+ * agent can take it. "Add a note" adds a follow-up note instead. The send
+ * shortcut follows the "Require ⌘↵ to send" setting. Images pasted or
+ * dropped on the box go with an AI follow-up; notes can't include images. */
 export function PostFollowUpField({
   post,
   adapters: allAdapters = NO_ADAPTERS,

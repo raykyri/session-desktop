@@ -249,7 +249,7 @@ test("a parent's card has a toggle line and its children follow it as indented c
   assert.match(html, /data-research-card="note"[^>]*data-research-holds-children/);
   assert.match(html, /data-research-card="link"[^>]*data-research-holds-children/);
   assert.doesNotMatch(html, /data-research-card="c1"[^>]*data-research-holds-children/);
-  assert.equal(html.match(/class="research-feed-nest-port" aria-hidden="true">Make child</g)?.length, 3);
+  assert.equal(html.match(/class="research-feed-nest-port" aria-hidden="true">Nest here</g)?.length, 3);
   // The expanded group's Move out strip follows it.
   assert.match(html, /class="research-feed-group"[\s\S]*<\/div><div class="research-feed-group-exit" data-research-group-exit="p" aria-hidden="true">Move out of group<\/div>/);
   // Expanded, the toggle shows no counts.
@@ -291,7 +291,7 @@ test("deleting a parent names its children, and the Trash keeps them together", 
   const first = renderToStaticMarkup(createElement(ResearchDeleteDialogPanel, props));
   assert.match(first, /Delete “Gum” and its 2 children\?/);
   assert.match(first, /It moves to the Trash with its 2 children. Restoring it restores its children too./);
-  assert.match(first, /One of its children has active runs/);
+  assert.match(first, /At least one of its children has active runs/);
   const second = renderToStaticMarkup(createElement(ResearchDeleteDialogPanel, { ...props, initialStep: "remove" }));
   assert.match(second, /“Gum” and its 2 children will be deleted. This can’t be undone./);
   assert.equal(

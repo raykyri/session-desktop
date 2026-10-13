@@ -30,7 +30,7 @@ export default function ResearchGroupPanel({
   if (group.parent) {
     const parent = group.parent;
     return (
-      <nav className="research-group-panel" aria-label="Group">
+      <nav className="research-group-panel" aria-label="Parent thread">
         <button type="button" className="research-group-panel-parent" onClick={() => onOpen(parent.id)}>
           <CornerLeftUp size={13} aria-hidden="true" />
           <span className="research-group-panel-title">In “{parent.title}”</span>

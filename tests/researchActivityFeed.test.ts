@@ -319,7 +319,7 @@ test("Trash lists its items newest first with Restore and Delete now, and emptie
   assert.match(html, /<button type="button" class="research-feed-button">Empty Trash<\/button>/);
   assert.ok(html.indexOf("Old folder") < html.indexOf("Old thread"));
   assert.match(html, /aria-label="Restore Old thread"/);
-  assert.match(html, /aria-label="Delete now: Old folder"/);
+  assert.match(html, /aria-label="Delete Old folder now"/);
   // Trash has no ask box and takes no drops.
   assert.doesNotMatch(html, /Query composer/);
   assert.doesNotMatch(html, /research-feed-solo"[^>]*data-research-drop/);

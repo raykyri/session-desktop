@@ -1047,8 +1047,8 @@ function ResearchActivityFeed({
         unread={Boolean(tree?.hasUnseenUpdate) && !selected}
         menuOpen={menuTreeId === treeId}
         onOpen={() => openTreeCard(tree, query)}
-        // A double-click on a note's card edits the note; the feed lists
-        // threads outside Archive.
+        // A double-click on a note's card edits the note, unless the thread is
+        // archived (researchNoteEditable).
         onEdit={
           onEditNote && tree && query && researchNoteEditable(query, tree.archivedAt != null)
             ? () => onEditNote(tree.id, query.nodeId)
@@ -1407,7 +1407,8 @@ function ResearchActivityFeed({
       return;
     }
     onNestTree(tree.id, above.id, null);
-    // A card with children asks first; the dialog announces itself.
+    // Nesting a card that has children opens a confirmation first; screen
+    // readers announce the dialog, so nothing is announced here.
     if (!card.dataset.researchChildren) {
       announce(`Moved under “${shortName(above.title)}”.`);
       keepCardFocus(tree.id);
@@ -1468,7 +1469,7 @@ function ResearchActivityFeed({
         {menuGroupParent && onMoveOutOfGroup ? (
           <ResearchMenuItem
             icon={<IndentDecrease size={15} aria-hidden="true" />}
-            label="Move out"
+            label="Move out of group"
             onSelect={() => {
               const parent = menuGroupParent;
               closeMenu(true);
@@ -1783,7 +1784,8 @@ function ResearchActivityFeed({
             </ResearchFeedTray>
           ) : null}
           {view.kind === "home" && onNewFolder ? (
-            // The sidebar's New folder, below the trays; focus returns here.
+            // The same New folder action as the sidebar's, below the trays;
+            // focus returns to this button when the dialog closes.
             <button
               type="button"
               className="research-feed-new-folder"

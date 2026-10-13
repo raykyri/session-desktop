@@ -307,13 +307,13 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
   );
 }
 
-/** Renders a hydrated tweet directly as a feed entry. The layout uses a
+/** Renders a hydrated tweet as an embed in a message. The layout uses a
  * single header row with a 20px avatar, name, and badge. The handle is
  * available in the name's tooltip and accessible label. Full-width text with
  * Show more under it, media, and the quote follow; the timestamp and
- * engagement counts share the footer. With `openable` off (Home), no part of
- * the embed opens X, so a click reaches the feed row, and cut-off text ends at
- * its ellipsis without Show more. Exported for static-markup tests. */
+ * engagement counts share the footer. With `openable` off, no part of the
+ * embed opens X, so a click reaches the element around it, and cut-off text
+ * ends at its ellipsis without Show more. Exported for static-markup tests. */
 export function TweetEmbed({
   tweet,
   openable = true,

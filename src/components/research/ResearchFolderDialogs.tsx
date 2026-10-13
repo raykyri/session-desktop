@@ -16,7 +16,7 @@ export type ResearchFolderNameRequest = (
 
 /** New folder / Rename folder: a confirm dialog with the name field focused.
  * Enter or the primary button confirms; Esc, Cancel, or a click outside
- * closes it. Problems show inline and keep the text. */
+ * closes it. Errors show inline, and the typed name is kept. */
 export function ResearchFolderNameDialog({
   request,
   folders,

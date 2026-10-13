@@ -298,8 +298,8 @@ export function ResearchRailButton({
 
 /** The collapsed sidebar: a 52px column of icons. Home and Highlights,
  * then one icon per folder (user folders as their first letter, named in the
- * tooltip) ending with Archive and Trash, then New folder. Home and the folder
- * icons but Trash accept drops. */
+ * tooltip) ending with Archive and Trash, then New folder. Home and every
+ * folder icon except Trash accept drops. */
 export function ResearchSidebarRail({
   current,
   folders,

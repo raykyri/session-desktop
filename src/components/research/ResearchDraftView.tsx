@@ -16,8 +16,9 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
  * question as the header's title, then its ask box labelled "Draft", which
  * gives the text the full width with Send on its own row. Opening a draft
  * never focuses the box. Edits save as you type and when the view closes,
- * and an added or removed image saves at once; once a send starts nothing
- * more is saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows
+ * and an added or removed image saves at once when the draft has text
+ * (otherwise with the next text edit); once a send starts nothing more is
+ * saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows
  * a toast; with nothing to save it does nothing. A failed send keeps the view
  * open with the error. Delete is in the draft's … menu in the feed. */
 export default function ResearchDraftView({

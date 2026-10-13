@@ -239,7 +239,7 @@ export default function ResearchFeedCard({
         {holdsChildren && onDragStart ? (
           // Shown by CSS only during a drag of an item the card can take.
           <span className="research-feed-nest-port" aria-hidden="true">
-            Make child
+            Nest here
           </span>
         ) : null}
       </div>

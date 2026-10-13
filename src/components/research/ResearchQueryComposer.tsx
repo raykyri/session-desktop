@@ -176,7 +176,7 @@ export interface ResearchLaunchChoice {
 
 /** The Home ask box's session draft: the question text, its images, and the
  * agent, model, and effort choice. `effortChoice` and `images` are absent in
- * drafts stored before they were kept. */
+ * drafts stored before these fields were added. */
 interface HomeComposerDraft {
   prompt: string;
   adapter: string;
@@ -431,8 +431,8 @@ export default function ResearchQueryComposer({
     disabled: submitting,
     dropTarget: rootRef,
   });
-  // A note keeps no images, and an agent that can't read them never gets
-  // the question without them.
+  // Notes can't include images, and for an agent that can't read images
+  // the send is blocked rather than dropping them.
   const imageBlock =
     images.length === 0
       ? null

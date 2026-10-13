@@ -1152,7 +1152,8 @@
   display: flex;
 }
 
-/* The port is opaque over the card's text, in the background it sits on. */
+/* In a tray the port fills with the tray background, so it covers the card
+   text beneath it. */
 .research-feed-tray-body .research-feed-nest-port {
   --research-nest-port-bg: var(--research-tray-bg);
 }

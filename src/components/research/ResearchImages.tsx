@@ -26,13 +26,14 @@ import {
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** A file drop can reach the page both as a DOM drop and as the window's
- * native drop. A second drop of the same file names within this window is
- * the same drop; a drop of other files is not. */
+ * native drop. A second drop of the same file names within DUPLICATE_DROP_MS
+ * is the same drop; a drop of other files is not. */
 const DUPLICATE_DROP_MS = 1_000;
 
 // Data URLs of recently shown thumbnails and full images, most recent
-// last, kept to a total length. The webview's content security policy allows
-// only data: and blob: image sources.
+// last, evicted oldest first above MAX_CACHED_URL_LENGTH total characters.
+// The webview's content security policy allows only data: and blob: image
+// sources.
 const MAX_CACHED_URL_LENGTH = 32 * 1024 * 1024;
 type ImageSize = "thumbnail" | "full";
 const imageUrls = new Map<string, { url: Promise<string>; length: number }>();
@@ -200,7 +201,7 @@ export type ResearchImagesUpdate = (
 
 /** Paste and drop handling for a composer's field. Each accepted image is
  * saved at once and added through `onImagesChange`; `saving` counts the
- * images still being saved and `error` names the last rejected file.
+ * images still being saved and `error` is the message for the last rejected file or failed save.
  * `dropTarget` is the element native file drops (which arrive as paths)
  * must land on. Without `onImagesChange` the field takes no images. */
 export function useResearchImageInput({

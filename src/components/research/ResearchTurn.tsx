@@ -658,8 +658,9 @@ export function researchMessageStateWord(state: ResearchRowState): string | null
 
 /** One message in a level's messages column: the user's message in full,
  * then a meta line, shown only when it has something to show: "Imported"
- * for an imported report, or the word Queued or Stopped. A message whose answer has branches shows the branch
- * indicator at the right end of its first line. The first line starts with the row's glyph (ResearchRowGlyph)
+ * for an imported report, or the word Queued or Stopped. A message whose
+ * answer has branches shows the branch indicator at the right end of its
+ * first line. The first line starts with the row's glyph (ResearchRowGlyph)
  * unless the row is an answered exchange, the common case: a note, link, X
  * post or document shows its kind, and a queued, running, failed or stopped
  * question its state. The row's time is not shown; the answer's footer has

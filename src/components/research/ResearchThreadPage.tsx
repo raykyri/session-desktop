@@ -153,8 +153,8 @@ const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_MARKERS: ResearchBranchMarker[] = [];
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
 
-/** The ask boxes' images with `images` as box `key`'s; an empty list
- * removes the key. */
+/** Returns `current` with box `key`'s images replaced by `images`; an empty
+ * list removes the key. */
 function withImages(
   current: Record<string, ResearchImageAttachment[]>,
   key: string,
@@ -1960,10 +1960,10 @@ function ResearchThreadPage({
     startEditing(nodeId, returnFocus);
   }
 
-  // A note double-clicked in the feed is edited once this page has its
-  // tree's detail and has restored the open levels, which the feed's click
-  // set to the note, so editing adds no second visit. A note that cannot be
-  // edited is not.
+  // Edits a note double-clicked in the feed once this page has the tree's
+  // detail and has restored the open levels. The double-click's first click
+  // already opened the levels at the note, so editing adds no second history
+  // visit. A note that is not editable (researchNoteEditable) is skipped.
   useEffect(() => {
     if (!noteEditRequest || detail?.tree.id !== noteEditRequest.treeId || selection === null) {
       return;
@@ -2401,7 +2401,7 @@ function ResearchThreadPage({
     (key: string): ResearchImagesUpdate =>
     (update) =>
       setComposerImages((current) => withImages(current, key, update(current[key] ?? [])));
-  /** Why an ask box's images cannot go to `adapter`, or null. */
+  /** Why an ask box's images cannot be sent to `adapter`, or null. */
   const imageBlockReasonFor = (adapter: string | null, images: readonly ResearchImageAttachment[] | undefined) =>
     researchImageBlockReason(
       adapter,

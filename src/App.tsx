@@ -719,10 +719,10 @@ function MainApp() {
 
   // Opening a card whose root isn't in the loaded feed (Archive, or a folder
   // member paged out of it) keeps the list in the feed column beside the thread.
-  // Opening a card (a click, or Enter on it) selects its question in the
-  // column that lists it, with nothing selected after it, also when the
-  // thread is already open and for an archived thread's card. A thread
-  // already showing that selection keeps it as it is.
+  // Opening a card (click or Enter) selects its question in the column that
+  // lists it and clears any selection after it, including when the thread is
+  // already open and for archived threads. A thread already showing that
+  // selection is left unchanged.
   const openFeedResearchTree = useCallback(
     (treeId: string) => {
       const rootNodeId = researchFeedCardNodeId([...researchTrees, ...archivedResearchTrees], treeId);

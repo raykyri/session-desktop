@@ -58,7 +58,7 @@ export default function ResearchTrashList({
             <button
               type="button"
               className="research-feed-button is-ghost"
-              aria-label={`Delete now: ${entry.title}`}
+              aria-label={`Delete ${entry.title} now`}
               onClick={(event) => onDeleteNow(entry, event.currentTarget)}
             >
               Delete now

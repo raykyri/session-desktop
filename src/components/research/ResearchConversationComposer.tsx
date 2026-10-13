@@ -63,7 +63,8 @@ const ResearchConversationComposer = forwardRef<
     /** The attached images; with `onImagesChange`, the box accepts more. */
     images?: readonly ResearchImageAttachment[];
     onImagesChange?: ResearchImagesUpdate;
-    /** Why the attached images cannot be sent (the agent can't read them).
+    /** Why the attached images cannot be sent (the agent can't read images,
+     * or they exceed a message's size limit).
      * Shown under the field; Send stays disabled. */
     imageBlockReason?: string | null;
     onChange: (value: string) => void;
@@ -115,7 +116,8 @@ const ResearchConversationComposer = forwardRef<
       growComposerTextarea(textareaRef.current);
     }
   }, [value]);
-  // Images still being saved, or images the agent can't read, hold the send.
+  // Send stays disabled while images are still saving or cannot be sent to
+  // the agent.
   const ready =
     canSubmit &&
     value.trim().length > 0 &&

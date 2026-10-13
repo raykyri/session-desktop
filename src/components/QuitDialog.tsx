@@ -41,7 +41,7 @@ export default function QuitDialog({
         <p>
           {dialog.researchRunCount} active research run
           {dialog.researchRunCount === 1 ? "" : "s"} will be cancelled and kept in
-          Research history.
+          their threads.
         </p>
         <div className="confirm-dialog-actions">
           <button className="control-button" type="button" disabled={quitting} onClick={onCancel}>
@@ -53,7 +53,7 @@ export default function QuitDialog({
             className="danger"
             autoFocus
             pending={quitting}
-            pendingLabel="Quitting..."
+            pendingLabel="Quitting…"
             onClick={onConfirm}
           >
             Quit Session
