@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { closeDiagramLightbox, getDiagramLightbox } from "../lib/diagramLightbox";
 import { closeImageLightbox, getImageLightbox } from "../lib/imageLightbox";
-import { isTerminalTarget } from "../lib/appHelpers";
 import { resolveAppShortcut, type AppShortcutCommand } from "../lib/appShortcuts";
 import {
   requestResearchFollowupsFocus,
@@ -246,7 +245,6 @@ export function useAppShortcuts({
         ctrlKey: event.ctrlKey,
         altKey: event.altKey,
         shiftKey: event.shiftKey,
-        terminalTarget: isTerminalTarget(event.target),
       });
       if (!command) {
         return;

@@ -9,16 +9,11 @@ mod events;
 mod file_server;
 mod github_auth;
 mod headless_process;
-mod host;
 mod human_browser;
 mod launch_path;
 mod native_support;
 mod persistence;
-mod pty;
-mod remote_cli;
 mod remote_files;
-mod remote_terminal;
-mod remote_transcript;
 mod research;
 mod research_anchors;
 mod research_artifacts;
@@ -27,14 +22,12 @@ mod research_recap;
 mod research_runtime;
 mod research_widgets;
 mod scrollback;
-mod shell_jobs;
 mod show_hide_shortcut;
 mod sleep;
 mod state;
 mod thread_graph;
 mod title_generation;
 mod transcript;
-mod turn_queue;
 mod tweets;
 mod updater;
 mod user_notifications;
@@ -59,10 +52,10 @@ use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
 };
 use sleep::SleepGuard;
-use state::{AppState, PaneInfo, ResearchRelaunch};
+use state::{AppState, ResearchRelaunch};
 use tauri::{Manager, Url};
 use workspace::{
-    AgentInfo, AgentStatus, GroupInfo, LaunchOrigin, create_research_workspace,
+    AgentInfo, AgentStatus, GroupInfo, create_research_workspace,
     ensure_default_research_workspace, move_research_workspace, remove_research_workspace,
     rename_research_workspace, validate_launch_workspace,
 };
@@ -90,9 +83,9 @@ const RELOAD_INTERFACE_MENU_ID: &str = "session-reload-interface";
 ///   a second webview over the same state.
 /// - Adds "Reload Interface" to the View menu. It is native (rather than a DOM
 ///   shortcut) so it remains usable when WebKit's renderer is unhealthy, and reloads
-///   only the webview while preserving PTYs and native terminal surfaces.
+///   only the webview while preserving research processes.
 /// - Strips the native "Close Window" items (⌘W on macOS, Alt+F4 elsewhere) so the
-///   webview receives ⌘W itself; the frontend then routes ⌘W to close the active pane.
+///   webview receives ⌘W itself and the frontend handles it.
 /// - On macOS, replaces the predefined "Quit" item with our own ⌘Q item. The native
 ///   item is hard-wired to Cocoa's `terminate:` selector, which tao does not intercept
 ///   (it implements `applicationWillTerminate:` but not `applicationShouldTerminate:`),
@@ -181,13 +174,7 @@ fn handle_app_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) 
 
 #[tauri::command(async)]
 fn get_runtime_config(state: tauri::State<'_, AppState>) -> Result<RuntimeConfig, String> {
-    // A damaged preferences file should not prevent the entire interface from
-    // booting. Mutations still fail closed in `update_preferences`, so the UI
-    // cannot overwrite it while trying to add a remote.
-    let remotes = persistence::load_preferences(&state.config().workspace_root)
-        .map(|preferences| preferences.remotes)
-        .unwrap_or_default();
-    let mut runtime = state.config().runtime_with(&remotes);
+    let mut runtime = state.config().runtime();
     runtime.file_server_port = state.file_server_port();
     Ok(runtime)
 }
@@ -195,23 +182,9 @@ fn get_runtime_config(state: tauri::State<'_, AppState>) -> Result<RuntimeConfig
 #[tauri::command(async)]
 fn probe_agent_adapters(
     state: tauri::State<'_, AppState>,
-    group_id: Option<String>,
     force: Option<bool>,
 ) -> Result<Vec<adapters::AdapterMetadata>, String> {
-    let group = group_id
-        .as_deref()
-        .map(|group_id| {
-            state
-                .group(group_id)?
-                .ok_or_else(|| format!("group {group_id} was not found"))
-        })
-        .transpose()?;
-    let remote_target = group.as_ref().and_then(|group| group.remote.as_ref());
-    adapters::probe_adapter_metadata_for_config(
-        state.config(),
-        remote_target,
-        force.unwrap_or(false),
-    )
+    adapters::probe_adapter_metadata_for_config(state.config(), force.unwrap_or(false))
 }
 
 #[cfg(target_os = "macos")]
@@ -353,61 +326,15 @@ fn browser_open_preview_external(
     open_in_os_browser(file_url.as_str())
 }
 
+/// Local file links were resolved against the clicked pane's working
+/// directory and file roots. Session creates no panes, so no owner exists to
+/// resolve against.
 fn resolve_local_link_target(
-    state: &AppState,
+    _state: &AppState,
     pane_id: &str,
-    path: &str,
+    _path: &str,
 ) -> Result<control_socket::ResolvedBrowserTarget, String> {
-    if !state.pane_exists(pane_id)? {
-        return Err(format!("pane {pane_id} was not found"));
-    }
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Err("nothing to open".to_string());
-    }
-    // Absolute paths resolve as-is. Relative local targets (transcript or
-    // terminal) resolve against the pane's live cwd, then the same root
-    // confinement as other local previews.
-    let cwd = if std::path::Path::new(trimmed).is_absolute() {
-        None
-    } else {
-        Some(
-            state
-                .inheritable_pane_cwd(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} has no usable working directory"))?,
-        )
-    };
-    control_socket::resolve_browser_target(
-        state,
-        pane_id,
-        trimmed,
-        cwd.as_deref().and_then(std::path::Path::to_str),
-    )
-}
-
-fn grant_staged_artifact_to_pane(
-    state: &AppState,
-    pane_id: &str,
-    artifact_id: &str,
-    path: &str,
-) -> Result<(), String> {
-    let artifact = state.artifact(artifact_id)?;
-    if artifact.path.as_deref() != Some(path) {
-        return Err("artifact path does not match its persisted target".to_string());
-    }
-    let pane_group = state
-        .pane_group_id(pane_id)?
-        .ok_or_else(|| format!("pane {pane_id} has no workspace"))?;
-    if artifact.group_id.as_deref() != Some(&pane_group) {
-        return Err("artifact belongs to another workspace".to_string());
-    }
-    let canonical = remote_files::resolve_staged_file(
-        &state.config().workspace_root,
-        std::path::Path::new(path),
-    )
-    .ok_or_else(|| "staged remote artifact is no longer available".to_string())?;
-    state.grant_pane_file_preview(pane_id, &canonical)?;
-    Ok(())
+    Err(format!("pane {pane_id} was not found"))
 }
 
 fn open_local_link(
@@ -457,15 +384,6 @@ fn browser_open_local_path(
     path: String,
     artifact_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    if let Some(artifact_id) = artifact_id.as_deref()
-        && remote_files::resolve_staged_file(
-            &state.config().workspace_root,
-            std::path::Path::new(&path),
-        )
-        .is_some()
-    {
-        grant_staged_artifact_to_pane(&state, &pane_id, artifact_id, &path)?;
-    }
     let resolved = resolve_local_link_target(&state, &pane_id, &path)?;
     open_local_link(&state, &pane_id, resolved, artifact_id)
 }
@@ -541,51 +459,10 @@ async fn browser_open_codex_inline_visualization(
     pane_id: String,
     file: String,
 ) -> Result<serde_json::Value, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        if !state.pane_exists(&pane_id)? {
-            return Err(format!("pane {pane_id} was not found"));
-        }
-        let agent = state
-            .agent_by_pane(&pane_id)?
-            .ok_or_else(|| format!("pane {pane_id} has no attached agent"))?;
-        if agent.adapter != "codex" {
-            return Err("codex-inline-vis can only be opened for a Codex session".to_string());
-        }
-        let session_id = agent
-            .session_id
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| "the attached Codex agent has no session id".to_string())?;
-        let visualization_root = state
-            .config()
-            .workspace_root
-            .join(".codex")
-            .join("visualizations");
-        let path = file_server::resolve_codex_inline_visualization(
-            &visualization_root,
-            session_id,
-            file.trim(),
-        )?;
-        let canonical = state.grant_pane_file_preview(&pane_id, &path)?;
-        let port = state
-            .file_server_port()
-            .ok_or_else(|| "the file server is not running".to_string())?;
-        let token = state.exact_file_preview_token(&pane_id, &canonical)?;
-        let url = format!(
-            "{}?codex-inline-vis=1",
-            file_server::file_url(port, &token, &canonical)
-        );
-        state.emit(events::SessionEvent::new(
-            "browser.open",
-            Some(pane_id),
-            None,
-            serde_json::json!({ "url": url, "sandbox": true }),
-        ));
-        Ok(serde_json::json!({ "url": url, "sandbox": true }))
-    })
-    .await
-    .map_err(|err| format!("browser_open_codex_inline_visualization task failed: {err}"))?
+    // Visualizations resolved against the pane's attached Codex agent;
+    // Session creates no panes.
+    let _ = (state, file);
+    Err(format!("pane {pane_id} was not found"))
 }
 
 /// Resolve and open an absolute HTML-fragment path from the current Codex
@@ -598,48 +475,10 @@ async fn browser_open_codex_visualization_reference(
     pane_id: String,
     path: String,
 ) -> Result<serde_json::Value, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        if !state.pane_exists(&pane_id)? {
-            return Err(format!("pane {pane_id} was not found"));
-        }
-        let agent = state
-            .agent_by_pane(&pane_id)?
-            .ok_or_else(|| format!("pane {pane_id} has no attached agent"))?;
-        if agent.adapter != "codex" {
-            return Err(
-                "visualization references can only be opened for a Codex session".to_string(),
-            );
-        }
-        let pane_roots = state.pane_file_roots(&pane_id);
-        if pane_roots.is_empty() {
-            return Err("local visualization references are unavailable for this pane".to_string());
-        }
-        let designs_root = state.config().workspace_root.join("designs");
-        let path = file_server::resolve_codex_visualization_reference(
-            &designs_root,
-            &pane_roots,
-            std::path::Path::new(path.trim()),
-        )?;
-        let canonical = state.grant_pane_file_preview(&pane_id, &path)?;
-        let port = state
-            .file_server_port()
-            .ok_or_else(|| "the file server is not running".to_string())?;
-        let token = state.exact_file_preview_token(&pane_id, &canonical)?;
-        let url = format!(
-            "{}?codex-inline-vis=1",
-            file_server::file_url(port, &token, &canonical)
-        );
-        state.emit(events::SessionEvent::new(
-            "browser.open",
-            Some(pane_id),
-            None,
-            serde_json::json!({ "url": url, "sandbox": true }),
-        ));
-        Ok(serde_json::json!({ "url": url, "sandbox": true }))
-    })
-    .await
-    .map_err(|err| format!("browser_open_codex_visualization_reference task failed: {err}"))?
+    // Visualizations resolved against the pane's attached Codex agent;
+    // Session creates no panes.
+    let _ = (state, path);
+    Err(format!("pane {pane_id} was not found"))
 }
 
 fn is_file_server_url(url: &str, port: u16) -> bool {
@@ -681,15 +520,10 @@ fn open_in_os_browser(url: &str) -> Result<(), String> {
 // The list/refetch commands below are async on purpose, not because their
 // reads are slow (each is a short clone under the model lock) but because sync
 // commands run on the macOS main thread: the frontend calls them in bursts on
-// every pane/agent/research event, exactly while backend threads (spawn
-// binding, research settle/retirement, the persist snapshot) hold the model
-// lock — so as sync commands they parked the main thread on that mutex and
-// extended every research start/stop into a visible stall.
-#[tauri::command]
-async fn list_panes(state: tauri::State<'_, AppState>) -> Result<Vec<PaneInfo>, String> {
-    state.list_panes()
-}
-
+// every agent/research event, exactly while backend threads (research
+// settle, the persist snapshot) hold the model lock, so as sync commands they
+// parked the main thread on that mutex and extended every research start/stop
+// into a visible stall.
 #[tauri::command]
 async fn list_groups(state: tauri::State<'_, AppState>) -> Result<Vec<GroupInfo>, String> {
     state.list_groups()
@@ -933,7 +767,7 @@ async fn create_research_tree(
         // already marks the workspace busy).
         let detail = {
             let _guard = workspace::lock_research_workspace_mutations()?;
-            validate_launch_workspace(&state, Some(&request.group_id), LaunchOrigin::Research)?;
+            validate_launch_workspace(&state, &request.group_id)?;
             state.create_research_tree_with_attachments(request, attachments)?
         };
         let root = detail
@@ -1034,7 +868,7 @@ async fn import_research_report(
     tauri::async_runtime::spawn_blocking(move || {
         let detail = {
             let _guard = workspace::lock_research_workspace_mutations()?;
-            validate_launch_workspace(&state, Some(&request.workspace_id), LaunchOrigin::Research)?;
+            validate_launch_workspace(&state, &request.workspace_id)?;
             state.import_research_report(request)?
         };
         research_recap::schedule(&state, &detail.tree.root_node_id);
@@ -1053,7 +887,7 @@ async fn create_research_post(
     let attachments = tweets::resolve_research_message_attachments(&request.body).await;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = workspace::lock_research_workspace_mutations()?;
-        validate_launch_workspace(&state, Some(&request.workspace_id), LaunchOrigin::Research)?;
+        validate_launch_workspace(&state, &request.workspace_id)?;
         state.create_research_post(request, attachments)
     })
     .await
@@ -1284,7 +1118,7 @@ async fn fork_research_node(
             let _guard = workspace::lock_research_workspace_mutations()?;
             let parent = state.research_node(&parent_node_id)?;
             let workspace = state.research_workspace_for_node(&parent_node_id)?;
-            validate_launch_workspace(&state, Some(&workspace.id), LaunchOrigin::Research)?;
+            validate_launch_workspace(&state, &workspace.id)?;
             let child = match replaces_node_id.as_deref() {
                 // Create the edited question before removing the failed node.
                 // If creation fails, preserve the failed node and partial answer.
@@ -1325,8 +1159,7 @@ async fn fork_research_node(
 /// runs with saved content as context; exchanges fork the native session.
 /// Shared by the fork command and retry, which relaunches a reset child
 /// through the same dispatch. Every failure path settles the child as Failed
-/// (reclaiming any spawned pane) before returning the error, exactly as the
-/// fork command always did.
+/// before returning the error, exactly as the fork command always did.
 fn launch_research_child_run(
     state: &AppState,
     parent: &ResearchNode,
@@ -1481,12 +1314,11 @@ fn relaunch_research_node(
     // atomically with the workspace checks, or a concurrent folder removal
     // could invalidate its workspace before the relaunch. The reset itself
     // refuses anything that is not a settled run of the kind `relaunch`
-    // accepts (or that still holds a live pane), so a double-click cannot
-    // relaunch twice.
+    // accepts, so a double-click cannot relaunch twice.
     let node = {
         let _guard = workspace::lock_research_workspace_mutations()?;
         let node = state.research_node(node_id)?;
-        validate_launch_workspace(state, Some(&node.group_id), LaunchOrigin::Research)?;
+        validate_launch_workspace(state, &node.group_id)?;
         match relaunch {
             ResearchRelaunch::Retry => state.reset_research_node_for_retry(node_id)?,
             ResearchRelaunch::Rerun => {
@@ -1552,7 +1384,6 @@ async fn cancel_research_node(
     node_id: String,
 ) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
-    // Blocking: cancellation kills the run's pane (process wait + teardown).
     tauri::async_runtime::spawn_blocking(move || state.cancel_research_node(&node_id))
         .await
         .map_err(|err| format!("cancel_research_node task failed: {err}"))?
@@ -1873,14 +1704,6 @@ fn mark_events_listener_ready() {
     native_support::set_events_listener_ready(true);
 }
 
-/// Records that `pane_id` is now the focused pane. Fired by the frontend whenever
-/// the active pane changes; feeds the recency signal that `group_spawn_cwd` uses to
-/// pick a spawn directory. Best-effort and cheap (in-memory stamp, no persist).
-#[tauri::command]
-fn pane_activate(state: tauri::State<'_, AppState>, pane_id: String) {
-    state.touch_pane_active(&pane_id);
-}
-
 #[tauri::command]
 fn interface_draft_get(
     state: tauri::State<'_, AppState>,
@@ -2049,7 +1872,7 @@ pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
 const INTERFACE_HEALTH_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Called by the native WKWebView snapshot watchdog when the compositor fails
-/// or never completes. Reload only the webview; research and PTY processes stay
+/// or never completes. Reload only the webview; research processes stay
 /// alive through the same reset path as the manual recovery command.
 #[cfg(desktop)]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -2121,7 +1944,7 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-/// Clears document-owned native routing without touching terminal sessions.
+/// Clears document-owned native routing without touching research processes.
 /// This is safe before the native host is initialized (the first page-load
 /// callback can run before setup) and idempotent across an explicit reload plus
 /// its ensuing PageLoadEvent::Started callback.
@@ -2319,7 +2142,7 @@ fn main() {
         .on_page_load(|webview, payload| {
             // The quick-launch webview has its own event subscription. Loading
             // or reloading it must not revoke the main document's native
-            // terminal shortcut readiness.
+            // shortcut readiness.
             if webview.label() == "main"
                 && payload.event() == tauri::webview::PageLoadEvent::Started
             {
@@ -2329,8 +2152,7 @@ fn main() {
 
     // Registering this replaces Tauri's default WebContent termination handler,
     // so every webview must still be explicitly reloaded. The main document
-    // additionally clears terminal routing first; quick launch has no native
-    // terminal ownership to reset.
+    // additionally clears its native routing first.
     #[cfg(target_os = "macos")]
     let builder = builder.on_web_content_process_terminate(|webview| {
         let label = webview.label();
@@ -2349,7 +2171,7 @@ fn main() {
             move |app| {
                 // First thing, so the login-shell PATH probe (up to seconds under
                 // heavy shell profiles) overlaps the rest of startup instead of
-                // stalling the first recovered pane's spawn at the end of it.
+                // delaying the first agent launch.
                 launch_path::warm_login_shell_path();
                 state
                     .attach_app(app.handle().clone())
@@ -2440,17 +2262,9 @@ fn main() {
                         persistence::remove_stale_tmp_files(&workspace_root);
                     });
                 }
-                // Restore persisted groups/agents/queues, then respawn recoverable
-                // panes into fresh PTYs before the command handlers go live so the
-                // webview's first list_panes() already sees the recovered session.
-                let recovered_panes = state.restore_session();
-                // Session has no terminal workspace. Persisted Session panes are
-                // retired during migration instead of respawned invisibly.
-                for pane in recovered_panes {
-                    if let Err(err) = state.remove_pane(&pane.id) {
-                        eprintln!("Session: failed to retire legacy pane {}: {err}", pane.id);
-                    }
-                }
+                // Restore the persisted session before the command handlers go
+                // live. Panes saved by older builds are dropped during the load.
+                state.restore_session();
                 {
                     let workspace_root = state.config().workspace_root.clone();
                     let referenced = state
@@ -2477,10 +2291,7 @@ fn main() {
                 {
                     let workspace_root = state.config().workspace_root.clone();
                     std::thread::spawn(move || {
-                        scrollback::remove_orphaned_scrollback(
-                            &workspace_root,
-                            &std::collections::HashSet::new(),
-                        );
+                        scrollback::remove_legacy_scrollback(&workspace_root);
                     });
                 }
                 app.manage(state.clone());
@@ -2538,7 +2349,6 @@ fn main() {
             browser_open_local_path_external,
             browser_open_codex_inline_visualization,
             browser_open_codex_visualization_reference,
-            list_panes,
             list_groups,
             ensure_default_research_workspace_command,
             research_workspace_create_pick,
@@ -2601,7 +2411,6 @@ fn main() {
             research_artifact_state_get,
             research_artifact_state_update,
             mark_events_listener_ready,
-            pane_activate,
             native_support_set_browser_overlay_open,
             native_support_set_iframe_shortcut_fallback,
             native_support_set_browser_background,
@@ -2627,16 +2436,13 @@ fn main() {
                 exit_state.request_exit_confirmation();
             }
             // The process is really terminating now (exit confirmed, or nothing to
-            // confirm). Take down every pane's process tree so agent-spawned
+            // confirm). Take down every research session so agent-spawned
             // descendants don't survive as orphans past quit.
             tauri::RunEvent::Exit => {
-                // Freeze the on-disk session before touching the panes: killing them
-                // makes every reader thread see PTY EOF and run the natural-exit
-                // remove_pane path, and any of those persists that win the race with
-                // process death would save the session with its tabs deleted.
+                // Freeze the on-disk session before killing research sessions, so a
+                // persist triggered while they exit cannot replace the final snapshot.
                 exit_state.finalize_persistence_for_exit();
                 research_runtime::kill_all_sessions();
-                pty::kill_all_panes(&exit_state);
                 native_support::shutdown();
                 // Stop the supervisor before touching the pathname. If we unlink
                 // first, the watchdog can treat that as a missing socket and bind

@@ -1,33 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setPreventSleep } from "../lib/api";
 import { agentStatusKeepsMachineAwake, desiredPreventSleepState } from "../lib/appHelpers";
-import { reconcileRemoteReservation } from "../lib/remoteStartup";
-import type { AgentInfo, GroupInfo, PaneInfo } from "../types";
+import type { AgentInfo, GroupInfo } from "../types";
 
 /**
- * The backend's groups, panes and agents as session events report them, and
- * the wake lock held while the `preventSleep` setting is on and an agent may
- * still be working. No surface renders panes; research runs, the control
- * socket and notifications still create and address them.
+ * The backend's groups and agents as session events report them, and the
+ * wake lock held while the `preventSleep` setting is on and an agent may
+ * still be working.
  */
 export function useSessionProcesses(preventSleep: boolean) {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
-  const [panes, setPanesState] = useState<PaneInfo[]>([]);
-  const panesRef = useRef(panes);
-  panesRef.current = panes;
-  // Every pane list passes through the remote reservation reconciliation.
-  const setPanes = useCallback((update: SetStateAction<PaneInfo[]>) => {
-    setPanesState((current) => {
-      const next =
-        typeof update === "function"
-          ? (update as (current: PaneInfo[]) => PaneInfo[])(current)
-          : update;
-      return next.map(reconcileRemoteReservation);
-    });
-  }, []);
-
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   // False while a fresh/reloaded WebContent document still holds the empty
   // placeholder above. Until listAgents() succeeds, it is not safe to infer
@@ -70,9 +54,6 @@ export function useSessionProcesses(preventSleep: boolean) {
     groups,
     setGroups,
     groupsRef,
-    panes,
-    panesRef,
-    setPanes,
     agents,
     setAgents,
     hydrateAgents,

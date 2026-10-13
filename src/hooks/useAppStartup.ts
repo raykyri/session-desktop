@@ -5,7 +5,6 @@ import {
   getRuntimeConfig,
   listAgents,
   listGroups,
-  listPanes,
   listRecentActivity,
   listResearchActivity,
   listResearchTrees,
@@ -17,7 +16,6 @@ async function loadInitial() {
   const [
     runtimeConfig,
     existingGroups,
-    existingPanes,
     existingAgents,
     existingResearchTrees,
     existingResearchActivity,
@@ -25,7 +23,6 @@ async function loadInitial() {
   ] = await Promise.all([
     getRuntimeConfig(),
     listGroups().catch(() => []),
-    listPanes(),
     listAgents(),
     listResearchTrees(true).catch(() => []),
     listResearchActivity().catch(() => []),
@@ -34,7 +31,6 @@ async function loadInitial() {
   return {
     runtimeConfig,
     existingGroups,
-    existingPanes,
     existingAgents,
     existingResearchTrees,
     existingResearchActivity,

@@ -23,9 +23,6 @@ private func nativeSupportDidCancelInterfaceHealthCheck()
 @_silgen_name("session_native_support_did_detect_unhealthy_webview")
 private func nativeSupportDidDetectUnhealthyWebView(_ generation: UInt64)
 
-@_silgen_name("session_native_support_system_sleep_changed")
-private func nativeSupportSystemSleepChanged(_ sleeping: Int32)
-
 @MainActor
 final class NativeSupportHost {
     static let shared = NativeSupportHost()
@@ -285,12 +282,10 @@ final class NativeSupportHost {
     }
 
     private func systemDidWake() {
-        nativeSupportSystemSleepChanged(0)
         requestInterfaceRecovery()
     }
 
     private func systemWillSleep() {
-        nativeSupportSystemSleepChanged(1)
         resetInterruptedInputState()
         interfaceHealthCheckPending = false
         interfaceHealthCheckInFlight = false
@@ -729,7 +724,6 @@ final class NativeSupportHost {
         }
         guard
               shouldClaimWebAppShortcut(
-                  hasTerminalKeyboardOwner: false,
                   responderState: responderState,
                   // Only ⌘ chords are pulled out of a focused iframe; option
                   // and bare-control chords (word navigation, readline-style

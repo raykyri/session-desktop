@@ -28,6 +28,3 @@ func nativeSupportDidCancelInterfaceHealthCheckStub() {}
 
 @_cdecl("session_native_support_did_detect_unhealthy_webview")
 func nativeSupportDidDetectUnhealthyWebViewStub(_: UInt64) {}
-
-@_cdecl("session_native_support_system_sleep_changed")
-func testSystemSleepChanged(_ sleeping: Int32) {}

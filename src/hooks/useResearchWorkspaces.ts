@@ -15,14 +15,12 @@ import {
   treesForResearchScope,
   type ResearchWorkspaceScope,
 } from "../lib/researchScope";
-import type { GroupInfo, PaneInfo, RuntimeConfig } from "../types";
+import type { GroupInfo, RuntimeConfig } from "../types";
 
 interface ResearchWorkspaceContext {
   groups: GroupInfo[];
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
   groupsRef: { current: GroupInfo[] };
-  panes: PaneInfo[];
-  panesRef: { current: PaneInfo[] };
   config: RuntimeConfig | null;
   /** The sidebar's workspace. */
   researchScope: ResearchWorkspaceScope;
@@ -42,8 +40,6 @@ export function useResearchWorkspaces(
     groups,
     setGroups,
     groupsRef,
-    panes,
-    panesRef,
     config,
     researchScope,
     changeResearchWorkspaceScope,
@@ -72,7 +68,7 @@ export function useResearchWorkspaces(
   const homeDir = config?.homeDir;
   const groupDirRoots = useMemo(() => ({ workspaceRoot, homeDir }), [workspaceRoot, homeDir]);
   /** The name a workspace shows. */
-  const workspaceName = (workspace: GroupInfo) => displayGroupName(workspace, panes, groupDirRoots);
+  const workspaceName = (workspace: GroupInfo) => displayGroupName(workspace, groupDirRoots);
 
   // Shown while the native folder picker is open.
   const [folderPickerStatus, setFolderPickerStatus] = useState<string | null>(null);
@@ -179,10 +175,10 @@ export function useResearchWorkspaces(
     (group: GroupInfo) => {
       setRenameRequest({
         groupId: group.id,
-        name: displayGroupName(group, panesRef.current, groupDirRoots),
+        name: displayGroupName(group, groupDirRoots),
       });
     },
-    [groupDirRoots, panesRef],
+    [groupDirRoots],
   );
   const closeRename = useCallback(() => setRenameRequest(null), []);
 
@@ -198,7 +194,7 @@ export function useResearchWorkspaces(
     if (
       previousNameOverride === nextNameOverride ||
       (previousNameOverride === null &&
-        nextNameOverride === defaultGroupName(previous, panes, groupDirRoots))
+        nextNameOverride === defaultGroupName(previous, groupDirRoots))
     ) {
       return;
     }

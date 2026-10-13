@@ -4,7 +4,7 @@ import type { AgentAdapterMetadata } from "../../types";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../../lib/adapterIcons";
 import {
   adapterSetupIsComplete,
-  agentSetupMenuDetail,
+  agentSetupStatusLabel,
   agentSetupSummary,
 } from "../../lib/agentSetup";
 import {
@@ -106,7 +106,7 @@ export default function ResearchAgentsSwitcher({
               )
             }
             label={adapter.label}
-            detail={agentSetupMenuDetail(adapter)}
+            detail={agentSetupStatusLabel(adapter)}
             trailing={
               <span
                 className={`sidebar-agents-dot is-${ready ? "ready" : "neutral"}`}

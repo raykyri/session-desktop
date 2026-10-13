@@ -1,6 +1,6 @@
 // Default and displayed names of groups (research workspaces and terminal
 // groups), derived from their directories.
-import type { GroupInfo, PaneInfo } from "../types";
+import type { GroupInfo } from "../types";
 
 /** The directories group directory labels are shown relative to. */
 interface GroupDirRoots {
@@ -34,34 +34,14 @@ export function formatGroupDir(rawPath: string, roots: GroupDirRoots): string {
   return `…/${segments.slice(-2).join("/")}`;
 }
 
-// The directory a group's default title reflects: its root terminal (the first,
-// oldest shell pane in the group), falling back to the group's creation-time seed
-// dir when the group has no shell pane yet (empty, or agent-only — whose worktree
-// dirs shouldn't name the group). Groups are advisory, so the title tracks where
-// the group's work is rooted rather than a fixed stored directory, and is stable
-// against focus changes. Reactive: a cd in the root terminal patches panes[].cwd
-// (pane.cwd_changed), and closing it promotes the next shell — both re-derive here.
-function groupRootDir(group: GroupInfo, panes: readonly PaneInfo[]): string {
-  const rootShell = panes.find((pane) => pane.groupId === group.id && pane.kind === "shell");
-  return rootShell?.cwd || group.dir;
-}
-
-/** The name a group shows without a name override: its root directory's last
+/** The name a group shows without a name override: its directory's last
  * segment. */
-export function defaultGroupName(
-  group: GroupInfo,
-  panes: readonly PaneInfo[],
-  roots: GroupDirRoots,
-): string {
-  const dir = groupRootDir(group, panes);
+export function defaultGroupName(group: GroupInfo, roots: GroupDirRoots): string {
+  const dir = group.dir;
   const base = dir.split("/").filter(Boolean).pop();
   return base && base.length > 0 ? base : formatGroupDir(dir, roots);
 }
 
-export function displayGroupName(
-  group: GroupInfo,
-  panes: readonly PaneInfo[],
-  roots: GroupDirRoots,
-): string {
-  return group.nameOverride?.trim() || defaultGroupName(group, panes, roots);
+export function displayGroupName(group: GroupInfo, roots: GroupDirRoots): string {
+  return group.nameOverride?.trim() || defaultGroupName(group, roots);
 }

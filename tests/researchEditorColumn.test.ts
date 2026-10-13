@@ -29,7 +29,6 @@ function adapter(id: string, researchReadiness: AgentAdapterMetadata["researchRe
     supportsResearch: true,
     supportsRecapGeneration: true,
     supportsForkAtMessage: true,
-    supportsRemote: false,
     configuredBinary: id,
     resolvedBinary: `/bin/${id}`,
     readiness: "ready",

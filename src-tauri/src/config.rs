@@ -1,7 +1,5 @@
 use crate::adapters::{AdapterMetadata, adapter_registry};
-use crate::workspace::{RemoteMultiplexer, RemoteRef};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,12 +11,6 @@ pub struct SessionConfig {
     pub socket_path: PathBuf,
     #[serde(default)]
     pub adapters: AdapterConfigs,
-    /// Machines a workspace can be created on, keyed by a stable id. A group
-    /// snapshots the one it was created against into its own `RemoteRef`, so
-    /// editing or removing an entry here never redirects a group that already
-    /// exists — the id survives only as provenance.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub remotes: BTreeMap<String, SavedRemote>,
     #[serde(
         default,
         rename = "claudeBinary",
@@ -65,78 +57,12 @@ pub struct GrokAdapterConfig {
     pub binary: Option<String>,
 }
 
-/// A saved machine that workspaces can be created on. Entries can come from
-/// `session.config.json` or the UI-owned preferences store.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedRemote {
-    /// ssh destination: an alias from `~/.ssh/config`, or `user@host`. Auth and
-    /// address resolution belong to the system `ssh` client, never to session.
-    pub host: String,
-    /// Display name; falls back to the map key.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub multiplexer: RemoteMultiplexer,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_cli: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workspace_root: Option<String>,
-}
-
-impl SavedRemote {
-    /// Copies this entry into a group's binding.
-    ///
-    /// A copy rather than a reference on purpose: a group that already exists
-    /// must keep pointing at the machine its worktrees are actually on, even
-    /// after the config entry is edited or deleted.
-    pub fn to_ref(&self, id: &str) -> RemoteRef {
-        RemoteRef {
-            id: id.to_string(),
-            label: self.label.clone().unwrap_or_else(|| id.to_string()),
-            host: self.host.clone(),
-            multiplexer: self.multiplexer,
-            session_cli: self.session_cli.clone(),
-            workspace_root: self.workspace_root.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteChoice {
-    pub id: String,
-    pub label: String,
-    pub host: String,
-    pub multiplexer: RemoteMultiplexer,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_cli: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_root: Option<String>,
-    /// Config-file entries are explicit, read-only declarations. Preference
-    /// entries are owned by the settings UI and can be edited or removed.
-    pub source: RemoteSource,
-    /// False for a multiplexer Session cannot drive yet, so a picker can list the
-    /// entry without offering a launch that is going to fail.
-    pub usable: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RemoteSource {
-    Config,
-    Preferences,
-}
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeConfig {
     pub workspace_root: String,
     pub socket_path: String,
     pub adapters: Vec<AdapterMetadata>,
-    /// Machines a workspace can be created on. Empty means local-only, which is
-    /// every install that has not declared any.
-    pub remotes: Vec<RemoteChoice>,
     // The user's home directory, so the UI can render home-relative paths as ~/…
     // instead of bare relative segments. Empty if HOME is unset.
     pub home_dir: String,
@@ -146,25 +72,6 @@ pub struct RuntimeConfig {
     // from live state after the server binds; `None` here because the ephemeral
     // port is not yet known at config load time.
     pub file_server_port: Option<u16>,
-}
-
-fn remote_choices_from(
-    remotes: &BTreeMap<String, SavedRemote>,
-    source: RemoteSource,
-) -> Vec<RemoteChoice> {
-    remotes
-        .iter()
-        .map(|(id, remote)| RemoteChoice {
-            id: id.clone(),
-            label: remote.label.clone().unwrap_or_else(|| id.clone()),
-            host: remote.host.clone(),
-            multiplexer: remote.multiplexer,
-            session_cli: remote.session_cli.clone(),
-            workspace_root: remote.workspace_root.clone(),
-            source,
-            usable: remote.multiplexer == RemoteMultiplexer::Tmux,
-        })
-        .collect()
 }
 
 impl SessionConfig {
@@ -225,10 +132,8 @@ impl SessionConfig {
         })?;
 
         // Keep Session's private state tree owner-only, matching the 0700/0600 treatment
-        // the control socket and shell-integration files already get. `.session` holds the
-        // persisted state (composer drafts, queued-turn prompts), preferences, hook
-        // settings, and per-pane terminal scrollback logs — which can capture any secret
-        // echoed to a terminal and the pane's own SESSION_TOKEN. Runs on every startup so a
+        // the control socket already gets. `.session` holds the persisted session
+        // state and preferences, including the GitHub token. Runs on every startup so a
         // tree created by an older, unhardened build is tightened on the next launch.
         // Best-effort: the individual writers below also create their files 0600.
         {
@@ -255,78 +160,11 @@ impl SessionConfig {
         Ok(config)
     }
 
-    /// The config-declared remotes, for a picker.
-    pub fn remote_choices(&self) -> Vec<RemoteChoice> {
-        remote_choices_from(&self.remotes, RemoteSource::Config)
-    }
-
-    /// The effective remote set. UI-owned preferences are merged underneath
-    /// explicit config declarations, which win on an id collision.
-    pub fn remote_choices_with(
-        &self,
-        preference_remotes: &BTreeMap<String, SavedRemote>,
-    ) -> Vec<RemoteChoice> {
-        let mut choices: BTreeMap<String, RemoteChoice> =
-            remote_choices_from(preference_remotes, RemoteSource::Preferences)
-                .into_iter()
-                .map(|choice| (choice.id.clone(), choice))
-                .collect();
-        choices.extend(
-            self.remote_choices()
-                .into_iter()
-                .map(|choice| (choice.id.clone(), choice)),
-        );
-        choices.into_values().collect()
-    }
-
-    /// Resolves a `remotes` id into the binding a new group will carry.
-    #[cfg(test)]
-    pub fn saved_remote(&self, id: &str) -> Result<RemoteRef, String> {
-        self.saved_remote_with(id, &BTreeMap::new())
-    }
-
-    /// Resolves an id from the effective config-plus-preferences set. Config
-    /// entries win on collisions, matching `remote_choices_with`.
-    pub fn saved_remote_with(
-        &self,
-        id: &str,
-        preference_remotes: &BTreeMap<String, SavedRemote>,
-    ) -> Result<RemoteRef, String> {
-        let remote = self
-            .remotes
-            .get(id)
-            .or_else(|| preference_remotes.get(id))
-            .ok_or_else(|| {
-                let ids = self
-                    .remotes
-                    .keys()
-                    .chain(preference_remotes.keys())
-                    .cloned()
-                    .collect::<std::collections::BTreeSet<_>>();
-                if ids.is_empty() {
-                    format!("unknown remote '{id}'; no remotes are configured")
-                } else {
-                    format!(
-                        "unknown remote '{id}'; configured remotes: {}",
-                        ids.into_iter().collect::<Vec<_>>().join(", ")
-                    )
-                }
-            })?;
-        if remote.host.trim().is_empty() {
-            return Err(format!("remote '{id}' has no ssh host"));
-        }
-        Ok(remote.to_ref(id))
-    }
-
-    pub fn runtime_with(
-        &self,
-        preference_remotes: &BTreeMap<String, SavedRemote>,
-    ) -> RuntimeConfig {
+    pub fn runtime(&self) -> RuntimeConfig {
         RuntimeConfig {
             workspace_root: self.workspace_root.display().to_string(),
             socket_path: self.socket_path.display().to_string(),
             adapters: adapter_registry(self).metadata(),
-            remotes: self.remote_choices_with(preference_remotes),
             home_dir: env::var("HOME").unwrap_or_default(),
             file_server_port: None,
         }
@@ -404,7 +242,6 @@ impl SessionConfig {
                     binary: Some("grok".to_string()),
                 },
             },
-            remotes: BTreeMap::new(),
             legacy_claude_binary: None,
             // Overwritten by load() once the cwd is known; this default is only a
             // placeholder for the no-config-file path.
@@ -551,179 +388,6 @@ fn absolutize(cwd: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         cwd.join(path)
-    }
-}
-
-#[cfg(test)]
-mod remote_tests {
-    use super::*;
-
-    fn config(remotes: &[(&str, SavedRemote)]) -> SessionConfig {
-        let mut config = SessionConfig::default_config().expect("defaults");
-        config.remotes = remotes
-            .iter()
-            .map(|(id, remote)| (id.to_string(), remote.clone()))
-            .collect();
-        config
-    }
-
-    fn saved(host: &str) -> SavedRemote {
-        SavedRemote {
-            host: host.to_string(),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn remote_cli_fields_use_only_session_names() {
-        let saved: SavedRemote = serde_json::from_value(serde_json::json!({
-            "host": "devbox", "sessionCli": "/opt/custom-cli", "workspaceRoot": "/srv/research"
-        }))
-        .unwrap();
-        assert_eq!(saved.session_cli.as_deref(), Some("/opt/custom-cli"));
-        let encoded = serde_json::to_value(&saved).unwrap();
-        assert_eq!(encoded["sessionCli"], "/opt/custom-cli");
-
-        let legacy: SavedRemote = serde_json::from_value(serde_json::json!({
-            "host": "devbox", "qmuxCli": "/opt/legacy-cli"
-        }))
-        .unwrap();
-        assert_eq!(legacy.session_cli, None);
-
-        let reference: RemoteRef = serde_json::from_value(serde_json::json!({
-            "id": "box", "label": "Box", "host": "devbox", "multiplexer": "tmux",
-            "sessionCli": "~/.session/bin/session-cli", "workspaceRoot": "/srv/research"
-        }))
-        .unwrap();
-        assert_eq!(
-            reference.session_cli.as_deref(),
-            Some("~/.session/bin/session-cli")
-        );
-        assert!(crate::remote_cli::is_managed_cli(
-            reference.session_cli.as_deref()
-        ));
-    }
-
-    #[test]
-    fn a_saved_remote_is_snapshotted_into_the_group_not_referenced() {
-        let config = config(&[(
-            "devbox",
-            SavedRemote {
-                host: "user@devbox".to_string(),
-                label: Some("Dev box".to_string()),
-                multiplexer: RemoteMultiplexer::Tmux,
-                session_cli: Some("/opt/session-cli".to_string()),
-                workspace_root: Some("/srv/session".to_string()),
-            },
-        )]);
-
-        let reference = config.saved_remote("devbox").expect("declared");
-        assert_eq!(reference.id, "devbox");
-        assert_eq!(reference.label, "Dev box");
-        assert_eq!(reference.host, "user@devbox");
-        assert_eq!(reference.session_cli.as_deref(), Some("/opt/session-cli"));
-        assert_eq!(reference.workspace_root.as_deref(), Some("/srv/session"));
-
-        // The copy is the point: a group already holding worktrees on that
-        // machine must keep pointing at it after the entry is edited away. The
-        // binding owns its data, so dropping the config it came from cannot
-        // reach it — which is what makes a group's host stable.
-        drop(config);
-        assert_eq!(reference.host, "user@devbox");
-        assert_eq!(reference.label, "Dev box");
-    }
-
-    #[test]
-    fn a_remote_without_a_label_falls_back_to_its_id() {
-        let reference = config(&[("box", saved("box.internal"))])
-            .saved_remote("box")
-            .expect("declared");
-        assert_eq!(reference.label, "box");
-        // tmux is the default because it is the one Session can drive.
-        assert_eq!(reference.multiplexer, RemoteMultiplexer::Tmux);
-    }
-
-    #[test]
-    fn an_unknown_remote_names_what_is_declared() {
-        let err = config(&[("devbox", saved("devbox"))])
-            .saved_remote("nope")
-            .expect_err("unknown");
-        assert!(err.contains("devbox"), "{err}");
-
-        let err = config(&[])
-            .saved_remote("devbox")
-            .expect_err("none declared");
-        assert!(err.contains("no remotes are configured"), "{err}");
-    }
-
-    #[test]
-    fn a_remote_without_an_ssh_host_is_rejected_before_a_group_exists() {
-        let err = config(&[("broken", SavedRemote::default())])
-            .saved_remote("broken")
-            .expect_err("no host");
-        assert!(err.contains("no ssh host"), "{err}");
-    }
-
-    #[test]
-    fn a_multiplexer_session_cannot_drive_is_listed_but_marked_unusable() {
-        let mut herdr = saved("box");
-        herdr.multiplexer = RemoteMultiplexer::Herdr;
-        let choices = config(&[("a", saved("a-host")), ("b", herdr)]).remote_choices();
-
-        assert_eq!(choices.len(), 2);
-        assert!(choices[0].usable, "tmux is driveable");
-        assert!(
-            !choices[1].usable,
-            "a picker should show herdr without offering a launch that will fail"
-        );
-    }
-
-    #[test]
-    fn preference_remotes_merge_under_config_declarations() {
-        let config = config(&[("shared", saved("config-host"))]);
-        let preferences = BTreeMap::from([
-            ("shared".to_string(), saved("preference-host")),
-            ("ui".to_string(), saved("ui-host")),
-        ]);
-
-        let choices = config.remote_choices_with(&preferences);
-        assert_eq!(choices.len(), 2);
-        assert_eq!(choices[0].id, "shared");
-        assert_eq!(choices[0].host, "config-host");
-        assert_eq!(choices[0].source, RemoteSource::Config);
-        assert_eq!(choices[1].id, "ui");
-        assert_eq!(choices[1].source, RemoteSource::Preferences);
-
-        assert_eq!(
-            config
-                .saved_remote_with("shared", &preferences)
-                .expect("config wins")
-                .host,
-            "config-host"
-        );
-        assert_eq!(
-            config
-                .saved_remote_with("ui", &preferences)
-                .expect("preference resolves")
-                .host,
-            "ui-host"
-        );
-    }
-
-    #[test]
-    fn remotes_parse_from_config_with_only_a_host() {
-        let parsed: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "remotes": { "devbox": { "host": "user@devbox" } }
-            }"#,
-        )
-        .expect("parses");
-        let remote = &parsed.remotes["devbox"];
-        assert_eq!(remote.host, "user@devbox");
-        assert_eq!(remote.multiplexer, RemoteMultiplexer::Tmux);
-        assert_eq!(remote.label, None);
     }
 }
 

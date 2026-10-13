@@ -1,10 +1,8 @@
 export type ExitDialogState = {
-  paneCount: number;
   researchRunCount: number;
 };
 
 export type ExitPreflightRequest = {
-  paneCount: number;
   researchRunCount: number;
   nonce: number;
 };

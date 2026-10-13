@@ -19,7 +19,7 @@ interface AgentSetupStep {
  * - `needsAuth`: the provider's status command reported it signed out.
  * - `error`: a probe failed (for example, the version check).
  * - `researchUnavailable`: the CLI works, but research cannot run through it
- *   (a remote target, or an adapter without a research runtime).
+ *   (its research runtime reported an error, or the adapter has none).
  * - `unverified`: research can launch, but the sign-in status command gave no
  *   definitive answer. Not counted as ready; research can still be attempted.
  * - `ready`: sign-in verified and research ready.
@@ -255,13 +255,6 @@ export function agentSetupSummary(
     text: `${readyCount} of ${total}${unverified}${updates}`,
     tone: updateCount === 0 && unverifiedCount === 0 ? "ready" : "attention",
   };
-}
-
-/** An agent's status line in the sidebar menu, naming the host for an agent
- * on a remote target, since local and remote instances share a label. */
-export function agentSetupMenuDetail(adapter: AgentAdapterMetadata) {
-  const status = agentSetupStatusLabel(adapter);
-  return adapter.target.kind === "remote" ? `${status} · ${adapter.target.label}` : status;
 }
 
 /** Returns available probe details for setup and repair panels. */

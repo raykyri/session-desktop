@@ -29,7 +29,6 @@ function agent(
     supportsResearch: true,
     supportsRecapGeneration: true,
     supportsForkAtMessage: true,
-    supportsRemote: true,
     configuredBinary: id,
     resolvedBinary: `/bin/${id}`,
     readiness: "ready",
@@ -55,7 +54,6 @@ const SIGN_IN_ERROR =
 test("repair targets the failed run's own agent, not another selection", () => {
   const adapters = [
     agent("claude"),
-    agent("codex", { instanceId: "remote:devbox:codex", target: { kind: "remote", id: "devbox", label: "devbox" } }),
     agent("codex"),
   ];
   assert.equal(repairAgentFor(adapters, "codex")?.instanceId, "local:codex");

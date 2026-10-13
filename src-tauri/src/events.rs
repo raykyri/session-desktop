@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -31,35 +31,7 @@ impl SessionEvent {
                 .unwrap_or_default(),
         }
     }
-
-    pub fn pty_exit(pane_id: String, exit_code: Option<i32>) -> Self {
-        Self::new(
-            "pty.exit",
-            Some(pane_id),
-            None,
-            json!({ "exitCode": exit_code }),
-        )
-    }
-
-    pub fn pane_removed(pane_id: String) -> Self {
-        Self::new(
-            "pane.removed",
-            Some(pane_id.clone()),
-            None,
-            json!({ "paneId": pane_id }),
-        )
-    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pane_removed_carries_the_authoritative_pane_id() {
-        let event = SessionEvent::pane_removed("pane-1".to_string());
-        assert_eq!(event.event_type, "pane.removed");
-        assert_eq!(event.pane_id.as_deref(), Some("pane-1"));
-        assert_eq!(event.payload, json!({ "paneId": "pane-1" }));
-    }
-}
+mod tests {}

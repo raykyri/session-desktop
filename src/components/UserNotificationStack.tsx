@@ -9,7 +9,6 @@ export interface UserNotificationItem {
   body: string;
   tone: UserNotificationTone;
   timeoutMs: number;
-  paneId: string | null;
   createdAt: number;
 }
 
@@ -28,7 +27,6 @@ export function formatShortRelativeTime(createdAt: number, now = Date.now()): st
 interface UserNotificationStackProps {
   notifications: UserNotificationItem[];
   onDismiss: (id: string) => void;
-  onOpenPane: (paneId: string) => void;
 }
 
 const EXIT_MS = 180;
@@ -53,13 +51,11 @@ function NotificationCard({
   now,
   active,
   onDismiss,
-  onOpenPane,
 }: {
   notification: UserNotificationItem;
   now: number;
   active: boolean;
   onDismiss: (id: string) => void;
-  onOpenPane: (paneId: string) => void;
 }) {
   const [phase, setPhase] = useState<"entering" | "visible" | "exiting">("entering");
   const [hovered, setHovered] = useState(false);
@@ -124,21 +120,7 @@ function NotificationCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {notification.paneId ? (
-        <button
-          type="button"
-          className="user-notification-open"
-          aria-label={`${notification.title}: ${notification.body}. Open source pane.`}
-          onClick={() => {
-            onOpenPane(notification.paneId!);
-            beginDismiss();
-          }}
-        >
-          {content}
-        </button>
-      ) : (
-        <div className="user-notification-open">{content}</div>
-      )}
+      <div className="user-notification-open">{content}</div>
       <button
         type="button"
         className="user-notification-close"
@@ -154,7 +136,6 @@ function NotificationCard({
 export function UserNotificationStack({
   notifications,
   onDismiss,
-  onOpenPane,
 }: UserNotificationStackProps) {
   const [windowActive, setWindowActive] = useState(
     () => document.visibilityState === "visible" && document.hasFocus(),
@@ -192,7 +173,6 @@ export function UserNotificationStack({
           now={now}
           active={windowActive}
           onDismiss={onDismiss}
-          onOpenPane={onOpenPane}
         />
       ))}
     </div>

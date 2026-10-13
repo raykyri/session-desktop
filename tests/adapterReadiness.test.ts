@@ -22,7 +22,6 @@ function adapter(
     supportsResearch: true,
     supportsRecapGeneration: true,
     supportsForkAtMessage: true,
-    supportsRemote: false,
     configuredBinary: id,
     resolvedBinary: readiness === "missing" ? null : `/bin/${id}`,
     readiness,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { defaultGroupName, displayGroupName, formatGroupDir } from "../src/lib/groupNames";
-import type { GroupInfo, PaneInfo } from "../src/types";
+import type { GroupInfo } from "../src/types";
 
 function group(overrides: Partial<GroupInfo> = {}): GroupInfo {
   return {
@@ -13,20 +13,6 @@ function group(overrides: Partial<GroupInfo> = {}): GroupInfo {
     collapsed: false,
     scope: "research",
     agents: [],
-    ...overrides,
-  };
-}
-
-function pane(overrides: Partial<PaneInfo> = {}): PaneInfo {
-  return {
-    id: "p",
-    title: "shell",
-    kind: "shell",
-    groupId: "g",
-    cwd: "/Users/me/elsewhere",
-    cols: 80,
-    rows: 24,
-    status: "running",
     ...overrides,
   };
 }
@@ -49,16 +35,13 @@ test("a workspace root that is home anchors relative paths with ~/", () => {
   );
 });
 
-test("a group is named by its first shell pane's directory, else its own", () => {
-  const agentPane = pane({ id: "a", kind: "agent", cwd: "/tmp/worktree" });
-  assert.equal(defaultGroupName(group(), [agentPane], roots), "project");
-  assert.equal(defaultGroupName(group(), [agentPane, pane()], roots), "elsewhere");
-  assert.equal(defaultGroupName(group(), [pane({ groupId: "other" })], roots), "project");
-  assert.equal(defaultGroupName(group({ dir: "/" }), [], roots), "/");
+test("a group is named by its directory's last segment", () => {
+  assert.equal(defaultGroupName(group(), roots), "project");
+  assert.equal(defaultGroupName(group({ dir: "/" }), roots), "/");
 });
 
 test("a name override wins unless it is blank", () => {
-  assert.equal(displayGroupName(group({ nameOverride: " Notes " }), [], roots), "Notes");
-  assert.equal(displayGroupName(group({ nameOverride: "  " }), [], roots), "project");
-  assert.equal(displayGroupName(group({ nameOverride: null }), [], roots), "project");
+  assert.equal(displayGroupName(group({ nameOverride: " Notes " }), roots), "Notes");
+  assert.equal(displayGroupName(group({ nameOverride: "  " }), roots), "project");
+  assert.equal(displayGroupName(group({ nameOverride: null }), roots), "project");
 });

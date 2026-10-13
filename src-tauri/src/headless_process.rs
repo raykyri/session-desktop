@@ -1,6 +1,7 @@
 //! Bounded JSONL subprocess transport shared by pane-less research runners.
 
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -289,9 +290,94 @@ fn terminate_after_setup_failure(child: &mut Child) {
     let _ = child.wait();
 }
 
+/// Walks a process's live descendants from a single `ps` snapshot: one
+/// subprocess regardless of tree size, rather than one `pgrep -P` per node.
+pub(crate) fn descendant_process_ids(pid: u32) -> Vec<u32> {
+    descendants_from_parent_pairs(pid, &process_parent_snapshot())
+}
+
+/// Every live process's (pid, ppid), from one `ps` invocation.
+fn process_parent_snapshot() -> Vec<(u32, u32)> {
+    let Ok(output) = Command::new("/bin/ps")
+        .arg("-axo")
+        .arg("pid=,ppid=")
+        .output()
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let pid = parts.next()?.parse::<u32>().ok()?;
+            let ppid = parts.next()?.parse::<u32>().ok()?;
+            Some((pid, ppid))
+        })
+        .collect()
+}
+
+/// Pre-order walk (each process before its own descendants) so callers can
+/// reverse the list for a deepest-first teardown. The `seen` guard keeps a
+/// cyclic snapshot — possible if a pid was recycled mid-`ps` — from looping.
+fn descendants_from_parent_pairs(root: u32, parent_pairs: &[(u32, u32)]) -> Vec<u32> {
+    let mut children_by_parent: HashMap<u32, Vec<u32>> = HashMap::new();
+    for (pid, ppid) in parent_pairs {
+        children_by_parent.entry(*ppid).or_default().push(*pid);
+    }
+    let mut descendants = Vec::new();
+    let mut seen = HashSet::from([root]);
+    let mut stack = vec![root];
+    while let Some(pid) = stack.pop() {
+        let Some(children) = children_by_parent.get(&pid) else {
+            continue;
+        };
+        for child_pid in children {
+            if seen.insert(*child_pid) {
+                descendants.push(*child_pid);
+                stack.push(*child_pid);
+            }
+        }
+    }
+    descendants
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn descendant_walk_follows_parent_pairs_and_survives_cycles() {
+        // 1 → {2, 3}, 2 → {4}, plus an unrelated 9→10 subtree and a stale
+        // cycle (4 → 1) a mid-snapshot pid reuse could produce.
+        let pairs = vec![(2, 1), (3, 1), (4, 2), (10, 9), (1, 4)];
+        let mut descendants = descendants_from_parent_pairs(1, &pairs);
+        // Each process must appear before its own descendants so a reversed
+        // walk kills deepest-first; sibling order is unspecified.
+        let position = |pid: u32| {
+            descendants
+                .iter()
+                .position(|candidate| *candidate == pid)
+                .unwrap_or_else(|| panic!("pid {pid} missing from walk"))
+        };
+        assert!(position(2) < position(4));
+        descendants.sort_unstable();
+        assert_eq!(descendants, vec![2, 3, 4]);
+
+        assert_eq!(descendants_from_parent_pairs(9, &pairs), vec![10]);
+        assert!(descendants_from_parent_pairs(42, &pairs).is_empty());
+    }
+
+    #[test]
+    fn process_parent_snapshot_includes_this_process() {
+        let pid = std::process::id();
+        assert!(
+            process_parent_snapshot()
+                .iter()
+                .any(|(candidate, _)| *candidate == pid),
+            "ps snapshot did not include the test process"
+        );
+    }
+
     use std::os::unix::fs::PermissionsExt;
     use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -20,11 +20,11 @@ import {
 } from "../lib/browserOverlay";
 import { nativeHumanBrowserOwnerIds } from "../lib/humanBrowserState";
 import { canRenderInInternalBrowser, isFileServerUrl, pathFromSessionFileHref, resolveLocalLinkPath } from "../lib/links";
-import type { PaneInfo, ResearchTreeSummary } from "../types";
+import type { ResearchTreeSummary } from "../types";
 
 // Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
-// into another tree. Overlays are scoped to their tree, as they are to panes.
+// into another tree.
 const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 export function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
@@ -40,7 +40,6 @@ interface LinkMenuState {
 }
 
 interface BrowserOverlayOptions {
-  panes: PaneInfo[];
   researchTrees: ResearchTreeSummary[];
   archivedResearchTrees: ResearchTreeSummary[];
   /** The owner whose overlay is shown: the open research tree, if any. */
@@ -66,13 +65,11 @@ function httpUrl(raw: string | null | undefined): string | null {
 }
 
 /**
- * The browser overlays, one per owner (a research thread, or a pane whose
- * agent ran `session open`), and the link actions and link menu that open
- * them. The native WKWebView children of closed or removed overlays are
+ * The browser overlays, one per research thread, and the link actions and
+ * link menu that open them. The native WKWebView children of closed or removed overlays are
  * destroyed here.
  */
 export function useBrowserOverlays({
-  panes,
   researchTrees,
   archivedResearchTrees,
   activeOwnerId,
@@ -85,8 +82,6 @@ export function useBrowserOverlays({
   overlaysRef.current = overlays;
   const activeOwnerIdRef = useRef(activeOwnerId);
   activeOwnerIdRef.current = activeOwnerId;
-  const panesRef = useRef(panes);
-  panesRef.current = panes;
   const fileServerPortRef = useRef(fileServerPort);
   fileServerPortRef.current = fileServerPort;
   const onErrorRef = useRef(onError);
@@ -106,11 +101,9 @@ export function useBrowserOverlays({
     [],
   );
 
-  // Drop overlay state only when its owner disappears. Owners include
-  // research trees as well as panes; unrelated pane metadata updates must
-  // not remove a research thread's preserved browser.
+  // Drop overlay state only when its research tree disappears.
   useEffect(() => {
-    const ownerIds = new Set(panes.map((pane) => pane.id));
+    const ownerIds = new Set<string>();
     for (const tree of [...researchTrees, ...archivedResearchTrees]) {
       ownerIds.add(researchBrowserOwnerId(tree.id));
     }
@@ -120,7 +113,7 @@ export function useBrowserOverlays({
       );
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
-  }, [archivedResearchTrees, panes, researchTrees]);
+  }, [archivedResearchTrees, researchTrees]);
 
   // Keep a child mounted while its overlay is open, including inactive tabs.
   // Remove it after its overlay closes and the child effect publishes the
@@ -186,11 +179,10 @@ export function useBrowserOverlays({
       const port = fileServerPortRef.current;
       if (localPath) {
         if (!ownerId) {
-          onErrorRef.current(`Cannot open local file without an active pane: ${localPath}`);
+          onErrorRef.current(`Cannot open local file without an open thread: ${localPath}`);
           return;
         }
-        const paneCwd = panesRef.current.find((pane) => pane.id === ownerId)?.cwd;
-        const resolvedPath = resolveLocalLinkPath(localPath, paneCwd);
+        const resolvedPath = resolveLocalLinkPath(localPath);
         if (browserOverlayShowsLink(overlaysRef.current[ownerId], { path: resolvedPath }, port)) {
           setOverlays((current) => closeBrowserOverlayState(current, ownerId));
           return;
@@ -219,17 +211,8 @@ export function useBrowserOverlays({
   // One stable LinkActions object per owner, so markdown links rendered by
   // a memoized thread page keep their props across unrelated renders.
   const linkActionsByOwnerRef = useRef(new Map<string, LinkActions>());
-  // Closed panes never render again, so drop their cached actions. Research
-  // owners are exempt because they are not panes. Their cached closures remain
-  // small because a session contains few trees.
-  useEffect(() => {
-    const livePaneIds = new Set(panes.map((pane) => pane.id));
-    for (const ownerId of linkActionsByOwnerRef.current.keys()) {
-      if (!ownerId.startsWith(RESEARCH_BROWSER_OWNER_PREFIX) && !livePaneIds.has(ownerId)) {
-        linkActionsByOwnerRef.current.delete(ownerId);
-      }
-    }
-  }, [panes]);
+  // Entries are kept for removed trees too: the cached closures are small
+  // and a session contains few trees.
   const linkActionsFor = useCallback(
     (ownerId: string): LinkActions => {
       const cache = linkActionsByOwnerRef.current;

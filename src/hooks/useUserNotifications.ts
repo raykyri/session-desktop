@@ -5,7 +5,6 @@ import type { SessionEvent } from "../types";
 
 interface UserNotificationOptions {
   settings: Pick<AppSettings, "showNotifications">;
-  onOpenPane: (paneId: string) => void;
 }
 
 /** Owns transient notification state and stable callbacks for the event subscription. */
@@ -39,7 +38,6 @@ export function useUserNotifications(options: UserNotificationOptions) {
           body,
           tone: normalizedTone,
           timeoutMs: Math.min(30_000, Math.max(1_000, timeoutMs)),
-          paneId: event.paneId ?? null,
           createdAt:
             typeof createdAt === "number" && Number.isFinite(createdAt)
               ? createdAt
@@ -49,10 +47,6 @@ export function useUserNotifications(options: UserNotificationOptions) {
     );
   }, []);
 
-  const handleNotificationOpenPane = useCallback(
-    (paneId: string) => optionsRef.current.onOpenPane(paneId),
-    [],
-  );
   const dismissUserNotification = useCallback((id: string) => {
     setUserNotifications((current) =>
       current.filter((notification) => notification.id !== id),
@@ -62,7 +56,6 @@ export function useUserNotifications(options: UserNotificationOptions) {
   return {
     userNotifications,
     handleUserNotificationRequested,
-    handleNotificationOpenPane,
     dismissUserNotification,
   };
 }

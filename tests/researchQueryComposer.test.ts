@@ -31,7 +31,6 @@ function adapter(id: string): AgentAdapterMetadata {
     supportsResearch: true,
     supportsRecapGeneration: true,
     supportsForkAtMessage: true,
-    supportsRemote: false,
     configuredBinary: id,
     resolvedBinary: `/bin/${id}`,
     readiness: "ready",

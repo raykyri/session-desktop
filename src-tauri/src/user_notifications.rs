@@ -2,22 +2,23 @@ use crate::events::SessionEvent;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_TITLE_CHARS: usize = 120;
+/// Title used when a request carries none.
+const DEFAULT_TITLE: &str = "session";
 const MAX_BODY_CHARS: usize = 4_096;
 const MIN_TIMEOUT_MS: u64 = 1_000;
 const MAX_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
 const RATE_WINDOW: Duration = Duration::from_secs(10);
 const RATE_LIMIT: usize = 10;
-const EXTERNAL_RATE_KEY: &str = "\0external";
 const MAX_LOG_ENTRIES: usize = 200;
 
-static RECENT_REQUESTS: LazyLock<Mutex<HashMap<String, VecDeque<Instant>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static RECENT_REQUESTS: LazyLock<Mutex<VecDeque<Instant>>> =
+    LazyLock::new(|| Mutex::new(VecDeque::new()));
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -62,8 +63,6 @@ pub struct NotificationLogEntry {
     pub title: String,
     pub body: String,
     pub tone: NotificationTone,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pane_id: Option<String>,
     pub created_at: i64,
     #[serde(default)]
     pub read: bool,
@@ -160,22 +159,17 @@ fn validate_request(request: &SendNotificationRequest) -> Result<(), String> {
     Ok(())
 }
 
-fn check_rate_limit(source_pane_id: Option<&str>) -> Result<(), String> {
-    let key = source_pane_id.unwrap_or(EXTERNAL_RATE_KEY).to_string();
+fn check_rate_limit() -> Result<(), String> {
     let now = Instant::now();
-    let mut all = RECENT_REQUESTS
+    let mut recent = RECENT_REQUESTS
         .lock()
         .map_err(|_| "notification rate limiter lock poisoned".to_string())?;
-    all.retain(|_, recent| {
-        while recent
-            .front()
-            .is_some_and(|instant| now.duration_since(*instant) >= RATE_WINDOW)
-        {
-            recent.pop_front();
-        }
-        !recent.is_empty()
-    });
-    let recent = all.entry(key).or_default();
+    while recent
+        .front()
+        .is_some_and(|instant| now.duration_since(*instant) >= RATE_WINDOW)
+    {
+        recent.pop_front();
+    }
     if recent.len() >= RATE_LIMIT {
         return Err("notification rate limit exceeded; try again in a few seconds".to_string());
     }
@@ -183,46 +177,8 @@ fn check_rate_limit(source_pane_id: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn default_title(state: &AppState, source_pane_id: Option<&str>) -> String {
-    let candidate = source_pane_id
-        .and_then(|pane_id| {
-            state
-                .list_panes()
-                .ok()?
-                .into_iter()
-                .find(|pane| pane.id == pane_id)
-        })
-        .map(|pane| pane.title)
-        .filter(|title| !title.trim().is_empty())
-        .unwrap_or_else(|| "session".to_string());
-    // Terminal titles originate in child processes, not in this command's
-    // validated payload. Collapse control/whitespace and cap them before they
-    // reach the overlay toast.
-    let without_controls = candidate
-        .chars()
-        .map(|character| {
-            if character.is_control() {
-                ' '
-            } else {
-                character
-            }
-        })
-        .collect::<String>();
-    let normalized = without_controls
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let normalized = normalized.chars().take(MAX_TITLE_CHARS).collect::<String>();
-    if normalized.is_empty() {
-        "session".to_string()
-    } else {
-        normalized
-    }
-}
-
 fn overlay_event(
     state: &AppState,
-    source_pane_id: Option<&str>,
     id: &str,
     title: &str,
     created_at: i64,
@@ -230,7 +186,7 @@ fn overlay_event(
 ) {
     state.emit(SessionEvent::new(
         "app.notification_requested",
-        source_pane_id.map(str::to_string),
+        None,
         None,
         json!({
             "id": id,
@@ -255,16 +211,15 @@ fn emit_log_changed(state: &AppState, log: &NotificationLog) {
 
 pub fn dispatch(
     state: &AppState,
-    source_pane_id: Option<&str>,
     request: SendNotificationRequest,
 ) -> Result<serde_json::Value, String> {
     validate_request(&request)?;
-    check_rate_limit(source_pane_id)?;
+    check_rate_limit()?;
     let title = request
         .title
         .clone()
         .filter(|title| !title.trim().is_empty())
-        .unwrap_or_else(|| default_title(state, source_pane_id));
+        .unwrap_or_else(|| DEFAULT_TITLE.to_string());
 
     let id = state.next_id("notification");
     let created_at = now_ms();
@@ -273,14 +228,13 @@ pub fn dispatch(
         title: title.clone(),
         body: request.body.clone(),
         tone: request.tone,
-        pane_id: source_pane_id.map(str::to_string),
         created_at,
         read: false,
     };
     let log = state.append_notification_log(entry)?;
     emit_log_changed(state, &log);
 
-    overlay_event(state, source_pane_id, &id, &title, created_at, &request);
+    overlay_event(state, &id, &title, created_at, &request);
     Ok(json!({ "accepted": true, "delivery": "overlay" }))
 }
 
@@ -358,7 +312,6 @@ mod tests {
             title: "agent".into(),
             body: "done".into(),
             tone: NotificationTone::Info,
-            pane_id: None,
             created_at,
             read: false,
         }

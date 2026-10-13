@@ -1,6 +1,6 @@
 use crate::connection_limit::ConnectionLimiter;
 use crate::events::SessionEvent;
-use crate::state::{AppState, canonical_loopback_artifact_url};
+use crate::state::AppState;
 use serde_json::{Value, json};
 use session_proto::{ControlRequest, ControlResponse};
 use std::fs;
@@ -20,9 +20,8 @@ const CONTROL_SOCKET_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// bounded before authentication so a peer cannot grow a handler without limit.
 const MAX_CONTROL_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 /// Cap on concurrent client-handler threads. Connections are mostly one-shot
-/// (hook notifies, CLI invocations); remote file uploads may remain active for
-/// up to 60 seconds. This covers simultaneous in-flight requests, not panes,
-/// while keeping a connection-spamming process from exhausting threads/FDs. At
+/// (CLI invocations and external notifications). This covers simultaneous
+/// in-flight requests while keeping a connection-spamming process from exhausting threads/FDs. At
 /// the cap the supervisor leaves excess connections in the kernel listen backlog
 /// and keeps polling so health checks still run.
 const MAX_CONCURRENT_CLIENTS: usize = 64;
@@ -130,7 +129,6 @@ impl Drop for ControlSocketRuntime {
 }
 
 pub fn start_control_socket(state: AppState) -> Result<ControlSocketRuntime, String> {
-    crate::shell_jobs::start_shell_job_monitor(state.clone());
     start_control_socket_runtime(state, MAX_CONCURRENT_CLIENTS)
 }
 
@@ -222,8 +220,8 @@ fn bind_control_socket(socket_path: &Path) -> Result<(UnixListener, (u64, u64)),
     let listener = UnixListener::bind(socket_path)
         .map_err(|err| format!("failed to bind socket {}: {err}", socket_path.display()))?;
 
-    // Restrict the socket to the owning user so the per-pane token is not the only thing
-    // standing between other local accounts and the control plane.
+    // Restrict the socket to the owning user so the same-user peer check is not the
+    // only thing standing between other local accounts and the control plane.
     if let Err(err) = fs::set_permissions(socket_path, fs::Permissions::from_mode(0o600)) {
         drop(listener);
         let _ = fs::remove_file(socket_path);
@@ -879,7 +877,7 @@ fn handle_request_with_peer(
                 crate::user_notifications::SendNotificationRequest,
             >(request.payload)
             .map_err(|err| format!("invalid notification.send payload: {err}"))?;
-            crate::user_notifications::dispatch(state, None, payload)
+            crate::user_notifications::dispatch(state, payload)
         }
         other => Err(format!("unknown control command '{other}'")),
     }
@@ -949,63 +947,6 @@ pub(crate) struct ResolvedBrowserTarget {
     pub path: Option<std::path::PathBuf>,
 }
 
-/// Resolve a browser-overlay target for `pane_id`: either a loopback http(s)
-/// URL (returned as-is, unsandboxed) or a path under the pane's file roots
-/// (minted into a token-bearing file-server URL and sandboxed). Shared by the
-/// control-socket `browser.open` path and the trusted GUI command that opens
-/// local file links from transcript markdown.
-pub(crate) fn resolve_browser_target(
-    state: &AppState,
-    authed_pane: &str,
-    target: &str,
-    cwd: Option<&str>,
-) -> Result<ResolvedBrowserTarget, String> {
-    if target.is_empty() {
-        return Err("nothing to open".to_string());
-    }
-    if target.starts_with("http://") || target.starts_with("https://") {
-        let url = canonical_loopback_artifact_url(target).ok_or_else(|| {
-            format!(
-                "refusing to open '{target}': the browser overlay only loads http(s) URLs on localhost/127.0.0.1"
-            )
-        })?;
-        return Ok(ResolvedBrowserTarget {
-            url,
-            sandbox: false,
-            path: None,
-        });
-    }
-
-    let requested = {
-        let path = std::path::Path::new(target);
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            let base = cwd.ok_or_else(|| {
-                "cannot resolve a relative path without a working directory".to_string()
-            })?;
-            std::path::Path::new(base).join(path)
-        }
-    };
-
-    let roots = state.pane_file_roots(authed_pane);
-    let canonical = crate::file_server::resolve_under_roots(&requested, &roots)
-        .ok_or_else(|| format!("'{target}' was not found"))?;
-    let port = state
-        .file_server_port()
-        .ok_or_else(|| "the file server is not running".to_string())?;
-    let token = if crate::file_server::is_executable_preview_path(&canonical) {
-        state.exact_file_preview_token(authed_pane, &canonical)?
-    } else {
-        state.pane_file_token(authed_pane)?
-    };
-    Ok(ResolvedBrowserTarget {
-        url: crate::file_server::file_url(port, &token, &canonical),
-        sandbox: true,
-        path: Some(canonical),
-    })
-}
-
 fn write_response(stream: &mut UnixStream, result: Result<Value, String>) -> std::io::Result<()> {
     let response = match result {
         Ok(data) => ControlResponse {
@@ -1030,6 +971,7 @@ mod tests {
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
+    use crate::state::canonical_loopback_artifact_url;
 
     use std::io::Read;
     use std::path::PathBuf;
@@ -1051,7 +993,6 @@ mod tests {
 
     fn runtime_state(workspace_root: PathBuf, socket_path: PathBuf) -> (AppState, PathBuf) {
         let state = AppState::new(SessionConfig {
-            remotes: Default::default(),
             workspace_root,
             socket_path: socket_path.clone(),
             adapters: AdapterConfigs {
@@ -1167,31 +1108,6 @@ mod tests {
                 "accepted malformed loopback URL: {invalid}"
             );
         }
-    }
-
-    #[test]
-    fn browser_target_rejects_absolute_paths_outside_the_pane_roots() {
-        let state = test_state();
-        // No pane has been inserted, so roots are empty and any absolute path
-        // is refused rather than minting a token URL that would 403 later.
-        let err = resolve_browser_target(
-            &state,
-            "missing-pane",
-            "/Users/raymond/Code/multitool/dev/menubar-design-variants.html",
-            None,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err,
-            "'/Users/raymond/Code/multitool/dev/menubar-design-variants.html' was not found"
-        );
-    }
-
-    #[test]
-    fn browser_target_rejects_relative_paths_without_a_cwd() {
-        let state = test_state();
-        let err = resolve_browser_target(&state, "pane-1", "report.html", None).unwrap_err();
-        assert!(err.contains("working directory"), "unexpected error: {err}");
     }
 
     #[test]

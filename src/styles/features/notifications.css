@@ -60,17 +60,7 @@
   font: inherit;
   line-height: 1.35;
   text-align: left;
-  /* WKWebView buttons default to white-space: pre, so JSX newlines between the
-     icon and copy become anonymous flex items and pad the toast from below. */
   white-space: normal;
-}
-
-button.user-notification-open {
-  cursor: pointer;
-}
-
-button.user-notification-open:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 }
 
 .user-notification-icon {

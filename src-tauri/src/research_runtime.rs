@@ -138,13 +138,11 @@ fn launch_claude(
     let agent = prepare_agent_workspace(
         state,
         PrepareAgentWorkspaceRequest {
-            group_id: Some(workspace.id.clone()),
+            group_id: workspace.id.clone(),
             base_repo: Some(workspace.dir.clone()),
-            base_ref: Some("HEAD".to_string()),
             adapter: "claude".to_string(),
             model: node.model().map(str::to_string),
             effort: node.effort().map(str::to_string),
-            use_worktree: false,
         },
     )
     .map_err(|err| {
@@ -318,13 +316,11 @@ fn launch_jsonl(
     let mut agent = prepare_agent_workspace(
         state,
         PrepareAgentWorkspaceRequest {
-            group_id: Some(workspace.id.clone()),
+            group_id: workspace.id.clone(),
             base_repo: Some(workspace.dir.clone()),
-            base_ref: Some("HEAD".to_string()),
             adapter: node.adapter().to_string(),
             model: node.model().map(str::to_string),
             effort: node.effort().map(str::to_string),
-            use_worktree: false,
         },
     )
     .map_err(|err| {
@@ -1868,7 +1864,6 @@ time.sleep(2)
         grok: &Path,
     ) -> SessionConfig {
         SessionConfig {
-            remotes: Default::default(),
             workspace_root,
             socket_path: PathBuf::from("/tmp/session-research-sdk-test.sock"),
             adapters: AdapterConfigs {
@@ -1910,7 +1905,6 @@ time.sleep(2)
             collapsed: false,
             scope: WorkspaceScope::Research,
             imported_research_archive_id: None,
-            remote: None,
             agents: Vec::new(),
         }
     }
@@ -1994,7 +1988,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             collapsed: false,
             scope: WorkspaceScope::Research,
             imported_research_archive_id: None,
-            remote: None,
             agents: Vec::new(),
         };
         state.insert_group_after(group.clone(), None).unwrap();
@@ -2070,7 +2063,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             collapsed: false,
             scope: WorkspaceScope::Research,
             imported_research_archive_id: None,
-            remote: None,
             agents: Vec::new(),
         };
         state.insert_group_after(group.clone(), None).unwrap();
@@ -2171,7 +2163,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             collapsed: false,
             scope: WorkspaceScope::Research,
             imported_research_archive_id: None,
-            remote: None,
             agents: Vec::new(),
         };
         state.insert_group_after(group.clone(), None).unwrap();
@@ -2232,7 +2223,6 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             collapsed: false,
             scope: WorkspaceScope::Research,
             imported_research_archive_id: None,
-            remote: None,
             agents: Vec::new(),
         };
         state.insert_group_after(group.clone(), None).unwrap();

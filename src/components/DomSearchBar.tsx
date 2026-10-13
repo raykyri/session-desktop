@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { IS_MAC, isEditableTarget, isTerminalTarget } from "../lib/appHelpers";
+import { IS_MAC, isEditableTarget } from "../lib/appHelpers";
 import {
   applySearchHighlights,
   clearSearchHighlights,
@@ -132,9 +132,6 @@ export default function DomSearchBar({
       }
       const target = event.target;
       if (target instanceof HTMLElement) {
-        if (isTerminalTarget(target)) {
-          return;
-        }
         if (!inScope(target) && isEditableTarget(target)) {
           return;
         }
@@ -177,7 +174,7 @@ export default function DomSearchBar({
           // The bar's own input handles Escape itself.
           return;
         }
-        if (isTerminalTarget(target) || isEditableTarget(target)) {
+        if (isEditableTarget(target)) {
           return;
         }
         if (target !== document.body && !inScope(target)) {

@@ -172,7 +172,7 @@ export default function ResearchColumns({
       // The strip hidden behind another surface, or focus in a dialog or menu.
       if (!row.isConnected || row.getClientRects().length === 0) return;
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest("[role='dialog'], [role='alertdialog'], [role='menu'], .terminal-pane")) return;
+      if (target?.closest("[role='dialog'], [role='alertdialog'], [role='menu']")) return;
       event.preventDefault();
       const request: ResearchCycleRequest = {
         column: lastColumnRef.current,

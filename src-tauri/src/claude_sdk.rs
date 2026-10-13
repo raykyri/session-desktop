@@ -869,10 +869,10 @@ pub fn terminate_process_tree(pid: u32) {
     // leader exits, descendants that created their own process group may be
     // reparented and disappear from a fresh parent walk even though they are
     // still alive.
-    let mut descendants = crate::pty::descendant_process_ids(pid);
+    let mut descendants = crate::headless_process::descendant_process_ids(pid);
     signal_process_tree(pid, &descendants, libc::SIGTERM);
     thread::sleep(Duration::from_millis(100));
-    for child_pid in crate::pty::descendant_process_ids(pid) {
+    for child_pid in crate::headless_process::descendant_process_ids(pid) {
         if !descendants.contains(&child_pid) {
             descendants.push(child_pid);
         }

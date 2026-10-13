@@ -16,7 +16,6 @@ use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-use std::os::unix::io::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,7 +49,6 @@ struct BrowserBackend {
     engine: Option<Arc<BrowserEngine>>,
     engine_error: Option<String>,
     app_state: Option<AppState>,
-    pane_by_session: Mutex<HashMap<String, String>>,
     tab_by_pane: Mutex<HashMap<String, u64>>,
     pane_by_tab: Mutex<HashMap<u64, String>>,
     viewport_by_pane: Mutex<HashMap<String, BrowserViewport>>,
@@ -141,7 +139,6 @@ pub fn start_browser_discovery(
         engine,
         engine_error,
         app_state,
-        pane_by_session: Mutex::new(HashMap::new()),
         tab_by_pane: Mutex::new(HashMap::new()),
         pane_by_tab: Mutex::new(HashMap::new()),
         viewport_by_pane: Mutex::new(HashMap::new()),
@@ -214,23 +211,14 @@ fn remove_stale_session_sockets(directory: &Path) {
 }
 
 fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Result<(), String> {
-    let pane_id = backend
-        .app_state
-        .as_ref()
-        .and_then(|state| peer_process_id(&stream).and_then(|pid| pane_for_process(state, pid)));
     let mut writer_stream = stream
         .try_clone()
         .map_err(|err| format!("failed to clone browser client socket: {err}"))?;
     let (writer_tx, writer_rx) = mpsc::sync_channel(CLIENT_EVENT_QUEUE);
-    let writer_backend = Arc::clone(&backend);
-    let writer_pane_id = pane_id.clone();
     thread::Builder::new()
         .name("session-browser-client-writer".to_string())
         .spawn(move || {
             while let Ok(message) = writer_rx.recv() {
-                if !event_is_visible_to_pane(&writer_backend, writer_pane_id.as_deref(), &message) {
-                    continue;
-                }
                 if write_frame(&mut writer_stream, &message).is_err() {
                     break;
                 }
@@ -245,7 +233,6 @@ fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Res
     let request_rx = Arc::new(Mutex::new(request_rx));
     for worker_index in 0..CLIENT_REQUEST_WORKERS {
         let worker_backend = Arc::clone(&backend);
-        let worker_pane_id = pane_id.clone();
         let worker_writer_tx = writer_tx.clone();
         let worker_request_rx = Arc::clone(&request_rx);
         thread::Builder::new()
@@ -259,8 +246,7 @@ fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Res
                     let Ok((request, id)) = work else {
                         break;
                     };
-                    let response =
-                        handle_request(&worker_backend, worker_pane_id.as_deref(), &request, id);
+                    let response = handle_request(&worker_backend, &request, id);
                     if worker_writer_tx.send(response).is_err() {
                         break;
                     }
@@ -295,27 +281,8 @@ fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Res
     Ok(())
 }
 
-fn handle_request(
-    backend: &BrowserBackend,
-    pane_id: Option<&str>,
-    request: &Value,
-    id: Value,
-) -> Value {
+fn handle_request(backend: &BrowserBackend, request: &Value, id: Value) -> Value {
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
-    let session_id = request
-        .pointer("/params/session_id")
-        .and_then(Value::as_str);
-    let owned_pane = pane_id.map(str::to_string).or_else(|| {
-        session_id.and_then(|session_id| {
-            lock_or_recover(&backend.pane_by_session)
-                .get(session_id)
-                .cloned()
-        })
-    });
-    if let (Some(pane_id), Some(session_id)) = (owned_pane.as_deref(), session_id) {
-        lock_or_recover(&backend.pane_by_session)
-            .insert(session_id.to_string(), pane_id.to_string());
-    }
     match method {
         "getInfo" => {
             let session_id = request
@@ -372,23 +339,12 @@ fn handle_request(
             "id": id,
             "result": "pong"
         }),
-        _ if !tab_access_is_allowed(backend, owned_pane.as_deref(), request) => json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": {
-                "code": -32002,
-                "message": "browser tab belongs to a different session pane"
-            }
-        }),
         _ => match backend.engine.as_ref() {
             Some(engine) => match engine.call(
                 method,
                 request.get("params").cloned().unwrap_or_else(|| json!({})),
             ) {
                 Ok(result) => {
-                    remember_tab_owner(backend, owned_pane.as_deref(), method, request, &result);
-                    let result =
-                        scope_result_to_pane(backend, owned_pane.as_deref(), method, result);
                     json!({
                         "jsonrpc": "2.0",
                         "id": id,
@@ -418,278 +374,11 @@ fn handle_request(
     }
 }
 
-fn remember_tab_owner(
-    backend: &BrowserBackend,
-    pane_id: Option<&str>,
-    method: &str,
-    request: &Value,
-    result: &Value,
-) {
-    let Some(pane_id) = pane_id else {
-        return;
-    };
-    let tab_id = if method == "createTab" {
-        result.get("id").and_then(Value::as_u64)
-    } else {
-        request
-            .pointer("/params/tabId")
-            .or_else(|| request.pointer("/params/target/tabId"))
-            .and_then(Value::as_u64)
-    };
-    if let Some(tab_id) = tab_id {
-        lock_or_recover(&backend.tab_by_pane).insert(pane_id.to_string(), tab_id);
-        lock_or_recover(&backend.pane_by_tab).insert(tab_id, pane_id.to_string());
-    }
-    if method == "executeCdp"
-        && request
-            .pointer("/params/method")
-            .and_then(Value::as_str)
-            .is_some_and(|method| {
-                matches!(
-                    method,
-                    "Emulation.setDeviceMetricsOverride"
-                        | "Emulation.clearDeviceMetricsOverride"
-                        | "Page.setDeviceMetricsOverride"
-                )
-            })
-    {
-        lock_or_recover(&backend.viewport_by_pane).remove(pane_id);
-        // The frame size follows the client's own override now. Stop the
-        // actual Chromium stream before forgetting it so closing the overlay
-        // during the next heartbeat cannot strand an untracked screencast.
-        let streaming = {
-            lock_or_recover(&backend.screencast_by_pane)
-                .get(pane_id)
-                .copied()
-        };
-        if let Some(streaming) = streaming {
-            if let Err(error) = stop_recorded_screencast(backend, pane_id, streaming) {
-                eprintln!(
-                    "session: failed to stop pane {pane_id} screencast after a device metrics override: {error}"
-                );
-            }
-        }
-    }
-}
-
-fn request_tab_id(request: &Value) -> Option<u64> {
-    request
-        .pointer("/params/tabId")
-        .or_else(|| request.pointer("/params/target/tabId"))
-        .and_then(Value::as_u64)
-}
-
-fn tab_access_is_allowed(backend: &BrowserBackend, pane_id: Option<&str>, request: &Value) -> bool {
-    let (Some(pane_id), Some(tab_id)) = (pane_id, request_tab_id(request)) else {
-        return true;
-    };
-    let mut owners = lock_or_recover(&backend.pane_by_tab);
-    match owners.get(&tab_id) {
-        Some(owner) if pane_is_live(backend, owner) => owner == pane_id,
-        Some(_) => {
-            owners.insert(tab_id, pane_id.to_string());
-            true
-        }
-        None => {
-            owners.insert(tab_id, pane_id.to_string());
-            true
-        }
-    }
-}
-
-fn pane_is_live(backend: &BrowserBackend, pane_id: &str) -> bool {
-    backend
-        .app_state
-        .as_ref()
-        .is_none_or(|state| state.pane_exists(pane_id).unwrap_or(false))
-}
-
-fn scope_result_to_pane(
-    backend: &BrowserBackend,
-    pane_id: Option<&str>,
-    method: &str,
-    mut result: Value,
-) -> Value {
-    let (Some(pane_id), "getTabs", Some(tabs)) = (pane_id, method, result.as_array_mut()) else {
-        return result;
-    };
-    let live_tab_ids = tabs
-        .iter()
-        .filter_map(|tab| tab.get("id").and_then(Value::as_u64))
-        .collect::<std::collections::HashSet<_>>();
-    {
-        let mut owners = lock_or_recover(&backend.pane_by_tab);
-        owners
-            .retain(|tab_id, owner| live_tab_ids.contains(tab_id) && pane_is_live(backend, owner));
-        if !owners.values().any(|owner| owner == pane_id) {
-            let claim = tabs
-                .iter()
-                .find(|tab| {
-                    tab.get("active") == Some(&Value::Bool(true))
-                        && tab
-                            .get("id")
-                            .and_then(Value::as_u64)
-                            .is_some_and(|tab_id| !owners.contains_key(&tab_id))
-                })
-                .or_else(|| {
-                    tabs.iter().find(|tab| {
-                        tab.get("id")
-                            .and_then(Value::as_u64)
-                            .is_some_and(|tab_id| !owners.contains_key(&tab_id))
-                    })
-                })
-                .and_then(|tab| tab.get("id"))
-                .and_then(Value::as_u64);
-            if let Some(tab_id) = claim {
-                owners.insert(tab_id, pane_id.to_string());
-                lock_or_recover(&backend.tab_by_pane).insert(pane_id.to_string(), tab_id);
-            }
-        }
-    }
-    lock_or_recover(&backend.tab_by_pane)
-        .retain(|owner, tab_id| live_tab_ids.contains(tab_id) && pane_is_live(backend, owner));
-    let selected_tabs = lock_or_recover(&backend.tab_by_pane).clone();
-    lock_or_recover(&backend.viewport_by_pane).retain(|owner, viewport| {
-        selected_tabs.get(owner) == Some(&viewport.tab_id)
-            && live_tab_ids.contains(&viewport.tab_id)
-    });
-    // A selected-tab change invalidates the viewport cache, but the active
-    // retain the screencast record until the heartbeat stops that old tab.
-    // Targets already gone need no stop; streams owned by panes that vanished
-    // unexpectedly are actively reaped instead of merely forgotten.
-    let orphaned_screencasts = {
-        let mut streams = lock_or_recover(&backend.screencast_by_pane);
-        streams.retain(|_, viewport| live_tab_ids.contains(&viewport.tab_id));
-        streams
-            .iter()
-            .filter(|(owner, _)| !pane_is_live(backend, owner))
-            .map(|(owner, viewport)| (owner.clone(), *viewport))
-            .collect::<Vec<_>>()
-    };
-    for (owner, viewport) in orphaned_screencasts {
-        if let Err(error) = stop_recorded_screencast(backend, &owner, viewport) {
-            eprintln!("session: failed to stop orphaned pane {owner} screencast: {error}");
-        }
-    }
-    lock_or_recover(&backend.pane_by_session).retain(|_, owner| pane_is_live(backend, owner));
-    let owners = lock_or_recover(&backend.pane_by_tab);
-    tabs.retain(|tab| {
-        tab.get("id")
-            .and_then(Value::as_u64)
-            .and_then(|tab_id| owners.get(&tab_id))
-            .is_some_and(|owner| owner == pane_id)
-    });
-    let selected = lock_or_recover(&backend.tab_by_pane)
-        .get(pane_id)
-        .copied()
-        .filter(|selected| {
-            tabs.iter()
-                .any(|tab| tab.get("id").and_then(Value::as_u64) == Some(*selected))
-        })
-        .or_else(|| {
-            tabs.first()
-                .and_then(|tab| tab.get("id"))
-                .and_then(Value::as_u64)
-        });
-    drop(owners);
-    if let Some(selected) = selected {
-        lock_or_recover(&backend.tab_by_pane).insert(pane_id.to_string(), selected);
-        for tab in tabs {
-            if let Some(tab) = tab.as_object_mut() {
-                let active = tab.get("id").and_then(Value::as_u64) == Some(selected);
-                tab.insert("active".to_string(), Value::Bool(active));
-            }
-        }
-    }
-    result
-}
-
-fn event_is_visible_to_pane(
-    backend: &BrowserBackend,
-    pane_id: Option<&str>,
-    message: &Value,
-) -> bool {
-    let Some(pane_id) = pane_id else {
-        return true;
-    };
-    if message.get("id").is_some() {
-        return true;
-    }
-    let tab_id = message
-        .pointer("/params/source/tabId")
-        .or_else(|| message.pointer("/params/tabId"))
-        .and_then(Value::as_u64);
-    let Some(tab_id) = tab_id else {
-        return false;
-    };
-    lock_or_recover(&backend.pane_by_tab)
-        .get(&tab_id)
-        .is_some_and(|owner| owner == pane_id)
-}
-
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     match mutex.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     }
-}
-
-fn pane_for_process(state: &AppState, process_id: u32) -> Option<String> {
-    for (pane_id, child) in state.all_pane_children().ok()? {
-        let Some(root_pid) = child.lock().ok().and_then(|guard| guard.process_id()) else {
-            continue;
-        };
-        if root_pid == process_id
-            || crate::pty::descendant_process_ids(root_pid).contains(&process_id)
-        {
-            return Some(pane_id);
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "macos")]
-fn peer_process_id(stream: &UnixStream) -> Option<u32> {
-    let mut pid: libc::pid_t = 0;
-    let mut length = std::mem::size_of_val(&pid) as libc::socklen_t;
-    // SAFETY: pid and length point to writable storage of the exact types and
-    // sizes required by LOCAL_PEERPID; stream owns a valid Unix socket fd.
-    let result = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_LOCAL,
-            libc::LOCAL_PEERPID,
-            (&mut pid as *mut libc::pid_t).cast(),
-            &mut length,
-        )
-    };
-    (result == 0 && pid > 0).then_some(pid as u32)
-}
-
-#[cfg(target_os = "linux")]
-fn peer_process_id(stream: &UnixStream) -> Option<u32> {
-    let mut credentials = libc::ucred {
-        pid: 0,
-        uid: 0,
-        gid: 0,
-    };
-    let mut length = std::mem::size_of_val(&credentials) as libc::socklen_t;
-    // SAFETY: credentials and length are valid writable storage for SO_PEERCRED.
-    let result = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_PEERCRED,
-            (&mut credentials as *mut libc::ucred).cast(),
-            &mut length,
-        )
-    };
-    (result == 0 && credentials.pid > 0).then_some(credentials.pid as u32)
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-fn peer_process_id(_stream: &UnixStream) -> Option<u32> {
-    None
 }
 
 #[derive(Serialize)]
@@ -1403,7 +1092,6 @@ mod tests {
             engine: None,
             engine_error: Some("test browser unavailable".to_string()),
             app_state: None,
-            pane_by_session: Mutex::new(HashMap::new()),
             tab_by_pane: Mutex::new(HashMap::new()),
             pane_by_tab: Mutex::new(HashMap::new()),
             viewport_by_pane: Mutex::new(HashMap::new()),
@@ -1416,7 +1104,6 @@ mod tests {
     fn get_info_echoes_codex_session_metadata() {
         let response = handle_request(
             &unavailable_backend(),
-            None,
             &json!({
                 "jsonrpc": "2.0",
                 "id": 7,
@@ -1434,18 +1121,9 @@ mod tests {
     }
 
     #[test]
-    fn native_length_prefixed_json_round_trips() {
-        let (mut client, mut server) = UnixStream::pair().unwrap();
-        let request = json!({"jsonrpc": "2.0", "id": "a", "method": "ping"});
-        write_frame(&mut client, &request).unwrap();
-        assert_eq!(read_frame(&mut server).unwrap(), Some(request));
-    }
-
-    #[test]
     fn unknown_methods_return_json_rpc_error() {
         let response = handle_request(
             &unavailable_backend(),
-            None,
             &json!({"jsonrpc": "2.0", "id": 1, "method": "createTab"}),
             json!(1),
         );
@@ -1453,91 +1131,11 @@ mod tests {
     }
 
     #[test]
-    fn agent_viewport_changes_invalidate_the_mirror_cache() {
-        let backend = unavailable_backend();
-        let viewport = BrowserViewport {
-            tab_id: 7,
-            width: 1280,
-            height: 900,
-            scale_factor: 2.0,
-        };
-        lock_or_recover(&backend.viewport_by_pane).insert("pane-1".to_string(), viewport);
-        lock_or_recover(&backend.screencast_by_pane).insert("pane-1".to_string(), viewport);
-
-        remember_tab_owner(
-            &backend,
-            Some("pane-1"),
-            "executeCdp",
-            &json!({
-                "params": {
-                    "target": { "tabId": 7 },
-                    "method": "Emulation.setDeviceMetricsOverride"
-                }
-            }),
-            &Value::Null,
-        );
-
-        assert!(lock_or_recover(&backend.viewport_by_pane).is_empty());
-        // The client owns the frame size now; the next heartbeat has to restart
-        // the screencast rather than keep streaming at the stale bounds.
-        assert!(lock_or_recover(&backend.screencast_by_pane).is_empty());
-    }
-
-    #[test]
-    fn a_closed_tab_drops_its_pane_screencast() {
-        let backend = unavailable_backend();
-        lock_or_recover(&backend.pane_by_tab).insert(4, "pane-1".to_string());
-        lock_or_recover(&backend.tab_by_pane).insert("pane-1".to_string(), 4);
-        lock_or_recover(&backend.screencast_by_pane).insert(
-            "pane-1".to_string(),
-            BrowserViewport {
-                tab_id: 4,
-                width: 800,
-                height: 600,
-                scale_factor: 2.0,
-            },
-        );
-
-        scope_result_to_pane(
-            &backend,
-            Some("pane-1"),
-            "getTabs",
-            json!([{ "id": 9, "url": "about:blank", "title": "", "active": true }]),
-        );
-
-        assert!(lock_or_recover(&backend.screencast_by_pane).is_empty());
-    }
-
-    #[test]
-    fn a_live_previous_tab_keeps_its_screencast_record_until_replacement() {
-        let backend = unavailable_backend();
-        lock_or_recover(&backend.pane_by_tab).insert(4, "pane-1".to_string());
-        lock_or_recover(&backend.pane_by_tab).insert(9, "pane-1".to_string());
-        lock_or_recover(&backend.tab_by_pane).insert("pane-1".to_string(), 9);
-        let previous = BrowserViewport {
-            tab_id: 4,
-            width: 800,
-            height: 600,
-            scale_factor: 2.0,
-        };
-        lock_or_recover(&backend.screencast_by_pane).insert("pane-1".to_string(), previous);
-
-        scope_result_to_pane(
-            &backend,
-            Some("pane-1"),
-            "getTabs",
-            json!([
-                { "id": 4, "url": "https://old.example", "title": "old", "active": false },
-                { "id": 9, "url": "about:blank", "title": "", "active": true }
-            ]),
-        );
-
-        assert_eq!(
-            lock_or_recover(&backend.screencast_by_pane)
-                .get("pane-1")
-                .copied(),
-            Some(previous)
-        );
+    fn native_length_prefixed_json_round_trips() {
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        let request = json!({"jsonrpc": "2.0", "id": "a", "method": "ping"});
+        write_frame(&mut client, &request).unwrap();
+        assert_eq!(read_frame(&mut server).unwrap(), Some(request));
     }
 
     #[test]
@@ -1587,34 +1185,6 @@ mod tests {
         assert_eq!(browser_history_entry_id(&first, "back").unwrap(), None);
         assert_eq!(browser_history_entry_id(&first, "forward").unwrap(), None);
         assert!(browser_history_entry_id(&history, "sideways").is_err());
-    }
-
-    #[test]
-    fn tab_lists_and_events_are_isolated_by_pane() {
-        let backend = unavailable_backend();
-        let tabs = json!([
-            { "id": 1, "url": "about:blank", "title": "one", "active": true },
-            { "id": 2, "url": "about:blank", "title": "two", "active": false }
-        ]);
-        let pane_a = scope_result_to_pane(&backend, Some("pane-a"), "getTabs", tabs.clone());
-        let pane_b = scope_result_to_pane(&backend, Some("pane-b"), "getTabs", tabs);
-        assert_eq!(pane_a.as_array().unwrap().len(), 1);
-        assert_eq!(pane_a[0]["id"], 1);
-        assert_eq!(pane_b.as_array().unwrap().len(), 1);
-        assert_eq!(pane_b[0]["id"], 2);
-        assert!(!tab_access_is_allowed(
-            &backend,
-            Some("pane-b"),
-            &json!({ "params": { "tabId": 1 } })
-        ));
-
-        let event = json!({
-            "jsonrpc": "2.0",
-            "method": "onCDPEvent",
-            "params": { "source": { "tabId": 1 }, "method": "Page.loadEventFired" }
-        });
-        assert!(event_is_visible_to_pane(&backend, Some("pane-a"), &event));
-        assert!(!event_is_visible_to_pane(&backend, Some("pane-b"), &event));
     }
 
     fn write_rpc_request(stream: &mut UnixStream, id: u64, method: &str, params: Value) {

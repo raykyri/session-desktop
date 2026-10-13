@@ -3,33 +3,21 @@ pub mod codex;
 pub mod grok;
 
 use crate::config::SessionConfig;
-use crate::events::SessionEvent;
-use crate::pty::InitialPaneSize;
-use crate::state::{AppState, PaneInfo};
 use crate::transcript::{Turn, TurnBlock};
 // The canonical JSON string-field extractor. Re-exported so the adapters can reach it
 // as `super::string_field` and share the one definition (see `transcript::string_field`).
 pub(crate) use crate::transcript::string_field;
-use crate::workspace::{ActiveWorkspaceSource, AgentInfo, AgentStatus};
 use claude::ClaudeAdapter;
 use codex::CodexAdapter;
 use grok::GrokAdapter;
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-/// Single-quotes a path for safe interpolation into a POSIX shell command,
-/// escaping embedded single quotes. Shared by the Claude and Codex adapters,
-/// which both embed the Session CLI path into generated hook commands.
-pub(crate) fn shell_quote_path(path: &Path) -> String {
-    let raw = path.display().to_string();
-    format!("'{}'", raw.replace('\'', "'\\''"))
-}
 
 /// Single-quotes an arbitrary argument for safe interpolation into a POSIX shell
 /// command. Used to embed a session id into an adapter's resume command line.
@@ -74,199 +62,6 @@ pub(crate) fn hook_transcript_path_acceptable(current: Option<&str>, candidate: 
         Some(current) => Path::new(current).parent() == candidate.parent(),
         None => true,
     }
-}
-
-/// Normalize a raw model id for storage/display. Maps Claude API-style ids
-/// (`claude-fable-5`, `claude-opus-4-7`) to short launcher names (`fable`,
-/// `opus`) when the family is recognized; otherwise keeps the trimmed raw id.
-/// Returns `None` for empty values and Claude's synthetic placeholders.
-pub(crate) fn normalize_agent_model(raw: &str) -> Option<String> {
-    let raw = raw.trim();
-    if raw.is_empty() || raw.eq_ignore_ascii_case("<synthetic>") {
-        return None;
-    }
-    const CLAUDE_FAMILIES: &[&str] = &["fable", "opus", "sonnet", "haiku"];
-    if CLAUDE_FAMILIES
-        .iter()
-        .any(|family| raw.eq_ignore_ascii_case(family))
-    {
-        return Some(raw.to_ascii_lowercase());
-    }
-    if let Some(rest) = raw
-        .strip_prefix("claude-")
-        .or_else(|| raw.strip_prefix("Claude-"))
-    {
-        // Prefer a known family token anywhere in the remainder so both
-        // `claude-fable-5` and older `claude-3-5-sonnet-…` ids map cleanly.
-        for part in rest.split('-') {
-            let part_lower = part.to_ascii_lowercase();
-            if CLAUDE_FAMILIES.iter().any(|family| *family == part_lower) {
-                return Some(part_lower);
-            }
-        }
-    }
-    Some(raw.to_string())
-}
-
-/// Model declared on a Claude-native (or Grok Claude-compatible) transcript
-/// line: `message.model` on assistant records. Ignores other line types.
-pub(crate) fn model_from_claude_native_transcript_line(line: &str) -> Option<String> {
-    let value = serde_json::from_str::<Value>(line).ok()?;
-    let is_assistant = value.get("type").and_then(Value::as_str) == Some("assistant")
-        || value
-            .get("message")
-            .and_then(|message| message.get("role"))
-            .and_then(Value::as_str)
-            == Some("assistant");
-    if !is_assistant {
-        return None;
-    }
-    value
-        .get("message")
-        .and_then(|message| string_field(message, "model"))
-        .or_else(|| string_field(&value, "model"))
-}
-
-/// Model declared on a Codex-style rollout line (`turn_context`,
-/// `session_meta`, or `world_state` payload).
-pub(crate) fn model_from_codex_transcript_line(line: &str) -> Option<String> {
-    let value = serde_json::from_str::<Value>(line).ok()?;
-    let payload = value.get("payload")?;
-    match value.get("type").and_then(Value::as_str)? {
-        "turn_context" | "session_meta" => string_field(payload, "model"),
-        "world_state" => payload
-            .get("state")
-            .and_then(|state| string_field(state, "model")),
-        _ => None,
-    }
-}
-
-/// Record a model discovered from a tailed transcript line. Updates the agent
-/// only when the normalized value differs, and emits `agent.updated` so the UI
-/// can show it without a full agent-list refetch.
-pub(crate) fn maybe_record_agent_model(
-    state: &AppState,
-    agent_id: &str,
-    raw_model: &str,
-) -> Result<Option<AgentInfo>, String> {
-    let Some(model) = normalize_agent_model(raw_model) else {
-        return Ok(None);
-    };
-    let Some(current) = state.agent(agent_id)? else {
-        return Ok(None);
-    };
-    if current.model.as_deref() == Some(model.as_str()) {
-        return Ok(None);
-    }
-    let updated = state.mutate_agent(agent_id, |agent| {
-        agent.model = Some(model);
-    })?;
-    if let Some(agent) = updated.as_ref() {
-        state.emit(SessionEvent::new(
-            "agent.updated",
-            agent.pane_id.clone(),
-            Some(agent.id.clone()),
-            json!({ "agent": agent }),
-        ));
-    }
-    Ok(updated)
-}
-
-/// Records native lineage on a fresh agent created by a shell-level fork command.
-/// The CLI resumes `fork_point` but creates a new native session, so the source Session
-/// record must remain separate. Preserve Session parent/root lineage when its source is
-/// known in the same workspace.
-pub(crate) fn record_shell_fork_lineage(
-    state: &AppState,
-    agent: AgentInfo,
-    adapter_id: &str,
-    fork_point: Option<&str>,
-    cwd: &str,
-) -> Result<AgentInfo, String> {
-    let Some(fork_point) = fork_point.map(str::trim).filter(|id| !id.is_empty()) else {
-        return Ok(agent);
-    };
-    let source = state.list_agents()?.into_iter().find(|candidate| {
-        candidate.id != agent.id
-            && candidate.adapter == adapter_id
-            && same_dir(&candidate.worktree_dir, cwd)
-            && native_session_selector_matches(candidate, fork_point, cwd)
-    });
-    let updated = state
-        .mutate_agent(&agent.id, |agent| {
-            agent.fork_point = Some(fork_point.to_string());
-            agent.root_session_id = source
-                .as_ref()
-                .and_then(|source| source.root_session_id.clone())
-                .or_else(|| agent.root_session_id.clone())
-                .or_else(|| Some(fork_point.to_string()));
-            agent.parent_id = source
-                .as_ref()
-                .map(|source| source.id.clone())
-                .or_else(|| agent.parent_id.clone());
-        })?
-        .ok_or_else(|| {
-            format!(
-                "agent {} disappeared while recording fork lineage",
-                agent.id
-            )
-        })?;
-    if let Some(source) = source {
-        match state.capture_conversation_history(&source, None) {
-            Ok(Some(history)) => {
-                if let Err(err) = state.record_conversation_history(&updated, history) {
-                    eprintln!(
-                        "session: could not record conversation history for shell fork {}: {err}",
-                        updated.id
-                    );
-                }
-            }
-            Ok(None) => {}
-            Err(err) => eprintln!(
-                "session: could not capture conversation history for shell fork {}: {err}",
-                updated.id
-            ),
-        }
-    }
-    Ok(updated)
-}
-
-/// True when both paths name the same directory. Canonicalization resolves symlinks,
-/// `.`/`..`, trailing slashes, and (on case-insensitive volumes) the on-disk case, so a
-/// shell's reported `$PWD` rebinds the original agent even when its spelling differs from
-/// the recorded launch dir. Falls back to a raw compare when a side can't be canonicalized
-/// (e.g. the directory no longer exists), preserving the previous exact-match behavior.
-pub(crate) fn same_dir(a: &str, b: &str) -> bool {
-    same_path(a, b)
-}
-
-fn same_path(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
-    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
-}
-
-/// Native CLIs may accept either a session id or a transcript path for resume
-/// and fork selectors. Match both forms so Session keeps one record and preserves
-/// lineage regardless of which spelling the user gives the CLI.
-fn native_session_selector_matches(agent: &AgentInfo, selector: &str, cwd: &str) -> bool {
-    if agent.session_id.as_deref() == Some(selector) {
-        return true;
-    }
-    let Some(transcript_path) = agent.transcript_path.as_deref() else {
-        return false;
-    };
-    let selector_path = Path::new(selector);
-    let resolved = if selector_path.is_absolute() {
-        selector_path.to_path_buf()
-    } else {
-        Path::new(cwd).join(selector_path)
-    };
-    same_path(transcript_path, &resolved.display().to_string())
 }
 
 /// Parse a single line from a Claude-style or Grok-native rollout transcript (the
@@ -346,11 +141,6 @@ pub(crate) fn native_timestamp_ms(value: &Value) -> Option<i64> {
         }
         _ => None,
     }
-}
-
-pub(crate) fn parse_claude_native_lifecycle_event(line: &str) -> Option<TranscriptLifecycleEvent> {
-    let value = serde_json::from_str::<Value>(line).ok()?;
-    parse_claude_native_lifecycle_value(&value)
 }
 
 /// As [`parse_claude_native_lifecycle_event`], but over an already-parsed value (see
@@ -437,79 +227,9 @@ fn parse_claude_native_block(value: &Value) -> Option<TurnBlock> {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpawnAgentRequest {
-    pub adapter_id: String,
-    pub prompt: String,
-    pub group_id: Option<String>,
-    pub base_repo: Option<String>,
-    pub base_ref: Option<String>,
-    pub cwd: Option<String>,
-    pub model: Option<String>,
-    pub initial_size: Option<InitialPaneSize>,
-    /// Opt in to an isolated git worktree; defaults to false (run in place).
-    pub use_worktree: Option<bool>,
-    #[serde(default)]
-    pub options: Value,
-    /// Session lineage to persist before the new process is allowed to start.
-    /// User launches omit it; orchestration surfaces set it to their caller.
-    #[serde(default)]
-    pub parent_id: Option<String>,
-    /// Provider-native conversation selected by the backend history scanner.
-    #[serde(default)]
-    pub resume_session_id: Option<String>,
-    /// Branch `resume_session_id` rather than continuing it in place.
-    #[serde(default)]
-    pub fork_session: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct ShellCommandIntegration {
-    pub command_name: &'static str,
-    pub adapter_id: &'static str,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TranscriptLifecycleEvent {
     Interrupted,
-    TurnStarted,
-    /// A native transcript record that the turn ended successfully. Used when
-    /// the adapter's Stop/idle hook is missing, never fires, or fires too
-    /// early (Codex emits `Stop` between review jobs and internally queued
-    /// prompts, then continues the same turn).
-    TurnCompleted,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WorkspaceObservation {
-    pub cwd: String,
-    pub source: ActiveWorkspaceSource,
-    pub session_id: Option<String>,
-    pub observed_at_millis: Option<u128>,
-}
-
-impl TranscriptLifecycleEvent {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            TranscriptLifecycleEvent::Interrupted => "interrupted",
-            TranscriptLifecycleEvent::TurnStarted => "turnStarted",
-            TranscriptLifecycleEvent::TurnCompleted => "turnCompleted",
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ComposerPolicy {
-    pub ready_statuses: Vec<AgentStatus>,
-    pub queue_statuses: Vec<AgentStatus>,
-    pub steer_statuses: Vec<AgentStatus>,
-}
-
-impl ComposerPolicy {
-    pub fn can_send(&self, status: AgentStatus) -> bool {
-        self.ready_statuses.contains(&status)
-    }
 }
 
 pub trait AgentAdapter: Send + Sync {
@@ -517,22 +237,6 @@ pub trait AgentAdapter: Send + Sync {
     fn display_name(&self) -> &'static str;
     /// The configured executable name or path used by every launch and probe.
     fn configured_binary(&self) -> &str;
-
-    fn launch(&self, state: &AppState, request: SpawnAgentRequest) -> Result<PaneInfo, String>;
-
-    fn shell_commands(&self) -> Vec<ShellCommandIntegration>;
-
-    /// Whether this adapter can launch into a remote group.
-    ///
-    /// Defaults to `false`, and deliberately so. A remote launch is not just an
-    /// ssh wrapper: an adapter that resolves its binary against the local
-    /// `PATH`, points a flag at a locally-materialized plugin directory, or
-    /// relies on the pane's cwd being its worktree will start successfully over
-    /// there and then be wrong in ways that look like the agent misbehaving.
-    /// Opting in means an adapter has been checked for all three.
-    fn supports_remote(&self) -> bool {
-        false
-    }
 
     fn parse_transcript_line(
         &self,
@@ -556,42 +260,6 @@ pub trait AgentAdapter: Send + Sync {
             .collect()
     }
 
-    /// Resolves a transcript with adapter-owned session-tree state. Linear
-    /// adapters ignore the leaf and retain their existing resolver; tree-shaped
-    /// adapters override this to select the native active ancestry.
-    fn resolve_transcript_turns_at_leaf(
-        &self,
-        agent_id: &str,
-        source_index_offset: usize,
-        lines: &[String],
-        _native_leaf_id: Option<&str>,
-    ) -> Vec<Turn> {
-        self.resolve_transcript_turns(agent_id, source_index_offset, lines)
-    }
-
-    fn transcript_line_can_update_turn_status(&self, _line: &str) -> bool {
-        false
-    }
-
-    fn parse_transcript_lifecycle_event(&self, _line: &str) -> Option<TranscriptLifecycleEvent> {
-        None
-    }
-
-    /// Best-effort model id carried by a single transcript line, when the
-    /// adapter's native format records one (e.g. Claude `message.model` on
-    /// assistant turns). The transcript tailer uses this to fill in
-    /// `AgentInfo.model` for bare shell launches that never passed `--model`.
-    fn transcript_line_model(&self, _line: &str) -> Option<String> {
-        None
-    }
-
-    /// Display-only command cwd carried by a native transcript record. Only
-    /// adapters whose formats expose an authoritative cwd opt in; lifecycle
-    /// behavior continues to use the agent's session-owned launch workspace.
-    fn transcript_workspace_observation(&self, _line: &str) -> Option<WorkspaceObservation> {
-        None
-    }
-
     fn supports_fork(&self) -> bool {
         false
     }
@@ -605,18 +273,6 @@ pub trait AgentAdapter: Send + Sync {
     fn supports_fork_at_message(&self) -> bool {
         false
     }
-
-    fn fork_pane(
-        &self,
-        _state: &AppState,
-        _source: &AgentInfo,
-        _use_worktree: bool,
-        _prompt: Option<&str>,
-    ) -> Result<(PaneInfo, AgentInfo), String> {
-        Err(FORK_UNSUPPORTED_ERROR.to_string())
-    }
-
-    fn composer_policy(&self) -> ComposerPolicy;
 }
 
 pub struct AdapterRegistry {
@@ -634,14 +290,6 @@ impl AdapterRegistry {
             .find(|adapter| adapter.id() == adapter_id)
             .map(|adapter| adapter.as_ref())
             .ok_or_else(|| format!("unknown agent adapter '{adapter_id}'"))
-    }
-
-    pub fn shell_commands(&self, remote: bool) -> Vec<ShellCommandIntegration> {
-        self.adapters
-            .iter()
-            .filter(|adapter| !remote || adapter.supports_remote())
-            .flat_map(|adapter| adapter.shell_commands())
-            .collect()
     }
 
     pub fn metadata(&self) -> Vec<AdapterMetadata> {
@@ -667,7 +315,6 @@ impl AdapterRegistry {
                     supports_research: adapter.supports_research(),
                     supports_recap_generation: matches!(adapter.id(), "claude" | "codex" | "grok"),
                     supports_fork_at_message: adapter.supports_fork_at_message(),
-                    supports_remote: adapter.supports_remote(),
                     configured_binary,
                     resolved_binary,
                     readiness: if installed {
@@ -738,7 +385,6 @@ pub struct AdapterMetadata {
     /// session head. Gates the transcript's per-message fork action, which is
     /// hidden rather than disabled for adapters without it.
     pub supports_fork_at_message: bool,
-    pub supports_remote: bool,
     /// Executable name/path from session.config.json after home expansion.
     pub configured_binary: String,
     /// Resolved executable used for launch, absent when it cannot be found.
@@ -851,38 +497,6 @@ fn run_adapter_probe(binary: &str, args: &[&str]) -> Result<ProbeOutput, String>
     let command = format!("{binary} {}", args.join(" "));
     let mut process = Command::new(binary);
     process.args(args);
-    run_adapter_probe_command(process, &command)
-}
-
-fn run_remote_adapter_probe(
-    host: &crate::host::Host,
-    binary: &str,
-    args: &[&str],
-) -> Result<ProbeOutput, String> {
-    let command = format!("{binary} {} on {}", args.join(" "), host.label());
-    let process = host.command(crate::host::RemoteCommand {
-        program: binary,
-        args: args.iter().map(|arg| (*arg).to_string()).collect(),
-        ..Default::default()
-    });
-    run_adapter_probe_command(process, &command)
-}
-
-fn run_remote_command_presence_probe(
-    host: &crate::host::Host,
-    program: &str,
-) -> Result<ProbeOutput, String> {
-    let command = format!("find {program} on {}", host.label());
-    let process = host.command(crate::host::RemoteCommand {
-        program: "sh",
-        args: vec![
-            "-c".to_string(),
-            "command -v \"$1\" >/dev/null 2>&1".to_string(),
-            "session-remote-probe".to_string(),
-            program.to_string(),
-        ],
-        ..Default::default()
-    });
     run_adapter_probe_command(process, &command)
 }
 
@@ -1075,73 +689,6 @@ fn probe_adapter_metadata(mut metadata: AdapterMetadata) -> AdapterMetadata {
     metadata
 }
 
-fn probe_remote_adapter_metadata(
-    mut metadata: AdapterMetadata,
-    host: &crate::host::Host,
-) -> AdapterMetadata {
-    metadata.checked_at = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .and_then(|duration| u64::try_from(duration.as_millis()).ok());
-    let binary = metadata.configured_binary.trim().to_string();
-    if binary.is_empty() {
-        metadata.resolved_binary = None;
-        metadata.readiness = AdapterReadiness::Missing;
-        metadata.research_readiness = AdapterReadiness::Error;
-        metadata.message = Some(format!(
-            "{} has no binary configured for {}.",
-            metadata.label,
-            host.label()
-        ));
-        return metadata;
-    }
-    metadata.resolved_binary = Some(binary.clone());
-    metadata.readiness = AdapterReadiness::Ready;
-    // This increment supports interactive remote terminals. Research still
-    // launches through a local SDK/transcript path and must not be advertised
-    // merely because the remote CLI itself is installed.
-    metadata.research_readiness = AdapterReadiness::Error;
-    metadata.message = Some("Remote terminal ready; Research remains local-only.".to_string());
-
-    let version_output =
-        match run_remote_adapter_probe(host, &binary, adapter_version_args(&metadata.id)) {
-            Ok(output) if output.success => output,
-            Ok(output) => {
-                metadata.readiness = AdapterReadiness::Error;
-                metadata.message = Some(first_probe_line(&output.text).unwrap_or_else(|| {
-                    format!(
-                        "{} version check failed on {}",
-                        metadata.label,
-                        host.label()
-                    )
-                }));
-                return metadata;
-            }
-            Err(err) => {
-                metadata.readiness = AdapterReadiness::Error;
-                metadata.message = Some(err);
-                return metadata;
-            }
-        };
-    metadata.version = first_probe_line(&version_output.text);
-
-    if let Some(args) = adapter_auth_args(&metadata.id) {
-        let probe = run_remote_adapter_probe(host, &binary, args);
-        (metadata.auth, metadata.auth_detail) = auth_probe_result(&metadata.id, args, probe);
-        if metadata.auth == AdapterAuthState::Unauthenticated {
-            metadata.readiness = AdapterReadiness::NeedsAuth;
-            metadata.message = metadata.login_command.as_ref().map(|command| {
-                format!(
-                    "{} is not signed in on {}. Run `{command}` in a remote shell and check again.",
-                    metadata.label,
-                    host.label()
-                )
-            });
-        }
-    }
-    metadata
-}
-
 /// Runs provider probes concurrently so one slow CLI consumes only its own
 /// timeout rather than serially delaying every status card and launcher.
 struct AdapterProbeCacheEntry {
@@ -1157,10 +704,9 @@ fn adapter_probe_cache() -> &'static Mutex<HashMap<String, AdapterProbeCacheEntr
     ADAPTER_PROBE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn adapter_probe_cache_key(metadata: &[AdapterMetadata], remote_id: Option<&str>) -> String {
-    let target = remote_id.unwrap_or("local");
+fn adapter_probe_cache_key(metadata: &[AdapterMetadata]) -> String {
     format!(
-        "{target}\n{}",
+        "local\n{}",
         metadata
             .iter()
             .map(|adapter| format!("{}={}", adapter.id, adapter.configured_binary))
@@ -1177,109 +723,26 @@ fn cached_adapter_metadata(key: &str) -> Option<Vec<AdapterMetadata>> {
 
 pub fn probe_adapter_metadata_for_config(
     config: &SessionConfig,
-    remote_target: Option<&crate::workspace::RemoteRef>,
     force: bool,
 ) -> Result<Vec<AdapterMetadata>, String> {
-    let mut base = adapter_registry(config).metadata();
-    let remote_cache_target = remote_target.map(|remote| format!("{}@{}", remote.id, remote.host));
-    let key = adapter_probe_cache_key(&base, remote_cache_target.as_deref());
+    let base = adapter_registry(config).metadata();
+    let key = adapter_probe_cache_key(&base);
     if !force && let Some(metadata) = cached_adapter_metadata(&key) {
         return Ok(metadata);
     }
 
-    let metadata: Vec<AdapterMetadata> = if let Some(remote) = remote_target {
-        let remote_id = remote.id.as_str();
-        let remote_label = remote.label.as_str();
-        let checked_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()
-            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
-        for adapter in &mut base {
-            adapter.target = AdapterTargetMetadata {
-                kind: "remote".to_string(),
-                id: Some(remote_id.to_string()),
-                label: remote_label.to_string(),
-            };
-            adapter.instance_id = format!("remote:{remote_id}:{}", adapter.id);
-            adapter.checked_at = checked_at;
-            // The local resolution does not apply on the remote host.
-            adapter.update_command =
-                adapter_update_command(&adapter.id, &adapter.configured_binary);
-            if !adapter.supports_remote {
-                adapter.readiness = AdapterReadiness::Error;
-                adapter.research_readiness = AdapterReadiness::Error;
-                adapter.message = Some(format!(
-                    "{} cannot run on remote '{}' yet; its integration currently requires local paths and hooks.",
-                    adapter.label, remote_label
-                ));
-            } else {
-                // Establish a remote-safe fallback before the probe thread is
-                // spawned. If that worker panics, never leak the registry's
-                // local PATH/auth result into a remote launcher.
-                adapter.resolved_binary = None;
-                adapter.readiness = AdapterReadiness::Error;
-                adapter.research_readiness = AdapterReadiness::Error;
-                adapter.message = Some(format!(
-                    "Could not verify {} on remote '{}'.",
-                    adapter.label, remote_label
-                ));
-            }
-        }
-        // Probe the group's snapshotted binding, not the current saved-remote
-        // entry. Editing or removing a config entry must never silently move or
-        // disable an existing workspace that still points at its original host.
-        let host = crate::host::for_group(Some(remote));
-        let session_cli_error = host
-            .remote()
-            .map(|target| target.session_cli.as_str())
-            .and_then(|session_cli| match run_remote_command_presence_probe(&host, session_cli) {
-                Ok(output) if output.success => None,
-                Ok(_) => Some(format!(
-                    "Remote '{}' does not provide the configured sessionCli '{}'; install session-cli there or update the remote configuration.",
-                    remote_label, session_cli
-                )),
-                Err(err) => Some(err),
-            });
-        let handles = base
-            .into_iter()
-            .map(|metadata| {
-                if !metadata.supports_remote {
-                    return (metadata, None);
-                }
-                if let Some(err) = session_cli_error.as_ref() {
-                    let mut metadata = metadata;
-                    metadata.message = Some(err.clone());
-                    return (metadata, None);
-                }
-                let fallback = metadata.clone();
-                let host = host.clone();
-                let handle =
-                    std::thread::spawn(move || probe_remote_adapter_metadata(metadata, &host));
-                (fallback, Some(handle))
-            })
-            .collect::<Vec<_>>();
-        handles
-            .into_iter()
-            .map(|(fallback, handle)| {
-                handle
-                    .and_then(|handle| handle.join().ok())
-                    .unwrap_or(fallback)
-            })
-            .collect()
-    } else {
-        let handles = base
-            .into_iter()
-            .map(|metadata| {
-                let fallback = metadata.clone();
-                let handle = std::thread::spawn(move || probe_adapter_metadata(metadata));
-                (fallback, handle)
-            })
-            .collect::<Vec<_>>();
-        handles
-            .into_iter()
-            .map(|(fallback, handle)| handle.join().unwrap_or(fallback))
-            .collect()
-    };
+    let handles = base
+        .into_iter()
+        .map(|metadata| {
+            let fallback = metadata.clone();
+            let handle = std::thread::spawn(move || probe_adapter_metadata(metadata));
+            (fallback, handle)
+        })
+        .collect::<Vec<_>>();
+    let metadata: Vec<AdapterMetadata> = handles
+        .into_iter()
+        .map(|(fallback, handle)| handle.join().unwrap_or(fallback))
+        .collect();
     if let Ok(mut cache) = adapter_probe_cache().lock() {
         cache.insert(
             key,
@@ -1296,7 +759,7 @@ pub fn ensure_adapter_ready_for_research(
     config: &SessionConfig,
     adapter_id: &str,
 ) -> Result<AdapterMetadata, String> {
-    let metadata = probe_adapter_metadata_for_config(config, None, false)?
+    let metadata = probe_adapter_metadata_for_config(config, false)?
         .into_iter()
         .find(|metadata| metadata.id == adapter_id)
         .ok_or_else(|| format!("unknown agent adapter '{adapter_id}'"))?;
@@ -1346,21 +809,6 @@ pub fn adapter_supports_fork_at_message(config: &SessionConfig, adapter_id: &str
         .is_ok_and(|adapter| adapter.supports_fork_at_message())
 }
 
-/// Identifies the message a fork branches from. Carries every anchor the
-/// frontend already has on `Turn` because the adapters key off different ones:
-/// Claude walks the `parentUuid` chain, Codex cuts positionally on the line
-/// index. Each adapter validates the field it needs and ignores the rest.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageAnchor {
-    /// Native record uuid of the message being forked from.
-    pub native_id: Option<String>,
-    /// The message's parent uuid — the last record the fork keeps.
-    pub parent_native_id: Option<String>,
-    /// Transcript line index of the message being forked from.
-    pub source_index: usize,
-}
-
 /// Mints a random v4 UUID. Both adapters name synthesized sessions this way:
 /// Claude derives the session id from the transcript filename, and Codex parses
 /// it out of the `rollout-<timestamp>-<id>.jsonl` convention.
@@ -1388,7 +836,7 @@ pub(crate) fn new_uuid_v4() -> Result<String, String> {
 /// this preference to resolve adapter-specific composer affordances.
 pub fn default_fork_adapter(config: &SessionConfig) -> Result<String, String> {
     let base = adapter_registry(config).metadata();
-    let key = adapter_probe_cache_key(&base, None);
+    let key = adapter_probe_cache_key(&base);
     let metadata = cached_adapter_metadata(&key).unwrap_or(base);
     metadata
         .iter()
@@ -1406,150 +854,6 @@ pub fn default_fork_adapter(config: &SessionConfig) -> Result<String, String> {
         .ok_or_else(|| "no installed agent supports research follow-ups".to_string())
 }
 
-pub const FORK_UNSUPPORTED_ERROR: &str = "Fork is not supported for this agent adapter";
-
-/// Forks directly into a dedicated agent pane. Research runs use this path so
-/// their transient execution panes retain the existing lifecycle; the queue
-/// engine also uses it when dispatching fork-delivery turns without a calling
-/// pane to authenticate. Ordinary UI/control-socket forks go through
-/// [`fork_agent_in_shell`] instead.
-pub fn fork_agent_source(
-    state: &AppState,
-    source: &AgentInfo,
-    use_worktree: bool,
-    prompt: Option<&str>,
-) -> Result<PaneInfo, String> {
-    fork_agent_source_with_placement(state, source, use_worktree, prompt)
-}
-
-fn fork_agent_source_with_placement(
-    state: &AppState,
-    source: &AgentInfo,
-    use_worktree: bool,
-    prompt: Option<&str>,
-) -> Result<PaneInfo, String> {
-    let conversation_history = match state.capture_conversation_history(source, None) {
-        Ok(history) => history,
-        Err(err) => {
-            eprintln!(
-                "session: could not capture conversation history for fork of {}: {err}",
-                source.id
-            );
-            None
-        }
-    };
-    let (pane, agent) = adapter_registry(state.config())
-        .get(&source.adapter)
-        .map_err(|_| FORK_UNSUPPORTED_ERROR.to_string())?
-        .fork_pane(state, source, use_worktree, prompt)?;
-    if let Some(history) = conversation_history
-        && let Err(err) = state.record_conversation_history(&agent, history)
-    {
-        eprintln!(
-            "session: could not record conversation history for fork {}: {err}",
-            agent.id
-        );
-    }
-    finish_fork_spawn(state, source, pane, agent)
-}
-
-fn finish_fork_spawn(
-    state: &AppState,
-    source: &AgentInfo,
-    pane: PaneInfo,
-    agent: AgentInfo,
-) -> Result<PaneInfo, String> {
-    if let Some(source_pane) = source.pane_id.as_deref() {
-        // Placement is cosmetic and the fork has already spawned. The source
-        // pane can legitimately vanish between the fork and this point —
-        // research retirement closes a completed parent pane the moment its
-        // node completes, exactly when follow-ups become possible — and
-        // propagating the placement error would report failure for a live
-        // pane+agent the caller then can neither see nor clean up. Leave the
-        // new pane at the end of the order instead.
-        let placed = state.place_pane_after(&pane.id, source_pane);
-        if let Err(err) = placed {
-            eprintln!(
-                "session: fork of agent {} spawned but could not be placed relative to pane {source_pane}: {err}",
-                source.id
-            );
-        }
-    }
-    state.emit(SessionEvent::new(
-        "agent.forked",
-        Some(pane.id.clone()),
-        Some(agent.id.clone()),
-        json!({
-            "agent": agent,
-            "pane": pane,
-            "sourceAgentId": source.id,
-            "sourcePaneId": source.pane_id,
-        }),
-    ));
-    Ok(pane)
-}
-
-/// Starts a fresh session of `source`'s adapter in the source's own directory,
-/// launched with `prompt` as its first message, and places the new pane after the
-/// source. Used by the queue engine for new-session-delivery turns. Emits
-/// `agent.spawned` with source "queue" so the frontend refreshes its pane list
-/// (unlike launcher spawns, no frontend caller holds the returned pane).
-pub fn spawn_sibling_agent_session(
-    state: &AppState,
-    source: &AgentInfo,
-    prompt: &str,
-) -> Result<PaneInfo, String> {
-    let pane = adapter_registry(state.config())
-        .get(&source.adapter)?
-        .launch(
-            state,
-            SpawnAgentRequest {
-                adapter_id: source.adapter.clone(),
-                prompt: prompt.to_string(),
-                group_id: Some(source.group_id.clone()),
-                // Run in the source's directory (no worktree), like an in-place fork.
-                base_repo: Some(source.worktree_dir.clone()),
-                base_ref: Some("HEAD".to_string()),
-                cwd: None,
-                model: source.model.clone(),
-                initial_size: None,
-                use_worktree: Some(false),
-                options: Value::Null,
-                parent_id: Some(source.id.clone()),
-                resume_session_id: None,
-                fork_session: false,
-            },
-        )?;
-    if let Some(source_pane) = source.pane_id.as_deref() {
-        // Best-effort, like fork placement above: the session has already
-        // spawned, and a source pane closed in the meantime must not turn a
-        // live pane into a reported failure.
-        if let Err(err) = state.place_pane_after(&pane.id, source_pane) {
-            eprintln!(
-                "session: sibling session for agent {} spawned but could not be placed after pane {source_pane}: {err}",
-                source.id
-            );
-        }
-    }
-    let agent = state.agent_by_pane(&pane.id)?;
-    state.emit(SessionEvent::new(
-        "agent.spawned",
-        Some(pane.id.clone()),
-        agent.as_ref().map(|agent| agent.id.clone()),
-        json!({ "agent": agent, "pane": pane, "source": "queue" }),
-    ));
-    Ok(pane)
-}
-
-pub fn agent_composer_policy(
-    state: &AppState,
-    agent: &AgentInfo,
-) -> Result<ComposerPolicy, String> {
-    Ok(adapter_registry(state.config())
-        .get(&agent.adapter)?
-        .composer_policy())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1560,7 +864,6 @@ mod tests {
 
     fn test_config() -> SessionConfig {
         SessionConfig {
-            remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/session-adapter-tests"),
             socket_path: PathBuf::from("/tmp/session-adapter-tests.sock"),
             adapters: AdapterConfigs {
@@ -1603,24 +906,6 @@ mod tests {
         assert!(!metadata[1].default);
         assert_eq!(metadata[2].id, "grok");
         assert!(!metadata[2].default);
-        assert!(
-            metadata
-                .iter()
-                .find(|adapter| adapter.id == "claude")
-                .is_some_and(|adapter| adapter.supports_remote)
-        );
-        assert!(
-            metadata
-                .iter()
-                .filter(|adapter| !matches!(adapter.id.as_str(), "claude" | "codex"))
-                .all(|adapter| !adapter.supports_remote)
-        );
-        assert!(
-            metadata
-                .iter()
-                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex"))
-                .all(|adapter| adapter.supports_remote)
-        );
         assert!(
             metadata
                 .iter()
@@ -1768,240 +1053,5 @@ mod tests {
             detail.as_deref(),
             Some("The sign-in status check failed: `codex login status` timed out.")
         );
-    }
-
-    #[test]
-    fn remote_prerequisite_probe_treats_the_program_as_one_opaque_argument() {
-        let host = crate::host::Host::Local;
-        assert!(
-            run_remote_command_presence_probe(&host, "/bin/sh")
-                .unwrap()
-                .success
-        );
-        assert!(
-            !run_remote_command_presence_probe(&host, "/definitely missing/session-cli")
-                .unwrap()
-                .success
-        );
-    }
-
-    #[test]
-    fn remote_probe_never_reuses_local_provider_readiness() {
-        let config = test_config();
-        let remote = crate::config::SavedRemote {
-            host: "127.0.0.1".to_string(),
-            label: Some("Build host".to_string()),
-            multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: None,
-        }
-        .to_ref("build-host");
-
-        let metadata = probe_adapter_metadata_for_config(&config, Some(&remote), true)
-            .expect("remote metadata");
-        assert_eq!(metadata.len(), 3);
-        assert!(metadata.iter().all(|adapter| {
-            adapter.target.kind == "remote" && adapter.target.id.as_deref() == Some("build-host")
-        }));
-        assert!(
-            metadata
-                .iter()
-                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex"))
-                .all(|adapter| adapter.readiness == AdapterReadiness::Error
-                    && adapter
-                        .message
-                        .as_deref()
-                        .is_some_and(|message| !message.contains("was not found")))
-        );
-        assert!(
-            metadata
-                .iter()
-                .filter(|adapter| !matches!(adapter.id.as_str(), "claude" | "codex"))
-                .all(|adapter| adapter.readiness == AdapterReadiness::Error
-                    && adapter
-                        .message
-                        .as_deref()
-                        .is_some_and(|message| message.contains("cannot run on remote")))
-        );
-    }
-
-    #[test]
-    fn remote_shell_wrappers_only_include_supported_adapters() {
-        let registry = adapter_registry(&test_config());
-        let local = registry.shell_commands(false);
-        let remote = registry.shell_commands(true);
-        for adapter in &registry.adapters {
-            for command in adapter.shell_commands() {
-                assert!(
-                    local
-                        .iter()
-                        .any(|entry| entry.command_name == command.command_name)
-                );
-                assert_eq!(
-                    remote
-                        .iter()
-                        .any(|entry| entry.command_name == command.command_name),
-                    adapter.supports_remote(),
-                    "{}",
-                    command.command_name
-                );
-            }
-        }
-    }
-
-    fn session_agent(id: &str, pane_id: Option<&str>, dir: &str, session: &str) -> AgentInfo {
-        AgentInfo {
-            id: id.to_string(),
-            group_id: "group-1".to_string(),
-            adapter: "claude".to_string(),
-            worktree_dir: dir.to_string(),
-            branch: None,
-            active_workspace: None,
-            pane_id: pane_id.map(ToString::to_string),
-            orphaned_queue_pane_id: None,
-            session_id: Some(session.to_string()),
-            transcript_path: None,
-            status: AgentStatus::Idle,
-            model: None,
-            effort: None,
-            approval_mode: None,
-            parent_id: None,
-            fork_point: None,
-            root_session_id: None,
-            thread_id: None,
-            branch_id: None,
-            native_leaf_id: None,
-            paused: false,
-            created_at: 1,
-        }
-    }
-
-    #[test]
-    fn normalize_agent_model_maps_claude_families_and_keeps_unknown_ids() {
-        assert_eq!(
-            normalize_agent_model("claude-fable-5").as_deref(),
-            Some("fable")
-        );
-        assert_eq!(
-            normalize_agent_model("claude-opus-4-7").as_deref(),
-            Some("opus")
-        );
-        assert_eq!(
-            normalize_agent_model("claude-3-5-sonnet-20241022").as_deref(),
-            Some("sonnet")
-        );
-        assert_eq!(normalize_agent_model("Fable").as_deref(), Some("fable"));
-        assert_eq!(
-            normalize_agent_model("gpt-5.6-sol").as_deref(),
-            Some("gpt-5.6-sol")
-        );
-        assert_eq!(normalize_agent_model("<synthetic>"), None);
-        assert_eq!(normalize_agent_model("  "), None);
-    }
-
-    #[test]
-    fn claude_native_transcript_line_exposes_assistant_model() {
-        let assistant = r#"{"type":"assistant","message":{"role":"assistant","model":"claude-fable-5","content":[{"type":"text","text":"hi"}]}}"#;
-        assert_eq!(
-            model_from_claude_native_transcript_line(assistant).as_deref(),
-            Some("claude-fable-5")
-        );
-        let user =
-            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}"#;
-        assert_eq!(model_from_claude_native_transcript_line(user), None);
-        let synthetic = r#"{"type":"assistant","message":{"role":"assistant","model":"<synthetic>","content":[]}}"#;
-        assert_eq!(
-            model_from_claude_native_transcript_line(synthetic).as_deref(),
-            Some("<synthetic>")
-        );
-    }
-
-    #[test]
-    fn codex_transcript_line_exposes_turn_context_model() {
-        let turn_context =
-            r#"{"type":"turn_context","payload":{"model":"gpt-5.6-sol","turn_id":"t1"}}"#;
-        assert_eq!(
-            model_from_codex_transcript_line(turn_context).as_deref(),
-            Some("gpt-5.6-sol")
-        );
-        let world = r#"{"type":"world_state","payload":{"state":{"model":"gpt-5.4"}}}"#;
-        assert_eq!(
-            model_from_codex_transcript_line(world).as_deref(),
-            Some("gpt-5.4")
-        );
-        let other = r#"{"type":"event_msg","payload":{"type":"task_started"}}"#;
-        assert_eq!(model_from_codex_transcript_line(other), None);
-    }
-
-    #[test]
-    fn maybe_record_agent_model_updates_once_and_normalizes() {
-        let state = AppState::new(test_config());
-        let mut agent = session_agent("agent-1", Some("pane-1"), "/work", "sess-1");
-        agent.model = None;
-        state.insert_agent(agent).unwrap();
-
-        let updated = maybe_record_agent_model(&state, "agent-1", "claude-fable-5")
-            .unwrap()
-            .expect("should update empty model");
-        assert_eq!(updated.model.as_deref(), Some("fable"));
-
-        // Same normalized value is a no-op.
-        assert!(
-            maybe_record_agent_model(&state, "agent-1", "claude-fable-5")
-                .unwrap()
-                .is_none()
-        );
-        // Synthetic placeholders are ignored.
-        assert!(
-            maybe_record_agent_model(&state, "agent-1", "<synthetic>")
-                .unwrap()
-                .is_none()
-        );
-        // A real model change (e.g. /model) updates again.
-        let switched = maybe_record_agent_model(&state, "agent-1", "claude-opus-5")
-            .unwrap()
-            .expect("should update changed model");
-        assert_eq!(switched.model.as_deref(), Some("opus"));
-    }
-
-    #[test]
-    fn shell_fork_lineage_links_a_fresh_agent_without_reusing_the_source() {
-        let state = AppState::new(test_config());
-        let mut source = session_agent(
-            "source-agent",
-            Some("pane-source"),
-            "/work",
-            "source-session",
-        );
-        source.transcript_path = Some("/work/source.jsonl".to_string());
-        state.insert_agent(source).unwrap();
-        let mut fork = session_agent("fork-agent", None, "/work", "placeholder");
-        fork.session_id = None;
-        state.insert_agent(fork.clone()).unwrap();
-
-        let fork =
-            record_shell_fork_lineage(&state, fork, "claude", Some("source-session"), "/work")
-                .unwrap();
-
-        assert_eq!(fork.parent_id.as_deref(), Some("source-agent"));
-        assert_eq!(fork.fork_point.as_deref(), Some("source-session"));
-        assert_eq!(fork.root_session_id.as_deref(), Some("source-session"));
-        assert_eq!(
-            state
-                .agent("source-agent")
-                .unwrap()
-                .unwrap()
-                .session_id
-                .as_deref(),
-            Some("source-session")
-        );
-
-        let mut path_fork = session_agent("path-fork-agent", None, "/work", "placeholder");
-        path_fork.session_id = None;
-        state.insert_agent(path_fork.clone()).unwrap();
-        let path_fork =
-            record_shell_fork_lineage(&state, path_fork, "claude", Some("source.jsonl"), "/work")
-                .unwrap();
-        assert_eq!(path_fork.parent_id.as_deref(), Some("source-agent"));
     }
 }

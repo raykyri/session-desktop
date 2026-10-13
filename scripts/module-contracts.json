@@ -4,24 +4,15 @@
     "src/types.ts": {
       "reason": "Backend wire and persisted record mirrors remain explicit compatibility contracts even when current frontend consumers do not use every DTO.",
       "names": [
+        "ActiveWorkspace",
         "AgentReadiness",
-        "ArtifactInfo",
-        "PaneKind",
         "PostReplyAuthor",
         "PromptLibrary",
         "PromptScope",
-        "RemoteConnectionState",
-        "RemoteMultiplexer",
-        "RemoteRef",
-        "RemoteSessionIdentity",
         "ResearchDocumentNode",
         "ResearchExchangeNode",
         "ResearchPostNode",
         "SavedPrompt",
-        "ShellAgentJobInfo",
-        "ShellAgentJobState",
-        "TranscriptCopyPayload",
-        "TranscriptHookEvent",
         "UserMessage"
       ]
     }

@@ -1,7 +1,5 @@
 import type { TweetSnapshot } from "./lib/tweets";
 
-export type PaneKind = "shell" | "agent";
-
 export interface RuntimeConfig {
   workspaceRoot: string;
   socketPath: string;
@@ -50,7 +48,6 @@ export interface AgentAdapterMetadata {
    * head. Gates the transcript's per-message fork action, which is hidden
    * rather than disabled for adapters without it. */
   supportsForkAtMessage: boolean;
-  supportsRemote: boolean;
   configuredBinary: string;
   resolvedBinary: string | null;
   readiness: AgentReadiness;
@@ -68,7 +65,7 @@ export interface AgentAdapterMetadata {
   updateCommand: string | null;
   instanceId: string;
   target: {
-    kind: "local" | "remote";
+    kind: "local";
     id: string | null;
     label: string;
   };
@@ -80,86 +77,6 @@ export type AgentReadiness =
   | "needsAuth"
   | "unsupportedVersion"
   | "error";
-
-export interface PaneInfo {
-  id: string;
-  title: string;
-  /** Last sanitized OSC 0/2 title reported by the terminal program. */
-  lastOscTitle?: string | null;
-  kind: PaneKind;
-  agentId?: string | null;
-  groupId: string;
-  cwd: string;
-  /** Display-only workspace observation for shell tabs (checkout kind, git
-   * root, branch), resolved by the backend at spawn and on each shell prompt.
-   * Agent tabs leave this unset and use AgentInfo.activeWorkspace instead. */
-  activeWorkspace?: ActiveWorkspace | null;
-  /** Durable coordinates of a session-owned tmux session on a remote host. */
-  remoteSession?: RemoteSessionIdentity | null;
-  /** Health of the disposable SSH attachment to a durable remote session. */
-  remoteConnection?: RemoteConnectionInfo | null;
-  /** SSH destination for a client session opened inside a local (or other)
-   * group. Restart re-runs `ssh` to this host. */
-  sshTarget?: string | null;
-  cols: number;
-  rows: number;
-  status: "starting" | "running" | "exited" | "killed" | "failed";
-  // Wall-clock millis when the pane was last focused. Stamped by the backend at
-  // spawn and on activation; feeds the group spawn-cwd heuristic.
-  lastActiveAt?: number;
-  // True for panes recreated from persisted state after a Session restart.
-  recovered?: boolean;
-  // Deprecated compatibility field. Flat tab layouts always use zero.
-  depth?: number;
-}
-
-export interface RemoteSessionIdentity {
-  remoteId: string;
-  tmuxServer: string;
-  tmuxSession: string;
-  supportDir?: string;
-}
-
-export type RemoteConnectionState =
-  | "connecting"
-  | "checking"
-  | "connected"
-  | "reconnecting"
-  | "disconnected"
-  | "failed";
-
-export interface RemoteConnectionInfo {
-  state: RemoteConnectionState;
-  startupStartedAt?: number | null;
-  startupTimings?: Record<string, number>;
-  hookHealth?: "checking" | "healthy" | "authenticationFailed" | "unavailable" | null;
-  message?: string | null;
-  stage?: string | null;
-  reason?: string | null;
-  attempt?: number;
-  nextRetryAt?: number;
-  disconnectedAt?: number;
-  lastConnectedAt?: number;
-  lastVerifiedAt?: number;
-  recoveryDurationMs?: number;
-  recoveryAction?: string | null;
-  sessionExists?: boolean | null;
-}
-
-export type RemoteMultiplexer = "tmux" | "herdr";
-
-/** The remote host a group is bound to. Mirrors Rust's `RemoteRef`. */
-export interface RemoteRef {
-  id: string;
-  label: string;
-  host: string;
-  multiplexer: RemoteMultiplexer;
-  /** How to invoke the Session CLI on that host; defaults to `session-cli`. */
-  sessionCli?: string | null;
-  /** Where agent worktrees live there. A group's `managedDir` is always local,
-   * so a remote group needs somewhere on its own machine to put them. */
-  workspaceRoot?: string | null;
-}
 
 export interface GroupInfo {
   id: string;
@@ -174,7 +91,6 @@ export interface GroupInfo {
   collapsed: boolean;
   scope: "terminal" | "research";
   importedResearchArchiveId?: string | null;
-  remote?: RemoteRef | null;
   agents: string[];
 }
 
@@ -220,28 +136,6 @@ export interface ActiveWorkspace {
   kind: "directory" | "gitCheckout" | "mainCheckout" | "linkedWorktree";
   source: "session" | "claude" | "codex";
   managedBySession: boolean;
-}
-
-/** One artifact-tray entry: a file or loopback URL opened from an agent pane via
- * `session open`. File artifacts carry `path` (canonical, absolute) and are re-opened
- * through `browserOpenLocalPath`, which mints a fresh file-server URL; URL
- * artifacts carry the loopback `url` directly. */
-export interface ArtifactInfo {
-  id: string;
-  groupId: string | null;
-  paneId: string;
-  path?: string | null;
-  url?: string | null;
-  createdAt: number;
-}
-
-export type ShellAgentJobState = "foreground" | "backgrounded" | "stopped";
-
-export interface ShellAgentJobInfo {
-  jobId: string;
-  agentId: string;
-  paneId: string;
-  state: ShellAgentJobState;
 }
 
 export type ResearchNodeStatus =
@@ -696,25 +590,6 @@ export interface PromptLibrary {
   // False when the workspace root is the home directory, making the two scopes
   // one folder — the UI then collapses to a single Global section.
   hasProjectScope: boolean;
-}
-
-export interface TranscriptHookEvent {
-  type: string;
-  paneId?: string | null;
-  agentId: string;
-  hookEvent: string;
-  payload: unknown;
-  timestamp: number;
-}
-
-export interface TranscriptCopyPayload {
-  version: 1;
-  exportedAt: string;
-  agent: AgentInfo;
-  pane: PaneInfo;
-  transcriptText: string;
-  turns: Turn[];
-  hooks: TranscriptHookEvent[];
 }
 
 export interface SessionEvent {

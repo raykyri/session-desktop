@@ -8,7 +8,6 @@ import {
   agentCanAttemptResearch,
   agentResearchState,
   agentSetupIntro,
-  agentSetupMenuDetail,
   agentSetupStatusLabel,
   agentSetupSteps,
   agentSetupSummary,
@@ -32,7 +31,6 @@ function adapter(
     supportsResearch: true,
     supportsRecapGeneration: true,
     supportsForkAtMessage: true,
-    supportsRemote: false,
     configuredBinary: id,
     resolvedBinary: readiness === "missing" ? null : `/bin/${id}`,
     readiness,
@@ -172,22 +170,6 @@ test("the sidebar summary counts agents the way the setup dialog does", () => {
   );
 });
 
-test("a remote agent's menu detail names its host", () => {
-  const local = checked("claude", "ready");
-  // A remote probe reports the CLI itself but never research readiness:
-  // research runs locally.
-  const remote: AgentAdapterMetadata = {
-    ...local,
-    researchReadiness: "error",
-    message: "Remote terminal ready; Research remains local-only.",
-    instanceId: "remote:devbox:claude",
-    target: { kind: "remote", id: "devbox", label: "devbox" },
-  };
-
-  assert.equal(agentSetupMenuDetail(local), "Signed in");
-  assert.equal(agentSetupMenuDetail(remote), "Research unavailable · devbox");
-});
-
 // The research-readiness matrix: sign-in evidence, general CLI readiness and
 // research readiness are separate inputs, and only verified sign-in with
 // research readiness counts as set up.
@@ -262,24 +244,22 @@ test("an unsupported research version stays an update, even when signed in", () 
 
 test("an agent that cannot run research never counts as ready for research", () => {
   for (const auth of ["authenticated", "unknown"] as const) {
-    const remote: AgentAdapterMetadata = {
+    const unavailable: AgentAdapterMetadata = {
       ...checked("codex", "ready"),
       auth,
       researchReadiness: "error",
-      message: "Remote terminal ready; Research remains local-only.",
-      instanceId: "remote:devbox:codex",
-      target: { kind: "remote", id: "devbox", label: "devbox" },
+      message: "The research runtime could not start.",
     };
-    assert.equal(agentResearchState(remote), "researchUnavailable");
-    assert.equal(adapterSetupIsComplete(remote), false);
-    assert.equal(agentCanAttemptResearch(remote), false);
-    assert.equal(agentSetupStatusLabel(remote), "Research unavailable");
-    assert.equal(agentSetupIntro([remote]).readyCount, 0);
-    assert.equal(agentSetupSummary([remote], null).text, "Set up an agent");
-    const steps = agentSetupSteps(remote);
+    assert.equal(agentResearchState(unavailable), "researchUnavailable");
+    assert.equal(adapterSetupIsComplete(unavailable), false);
+    assert.equal(agentCanAttemptResearch(unavailable), false);
+    assert.equal(agentSetupStatusLabel(unavailable), "Research unavailable");
+    assert.equal(agentSetupIntro([unavailable]).readyCount, 0);
+    assert.equal(agentSetupSummary([unavailable], null).text, "Set up an agent");
+    const steps = agentSetupSteps(unavailable);
     assert.equal(steps[2].title, "Research support");
     assert.equal(steps[2].done, false);
-    assert.equal(steps[2].hint, "Remote terminal ready; Research remains local-only.");
+    assert.equal(steps[2].hint, "The research runtime could not start.");
   }
   const noRuntime = { ...checked("codex", "ready"), supportsResearch: false };
   assert.equal(agentResearchState(noRuntime), "researchUnavailable");

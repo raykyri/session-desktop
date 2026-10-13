@@ -11,7 +11,6 @@ import type {
   GithubDeviceLogin,
   GithubLoginPoll,
   GroupInfo,
-  PaneInfo,
   SessionEvent,
   ResearchBranchRemoval,
   RecentResearchQuery,
@@ -42,9 +41,8 @@ export function getRuntimeConfig() {
 
 
 
-export function probeAgentAdapters(options?: { groupId?: string | null; force?: boolean }) {
+export function probeAgentAdapters(options?: { force?: boolean }) {
   return invoke<RuntimeConfig["adapters"]>("probe_agent_adapters", {
-    groupId: options?.groupId ?? null,
     force: options?.force ?? false,
   });
 }
@@ -96,10 +94,6 @@ export function setShowHideShortcut(accelerator: string | null) {
 
 export function setShowHideShortcutCaptureActive(active: boolean) {
   return invoke<ShowHideShortcutSetting>("show_hide_shortcut_capture_set", { active });
-}
-
-export function listPanes() {
-  return invoke<PaneInfo[]>("list_panes");
 }
 
 export function listGroups() {
@@ -807,11 +801,6 @@ export function setNativeBrowserBackground(red: number, green: number, blue: num
   return nativeBrowserBackgroundUpdate;
 }
 
-// Records the focused pane so the backend can pick a group's most-recently-active
-// shell pane when resolving a spawn cwd. Best-effort; failures are ignored.
-export function activatePane(paneId: string) {
-  return invoke<void>("pane_activate", { paneId });
-}
 
 
 export function confirmAppExit() {

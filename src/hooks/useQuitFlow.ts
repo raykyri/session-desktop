@@ -1,23 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExitDialogState, ExitPreflightRequest } from "../appTypes";
 import { cancelResearchNode, confirmAppExit } from "../lib/api";
 import { waitForNextPaint } from "../lib/appHelpers";
 import { isActiveResearchStatus } from "../lib/researchChains";
 import { nodeStatus } from "../lib/researchNodeTypes";
-import type { PaneInfo, ResearchNode } from "../types";
+import type { ResearchNode } from "../types";
 
 /**
  * Quitting: the backend's exit preflight request opens the Quit dialog when
- * panes or research runs are open, and confirming cancels the active research
- * runs before the app exits.
+ * research runs are active, and confirming cancels them before the app exits.
  */
 export function useQuitFlow({
-  panesRef,
   runningResearchCount,
   researchActivity,
   onError,
 }: {
-  panesRef: RefObject<PaneInfo[]>;
   runningResearchCount: number;
   researchActivity: ResearchNode[];
   onError: (message: string | null) => void;
@@ -32,18 +29,13 @@ export function useQuitFlow({
     if (!exitPreflightRequest) {
       return;
     }
-    // Quitting already warns that every tab, agent, and process will stop. Reusing
-    // the per-pane close checks here used to fork one or two `ps` probes for every
-    // ordinary pane, then discard the resulting dialog descriptions. With many tabs
-    // that delayed this generic confirmation by hundreds of milliseconds.
-    const paneCount = Math.max(exitPreflightRequest.paneCount, panesRef.current.length);
     const researchRunCount = Math.max(
       exitPreflightRequest.researchRunCount,
       runningResearchCount,
     );
     setExitPreflightRequest(null);
-    setExitDialog(paneCount > 0 || researchRunCount > 0 ? { paneCount, researchRunCount } : null);
-  }, [exitPreflightRequest, panesRef, runningResearchCount]);
+    setExitDialog(researchRunCount > 0 ? { researchRunCount } : null);
+  }, [exitPreflightRequest, runningResearchCount]);
 
   const confirmExit = useCallback(async () => {
     if (quittingRef.current) {
@@ -60,7 +52,7 @@ export function useQuitFlow({
         .filter((node) => isActiveResearchStatus(nodeStatus(node)))
         .map((node) => node.id);
       // Settled, not fail-fast: the activity snapshot can be moments stale, so
-      // a run that finished (and lost its pane) in the meantime rejects with
+      // a run that finished in the meantime rejects with
       // "not active" — which must not abort the quit. Runs whose cancel truly
       // failed are killed by app teardown and reconciled to Failed on the next
       // start, so proceeding is safe either way.

@@ -237,10 +237,6 @@ pub enum WorktreeLocation {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppPreferences {
-    /// Remotes created and managed through the settings UI. Explicit entries
-    /// in `session.config.json` remain authoritative on an id collision.
-    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub remotes: std::collections::BTreeMap<String, crate::config::SavedRemote>,
     /// Whether new and recovered shells run as login shells (sourcing the user's
     /// login profile files in addition to the interactive rc). Absent means the
     /// default, on — matching how terminal emulators launch shells.
@@ -289,7 +285,6 @@ pub struct AppPreferences {
 impl Default for AppPreferences {
     fn default() -> Self {
         Self {
-            remotes: std::collections::BTreeMap::new(),
             use_login_shell: None,
             worktree_location: None,
             show_hide_shortcut: None,
@@ -1393,34 +1388,6 @@ mod tests {
         let outcome = load_with_diagnostics(&root);
         assert!(outcome.warning.is_none());
         assert_eq!(outcome.state.global_drafts, drafts);
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn preferences_round_trip_saved_remotes() {
-        let root = temp_root();
-        let remote = crate::config::SavedRemote {
-            host: "user@devbox".to_string(),
-            label: Some("Dev box".to_string()),
-            workspace_root: Some("/srv/session".to_string()),
-            ..Default::default()
-        };
-        save_preferences(
-            &root,
-            &AppPreferences {
-                remotes: std::collections::BTreeMap::from([("devbox".to_string(), remote.clone())]),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        assert_eq!(
-            read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .remotes
-                .get("devbox"),
-            Some(&remote)
-        );
         fs::remove_dir_all(root).unwrap();
     }
 

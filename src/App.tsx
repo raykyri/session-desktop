@@ -128,10 +128,7 @@ import {
   ResearchTreeDeleteOfferDialog,
 } from "./components/research/ResearchTreeMenu";
 import { researchTreeContents, type ResearchTreeContents } from "./lib/researchTreeContents";
-import {
-  activatePane,
-  emptyResearchTrash,
-} from "./lib/api";
+import { emptyResearchTrash } from "./lib/api";
 import { researchTrashEntries, type ResearchTrashEntry } from "./lib/researchTrash";
 import { useResearchTrash } from "./hooks/useResearchTrash";
 import type {
@@ -201,9 +198,6 @@ function MainApp() {
     groups,
     setGroups,
     groupsRef,
-    panes,
-    panesRef,
-    setPanes: setPanesReconciled,
     setAgents,
     hydrateAgents,
   } = useSessionProcesses(settings.preventSleep);
@@ -267,21 +261,8 @@ function MainApp() {
     return () => window.cancelAnimationFrame(frame);
   }, [error]);
   const { appToast, showAppToast } = useAppToast();
-  const {
-    userNotifications,
-    handleUserNotificationRequested,
-    handleNotificationOpenPane,
-    dismissUserNotification,
-  } = useUserNotifications({
-    settings,
-    // No surface shows panes; opening a notification's source pane records
-    // it as the most recently active one, as selecting it did.
-    onOpenPane: (paneId) => {
-      if (panesRef.current.some((pane) => pane.id === paneId)) {
-        void activatePane(paneId).catch(() => {});
-      }
-    },
-  });
+  const { userNotifications, handleUserNotificationRequested, dismissUserNotification } =
+    useUserNotifications({ settings });
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
   const researchScope = useMemo(
@@ -313,8 +294,6 @@ function MainApp() {
     groups,
     setGroups,
     groupsRef,
-    panes,
-    panesRef,
     config,
     researchScope,
     changeResearchWorkspaceScope,
@@ -346,9 +325,8 @@ function MainApp() {
     setExitPreflightRequest,
     confirmExit,
     cancelExit,
-  } = useQuitFlow({ panesRef, runningResearchCount, researchActivity, onError: setError });
+  } = useQuitFlow({ runningResearchCount, researchActivity, onError: setError });
   const browser = useBrowserOverlays({
-    panes,
     researchTrees,
     archivedResearchTrees,
     activeOwnerId: activeResearchTreeId ? researchBrowserOwnerId(activeResearchTreeId) : null,
@@ -398,7 +376,7 @@ function MainApp() {
 
   useAppStartup({
     applySecondary: applyStoredPreferences,
-    applyInitial: async ({ runtimeConfig, existingGroups, existingPanes,
+    applyInitial: async ({ runtimeConfig, existingGroups,
       existingAgents, existingResearchTrees, existingResearchActivity,
       existingRecentActivity }, isCancelled) => {
       setConfig(runtimeConfig);
@@ -411,7 +389,6 @@ function MainApp() {
         groups: existingGroups,
       });
       if (!isCancelled()) {
-        setPanesReconciled(existingPanes);
         await restoreResearchSelection(isCancelled);
       }
     },
@@ -694,7 +671,6 @@ function MainApp() {
   });
 
   useSessionEvents({
-    setPanes: setPanesReconciled,
     setExitPreflightRequest,
     setAgents,
     setGroups,
@@ -1382,7 +1358,6 @@ function MainApp() {
       <UserNotificationStack
         notifications={userNotifications}
         onDismiss={dismissUserNotification}
-        onOpenPane={handleNotificationOpenPane}
       />
 
       {appToast ? (

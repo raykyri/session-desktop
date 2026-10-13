@@ -94,7 +94,6 @@ mod imp {
         fn session_native_support_human_browser_history_state(native_view: *mut c_void) -> i32;
         fn session_native_support_prepare_for_webview_reload() -> i32;
         fn session_native_support_should_claim_web_app_shortcut(
-            has_terminal_keyboard_owner: i32,
             responder_state: i32,
             iframe_fallback_eligible: i32,
         ) -> i32;
@@ -242,7 +241,6 @@ mod imp {
     }
 
     pub fn should_claim_web_app_shortcut(
-        has_terminal_keyboard_owner: bool,
         responder_state: i32,
         iframe_fallback_eligible: bool,
     ) -> bool {
@@ -251,7 +249,6 @@ mod imp {
         // helper linked from the same package as the native support bridge.
         unsafe {
             session_native_support_should_claim_web_app_shortcut(
-                i32::from(has_terminal_keyboard_owner),
                 responder_state,
                 i32::from(iframe_fallback_eligible),
             ) == 1
@@ -402,14 +399,6 @@ fn callback_string(pointer: *const std::ffi::c_char) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
-pub extern "C" fn session_native_support_system_sleep_changed(sleeping: i32) {
-    with_app_state(|state| {
-        crate::pty::remote_system_sleep_changed(state, sleeping != 0);
-    });
-}
-
-#[cfg(target_os = "macos")]
-#[unsafe(no_mangle)]
 pub extern "C" fn session_native_support_did_begin_interface_health_check() -> u64 {
     if !events_listener_ready() {
         return 0;
@@ -533,38 +522,21 @@ mod tests {
     }
 
     #[test]
-    fn swift_web_app_shortcut_routing_preserves_terminal_and_dom_ownership() {
+    fn swift_web_app_shortcut_routing_preserves_dom_ownership() {
         const OUTSIDE_WEB_VIEW: i32 = 0;
         const OUTER_WEB_VIEW: i32 = 1;
         const WEB_VIEW_DESCENDANT: i32 = 2;
         const HUMAN_BROWSER: i32 = 3;
 
-        for responder_state in [
-            OUTSIDE_WEB_VIEW,
-            OUTER_WEB_VIEW,
-            WEB_VIEW_DESCENDANT,
-            HUMAN_BROWSER,
-        ] {
-            for iframe_fallback_eligible in [false, true] {
-                assert!(!super::imp::should_claim_web_app_shortcut(
-                    true,
-                    responder_state,
-                    iframe_fallback_eligible
-                ));
-            }
-        }
         assert!(super::imp::should_claim_web_app_shortcut(
-            false,
             OUTSIDE_WEB_VIEW,
             false
         ));
         assert!(super::imp::should_claim_web_app_shortcut(
-            false,
             OUTER_WEB_VIEW,
             false
         ));
         assert!(!super::imp::should_claim_web_app_shortcut(
-            false,
             WEB_VIEW_DESCENDANT,
             false
         ));
@@ -572,7 +544,6 @@ mod tests {
         // be claimed natively: the host document's window-level handlers never
         // see keys delivered to the framed document.
         assert!(super::imp::should_claim_web_app_shortcut(
-            false,
             WEB_VIEW_DESCENDANT,
             true
         ));
@@ -580,7 +551,6 @@ mod tests {
         // responder nor its content descendants can deliver Session shortcuts to
         // the React window listener.
         assert!(super::imp::should_claim_web_app_shortcut(
-            false,
             HUMAN_BROWSER,
             false
         ));

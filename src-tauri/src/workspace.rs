@@ -1,9 +1,5 @@
-use crate::events::SessionEvent;
-use crate::host::{self, Host};
-use crate::persistence::{self, WorktreeLocation};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -18,8 +14,8 @@ static AGENT_WORKSPACE_CREATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mut
 static MANIFEST_TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Serializes research-workspace mutations against research launches. The
-/// folder-replace and remove commands make a compound decision — "no live
-/// panes, no active runs / no trees → commit" — that is not atomic under the
+/// folder-replace and remove commands make a compound decision — "no active
+/// runs / no trees → commit" — that is not atomic under the
 /// model lock alone: a tree or follow-up admitted between the check and the
 /// commit would either launch into the old directory or silently survive a
 /// removal. Launch admission (`create_research_tree` / `fork_research_node`)
@@ -30,7 +26,8 @@ pub fn lock_research_workspace_mutations() -> Result<std::sync::MutexGuard<'stat
         .map_err(|_| "research workspace mutation lock poisoned".to_string())
 }
 
-/// Which application mode owns a workspace and every pane launched into it.
+/// Which application mode owns a workspace. `Terminal` is the default for
+/// groups saved by builds that hosted terminal panes.
 /// Ownership is durable: callers must never infer it from a transient agent or
 /// research-node binding.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -41,75 +38,22 @@ pub enum WorkspaceScope {
     Research,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LaunchOrigin {
-    Terminal,
-    Research,
-}
-
-pub fn validate_launch_workspace(
-    state: &AppState,
-    group_id: Option<&str>,
-    origin: LaunchOrigin,
-) -> Result<Option<GroupInfo>, String> {
-    let Some(group_id) = group_id else {
-        return match origin {
-            LaunchOrigin::Terminal => Ok(None),
-            LaunchOrigin::Research => Err("research launch requires a workspace".to_string()),
-        };
-    };
+/// Checks that a research launch targets an available Research-scoped
+/// workspace.
+pub fn validate_launch_workspace(state: &AppState, group_id: &str) -> Result<GroupInfo, String> {
     let group = state
         .group(group_id)?
         .ok_or_else(|| format!("workspace {group_id} was not found"))?;
-    match origin {
-        LaunchOrigin::Terminal if group.scope != WorkspaceScope::Terminal => {
-            Err("ordinary agents cannot be launched in a research workspace".to_string())
-        }
-        LaunchOrigin::Research if group.scope != WorkspaceScope::Research => {
-            Err("research requires a Research-scoped workspace".to_string())
-        }
-        LaunchOrigin::Research if !Path::new(&group.dir).is_dir() => Err(format!(
+    if group.scope != WorkspaceScope::Research {
+        return Err("research requires a Research-scoped workspace".to_string());
+    }
+    if !Path::new(&group.dir).is_dir() {
+        return Err(format!(
             "research folder '{}' is unavailable; restore it at that path before launching another run",
             group.dir
-        )),
-        _ => Ok(Some(group)),
+        ));
     }
-}
-
-/// Which multiplexer manages a remote group's panes on its host.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RemoteMultiplexer {
-    /// The default because it is the one Session can currently drive.
-    #[default]
-    Tmux,
-    Herdr,
-}
-
-/// The remote host a group is bound to.
-///
-/// Created from a `remotes` entry in `session.config.json` and then snapshotted
-/// here, so editing that entry never moves a group whose worktrees already live
-/// on the old machine. `plan_to_spec` wraps this group's panes in ssh plus the
-/// named multiplexer; adapters opt in through `AgentAdapter::supports_remote`.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RemoteRef {
-    /// Stable identity of the saved remote this group was created against.
-    pub id: String,
-    /// Display label, e.g. the ssh-config alias.
-    pub label: String,
-    /// Connection target: an ssh-config alias or `user@host` string. Auth and
-    /// address resolution belong to the system `ssh` client, never to session.
-    pub host: String,
-    pub multiplexer: RemoteMultiplexer,
-    /// How to invoke the Session CLI on that host; defaults to `session-cli`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_cli: Option<String>,
-    /// Where agent worktrees live there. The group's `managed_dir` is always
-    /// local, so a remote group needs somewhere on its own machine to put them.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workspace_root: Option<String>,
+    Ok(group)
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -119,13 +63,9 @@ pub struct GroupInfo {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name_override: Option<String>,
-    /// User-facing working directory represented by this group. For a remote
-    /// group this is a path on the remote host, so it must only be validated
-    /// through the group-aware helpers below, never by a bare local stat.
+    /// User-facing working directory represented by this group.
     pub dir: String,
-    /// Session-owned storage for the group's manifest and any generated worktrees.
-    /// Always local, remote groups included: the manifest describes the group,
-    /// it does not live with the group's processes.
+    /// Session-owned storage for the group's manifest.
     pub managed_dir: String,
     pub base_repo: Option<String>,
     pub base_ref: Option<String>,
@@ -140,16 +80,10 @@ pub struct GroupInfo {
     /// finish cleanup after a crash without touching an unrelated archive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imported_research_archive_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub remote: Option<RemoteRef>,
     pub agents: Vec<String>,
 }
 
-impl GroupInfo {
-    pub fn is_remote(&self) -> bool {
-        self.remote.is_some()
-    }
-}
+impl GroupInfo {}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -258,46 +192,17 @@ pub struct CreateGroupRequest {
     pub after_group_id: Option<String>,
     pub base_repo: Option<String>,
     pub base_ref: Option<String>,
-    #[serde(default)]
-    pub remote: Option<RemoteRef>,
-    /// Names an effective config- or preferences-backed saved remote to bind
-    /// this group to.
-    /// Resolved into `remote` before the group is created; ignored when
-    /// `remote` is already set.
-    #[serde(default)]
-    pub remote_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PrepareAgentWorkspaceRequest {
-    pub group_id: Option<String>,
+    pub group_id: String,
     pub base_repo: Option<String>,
-    pub base_ref: Option<String>,
     pub adapter: String,
     pub model: Option<String>,
     /// Reasoning effort level for the new session, recorded on the agent like
-    /// `model` so later respawns and forks re-apply it.
+    /// `model`.
     pub effort: Option<String>,
-    /// When false, the agent runs directly in the base repository / cwd with no
-    /// isolated git worktree (the default).
-    pub use_worktree: bool,
-}
-
-pub fn create_group(
-    state: &AppState,
-    mut request: CreateGroupRequest,
-) -> Result<GroupInfo, String> {
-    // Resolve the saved remote before anything is created, so an id that is no
-    // longer declared fails the request rather than silently producing a local
-    // group where the caller asked for a remote one.
-    if request.remote.is_none()
-        && let Some(id) = request.remote_id.as_deref()
-    {
-        let preferences = persistence::load_preferences(&state.config().workspace_root)?;
-        request.remote = Some(state.config().saved_remote_with(id, &preferences.remotes)?);
-    }
-
-    create_scoped_group(state, request, WorkspaceScope::Terminal)
 }
 
 /// Creates a durable research workspace rooted at `dir`. Research workspaces
@@ -392,13 +297,11 @@ fn create_research_workspace_locked(
         let mut group = create_group_record(
             state,
             CreateGroupRequest {
-                remote_id: None,
                 name: name.or(archive_name),
                 dir: Some(canonical.display().to_string()),
                 after_group_id: None,
                 base_repo: None,
                 base_ref: Some("HEAD".to_string()),
-                remote: None,
             },
             WorkspaceScope::Research,
         )?;
@@ -440,13 +343,11 @@ fn create_research_workspace_locked(
     create_scoped_group(
         state,
         CreateGroupRequest {
-            remote_id: None,
             name,
             dir: Some(canonical.display().to_string()),
             after_group_id: None,
             base_repo: None,
             base_ref: Some("HEAD".to_string()),
-            remote: None,
         },
         WorkspaceScope::Research,
     )
@@ -555,11 +456,6 @@ pub fn move_research_workspace(
         .name_override
         .as_deref()
         .unwrap_or(&workspace.name);
-    if dependencies.has_live_panes {
-        return Err(format!(
-            "research folder '{display_name}' cannot be moved while it has live terminals"
-        ));
-    }
     if dependencies.has_active_runs {
         return Err(format!(
             "research folder '{display_name}' cannot be moved while it has active runs"
@@ -661,11 +557,6 @@ pub fn remove_research_workspace(
         .name_override
         .as_deref()
         .unwrap_or(&workspace.name);
-    if dependencies.has_live_panes {
-        return Err(format!(
-            "research folder '{display_name}' cannot be removed while it has live terminals"
-        ));
-    }
     if dependencies.has_active_runs {
         return Err(format!(
             "research folder '{display_name}' cannot be removed while it has active runs"
@@ -820,10 +711,9 @@ pub(crate) fn create_group_record(
     scope: WorkspaceScope,
 ) -> Result<GroupInfo, String> {
     let id = state.next_id("group");
-    let dir = match (request.remote.as_ref(), request.dir.as_deref()) {
-        (remote, Some(dir)) => group_canonical_dir(remote, dir)?,
-        (Some(remote), None) => group_canonical_dir(Some(remote), "~")?,
-        (None, None) => state.default_open_dir(),
+    let dir = match request.dir.as_deref() {
+        Some(dir) => canonical_dir(dir)?,
+        None => state.default_open_dir(),
     };
     let generated_name = group_name_for_dir(&dir);
     let name_override = request
@@ -851,7 +741,6 @@ pub(crate) fn create_group_record(
         collapsed: false,
         scope,
         imported_research_archive_id: None,
-        remote: request.remote,
         agents: Vec::new(),
     };
 
@@ -897,7 +786,6 @@ pub(crate) fn clone_group_record_for_scope(
         imported_research_archive_id: None,
         // Research runs entirely on the local machine; a research clone of a
         // remote group deliberately drops the binding.
-        remote: None,
         agents: Vec::new(),
     };
     if let Err(err) = write_group_manifest(&group) {
@@ -933,183 +821,33 @@ pub fn prepare_agent_workspace(
     let _guard = AGENT_WORKSPACE_CREATION_LOCK
         .lock()
         .map_err(|_| "agent workspace creation lock poisoned".to_string())?;
-    prepare_agent_workspace_locked(state, request, None, None)
-}
-
-/// Prepares a new agent and records its lineage before returning to the adapter
-/// that will start the process. Keeping both mutations under the workspace
-/// creation lock prevents a newly-execed child from observing itself without
-/// the parent capability boundary its launcher requested.
-pub fn prepare_agent_workspace_with_parent(
-    state: &AppState,
-    request: PrepareAgentWorkspaceRequest,
-    parent_id: Option<&str>,
-) -> Result<AgentInfo, String> {
-    prepare_agent_workspace_with_parent_inner(state, request, parent_id, None)
-}
-
-fn prepare_agent_workspace_with_parent_inner(
-    state: &AppState,
-    mut request: PrepareAgentWorkspaceRequest,
-    parent_id: Option<&str>,
-    worktree_name: Option<&str>,
-) -> Result<AgentInfo, String> {
-    let _guard = AGENT_WORKSPACE_CREATION_LOCK
-        .lock()
-        .map_err(|_| "agent workspace creation lock poisoned".to_string())?;
-    let parent = match parent_id.map(str::trim).filter(|id| !id.is_empty()) {
-        Some(parent_id) => {
-            let parent = state
-                .agent(parent_id)?
-                .ok_or_else(|| format!("parent agent {parent_id} was not found"))?;
-            if request
-                .group_id
-                .as_deref()
-                .is_some_and(|group_id| group_id != parent.group_id)
-            {
-                return Err(format!(
-                    "parent agent {parent_id} belongs to workspace {}, not {}",
-                    parent.group_id,
-                    request.group_id.as_deref().unwrap_or_default()
-                ));
-            }
-            if request.group_id.is_none() {
-                request.group_id = Some(parent.group_id.clone());
-            }
-            Some(parent)
-        }
-        None => None,
-    };
-    let agent = prepare_agent_workspace_locked(state, request, None, worktree_name)?;
-    let Some(parent) = parent else {
-        return Ok(agent);
-    };
-    let parent_id = parent.id;
-    debug_assert_eq!(parent.group_id, agent.group_id);
-    state
-        .mutate_agent(&agent.id, |agent| {
-            agent.parent_id = Some(parent_id.clone());
-        })?
-        .ok_or_else(|| format!("prepared agent {} disappeared", agent.id))
+    prepare_agent_workspace_locked(state, request)
 }
 
 fn prepare_agent_workspace_locked(
     state: &AppState,
     request: PrepareAgentWorkspaceRequest,
-    agent_id_override: Option<String>,
-    worktree_name: Option<&str>,
 ) -> Result<AgentInfo, String> {
-    let mut group = match request.group_id.as_deref() {
-        Some(group_id) => state
-            .group(group_id)?
-            .ok_or_else(|| format!("group {group_id} was not found"))?,
-        None => create_group(
-            state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: request
-                    .base_repo
-                    .clone()
-                    .or_else(|| Some(state.default_open_dir().display().to_string())),
-                after_group_id: None,
-                base_repo: request
-                    .base_repo
-                    .clone()
-                    .or_else(|| default_base_repo(state)),
-                base_ref: request
-                    .base_ref
-                    .clone()
-                    .or_else(|| Some("HEAD".to_string())),
-                remote: None,
-            },
-        )?,
-    };
+    let mut group = state
+        .group(&request.group_id)?
+        .ok_or_else(|| format!("group {} was not found", request.group_id))?;
 
-    let agent_id = agent_id_override.unwrap_or_else(|| state.next_id("agent"));
-    let agent_name = format!("agent-{}", group.agents.len() + 1);
-    // An agent roots at its explicit base_repo, else the group's base_repo hint, else
-    // the group's advisory cwd (its most-recently-active shell pane), else the group's
-    // creation-time seed dir, else the default dir. Groups are not directory-scoped,
-    // so the seed is only a fallback for a group with no shell panes yet.
-    let base_repo = request
+    let agent_id = state.next_id("agent");
+    // An agent runs directly in its explicit base_repo, else the group's
+    // base_repo hint, else the group's directory.
+    let worktree_dir = request
         .base_repo
         .or_else(|| group.base_repo.clone())
-        .or_else(|| {
-            state
-                .group_spawn_cwd(&group.id)
-                .map(|dir| dir.display().to_string())
-        })
-        .or_else(|| Some(group.dir.clone()));
-    let base_ref = request
-        .base_ref
-        .or_else(|| group.base_ref.clone())
-        .unwrap_or_else(|| "HEAD".to_string());
-    let mut branch = None;
-    // The group is already resolved above, so the host comes for free — and
-    // cannot disagree with the workspace the worktree is being cut from.
-    let host = host::for_group(group.remote.as_ref());
-
-    let use_worktree = request.use_worktree;
-    if worktree_name.is_some() && !use_worktree {
-        return Err("a worktree name requires a worktree-backed agent".to_string());
-    }
-    let worktree_dir = if use_worktree {
-        // Isolated git worktree in the configured global or project-local root
-        // (or a plain directory when the base is not a git repo).
-        let dir = match worktree_name {
-            Some(name) => {
-                let base_repo = base_repo.as_deref().ok_or_else(|| {
-                    "cannot create a named worktree without a project directory".to_string()
-                })?;
-                allocate_named_worktree_dir(state, &host, base_repo, &group, name)?
-            }
-            None => allocate_agent_worktree_dir(
-                state,
-                &host,
-                base_repo.as_deref(),
-                &group,
-                &agent_name,
-            )?,
-        };
-        match base_repo.as_deref().filter(|repo| is_git_repo(&host, repo)) {
-            Some(base_repo) => {
-                let branch_name = worktree_name.map(ToString::to_string).unwrap_or_else(|| {
-                    format!("session/{}/{}", sanitize_ref_segment(&group.id), agent_name)
-                });
-                create_worktree(&host, base_repo, &dir, &branch_name, &base_ref)?;
-                branch = Some(branch_name);
-            }
-            // Not a git repo, so there is no worktree to add — just a
-            // directory to run in. It belongs on the group's host: creating it
-            // locally would leave a stray tree here and the agent pointed at a
-            // path that does not exist over there.
-            None => host.create_dir_all(&dir)?,
-        }
-        dir.display().to_string()
-    } else {
-        // Default: no worktree — the agent runs directly in the base repo / cwd.
-        // base_repo is always Some by construction above; the fallback handles an unexpected None.
-        base_repo.unwrap_or_else(|| state.default_open_dir().display().to_string())
-    };
-
-    let active_workspace = host
-        .is_local()
-        .then(|| {
-            resolve_active_workspace(
-                &worktree_dir,
-                ActiveWorkspaceSource::Session,
-                use_worktree && branch.is_some(),
-            )
-        })
-        .flatten();
+        .unwrap_or_else(|| group.dir.clone());
+    let active_workspace =
+        resolve_active_workspace(&worktree_dir, ActiveWorkspaceSource::Session, false);
 
     let agent = AgentInfo {
         id: agent_id.clone(),
         group_id: group.id.clone(),
         adapter: request.adapter,
         worktree_dir,
-        branch,
+        branch: None,
         active_workspace,
         pane_id: None,
         orphaned_queue_pane_id: None,
@@ -1136,264 +874,6 @@ fn prepare_agent_workspace_locked(
     Ok(agent)
 }
 
-pub fn attach_agent_pane(
-    state: &AppState,
-    agent_id: &str,
-    pane_id: String,
-) -> Result<AgentInfo, String> {
-    for previous in state.list_agents()? {
-        if previous.id != agent_id && previous.pane_id.as_deref() == Some(&pane_id) {
-            let has_queue = !state.list_agent_turn_queue(&previous.id)?.is_empty();
-            let orphaned_queue_pane_id = has_queue.then(|| pane_id.clone());
-            let detached = state.mutate_agent(&previous.id, |agent| {
-                agent.pane_id = None;
-                agent.orphaned_queue_pane_id = orphaned_queue_pane_id;
-                agent.status = AgentStatus::Idle;
-                if has_queue {
-                    agent.paused = true;
-                }
-            })?;
-            if let Some(detached) = detached {
-                let detached_id = detached.id.clone();
-                // Clear the pane binding before cancelling the barrier. Otherwise a
-                // concurrent fork-dispatch finalizer can observe the missing barrier
-                // while the old source still owns this pane and drain post-fork input
-                // into the terminal being replaced.
-                state.cancel_agent_fork_barrier_for_source(&detached_id)?;
-                state.emit(crate::events::SessionEvent::new(
-                    "agent.detached",
-                    Some(pane_id.clone()),
-                    Some(detached_id.clone()),
-                    serde_json::json!({
-                        "agent": detached,
-                        "replacementAgentId": agent_id,
-                    }),
-                ));
-                crate::turn_queue::release_waiters_for_agent(state, &detached_id)?;
-            }
-        }
-    }
-
-    // Field-scoped mutation, not a full-struct `update_agent`: a freshly spawned agent's
-    // SessionStart hook may be recording its session_id / transcript_path on another
-    // thread right now, and a stale-snapshot write here would race it and wipe them. Only
-    // touch the pane-binding fields.
-    state
-        .mutate_agent(agent_id, |agent| {
-            agent.pane_id = Some(pane_id);
-            agent.orphaned_queue_pane_id = None;
-            agent.status = AgentStatus::Running;
-        })?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))
-}
-
-fn detach_known_pane_agent(
-    state: &AppState,
-    pane_id: &str,
-    current: AgentInfo,
-) -> Result<Option<AgentInfo>, String> {
-    let has_queue = !state.list_agent_turn_queue(&current.id)?.is_empty();
-    let orphaned_queue_pane_id = has_queue.then(|| pane_id.to_string());
-    let detached = state.mutate_agent(&current.id, |agent| {
-        agent.pane_id = None;
-        agent.orphaned_queue_pane_id = orphaned_queue_pane_id;
-        agent.status = AgentStatus::Idle;
-        if has_queue {
-            agent.paused = true;
-        }
-    })?;
-    if let Some(detached) = &detached {
-        // Make the source visibly detached before removing its barrier so neither the
-        // dispatch owner nor a child-ready hook can resume into the old pane during
-        // the cancellation window.
-        state.cancel_agent_fork_barrier_for_source(&detached.id)?;
-        // Every caller reaches this only after the supervised adapter process has
-        // exited (the host shell may remain). A queued fork that never reached its
-        // prompt hook can therefore release its source safely; no live child remains
-        // to copy more context.
-        if let Err(err) = crate::turn_queue::abort_fork_barrier_for_child(
-            state,
-            &detached.id,
-            "Forked terminal exited before its initial prompt was accepted",
-        ) {
-            eprintln!(
-                "session: failed to release fork barrier for detached agent {}: {err}",
-                detached.id
-            );
-        }
-        state.emit(crate::events::SessionEvent::new(
-            "agent.detached",
-            Some(pane_id.to_string()),
-            Some(detached.id.clone()),
-            serde_json::json!({ "agent": detached }),
-        ));
-        crate::turn_queue::release_waiters_for_agent(state, &detached.id)?;
-    }
-    Ok(detached)
-}
-
-/// Detaches only the named agent when it still owns `pane_id`. Shell jobs can
-/// outlive their foreground tenure: an older background job exiting must never
-/// detach a newer agent that the user launched in the same shell meanwhile.
-pub fn detach_pane_agent_if_matches(
-    state: &AppState,
-    pane_id: &str,
-    expected_agent_id: &str,
-) -> Result<Option<AgentInfo>, String> {
-    let Some(current) = state.agent_by_pane(pane_id)? else {
-        return Ok(None);
-    };
-    if current.id != expected_agent_id {
-        return Ok(None);
-    }
-    // Use the agent resolved above rather than looking the pane binding up again:
-    // a replacement can attach between these operations, and a second lookup could
-    // otherwise detach that newer primary on behalf of this stale job.
-    detach_known_pane_agent(state, pane_id, current)
-}
-
-pub fn mark_agent_spawn_failed(
-    state: &AppState,
-    agent_id: &str,
-    reserved_pane_id: &str,
-) -> Result<AgentInfo, String> {
-    // No release of waiters here: a failed target intentionally keeps its waiters
-    // blocked (see `queued_turn_wait_is_resolved_locked`), so a dependent turn doesn't
-    // silently fire when the agent it was waiting on errored out instead of finishing.
-    let has_queue = !state.list_agent_turn_queue(agent_id)?.is_empty();
-    state
-        .mutate_agent(agent_id, |agent| {
-            if agent.pane_id.as_deref() == Some(reserved_pane_id) {
-                agent.pane_id = None;
-                agent.orphaned_queue_pane_id = None;
-            }
-            agent.status = AgentStatus::Failed;
-            if has_queue {
-                agent.paused = true;
-            }
-        })?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))
-}
-
-pub fn mark_agent_failed(state: &AppState, agent_id: &str) -> Result<AgentInfo, String> {
-    // No release of waiters here, by design: a failed target keeps its waiters blocked
-    // (see `mark_agent_spawn_failed` and `queued_turn_wait_is_resolved_locked`).
-    // Field-scoped write (only status): a full-struct `update_agent` drops the lock
-    // between read and write and could clobber a concurrent SessionStart hook's
-    // session_id/transcript_path, leaving the session unresumable.
-    // Pause a pending queue so acknowledging Failed → Idle cannot auto-send it.
-    let has_queue = !state.list_agent_turn_queue(agent_id)?.is_empty();
-    state
-        .mutate_agent(agent_id, |agent| {
-            agent.status = AgentStatus::Failed;
-            if has_queue {
-                agent.paused = true;
-            }
-        })?
-        .ok_or_else(|| format!("agent {agent_id} was not found"))
-}
-
-/// How long after a lone Esc keystroke into a working agent's pane Session waits for
-/// counter-evidence before concluding the user interrupted the turn.
-const ESC_INTERRUPT_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
-
-/// Adapters whose TUI interrupts the running turn on a *lone* Esc, verified to emit
-/// no Stop hook / transcript line / idle notification when interrupted mid-thinking.
-/// Only these get the escape watch below. Codex, for instance, requires Esc twice —
-/// running the watch there would demote a still-working agent on every single Esc.
-/// Others can opt in once their Esc semantics are confirmed.
-fn adapter_interrupts_on_lone_escape(adapter: &str) -> bool {
-    adapter == "claude"
-}
-
-/// Handles a lone Esc typed into a working agent's pane. In the agent TUIs Session
-/// hosts (see `adapter_interrupts_on_lone_escape`), Esc while a turn is running means
-/// "interrupt" — and a turn canceled during its thinking phase produces no Stop hook,
-/// no transcript line, and no idle notification (verified against Claude Code 2.1.x),
-/// so nothing would ever demote the agent from Running and the transcript pane would
-/// show "Working…" forever.
-///
-/// Watch the agent for a short grace window; if no hook or transcript activity arrives,
-/// mark it AwaitingInput and hold any queued follow-ups (same as a transcript
-/// interrupt). AwaitingInput is a ready status, so without the pause a later
-/// typing-clear or idle_prompt would auto-send. The residual risk is a *wrong*
-/// demotion (an Esc that dismissed a menu mid-run), which the activity-counter
-/// guard makes rare and which the next hook/transcript event self-corrects by
-/// re-promoting to Running.
-pub fn watch_agent_after_escape(state: &AppState, pane_id: &str) {
-    let Ok(Some(agent)) = state.agent_by_pane(pane_id) else {
-        return;
-    };
-    if !adapter_interrupts_on_lone_escape(&agent.adapter) {
-        return;
-    }
-    if !matches!(agent.status, AgentStatus::Starting | AgentStatus::Running) {
-        return;
-    }
-    let Ok(baseline) = state.agent_activity_seq(&agent.id) else {
-        return;
-    };
-    // Dedupe: a held Esc (key repeat) calls this per keystroke. Spawn one watcher per
-    // burst rather than a thread each, all racing to demote the same agent.
-    if !state.begin_agent_escape_watch(&agent.id) {
-        return;
-    }
-    let state = state.clone();
-    let agent_id = agent.id;
-    std::thread::spawn(move || {
-        std::thread::sleep(ESC_INTERRUPT_GRACE);
-        let resolved = resolve_agent_escape_watch(&state, &agent_id, baseline);
-        state.end_agent_escape_watch(&agent_id);
-        if let Some(agent) = resolved {
-            state.emit(crate::events::SessionEvent::new(
-                "agent.interrupted",
-                agent.pane_id.clone(),
-                Some(agent.id.clone()),
-                serde_json::json!({ "agent": agent }),
-            ));
-        }
-    });
-}
-
-/// The post-grace half of [`watch_agent_after_escape`]: demotes the agent to
-/// AwaitingInput and returns it if it is still in a working status with no activity
-/// recorded since `baseline`; returns `None` when the watch should stand down.
-fn resolve_agent_escape_watch(
-    state: &AppState,
-    agent_id: &str,
-    baseline: u64,
-) -> Option<AgentInfo> {
-    let agent = state.agent(agent_id).ok().flatten()?;
-    if !matches!(agent.status, AgentStatus::Starting | AgentStatus::Running) {
-        return None;
-    }
-    // Any agent mutation or transcript write during the grace window means the
-    // turn is still alive (or something else already resolved the status).
-    if state.agent_activity_seq(agent_id).ok() != Some(baseline) {
-        return None;
-    }
-    let _ = crate::turn_queue::advance_after_interruption(state, agent_id);
-    state.agent(agent_id).ok().flatten()
-}
-
-/// The host an agent's work runs on, which is its group's.
-///
-/// Derived rather than stored: the workspace is what is bound to a machine, so
-/// reading it from the group keeps the agent value consistent with its
-/// worktree's host.
-fn agent_host(state: &AppState, agent: &AgentInfo) -> Result<Host, String> {
-    let group = state
-        .group(&agent.group_id)?
-        .ok_or_else(|| format!("group {} was not found", agent.group_id))?;
-    Ok(host::for_group(group.remote.as_ref()))
-}
-
-/// The directory a launched agent works in when the caller doesn't specify one:
-/// the group's directory if it still exists, else the app default.
-fn default_base_repo(state: &AppState) -> Option<String> {
-    Some(state.default_open_dir().display().to_string())
-}
-
 fn canonical_dir(path: &str) -> Result<PathBuf, String> {
     let canonical =
         fs::canonicalize(path).map_err(|err| format!("failed to resolve {path}: {err}"))?;
@@ -1401,25 +881,6 @@ fn canonical_dir(path: &str) -> Result<PathBuf, String> {
         return Err(format!("{} is not a directory", canonical.display()));
     }
     Ok(canonical)
-}
-
-/// Group-aware directory canonicalization: the single place that decides how a
-/// group's directory strings are resolved and validated. Every path a group
-/// stores must pass through here (or `group_recoverable_dir`) rather than a
-/// bare local canonicalize/stat, because a remote group's paths live on its
-/// host — a local stat would spuriously fail and silently redirect the caller
-/// to a local fallback directory.
-pub fn group_canonical_dir(remote: Option<&RemoteRef>, path: &str) -> Result<PathBuf, String> {
-    match remote {
-        // Remote paths live on the far side: don't canonicalize or stat them
-        // locally. Expand a leading `~` against the remote account's home so
-        // the stored dir (and later tmux `-c`) is an absolute path rather than
-        // a quoted literal tilde.
-        Some(remote) => Ok(PathBuf::from(
-            crate::host::for_group(Some(remote)).expand_home(path)?,
-        )),
-        None => canonical_dir(path),
-    }
 }
 
 fn group_name_for_dir(dir: &Path) -> String {
@@ -1450,32 +911,6 @@ fn unique_group_dir(root: &Path, requested_name: &str) -> Result<PathBuf, String
     unique_dir(root, requested_name, "group")
 }
 
-fn unique_worktree_dir(root: &Path, requested_name: &str) -> Result<PathBuf, String> {
-    // Leave room for unique_dir's largest collision suffix ("-999") under
-    // the common 255-byte filesystem component limit. Group display names are
-    // user-controlled and may be much longer than a valid filename.
-    unique_dir(root, &bounded_path_segment(requested_name, 240), "worktree")
-}
-
-fn validate_worktree_name(requested_name: &str) -> Result<&str, String> {
-    let name = requested_name.trim();
-    if name.is_empty() {
-        return Err("worktree name cannot be empty".to_string());
-    }
-    if name.len() > 240 {
-        return Err("worktree name must be at most 240 characters".to_string());
-    }
-    if !name
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-    {
-        return Err(
-            "worktree name may contain only letters, numbers, hyphens, and underscores".to_string(),
-        );
-    }
-    Ok(name)
-}
-
 fn unique_dir(root: &Path, requested_name: &str, kind: &str) -> Result<PathBuf, String> {
     let base = sanitize_path_segment(requested_name);
     for index in 0..1000 {
@@ -1493,192 +928,6 @@ fn unique_dir(root: &Path, requested_name: &str, kind: &str) -> Result<PathBuf, 
         "failed to allocate a unique {kind} directory under {}",
         root.display()
     ))
-}
-
-fn allocate_agent_worktree_dir(
-    state: &AppState,
-    host: &Host,
-    base_repo: Option<&str>,
-    group: &GroupInfo,
-    agent_name: &str,
-) -> Result<PathBuf, String> {
-    // Preserve the existing compact agent paths for remote/global storage;
-    // project-local storage includes the group label to avoid collisions across
-    // groups sharing the same repository root.
-    if let Some(root) = host.remote_workspace_root()? {
-        return Ok(PathBuf::from(root).join(&group.id).join(agent_name));
-    }
-    let location = persistence::load_preferences(&state.config().workspace_root)?
-        .worktree_location
-        .unwrap_or_default();
-    if location == WorktreeLocation::Global {
-        return Ok(PathBuf::from(&group.managed_dir).join(agent_name));
-    }
-    let root = worktree_root(state, host, base_repo, group)?;
-    let display_name = group.name_override.as_deref().unwrap_or(&group.name);
-    unique_worktree_dir(&root, &format!("{display_name}-{agent_name}"))
-}
-
-fn worktree_root(
-    state: &AppState,
-    host: &Host,
-    base_repo: Option<&str>,
-    group: &GroupInfo,
-) -> Result<PathBuf, String> {
-    // A remote worktree has to live under the *host's* root. The group's
-    // managed directory and the project-local placements below are all resolved
-    // against this filesystem — canonicalizing a remote path here would silently
-    // produce a local directory and the agent would edit the wrong tree.
-    if let Some(root) = host.remote_workspace_root()? {
-        return Ok(PathBuf::from(root).join(&group.id));
-    }
-
-    let location = persistence::load_preferences(&state.config().workspace_root)?
-        .worktree_location
-        .unwrap_or_default();
-    if location == WorktreeLocation::Global {
-        return Ok(PathBuf::from(&group.managed_dir));
-    }
-
-    let base_repo = base_repo.ok_or_else(|| {
-        "cannot resolve a project-local worktree location without a project directory".to_string()
-    })?;
-    let is_git = is_git_repo(host, base_repo);
-    let project_root = if is_git {
-        git_project_root(host, base_repo)?
-    } else {
-        fs::canonicalize(base_repo)
-            .map_err(|err| format!("failed to resolve project directory {base_repo}: {err}"))?
-    };
-    let (relative_root, exclude_pattern) = match location {
-        WorktreeLocation::Global => unreachable!(),
-        WorktreeLocation::LocalSession => (Path::new(".session/worktrees"), "/.session/worktrees/"),
-        WorktreeLocation::LocalClaude => (Path::new(".claude/worktrees"), "/.claude/worktrees/"),
-    };
-
-    if is_git {
-        ensure_git_local_exclude(host, base_repo, exclude_pattern)?;
-    }
-    let root = project_root.join(relative_root);
-    fs::create_dir_all(&root)
-        .map_err(|err| format!("failed to create worktree root {}: {err}", root.display()))?;
-    Ok(root)
-}
-
-/// Resolves the parent directory Session would use for a newly requested Git
-/// worktree without creating it or changing the repository's exclude file.
-/// Agent adapters use this to describe Session's placement policy to tools that
-/// may create worktrees themselves.
-pub(crate) fn configured_worktree_root_for_cwd(
-    state: &AppState,
-    host: &Host,
-    cwd: &str,
-    group: &GroupInfo,
-) -> Result<Option<PathBuf>, String> {
-    if let Some(root) = host.remote_workspace_root()? {
-        return Ok(Some(PathBuf::from(root).join(&group.id)));
-    }
-
-    let location = persistence::load_preferences(&state.config().workspace_root)?
-        .worktree_location
-        .unwrap_or_default();
-    if location == WorktreeLocation::Global {
-        return Ok(Some(PathBuf::from(&group.managed_dir)));
-    }
-
-    // A non-Git directory cannot host a Git worktree request. Keep ordinary
-    // agent launches working there and omit the worktree-specific context.
-    let Ok(project_root) = git_main_checkout(host, cwd) else {
-        return Ok(None);
-    };
-    let relative_root = match location {
-        WorktreeLocation::Global => unreachable!(),
-        WorktreeLocation::LocalSession => Path::new(".session/worktrees"),
-        WorktreeLocation::LocalClaude => Path::new(".claude/worktrees"),
-    };
-    Ok(Some(project_root.join(relative_root)))
-}
-
-fn allocate_named_worktree_dir(
-    state: &AppState,
-    host: &Host,
-    base_repo: &str,
-    group: &GroupInfo,
-    requested_name: &str,
-) -> Result<PathBuf, String> {
-    let name = validate_worktree_name(requested_name)?;
-    let dir = worktree_root(state, host, Some(base_repo), group)?.join(name);
-    if host.is_local() && dir.exists() {
-        return Err(format!("a file or directory named {name:?} already exists"));
-    }
-    Ok(dir)
-}
-
-fn git_project_root(host: &Host, base_repo: &str) -> Result<PathBuf, String> {
-    let output = host
-        .git(["-C", base_repo, "rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|err| format!("failed to resolve git project root: {err}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "failed to resolve git project root: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if root.is_empty() {
-        return Err("git returned an empty project root".to_string());
-    }
-    Ok(PathBuf::from(root))
-}
-
-fn ensure_git_local_exclude(host: &Host, base_repo: &str, pattern: &str) -> Result<(), String> {
-    let output = host
-        .git(["-C", base_repo, "rev-parse", "--git-path", "info/exclude"])
-        .output()
-        .map_err(|err| format!("failed to resolve git exclude path: {err}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "failed to resolve git exclude path: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    let raw_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if raw_path.is_empty() {
-        return Err("git returned an empty exclude path".to_string());
-    }
-    let path = {
-        let candidate = PathBuf::from(raw_path);
-        if candidate.is_absolute() {
-            candidate
-        } else {
-            PathBuf::from(base_repo).join(candidate)
-        }
-    };
-    let existing = match fs::read_to_string(&path) {
-        Ok(existing) => existing,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(err) => return Err(format!("failed to read {}: {err}", path.display())),
-    };
-    if existing.lines().any(|line| line.trim() == pattern) {
-        return Ok(());
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("failed to create {}: {err}", parent.display()))?;
-    }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .map_err(|err| format!("failed to open {}: {err}", path.display()))?;
-    if !existing.is_empty() && !existing.ends_with('\n') {
-        file.write_all(b"\n")
-            .map_err(|err| format!("failed to update {}: {err}", path.display()))?;
-    }
-    writeln!(file, "{pattern}").map_err(|err| format!("failed to update {}: {err}", path.display()))
 }
 
 fn sanitize_path_segment(value: &str) -> String {
@@ -1699,102 +948,6 @@ fn sanitize_path_segment(value: &str) -> String {
         default_group_name()
     } else {
         sanitized
-    }
-}
-
-fn bounded_path_segment(value: &str, max_bytes: usize) -> String {
-    let sanitized = sanitize_path_segment(value);
-    if sanitized.len() <= max_bytes {
-        return sanitized;
-    }
-
-    // FNV-1a is sufficient here: the hash only keeps two long names with the
-    // same truncated prefix distinguishable; unique_dir still handles an
-    // actual collision. sanitize_path_segment emits ASCII, so byte slicing is
-    // safe and exactly matches filesystem component accounting.
-    let hash = value
-        .as_bytes()
-        .iter()
-        .fold(0xcbf29ce484222325_u64, |hash, byte| {
-            (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
-        });
-    let suffix = format!("-{hash:016x}");
-    let prefix_len = max_bytes.saturating_sub(suffix.len());
-    format!("{}{}", &sanitized[..prefix_len], suffix)
-}
-
-fn sanitize_ref_segment(value: &str) -> String {
-    sanitize_path_segment(value)
-}
-
-fn is_git_repo(host: &Host, path: &str) -> bool {
-    host.git(["-C", path, "rev-parse", "--is-inside-work-tree"])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-fn git_rev_parse_field(host: &Host, cwd: &str, spec: &str) -> Result<String, String> {
-    let output = host
-        .git(["-C", cwd, "rev-parse", spec])
-        .output()
-        .map_err(|err| format!("failed to run git rev-parse {spec}: {err}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "git rev-parse {spec} failed: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if value.is_empty() {
-        return Err(format!("git rev-parse {spec} returned an empty path"));
-    }
-    Ok(value)
-}
-
-fn git_rev_parse_path(host: &Host, cwd: &str, spec: &str) -> Result<PathBuf, String> {
-    let raw = git_rev_parse_field(host, cwd, spec)?;
-    let path = PathBuf::from(&raw);
-    if path.is_absolute() {
-        Ok(path)
-    } else {
-        Ok(Path::new(cwd).join(path))
-    }
-}
-
-/// The repository's primary checkout. A linked worktree's `--show-toplevel` is
-/// the worktree itself; allocating under that would nest `.session/worktrees`
-/// inside another worktree. Prefer the parent of `--git-common-dir` when that
-/// is the main `.git`.
-///
-/// Git dir probes run from `--show-toplevel`, not the caller's possibly nested
-/// cwd. `--git-common-dir` is often the relative `.git`; joining that with a
-/// subdirectory would invent `<subdir>/.git` and mis-classify a main checkout.
-pub(crate) fn git_main_checkout(host: &Host, cwd: &str) -> Result<PathBuf, String> {
-    if !is_git_repo(host, cwd) {
-        return Err("this tab is not inside a git repository".to_string());
-    }
-    let current = git_project_root(host, cwd)?;
-    let current_str = current
-        .to_str()
-        .ok_or_else(|| "current checkout path is not valid UTF-8".to_string())?;
-    let git_dir = git_rev_parse_path(host, current_str, "--absolute-git-dir")?;
-    let common_dir = git_rev_parse_path(host, current_str, "--git-common-dir")?;
-    if git_dir == common_dir {
-        return Ok(current);
-    }
-    match common_dir.file_name().and_then(|name| name.to_str()) {
-        Some(".git") => {
-            let parent = common_dir
-                .parent()
-                .ok_or_else(|| "could not resolve the repository's main checkout".to_string())?;
-            let parent_str = parent
-                .to_str()
-                .ok_or_else(|| "main checkout path is not valid UTF-8".to_string())?;
-            git_project_root(host, parent_str)
-        }
-        _ => Err("could not resolve the repository's main checkout".to_string()),
     }
 }
 
@@ -1843,84 +996,6 @@ pub fn resolve_active_workspace(
     })
 }
 
-/// Host-aware companion used by agent transcript observations. Remote cwd
-/// values cannot be canonicalized on the desktop, so their Git fields are
-/// resolved by one bounded command on the agent's host.
-fn resolve_active_workspace_on_host(
-    host: &Host,
-    cwd: &str,
-    source: ActiveWorkspaceSource,
-) -> Option<ActiveWorkspace> {
-    if host.is_local() {
-        return resolve_active_workspace(cwd, source, false);
-    }
-    if !Path::new(cwd).is_absolute() || cwd.chars().any(char::is_control) {
-        return None;
-    }
-    let output = host
-        .git([
-            "-C",
-            cwd,
-            "rev-parse",
-            "--show-toplevel",
-            "--absolute-git-dir",
-            "--git-common-dir",
-            "--abbrev-ref",
-            "HEAD",
-        ])
-        .output()
-        .ok()?;
-    // OpenSSH reserves 255 for connection/setup failure. Do not turn a
-    // transient transport outage into a durable "plain directory" observation.
-    if output.status.code() == Some(255) {
-        return None;
-    }
-    let Some((git_root, git_dir, common_dir, branch)) = output
-        .status
-        .success()
-        .then_some(output)
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .and_then(|stdout| {
-            let mut lines = stdout.lines();
-            Some((
-                lines.next()?.trim().to_string(),
-                lines.next()?.trim().to_string(),
-                lines.next()?.trim().to_string(),
-                lines.next().map(str::trim).unwrap_or_default().to_string(),
-            ))
-        })
-        .filter(|(root, git_dir, common_dir, _)| {
-            !root.is_empty() && !git_dir.is_empty() && !common_dir.is_empty()
-        })
-    else {
-        return Some(ActiveWorkspace {
-            cwd: cwd.to_string(),
-            git_root: None,
-            branch: None,
-            kind: ActiveWorkspaceKind::Directory,
-            source,
-            managed_by_session: false,
-        });
-    };
-    let resolve = |raw: &str| {
-        let path = PathBuf::from(raw);
-        normalize_absolute_path(if path.is_absolute() {
-            path
-        } else {
-            Path::new(cwd).join(path)
-        })
-    };
-    let kind = classify_git_checkout(Some(&resolve(&git_dir)), Some(&resolve(&common_dir)));
-    Some(ActiveWorkspace {
-        cwd: cwd.to_string(),
-        git_root: Some(resolve(&git_root).display().to_string()),
-        branch: (!branch.is_empty() && branch != "HEAD").then_some(branch),
-        kind,
-        source,
-        managed_by_session: false,
-    })
-}
-
 fn classify_git_checkout(git_dir: Option<&Path>, common_dir: Option<&Path>) -> ActiveWorkspaceKind {
     match (git_dir, common_dir) {
         (Some(git_dir), Some(common_dir)) if git_dir == common_dir => {
@@ -1929,97 +1004,6 @@ fn classify_git_checkout(git_dir: Option<&Path>, common_dir: Option<&Path>) -> A
         (Some(_), Some(_)) => ActiveWorkspaceKind::LinkedWorktree,
         _ => ActiveWorkspaceKind::GitCheckout,
     }
-}
-
-fn normalize_absolute_path(path: PathBuf) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
-                normalized.pop();
-            }
-            other => normalized.push(other.as_os_str()),
-        }
-    }
-    normalized
-}
-
-/// Resolves display-only workspace metadata for a shell pane with a single git
-/// invocation. The agent-facing [`resolve_active_workspace`] probes fields one
-/// process at a time, which is fine at transcript-tail cadence but would
-/// multiply process spawns onto every reported cd; rev-parse prints each
-/// requested value on its own line, so one process answers all of them.
-///
-/// The combined form trades away one behavior: an unborn branch (fresh
-/// `git init`, no commits) fails the whole invocation, so such a pane reports
-/// no workspace at all instead of just no branch. The result only feeds the
-/// tab worktree badge, so staying silent there is acceptable.
-pub fn resolve_pane_workspace(cwd: &str) -> Option<ActiveWorkspace> {
-    if !Path::new(cwd).is_absolute() {
-        return None;
-    }
-    let canonical = fs::canonicalize(cwd).ok()?;
-    if !canonical.is_dir() {
-        return None;
-    }
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&canonical)
-        .args([
-            "rev-parse",
-            "--show-toplevel",
-            "--absolute-git-dir",
-            "--git-common-dir",
-            "--abbrev-ref",
-            "HEAD",
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8(output.stdout).ok()?;
-    let mut lines = stdout.lines();
-    // Output order mirrors the argument order. `--git-common-dir` may print a
-    // path relative to the `-C` directory, so resolve both git paths against
-    // it before comparing (older Git releases print relative paths).
-    let toplevel = lines.next()?.trim();
-    let git_dir = lines.next()?.trim();
-    let common_dir = lines.next()?.trim();
-    let branch = lines.next().map(str::trim);
-    if toplevel.is_empty() || git_dir.is_empty() || common_dir.is_empty() {
-        return None;
-    }
-    let resolve_against_cwd = |raw: &str| -> Option<PathBuf> {
-        let path = PathBuf::from(raw);
-        let path = if path.is_absolute() {
-            path
-        } else {
-            canonical.join(path)
-        };
-        fs::canonicalize(path).ok()
-    };
-    let git_root = fs::canonicalize(toplevel).unwrap_or_else(|_| PathBuf::from(toplevel));
-    let kind = classify_git_checkout(
-        resolve_against_cwd(git_dir).as_deref(),
-        resolve_against_cwd(common_dir).as_deref(),
-    );
-    // Detached HEAD abbreviates to the literal "HEAD"; report no branch rather
-    // than a bogus name.
-    let branch = branch
-        .map(str::trim)
-        .filter(|value| !value.is_empty() && *value != "HEAD")
-        .map(str::to_string);
-
-    Some(ActiveWorkspace {
-        cwd: cwd.to_string(),
-        git_root: Some(git_root.display().to_string()),
-        branch,
-        kind,
-        source: ActiveWorkspaceSource::Session,
-        managed_by_session: false,
-    })
 }
 
 fn local_git_field(cwd: &Path, args: &[&str]) -> Option<String> {
@@ -2045,119 +1029,6 @@ fn local_git_path(cwd: &Path, args: &[&str]) -> Option<PathBuf> {
         cwd.join(path)
     };
     fs::canonicalize(path).ok()
-}
-
-/// Applies an adapter observation only for local agents and emits a per-agent
-/// update when the normalized workspace actually changes. The launch workspace
-/// remains authoritative for lifecycle operations.
-pub fn record_agent_active_workspace(
-    state: &AppState,
-    agent_id: &str,
-    transcript_path: &str,
-    tail_generation: u64,
-    cwd: &str,
-    source: ActiveWorkspaceSource,
-) -> Result<Option<AgentInfo>, String> {
-    let Some(current) = state.agent(agent_id)? else {
-        return Ok(None);
-    };
-    let host = agent_host(state, &current)?;
-    let mut workspace = match resolve_active_workspace_on_host(&host, cwd, source) {
-        Some(workspace) => workspace,
-        None => return Ok(None),
-    };
-    workspace.managed_by_session = current.branch.is_some()
-        && workspace.git_root.as_deref().is_some_and(|root| {
-            if host.is_local() {
-                fs::canonicalize(root).ok() == fs::canonicalize(&current.worktree_dir).ok()
-            } else {
-                root == current.worktree_dir
-            }
-        });
-    let updated = state.set_agent_active_workspace_for_transcript(
-        agent_id,
-        transcript_path,
-        tail_generation,
-        workspace,
-    )?;
-    if let Some(agent) = updated.as_ref() {
-        state.emit(SessionEvent::new(
-            "agent.workspace_changed",
-            agent.pane_id.clone(),
-            Some(agent.id.clone()),
-            json!({ "agent": agent }),
-        ));
-    }
-    Ok(updated)
-}
-
-fn create_worktree(
-    host: &Host,
-    base_repo: &str,
-    worktree_dir: &Path,
-    branch: &str,
-    base_ref: &str,
-) -> Result<(), String> {
-    // base_ref arrives from the frontend. Resolve it to a real commit first so an
-    // option-looking value (e.g. "--detach") can't be interpreted by git as a flag
-    // rather than a starting point. `--end-of-options` keeps a ref beginning with
-    // "-" from being parsed as an option by rev-parse itself.
-    verify_base_ref(host, base_repo, base_ref)?;
-
-    let output = host
-        .git([
-            "-C",
-            base_repo,
-            "worktree",
-            "add",
-            "-b",
-            branch,
-            // Stop option parsing before the user-influenced positional
-            // arguments so neither the worktree path nor the ref can be
-            // mistaken for a flag. On a remote host `Host::git` additionally
-            // quotes each one, so the far side's shell cannot re-split them
-            // and undo this guard.
-            "--",
-            &worktree_dir.display().to_string(),
-            base_ref,
-        ])
-        .output()
-        .map_err(|err| format!("failed to run git worktree add: {err}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "git worktree add failed on {}: {}{}",
-            host.label(),
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ))
-    }
-}
-
-/// Verifies that `base_ref` resolves to a commit in `base_repo`, rejecting values
-/// that don't (including option-looking input). `--end-of-options` ensures a ref
-/// starting with "-" is treated as a revision rather than a flag.
-fn verify_base_ref(host: &Host, base_repo: &str, base_ref: &str) -> Result<(), String> {
-    let resolved = host
-        .git([
-            "-C",
-            base_repo,
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            "--end-of-options",
-            &format!("{base_ref}^{{commit}}"),
-        ])
-        .output()
-        .map_err(|err| format!("failed to verify base ref: {err}"))?;
-
-    if resolved.status.success() {
-        Ok(())
-    } else {
-        Err(format!("base ref '{base_ref}' did not resolve to a commit"))
-    }
 }
 
 pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
@@ -2244,244 +1115,12 @@ mod tests {
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
-    use std::process::Command;
-
-    fn test_remote() -> RemoteRef {
-        RemoteRef {
-            id: "remote-1".to_string(),
-            label: "workbox".to_string(),
-            host: "workbox".to_string(),
-            multiplexer: RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: None,
-        }
-    }
-
-    #[test]
-    fn remote_group_canonical_dir_expands_home() {
-        crate::host::seed_remote_home("workbox", "/home/dev");
-        let remote = test_remote();
-        assert_eq!(
-            group_canonical_dir(Some(&remote), "~").unwrap(),
-            PathBuf::from("/home/dev")
-        );
-        assert_eq!(
-            group_canonical_dir(Some(&remote), "~/src").unwrap(),
-            PathBuf::from("/home/dev/src")
-        );
-        assert_eq!(
-            group_canonical_dir(Some(&remote), "/srv/code/project").unwrap(),
-            PathBuf::from("/srv/code/project")
-        );
-    }
-
-    fn remote_host(root: Option<&str>) -> Host {
-        host::for_group(Some(&RemoteRef {
-            id: "saved-1".to_string(),
-            label: "devbox".to_string(),
-            host: "user@devbox".to_string(),
-            multiplexer: RemoteMultiplexer::Tmux,
-            session_cli: None,
-            workspace_root: root.map(str::to_string),
-        }))
-    }
-
-    #[test]
-    fn a_remote_id_binds_the_group_to_that_machine() {
-        // Without this the whole feature can be a no-op: the request is
-        // accepted, a group is created, and it is silently local.
-        let root = std::env::temp_dir().join("session-remote-id");
-        let state = test_state_with_remotes(
-            root,
-            std::collections::BTreeMap::from([(
-                "devbox".to_string(),
-                crate::config::SavedRemote {
-                    host: "user@devbox".to_string(),
-                    label: Some("Dev box".to_string()),
-                    ..Default::default()
-                },
-            )]),
-        );
-
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                name: None,
-                dir: Some("/srv/code/project".to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-                remote_id: Some("devbox".to_string()),
-            },
-        )
-        .expect("creates");
-
-        let remote = group.remote.as_ref().expect("bound to the remote");
-        assert_eq!(remote.id, "devbox");
-        assert_eq!(remote.host, "user@devbox");
-        assert_eq!(remote.label, "Dev box");
-        assert!(group.is_remote());
-    }
-
-    #[test]
-    fn a_remote_group_without_a_dir_opens_in_the_remote_home() {
-        crate::host::seed_remote_home("user@session-remote-home-dir", "/home/dev");
-        let root = std::env::temp_dir().join("session-remote-home-dir");
-        let state = test_state_with_remotes(
-            root,
-            std::collections::BTreeMap::from([(
-                "devbox".to_string(),
-                crate::config::SavedRemote {
-                    host: "user@session-remote-home-dir".to_string(),
-                    label: Some("Dev box".to_string()),
-                    ..Default::default()
-                },
-            )]),
-        );
-
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                name: None,
-                dir: None,
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-                remote_id: Some("devbox".to_string()),
-            },
-        )
-        .expect("creates");
-
-        assert_eq!(group.dir, "/home/dev");
-        assert_eq!(group.name, "dev");
-        assert!(group.is_remote());
-    }
-
-    #[test]
-    fn a_preference_remote_id_binds_the_group_to_that_machine() {
-        let root = temp_workspace("preference-remote-id");
-        let state = test_state_with_workspace(root.clone());
-        persistence::save_preferences(
-            &state.config().workspace_root,
-            &persistence::AppPreferences {
-                remotes: std::collections::BTreeMap::from([(
-                    "buildbox".to_string(),
-                    crate::config::SavedRemote {
-                        host: "user@buildbox".to_string(),
-                        label: Some("Build box".to_string()),
-                        ..Default::default()
-                    },
-                )]),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                name: None,
-                dir: Some("/srv/code/project".to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-                remote_id: Some("buildbox".to_string()),
-            },
-        )
-        .expect("creates from preferences");
-
-        let remote = group.remote.as_ref().expect("bound to the remote");
-        assert_eq!(remote.id, "buildbox");
-        assert_eq!(remote.host, "user@buildbox");
-        assert_eq!(remote.label, "Build box");
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn an_unknown_remote_id_fails_before_a_group_exists() {
-        let root = std::env::temp_dir().join("session-remote-id-unknown");
-        let state = test_state_with_workspace(root);
-        let before = state.list_groups().expect("groups").len();
-
-        let err = create_group(
-            &state,
-            CreateGroupRequest {
-                name: None,
-                dir: Some("/tmp".to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-                remote_id: Some("nope".to_string()),
-            },
-        )
-        .expect_err("unknown remote");
-
-        assert!(err.contains("nope"), "{err}");
-        // A half-created local group would be worse than the error.
-        assert_eq!(state.list_groups().expect("groups").len(), before);
-    }
-
-    #[test]
-    fn a_remote_worktree_is_allocated_under_the_host_root() {
-        let root = std::env::temp_dir().join("session-remote-alloc");
-        let state = test_state_with_workspace(root);
-        let mut group =
-            allocation_group(Path::new("/srv/code/project"), Path::new("/local/managed"));
-        group.id = "group-9".to_string();
-        group.managed_dir = "/local/managed/group-9".to_string();
-
-        let dir = allocate_agent_worktree_dir(
-            &state,
-            &remote_host(Some("/srv/session")),
-            Some("/srv/code/project"),
-            &group,
-            "agent-1",
-        )
-        .expect("allocates");
-
-        // The group's managed directory is a path on *this* machine. Using it
-        // would put the worktree where the remote agent cannot reach it — which
-        // is exactly what happened before the host was threaded through here.
-        assert_eq!(dir, PathBuf::from("/srv/session/group-9/agent-1"));
-        assert!(!dir.starts_with("/local"), "must not land locally: {dir:?}");
-    }
-
-    #[test]
-    fn a_remote_host_without_a_root_still_lands_remotely() {
-        let root = std::env::temp_dir().join("session-remote-alloc-default");
-        let state = test_state_with_workspace(root);
-        // The default root is `~/.session/workspaces`, and every argument sent
-        // over ssh is quoted, so it has to be expanded here or the worktree
-        // creates a directory literally named `~`.
-        host::seed_remote_home("user@devbox", "/home/dev");
-        let dir = allocate_agent_worktree_dir(
-            &state,
-            &remote_host(None),
-            Some("/srv/x"),
-            &allocation_group(Path::new("/srv/x"), Path::new("/local/managed")),
-            "a",
-        )
-        .expect("allocates");
-        assert!(dir.starts_with("/home/dev/.session/workspaces"), "{dir:?}");
-        assert!(dir.is_absolute(), "the bridge requires an absolute cwd");
-    }
+    use crate::persistence;
 
     fn test_state_with_workspace(workspace_root: PathBuf) -> AppState {
-        test_state_with_remotes(workspace_root, Default::default())
-    }
-
-    fn test_state_with_remotes(
-        workspace_root: PathBuf,
-        remotes: std::collections::BTreeMap<String, crate::config::SavedRemote>,
-    ) -> AppState {
         std::fs::create_dir_all(&workspace_root).unwrap();
         let socket_path = workspace_root.join("session.sock");
         AppState::new(SessionConfig {
-            remotes,
             workspace_root,
             socket_path,
             adapters: AdapterConfigs {
@@ -2500,10 +1139,6 @@ mod tests {
         })
     }
 
-    fn test_state() -> AppState {
-        test_state_with_workspace(PathBuf::from("/tmp/session-workspace-tests"))
-    }
-
     fn temp_workspace(prefix: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2512,175 +1147,6 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("session-workspace-{prefix}-{nanos}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    #[test]
-    fn active_workspace_resolves_main_checkout_linked_worktree_and_nested_cwd() {
-        let workspace = temp_workspace("active-worktree");
-        let repo = workspace.join("repo");
-        let linked = workspace.join("linked");
-        let nested = linked.join("packages/app");
-        let nested_main = repo.join("packages/app");
-        fs::create_dir_all(&repo).unwrap();
-        let git = |cwd: &Path, args: &[&str]| {
-            let output = Command::new("git")
-                .arg("-C")
-                .arg(cwd)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&repo, &["init", "-b", "main"]);
-        git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "session test"]);
-        git(&repo, &["commit", "--allow-empty", "-m", "init"]);
-        git(
-            &repo,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                "feature/test",
-                linked.to_str().unwrap(),
-            ],
-        );
-        fs::create_dir_all(&nested).unwrap();
-        fs::create_dir_all(&nested_main).unwrap();
-
-        let main = resolve_active_workspace(
-            repo.to_str().unwrap(),
-            ActiveWorkspaceSource::Session,
-            false,
-        )
-        .unwrap();
-        let canonical_repo = fs::canonicalize(&repo).unwrap();
-        let canonical_linked = fs::canonicalize(&linked).unwrap();
-        assert_eq!(main.kind, ActiveWorkspaceKind::MainCheckout);
-        assert_eq!(main.git_root.as_deref(), canonical_repo.to_str());
-        assert_eq!(main.branch.as_deref(), Some("main"));
-
-        let current =
-            resolve_active_workspace(nested.to_str().unwrap(), ActiveWorkspaceSource::Codex, true)
-                .unwrap();
-        assert_eq!(current.kind, ActiveWorkspaceKind::LinkedWorktree);
-        assert_eq!(current.cwd, nested.to_str().unwrap());
-        assert_eq!(
-            fs::canonicalize(&current.cwd).unwrap(),
-            fs::canonicalize(&nested).unwrap()
-        );
-        assert_eq!(current.git_root.as_deref(), canonical_linked.to_str());
-        assert_eq!(current.branch.as_deref(), Some("feature/test"));
-        assert_eq!(current.source, ActiveWorkspaceSource::Codex);
-        assert!(current.managed_by_session);
-
-        let main_from_nested = git_main_checkout(&Host::Local, nested.to_str().unwrap()).unwrap();
-        let main_from_nested_main =
-            git_main_checkout(&Host::Local, nested_main.to_str().unwrap()).unwrap();
-        let main_from_repo = git_main_checkout(&Host::Local, repo.to_str().unwrap()).unwrap();
-        assert_eq!(fs::canonicalize(&main_from_nested).unwrap(), canonical_repo);
-        assert_eq!(
-            fs::canonicalize(&main_from_nested_main).unwrap(),
-            canonical_repo
-        );
-        assert_eq!(fs::canonicalize(&main_from_repo).unwrap(), canonical_repo);
-
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn pane_workspace_resolves_with_a_single_invocation() {
-        let workspace = temp_workspace("pane-workspace");
-        let repo = workspace.join("repo");
-        let linked = workspace.join("linked");
-        fs::create_dir_all(&repo).unwrap();
-        let git = |cwd: &Path, args: &[&str]| {
-            let output = Command::new("git")
-                .arg("-C")
-                .arg(cwd)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&repo, &["init", "-b", "main"]);
-        git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "session test"]);
-        git(&repo, &["commit", "--allow-empty", "-m", "init"]);
-        git(
-            &repo,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                "feature/pane",
-                linked.to_str().unwrap(),
-            ],
-        );
-
-        let canonical_repo = fs::canonicalize(&repo).unwrap();
-        let canonical_linked = fs::canonicalize(&linked).unwrap();
-
-        let main = resolve_pane_workspace(repo.to_str().unwrap()).unwrap();
-        assert_eq!(main.kind, ActiveWorkspaceKind::MainCheckout);
-        assert_eq!(main.git_root.as_deref(), canonical_repo.to_str());
-        assert_eq!(main.branch.as_deref(), Some("main"));
-        assert_eq!(main.source, ActiveWorkspaceSource::Session);
-        assert!(!main.managed_by_session);
-
-        let worktree = resolve_pane_workspace(linked.to_str().unwrap()).unwrap();
-        assert_eq!(worktree.kind, ActiveWorkspaceKind::LinkedWorktree);
-        assert_eq!(worktree.git_root.as_deref(), canonical_linked.to_str());
-        assert_eq!(worktree.branch.as_deref(), Some("feature/pane"));
-
-        // Detached HEAD still classifies as a worktree but reports no branch.
-        git(&linked, &["checkout", "--detach", "HEAD"]);
-        let detached = resolve_pane_workspace(linked.to_str().unwrap()).unwrap();
-        assert_eq!(detached.kind, ActiveWorkspaceKind::LinkedWorktree);
-        assert_eq!(detached.branch, None);
-
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn pane_workspace_stays_silent_outside_git_and_on_unborn_branches() {
-        let workspace = temp_workspace("pane-workspace-none");
-        let plain = workspace.join("plain");
-        let unborn = workspace.join("unborn");
-        fs::create_dir_all(&plain).unwrap();
-        fs::create_dir_all(&unborn).unwrap();
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(&unborn)
-            .args(["init", "-b", "main"])
-            .output()
-            .expect("git runs");
-        assert!(output.status.success());
-
-        assert_eq!(resolve_pane_workspace(plain.to_str().unwrap()), None);
-        // Unborn branch: the combined rev-parse fails, so no workspace at all
-        // (accepted regression versus the per-field agent resolver).
-        assert_eq!(resolve_pane_workspace(unborn.to_str().unwrap()), None);
-        assert_eq!(resolve_pane_workspace("relative/path"), None);
-        assert_eq!(resolve_pane_workspace("/no/such/session/dir"), None);
-
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn git_main_checkout_rejects_a_directory_outside_git() {
-        let directory = temp_workspace("not-git");
-        let err = git_main_checkout(&Host::Local, directory.to_str().unwrap()).unwrap_err();
-        assert!(err.contains("not inside a git repository"), "{err}");
-        fs::remove_dir_all(directory).ok();
     }
 
     #[test]
@@ -2767,137 +1233,6 @@ mod tests {
 
         let restored: AgentInfo = serde_json::from_value(value).expect("legacy payload loads");
         assert_eq!(restored.active_workspace, None);
-    }
-
-    #[test]
-    fn latest_local_command_workspace_replaces_the_previous_observation() {
-        let root = temp_workspace("latest-active-command");
-        let first = root.join("first");
-        let second = root.join("second");
-        fs::create_dir_all(&first).unwrap();
-        fs::create_dir_all(&second).unwrap();
-        let state = test_state_with_workspace(root.join("state"));
-        state
-            .insert_group_after(allocation_group(&first, &root.join("managed")), None)
-            .unwrap();
-        let mut agent = sample_agent("agent-1", None, AgentStatus::Running);
-        agent.worktree_dir = first.display().to_string();
-        agent.transcript_path = Some("/tmp/live-transcript.jsonl".to_string());
-        state.insert_agent(agent).unwrap();
-        let (tail_generation, _) = state
-            .mark_transcript_tail("agent-1", "/tmp/live-transcript.jsonl", true)
-            .unwrap()
-            .unwrap();
-
-        record_agent_active_workspace(
-            &state,
-            "agent-1",
-            "/tmp/live-transcript.jsonl",
-            tail_generation,
-            first.to_str().unwrap(),
-            ActiveWorkspaceSource::Claude,
-        )
-        .unwrap();
-        record_agent_active_workspace(
-            &state,
-            "agent-1",
-            "/tmp/live-transcript.jsonl",
-            tail_generation,
-            second.to_str().unwrap(),
-            ActiveWorkspaceSource::Codex,
-        )
-        .unwrap();
-
-        let current = state
-            .agent("agent-1")
-            .unwrap()
-            .unwrap()
-            .active_workspace
-            .unwrap();
-        assert_eq!(
-            fs::canonicalize(&current.cwd).unwrap(),
-            fs::canonicalize(&second).unwrap()
-        );
-        assert_eq!(current.cwd, second.to_str().unwrap());
-        assert_eq!(current.source, ActiveWorkspaceSource::Codex);
-
-        let (replacement_generation, _) = state
-            .mark_transcript_tail("agent-1", "/tmp/live-transcript.jsonl", false)
-            .unwrap()
-            .unwrap();
-        let superseded_update = record_agent_active_workspace(
-            &state,
-            "agent-1",
-            "/tmp/live-transcript.jsonl",
-            tail_generation,
-            first.to_str().unwrap(),
-            ActiveWorkspaceSource::Claude,
-        )
-        .unwrap();
-        assert!(superseded_update.is_none());
-
-        state
-            .mutate_agent("agent-1", |agent| {
-                agent.transcript_path = Some("/tmp/new-transcript.jsonl".to_string());
-            })
-            .unwrap();
-        let stale_update = record_agent_active_workspace(
-            &state,
-            "agent-1",
-            "/tmp/live-transcript.jsonl",
-            replacement_generation,
-            first.to_str().unwrap(),
-            ActiveWorkspaceSource::Claude,
-        )
-        .unwrap();
-        assert!(stale_update.is_none());
-        assert_eq!(
-            state
-                .agent("agent-1")
-                .unwrap()
-                .unwrap()
-                .active_workspace
-                .unwrap()
-                .cwd,
-            second.to_str().unwrap()
-        );
-        fs::remove_dir_all(root).ok();
-    }
-
-    #[test]
-    fn remote_agent_transport_failure_does_not_adopt_a_local_lookalike() {
-        let root = temp_workspace("remote-active-command");
-        let directory = root.join("local-lookalike");
-        fs::create_dir_all(&directory).unwrap();
-        let state = test_state_with_workspace(root.join("state"));
-        let mut group = allocation_group(&directory, &root.join("managed"));
-        group.remote = Some(test_remote());
-        state.insert_group_after(group, None).unwrap();
-        let mut agent = sample_agent("agent-1", None, AgentStatus::Running);
-        agent.worktree_dir = "/srv/code/project".to_string();
-        agent.transcript_path = Some("/tmp/live-transcript.jsonl".to_string());
-        state.insert_agent(agent).unwrap();
-        let (tail_generation, _) = state
-            .mark_transcript_tail("agent-1", "/tmp/live-transcript.jsonl", true)
-            .unwrap()
-            .unwrap();
-
-        let update = record_agent_active_workspace(
-            &state,
-            "agent-1",
-            "/tmp/live-transcript.jsonl",
-            tail_generation,
-            directory.to_str().unwrap(),
-            ActiveWorkspaceSource::Claude,
-        )
-        .unwrap();
-
-        assert!(update.is_none());
-        assert_eq!(
-            state.agent("agent-1").unwrap().unwrap().active_workspace,
-            None
-        );
-        fs::remove_dir_all(root).ok();
     }
 
     #[test]
@@ -3151,7 +1486,7 @@ mod tests {
         agent.group_id = workspace.id.clone();
         agent.transcript_path = Some(root.join("pruned/session-gone.jsonl").display().to_string());
         state
-            .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-never-existed")
+            .bind_research_node_run(&detail.tree.root_node_id, &agent)
             .unwrap();
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
         assert_eq!(node.status(), crate::research::ResearchNodeStatus::Failed);
@@ -3203,7 +1538,7 @@ mod tests {
         let mut agent = sample_agent("research-agent", None, AgentStatus::Done);
         agent.group_id = workspace.id.clone();
         state
-            .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-never-existed")
+            .bind_research_node_run(&detail.tree.root_node_id, &agent)
             .unwrap();
         let node_id = detail.tree.root_node_id.clone();
         assert_eq!(
@@ -3301,7 +1636,6 @@ mod tests {
                 collapsed: false,
                 scope: WorkspaceScope::Research,
                 imported_research_archive_id: None,
-                remote: None,
                 agents: Vec::new(),
             },
             trees: Vec::new(),
@@ -3767,155 +2101,26 @@ mod tests {
     }
 
     #[test]
-    fn launch_origin_enforces_workspace_scope_and_research_availability() {
+    fn research_launch_requires_an_available_research_workspace() {
         let root = temp_workspace("launch-origin");
         let project = root.join("project");
         std::fs::create_dir_all(&project).unwrap();
         let state = test_state_with_workspace(root.join("managed"));
         let research =
             create_research_workspace(&state, None, project.display().to_string()).unwrap();
+        assert!(validate_launch_workspace(&state, &research.id).is_ok());
         assert!(
-            validate_launch_workspace(&state, Some(&research.id), LaunchOrigin::Terminal)
+            validate_launch_workspace(&state, "missing")
                 .unwrap_err()
-                .contains("ordinary agents")
-        );
-        assert!(
-            validate_launch_workspace(&state, Some(&research.id), LaunchOrigin::Research).is_ok()
+                .contains("was not found")
         );
         std::fs::remove_dir_all(&project).unwrap();
         assert!(
-            validate_launch_workspace(&state, Some(&research.id), LaunchOrigin::Research)
+            validate_launch_workspace(&state, &research.id)
                 .unwrap_err()
                 .contains("unavailable")
         );
         std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn attach_agent_pane_preserves_session_id_and_transcript() {
-        // attach binds the pane via a field-scoped write, so the session id/transcript a
-        // freshly spawned agent's SessionStart hook records on another thread survive —
-        // attach never touches those fields. (The clobber it guards against is a
-        // concurrent interleaving, which a single-threaded test can't reproduce; this
-        // asserts the structural invariant that attach only writes pane-binding fields.)
-        let state = test_state();
-        let mut spawned = sample_agent("agent-new", None, AgentStatus::Starting);
-        spawned.session_id = Some("sess-xyz".to_string());
-        spawned.transcript_path = Some("/tmp/new.jsonl".to_string());
-        state.insert_agent(spawned).unwrap();
-
-        let attached = attach_agent_pane(&state, "agent-new", "pane-1".to_string()).unwrap();
-
-        assert_eq!(attached.pane_id.as_deref(), Some("pane-1"));
-        assert!(matches!(attached.status, AgentStatus::Running));
-        assert_eq!(attached.session_id.as_deref(), Some("sess-xyz"));
-        assert_eq!(attached.transcript_path.as_deref(), Some("/tmp/new.jsonl"));
-    }
-
-    #[test]
-    fn escape_watch_stands_down_when_activity_arrives_during_grace() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-1",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-        let baseline = state.agent_activity_seq("agent-1").unwrap();
-
-        // A hook event received during the grace window (e.g. a PostToolUse
-        // re-marking Running) bumps the activity counter: the watch stands down.
-        state
-            .set_agent_status("agent-1", AgentStatus::Running)
-            .unwrap();
-
-        assert!(resolve_agent_escape_watch(&state, "agent-1", baseline).is_none());
-        assert!(matches!(
-            state.agent("agent-1").unwrap().unwrap().status,
-            AgentStatus::Running
-        ));
-    }
-
-    #[test]
-    fn escape_watch_ignores_non_working_agents() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent("agent-1", Some("pane-1"), AgentStatus::Done))
-            .unwrap();
-        let baseline = state.agent_activity_seq("agent-1").unwrap();
-
-        assert!(resolve_agent_escape_watch(&state, "agent-1", baseline).is_none());
-        assert!(matches!(
-            state.agent("agent-1").unwrap().unwrap().status,
-            AgentStatus::Done
-        ));
-    }
-
-    #[test]
-    fn escape_watch_only_runs_for_lone_escape_adapters() {
-        // Claude interrupts on a lone Esc (no hook), so it is watched; Codex needs Esc
-        // twice, so watching it would demote a still-working agent on every Esc.
-        assert!(adapter_interrupts_on_lone_escape("claude"));
-        assert!(!adapter_interrupts_on_lone_escape("codex"));
-        assert!(!adapter_interrupts_on_lone_escape("grok"));
-    }
-
-    #[test]
-    fn escape_watch_dedupes_a_held_escape_burst() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-1",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-
-        // The first Esc reserves the watch; a repeat while it is in flight does not.
-        assert!(state.begin_agent_escape_watch("agent-1"));
-        assert!(!state.begin_agent_escape_watch("agent-1"));
-        // Once the watcher resolves, the next burst may reserve again.
-        state.end_agent_escape_watch("agent-1");
-        assert!(state.begin_agent_escape_watch("agent-1"));
-    }
-
-    #[test]
-    fn stale_shell_job_cannot_detach_replacement_agent() {
-        let state = test_state();
-        state
-            .insert_agent(sample_agent(
-                "agent-new",
-                Some("pane-1"),
-                AgentStatus::Running,
-            ))
-            .unwrap();
-
-        assert!(
-            detach_pane_agent_if_matches(&state, "pane-1", "agent-old")
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(
-            state.agent_by_pane("pane-1").unwrap().unwrap().id,
-            "agent-new"
-        );
-    }
-
-    #[test]
-    fn mark_agent_spawn_failed_clears_reserved_pane_binding() {
-        let state = test_state();
-        let mut agent = sample_agent("agent-new", Some("pane-1"), AgentStatus::Running);
-        agent.orphaned_queue_pane_id = Some("pane-1".to_string());
-        agent.session_id = Some("sess-xyz".to_string());
-        state.insert_agent(agent).unwrap();
-
-        let failed = mark_agent_spawn_failed(&state, "agent-new", "pane-1").unwrap();
-
-        assert_eq!(failed.pane_id, None);
-        assert_eq!(failed.orphaned_queue_pane_id, None);
-        assert!(matches!(failed.status, AgentStatus::Failed));
-        assert_eq!(failed.session_id.as_deref(), Some("sess-xyz"));
     }
 
     #[test]
@@ -3944,215 +2149,5 @@ mod tests {
                 "name should not use the group- prefix: {name:?}"
             );
         }
-    }
-
-    fn allocation_group(project: &Path, managed: &Path) -> GroupInfo {
-        GroupInfo {
-            id: "group-1".to_string(),
-            name: "brave otter".to_string(),
-            name_override: None,
-            dir: project.display().to_string(),
-            managed_dir: managed.display().to_string(),
-            base_repo: Some(project.display().to_string()),
-            base_ref: Some("HEAD".to_string()),
-            parent_id: None,
-            created_at: 1,
-            collapsed: false,
-            scope: WorkspaceScope::Terminal,
-            imported_research_archive_id: None,
-            remote: None,
-            agents: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn allocates_non_git_worktrees_in_local_session_root() {
-        let workspace = temp_workspace("local-session");
-        let project = workspace.join("project");
-        let managed = workspace.join("managed/group");
-        fs::create_dir_all(&project).unwrap();
-        fs::create_dir_all(&managed).unwrap();
-        let state = test_state_with_workspace(workspace.join("state"));
-        persistence::save_preferences(
-            &state.config().workspace_root,
-            &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalSession),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let group = allocation_group(&project, &managed);
-        let canonical_project = fs::canonicalize(&project).unwrap();
-        assert_eq!(
-            configured_worktree_root_for_cwd(
-                &state,
-                &Host::Local,
-                project.to_str().unwrap(),
-                &group,
-            )
-            .unwrap(),
-            None
-        );
-
-        let first = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(project.to_str().unwrap()),
-            &group,
-            "agent-1",
-        )
-        .unwrap();
-        assert_eq!(
-            first,
-            canonical_project.join(".session/worktrees/brave-otter-agent-1")
-        );
-        fs::create_dir_all(&first).unwrap();
-        let collision = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(project.to_str().unwrap()),
-            &group,
-            "agent-1",
-        )
-        .unwrap();
-        assert_eq!(
-            collision,
-            canonical_project.join(".session/worktrees/brave-otter-agent-1-1")
-        );
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn local_worktree_names_bound_long_group_names() {
-        let workspace = temp_workspace("local-long-name");
-        let project = workspace.join("project");
-        let managed = workspace.join("managed/group");
-        fs::create_dir_all(&project).unwrap();
-        fs::create_dir_all(&managed).unwrap();
-        let state = test_state_with_workspace(workspace.join("state"));
-        persistence::save_preferences(
-            &state.config().workspace_root,
-            &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalSession),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let mut group = allocation_group(&project, &managed);
-        group.name_override = Some("a".repeat(400));
-
-        let dir = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(project.to_str().unwrap()),
-            &group,
-            "agent-1",
-        )
-        .unwrap();
-        let name = dir.file_name().unwrap().to_str().unwrap();
-        assert!(
-            name.len() <= 240,
-            "worktree component was {} bytes",
-            name.len()
-        );
-        fs::create_dir_all(&dir).unwrap();
-        assert!(dir.is_dir());
-
-        let mut other = group;
-        other.name_override = Some(format!("{}b", "a".repeat(399)));
-        let other_dir = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(project.to_str().unwrap()),
-            &other,
-            "agent-1",
-        )
-        .unwrap();
-        assert_ne!(
-            dir, other_dir,
-            "the hash should distinguish truncated names"
-        );
-        fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn local_claude_uses_git_top_level_and_excludes_worktrees_once() {
-        let workspace = temp_workspace("local-claude");
-        let project = workspace.join("project");
-        let nested = project.join("nested/path");
-        let managed = workspace.join("managed/group");
-        fs::create_dir_all(&nested).unwrap();
-        fs::create_dir_all(&managed).unwrap();
-        let git = |args: &[&str]| {
-            let output = Command::new("git")
-                .arg("-C")
-                .arg(&project)
-                .args(args)
-                .output()
-                .expect("git runs");
-            assert!(
-                output.status.success(),
-                "git {args:?} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        };
-        git(&["init", "-b", "main"]);
-        let canonical_project = fs::canonicalize(&project).unwrap();
-        let state = test_state_with_workspace(workspace.join("state"));
-        persistence::save_preferences(
-            &state.config().workspace_root,
-            &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalClaude),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let group = allocation_group(&nested, &managed);
-
-        assert_eq!(
-            configured_worktree_root_for_cwd(
-                &state,
-                &Host::Local,
-                nested.to_str().unwrap(),
-                &group,
-            )
-            .unwrap(),
-            Some(canonical_project.join(".claude/worktrees"))
-        );
-
-        let first = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(nested.to_str().unwrap()),
-            &group,
-            "agent-1",
-        )
-        .unwrap();
-        let second = allocate_agent_worktree_dir(
-            &state,
-            &Host::Local,
-            Some(nested.to_str().unwrap()),
-            &group,
-            "agent-2",
-        )
-        .unwrap();
-
-        assert_eq!(
-            first,
-            canonical_project.join(".claude/worktrees/brave-otter-agent-1")
-        );
-        assert_eq!(
-            second,
-            canonical_project.join(".claude/worktrees/brave-otter-agent-2")
-        );
-        let exclude = fs::read_to_string(project.join(".git/info/exclude")).unwrap();
-        assert_eq!(
-            exclude
-                .lines()
-                .filter(|line| line.trim() == "/.claude/worktrees/")
-                .count(),
-            1
-        );
-        fs::remove_dir_all(workspace).ok();
     }
 }

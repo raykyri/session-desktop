@@ -4,8 +4,8 @@ import { useConfirmDialogFocus } from "../hooks/useConfirmDialogFocus";
 import ConfirmDialogActionButton from "./ConfirmDialogActionButton";
 import { trapResearchDialogTab } from "./research/researchFocus";
 
-/** The Quit Session confirmation, naming the tabs and research runs that
- * quitting stops. */
+/** The Quit Session confirmation, naming the research runs that quitting
+ * cancels. */
 export default function QuitDialog({
   dialog,
   quitting,
@@ -38,22 +38,11 @@ export default function QuitDialog({
         aria-busy={quitting}
       >
         <h2 id="exit-dialog-title">Quit Session?</h2>
-        {dialog.paneCount > 0 ? (
-          <p>
-            Quitting will close{" "}
-            {dialog.paneCount === 1 ? "the open tab" : `all ${dialog.paneCount} tabs`}{" "}
-            and stop any running agents or processes.
-          </p>
-        ) : (
-          <p>Quitting will stop running agents or processes.</p>
-        )}
-        {dialog.researchRunCount > 0 ? (
-          <p>
-            {dialog.researchRunCount} active research run
-            {dialog.researchRunCount === 1 ? "" : "s"} will be cancelled and kept in
-            Research history.
-          </p>
-        ) : null}
+        <p>
+          {dialog.researchRunCount} active research run
+          {dialog.researchRunCount === 1 ? "" : "s"} will be cancelled and kept in
+          Research history.
+        </p>
         <div className="confirm-dialog-actions">
           <button className="control-button" type="button" disabled={quitting} onClick={onCancel}>
             Cancel
@@ -64,7 +53,7 @@ export default function QuitDialog({
             className="danger"
             autoFocus
             pending={quitting}
-            pendingLabel="Closing terminals..."
+            pendingLabel="Quitting..."
             onClick={onConfirm}
           >
             Quit Session

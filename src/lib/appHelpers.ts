@@ -140,12 +140,6 @@ export function isEditableTarget(target: EventTarget | null) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-const TERMINAL_PANE_CLASS = "terminal-pane";
-
-export function isTerminalTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && target.closest(`.${TERMINAL_PANE_CLASS}`) !== null;
-}
-
 const AGENT_STATUSES_AT_REST = new Set<AgentInfo["status"]>([
   "done",
   "idle",

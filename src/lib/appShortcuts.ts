@@ -13,7 +13,6 @@ interface AppShortcutInput {
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
-  terminalTarget?: boolean;
 }
 
 export const RESEARCH_HOME_SHORTCUT_LABEL = "⌘N";

@@ -31,11 +31,9 @@ func shouldClaimBrowserEscape(
 /// shortcuts must be claimed for both its outer view and content descendants.
 /// The legacy iframe fallback follows the same rule when explicitly armed.
 func shouldClaimWebAppShortcut(
-    hasTerminalKeyboardOwner: Bool,
     responderState: WebAppShortcutResponderState,
     iframeFallbackEligible: Bool
 ) -> Bool {
-    guard !hasTerminalKeyboardOwner else { return false }
     if responderState == .humanBrowser {
         return true
     }
@@ -68,7 +66,6 @@ func humanBrowserDefersEditableSensitiveShortcut(
 /// Tools-only macOS installations.
 @_cdecl("session_native_support_should_claim_web_app_shortcut")
 public func sessionNativeSupportShouldClaimWebAppShortcut(
-    _ hasTerminalKeyboardOwner: Int32,
     _ responderStateValue: Int32,
     _ iframeFallbackEligible: Int32
 ) -> Int32 {
@@ -78,7 +75,6 @@ public func sessionNativeSupportShouldClaimWebAppShortcut(
         return 0
     }
     return shouldClaimWebAppShortcut(
-        hasTerminalKeyboardOwner: hasTerminalKeyboardOwner == 1,
         responderState: responderState,
         iframeFallbackEligible: iframeFallbackEligible == 1
     ) ? 1 : 0

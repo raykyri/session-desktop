@@ -1,18 +1,13 @@
 use std::collections::HashSet;
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::fs;
-use std::io::{ErrorKind, Read};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt, symlink};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-
-static SHIM_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 const HOME_FALLBACK_DIRS: &[&str] = &[
     ".local/bin",
@@ -39,24 +34,13 @@ const SYSTEM_FALLBACK_DIRS: &[&str] = &[
 /// Resolves the login-shell PATH cache on a background thread. The probe runs
 /// the user's shell as an interactive login shell (`-ilc`) and can take
 /// hundreds of milliseconds to seconds under nvm/pyenv-style profiles; its
-/// first caller used to be the first recovered pane's spawn, which sat on the
-/// main thread inside the startup hook. Warming it as startup's first act
+/// first caller would otherwise be the first agent launch. Warming it as startup's first act
 /// overlaps the probe with the rest of setup, and any spawn that arrives early
 /// blocks on the same `OnceLock` initialization instead of starting a second probe.
 pub(crate) fn warm_login_shell_path() {
     std::thread::spawn(|| {
         let _ = login_shell_path_dirs();
     });
-}
-
-/// The Session CLI path advertised to child processes — `SESSION_CLI`, hook
-/// commands, and shell wrapper functions all call back into Session through this
-/// binary. Centralized so exactly one place decides which CLI a launch target
-/// gets: the local target reuses this process's executable (the app binary
-/// doubles as the CLI), while a remote target must instead resolve a
-/// standalone `session-cli` shipped to its host.
-pub(crate) fn session_cli_path() -> Result<PathBuf, String> {
-    env::current_exe().map_err(|err| format!("failed to resolve the Session executable: {err}"))
 }
 
 pub(crate) fn resolve_binary(binary: &str) -> Option<PathBuf> {
@@ -68,33 +52,6 @@ pub(crate) fn resolve_binary(binary: &str) -> Option<PathBuf> {
         home.as_deref(),
         login_shell_path_dirs(),
     )
-}
-
-/// Builds the PATH inherited by local pane processes, with a session-owned shim
-/// directory first. The directory is namespaced by the configured socket name,
-/// so production and development instances sharing a runtime parent cannot
-/// redirect each other's panes to a different app binary.
-///
-/// This environment is applied by the local PTY launcher. Remote pane variables
-/// have already been serialized into their ssh command by then, so the local
-/// filesystem path never crosses the host boundary.
-pub(crate) fn pane_child_path(socket_path: &Path) -> Result<String, String> {
-    let session_cli = session_cli_path()?;
-    let shim_dir = ensure_session_cli_shim(socket_path, &session_cli)?;
-    let path = env::var_os("PATH");
-    let home = env::var_os("HOME").map(PathBuf::from);
-    child_path_from_with_prepend(
-        path.as_deref(),
-        home.as_deref(),
-        login_shell_path_dirs(),
-        &shim_dir,
-    )
-    .ok_or_else(|| {
-        format!(
-            "failed to add Session shim directory {} to child PATH",
-            shim_dir.display()
-        )
-    })
 }
 
 fn resolve_binary_from(
@@ -123,159 +80,6 @@ fn child_path_from(
     env::join_paths(launch_path_dirs(path, home, login_dirs))
         .ok()
         .map(|path| path.to_string_lossy().into_owned())
-}
-
-fn child_path_from_with_prepend(
-    path: Option<&OsStr>,
-    home: Option<&Path>,
-    login_dirs: &[PathBuf],
-    prepend: &Path,
-) -> Option<String> {
-    let mut dirs = launch_path_dirs(path, home, login_dirs);
-    dirs.retain(|dir| dir != prepend);
-    dirs.insert(0, prepend.to_path_buf());
-    env::join_paths(dirs)
-        .ok()
-        .map(|path| path.to_string_lossy().into_owned())
-}
-
-/// Materializes a stable command name for the app binary without installing
-/// anything globally. The shim's own directories are owner-only even when an
-/// explicitly configured control socket lives below a shared parent. The socket
-/// filename adds an instance namespace for users who run production and
-/// development builds from the same parent.
-fn ensure_session_cli_shim(socket_path: &Path, session_cli: &Path) -> Result<PathBuf, String> {
-    let runtime_dir = socket_path.parent().ok_or_else(|| {
-        format!(
-            "Session socket path {} has no parent directory",
-            socket_path.display()
-        )
-    })?;
-    let socket_name = socket_path.file_name().ok_or_else(|| {
-        format!(
-            "Session socket path {} has no filename",
-            socket_path.display()
-        )
-    })?;
-    let bin_root = runtime_dir.join("session-bin");
-    let shim_dir = bin_root.join(socket_name);
-    ensure_runtime_directory(runtime_dir)?;
-    ensure_owner_only_directory(&bin_root)?;
-    ensure_owner_only_directory(&shim_dir)?;
-
-    let shim_path = shim_dir.join("session");
-    if fs::read_link(&shim_path).is_ok_and(|target| target == session_cli) {
-        return Ok(shim_dir);
-    }
-
-    // Build the replacement beside the destination and rename it into place,
-    // so concurrent pane spawns see either the old complete link or the new
-    // complete link. PID plus a process-local sequence also avoids collisions
-    // between simultaneous spawns and stale temporary links after a crash.
-    let sequence = SHIM_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let temporary = shim_dir.join(format!(".session.tmp-{}-{sequence}", std::process::id()));
-    match fs::remove_file(&temporary) {
-        Ok(()) => {}
-        Err(err) if err.kind() == ErrorKind::NotFound => {}
-        Err(err) => {
-            return Err(format!(
-                "failed to remove stale Session shim {}: {err}",
-                temporary.display()
-            ));
-        }
-    }
-    symlink(session_cli, &temporary).map_err(|err| {
-        format!(
-            "failed to create Session shim {} -> {}: {err}",
-            temporary.display(),
-            session_cli.display()
-        )
-    })?;
-    if let Err(err) = fs::rename(&temporary, &shim_path) {
-        let _ = fs::remove_file(&temporary);
-        return Err(format!(
-            "failed to install Session shim {} -> {}: {err}",
-            shim_path.display(),
-            session_cli.display()
-        ));
-    }
-
-    Ok(shim_dir)
-}
-
-/// Config loading normally creates the socket parent before any pane can spawn,
-/// but recovery tests and directly-constructed states can reach this boundary
-/// without that setup. Create a missing parent privately; never chmod an
-/// existing directory because an explicitly configured socket may live under a
-/// shared location such as `/tmp`.
-fn ensure_runtime_directory(path: &Path) -> Result<(), String> {
-    let created = match fs::DirBuilder::new().mode(0o700).create(path) {
-        Ok(()) => true,
-        Err(err) if err.kind() == ErrorKind::AlreadyExists => false,
-        Err(err) => {
-            return Err(format!(
-                "failed to create Session runtime directory {}: {err}",
-                path.display()
-            ));
-        }
-    };
-
-    let metadata = fs::metadata(path).map_err(|err| {
-        format!(
-            "failed to inspect Session runtime directory {}: {err}",
-            path.display()
-        )
-    })?;
-    if !metadata.is_dir() {
-        return Err(format!(
-            "Session runtime path {} is not a directory",
-            path.display()
-        ));
-    }
-
-    if created {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|err| {
-            format!(
-                "failed to restrict Session runtime directory {}: {err}",
-                path.display()
-            )
-        })?;
-    }
-
-    Ok(())
-}
-
-fn ensure_owner_only_directory(path: &Path) -> Result<(), String> {
-    match fs::DirBuilder::new().mode(0o700).create(path) {
-        Ok(()) => {}
-        Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-        Err(err) => {
-            return Err(format!(
-                "failed to create Session shim directory {}: {err}",
-                path.display()
-            ));
-        }
-    }
-
-    let metadata = fs::symlink_metadata(path).map_err(|err| {
-        format!(
-            "failed to inspect Session shim directory {}: {err}",
-            path.display()
-        )
-    })?;
-    if !metadata.file_type().is_dir() {
-        return Err(format!(
-            "Session shim directory path {} is not a directory",
-            path.display()
-        ));
-    }
-
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|err| {
-        format!(
-            "failed to restrict Session shim directory {}: {err}",
-            path.display()
-        )
-    })
 }
 
 fn launch_path_dirs(
@@ -396,6 +200,7 @@ fn push_unique_path(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, dir: 
 mod tests {
     use super::*;
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(name: &str) -> PathBuf {
@@ -475,141 +280,6 @@ mod tests {
         assert_eq!(dirs[1], PathBuf::from("/bin"));
         assert!(dirs.contains(&PathBuf::from("/Users/tester/.local/bin")));
         assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
-    }
-
-    #[test]
-    fn pane_child_path_puts_the_shim_first_without_duplicates() {
-        let shim = PathBuf::from("/private/Session runtime/bin/session.sock");
-        let inherited = env::join_paths([
-            PathBuf::from("/usr/bin"),
-            shim.clone(),
-            PathBuf::from("/bin"),
-        ])
-        .unwrap();
-
-        let child_path =
-            child_path_from_with_prepend(Some(inherited.as_os_str()), None, &[], &shim).unwrap();
-        let dirs = env::split_paths(OsStr::new(&child_path)).collect::<Vec<_>>();
-
-        assert_eq!(dirs[0], shim);
-        assert_eq!(dirs.iter().filter(|dir| *dir == &dirs[0]).count(), 1);
-        assert_eq!(dirs[1], PathBuf::from("/usr/bin"));
-        assert_eq!(dirs[2], PathBuf::from("/bin"));
-    }
-
-    #[test]
-    fn pane_child_path_materializes_a_session_command_for_the_current_executable() {
-        let root = temp_root("pane-child-path");
-        let socket = root.join("run/session.sock");
-        let process_path_before = env::var_os("PATH");
-
-        let child_path = pane_child_path(&socket).unwrap();
-        let dirs = env::split_paths(OsStr::new(&child_path)).collect::<Vec<_>>();
-
-        assert_eq!(dirs[0], root.join("run/session-bin/session.sock"));
-        assert_eq!(
-            fs::read_link(dirs[0].join("session")).unwrap(),
-            session_cli_path().unwrap()
-        );
-        assert_ne!(
-            fs::metadata(dirs[0].join("session"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o111,
-            0
-        );
-        assert_eq!(env::var_os("PATH"), process_path_before);
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn session_cli_shim_is_private_socket_scoped_and_retargetable() {
-        let root = temp_root("cli-shim");
-        let runtime = root.join("run");
-        let socket = runtime.join("session-dev.sock");
-        let first_cli = root.join("first/session");
-        let second_cli = root.join("second/session");
-        touch(&first_cli);
-        touch(&second_cli);
-
-        let shim_dir = ensure_session_cli_shim(&socket, &first_cli).unwrap();
-        let expected_dir = runtime.join("session-bin/session-dev.sock");
-        assert_eq!(shim_dir, expected_dir);
-        assert_eq!(fs::read_link(shim_dir.join("session")).unwrap(), first_cli);
-        assert_eq!(
-            fs::metadata(&runtime).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
-        assert_eq!(
-            fs::metadata(runtime.join("session-bin"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o700
-        );
-        assert_eq!(
-            fs::metadata(&shim_dir).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
-
-        let same_dir = ensure_session_cli_shim(&socket, &second_cli).unwrap();
-        assert_eq!(same_dir, shim_dir);
-        assert_eq!(fs::read_link(shim_dir.join("session")).unwrap(), second_cli);
-        assert!(fs::read_dir(&shim_dir).unwrap().all(|entry| {
-            !entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".session.tmp-")
-        }));
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn session_cli_shim_refuses_to_replace_a_directory() {
-        let root = temp_root("cli-shim-directory");
-        let runtime = root.join("run");
-        let socket = runtime.join("session.sock");
-        let cli = root.join("app/session");
-        touch(&cli);
-        let occupied = runtime.join("session-bin/session.sock/session");
-        fs::create_dir_all(&occupied).unwrap();
-
-        let error = ensure_session_cli_shim(&socket, &cli).unwrap_err();
-
-        assert!(error.contains("failed to install Session shim"), "{error}");
-        assert!(occupied.is_dir());
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn session_cli_shim_does_not_chmod_an_existing_runtime_parent() {
-        let root = temp_root("cli-shim-shared-parent");
-        let runtime = root.join("shared");
-        fs::create_dir(&runtime).unwrap();
-        fs::set_permissions(&runtime, fs::Permissions::from_mode(0o755)).unwrap();
-        let socket = runtime.join("session.sock");
-        let cli = root.join("app/session");
-        touch(&cli);
-
-        ensure_session_cli_shim(&socket, &cli).unwrap();
-
-        assert_eq!(
-            fs::metadata(&runtime).unwrap().permissions().mode() & 0o777,
-            0o755
-        );
-        assert_eq!(
-            fs::metadata(runtime.join("session-bin"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o700
-        );
-        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

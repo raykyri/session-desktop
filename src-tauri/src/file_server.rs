@@ -19,7 +19,7 @@ use crate::research_widgets::{self, WidgetMode};
 use crate::state::AppState;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use sha2::{Digest, Sha256};
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -109,29 +109,6 @@ pub fn start_file_server(state: AppState) -> Result<FileServerInfo, String> {
     Ok(FileServerInfo { port })
 }
 
-/// Builds the loopback URL for an absolute file path. `abs_path` must be absolute
-/// (start with `/`), so the encoded form sits directly after the token.
-pub fn file_url(port: u16, token: &str, abs_path: &Path) -> String {
-    format!(
-        "http://127.0.0.1:{port}/{token}{}",
-        percent_encode_path(&abs_path.to_string_lossy())
-    )
-}
-
-/// Canonicalizes `requested` (resolving `..` and symlinks) and returns it only if it
-/// lives under one of `roots`. This is the trust boundary for what may be served.
-pub fn resolve_under_roots(requested: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
-    let canonical = std::fs::canonicalize(requested).ok()?;
-    for root in roots {
-        if let Ok(root_canonical) = std::fs::canonicalize(root)
-            && canonical.starts_with(&root_canonical)
-        {
-            return Some(canonical);
-        }
-    }
-    None
-}
-
 /// Resolve one of the exact canonical files granted to a pane. This is kept
 /// separate from directory roots so a visualization under Session's private
 /// workspace metadata does not grant the preview token access to sibling
@@ -166,137 +143,8 @@ pub fn resolve_tokenized_file_path(
 }
 
 fn resolve_file_token_path(state: &AppState, token: &str, requested: &Path) -> Option<PathBuf> {
-    if let Some(pane_id) = state.pane_for_file_token(token) {
-        let roots = state.pane_file_roots(&pane_id);
-        let grants = state.pane_file_preview_grants(&pane_id);
-        return resolve_under_roots(requested, &roots)
-            .or_else(|| resolve_exact_file(requested, &grants));
-    }
     let (_, exact) = state.exact_file_for_preview_token(token)?;
     resolve_exact_file(requested, &[exact])
-}
-
-fn valid_codex_inline_vis_filename(file: &str) -> bool {
-    let Some(stem) = file.strip_suffix(".html") else {
-        return false;
-    };
-    !stem.is_empty()
-        && stem.split('-').all(|part| {
-            !part.is_empty()
-                && part
-                    .bytes()
-                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-        })
-}
-
-fn valid_visualization_session_id(session_id: &str) -> bool {
-    !session_id.is_empty()
-        && session_id.len() <= 128
-        && session_id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-}
-
-fn dated_directories(root: &Path, digits: usize) -> Result<Vec<PathBuf>, String> {
-    let entries = fs::read_dir(root).map_err(|err| {
-        format!(
-            "failed to read visualization directory {}: {err}",
-            root.display()
-        )
-    })?;
-    let mut directories = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|err| {
-            format!(
-                "failed to inspect visualization directory {}: {err}",
-                root.display()
-            )
-        })?;
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.len() == digits
-            && name.bytes().all(|byte| byte.is_ascii_digit())
-            && entry.file_type().is_ok_and(|kind| kind.is_dir())
-        {
-            directories.push(entry.path());
-        }
-    }
-    directories.sort();
-    Ok(directories)
-}
-
-/// Resolve the file named by a `codex-inline-vis` directive inside the owning
-/// Codex thread's dated visualization directory. The directive supplies only a
-/// contract-valid basename; the trusted pane session supplies the directory.
-pub fn resolve_codex_inline_visualization(
-    visualization_root: &Path,
-    session_id: &str,
-    file: &str,
-) -> Result<PathBuf, String> {
-    if !valid_visualization_session_id(session_id) {
-        return Err("the attached Codex session has an invalid id".to_string());
-    }
-    if !valid_codex_inline_vis_filename(file) {
-        return Err(format!("invalid codex-inline-vis file '{file}'"));
-    }
-    let canonical_root = fs::canonicalize(visualization_root).map_err(|_| {
-        format!(
-            "Codex visualization storage {} was not found",
-            visualization_root.display()
-        )
-    })?;
-    let mut matches = Vec::new();
-    for year in dated_directories(&canonical_root, 4)? {
-        for month in dated_directories(&year, 2)? {
-            for day in dated_directories(&month, 2)? {
-                let candidate = day.join(session_id).join(file);
-                let Ok(canonical) = fs::canonicalize(&candidate) else {
-                    continue;
-                };
-                if canonical.starts_with(&canonical_root) && canonical.is_file() {
-                    matches.push(canonical);
-                }
-            }
-        }
-    }
-    matches.sort();
-    matches.dedup();
-    match matches.as_slice() {
-        [only] => Ok(only.clone()),
-        [] => Err(format!(
-            "Codex visualization '{file}' was not found for session {session_id}"
-        )),
-        _ => Err(format!(
-            "Codex visualization '{file}' is ambiguous for session {session_id}"
-        )),
-    }
-}
-
-/// Resolves an absolute path carried by the current Codex visualization
-/// content-reference contract. Ordinary pane roots cover the attached
-/// checkout and temporary output; Session's durable designs directory is added
-/// explicitly because it sits inside private workspace metadata that must not
-/// become a general pane file root.
-pub fn resolve_codex_visualization_reference(
-    designs_root: &Path,
-    pane_roots: &[PathBuf],
-    reference: &Path,
-) -> Result<PathBuf, String> {
-    if !reference.is_absolute() {
-        return Err("Codex visualization references must use an absolute path".to_string());
-    }
-    if !reference
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("html"))
-    {
-        return Err("Codex visualization references must target an HTML fragment".to_string());
-    }
-    let mut allowed_roots = pane_roots.to_vec();
-    allowed_roots.push(designs_root.to_path_buf());
-    resolve_under_roots(reference, &allowed_roots)
-        .filter(|path| path.is_file())
-        .ok_or_else(|| "Codex visualization is outside this pane's approved roots".to_string())
 }
 
 struct RequestHead {
@@ -467,12 +315,9 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
         return Response::error(404, "Not Found");
     };
     let (token, encoded_path) = after_root.split_at(slash);
-    // Resolve pane-wide tokens beneath that pane's roots, while tokens exposed to
-    // executable previews can only re-read the exact source file. Unknown tokens and
-    // paths outside either capability fail without exposing whether the path exists.
-    if state.pane_for_file_token(token).is_none()
-        && state.exact_file_for_preview_token(token).is_none()
-    {
+    // A preview token can only re-read its exact source file. Unknown tokens and
+    // paths outside the capability fail without exposing whether the path exists.
+    if state.exact_file_for_preview_token(token).is_none() {
         return Response::error(404, "Not Found");
     }
     let Some(decoded) = percent_decode(encoded_path) else {
@@ -1207,27 +1052,6 @@ pub(crate) fn is_browser_previewable_path(path: &Path) -> bool {
         .is_some_and(session_proto::is_browser_preview_extension)
 }
 
-pub(crate) fn is_executable_preview_path(path: &Path) -> bool {
-    let content_type = mime_type(path);
-    content_type.starts_with("text/html") || content_type.starts_with("image/svg")
-}
-
-/// Percent-encodes a path, leaving `/` (the separator) and the RFC 3986 unreserved
-/// set intact so the encoded form is a normal multi-segment URL path.
-fn percent_encode_path(path: &str) -> String {
-    let mut out = String::with_capacity(path.len());
-    for byte in path.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
-            out.push(byte as char);
-        } else {
-            out.push('%');
-            out.push(hex_digit(byte >> 4));
-            out.push(hex_digit(byte & 0x0f));
-        }
-    }
-    out
-}
-
 fn percent_decode(input: &str) -> Option<String> {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -1252,13 +1076,6 @@ fn percent_decode(input: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-fn hex_digit(nibble: u8) -> char {
-    match nibble {
-        0..=9 => (b'0' + nibble) as char,
-        _ => (b'A' + (nibble - 10)) as char,
-    }
-}
-
 fn hex_value(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
@@ -1271,38 +1088,7 @@ fn hex_value(byte: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{PaneBackend, PaneInfo, PaneKind, PaneRuntime, PaneStatus};
     use crate::workspace::{GroupInfo, WorkspaceScope};
-    use portable_pty::{Child, ChildKiller, ExitStatus, PtySize, native_pty_system};
-    use std::io;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Debug)]
-    struct FakeChild;
-
-    impl ChildKiller for FakeChild {
-        fn kill(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-
-        fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
-            Box::new(FakeChild)
-        }
-    }
-
-    impl Child for FakeChild {
-        fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-            Ok(None)
-        }
-
-        fn wait(&mut self) -> io::Result<ExitStatus> {
-            Ok(ExitStatus::with_exit_code(0))
-        }
-
-        fn process_id(&self) -> Option<u32> {
-            None
-        }
-    }
 
     #[test]
     fn markdown_page_csp_allows_only_the_scroll_bridge_script() {
@@ -1336,20 +1122,6 @@ mod tests {
         assert!(page.contains("could not load one of its resources"));
         assert!(page.contains("unhandledrejection"));
         assert!(!page.contains("/tmp/activity.fragment.html"));
-    }
-
-    #[test]
-    fn browser_previewability_is_an_explicit_mime_allowlist() {
-        assert!(is_browser_previewable_path(Path::new("report.HTML")));
-        assert!(is_browser_previewable_path(Path::new("notes.md")));
-        assert!(is_browser_previewable_path(Path::new("diagram.svg")));
-        assert!(is_executable_preview_path(Path::new("report.html")));
-        assert!(is_executable_preview_path(Path::new("diagram.svg")));
-        assert!(!is_executable_preview_path(Path::new("notes.md")));
-        assert!(!is_browser_previewable_path(Path::new("release.dmg")));
-        assert!(!is_browser_previewable_path(Path::new("installer.pkg")));
-        assert!(!is_browser_previewable_path(Path::new("archive.zip")));
-        assert!(!is_browser_previewable_path(Path::new("unknown")));
     }
 
     #[test]
@@ -1394,15 +1166,6 @@ mod tests {
         assert!(!is_loopback_host_header("127.0.0.1.evil.com"));
         assert!(!is_loopback_host_header("0.0.0.0"));
         assert!(!is_loopback_host_header("192.168.1.5:5173"));
-    }
-
-    #[test]
-    fn percent_round_trips_paths_with_spaces_and_specials() {
-        let original = "/Users/x/my proj/réport (1).md";
-        let encoded = percent_encode_path(original);
-        assert!(!encoded.contains(' '));
-        assert!(encoded.contains('/'));
-        assert_eq!(percent_decode(&encoded).as_deref(), Some(original));
     }
 
     #[test]
@@ -1512,13 +1275,6 @@ mod tests {
         (status, body)
     }
 
-    fn url_path(port: u16, token: &str, abs: &Path) -> String {
-        file_url(port, token, abs)
-            .strip_prefix(&format!("http://127.0.0.1:{port}"))
-            .unwrap()
-            .to_string()
-    }
-
     /// Scratch space outside the production temp-directory allowlist, used by
     /// tests that need to distinguish a pane root from a forbidden sibling.
     fn non_temp_test_dir(label: &str) -> PathBuf {
@@ -1529,13 +1285,12 @@ mod tests {
 
     /// Builds an `AppState` with a live pane scoped to `root`, matching the
     /// production invariant required before a pane file token may serve files.
-    fn test_state(root: &Path, base: &Path, pane_id: &str) -> AppState {
+    fn test_state(root: &Path, base: &Path) -> AppState {
         use crate::config::{
             AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
             SessionConfig,
         };
         let config = SessionConfig {
-            remotes: Default::default(),
             workspace_root: base.join("state"),
             socket_path: base.join("x.sock"),
             adapters: AdapterConfigs {
@@ -1568,310 +1323,13 @@ mod tests {
                     collapsed: false,
                     scope: WorkspaceScope::Terminal,
                     imported_research_archive_id: None,
-                    remote: None,
                     agents: Vec::new(),
                 },
                 None,
             )
             .unwrap();
 
-        let pair = native_pty_system()
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
-        drop(pair.slave);
         state
-            .insert_pane(PaneRuntime {
-                info: PaneInfo {
-                    id: pane_id.to_string(),
-                    title: "Shell".to_string(),
-                    last_osc_title: None,
-                    kind: PaneKind::Shell,
-                    agent_id: None,
-                    group_id: "group-1".to_string(),
-                    cwd: root.display().to_string(),
-                    active_workspace: None,
-                    remote_session: None,
-                    remote_connection: None,
-                    cols: 80,
-                    rows: 24,
-                    status: PaneStatus::Running,
-                    last_active_at: 1,
-                    recovered: false,
-                    ssh_target: None,
-                    depth: 0,
-                },
-                backend: PaneBackend::HostPty(crate::state::HostPtyBackend {
-                    child: Arc::new(Mutex::new(Box::new(FakeChild))),
-                    master: Arc::new(Mutex::new(pair.master)),
-                    writer: Arc::new(Mutex::new(Box::new(io::sink()))),
-                    backlog: Default::default(),
-                }),
-                cwd_observation_seq: 0,
-            })
-            .unwrap();
-        state
-    }
-
-    #[test]
-    fn serves_files_under_root_with_range_and_blocks_the_rest() {
-        let base = non_temp_test_dir("serve");
-        let root = base.join("ws");
-        let outside = base.join("outside");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::write(root.join("hello.txt"), b"hello world").unwrap();
-        std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
-
-        let state = test_state(&root, &base, "pane-1");
-        let info = start_file_server(state.clone()).unwrap();
-        let token = state.pane_file_token("pane-1").unwrap();
-
-        let hello = std::fs::canonicalize(root.join("hello.txt")).unwrap();
-
-        // Full GET returns the file.
-        let (status, body) = http_get(info.port, &url_path(info.port, &token, &hello), None);
-        assert!(status.contains("200"), "status: {status}");
-        assert_eq!(body, b"hello world");
-
-        // Range GET returns the requested slice with 206.
-        let (status, body) = http_get(
-            info.port,
-            &url_path(info.port, &token, &hello),
-            Some("bytes=0-4"),
-        );
-        assert!(status.contains("206"), "status: {status}");
-        assert_eq!(body, b"hello");
-
-        // A file outside every root is forbidden (even though it exists).
-        let (status, _) = http_get(
-            info.port,
-            &url_path(info.port, &token, &outside.join("secret.txt")),
-            None,
-        );
-        assert!(status.contains("403"), "status: {status}");
-
-        // An unknown token can't reach any file.
-        let correct = url_path(info.port, &token, &hello);
-        let wrong = format!(
-            "/deadbeef{}",
-            correct.strip_prefix(&format!("/{token}")).unwrap()
-        );
-        let (status, _) = http_get(info.port, &wrong, None);
-        assert!(status.contains("404"), "status: {status}");
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn html_previews_include_the_scroll_bridge() {
-        let base = non_temp_test_dir("html-scroll");
-        let root = base.join("ws");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(root.join("page.html"), b"<!doctype html><p>hello</p>").unwrap();
-
-        let state = test_state(&root, &base, "pane-html-scroll");
-        let info = start_file_server(state.clone()).unwrap();
-        let token = state.pane_file_token("pane-html-scroll").unwrap();
-        let page = std::fs::canonicalize(root.join("page.html")).unwrap();
-        let (head, body) = http_get_full(info.port, &url_path(info.port, &token, &page), None);
-        let body = String::from_utf8(body).unwrap();
-
-        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
-        assert!(body.contains("<p>hello</p>"));
-        assert!(body.contains("session-preview-scroll"));
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn renders_markdown_as_html_unless_raw_is_requested() {
-        let base = std::env::temp_dir().join(format!("session-fs-md-{}", std::process::id()));
-        let root = base.join("ws");
-        std::fs::create_dir_all(&root).unwrap();
-        let source = "# Hello\n\nSome *text* in a table:\n\n| a | b |\n| - | - |\n| 1 | 2 |\n";
-        std::fs::write(root.join("doc.md"), source).unwrap();
-
-        let state = test_state(&root, &base, "pane-md");
-        let info = start_file_server(state.clone()).unwrap();
-        let token = state.pane_file_token("pane-md").unwrap();
-        let doc = std::fs::canonicalize(root.join("doc.md")).unwrap();
-        let path = url_path(info.port, &token, &doc);
-
-        // A plain GET returns a rendered HTML page.
-        let (head, body) = http_get_full(info.port, &path, None);
-        let body_text = String::from_utf8(body).unwrap();
-        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
-        assert!(head.contains("Content-Type: text/html"), "head: {head}");
-        assert!(body_text.contains("<h1>Hello</h1>"), "body: {body_text}");
-        assert!(body_text.contains("<table>"), "body: {body_text}");
-        assert!(
-            body_text.contains("session-preview-scroll"),
-            "body: {body_text}"
-        );
-
-        // `?raw=1` opts out and serves the source as plain text.
-        let (head, body) = http_get_full(info.port, &format!("{path}?raw=1"), None);
-        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
-        assert!(head.contains("Content-Type: text/plain"), "head: {head}");
-        assert_eq!(body, source.as_bytes());
-
-        // Range on Markdown is ignored: the full rendered page comes back as a 200.
-        let (head, body) = http_get_full(info.port, &path, Some("bytes=0-4"));
-        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
-        assert!(
-            String::from_utf8(body).unwrap().contains("<h1>Hello</h1>"),
-            "range response should carry the full rendered page"
-        );
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn resolves_only_thread_scoped_codex_inline_visualizations() {
-        let base = std::env::temp_dir().join(format!(
-            "session-fs-inline-vis-resolve-{}",
-            std::process::id()
-        ));
-        let root = base.join("visualizations");
-        let thread = root
-            .join("2026")
-            .join("08")
-            .join("08")
-            .join("019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391");
-        std::fs::create_dir_all(&thread).unwrap();
-        let visual = thread.join("artifact-tray-options.html");
-        std::fs::write(&visual, "<div>preview</div>").unwrap();
-
-        assert_eq!(
-            resolve_codex_inline_visualization(
-                &root,
-                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
-                "artifact-tray-options.html",
-            )
-            .unwrap(),
-            std::fs::canonicalize(&visual).unwrap()
-        );
-        assert!(
-            resolve_codex_inline_visualization(
-                &root,
-                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
-                "../artifact.html",
-            )
-            .is_err()
-        );
-        assert!(resolve_codex_inline_visualization(&root, "../../other", "artifact.html").is_err());
-
-        let duplicate = root
-            .join("2026")
-            .join("08")
-            .join("09")
-            .join("019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391");
-        std::fs::create_dir_all(&duplicate).unwrap();
-        std::fs::write(duplicate.join("artifact-tray-options.html"), "duplicate").unwrap();
-        assert!(
-            resolve_codex_inline_visualization(
-                &root,
-                "019fe2fe-2ef7-7aa2-a632-3f1d6d2bf391",
-                "artifact-tray-options.html",
-            )
-            .unwrap_err()
-            .contains("ambiguous")
-        );
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn resolves_current_codex_visualization_references_only_under_approved_roots() {
-        let base = std::env::temp_dir().join(format!(
-            "session-fs-visualization-reference-{}",
-            std::process::id()
-        ));
-        let designs = base.join("workspace-metadata/designs");
-        let pane_root = base.join("pane");
-        let outside = base.join("outside");
-        for directory in [&designs, &pane_root, &outside] {
-            std::fs::create_dir_all(directory).unwrap();
-        }
-        let durable = designs.join("activity/recent-activity.fragment.html");
-        std::fs::create_dir_all(durable.parent().unwrap()).unwrap();
-        std::fs::write(&durable, "<div>durable</div>").unwrap();
-        let temporary = pane_root.join("chart.html");
-        std::fs::write(&temporary, "<div>temporary</div>").unwrap();
-        let secret = outside.join("secret.html");
-        std::fs::write(&secret, "<div>secret</div>").unwrap();
-
-        let pane_roots = vec![pane_root.clone()];
-        assert_eq!(
-            resolve_codex_visualization_reference(&designs, &pane_roots, &durable).unwrap(),
-            std::fs::canonicalize(&durable).unwrap()
-        );
-        assert_eq!(
-            resolve_codex_visualization_reference(&designs, &pane_roots, &temporary).unwrap(),
-            std::fs::canonicalize(&temporary).unwrap()
-        );
-        assert!(resolve_codex_visualization_reference(&designs, &pane_roots, &secret).is_err());
-        assert!(
-            resolve_codex_visualization_reference(
-                &designs,
-                &pane_roots,
-                Path::new("relative.html")
-            )
-            .is_err()
-        );
-        assert!(
-            resolve_codex_visualization_reference(
-                &designs,
-                &pane_roots,
-                &pane_root.join("chart.svg")
-            )
-            .is_err()
-        );
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn exact_preview_token_serves_executable_content_but_not_siblings() {
-        let base = non_temp_test_dir("inline-vis");
-        let root = base.join("ws");
-        let visuals = base.join("private-visuals");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&visuals).unwrap();
-        let visual = visuals.join("preview.html");
-        let sibling = visuals.join("other.html");
-        std::fs::write(&visual, "<div class=\"card\">preview</div>").unwrap();
-        std::fs::write(&sibling, "private sibling").unwrap();
-
-        let state = test_state(&root, &base, "pane-vis");
-        let canonical = state.grant_pane_file_preview("pane-vis", &visual).unwrap();
-        let info = start_file_server(state.clone()).unwrap();
-        state.set_file_server(info.port);
-        let token = state
-            .exact_file_preview_token("pane-vis", &canonical)
-            .unwrap();
-        let path = format!(
-            "{}?codex-inline-vis=1",
-            url_path(info.port, &token, &canonical)
-        );
-        let (head, body) = http_get_full(info.port, &path, None);
-        let body = String::from_utf8(body).unwrap();
-        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
-        assert!(head.contains("Content-Security-Policy"), "head: {head}");
-        assert!(head.contains("script-src 'unsafe-inline'"), "head: {head}");
-        assert!(body.starts_with("<!doctype html>"), "body: {body}");
-        assert!(body.contains("--background:"), "body: {body}");
-        assert!(body.contains("<div class=\"card\">preview</div>"));
-
-        let (status, _) = http_get(info.port, &url_path(info.port, &token, &sibling), None);
-        assert!(status.contains("403"), "status: {status}");
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn csp_directive<'a>(head: &'a str, name: &str) -> Option<&'a str> {
@@ -1912,7 +1370,7 @@ mod tests {
         let base = non_temp_test_dir("widgets");
         let root = base.join("ws");
         std::fs::create_dir_all(&root).unwrap();
-        let state = test_state(&root, &base, "pane-widgets");
+        let state = test_state(&root, &base);
         let info = start_file_server(state.clone()).unwrap();
         state.set_file_server(info.port);
         // Startup allows scripts once WebRTC is off in the app web view; tests
@@ -2044,67 +1502,6 @@ mod tests {
         std::fs::write(&stored, "x".repeat(research_widgets::MAX_WIDGET_BYTES + 1)).unwrap();
         let (status, _) = http_get(info.port, &path_of(&urls.static_url), None);
         assert!(status.contains("413"), "{status}");
-        // The pane token machinery does not reach the widget store.
-        let pane_token = state.pane_file_token("pane-widgets").unwrap();
-        let (status, _) = http_get(info.port, &url_path(info.port, &pane_token, &stored), None);
-        assert!(status.contains("403"), "{status}");
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn tokenized_url_paths_resolve_only_authorized_source_files() {
-        let base = non_temp_test_dir("external-source");
-        let root = base.join("ws");
-        let outside = base.join("outside");
-        let granted_dir = base.join("private-visuals");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::create_dir_all(&granted_dir).unwrap();
-        let report = root.join("report with spaces.html");
-        let secret = outside.join("secret.html");
-        let granted = granted_dir.join("visual.html");
-        std::fs::write(&report, "report").unwrap();
-        std::fs::write(&secret, "secret").unwrap();
-        std::fs::write(&granted, "visual").unwrap();
-
-        let state = test_state(&root, &base, "pane-external");
-        let token = state.pane_file_token("pane-external").unwrap();
-        let report = std::fs::canonicalize(report).unwrap();
-        let secret = std::fs::canonicalize(secret).unwrap();
-        let granted = state
-            .grant_pane_file_preview("pane-external", &granted)
-            .unwrap();
-
-        assert_eq!(
-            resolve_tokenized_file_path(&state, &url_path(8123, &token, &report)).unwrap(),
-            report
-        );
-        assert_eq!(
-            resolve_tokenized_file_path(&state, &url_path(8123, &token, &granted)).unwrap(),
-            granted
-        );
-        assert!(resolve_tokenized_file_path(&state, &url_path(8123, &token, &secret)).is_err());
-        assert!(resolve_tokenized_file_path(&state, &url_path(8123, "unknown", &report)).is_err());
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn resolve_under_roots_blocks_traversal_outside_roots() {
-        let base = std::env::temp_dir().join(format!("session-fs-{}", std::process::id()));
-        let root = base.join("root");
-        let outside = base.join("outside");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::write(root.join("ok.txt"), b"ok").unwrap();
-        std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
-
-        let roots = vec![root.clone()];
-        assert!(resolve_under_roots(&root.join("ok.txt"), &roots).is_some());
-        // A path that resolves outside every root is rejected, including via `..`.
-        assert!(resolve_under_roots(&outside.join("secret.txt"), &roots).is_none());
-        assert!(resolve_under_roots(&root.join("../outside/secret.txt"), &roots).is_none());
 
         let _ = std::fs::remove_dir_all(&base);
     }
