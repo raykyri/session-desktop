@@ -18,7 +18,4 @@ src-tauri/gen/
 # this ignored so legacy data and retained thread recovery copies are never
 # accidentally committed.
 .session/
-src-tauri/swift-terminal/.build/
-
-# Cross-compiled linux-musl session-cli binaries supplied by remote-support builds.
-src-tauri/remote-cli/*/session-cli
+src-tauri/swift-native-support/.build/
