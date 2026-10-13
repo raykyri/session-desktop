@@ -185,8 +185,9 @@ interface ResearchTreeDeleteOfferProps {
 /** Shown after "Ask as a question" created a new thread from the text of
  * `tree`'s root post or document: offers to delete `tree`, stating what
  * deleting it also deletes. Keep (focused first; also Escape) closes it;
- * Delete… closes it and hands over to the delete confirmation, which does
- * the deletion. Delete… is disabled while the thread has active runs. */
+ * Delete… closes it and hands over to the delete confirmation, which moves
+ * the thread to the Trash or deletes it. Delete… is disabled while the thread
+ * has active runs. */
 export function ResearchTreeDeleteOfferDialog({
   fallbackFocus,
   ...props
