@@ -44,9 +44,9 @@ function storeFor(db: SessionDatabase) {
   return store;
 }
 
-/** The least recently used page of `userId`, or of the user holding the most
- * pages. Map order is recency order: minting inserts at the end and serving a
- * page re-inserts it. */
+/** The least recently used page for `userId`, or for an account with the
+ * highest page count. Map order is recency order: minting inserts at the end
+ * and serving a page re-inserts it. */
 function evictionCandidate(store: Map<string, Preview>, userId?: string): string | undefined {
   if (userId !== undefined) {
     for (const [token, page] of store) if (page.userId === userId) return token;
@@ -54,21 +54,23 @@ function evictionCandidate(store: Map<string, Preview>, userId?: string): string
   }
   const counts = new Map<string, number>();
   for (const page of store.values()) counts.set(page.userId, (counts.get(page.userId) ?? 0) + 1);
-  let heaviest: string | undefined;
-  let most = 0;
+  let highestCountUserId: string | undefined;
+  let highestCount = 0;
   for (const [user, count] of counts)
-    if (count > most) {
-      heaviest = user;
-      most = count;
+    if (count > highestCount) {
+      highestCountUserId = user;
+      highestCount = count;
     }
-  return heaviest === undefined ? undefined : evictionCandidate(store, heaviest);
+  return highestCountUserId === undefined
+    ? undefined
+    : evictionCandidate(store, highestCountUserId);
 }
 
 /** Expiring render cache only. The answer remains the durable source: callers
  * pass HTML resolved from a stored answer (`answerWidgetSource`), never HTML a
- * client supplied. Each user holds at most 64 pages; when the shared cache is
- * full, the user holding the most pages loses their least recently used one,
- * so a few users' previews cannot evict everyone else's. */
+ * client supplied. Each account can cache at most 64 pages. When the shared
+ * cache is full, evict the least recently used page from an account with the
+ * highest page count. */
 export function mintWidgetPreview(
   db: SessionDatabase,
   userId: string,

@@ -90,30 +90,31 @@ test("widget previews serve only widgets of stored answers the caller can read",
   });
 });
 
-test("a full preview cache evicts the heaviest user's least recently used page", async (t) => {
+test("a full preview cache evicts the least recently used page from an account with the highest page count", async (t) => {
   const harness = createHarness(t);
   const status = async (token: string) =>
     (await harness.app.request(`/w/${token}`, { headers: frame })).status;
-  const quiet = mintWidgetPreview(harness.db, "quiet", "<p>quiet</p>");
+  const lowerCountPreview = mintWidgetPreview(harness.db, "lower-count", "<p>lower count</p>");
   // Four users fill the 256-page cache to their 64-page caps.
-  const heavy: string[] = [];
+  const highestCountTokens: string[] = [];
   for (const user of ["a", "b", "c", "d"])
     for (let index = 0; index < 64; index += 1)
-      heavy.push(mintWidgetPreview(harness.db, user, `<p>${user}${index}</p>`).token);
-  t.is(await status(quiet.token), 200, "the quiet user's page survives");
-  // The 257th page evicted the least recently used page of a heaviest user.
-  t.is(await status(heavy[0]!), 410);
-  t.is(await status(heavy[64]!), 200);
+      highestCountTokens.push(mintWidgetPreview(harness.db, user, `<p>${user}${index}</p>`).token);
+  t.is(await status(lowerCountPreview.token), 200, "the lower-count account's page remains cached");
+  // The 257th page evicts the least recently used page from an account with
+  // the highest page count.
+  t.is(await status(highestCountTokens[0]!), 410);
+  t.is(await status(highestCountTokens[64]!), 200);
   // Serving refreshes recency: b's first page is now its newest, so the next
-  // eviction (b now holds the most pages) takes b's second page.
+  // eviction removes b's second page because b now has the highest page count.
   mintWidgetPreview(harness.db, "e", "<p>e</p>");
-  t.is(await status(heavy[64]!), 200);
-  t.is(await status(heavy[65]!), 410);
-  t.is(await status(quiet.token), 200);
+  t.is(await status(highestCountTokens[64]!), 200);
+  t.is(await status(highestCountTokens[65]!), 410);
+  t.is(await status(lowerCountPreview.token), 200);
   // A user's own 64-page cap evicts that user's least recently used page.
   for (let index = 0; index < 64; index += 1)
-    mintWidgetPreview(harness.db, "quiet", `<p>more ${index}</p>`);
-  t.is(await status(quiet.token), 410);
+    mintWidgetPreview(harness.db, "lower-count", `<p>more ${index}</p>`);
+  t.is(await status(lowerCountPreview.token), 410);
 });
 
 test("static sanitization removes forms' actions, focus grabs and embedded navigation", (t) => {

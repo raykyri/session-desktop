@@ -28,7 +28,7 @@ export const artifactsRouter = router({
     .mutation(({ ctx, input }) => {
       const html = answerWidgetSource(nodeContent(ctx, input.nodeId), input.sha256);
       if (html === null)
-        throw new TRPCError({ code: "NOT_FOUND", message: "the answer has no such widget" });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Widget not found in this answer" });
       const minted = mintWidgetPreview(ctx.db, ctx.user.id, html);
       return { url: `${ctx.config.artifactOrigin}/w/${minted.token}`, expiresAt: minted.expiresAt };
     }),

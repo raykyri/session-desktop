@@ -1,11 +1,11 @@
 //! Durable research artifact revisions. The rendered-page cache is disposable;
-//! these source records are immutable and scoped to a research tree. A branch
-//! names its parent explicitly, never whichever revision happened to open last.
+//! these source records are immutable and scoped to a research tree. Each branch
+//! stores its parent revision explicitly instead of using the last opened revision.
 //!
 //! Layout: `.session/research-artifacts/<sha(tree)>/<sha(artifact)>/` holds
 //! one `<revision>.json` per revision and `state/<revision>.json` for saved
 //! widget inputs. Every revision can be re-created from the answer text that
-//! holds it, so [`prune`] may drop revisions of removed answers and, over the
+//! contains it, so [`prune`] may drop revisions of removed answers and, over the
 //! size cap, the oldest revisions.
 use crate::research_widgets::{MAX_WIDGET_BYTES, content_hash};
 use serde::{Deserialize, Serialize};
@@ -98,9 +98,10 @@ pub fn is_artifact_id(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b':' | b'-'))
 }
 
-/// One line of at most [`MAX_TITLE_CHARS`] characters: control characters and
-/// line breaks become spaces and runs of whitespace collapse, so an
-/// agent-written title cannot lay itself out as several rows of app chrome.
+/// Normalize agent-generated titles to one line of at most
+/// [`MAX_TITLE_CHARS`] characters so they cannot create multiple rows in the
+/// interface. Control characters and line breaks become spaces, and runs of
+/// whitespace collapse.
 /// Same rule as `sessionWidgetTitle` in web/packages/shared.
 pub fn normalize_title(title: &str) -> String {
     let single_line = title
@@ -116,8 +117,8 @@ pub fn normalize_title(title: &str) -> String {
         .collect()
 }
 
-/// Line endings are normalised to LF before hashing, so CRLF and LF copies of
-/// one answer name the same revision.
+/// Normalize line endings before hashing so CRLF and LF content produces the
+/// same revision.
 fn normalize_html(html: &str) -> String {
     html.replace("\r\n", "\n").replace('\r', "\n")
 }
@@ -191,8 +192,8 @@ pub fn history(root: &Path, tree: &str, artifact: &str) -> Result<Vec<ArtifactRe
                     .entry(revision.revision.clone())
                     .or_insert(revision);
             }
-            // One unreadable record must not hide the rest; it is re-created
-            // from its answer when that answer is indexed again.
+            // Skip an unreadable record without omitting the remaining records.
+            // Indexing its answer again re-creates the skipped revision.
             Err(error) => eprintln!(
                 "session: skipping artifact revision {}: {error}",
                 path.display()

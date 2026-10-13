@@ -5,11 +5,11 @@ import { registerWidgetUrls } from "../lib/sessionWidgetExecution";
 
 /** How a revision relates to its parent in the history list. */
 function lineageLabel(entry: ResearchArtifactRevision): string {
-  if (entry.unresolvedParent) return " · original (declared parent not found)";
+  if (entry.unresolvedParent) return " · parent revision unavailable";
   return entry.parentRevision ? ` · from ${entry.parentRevision.slice(0, 8)}` : " · original";
 }
 
-/** The artifact's title, revision and history. The title is agent-written:
+/** The artifact's title, revision and history. The title is generated content:
  * it is rendered as one line of plain text after a fixed "Widget:" label, so
  * it reads as content of the widget, not as Session's interface. */
 export default function SessionArtifactDetails({ revision, onOpen }: { revision: ResearchArtifactRevision; onOpen: (url: string) => void }) {
@@ -17,7 +17,7 @@ export default function SessionArtifactDetails({ revision, onOpen }: { revision:
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   return <div className="session-artifact-details" data-widget-chrome="">
-    <div className="session-artifact-heading"><span className="session-artifact-title" title={revision.title}><span className="session-artifact-label">Widget:</span> {revision.title}</span><span title={revision.revision}>Pinned · {revision.revision.slice(0, 8)}{revision.unresolvedParent ? " · original (declared parent not found)" : ""}</span>
+    <div className="session-artifact-heading"><span className="session-artifact-title" title={revision.title}><span className="session-artifact-label">Widget:</span> {revision.title}</span><span title={revision.revision}>Pinned · {revision.revision.slice(0, 8)}{revision.unresolvedParent ? " · parent revision unavailable" : ""}</span>
       <button type="button" className="research-link-button" disabled={loading} onClick={async () => {
         if (history) { setHistory(null); return; }
         setLoading(true); setError("");

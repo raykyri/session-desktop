@@ -130,7 +130,7 @@ test("inline previews drop widget HTML entirely", () => {
   assert.ok(render("Use `npm test`.", true, true).includes("npm test"));
 });
 
-test("widget chrome stays out of the projection, find and copy, and labels the agent's title", async () => {
+test("widget chrome stays out of the projection, find and copy, and labels the generated title", async () => {
   const { withWidgetDom } = await import("./widgetDom");
   const { act } = await import("react");
   const { createRoot } = await import("react-dom/client");
