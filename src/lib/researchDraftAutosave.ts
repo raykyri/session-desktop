@@ -13,9 +13,11 @@ interface ResearchDraftAutosaveOptions {
 
 /** Saves edits after `delayMs` without further input, unless the text is
  * empty or already stored. `flush` saves a pending edit immediately when
- * closing the view. `finish` stops saves and ignores pending save errors
- * when sending or deleting, preventing the draft from being recreated.
- * `resume` allows saves again if sending or deleting fails. */
+ * closing the view; `saveNow` does too (⌘S) and resolves true once that save
+ * succeeds, or false at once when nothing needed saving. `finish` stops
+ * saves and ignores pending save errors when sending or deleting, preventing
+ * the draft from being recreated. `resume` allows saves again if sending or
+ * deleting fails. */
 export function createResearchDraftAutosave({
   initial,
   delayMs,
@@ -36,9 +38,11 @@ export function createResearchDraftAutosave({
   const needsSave = () => !finished && Boolean(latest.trim()) && latest !== saved;
   const write = (prompt: string) => {
     saved = prompt;
-    void save(prompt).catch((err: unknown) => {
+    const saving = save(prompt);
+    void saving.catch((err: unknown) => {
       if (!finished) onError(errorMessage(err));
     });
+    return saving;
   };
 
   return {
@@ -53,7 +57,14 @@ export function createResearchDraftAutosave({
     },
     flush() {
       cancel();
-      if (needsSave()) write(latest);
+      if (needsSave()) void write(latest);
+    },
+    /** Rejects when the save fails, after `onError` reported it. */
+    async saveNow(): Promise<boolean> {
+      cancel();
+      if (!needsSave()) return false;
+      await write(latest);
+      return true;
     },
     finish() {
       finished = true;

@@ -7,6 +7,7 @@ import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
+import { SAVE_SHORTCUT_LABEL, isSaveShortcut } from "../../lib/editorShortcuts";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
 import type { AgentAdapterMetadata } from "../../types";
 import type { ResearchLaunchChoice } from "./ResearchQueryComposer";
@@ -43,7 +44,10 @@ interface ResearchEditorColumnProps {
   asking: boolean;
   textareaRef: Ref<HTMLTextAreaElement>;
   onCancel: () => void;
+  /** Save and ⌘↵: saves and closes the column. */
   onSave: () => void;
+  /** ⌘S: saves and keeps the column open, the field as it is. */
+  onSaveInPlace: () => void;
   /** Asks with the agent, model and effort chosen in the footer's menu. */
   onAskAsQuestion: (choice: ResearchLaunchChoice) => void;
   /** Back and forward: the root note's editor takes the note column's place,
@@ -55,9 +59,10 @@ interface ResearchEditorColumnProps {
  * text, in a plain field, with Cancel, Save and "Ask as a question" (with
  * the model menu it asks with) in its footer. A document's editor follows its
  * answer column, which previews the text; a note's editor is shown in place
- * of the note column. ⌘↵ (Ctrl↵)
- * saves; Esc closes the column when nothing changed, and otherwise asks in
- * the footer whether to discard the changes. */
+ * of the note column. ⌘↵ (Ctrl↵) saves and closes the column; ⌘S (Ctrl+S)
+ * saves and keeps it open. Both do nothing while Save is disabled. Esc closes
+ * the column when nothing changed, and otherwise asks in the footer whether
+ * to discard the changes. */
 export function ResearchEditorColumn({
   column,
   current,
@@ -77,6 +82,7 @@ export function ResearchEditorColumn({
   textareaRef,
   onCancel,
   onSave,
+  onSaveInPlace,
   onAskAsQuestion,
   history = null,
 }: ResearchEditorColumnProps) {
@@ -131,6 +137,18 @@ export function ResearchEditorColumn({
       event.preventDefault();
       if (confirmingDiscard) keepEditing();
       else requestClose();
+      return;
+    }
+    if (isSaveShortcut(event)) {
+      // Handled even when there is nothing to save, so the webview's own
+      // ⌘S does not run.
+      event.preventDefault();
+      if (canSave && !saving) {
+        // Saved changes are not discarded: the question goes, and focus
+        // returns from its Keep editing button to the field.
+        if (confirmingDiscard) keepEditing();
+        onSaveInPlace();
+      }
       return;
     }
     if (isComposerSubmitShortcut(event, true) || (event.key === "Enter" && event.ctrlKey && !event.metaKey)) {
@@ -229,6 +247,7 @@ export function ResearchEditorColumn({
                 type="button"
                 className="control-button research-editor-save"
                 disabled={!canSave || saving}
+                title={`Save and close (⌘↵) · Save and keep editing (${SAVE_SHORTCUT_LABEL})`}
                 onClick={onSave}
               >
                 <span>{saveLabel}</span>

@@ -6,6 +6,7 @@ import {
   researchChainComposerState,
   researchDeleteLabel,
   researchEditorCanSave,
+  researchEditorSessionSaved,
   researchEditorStats,
   researchMarkerLabel,
   researchNodeLabel,
@@ -195,6 +196,67 @@ test("researchEditorCanSave applies the document gate", () => {
   assert.equal(researchEditorCanSave({ ...document, text: "Edited" }, { overWordLimit: true, overByteLimit: false }), false);
   // Over the limit, the title alone can still change.
   assert.equal(researchEditorCanSave({ ...document, title: "U" }, { overWordLimit: true, overByteLimit: false }), true);
+});
+
+test("researchEditorSessionSaved makes the saved field values the initial ones and expects what was stored", () => {
+  const document = {
+    nodeId: "d",
+    kind: "document" as const,
+    initialText: "Body",
+    text: "  Body edited\n",
+    initialTitle: "Old title",
+    title: "",
+    expectedText: "Body",
+    expectedTitle: "Old title",
+    responseRevision: "rev-1",
+    highlightIds: ["h1", "h2"],
+    highlightAnchors: [anchor("Body"), anchor("gone")],
+  };
+  const kept = { id: "h1", anchor: anchor("Body"), createdAt: 1 };
+  const next = researchEditorSessionSaved(
+    // Typed while the save ran.
+    { ...document, text: "  Body edited\nMore" },
+    { text: document.text, title: document.title },
+    { tree: { title: "Body edited" }, node: node("d", { type: "document", highlights: [kept] }), responseRevision: "rev-2" },
+  );
+  assert.equal(next.initialText, "  Body edited\n");
+  assert.equal(next.text, "  Body edited\nMore");
+  // A blank title stays blank in the field; the next save expects the title
+  // the backend derived.
+  assert.equal(next.initialTitle, "");
+  assert.equal(next.title, "");
+  assert.equal(next.expectedTitle, "Body edited");
+  assert.equal(next.responseRevision, "rev-2");
+  assert.deepEqual(next.highlightIds, ["h1"]);
+  assert.deepEqual(next.highlightAnchors, [kept.anchor]);
+  assert.equal(next.nodeId, "d");
+
+  const note = {
+    ...document,
+    nodeId: "p",
+    kind: "post" as const,
+    initialText: "Old",
+    text: "New text \n",
+    initialTitle: "",
+    title: "",
+    expectedText: "Old",
+    expectedTitle: "",
+    responseRevision: null,
+    highlightIds: [],
+    highlightAnchors: [],
+  };
+  const savedNote = researchEditorSessionSaved(
+    note,
+    { text: note.text, title: note.title },
+    { tree: { title: "New text" }, node: node("p", { type: "post", prompt: "New text" }) },
+  );
+  // The field keeps its trailing whitespace and reads as unchanged; the next
+  // save expects the trimmed stored text.
+  assert.equal(savedNote.initialText, "New text \n");
+  assert.equal(savedNote.expectedText, "New text");
+  assert.equal(savedNote.expectedTitle, "");
+  assert.equal(savedNote.responseRevision, null);
+  assert.equal(researchEditorCanSave(savedNote, null), false);
 });
 
 test("researchChainComposerState continues, queues, or explains a stalled chain", () => {

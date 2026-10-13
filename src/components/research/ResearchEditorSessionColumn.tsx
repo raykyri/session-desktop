@@ -15,12 +15,20 @@ import type { ResearchLaunchChoice } from "./ResearchQueryComposer";
 export interface EditorSession {
   nodeId: string;
   kind: "document" | "post";
-  /** The saved text when the editor opened, and the text in the field. */
+  /** The saved text when the editor opened (or the field's text when ⌘S
+   * last saved it), and the text in the field. */
   initialText: string;
   text: string;
-  /** Documents: the thread title when the editor opened, and in the field. */
+  /** Documents: the thread title when the editor opened (or when ⌘S last
+   * saved it), and in the field. */
   initialTitle: string;
   title: string;
+  /** The stored note text and thread title the next save expects to
+   * replace. A save that keeps the editor open (⌘S) makes the saved field
+   * values the initial ones, while these follow what was stored, which the
+   * backend trims (and, for a blank title, derives from the first line). */
+  expectedText: string;
+  expectedTitle: string;
   /** Documents: the snapshot revision and highlight ids the save expects. */
   responseRevision: string | null;
   highlightIds: string[];
@@ -53,6 +61,7 @@ export function ResearchEditorSessionColumn({
   onChange,
   onCancel,
   onSave,
+  onSaveInPlace,
   onAskAsQuestion,
 }: {
   column: EditorColumn;
@@ -73,6 +82,7 @@ export function ResearchEditorSessionColumn({
   onChange: (patch: Partial<Pick<EditorSession, "text" | "title">>) => void;
   onCancel: () => void;
   onSave: () => void;
+  onSaveInPlace: () => void;
   onAskAsQuestion: (choice: ResearchLaunchChoice) => void;
 }) {
   const notices: ReactNode[] = [];
@@ -150,6 +160,7 @@ export function ResearchEditorSessionColumn({
       textareaRef={textareaRef}
       onCancel={onCancel}
       onSave={onSave}
+      onSaveInPlace={onSaveInPlace}
       onAskAsQuestion={onAskAsQuestion}
       history={history}
     />

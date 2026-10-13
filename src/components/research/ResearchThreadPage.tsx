@@ -80,6 +80,7 @@ import {
 import { buildSegmentView, type SegmentView } from "../../lib/researchSegmentView";
 import {
   researchEditorCanSave,
+  researchEditorSessionSaved,
   researchEditorStats,
   researchNodeLabel,
   researchQuoteText,
@@ -1892,6 +1893,8 @@ function ResearchThreadPage({
         text: markdown,
         initialTitle: detail?.tree.title ?? "",
         title: detail?.tree.title ?? "",
+        expectedText: markdown,
+        expectedTitle: detail?.tree.title ?? "",
         responseRevision: content.responseRevision,
         highlightIds: highlights.map((highlight) => highlight.id),
         highlightAnchors: highlights.map((highlight) => highlight.anchor),
@@ -1913,6 +1916,8 @@ function ResearchThreadPage({
         text: nodePrompt(node),
         initialTitle: "",
         title: "",
+        expectedText: nodePrompt(node),
+        expectedTitle: "",
         responseRevision: null,
         highlightIds: [],
         highlightAnchors: node.highlights.map((highlight) => highlight.anchor),
@@ -2010,7 +2015,12 @@ function ResearchThreadPage({
     });
   }
 
-  async function saveEditor() {
+  /** Saves the editor's text (Save and ⌘↵), then closes the editor; with
+   * `keepOpen` (⌘S) the editor stays open with the field, its selection and
+   * its scroll offset as they are, and the saved text becomes the one the
+   * field is compared with. A failed save keeps the editor open with the
+   * error either way. */
+  async function saveEditor({ keepOpen = false }: { keepOpen?: boolean } = {}) {
     const session = editorRef.current;
     if (!session || editorSaving || !researchEditorCanSave(session, editorStats)) {
       return;
@@ -2018,15 +2028,17 @@ function ResearchThreadPage({
     setEditorSaving(true);
     setEditorError(null);
     try {
+      let stored: Parameters<typeof researchEditorSessionSaved>[2];
       if (session.kind === "document") {
         const result = await onUpdateDocument({
           nodeId: session.nodeId,
           markdown: session.text,
           title: session.title.trim() || null,
           expectedResponseRevision: session.responseRevision ?? "",
-          expectedTitle: session.initialTitle,
+          expectedTitle: session.expectedTitle,
           expectedHighlightIds: session.highlightIds,
         });
+        stored = result;
         if (treeIdRef.current === result.tree.id && result.markdownChanged) {
           // The loader refetches the replaced snapshot; the old revision is
           // not shown once the editor closes.
@@ -2042,8 +2054,9 @@ function ResearchThreadPage({
         const result = await onUpdatePost({
           nodeId: session.nodeId,
           text: session.text,
-          expectedText: session.initialText,
+          expectedText: session.expectedText,
         });
+        stored = result;
         const removed = result.removedHighlightCount;
         onToast(
           removed > 0
@@ -2051,7 +2064,15 @@ function ResearchThreadPage({
             : "Note saved",
         );
       }
-      closeEditor();
+      if (!keepOpen) {
+        closeEditor();
+        return;
+      }
+      const saved = { text: session.text, title: session.title };
+      setEditor((current) =>
+        current && current.nodeId === session.nodeId ? researchEditorSessionSaved(current, saved, stored) : current,
+      );
+      setEditorSaving(false);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : String(err));
       setEditorSaving(false);
@@ -2671,6 +2692,7 @@ function ResearchThreadPage({
             }
             onCancel={closeEditor}
             onSave={() => void saveEditor()}
+            onSaveInPlace={() => void saveEditor({ keepOpen: true })}
             onAskAsQuestion={(choice) => void askEditorAsQuestion(choice)}
           />
         );

@@ -1336,6 +1336,7 @@ function MainApp() {
                 draft={openResearchDraft}
                 requireCmdEnterToSend={settings.requireCmdEnterToSend}
                 onSave={(prompt, images) => saveOpenResearchDraft(openResearchDraft, prompt, images)}
+                onToast={showResearchToast}
                 onSend={(prompt, images) => sendResearchDraft(openResearchDraft, prompt, images)}
               />
             ) : (

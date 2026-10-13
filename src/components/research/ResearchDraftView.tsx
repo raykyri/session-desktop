@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { ResearchDraft, ResearchImageAttachment } from "../../types";
 import { createResearchDraftAutosave, createResearchDraftImageSave } from "../../lib/researchDraftAutosave";
 import { researchImages } from "../../lib/researchImages";
 import { columnAttributes } from "../../lib/researchColumns";
+import { isSaveShortcut } from "../../lib/editorShortcuts";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
 
@@ -15,19 +17,23 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
  * gives the text the full width with Send on its own row. Opening a draft
  * never focuses the box. Edits save as you type and when the view closes,
  * and an added or removed image saves at once; once a send starts nothing
- * more is saved. A failed send keeps the view open with the error. Delete is
- * in the draft's … menu in the feed. */
+ * more is saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows
+ * a toast; with nothing to save it does nothing. A failed send keeps the view
+ * open with the error. Delete is in the draft's … menu in the feed. */
 export default function ResearchDraftView({
   draft,
   requireCmdEnterToSend,
   onSave,
   onSend,
+  onToast,
 }: {
   draft: ResearchDraft;
   requireCmdEnterToSend: boolean;
   /** `images` replaces the draft's images; omitted, they are kept. */
   onSave: (prompt: string, images?: ResearchImageAttachment[]) => Promise<void>;
   onSend: (prompt: string, images: ResearchImageAttachment[]) => Promise<void>;
+  /** Shows the toast after a ⌘S save. */
+  onToast?: (message: string) => void;
 }) {
   const [value, setValue] = useState(draft.prompt);
   const [images, setImages] = useState(() => researchImages(draft.attachments));
@@ -84,12 +90,28 @@ export default function ResearchDraftView({
     }
   }
 
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!isSaveShortcut(event)) return;
+    // Handled even when there is nothing to save, so the webview's own ⌘S
+    // does not run.
+    event.preventDefault();
+    if (sendingRef.current) return;
+    autosave.saveNow().then(
+      (wrote) => {
+        if (wrote) onToast?.("Draft saved.");
+      },
+      // The autosave's onError shows the failure under the box.
+      () => {},
+    );
+  };
+
   const title = draft.prompt.trim() || "Draft";
   return (
     <section
       className="research-pair-messages research-draft-view is-current"
       {...columnAttributes({ id: "T0", role: "draft", draftId: draft.id })}
       aria-label={`Draft: ${title}`}
+      onKeyDown={onKeyDown}
     >
       <ResearchPairHeader title={title} />
       <div className="research-column-scroll">

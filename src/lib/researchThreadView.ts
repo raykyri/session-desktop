@@ -258,6 +258,41 @@ export function researchEditorCanSave(
   }).canSave;
 }
 
+/** The editor session after a save that keeps the editor open (⌘S). The
+ * text and title that were saved (`saved`, read when the save started)
+ * become the initial ones, so the field reads as unchanged; what was typed
+ * while the save ran still differs from them. The next save expects what the
+ * backend stored: the note's trimmed text, the thread's title, the
+ * document's new revision and the highlights that survived. */
+export function researchEditorSessionSaved<
+  S extends {
+    kind: "document" | "post";
+    initialText: string;
+    initialTitle: string;
+    expectedText: string;
+    expectedTitle: string;
+    responseRevision: string | null;
+    highlightIds: string[];
+    highlightAnchors: ResearchHighlightAnchor[];
+  },
+>(
+  current: S,
+  saved: { text: string; title: string },
+  stored: { tree: { title: string }; node: ResearchNode; responseRevision?: string },
+): S {
+  const highlights = stored.node.highlights ?? [];
+  return {
+    ...current,
+    initialText: saved.text,
+    initialTitle: saved.title,
+    expectedText: current.kind === "post" ? nodePrompt(stored.node) : saved.text,
+    expectedTitle: current.kind === "document" ? stored.tree.title : current.expectedTitle,
+    responseRevision: stored.responseRevision ?? current.responseRevision,
+    highlightIds: highlights.map((highlight) => highlight.id),
+    highlightAnchors: highlights.map((highlight) => highlight.anchor),
+  };
+}
+
 /** A messages column's ask box: whether it can send, whether it is
  * disabled, the note under it and its placeholder. It continues the chain
  * whose messages are `chain` (queueing while the tail runs), or replaces a

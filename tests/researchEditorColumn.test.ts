@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentAdapterMetadata } from "../src/types";
+import { resolveAppShortcut } from "../src/lib/appShortcuts";
+import { isSaveShortcut } from "../src/lib/editorShortcuts";
 import {
   QUESTION_CHARACTER_LIMIT,
   editedMarkdownBlocks,
   markdownBlocks,
   researchQuestionLength,
 } from "../src/lib/researchEditor";
+import { withWidgetDom } from "./widgetDom";
 
 // Registered before the editor is pulled in: its model menu reaches adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
@@ -48,9 +51,10 @@ function adapter(id: string, researchReadiness: AgentAdapterMetadata["researchRe
 
 const ADAPTERS = [adapter("claude"), adapter("codex")];
 
-function editor(value: string, overrides: Partial<Parameters<typeof ResearchEditorColumn>[0]> = {}) {
-  return renderToStaticMarkup(
-    createElement(ResearchEditorColumn, {
+type EditorProps = Parameters<typeof ResearchEditorColumn>[0];
+
+function editorProps(value: string, overrides: Partial<EditorProps> = {}): EditorProps {
+  return {
       column: { id: "E0", role: "editor", levelIndex: 0, nodeId: "post" },
       current: true,
       kind: "post",
@@ -67,10 +71,48 @@ function editor(value: string, overrides: Partial<Parameters<typeof ResearchEdit
       textareaRef: null,
       onCancel: () => {},
       onSave: () => {},
+      onSaveInPlace: () => {},
       onAskAsQuestion: () => {},
       ...overrides,
-    }),
-  );
+  };
+}
+
+function editor(value: string, overrides: Partial<EditorProps> = {}) {
+  return renderToStaticMarkup(createElement(ResearchEditorColumn, editorProps(value, overrides)));
+}
+
+/** Mounts the editor column in a DOM; `run` gets the column and a key press
+ * on an element in it, which returns whether the column took the key. */
+async function withMountedEditor(
+  props: EditorProps,
+  run: (editor: {
+    column: HTMLElement;
+    field: HTMLTextAreaElement;
+    press: (target: Element, key: string, modifiers?: KeyboardEventInit) => Promise<boolean>;
+  }) => Promise<void>,
+) {
+  await withWidgetDom(async (window) => {
+    // Imported once the DOM is installed: React DOM decides at load whether
+    // the browser fires input events, and keys in a field need it to.
+    const { createRoot } = await import("react-dom/client");
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(ResearchEditorColumn, props)));
+    const column = container.querySelector<HTMLElement>("section.research-pair-editor")!;
+    const press = async (target: Element, key: string, modifiers: KeyboardEventInit = {}) => {
+      const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers });
+      await act(async () => {
+        target.dispatchEvent(event);
+      });
+      return event.defaultPrevented;
+    };
+    try {
+      await run({ column, field: column.querySelector("textarea")!, press });
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
 }
 
 test("a question is up to 500 characters after trimming", () => {
@@ -201,4 +243,87 @@ test("a note's field is set in the reading scale and a document's in the source 
   const document = editor("# Doc", { kind: "document" });
   assert.match(document, /class="research-editor"/);
   assert.match(document, /class="research-editor-field is-source"/);
+});
+
+test("⌘S or Ctrl+S is the save shortcut, and no app shortcut uses it", () => {
+  const key = { key: "s", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false };
+  assert.equal(isSaveShortcut({ ...key, metaKey: true }), true);
+  assert.equal(isSaveShortcut({ ...key, ctrlKey: true }), true);
+  // Caps Lock reports an upper-case key.
+  assert.equal(isSaveShortcut({ ...key, key: "S", metaKey: true }), true);
+  assert.equal(isSaveShortcut(key), false);
+  assert.equal(isSaveShortcut({ ...key, metaKey: true, ctrlKey: true }), false);
+  assert.equal(isSaveShortcut({ ...key, metaKey: true, shiftKey: true }), false);
+  assert.equal(isSaveShortcut({ ...key, metaKey: true, altKey: true }), false);
+  assert.equal(isSaveShortcut({ ...key, key: "Enter", metaKey: true }), false);
+  assert.equal(isSaveShortcut({ ...key, metaKey: true, nativeEvent: { isComposing: true } }), false);
+  assert.equal(resolveAppShortcut({ ...key, metaKey: true }), null);
+  assert.equal(resolveAppShortcut({ ...key, ctrlKey: true }), null);
+});
+
+test("the Save button's tooltip names both save shortcuts", () => {
+  const html = editor("New text", { dirty: true, canSave: true });
+  assert.match(html, /<button[^>]*research-editor-save[^>]*title="Save and close \(⌘↵\) · Save and keep editing \(⌘S\)"/);
+});
+
+test("⌘S in the field saves in place; ⌘↵ saves and closes", async () => {
+  const calls: string[] = [];
+  const props = editorProps("New text", {
+    dirty: true,
+    canSave: true,
+    onSave: () => calls.push("save"),
+    onSaveInPlace: () => calls.push("save in place"),
+    onCancel: () => calls.push("cancel"),
+  });
+  await withMountedEditor(props, async ({ column, field, press }) => {
+    assert.equal(await press(field, "s", { metaKey: true }), true);
+    assert.deepEqual(calls, ["save in place"]);
+    assert.equal(await press(field, "s", { ctrlKey: true }), true);
+    assert.deepEqual(calls, ["save in place", "save in place"]);
+    // From a footer button too: the key works anywhere in the column.
+    assert.equal(await press(column.querySelector(".research-editor-save")!, "s", { metaKey: true }), true);
+    assert.equal(calls.length, 3);
+    // ⌘⇧S is not the shortcut, and the webview keeps it.
+    assert.equal(await press(field, "s", { metaKey: true, shiftKey: true }), false);
+    assert.equal(calls.length, 3);
+    assert.equal(await press(field, "Enter", { metaKey: true }), true);
+    assert.deepEqual(calls.slice(3), ["save"]);
+  });
+});
+
+test("⌘S does nothing while Save is disabled or saving, and still keeps the webview's ⌘S from running", async () => {
+  for (const overrides of [
+    { dirty: false, canSave: false },
+    // An empty note, or a document over a limit, with changes.
+    { dirty: true, canSave: false },
+    { dirty: true, canSave: true, saving: true },
+  ]) {
+    const calls: string[] = [];
+    const props = editorProps("", {
+      ...overrides,
+      onSave: () => calls.push("save"),
+      onSaveInPlace: () => calls.push("save in place"),
+    });
+    await withMountedEditor(props, async ({ field, press }) => {
+      assert.equal(await press(field, "s", { metaKey: true }), true);
+      assert.deepEqual(calls, [], JSON.stringify(overrides));
+    });
+  }
+});
+
+test("⌘S while the footer asks whether to discard saves and drops the question", async () => {
+  const calls: string[] = [];
+  const props = editorProps("New text", {
+    dirty: true,
+    canSave: true,
+    onSaveInPlace: () => calls.push("save in place"),
+    onCancel: () => calls.push("cancel"),
+  });
+  await withMountedEditor(props, async ({ column, field, press }) => {
+    await press(field, "Escape");
+    assert.ok(column.querySelector("[aria-label='Discard changes']"));
+    assert.equal(await press(column.querySelector("[aria-label='Discard changes'] button")!, "s", { metaKey: true }), true);
+    assert.deepEqual(calls, ["save in place"]);
+    assert.equal(column.querySelector("[aria-label='Discard changes']"), null);
+  });
 });

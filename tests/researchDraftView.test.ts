@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchDraftView from "../src/components/research/ResearchDraftView";
 import { ResearchFeedToast } from "../src/components/research/ResearchFeedChrome";
 import { researchCardRefocus } from "../src/components/research/ResearchFeedCard";
 import { createResearchDraftAutosave, createResearchDraftImageSave } from "../src/lib/researchDraftAutosave";
+import { withWidgetDom } from "./widgetDom";
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -90,6 +91,86 @@ test("closing the draft flushes a pending edit at once", (t) => {
   assert.deepEqual(saves, ["Draft, edited"], "the timer was cleared");
   autosave.flush();
   assert.deepEqual(saves, ["Draft, edited"]);
+});
+
+test("⌘S saves a pending edit at once and says whether it saved", async (t) => {
+  const { autosave, saves, errors, failSave } = autosaveHarness(t);
+  assert.equal(await autosave.saveNow(), false, "nothing to save");
+  autosave.edit("Draft, edited");
+  assert.equal(await autosave.saveNow(), true);
+  assert.deepEqual(saves, ["Draft, edited"]);
+  t.mock.timers.tick(1000);
+  assert.deepEqual(saves, ["Draft, edited"], "the timer was cleared");
+  assert.equal(await autosave.saveNow(), false, "already saved");
+  autosave.edit("   ");
+  assert.equal(await autosave.saveNow(), false, "empty text is not saved");
+  failSave("Disk full.");
+  autosave.edit("Draft, edited again");
+  await assert.rejects(autosave.saveNow(), /Disk full/);
+  await settle();
+  assert.deepEqual(errors, ["Disk full."]);
+  autosave.finish();
+  autosave.edit("Draft, sent");
+  assert.equal(await autosave.saveNow(), false, "nothing saves once a send started");
+});
+
+test("⌘S in a draft saves the edit and shows a toast; with nothing to save it does nothing", async () => {
+  await withWidgetDom(async (window) => {
+    // Imported once the DOM is installed: React DOM decides at load whether
+    // the browser fires input events, and typing in a field needs it to.
+    const { createRoot } = await import("react-dom/client");
+    // The ask box sizes its field to the text.
+    const computedStyle = Object.getOwnPropertyDescriptor(globalThis, "getComputedStyle");
+    Object.defineProperty(globalThis, "getComputedStyle", {
+      value: window.getComputedStyle.bind(window),
+      configurable: true,
+      writable: true,
+    });
+    const saves: string[] = [];
+    const toasts: string[] = [];
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    await act(async () =>
+      root.render(
+        createElement(ResearchDraftView, {
+          draft: { id: "d1", workspaceId: "ws", prompt: "Draft", createdAt: 1, updatedAt: 1 },
+          requireCmdEnterToSend: true,
+          onSave: async (prompt) => {
+            saves.push(prompt);
+          },
+          onSend: asyncNoop,
+          onToast: (message) => toasts.push(message),
+        }),
+      ),
+    );
+    const field = container.querySelector("textarea")!;
+    const press = async () => {
+      const event = new window.KeyboardEvent("keydown", { key: "s", metaKey: true, bubbles: true, cancelable: true });
+      await act(async () => {
+        field.dispatchEvent(event);
+      });
+      return event.defaultPrevented;
+    };
+    try {
+      assert.equal(await press(), true);
+      assert.deepEqual([saves, toasts], [[], []]);
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Draft, edited");
+        field.dispatchEvent(new window.Event("input", { bubbles: true }));
+      });
+      assert.equal(await press(), true);
+      assert.deepEqual(saves, ["Draft, edited"]);
+      assert.deepEqual(toasts, ["Draft saved."]);
+      assert.equal(field.value, "Draft, edited");
+      assert.equal(await press(), true);
+      assert.deepEqual([saves.length, toasts.length], [1, 1]);
+    } finally {
+      await act(async () => root.unmount());
+      if (computedStyle) Object.defineProperty(globalThis, "getComputedStyle", computedStyle);
+      else Reflect.deleteProperty(globalThis, "getComputedStyle");
+    }
+  });
 });
 
 test("sending or deleting stops autosave and suppresses pending save errors", async (t) => {
