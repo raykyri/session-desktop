@@ -1604,7 +1604,12 @@ async fn get_research_tree(
     state: tauri::State<'_, AppState>,
     tree_id: String,
 ) -> Result<ResearchTreeDetail, String> {
-    state.research_tree(&tree_id)
+    // A thread in the Trash does not open; Restore brings it back first.
+    let detail = state.research_tree(&tree_id)?;
+    if detail.tree.is_trashed() {
+        return Err(format!("research tree {tree_id} is in the Trash"));
+    }
+    Ok(detail)
 }
 
 #[tauri::command]
@@ -2324,9 +2329,42 @@ fn restore_research_tree(
     state.restore_research_tree(&tree_id)
 }
 
+/// Deletes a tree permanently, whether or not it is in the Trash.
 #[tauri::command]
 fn remove_research_tree(state: tauri::State<'_, AppState>, tree_id: String) -> Result<(), String> {
     state.remove_research_tree(&tree_id)
+}
+
+#[tauri::command]
+fn trash_research_tree(
+    state: tauri::State<'_, AppState>,
+    tree_id: String,
+) -> Result<ResearchTree, String> {
+    state.trash_research_tree(&tree_id)
+}
+
+#[tauri::command]
+fn restore_research_tree_from_trash(
+    state: tauri::State<'_, AppState>,
+    tree_id: String,
+) -> Result<ResearchTree, String> {
+    state.restore_research_tree_from_trash(&tree_id)
+}
+
+#[tauri::command]
+fn list_research_trash(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ResearchTreeSummary>, String> {
+    state.list_research_trash()
+}
+
+/// Deletes the trees in one workspace's Trash; returns their ids.
+#[tauri::command]
+fn empty_research_trash(
+    state: tauri::State<'_, AppState>,
+    workspace_id: String,
+) -> Result<Vec<String>, String> {
+    state.empty_research_trash(Some(&workspace_id))
 }
 
 #[tauri::command]
@@ -3730,6 +3768,10 @@ fn main() {
             archive_research_tree,
             restore_research_tree,
             remove_research_tree,
+            trash_research_tree,
+            restore_research_tree_from_trash,
+            list_research_trash,
+            empty_research_trash,
             remove_research_branch,
             list_agent_turn_queue,
             group_create,

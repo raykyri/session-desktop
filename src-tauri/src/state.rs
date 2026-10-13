@@ -3727,74 +3727,8 @@ impl AppState {
         let mut summaries = model
             .research_trees
             .values()
-            .filter(|tree| include_archived || tree.archived_at.is_none())
-            .map(|tree| {
-                let nodes = model
-                    .research_nodes
-                    .values()
-                    .filter(|node| node.tree_id == tree.id);
-                fn merge(left: Option<u128>, right: Option<u64>) -> Option<u128> {
-                    match (left, right.map(u128::from)) {
-                        (Some(left), Some(right)) => Some(left.max(right)),
-                        (None, right) => right,
-                        (left, None) => left,
-                    }
-                }
-                // Runs only: posts and documents have no run to count or
-                // settle.
-                let (
-                    running_count,
-                    failed_count,
-                    completed_count,
-                    cancelled_count,
-                    latest_settlement,
-                    latest_failure,
-                ) = nodes.filter_map(ResearchNode::run).fold(
-                    (0, 0, 0, 0, None::<u128>, None::<u128>),
-                    |counts, run| {
-                        let failed = run.status == ResearchNodeStatus::Failed;
-                        (
-                            counts.0 + usize::from(run.status.is_active()),
-                            counts.1 + usize::from(failed),
-                            counts.2 + usize::from(run.status == ResearchNodeStatus::Complete),
-                            counts.3 + usize::from(run.status == ResearchNodeStatus::Cancelled),
-                            merge(counts.4, run.completed_at),
-                            if failed {
-                                merge(counts.5, run.completed_at)
-                            } else {
-                                counts.5
-                            },
-                        )
-                    },
-                );
-                let unseen = |settled_at: Option<u128>| {
-                    settled_at.is_some_and(|settled_at| {
-                        tree.last_viewed_at
-                            .is_none_or(|last_viewed_at| settled_at > last_viewed_at)
-                    })
-                };
-                ResearchTreeSummary {
-                    id: tree.id.clone(),
-                    title: tree.title.clone(),
-                    root_node_id: tree.root_node_id.clone(),
-                    node_type: model
-                        .research_nodes
-                        .get(&tree.root_node_id)
-                        .map_or(ResearchNodeType::Exchange, ResearchNode::node_type),
-                    workspace_id: tree.workspace_id.clone(),
-                    running_count,
-                    failed_count,
-                    completed_count,
-                    cancelled_count,
-                    updated_at: tree.updated_at,
-                    archived_at: tree.archived_at,
-                    has_unseen_update: unseen(latest_settlement),
-                    // Viewing the tree acknowledges the failure; the lifetime
-                    // failed_count stays for detail displays but must not brand
-                    // the sidebar forever.
-                    has_unseen_failure: unseen(latest_failure),
-                }
-            })
+            .filter(|tree| !tree.is_trashed() && (include_archived || tree.archived_at.is_none()))
+            .map(|tree| research_tree_summary(&model, tree))
             .collect::<Vec<_>>();
         let order = ordered_research_tree_ids(&model)
             .into_iter()
@@ -3806,8 +3740,9 @@ impl AppState {
     }
 
     /// Reorders exactly one visible Research sidebar section. Replacing only
-    /// that folder/status subsequence leaves hidden archived trees and other
-    /// folders at their existing positions in the master order.
+    /// that folder/status subsequence leaves hidden archived trees, trashed
+    /// trees and other folders at their existing positions in the master
+    /// order.
     pub fn reorder_research_trees(
         &self,
         workspace_id: &str,
@@ -3824,7 +3759,9 @@ impl AppState {
                 .into_iter()
                 .filter(|tree_id| {
                     model.research_trees.get(tree_id).is_some_and(|tree| {
-                        tree.workspace_id == workspace_id && tree.archived_at.is_some() == archived
+                        tree.workspace_id == workspace_id
+                            && !tree.is_trashed()
+                            && tree.archived_at.is_some() == archived
                     })
                 })
                 .collect::<Vec<_>>();
@@ -3851,7 +3788,9 @@ impl AppState {
             let mut next_order = ordered_research_tree_ids(&model);
             for tree_id in &mut next_order {
                 let replace = model.research_trees.get(tree_id).is_some_and(|tree| {
-                    tree.workspace_id == workspace_id && tree.archived_at.is_some() == archived
+                    tree.workspace_id == workspace_id
+                        && !tree.is_trashed()
+                        && tree.archived_at.is_some() == archived
                 });
                 if replace {
                     *tree_id = replacements.next().expect("validated replacement count");
@@ -3872,9 +3811,10 @@ impl AppState {
         Ok(model.research_folders.clone())
     }
 
-    /// Home's feed: every research root (exchanges, posts and documents),
-    /// newest first, each with its direct follow-ups oldest first and every
-    /// starred node in its tree.
+    /// Home's feed: every research root (exchanges, posts and documents) of a
+    /// tree that is neither archived nor in the Trash, newest first, each
+    /// with its direct follow-ups oldest first and every starred node in its
+    /// tree.
     pub fn list_recent_activity(
         &self,
         limit: usize,
@@ -3899,7 +3839,7 @@ impl AppState {
                     && model
                         .research_trees
                         .get(&node.tree_id)
-                        .is_some_and(|tree| tree.archived_at.is_none())
+                        .is_some_and(|tree| tree.archived_at.is_none() && !tree.is_trashed())
                     && before.as_ref().is_none_or(|cursor| {
                         node.created_at < cursor.created_at
                             || (node.created_at == cursor.created_at && node.id < cursor.node_id)
@@ -3926,7 +3866,7 @@ impl AppState {
 
     /// Home's feed entries for the roots of `tree_ids` (in that order), as
     /// `list_recent_activity` builds them, for cards whose root is not in a
-    /// loaded page. Unknown and archived trees are skipped.
+    /// loaded page. Unknown, archived and trashed trees are skipped.
     pub fn list_recent_activity_for_trees(
         &self,
         tree_ids: &[String],
@@ -3941,7 +3881,7 @@ impl AppState {
             .iter()
             .filter(|tree_id| seen.insert(tree_id.as_str()))
             .filter_map(|tree_id| model.research_trees.get(tree_id))
-            .filter(|tree| tree.archived_at.is_none())
+            .filter(|tree| tree.archived_at.is_none() && !tree.is_trashed())
             .filter_map(|tree| model.research_nodes.get(&tree.root_node_id))
             .filter(|root| root.parent_node_id.is_none())
             .collect::<Vec<_>>();
@@ -4030,8 +3970,8 @@ impl AppState {
         Ok(nodes)
     }
 
-    /// Every highlight on a non-archived thread, newest first, for the
-    /// sidebar's Highlights feed.
+    /// Every highlight on a thread that is neither archived nor in the Trash,
+    /// newest first, for the sidebar's Highlights feed.
     pub fn list_research_highlights(&self) -> Result<Vec<ResearchHighlightFeedItem>, String> {
         let model = self
             .inner
@@ -4043,7 +3983,7 @@ impl AppState {
             .values()
             .filter_map(|node| {
                 let tree = model.research_trees.get(&node.tree_id)?;
-                if tree.archived_at.is_some() {
+                if tree.archived_at.is_some() || tree.is_trashed() {
                     return None;
                 }
                 // An authored document has no message; it is labelled by
@@ -4251,6 +4191,7 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4324,6 +4265,7 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4392,6 +4334,7 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode::new(
@@ -4461,6 +4404,7 @@ impl AppState {
             if parent.node_type() != ResearchNodeType::Post {
                 return Err("follow-up notes can only be added to a note".to_string());
             }
+            reject_trashed_research_tree(&model, &parent.tree_id)?;
             if model
                 .research_trees
                 .get(&parent.tree_id)
@@ -4536,6 +4480,7 @@ impl AppState {
                 .research_nodes
                 .get(&request.node_id)
                 .ok_or_else(|| format!("research node {} was not found", request.node_id))?;
+            reject_trashed_research_tree(&model, &node.tree_id)?;
             if model
                 .research_trees
                 .get(&node.tree_id)
@@ -4605,6 +4550,7 @@ impl AppState {
                 .get(node_id)
                 .map(|node| node.tree_id.clone())
                 .ok_or_else(|| format!("research node {node_id} was not found"))?;
+            reject_trashed_research_tree(&model, &tree_id)?;
             if model
                 .research_trees
                 .get(&tree_id)
@@ -4682,6 +4628,7 @@ impl AppState {
                 return Err("only a note can be edited".to_string());
             }
             let is_root = current.parent_node_id.is_none() && tree.root_node_id == current.id;
+            reject_trashed_research_tree(&model, &tree.id)?;
             if tree.archived_at.is_some() {
                 return Err("restore archived research before editing its note".to_string());
             }
@@ -4823,6 +4770,7 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(now),
         };
         // The report is a document; its message is the question it answers.
@@ -4908,6 +4856,9 @@ impl AppState {
             || current_tree.root_node_id != current_node.id
         {
             return Err("only root research documents can be edited".to_string());
+        }
+        if current_tree.is_trashed() {
+            return Err(RESEARCH_TRASHED_EDIT_ERROR.to_string());
         }
         if current_tree.archived_at.is_some() {
             return Err("restore archived research before editing its document".to_string());
@@ -5301,6 +5252,7 @@ impl AppState {
                 .get(&parent.tree_id)
                 .cloned()
                 .ok_or_else(|| format!("research tree {} was not found", parent.tree_id))?;
+            reject_trashed_research_tree(&model, &tree.id)?;
             if tree.archived_at.is_some() {
                 return Err("restore archived research before creating a follow-up".to_string());
             }
@@ -6090,6 +6042,7 @@ impl AppState {
                 .research_trees
                 .get(&node.tree_id)
                 .ok_or_else(|| format!("research tree {} was not found", node.tree_id))?;
+            reject_trashed_research_tree(&model, &tree.id)?;
             match relaunch {
                 ResearchRelaunch::Retry => {
                     if tree.archived_at.is_some() {
@@ -6299,6 +6252,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_tree(&model, tree_id)?;
             let tree = model
                 .research_trees
                 .get_mut(tree_id)
@@ -6332,6 +6286,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_node(&model, node_id)?;
             let node = model
                 .research_nodes
                 .get_mut(node_id)
@@ -6363,6 +6318,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_node(&model, node_id)?;
             let node = model
                 .research_nodes
                 .get_mut(node_id)
@@ -6413,6 +6369,7 @@ impl AppState {
                     "Research node {head_node_id} does not start a conversation."
                 ));
             }
+            reject_trashed_research_tree(&model, &head.tree_id)?;
             if model
                 .research_trees
                 .get(&head.tree_id)
@@ -6644,6 +6601,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_node(&model, node_id)?;
             let total_bytes = model
                 .research_nodes
                 .values()
@@ -6709,6 +6667,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_node(&model, node_id)?;
             let node = model
                 .research_nodes
                 .get_mut(node_id)
@@ -6792,6 +6751,7 @@ impl AppState {
             {
                 return Err("cannot archive research while it has active runs".to_string());
             }
+            reject_trashed_research_tree(&model, tree_id)?;
             let tree = model
                 .research_trees
                 .get_mut(tree_id)
@@ -6825,6 +6785,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            reject_trashed_research_tree(&model, tree_id)?;
             let tree = model
                 .research_trees
                 .get_mut(tree_id)
@@ -6843,13 +6804,171 @@ impl AppState {
         Ok(tree)
     }
 
+    /// Moves a tree to the Trash. Nothing is deleted: its nodes, response
+    /// snapshots, artifacts, folder membership, position in the tree order
+    /// and archive state stay, so `restore_research_tree_from_trash` puts it
+    /// back where it was. Open windows drop it as they do a deleted tree
+    /// (`research.tree.removed`) and refetch the Trash
+    /// (`research.trash.changed`). Refused while the tree has active runs, as
+    /// deleting is.
+    pub fn trash_research_tree(&self, tree_id: &str) -> Result<ResearchTree, String> {
+        let _document_guard = self
+            .inner
+            .research_document_lock
+            .lock()
+            .map_err(|_| "research document lock poisoned".to_string())?;
+        let (tree, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            if model
+                .research_nodes
+                .values()
+                .any(|node| node.tree_id == tree_id && research_node_has_live_execution(node))
+            {
+                return Err(
+                    "cannot move research to the Trash while it has active runs".to_string()
+                );
+            }
+            let tree = model
+                .research_trees
+                .get_mut(tree_id)
+                .ok_or_else(|| format!("research tree {tree_id} was not found"))?;
+            let changed = tree.trashed_at.is_none();
+            if changed {
+                tree.trashed_at = Some(now_millis());
+            }
+            (tree.clone(), changed)
+        };
+        if changed {
+            self.persist();
+            self.emit(SessionEvent::new(
+                "research.tree.removed",
+                None,
+                None,
+                json!({ "treeId": tree_id }),
+            ));
+            self.emit_research_trash_changed();
+        }
+        Ok(tree)
+    }
+
+    /// Takes a tree out of the Trash. It returns to its folder (or Drafts,
+    /// Unfiled or Archive) at its old position in the tree order, and open
+    /// windows refetch their lists as they do after unarchiving.
+    pub fn restore_research_tree_from_trash(&self, tree_id: &str) -> Result<ResearchTree, String> {
+        let _document_guard = self
+            .inner
+            .research_document_lock
+            .lock()
+            .map_err(|_| "research document lock poisoned".to_string())?;
+        let (tree, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let tree = model
+                .research_trees
+                .get_mut(tree_id)
+                .ok_or_else(|| format!("research tree {tree_id} was not found"))?;
+            let changed = tree.trashed_at.take().is_some();
+            (tree.clone(), changed)
+        };
+        if changed {
+            self.persist();
+            self.emit(SessionEvent::new(
+                "research.tree.restored",
+                None,
+                None,
+                json!({ "tree": tree }),
+            ));
+            self.emit_research_trash_changed();
+        }
+        Ok(tree)
+    }
+
+    /// The trees in the Trash, most recently trashed first.
+    pub fn list_research_trash(&self) -> Result<Vec<ResearchTreeSummary>, String> {
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        let mut summaries = model
+            .research_trees
+            .values()
+            .filter(|tree| tree.is_trashed())
+            .map(|tree| research_tree_summary(&model, tree))
+            .collect::<Vec<_>>();
+        summaries.sort_by(|left, right| {
+            right
+                .trashed_at
+                .cmp(&left.trashed_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(summaries)
+    }
+
+    /// Deletes every tree in the Trash of `workspace_id` (every workspace when
+    /// None) through `remove_research_tree`, so each is cleaned up as a
+    /// direct delete is. Returns the ids deleted. A tree that fails to delete
+    /// stays in the Trash; the first error is returned after the others are
+    /// deleted.
+    pub fn empty_research_trash(&self, workspace_id: Option<&str>) -> Result<Vec<String>, String> {
+        let tree_ids = {
+            let model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let mut ids = model
+                .research_trees
+                .values()
+                .filter(|tree| {
+                    tree.is_trashed()
+                        && workspace_id.is_none_or(|workspace_id| tree.workspace_id == workspace_id)
+                })
+                .map(|tree| tree.id.clone())
+                .collect::<Vec<_>>();
+            ids.sort();
+            ids
+        };
+        let mut removed = Vec::with_capacity(tree_ids.len());
+        let mut first_error = None;
+        for tree_id in tree_ids {
+            match self.remove_research_tree(&tree_id) {
+                Ok(()) => removed.push(tree_id),
+                Err(err) => {
+                    first_error.get_or_insert(err);
+                }
+            }
+        }
+        match first_error {
+            Some(err) => Err(err),
+            None => Ok(removed),
+        }
+    }
+
+    /// Tells open windows to refetch the Trash. The payload is empty.
+    fn emit_research_trash_changed(&self) {
+        self.emit(SessionEvent::new(
+            "research.trash.changed",
+            None,
+            None,
+            json!({}),
+        ));
+    }
+
     pub fn remove_research_tree(&self, tree_id: &str) -> Result<(), String> {
         let _document_guard = self
             .inner
             .research_document_lock
             .lock()
             .map_err(|_| "research document lock poisoned".to_string())?;
-        let (removed, removed_node_ids, reaped_thread_records) = {
+        let (removed, was_trashed, removed_node_ids, reaped_thread_records) = {
             let mut model = self
                 .inner
                 .model
@@ -6900,7 +7019,9 @@ impl AppState {
                         .any(|agent| agent.thread_id.as_deref() == Some(thread_id))
                 })
                 .collect::<Vec<_>>();
-            let removed = model.research_trees.remove(tree_id).is_some();
+            let removed_tree = model.research_trees.remove(tree_id);
+            let removed = removed_tree.is_some();
+            let was_trashed = removed_tree.is_some_and(|tree| tree.is_trashed());
             let mut reaped_records = Vec::new();
             if removed {
                 model.research_tree_order.retain(|id| id != tree_id);
@@ -6924,7 +7045,7 @@ impl AppState {
             // A research tree references its durable workspace; it does not own
             // it. Other trees may use the same directory, so deleting a tree
             // never deletes the workspace record or anything in that directory.
-            (removed, node_ids, reaped_records)
+            (removed, was_trashed, node_ids, reaped_records)
         };
         if !removed {
             return Err(format!("research tree {tree_id} was not found"));
@@ -6937,6 +7058,9 @@ impl AppState {
             None,
             json!({ "treeId": tree_id }),
         ));
+        if was_trashed {
+            self.emit_research_trash_changed();
+        }
         for node_id in removed_node_ids {
             if let Err(err) =
                 research::remove_response_snapshot(&self.inner.config.workspace_root, &node_id)
@@ -6972,6 +7096,7 @@ impl AppState {
                 .get(node_id)
                 .cloned()
                 .ok_or_else(|| format!("research node {node_id} was not found"))?;
+            reject_trashed_research_tree(&model, &target.tree_id)?;
             let tree = model
                 .research_trees
                 .get(&target.tree_id)
@@ -7581,6 +7706,7 @@ impl AppState {
                 id,
                 name: folder.name,
                 workspace_id: workspace.id.clone(),
+                trashed_at: None,
             });
         }
         let imported_membership = membership
@@ -9307,6 +9433,7 @@ impl AppState {
                 .ok_or_else(|| format!("research node {} was not found", request.node_id))?
                 .tree_id
                 .clone();
+            reject_trashed_research_tree(&model, &tree_id)?;
             if model
                 .research_trees
                 .get(&tree_id)
@@ -11799,6 +11926,75 @@ fn recent_activity_entries(model: &Model, roots: Vec<&ResearchNode>) -> Vec<Rece
         .collect()
 }
 
+/// A tree's sidebar summary: its run counts and attention flags.
+fn research_tree_summary(model: &Model, tree: &ResearchTree) -> ResearchTreeSummary {
+    let nodes = model
+        .research_nodes
+        .values()
+        .filter(|node| node.tree_id == tree.id);
+    fn merge(left: Option<u128>, right: Option<u64>) -> Option<u128> {
+        match (left, right.map(u128::from)) {
+            (Some(left), Some(right)) => Some(left.max(right)),
+            (None, right) => right,
+            (left, None) => left,
+        }
+    }
+    // Runs only: posts and documents have no run to count or settle.
+    let (
+        running_count,
+        failed_count,
+        completed_count,
+        cancelled_count,
+        latest_settlement,
+        latest_failure,
+    ) = nodes.filter_map(ResearchNode::run).fold(
+        (0, 0, 0, 0, None::<u128>, None::<u128>),
+        |counts, run| {
+            let failed = run.status == ResearchNodeStatus::Failed;
+            (
+                counts.0 + usize::from(run.status.is_active()),
+                counts.1 + usize::from(failed),
+                counts.2 + usize::from(run.status == ResearchNodeStatus::Complete),
+                counts.3 + usize::from(run.status == ResearchNodeStatus::Cancelled),
+                merge(counts.4, run.completed_at),
+                if failed {
+                    merge(counts.5, run.completed_at)
+                } else {
+                    counts.5
+                },
+            )
+        },
+    );
+    let unseen = |settled_at: Option<u128>| {
+        settled_at.is_some_and(|settled_at| {
+            tree.last_viewed_at
+                .is_none_or(|last_viewed_at| settled_at > last_viewed_at)
+        })
+    };
+    ResearchTreeSummary {
+        id: tree.id.clone(),
+        title: tree.title.clone(),
+        root_node_id: tree.root_node_id.clone(),
+        node_type: model
+            .research_nodes
+            .get(&tree.root_node_id)
+            .map_or(ResearchNodeType::Exchange, ResearchNode::node_type),
+        workspace_id: tree.workspace_id.clone(),
+        running_count,
+        failed_count,
+        completed_count,
+        cancelled_count,
+        updated_at: tree.updated_at,
+        archived_at: tree.archived_at,
+        has_unseen_update: unseen(latest_settlement),
+        // Viewing the tree acknowledges the failure; the lifetime
+        // failed_count stays for detail displays but must not brand the
+        // sidebar forever.
+        has_unseen_failure: unseen(latest_failure),
+        trashed_at: tree.trashed_at,
+    }
+}
+
 /// The durable Research sidebar order. Older state files have no explicit
 /// vector, so missing ids fall back to the legacy updated-at order once, then
 /// hydration persists that normalized result.
@@ -11927,6 +12123,31 @@ fn bump_agent_status_activity_locked(model: &mut Model, agent_id: &str) {
         .or_insert(0);
     *seq = seq.wrapping_add(1);
 }
+
+/// Refuses user edits to a tree in the Trash, which the app no longer shows,
+/// so Restore returns it unchanged. Run bookkeeping for runs that settle is
+/// not an edit; trashing is refused while a tree has active runs.
+fn reject_trashed_research_tree(model: &Model, tree_id: &str) -> Result<(), String> {
+    if model
+        .research_trees
+        .get(tree_id)
+        .is_some_and(ResearchTree::is_trashed)
+    {
+        return Err(RESEARCH_TRASHED_EDIT_ERROR.to_string());
+    }
+    Ok(())
+}
+
+/// `reject_trashed_research_tree` for the tree that holds `node_id`; an
+/// unknown node is left to the caller's own lookup.
+fn reject_trashed_research_node(model: &Model, node_id: &str) -> Result<(), String> {
+    match model.research_nodes.get(node_id) {
+        Some(node) => reject_trashed_research_tree(model, &node.tree_id),
+        None => Ok(()),
+    }
+}
+
+const RESEARCH_TRASHED_EDIT_ERROR: &str = "restore this research from the Trash before changing it";
 
 /// Every research-node mutation is a tree mutation for ordering/recency
 /// purposes; failure and detachment paths previously skipped this, leaving
@@ -14142,6 +14363,7 @@ mod tests {
                 id: "f-a".to_string(),
                 name: "Reading".to_string(),
                 workspace_id: "ws-a".to_string(),
+                trashed_at: None,
             }],
             ..research::ResearchFolderState::default()
         };
@@ -14210,6 +14432,7 @@ mod tests {
                 id: id.to_string(),
                 name: name.to_string(),
                 workspace_id: group.id.clone(),
+                trashed_at: None,
             };
             let mut requested = research::ResearchFolderState {
                 folders: vec![folder("f1", "  Reading ")],
@@ -14670,6 +14893,7 @@ mod tests {
             id: "rf-1".to_string(),
             name: "Reading".to_string(),
             workspace_id: group.id.clone(),
+            trashed_at: None,
         });
         folders.membership.insert(filed.clone(), "rf-1".to_string());
         state.set_research_folders(folders).unwrap();
@@ -15862,6 +16086,7 @@ mod tests {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode {
@@ -16088,6 +16313,263 @@ mod tests {
                 .unwrap_err()
                 .contains("active"),
         );
+    }
+
+    fn emitted_types(state: &AppState) -> Vec<String> {
+        state
+            .take_emitted_events()
+            .into_iter()
+            .map(|event| event.event_type)
+            .filter(|event_type| {
+                event_type.starts_with("research.tree") || event_type == "research.trash.changed"
+            })
+            .collect()
+    }
+
+    #[test]
+    fn trashed_trees_leave_every_list_and_restore_where_they_were() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        state.insert_group_after(sample_group(), None).unwrap();
+        let filed = state
+            .create_research_post(post_request("Filed note", false), Vec::new())
+            .unwrap();
+        let middle = state
+            .create_research_post(post_request("Middle note", false), Vec::new())
+            .unwrap();
+        let archived = state
+            .create_research_post(post_request("Archived note", false), Vec::new())
+            .unwrap();
+        let mut folders = state.research_folders().unwrap();
+        folders.folders.push(research::ResearchFolder {
+            id: "f1".to_string(),
+            name: "Reading".to_string(),
+            workspace_id: "group-1".to_string(),
+            trashed_at: None,
+        });
+        folders
+            .membership
+            .insert(filed.tree.id.clone(), "f1".to_string());
+        state.set_research_folders(folders).unwrap();
+        state.archive_research_tree(&archived.tree.id).unwrap();
+        let order_before = ordered_research_tree_ids(&state.inner.model.lock().unwrap());
+        state.take_emitted_events();
+
+        let trashed = state.trash_research_tree(&filed.tree.id).unwrap();
+        assert!(trashed.trashed_at.is_some());
+        assert_eq!(
+            emitted_types(&state),
+            ["research.tree.removed", "research.trash.changed"]
+        );
+        // Trashing again changes nothing and emits nothing.
+        state.trash_research_tree(&filed.tree.id).unwrap();
+        assert!(emitted_types(&state).is_empty());
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        state.trash_research_tree(&archived.tree.id).unwrap();
+
+        let listed = state
+            .list_research_trees_with_archived(true)
+            .unwrap()
+            .into_iter()
+            .map(|summary| summary.id)
+            .collect::<Vec<_>>();
+        assert_eq!(listed, [middle.tree.id.clone()]);
+        let recent = state.list_recent_activity(50, None).unwrap();
+        assert!(
+            recent
+                .items
+                .iter()
+                .all(|item| item.tree_id == middle.tree.id)
+        );
+        assert!(
+            state
+                .list_recent_activity_for_trees(&[filed.tree.id.clone()])
+                .unwrap()
+                .is_empty()
+        );
+        let trash = state.list_research_trash().unwrap();
+        assert_eq!(
+            trash
+                .iter()
+                .map(|summary| summary.id.as_str())
+                .collect::<Vec<_>>(),
+            [archived.tree.id.as_str(), filed.tree.id.as_str()]
+        );
+        assert!(trash.iter().all(|summary| summary.trashed_at.is_some()));
+        // Reordering a section ignores trashed trees.
+        state
+            .reorder_research_trees("group-1", false, vec![middle.tree.id.clone()])
+            .unwrap();
+        // Edits wait for Restore.
+        for err in [
+            state
+                .rename_research_tree(&filed.tree.id, "Renamed".to_string())
+                .unwrap_err(),
+            state
+                .create_research_post_follow_up(
+                    &filed.tree.root_node_id,
+                    "More".to_string(),
+                    Vec::new(),
+                )
+                .unwrap_err(),
+            state.archive_research_tree(&filed.tree.id).unwrap_err(),
+            state.restore_research_tree(&archived.tree.id).unwrap_err(),
+        ] {
+            assert_eq!(err, RESEARCH_TRASHED_EDIT_ERROR);
+        }
+
+        // The Trash survives a restart.
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        assert_eq!(state.list_research_trash().unwrap().len(), 2);
+        state.take_emitted_events();
+
+        let restored = state
+            .restore_research_tree_from_trash(&filed.tree.id)
+            .unwrap();
+        assert!(restored.trashed_at.is_none());
+        assert_eq!(
+            emitted_types(&state),
+            ["research.tree.restored", "research.trash.changed"]
+        );
+        state
+            .restore_research_tree_from_trash(&archived.tree.id)
+            .unwrap();
+        // Back in its folder, its archive state and its place in the order.
+        assert_eq!(
+            state
+                .research_folders()
+                .unwrap()
+                .membership
+                .get(&filed.tree.id),
+            Some(&"f1".to_string())
+        );
+        let archived_tree = state.research_tree(&archived.tree.id).unwrap().tree;
+        assert!(archived_tree.archived_at.is_some());
+        assert_eq!(
+            ordered_research_tree_ids(&state.inner.model.lock().unwrap()),
+            order_before
+        );
+        assert_eq!(
+            state.list_research_trees_with_archived(true).unwrap().len(),
+            3
+        );
+        assert!(state.list_research_trash().unwrap().is_empty());
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn emptying_the_trash_deletes_only_trashed_trees_of_the_workspace() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        state.insert_group_after(sample_group(), None).unwrap();
+        let kept = state
+            .create_research_post(post_request("Kept", false), Vec::new())
+            .unwrap();
+        let first = state
+            .create_research_post(post_request("First", false), Vec::new())
+            .unwrap();
+        let second = state
+            .create_research_post(post_request("Second", false), Vec::new())
+            .unwrap();
+        state.trash_research_tree(&first.tree.id).unwrap();
+        state.trash_research_tree(&second.tree.id).unwrap();
+        assert!(
+            state
+                .empty_research_trash(Some("other-workspace"))
+                .unwrap()
+                .is_empty()
+        );
+        state.take_emitted_events();
+
+        let mut removed = state.empty_research_trash(Some("group-1")).unwrap();
+        removed.sort();
+        let mut expected = vec![first.tree.id.clone(), second.tree.id.clone()];
+        expected.sort();
+        assert_eq!(removed, expected);
+        assert_eq!(
+            emitted_types(&state),
+            [
+                "research.tree.removed",
+                "research.trash.changed",
+                "research.tree.removed",
+                "research.trash.changed",
+            ]
+        );
+        assert!(state.research_tree(&first.tree.id).is_err());
+        assert!(state.research_node(&second.tree.root_node_id).is_err());
+        assert!(state.list_research_trash().unwrap().is_empty());
+        assert_eq!(state.list_research_trees().unwrap()[0].id, kept.tree.id);
+
+        // Deleting a tree outside the Trash leaves the Trash alone.
+        state.remove_research_tree(&kept.tree.id).unwrap();
+        assert_eq!(emitted_types(&state), ["research.tree.removed"]);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn a_tree_with_active_runs_cannot_be_trashed() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Root".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        let err = state.trash_research_tree(&detail.tree.id).unwrap_err();
+        assert!(err.contains("active runs"));
+        assert!(state.list_research_trash().unwrap().is_empty());
+        assert!(
+            state
+                .trash_research_tree("missing")
+                .unwrap_err()
+                .contains("not found")
+        );
+    }
+
+    #[test]
+    fn a_stored_tree_from_before_the_trash_loads_outside_it() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_post(post_request("Older note", false), Vec::new())
+            .unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        // Trees written before the Trash have no trashedAt key at all.
+        let path = persistence::state_path(&workspace);
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(
+            raw["researchTrees"][&detail.tree.id]
+                .get("trashedAt")
+                .is_none()
+        );
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        assert!(
+            !restored
+                .research_tree(&detail.tree.id)
+                .unwrap()
+                .tree
+                .is_trashed()
+        );
+        assert_eq!(restored.list_research_trees().unwrap().len(), 1);
+        assert!(restored.list_research_trash().unwrap().is_empty());
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
@@ -16850,6 +17332,7 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: None,
         };
 
@@ -16924,6 +17407,7 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17028,6 +17512,7 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17142,6 +17627,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17231,6 +17717,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -17326,6 +17813,7 @@ mod tests {
                     created_at: 1,
                     updated_at: 2,
                     archived_at: None,
+                    trashed_at: None,
                     last_viewed_at: None,
                 },
             );
@@ -18325,6 +18813,7 @@ mod tests {
                 created_at: now,
                 updated_at: now,
                 archived_at: None,
+                trashed_at: None,
                 last_viewed_at: Some(now),
             };
             let mut node = ResearchNode::new(
@@ -18471,6 +18960,7 @@ mod tests {
             id: "rf-1".to_string(),
             name: "Reading".to_string(),
             workspace_id: "group-1".to_string(),
+            trashed_at: None,
         });
         state.set_research_folders(folders).unwrap();
         let original = research_nodes_by_id(&state);

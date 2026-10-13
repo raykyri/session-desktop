@@ -97,7 +97,10 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
 | `research.setTreeFollowed` / `setTreeBookmarked` | M | `{ treeId, value }` → `ResearchTree` | same |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
-| `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` |
+| `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent, in or out of the Trash) |
+| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree`, `restore_research_tree_from_trash` |
+| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, newest first | `list_research_trash` |
+| `research.emptyTrash` | M | `{ workspaceId }` → deleted tree ids | `empty_research_trash` |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
@@ -190,8 +193,9 @@ unless noted:
 | --- | --- | --- |
 | `research.tree.created` | `{ tree, node }` | createTree, importReport |
 | `research.tree.updated` | `{ tree }` | rename, followed, bookmarked, viewed |
-| `research.tree.archived` / `restored` | `{ tree }` | archive/restore |
-| `research.tree.removed` | `{ treeId }` | removeTree, workspace remove |
+| `research.tree.archived` / `restored` | `{ tree }` | archive/restore; `restored` also by restoreTreeFromTrash |
+| `research.tree.removed` | `{ treeId }` | removeTree, trashTree, workspace remove |
+| `research.trash.changed` | `{}` | trashTree, restoreTreeFromTrash, removeTree of a trashed tree |
 | `research.node.created` | `{ node }` | forkNode |
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/resume reset, recap saved, snapshot stamped, preview (≤ 2/s) |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch |

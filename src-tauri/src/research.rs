@@ -52,6 +52,11 @@ pub struct ResearchFolder {
     pub id: String,
     pub name: String,
     pub workspace_id: String,
+    /// When the folder was moved to the Trash. Its membership entries stay, so
+    /// Restore puts its questions back; until then they show as Unfiled. Its
+    /// name is free for another folder. Absent before the Trash existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<u128>,
 }
 
 /// The whole grouping layer for research trees. Persisted in `state.json`
@@ -96,8 +101,14 @@ const RESEARCH_SYSTEM_FOLDER_IDS: [&str; 3] = [
 const RESEARCH_SYSTEM_FOLDER_ID_PREFIX: &str = "system:";
 /// Names of the sidebar's built-in sections, lowercase. Mirrors
 /// `RESERVED_FOLDER_NAMES` in src/lib/researchFolders.ts.
-const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 5] =
-    ["home", "unfiled", "drafts", "archive", "highlights"];
+const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 6] = [
+    "home",
+    "unfiled",
+    "drafts",
+    "archive",
+    "trash",
+    "highlights",
+];
 /// Mirrors `RESEARCH_FOLDER_NAME_MAX_LENGTH` in src/lib/researchFolders.ts.
 const RESEARCH_FOLDER_NAME_MAX_CHARS: usize = 40;
 
@@ -109,27 +120,56 @@ fn is_research_system_folder_id(id: &str) -> bool {
 /// workspace) duplicate names, plus ids in the `system:` namespace. Reserved
 /// and duplicate checks both compare Unicode lowercase forms.
 /// A folder whose id and trimmed name match `current` is not re-checked, so a
-/// state saved before this validation existed stays writable.
+/// state saved before this validation existed stays writable. Folders in the
+/// Trash don't hold their names: duplicates count only folders outside it,
+/// and restoring a folder fails while another folder has its name.
 pub fn validate_research_folders(
     next: &mut ResearchFolderState,
     current: &ResearchFolderState,
 ) -> Result<(), String> {
-    let unchanged = current
+    let previous = current
         .folders
         .iter()
-        .map(|folder| (folder.id.as_str(), folder.name.trim()))
-        .collect::<HashSet<_>>();
+        .map(|folder| {
+            (
+                folder.id.as_str(),
+                (folder.name.trim(), folder.trashed_at.is_some()),
+            )
+        })
+        .collect::<HashMap<_, _>>();
     for folder in &mut next.folders {
         folder.name = folder.name.trim().to_string();
     }
     let mut names_by_workspace: HashMap<(&str, String), usize> = HashMap::new();
-    for folder in &next.folders {
+    for folder in next
+        .folders
+        .iter()
+        .filter(|folder| folder.trashed_at.is_none())
+    {
         *names_by_workspace
             .entry((folder.workspace_id.as_str(), folder.name.to_lowercase()))
             .or_default() += 1;
     }
+    let duplicate = |folder: &ResearchFolder| {
+        folder.trashed_at.is_none()
+            && names_by_workspace
+                .get(&(folder.workspace_id.as_str(), folder.name.to_lowercase()))
+                .copied()
+                .unwrap_or_default()
+                > 1
+    };
     for folder in &next.folders {
-        if unchanged.contains(&(folder.id.as_str(), folder.name.as_str())) {
+        if let Some(&(name, was_trashed)) = previous.get(folder.id.as_str())
+            && name == folder.name
+        {
+            // Same name: only a restore can collide with another folder.
+            let restored = was_trashed && folder.trashed_at.is_none();
+            if restored && duplicate(folder) {
+                return Err(format!(
+                    "A folder named \"{}\" already exists.",
+                    folder.name
+                ));
+            }
             continue;
         }
         if folder.id.trim().is_empty() {
@@ -150,8 +190,7 @@ pub fn validate_research_folders(
         if RESERVED_RESEARCH_FOLDER_NAMES.contains(&lowercase.as_str()) {
             return Err(format!("The name \"{}\" is reserved.", folder.name));
         }
-        let key = (folder.workspace_id.as_str(), lowercase);
-        if names_by_workspace.get(&key).copied().unwrap_or_default() > 1 {
+        if duplicate(folder) {
             return Err(format!(
                 "A folder named \"{}\" already exists.",
                 folder.name
@@ -303,8 +342,20 @@ pub struct ResearchTree {
     pub updated_at: u128,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<u128>,
+    /// When the tree was moved to the Trash. A trashed tree keeps its nodes,
+    /// files, folder membership, position and archive state, so Restore puts
+    /// it back where it was; lists, feeds, highlights and edits skip it until
+    /// then. Absent in state and archives written before the Trash existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_viewed_at: Option<u128>,
+}
+
+impl ResearchTree {
+    pub fn is_trashed(&self) -> bool {
+        self.trashed_at.is_some()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -2116,6 +2167,9 @@ pub struct ResearchTreeSummary {
     pub cancelled_count: usize,
     pub updated_at: u128,
     pub archived_at: Option<u128>,
+    /// Set only in the Trash's list; the other lists leave trashed trees out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trashed_at: Option<u128>,
     pub has_unseen_update: bool,
     /// A failure settled after the tree was last viewed. Unlike `failed_count`
     /// (a lifetime total that can never be cleared without deleting the tree),
@@ -3995,6 +4049,7 @@ mod tests {
             id: id.to_string(),
             name: id.to_string(),
             workspace_id: workspace.to_string(),
+            trashed_at: None,
         }
     }
 
@@ -4163,6 +4218,7 @@ mod tests {
                     id: id.to_string(),
                     name: name.to_string(),
                     workspace_id: workspace.to_string(),
+                    trashed_at: None,
                 })
                 .collect(),
             ..ResearchFolderState::default()
@@ -4183,7 +4239,14 @@ mod tests {
             validate_research_folders(&mut duplicate, &current).unwrap_err(),
             "A folder named \"Écoles\" already exists."
         );
-        for reserved in ["home", "UNFILED", " Drafts ", "archive", "HIGHLIGHTS"] {
+        for reserved in [
+            "home",
+            "UNFILED",
+            " Drafts ",
+            "archive",
+            "Trash",
+            "HIGHLIGHTS",
+        ] {
             let mut state = named(&[("f1", reserved, "ws-a")]);
             assert_eq!(
                 validate_research_folders(&mut state, &current).unwrap_err(),
@@ -4213,6 +4276,42 @@ mod tests {
     }
 
     #[test]
+    fn validate_research_folders_frees_the_names_of_trashed_folders() {
+        let live = |id: &str, name: &str| ResearchFolder {
+            id: id.to_string(),
+            name: name.to_string(),
+            workspace_id: "ws".to_string(),
+            trashed_at: None,
+        };
+        let state = |folders: Vec<ResearchFolder>| ResearchFolderState {
+            folders,
+            ..ResearchFolderState::default()
+        };
+        // A legacy folder named Trash can still be trashed.
+        let current = state(vec![live("f1", "Reading"), live("legacy", "Trash")]);
+        let mut trashed = current.clone();
+        trashed.folders[0].trashed_at = Some(10);
+        trashed.folders[1].trashed_at = Some(11);
+        validate_research_folders(&mut trashed, &current).unwrap();
+
+        // While f1 is in the Trash, a new folder can take its name.
+        let mut reused = trashed.clone();
+        reused.folders.push(live("f2", "reading"));
+        validate_research_folders(&mut reused, &trashed).unwrap();
+
+        // Restoring f1 then collides with f2; restoring it alone does not.
+        let mut restored = reused.clone();
+        restored.folders[0].trashed_at = None;
+        assert_eq!(
+            validate_research_folders(&mut restored, &reused).unwrap_err(),
+            "A folder named \"Reading\" already exists."
+        );
+        let mut restored = trashed.clone();
+        restored.folders[0].trashed_at = None;
+        validate_research_folders(&mut restored, &trashed).unwrap();
+    }
+
+    #[test]
     fn validate_research_folders_accepts_unchanged_legacy_names() {
         // Folders saved before validation existed must stay writable while
         // they are unchanged; a new or renamed folder is still checked.
@@ -4222,11 +4321,13 @@ mod tests {
                     id: "f1".to_string(),
                     name: "Drafts".to_string(),
                     workspace_id: "ws".to_string(),
+                    trashed_at: None,
                 },
                 ResearchFolder {
                     id: "f2".to_string(),
                     name: "drafts".to_string(),
                     workspace_id: "ws".to_string(),
+                    trashed_at: None,
                 },
             ],
             ..ResearchFolderState::default()
@@ -4236,6 +4337,7 @@ mod tests {
             id: "f4".to_string(),
             name: "x".repeat(60),
             workspace_id: "ws".to_string(),
+            trashed_at: None,
         });
         let mut next = legacy.clone();
         next.folders.push(folder("f3", "ws"));
@@ -4289,6 +4391,7 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
+            trashed_at: None,
             last_viewed_at: Some(2),
         };
         let node = ResearchNode {
@@ -4358,6 +4461,7 @@ mod tests {
                 id: "rf-1".to_string(),
                 name: "Folder".to_string(),
                 workspace_id: "group-1".to_string(),
+                trashed_at: None,
             }],
             membership: HashMap::from([("research-1".to_string(), "rf-1".to_string())]),
             nodes: vec![node],
@@ -5397,6 +5501,7 @@ mod tests {
             id: "rf".to_string(),
             name: "Reading".to_string(),
             workspace_id: "w".to_string(),
+            trashed_at: None,
         }];
         assert!(research_membership_is_unfiled(None, &folders));
         assert!(research_membership_is_unfiled(Some("gone"), &folders));
@@ -5431,6 +5536,7 @@ mod tests {
             id: "rf".to_string(),
             name: "Reading".to_string(),
             workspace_id: archive.workspace.id.clone(),
+            trashed_at: None,
         });
         // The sample files its tree in a folder; here it is Unfiled.
         archive.membership.clear();
