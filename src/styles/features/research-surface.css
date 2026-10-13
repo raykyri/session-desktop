@@ -292,11 +292,6 @@
   min-width: 0;
 }
 
-.tweet-embed.is-compact {
-  --research-body-font-size: var(--research-compact-font-size);
-  --research-body-line-height: var(--research-compact-line-height);
-}
-
 /* Avatar, name and badge, then the age at the right edge. */
 .tweet-embed-head {
   display: flex;

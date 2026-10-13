@@ -114,28 +114,21 @@ function TweetAvatar({
   );
 }
 
-function TweetText({ runs, className, compact }: {
-  runs: TweetTextRun[];
-  className: string;
-  compact?: boolean;
-}) {
+function TweetText({ runs, className }: { runs: TweetTextRun[]; className: string }) {
   if (runs.length === 0) {
     return null;
   }
   return (
     <p className={className}>
-      {runs.map((run, index) => {
-        // Feed previews keep single line breaks (including lists), but omit
-        // blank lines without changing the saved tweet or its link targets.
-        const text = compact ? run.text.replace(/\r?\n(?:[\t ]*\r?\n)+/g, "\n") : run.text;
-        return run.kind === "link" && run.url ? (
+      {runs.map((run, index) =>
+        run.kind === "link" && run.url ? (
           <TweetLink key={index} url={run.url} className="tweet-embed-link">
-            {text}
+            {run.text}
           </TweetLink>
         ) : (
-          <span key={index}>{text}</span>
-        );
-      })}
+          <span key={index}>{run.text}</span>
+        ),
+      )}
     </p>
   );
 }
@@ -314,8 +307,8 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
   );
 }
 
-/** Renders a hydrated tweet directly as a feed entry. The compact layout
- * uses a single header row with a 20px avatar, name, and badge. The handle is
+/** Renders a hydrated tweet directly as a feed entry. The layout uses a
+ * single header row with a 20px avatar, name, and badge. The handle is
  * available in the name's tooltip and accessible label. Full-width text with
  * Show more under it, media, and the quote follow; the timestamp and
  * engagement counts share the footer. With `openable` off (Home), no part of
@@ -323,12 +316,10 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
  * its ellipsis without Show more. Exported for static-markup tests. */
 export function TweetEmbed({
   tweet,
-  compact = false,
   openable = true,
   lead,
 }: {
   tweet: TweetSnapshot;
-  compact?: boolean;
   openable?: boolean;
   /** A row glyph at the start of the header, when the tweet is the row's
    * first line. */
@@ -336,20 +327,12 @@ export function TweetEmbed({
 }) {
   return (
     <TweetLinksOpen.Provider value={openable}>
-      <TweetEmbedBody tweet={tweet} compact={compact} lead={lead} />
+      <TweetEmbedBody tweet={tweet} lead={lead} />
     </TweetLinksOpen.Provider>
   );
 }
 
-function TweetEmbedBody({
-  tweet,
-  compact,
-  lead,
-}: {
-  tweet: TweetSnapshot;
-  compact: boolean;
-  lead?: ReactNode;
-}) {
+function TweetEmbedBody({ tweet, lead }: { tweet: TweetSnapshot; lead?: ReactNode }) {
   const openable = useContext(TweetLinksOpen);
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
@@ -357,7 +340,7 @@ function TweetEmbedBody({
   const hasStats = tweet.replies !== undefined || tweet.likes !== undefined;
   return (
     <article
-      className={`tweet-embed${compact ? " is-compact" : ""}${openable ? "" : " is-static"}`}
+      className={`tweet-embed${openable ? "" : " is-static"}`}
       aria-label={`${openable ? "Open tweet" : "Tweet"} by @${tweet.author.handle}`}
       role={openable ? "link" : undefined}
       tabIndex={openable ? 0 : undefined}
@@ -416,7 +399,7 @@ function TweetEmbedBody({
             Replying to <span>@{tweet.replyTo.handle}</span>
           </p>
         ) : null}
-        <TweetText runs={tweet.runs} className="tweet-embed-text" compact={compact} />
+        <TweetText runs={tweet.runs} className="tweet-embed-text" />
         {tweet.partial && openable ? (
           <TweetLink url={tweet.url} className="tweet-embed-more">
             Show more
@@ -466,7 +449,7 @@ function TweetEmbedBody({
               {quoted.author.verified ? <VerifiedBadge /> : null}
               <span className="tweet-embed-handle">@{quoted.author.handle}</span>
             </div>
-            <TweetText runs={quoted.runs} className="tweet-embed-text is-quote" compact={compact} />
+            <TweetText runs={quoted.runs} className="tweet-embed-text is-quote" />
             {quoted.partial ? (
               <span className="tweet-embed-more">Show more</span>
             ) : null}

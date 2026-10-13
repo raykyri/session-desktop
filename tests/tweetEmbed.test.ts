@@ -51,11 +51,11 @@ test("tweet card offers Show more on a long post", () => {
   assert.match(html, /…/);
 });
 
-test("clicking a Home tweet card activates the feed row without opening X", () => {
+test("a tweet card that is not openable opens nothing on X", () => {
   const long = renderToStaticMarkup(
-    createElement(TweetEmbed, { tweet: snapshot("1623411400545632256"), compact: true, openable: false }),
+    createElement(TweetEmbed, { tweet: snapshot("1623411400545632256"), openable: false }),
   );
-  assert.match(long, /<article class="tweet-embed is-compact is-static" aria-label="Tweet by @/);
+  assert.match(long, /<article class="tweet-embed is-static" aria-label="Tweet by @/);
   assert.doesNotMatch(long, /role="link"|tabindex|<a /);
   // A cut-off text ends at its ellipsis; Show more would open X.
   assert.doesNotMatch(long, /Show more/);
