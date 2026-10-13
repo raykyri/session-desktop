@@ -8,6 +8,14 @@ import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
+import type { AgentAdapterMetadata } from "../../types";
+import type { ResearchLaunchChoice } from "./ResearchQueryComposer";
+import {
+  ResearchQuestionModelPicker,
+  researchQuestionChoiceFrom,
+  researchQuestionLaunch,
+  type ResearchQuestionChoice,
+} from "./ResearchQuestionModelPicker";
 
 interface ResearchEditorColumnProps {
   column: EditorColumn;
@@ -27,23 +35,27 @@ interface ResearchEditorColumnProps {
   /** The document's word count line. */
   countText?: { text: string; over: boolean } | null;
   error: string | null;
-  /** The model a question is asked with, as the Home ask box has it
-   * selected; null when no agent is ready. */
-  questionModel: string | null;
+  /** The agents the model menu beside "Ask as a question" lists. */
+  questionAdapters: AgentAdapterMetadata[];
+  /** The agent, model and effort the Home ask box has selected, which the
+   * menu starts from; null when no agent is ready. */
+  questionDefault: ResearchLaunchChoice | null;
   asking: boolean;
   textareaRef: Ref<HTMLTextAreaElement>;
   onCancel: () => void;
   onSave: () => void;
-  onAskAsQuestion: () => void;
+  /** Asks with the agent, model and effort chosen in the footer's menu. */
+  onAskAsQuestion: (choice: ResearchLaunchChoice) => void;
   /** Back and forward: the root note's editor takes the note column's place,
    * the root level's first column, whose header carries them. */
   history?: ComponentProps<typeof ResearchPairHeader>["history"];
 }
 
 /** The editor column (E{level}): the Markdown source of a document, or a post's
- * text, in a plain field, with Cancel, Save and "Ask as a question" in its
- * footer. A document's editor follows its answer column, which previews the
- * text; a note's editor is shown in place of the note column. ⌘↵ (Ctrl↵)
+ * text, in a plain field, with Cancel, Save and "Ask as a question" (with
+ * the model menu it asks with) in its footer. A document's editor follows its
+ * answer column, which previews the text; a note's editor is shown in place
+ * of the note column. ⌘↵ (Ctrl↵)
  * saves; Esc closes the column when nothing changed, and otherwise asks in
  * the footer whether to discard the changes. */
 export function ResearchEditorColumn({
@@ -59,7 +71,8 @@ export function ResearchEditorColumn({
   notices,
   countText,
   error,
-  questionModel,
+  questionAdapters,
+  questionDefault,
   asking,
   textareaRef,
   onCancel,
@@ -71,15 +84,19 @@ export function ResearchEditorColumn({
   const keepEditingRef = useRef<HTMLButtonElement | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const questionNoteId = useId();
+  // The menu's choice applies to this column's ask only; until one is made
+  // it follows the Home ask box's selection.
+  const [chosenQuestion, setChosenQuestion] = useState<ResearchQuestionChoice | null>(null);
+  const questionChoice = chosenQuestion ?? (questionDefault ? researchQuestionChoiceFrom(questionDefault) : null);
+  const questionLaunch = questionChoice ? researchQuestionLaunch(questionAdapters, questionChoice) : null;
   const question = researchQuestionLength(value);
   const questionBlocker = !question.allowed
     ? question.count === 0
       ? "Write the question first"
       : `${question.count.toLocaleString()} / ${QUESTION_CHARACTER_LIMIT} characters`
-    : questionModel === null
+    : questionLaunch === null
       ? "No research agent is ready"
       : null;
-  const questionNote = questionBlocker ?? `Asks ${questionModel}`;
   const heading = kind === "document" ? "Edit document" : "Edit note";
   const saveLabel = saving ? "Saving…" : "Save";
 
@@ -104,6 +121,9 @@ export function ResearchEditorColumn({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    // Keys in the model menu and its Custom model dialog, which are portaled
+    // out of the column, are theirs.
+    if (!event.currentTarget.contains(event.target as Node)) return;
     if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey) {
       if (event.nativeEvent.isComposing) return;
       // Handled here, so the strip's own Esc (focus to the first column)
@@ -159,20 +179,30 @@ export function ResearchEditorColumn({
             type="button"
             className="control-button research-editor-ask"
             aria-disabled={questionBlocker !== null || asking || saving || undefined}
-            aria-describedby={questionNoteId}
+            aria-describedby={questionBlocker !== null ? questionNoteId : undefined}
             onClick={() => {
-              if (questionBlocker === null && !asking && !saving) onAskAsQuestion();
+              if (questionBlocker === null && questionLaunch && !asking && !saving) onAskAsQuestion(questionLaunch);
             }}
           >
             <MessageSquarePlus size={14} aria-hidden="true" />
             <span>{asking ? "Asking…" : "Ask as a question"}</span>
           </button>
-          <span
-            id={questionNoteId}
-            className={`research-editor-count${!question.allowed && question.count > 0 ? " is-over" : ""}`}
-          >
-            {questionNote}
-          </span>
+          {questionChoice ? (
+            <ResearchQuestionModelPicker
+              adapters={questionAdapters}
+              choice={questionChoice}
+              disabled={asking || saving}
+              onChange={setChosenQuestion}
+            />
+          ) : null}
+          {questionBlocker !== null ? (
+            <span
+              id={questionNoteId}
+              className={`research-editor-count${!question.allowed && question.count > 0 ? " is-over" : ""}`}
+            >
+              {questionBlocker}
+            </span>
+          ) : null}
         </div>
         {confirmingDiscard ? (
           <div className="research-editor-row is-confirm" role="group" aria-label="Discard changes">

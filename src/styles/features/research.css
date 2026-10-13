@@ -2435,6 +2435,29 @@
   cursor: default;
 }
 
+/* The model menu "Ask as a question" asks with: the launcher's select,
+   compact, in the muted size of the note it sits beside. */
+.research-question-model {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.research-question-model .launcher-select {
+  min-width: 0;
+}
+
+.research-question-model .launcher-select-trigger {
+  gap: 5px;
+  min-width: 0;
+  padding: 0 8px 0 9px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.research-question-model .launcher-select-trigger:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
 .research-editor-save:not(:disabled) {
   border-color: var(--accent-strong);
   background: var(--accent-soft);

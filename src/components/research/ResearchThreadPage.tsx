@@ -94,6 +94,7 @@ import {
   type QueuedResearchFollowup,
 } from "../../lib/researchNavigation";
 import type {
+  AgentAdapterMetadata,
   ResearchBranchRemoval,
   NodeAnchor,
   ResearchNodeType,
@@ -108,6 +109,7 @@ import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import { ResearchEditorSessionColumn, type EditorSession } from "./ResearchEditorSessionColumn";
+import type { ResearchLaunchChoice } from "./ResearchQueryComposer";
 import { ResearchThreadPlaceholder } from "./ResearchColumnChrome";
 import { rangeForTextOffsets } from "./researchTextRanges";
 import { ResearchDeleteBranchDialog, ResearchRenameDialog, ResearchRerunDialog } from "./ResearchThreadDialogs";
@@ -190,11 +192,15 @@ interface ResearchThreadPageProps {
     expectedText: string;
   }) => Promise<UpdateResearchPostResult>;
   /** "Ask as a question" in the editor: starts a new thread with `prompt`
-   * using the Home ask box's model, and opens it. */
-  onAskAsQuestion: (prompt: string) => Promise<void>;
-  /** The model a question is asked with ("Claude Opus"), or null when no
-   * research agent is ready. Read when the editor renders. */
-  readQuestionModel: () => string | null;
+   * using the agent, model and effort chosen in the editor's footer, and
+   * opens it. */
+  onAskAsQuestion: (prompt: string, choice: ResearchLaunchChoice) => Promise<void>;
+  /** The Home ask box's agent, model and effort, which the editor's model
+   * menu starts from, or null when no research agent is ready. Read when the
+   * editor renders. */
+  readQuestionChoice: () => ResearchLaunchChoice | null;
+  /** The agents the editor's model menu lists. */
+  questionAdapters: AgentAdapterMetadata[];
   onCancel: (nodeId: string) => Promise<void>;
   /** Relaunches a failed or cancelled run in place (same node id, same
    * inputs). The refreshed tree detail flows back through the caller's
@@ -273,7 +279,8 @@ function ResearchThreadPage({
   onUpdateDocument,
   onUpdatePost,
   onAskAsQuestion,
-  readQuestionModel,
+  readQuestionChoice,
+  questionAdapters,
   onCancel,
   onRetryNode,
   onRerunNode,
@@ -2027,7 +2034,7 @@ function ResearchThreadPage({
 
   /** Starts a new question thread with the editor's text. The edited
    * document or post is not changed: the editor closes without saving. */
-  async function askEditorAsQuestion() {
+  async function askEditorAsQuestion(choice: ResearchLaunchChoice) {
     const session = editorRef.current;
     if (!session || editorAsking) {
       return;
@@ -2035,7 +2042,7 @@ function ResearchThreadPage({
     setEditorAsking(true);
     setEditorError(null);
     try {
-      await onAskAsQuestion(session.text.trim());
+      await onAskAsQuestion(session.text.trim(), choice);
       setEditor(null);
     } catch (err) {
       setEditorError(err instanceof Error ? err.message : String(err));
@@ -2590,7 +2597,8 @@ function ResearchThreadPage({
             saving={editorSaving}
             asking={editorAsking}
             error={editorError}
-            questionModel={readQuestionModel()}
+            questionAdapters={questionAdapters}
+            questionDefault={readQuestionChoice()}
             textareaRef={editorFieldRef}
             history={editor.kind === "post" && column.levelIndex === 0 ? historyNav : null}
             onChange={(patch) =>
@@ -2598,7 +2606,7 @@ function ResearchThreadPage({
             }
             onCancel={closeEditor}
             onSave={() => void saveEditor()}
-            onAskAsQuestion={() => void askEditorAsQuestion()}
+            onAskAsQuestion={(choice) => void askEditorAsQuestion(choice)}
           />
         );
       }

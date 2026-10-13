@@ -6,8 +6,9 @@ import {
   researchDocumentEditGate,
 } from "../../lib/researchDocuments";
 import { researchEditorCanSave, type researchEditorStats } from "../../lib/researchThreadView";
-import type { ResearchHighlightAnchor } from "../../types";
+import type { AgentAdapterMetadata, ResearchHighlightAnchor } from "../../types";
 import { ResearchEditorColumn } from "./ResearchEditorColumn";
+import type { ResearchLaunchChoice } from "./ResearchQueryComposer";
 
 /** The root's document (E0), or a note (the root note or a follow-up note,
  * E{level}), open in the editor column. */
@@ -45,7 +46,8 @@ export function ResearchEditorSessionColumn({
   saving,
   asking,
   error,
-  questionModel,
+  questionAdapters,
+  questionDefault,
   textareaRef,
   history,
   onChange,
@@ -62,14 +64,16 @@ export function ResearchEditorSessionColumn({
   saving: boolean;
   asking: boolean;
   error: string | null;
-  /** The model "Ask as a question" uses, or null when none is ready. */
-  questionModel: string | null;
+  /** The agents "Ask as a question" can use, and the Home ask box's
+   * selection it starts from (null when none is ready). */
+  questionAdapters: AgentAdapterMetadata[];
+  questionDefault: ResearchLaunchChoice | null;
   textareaRef: Ref<HTMLTextAreaElement>;
   history: ComponentProps<typeof ResearchEditorColumn>["history"];
   onChange: (patch: Partial<Pick<EditorSession, "text" | "title">>) => void;
   onCancel: () => void;
   onSave: () => void;
-  onAskAsQuestion: () => void;
+  onAskAsQuestion: (choice: ResearchLaunchChoice) => void;
 }) {
   const notices: ReactNode[] = [];
   if (session.kind === "document") {
@@ -140,7 +144,8 @@ export function ResearchEditorSessionColumn({
           : null
       }
       error={error}
-      questionModel={questionModel}
+      questionAdapters={questionAdapters}
+      questionDefault={questionDefault}
       asking={asking}
       textareaRef={textareaRef}
       onCancel={onCancel}

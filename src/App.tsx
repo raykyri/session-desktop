@@ -43,7 +43,6 @@ import {
 import {
   UserNotificationStack,
 } from "./components/UserNotificationStack";
-import { formatResearchModelSummary } from "./lib/researchModelSummary";
 import {
   resolveResearchScope,
 } from "./lib/researchScope";
@@ -143,6 +142,7 @@ import type {
 } from "./types";
 
 const BROWSER_OVERLAY_LEFT_MARGIN = 64;
+const NO_ADAPTERS: AgentAdapterMetadata[] = [];
 
 function MainApp() {
   const appRef = useRef<HTMLDivElement | null>(null);
@@ -906,17 +906,14 @@ function MainApp() {
     [deleteResearchDraftEntry, showResearchToast, submitNewResearch],
   );
   // "Ask as a question" in the editor column: a new thread with the edited
-  // text, asked with the Home ask box's selected agent and model (as a draft
-  // sent from Drafts is), in the edited thread's folder. It opens selected.
+  // text, asked with the agent, model and effort chosen in the editor's
+  // footer (which starts from the Home ask box's selection), in the edited
+  // thread's folder. It opens selected.
   // Once the new thread exists, a dialog offers to delete the edited thread
   // (see ResearchTreeDeleteOfferDialog), counted from its nodes as they were
   // when the question was asked.
   const askResearchEditorQuestion = useCallback(
-    async (prompt: string) => {
-      const choice = composerLaunchChoiceRef.current?.();
-      if (!choice) {
-        throw new Error("No research agent is ready. Review agents in Settings.");
-      }
+    async (prompt: string, choice: ResearchLaunchChoice) => {
       const origin = activeResearchDetailRef.current;
       const workspaceId = origin?.tree.workspaceId ?? researchScopeRef.current;
       const newTreeId = await submitNewResearch({ prompt, ...choice, workspaceId });
@@ -951,10 +948,7 @@ function MainApp() {
       : null;
   }, []);
   if (researchDeleteOffer) researchOfferNewTreeIdRef.current = researchDeleteOffer.newTreeId;
-  const readResearchQuestionModel = useCallback(() => {
-    const choice = composerLaunchChoiceRef.current?.();
-    return choice ? formatResearchModelSummary(choice.adapter, choice.model) || choice.adapter : null;
-  }, []);
+  const readResearchQuestionChoice = useCallback(() => composerLaunchChoiceRef.current?.() ?? null, []);
   const configAdapters = config?.adapters;
   const feedComposer = useMemo(
     () =>
@@ -1292,7 +1286,8 @@ function MainApp() {
                     onUpdateDocument={editResearchDocument}
                     onUpdatePost={editResearchPost}
                     onAskAsQuestion={askResearchEditorQuestion}
-                    readQuestionModel={readResearchQuestionModel}
+                    readQuestionChoice={readResearchQuestionChoice}
+                    questionAdapters={configAdapters ?? NO_ADAPTERS}
                     onCancel={cancelResearchRun}
                     onRetryNode={retryResearchRun}
                     onRerunNode={rerunResearchRun}
