@@ -1,4 +1,4 @@
-import { feedTextRuns } from "../../lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns } from "../../lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "../../lib/researchNodeTypes";
 import {
@@ -850,10 +850,17 @@ function ResearchActivityFeed({
     // The card shows the question as plain text, URLs in the link color; its
     // Markdown renders in the conversation. Link cards still show; a tweet
     // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
-    const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
-      asQuestion(
-        feedText(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question),
+    // A note's text shows at most four lines, with blank lines removed.
+    const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () => {
+      const text = query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question;
+      return asQuestion(
+        isPost ? (
+          <span className="research-feed-note-text">{feedText(collapseBlankLines(text))}</span>
+        ) : (
+          feedText(text)
+        ),
       );
+    };
     return (
       <ResearchFeedCard
         cardId={treeId}

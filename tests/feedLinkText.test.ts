@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { feedTextRuns } from "../src/lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns } from "../src/lib/feedLinkText";
 
 test("feed text splits http(s) URLs from the text around them", () => {
   assert.deepEqual(feedTextRuns("See https://example.com/a?b=1 for details"), [
@@ -25,4 +25,12 @@ test("trailing sentence punctuation stays outside the URL, a URL's own parenthes
   assert.deepEqual(feedTextRuns("https://en.wikipedia.org/wiki/Foo_(bar)"), [
     { kind: "url", text: "https://en.wikipedia.org/wiki/Foo_(bar)" },
   ]);
+});
+
+test("blank lines between a note's paragraphs collapse to one line break", () => {
+  assert.equal(collapseBlankLines("One\n\nTwo\n\n\n\nThree"), "One\nTwo\nThree");
+  assert.equal(collapseBlankLines("One\n  \n\t\nTwo"), "One\nTwo");
+  assert.equal(collapseBlankLines("One\r\n\r\nTwo"), "One\nTwo");
+  assert.equal(collapseBlankLines("One\nTwo"), "One\nTwo");
+  assert.equal(collapseBlankLines("No breaks"), "No breaks");
 });

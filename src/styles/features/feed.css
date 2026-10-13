@@ -884,6 +884,14 @@
   margin-top: 6px;
 }
 
+/* A note's text shows at most four lines, ending in an ellipsis. */
+.research-feed-note-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 /* A card shows each tweet as a "[Tweet: @handle]" label in the faint text
    color, on its own line under the question; the embed shows in the
    conversation. */

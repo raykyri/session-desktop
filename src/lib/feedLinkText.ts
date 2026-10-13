@@ -28,3 +28,10 @@ export function feedTextRuns(text: string): FeedTextRun[] {
   if (last < text.length) runs.push({ kind: "text", text: text.slice(last) });
   return runs;
 }
+
+/** Replaces each run of line breaks that encloses blank (or whitespace-only)
+ * lines with one line break, so a note's Home preview spends no lines on
+ * paragraph gaps. Display only; the stored text keeps its blank lines. */
+export function collapseBlankLines(text: string): string {
+  return text.replace(/\r?\n(?:[ \t]*\r?\n)+/g, "\n");
+}
