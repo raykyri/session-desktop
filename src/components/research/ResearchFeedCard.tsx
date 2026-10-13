@@ -54,8 +54,8 @@ interface ResearchFeedCardProps {
   onDragStart?: ResearchCardDragStart;
   /** A card of a virtualized list, which may not render its neighbors. */
   virtual?: boolean;
-  /** A question, document or post: while another tree is dragged, the
-   * card's nest port takes drops that make it a child. */
+  /** A question, document or post: a tree dropped on the middle of the card
+   * becomes its child. */
   holdsChildren?: boolean;
   /** For a child card: its parent's tree id. */
   parentId?: string;
@@ -236,12 +236,6 @@ export default function ResearchFeedCard({
           menuOpen={menuOpen}
           onMenu={onMenu}
         />
-        {holdsChildren && onDragStart ? (
-          // Shown by CSS only during a drag of an item the card can take.
-          <span className="research-feed-nest-port" aria-hidden="true">
-            Nest here
-          </span>
-        ) : null}
       </div>
       {group && !group.collapsed ? (
         <>

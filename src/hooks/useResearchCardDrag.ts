@@ -31,7 +31,7 @@ interface ResearchCardDragOptions {
   onMoveTree?: (treeId: string, place: string, position: ResearchDropPosition | null) => void;
   onMoveDraft?: (draftId: string, beforeId: string | null) => void;
   onMoveMessage?: (nodeId: string, place: string, beforeId: string | null) => void;
-  /** A drop on a parent card's nest port, or within its group: lists the
+  /** A drop on the middle of a parent's card, or within its group: lists the
    * tree under `parentId`, before `beforeId` (one of its children) or at the
    * end of the group for null. */
   onNestTree?: (treeId: string, parentId: string, beforeId: string | null) => void;
@@ -58,6 +58,7 @@ const MARK_CLASSES = [
   "is-drop-same",
   "is-insert-before",
   "is-insert-after",
+  "is-drop-nest",
   "is-drop-hover",
   "is-drop-invalid",
 ];
@@ -102,13 +103,13 @@ function zoneAccepts(zone: HTMLElement, place: string, item: ResearchDragItem): 
  * Over a card in a zone that keeps an order, an insertion line shows where
  * the item goes; a zone of another place is highlighted as a whole. A drop
  * in the item's own place needs a position (a reorder); elsewhere it moves
- * the item. While a tree is dragged, each card that can take it as a child
- * shows a nest port; a drop on the port nests the tree under that card, and a
- * drop elsewhere on the card reorders (see `researchCardDrop`). A dragged
- * child's group shows a Move out strip below it. Marks are set on the DOM
- * directly so a drag re-renders nothing until it ends. Pointer events are
- * used instead of HTML drag and drop, which the native window's file-drop
- * handling can intercept.
+ * the item. A tree dropped on the middle band of a card that can take it as a
+ * child nests under that card, which is highlighted; the card's top and
+ * bottom edges, and the whole of any other card, reorder (see
+ * `researchCardDrop`). A dragged child's group shows a Move out strip below
+ * it. Marks are set on the DOM directly so a drag re-renders nothing until it
+ * ends. Pointer events are used instead of HTML drag and drop, which the
+ * native window's file-drop handling can intercept.
  */
 export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchCardDragStart {
   const optionsRef = useRef(options);
@@ -161,13 +162,9 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
     const itemGroup =
       card.nextElementSibling?.classList.contains("research-feed-group") ? card.nextElementSibling : null;
     const dragged: ResearchDraggedTree = { id: item.id, parentId: itemParentId };
-    // A child's group shows its Move out strip, and its parent hides its
-    // nest port, while the child is dragged.
+    // A child's group shows its Move out strip while the child is dragged.
     const itemParentGroup =
       itemParentId && card.parentElement?.classList.contains("research-feed-group") ? card.parentElement : null;
-    const itemParentCard = itemParentId
-      ? document.querySelector(`${TREE_CARD}[data-research-card="${CSS.escape(itemParentId)}"]`)
-      : null;
     const mark = (element: Element, className: string) => {
       element.classList.add(className);
       marked.add(element);
@@ -328,13 +325,12 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
                 ) ?? []),
               ].find((candidate) => candidate.dataset.researchCard !== item.id)
             : undefined;
-          const port = hit?.closest(".research-feed-nest-port") ?? null;
           researchHit = {
             card: "top",
             id: overId,
             holdsChildren: over.hasAttribute("data-research-holds-children"),
-            onPort: port !== null && over.contains(port),
-            after,
+            height: rect.height,
+            offsetY: lastY - rect.top,
             expanded,
             firstChildId: firstChild?.dataset.researchCard ?? null,
           };
@@ -354,9 +350,8 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
           showLabel(target, result.reason, true);
           return null;
         case "nest": {
-          if (researchHit.card === "top" && researchHit.onPort) {
-            const port = over?.querySelector(".research-feed-nest-port");
-            if (port) mark(port, "is-drop-hover");
+          if (result.onCard) {
+            mark(target, "is-drop-nest");
           } else if (result.beforeId) {
             const before = cardIn(zone, result.beforeId);
             if (before) mark(before, "is-insert-before");
@@ -465,10 +460,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       card.classList.add("is-dragging");
       itemGroup?.classList.add("is-dragging");
       itemParentGroup?.classList.add("has-dragged-child");
-      itemParentCard?.classList.add("is-drag-parent");
       root.classList.add("is-research-dragging");
-      // Nest ports show on the cards that can take the item.
-      if (item.kind === "tree") root.classList.add("is-research-nesting");
       window.getSelection()?.removeAllRanges();
       frame = requestAnimationFrame(autoScroll);
     };
@@ -489,8 +481,7 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       card.classList.remove("is-dragging");
       itemGroup?.classList.remove("is-dragging");
       itemParentGroup?.classList.remove("has-dragged-child");
-      itemParentCard?.classList.remove("is-drag-parent");
-      root.classList.remove("is-research-dragging", "is-research-nesting", "is-research-drop-none");
+      root.classList.remove("is-research-dragging", "is-research-drop-none");
     };
 
     function onMove(moveEvent: PointerEvent) {

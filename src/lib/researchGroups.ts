@@ -112,32 +112,50 @@ export interface ResearchDraggedTree {
   parentId: string | null;
 }
 
-/** Whether a card shows its nest port while `item` is dragged: a top-level
- * card that can hold children, other than the item and the item's current
- * parent. A dragged parent's own children are child cards, which hold none.
- * A dragged parent with children may nest; the drop asks before flattening. */
-export function researchNestPortShown(
+/** Whether the middle of a card nests `item` under it: a top-level card that
+ * can hold children, other than the item and the item's current parent. A
+ * dragged parent's own children are child cards, which hold none. A dragged
+ * parent with children may nest; the drop asks before flattening. */
+export function researchCardTakesChild(
   item: ResearchDraggedTree,
   card: { id: string; holdsChildren: boolean; parentId: string | null },
 ): boolean {
   return card.holdsChildren && card.parentId === null && card.id !== item.id && card.id !== item.parentId;
 }
 
+/** The part of a card the pointer is over during a drag, `offsetY` px below
+ * the card's top. A card that takes the dragged item as a child has top and
+ * bottom edges a quarter of its height (at least 8px, at most 14px) that
+ * insert before and after it; the band between them nests. Other cards split
+ * at the midpoint. */
+export function researchCardDropZone(
+  height: number,
+  offsetY: number,
+  takesChild: boolean,
+): "before" | "after" | "nest" {
+  if (!takesChild) return offsetY > height / 2 ? "after" : "before";
+  const edge = Math.min(14, Math.max(8, height * 0.25));
+  if (offsetY < edge) return "before";
+  if (offsetY > height - edge) return "after";
+  return "nest";
+}
+
 /** What the pointer is over during a tree drag in a place that keeps an
- * order. `after`: below the card's midpoint.
- * - `top`: a top-level card. `onPort`: on its nest port. `expanded`: its
- *   group is listed under it; `firstChildId` is its first child other than
- *   the dragged item.
- * - `child`: a child card. `nextId`: the next child other than the dragged
- *   item. `leftOfText`: left of the card's glyph.
+ * order.
+ * - `top`: a top-level card `height` px tall, with the pointer `offsetY` px
+ *   below its top. `expanded`: its group is listed under it; `firstChildId`
+ *   is its first child other than the dragged item.
+ * - `child`: a child card. `after`: below its midpoint. `nextId`: the next
+ *   child other than the dragged item. `leftOfText`: left of the card's
+ *   glyph.
  * - `group-exit`: the Move out strip below `parentId`'s group. */
 export type ResearchCardHit =
   | {
       card: "top";
       id: string;
       holdsChildren: boolean;
-      onPort: boolean;
-      after: boolean;
+      height: number;
+      offsetY: number;
       expanded: boolean;
       firstChildId: string | null;
     }
@@ -153,20 +171,23 @@ export type ResearchCardHit =
 
 /** Where a drop puts the dragged tree: nowhere, refused with a reason, under
  * a parent (before one of its children, or at the end for null), or at the
- * top level before a top-level card or after its group. */
+ * top level before a top-level card or after its group. `onCard` marks a
+ * nest from the middle band of the parent's card. */
 type ResearchCardDrop =
   | { kind: "none" }
   | { kind: "refuse"; reason: string }
-  | { kind: "nest"; parentId: string; beforeId: string | null }
+  | { kind: "nest"; parentId: string; beforeId: string | null; onCard?: true }
   | { kind: "before"; id: string }
   | { kind: "after-group"; id: string };
 
-/** The drop for a tree over a card. A top-level card's nest port nests under
- * the card. Elsewhere on a top-level card the drop goes before it in its top
- * half and after its group in its bottom half; below an expanded parent's
- * midpoint it goes before the parent's first child (a nest). A child card
- * inserts within its group; below the last child, left of its glyph, is after
- * the group at the top level. The Move out strip takes only the group's own
+/** The drop for a tree over a card. A top-level card that takes the item as
+ * a child (see `researchCardTakesChild`) nests it at the end of its group
+ * from its middle band and reorders from its edges (see
+ * `researchCardDropZone`); any other top-level card reorders by half. Before
+ * a top-level card is at the top level; after it is after its group, or
+ * before the first child of an expanded parent (a nest). A child card inserts
+ * within its group; below the last child, left of its glyph, is after the
+ * group at the top level. The Move out strip takes only the group's own
  * children. */
 export function researchCardDrop(item: ResearchDraggedTree, hit: ResearchCardHit): ResearchCardDrop {
   if (hit.card === "group-exit") {
@@ -181,14 +202,11 @@ export function researchCardDrop(item: ResearchDraggedTree, hit: ResearchCardHit
       ? { kind: "after-group", id: hit.parentId }
       : { kind: "nest", parentId: hit.parentId, beforeId: null };
   }
-  const portShown = researchNestPortShown(item, {
-    id: hit.id,
-    holdsChildren: hit.holdsChildren,
-    parentId: null,
-  });
-  if (hit.onPort && portShown) return { kind: "nest", parentId: hit.id, beforeId: null };
   if (hit.id === item.id) return { kind: "none" };
-  if (!hit.after) return { kind: "before", id: hit.id };
+  const takesChild = researchCardTakesChild(item, { id: hit.id, holdsChildren: hit.holdsChildren, parentId: null });
+  const zone = researchCardDropZone(hit.height, hit.offsetY, takesChild);
+  if (zone === "nest") return { kind: "nest", parentId: hit.id, beforeId: null, onCard: true };
+  if (zone === "before") return { kind: "before", id: hit.id };
   if (hit.expanded) return { kind: "nest", parentId: hit.id, beforeId: hit.firstChildId };
   return { kind: "after-group", id: hit.id };
 }
