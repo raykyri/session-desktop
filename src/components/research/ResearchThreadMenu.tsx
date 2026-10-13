@@ -240,6 +240,7 @@ export function ResearchThreadMenu({
             <ResearchMenuItem
               icon={<Trash2 size={15} aria-hidden="true" />}
               label="Delete note"
+              shortcut="D"
               danger
               disabled={info.hasActiveRuns}
               title={info.hasActiveRuns ? "Its follow-ups must finish or be cancelled before deletion" : undefined}

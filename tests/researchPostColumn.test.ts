@@ -161,7 +161,9 @@ function openMenuOutline(document: Document): string[] {
     (item) =>
       item.getAttribute("role") === "separator"
         ? "|"
-        : `${item.querySelector(".research-menu-label")?.textContent ?? ""}${item.hasAttribute("disabled") ? " (disabled)" : ""}`,
+        : `${item.querySelector(".research-menu-label")?.textContent ?? ""}${
+            item.getAttribute("data-shortcut") ? ` [${item.getAttribute("data-shortcut")}]` : ""
+          }${item.hasAttribute("disabled") ? " (disabled)" : ""}`,
   );
 }
 
@@ -192,8 +194,8 @@ async function noteMenuOutline(nodeId: string, options: { archived?: boolean; no
   return outline;
 }
 
-test("a follow-up note's menu edits, copies and deletes the note; the root note's has no Delete", async () => {
-  assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Copy note", "|", "Delete note"]);
+test("a follow-up note's menu edits, copies and deletes the note (D); the root note's has no Delete", async () => {
+  assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Copy note", "|", "Delete note [d]"]);
   // An AI follow-up still answering under the note keeps it from being
   // deleted.
   const running = researchNode({
@@ -201,10 +203,10 @@ test("a follow-up note's menu edits, copies and deletes the note; the root note'
   });
   assert.deepEqual(
     await noteMenuOutline("net", { nodes: [post, followUpNote, running] }),
-    ["Edit note", "Copy note", "|", "Delete note (disabled)"],
+    ["Edit note", "Copy note", "|", "Delete note [d] (disabled)"],
   );
   assert.deepEqual(await noteMenuOutline("net", { archived: true }), [
-    "Edit note (disabled)", "Copy note", "|", "Delete note",
+    "Edit note (disabled)", "Copy note", "|", "Delete note [d]",
   ]);
   // The root note stands for the thread, which is deleted from the feed.
   assert.deepEqual(await noteMenuOutline("post"), ["Edit note", "Copy note"]);
