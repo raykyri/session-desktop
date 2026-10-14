@@ -387,10 +387,11 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   until the router's `pendingMs`. A feed card starts loading the thread
   chunk on pointer enter and focus (`FeedCard` `onIntent`), and links
   preload on intent (`defaultPreload: "intent"`). Measured with
-  `vite build` (2026-10): the entry chunk went from 1,378.5 kB (432.7 kB
-  gzip) to 626.5 kB (201.1 kB gzip); everything a first load fetches
-  (entry and its static imports) from 1,379.6 kB (428.8 kB gzip) to 961.2 kB
-  (302.8 kB gzip); the thread chunk is 410.3 kB (129.6 kB gzip).
+  `vite build` (2026-10, gzip as Vite reports it): the entry chunk went
+  from 1,378.5 kB (432.7 kB gzip) before the split to 631.0 kB (202.4 kB
+  gzip) after it, the notification inbox included; everything a first load
+  fetches (entry and its static imports) from 1,379.6 kB to 967.2 kB; the
+  thread chunk is 410.4 kB (129.6 kB gzip).
 - MathJax, mermaid and viz are lazy chunks within the thread page's.
 - Feed virtualization with TanStack Virtual (replaces the hand-rolled canvas
   in `ResearchActivityFeed.tsx`).
