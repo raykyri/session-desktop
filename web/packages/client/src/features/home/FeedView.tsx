@@ -37,6 +37,7 @@ import {
   researchTreeHoldsChildren,
 } from "@session/shared/lib/researchGroups";
 import { nodeType } from "@session/shared/lib/researchNodeTypes";
+import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import {
   researchTrashCount,
@@ -308,6 +309,14 @@ export function FeedView({
   });
   const openTree = (treeId: string) =>
     void navigate({ to: "/r/$treeId", params: { treeId }, search: wsSearch });
+  // A double-click on a note's card opens the thread with the note in the
+  // editor (the desktop's researchNoteDoubleClick).
+  const editNote = (treeId: string, nodeId: string) =>
+    void navigate({
+      to: "/r/$treeId",
+      params: { treeId },
+      search: { ...wsSearch, node: nodeId, edit: nodeId },
+    });
   const openDraft = (draft: ResearchDraft) =>
     void navigate({ to: "/drafts/$draftId", params: { draftId: draft.id }, search: wsSearch });
   const openPlace = (place: string) => {
@@ -606,6 +615,7 @@ export function FeedView({
         }
         menuOpen={menuTreeId === tree.id}
         onOpen={() => openTree(tree.id)}
+        onEditNote={(nodeId) => editNote(tree.id, nodeId)}
         onMenu={(button) => openTreeMenu(tree.id, button)}
         onContextMenu={(anchor, button) =>
           setMenu({ kind: "tree", treeId: tree.id, anchor, button })
@@ -1235,6 +1245,7 @@ function TreeCard({
   holdsChildren,
   menuOpen,
   onOpen,
+  onEditNote,
   onMenu,
   onContextMenu,
   onDragStart,
@@ -1250,6 +1261,8 @@ function TreeCard({
   holdsChildren: boolean;
   menuOpen: boolean;
   onOpen: () => void;
+  /** Opens the root note in the editor. */
+  onEditNote: (nodeId: string) => void;
   onMenu: (button: HTMLElement) => void;
   onContextMenu: (anchor: MenuAnchor, button: HTMLElement) => void;
   onDragStart: ReturnType<typeof useCardDrag>;
@@ -1301,6 +1314,11 @@ function TreeCard({
       unread={tree.hasUnseenUpdate}
       menuOpen={menuOpen}
       onOpen={onOpen}
+      // A double-click on a note's card edits the note, unless the thread is
+      // archived (researchNoteEditable).
+      onEdit={
+        query && researchNoteEditable(query, archived) ? () => onEditNote(query.nodeId) : undefined
+      }
       onMenu={onMenu}
       onContextMenu={onContextMenu}
       onDragStart={onDragStart}

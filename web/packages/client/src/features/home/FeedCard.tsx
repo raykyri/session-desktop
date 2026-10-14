@@ -14,7 +14,7 @@ import {
   type ResearchRowState,
 } from "@session/shared/lib/researchRowGlyph";
 import { ChevronRight, Ellipsis, GripVertical } from "lucide-react";
-import { useId, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { RowGlyph } from "../../ui/RowGlyph.js";
@@ -153,6 +153,12 @@ function doubleClickEdits(event: MouseEvent<HTMLElement>): boolean {
   });
 }
 
+/** How long a click on an editable note's card waits for a second click
+ * before it opens the thread. Home is its own route on the web, so opening
+ * on the first click would replace the card before a double-click could
+ * reach it. */
+const NOTE_OPEN_DELAY_MS = 250;
+
 /** The middle of a card's … button, where a menu opened by a key goes. */
 function menuButtonOf(card: HTMLElement): HTMLElement | null {
   return card.querySelector<HTMLElement>("[data-research-card-menu]");
@@ -185,6 +191,13 @@ export function FeedCard({
   nested,
 }: FeedCardProps) {
   const glyphId = useId();
+  const openTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+    },
+    [],
+  );
   // The glyph's state name describes the open button.
   const glyphNamed = researchRowGlyph({ kind, state, unread }).label !== null;
   const child = parentId !== undefined;
@@ -270,9 +283,18 @@ export function FeedCard({
           aria-current={selected ? "true" : undefined}
           title={tooltip}
           onClick={(event) => {
-            // The second click of a double-click that edits the note does
-            // not open the thread again; the first click opened it.
+            // A pointer click on an editable note waits to see whether it is
+            // the first of a double-click (NOTE_OPEN_DELAY_MS); a key press
+            // (detail 0) opens at once.
             if (onEdit && event.detail > 1) return;
+            if (onEdit && event.detail === 1) {
+              if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+              openTimer.current = window.setTimeout(() => {
+                openTimer.current = null;
+                onOpen();
+              }, NOTE_OPEN_DELAY_MS);
+              return;
+            }
             onOpen();
           }}
           // The second press of a double-click is kept from selecting a word.
@@ -288,6 +310,8 @@ export function FeedCard({
               ? (event) => {
                   if (!doubleClickEdits(event)) return;
                   event.preventDefault();
+                  if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+                  openTimer.current = null;
                   onEdit();
                 }
               : undefined
