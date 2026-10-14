@@ -342,6 +342,8 @@ export function forkResearchNode(request: {
   inline?: boolean;
   /** A failed or stopped question this one replaces. */
   replacesNodeId?: string;
+  /** Image ids from `POST /api/images`. */
+  images?: string[];
 }): Promise<ResearchNode> {
   return trpc().research.forkNode.mutate(request);
 }
@@ -354,6 +356,8 @@ export function askResearchFollowup(request: {
   prompt: string;
   model?: string;
   effort?: string | null;
+  /** Image ids from `POST /api/images`. */
+  images?: string[];
 }): Promise<
   { kind: "sent"; node: ResearchNode } | { kind: "queued"; item: ResearchFollowupQueueItem }
 > {
