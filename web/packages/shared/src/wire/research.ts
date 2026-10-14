@@ -360,6 +360,11 @@ export interface ResearchHighlightFeedItem {
   prefix: string;
   suffix: string;
   createdAt: number;
+  /** Web only: who saved the highlight; null when their account is gone. */
+  authorId?: string | null;
+  /** Web only: the reader's role in the highlight's thread. The owner may
+   * remove any highlight, others only their own. */
+  role?: ResearchTreeRole;
 }
 
 export interface ResearchTreeSummary {

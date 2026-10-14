@@ -261,6 +261,8 @@ export const researchHighlightFeedItemSchema = z.object({
   prefix: z.string(),
   suffix: z.string(),
   createdAt: z.number(),
+  authorId: z.string().nullish(),
+  role: researchTreeRoleSchema.optional(),
 });
 
 export const researchTreeSummarySchema = z.object({

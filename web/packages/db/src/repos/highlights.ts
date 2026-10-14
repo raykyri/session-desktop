@@ -19,6 +19,7 @@ import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
 import { parseJsonColumn } from "../json.js";
+import { treeMembers } from "../schema/collaboration.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { responseSnapshots } from "../schema/snapshots.js";
@@ -31,6 +32,7 @@ import {
   highlightReadableBy,
   rejectTrashedNode,
   requireNodeAccess,
+  treeJoinedBy,
 } from "./access.js";
 import { rowPrompt, toResearchHighlight } from "./mappers.js";
 
@@ -212,9 +214,19 @@ export function removeAllForNode(db: SessionDatabase, userId: string, nodeId: st
 }
 
 /**
- * The Highlights feed: newest first, from threads that are not archived
- * (`docs/02` §5.9). `nodeLabel` is the node's title, or its prompt, or — for a
- * document, which has neither — the thread's title.
+ * The Highlights feed: newest first, from the threads the reader owns or is
+ * a member of (`access.treeJoinedBy`; public threads they only read are left
+ * out), outside the reader's Archive and Trash: the owner's own Archive and
+ * Trash for their threads; for a shared thread, the member's own Archive
+ * and Trash, the owner's Archive (which archives it for everyone) and the
+ * owner's Trash (which hides it) (`docs/02` §5.9). Highlights are shared, so
+ * a shared thread lists everyone's, each with its `authorId` and the
+ * reader's `role`: the owner may remove any, others only their own.
+ *
+ * `workspaceId` narrows the reader's own threads to one workspace; shared
+ * threads are listed whatever the workspace, as the Shared place lists them.
+ * `nodeLabel` is the node's title, or its prompt, or — for a document, which
+ * has neither — the thread's title.
  */
 export function feed(
   db: SessionDatabase,
@@ -224,9 +236,12 @@ export function feed(
   return db
     .select({
       highlightId: highlights.id,
+      authorId: highlights.authorId,
       nodeId: nodes.id,
       treeId: trees.id,
       treeTitle: trees.title,
+      ownerId: trees.ownerId,
+      memberRole: treeMembers.role,
       nodeTitle: nodes.title,
       messageJson: nodes.messageJson,
       anchorJson: highlights.anchorJson,
@@ -235,12 +250,16 @@ export function feed(
     .from(highlights)
     .innerJoin(nodes, eq(nodes.id, highlights.nodeId))
     .innerJoin(trees, eq(trees.id, nodes.treeId))
+    .leftJoin(treeMembers, and(eq(treeMembers.treeId, trees.id), eq(treeMembers.userId, userId)))
     .where(
       and(
-        eq(trees.ownerId, userId),
+        treeJoinedBy(userId),
         isNull(trees.archivedAt),
         isNull(trees.trashedAt),
-        workspaceId ? eq(trees.workspaceId, workspaceId) : undefined,
+        sql`(${trees.ownerId} = ${userId} or (${treeMembers.archivedAt} is null and ${treeMembers.trashedAt} is null))`,
+        workspaceId
+          ? sql`(${trees.ownerId} <> ${userId} or ${trees.workspaceId} = ${workspaceId})`
+          : undefined,
       ),
     )
     .orderBy(desc(highlights.createdAt), desc(highlights.id))
@@ -265,6 +284,8 @@ export function feed(
         prefix: anchor.prefix,
         suffix: anchor.suffix,
         createdAt: row.createdAt,
+        authorId: row.authorId,
+        role: row.ownerId === userId ? "owner" : (row.memberRole ?? "viewer"),
       };
     });
 }
