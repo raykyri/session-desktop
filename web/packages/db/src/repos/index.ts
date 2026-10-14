@@ -16,7 +16,6 @@ import * as feedgen from "./feedgen.js";
 import * as feeds from "./feeds.js";
 import * as folders from "./folders.js";
 import * as highlights from "./highlights.js";
-import * as journal from "./journal.js";
 import * as mappers from "./mappers.js";
 import * as messages from "./messages.js";
 import * as nodes from "./nodes.js";
@@ -42,7 +41,6 @@ export {
   feeds,
   folders,
   highlights,
-  journal,
   mappers,
   messages,
   nodes,

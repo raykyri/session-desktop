@@ -7,8 +7,6 @@
 //
 // Dropped: the "Ask network" toggle, adapter cycling, the custom-model field
 // and per-model effort (effort is fixed at medium, `04-agent-runtime.md` §1).
-// Added: the bare-URL path, which saves a link to the journal instead of
-// launching a run (`10` §2).
 
 import type { ModelInfo } from "@session/shared";
 import {
@@ -18,16 +16,14 @@ import {
   launcherTabAction,
   MODEL_REGISTRY,
 } from "@session/shared";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Globe, LoaderCircle } from "lucide-react";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { addJournalEntry } from "../../api/api.js";
 import { useCreateResearchTree, useMe, useRuntimeConfig } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { errorMessage, pushToast } from "../../lib/toast.js";
+import { errorMessage } from "../../lib/toast.js";
 import { homeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -40,16 +36,6 @@ import { GHOST_TRIGGER } from "../../ui/surfaces.js";
 
 import { oversizeRefusal } from "./limits.js";
 import { useRemoteComposerDraft } from "./useRemoteComposerDraft.js";
-
-/** A prompt containing only one web URL is saved as a Journal bookmark
- * (`10` §2). Additional text causes the prompt to run as a research query. */
-export function bareUrl(text: string): string | null {
-  const trimmed = text.trim();
-  if (trimmed === "" || /\s/.test(trimmed)) return null;
-  const url = URL.parse(trimmed);
-  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) return null;
-  return url.toString();
-}
 
 /** The models this account may launch on. The registry says which exist and
  * who may use them; the deployment's runtime config says which have a
@@ -100,7 +86,6 @@ export function ResearchQueryComposer({
   tools?: ReactNode;
 }) {
   const navigate = useNavigate();
-  const client = useQueryClient();
   const me = useMe();
   const runtimeConfig = useRuntimeConfig();
   const createTree = useCreateResearchTree();
@@ -179,17 +164,12 @@ export function ResearchQueryComposer({
   };
 
   const canSubmit = prompt.trim() !== "" && !submitting && workspaceId !== "" && selected !== null;
-  // A prompt that is one URL is kept as a link, not sent as a question; the
-  // button says so before it is pressed.
-  const savesLink = bareUrl(prompt) !== null;
 
   async function submit() {
     if (!canSubmit || !selected) return;
-    const link = bareUrl(prompt);
     // The same ceilings the report import applies, refused with the same
-    // sentence (`features/composer/limits.ts`). A bare URL is a link to keep
-    // rather than text to send, so it is not measured against them.
-    const refusal = link ? null : oversizeRefusal(prompt.trim(), "question");
+    // sentence (`features/composer/limits.ts`).
+    const refusal = oversizeRefusal(prompt.trim(), "question");
     if (refusal) {
       setError(refusal);
       return;
@@ -197,17 +177,6 @@ export function ResearchQueryComposer({
     setSubmitting(true);
     setError(null);
     try {
-      if (link) {
-        // A bare URL is a journal entry, not a run. The feed is keyset
-        // paginated, so the new row arrives through a refetch rather than a
-        // splice.
-        await addJournalEntry(link);
-        await client.invalidateQueries({ queryKey: ["activity"] });
-        setPrompt("");
-        clearDraft(draftKey);
-        pushToast({ title: "Link saved to the journal", tone: "success" });
-        return;
-      }
       const detail = await createTree.mutateAsync({
         prompt: prompt.trim(),
         model: selected.id,
@@ -309,7 +278,7 @@ export function ResearchQueryComposer({
           size="sm"
           className="gap-x-1.5"
           disabled={!canSubmit}
-          aria-label={submitting ? "Starting" : savesLink ? "Save link" : "Start research"}
+          aria-label={submitting ? "Starting" : "Start research"}
         >
           {submitting ? (
             <>
@@ -317,10 +286,7 @@ export function ResearchQueryComposer({
               <span>Starting…</span>
             </>
           ) : (
-            <>
-              {savesLink ? <span>Save link</span> : null}
-              <ComposerSubmitShortcutGlyph ariaHidden />
-            </>
+            <ComposerSubmitShortcutGlyph ariaHidden />
           )}
         </ControlButton>
       </div>

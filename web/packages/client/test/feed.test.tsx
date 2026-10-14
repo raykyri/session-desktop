@@ -1,4 +1,4 @@
-// The Home feed (`10-home-feed-journal.md` §2, §3).
+// The Home feed (`10-home-feed-journal.md` §2).
 
 import type { RecentActivityPage } from "@session/shared";
 import type { InfiniteData } from "@tanstack/react-query";
@@ -9,15 +9,12 @@ import { queryKeys } from "../src/api/queries.js";
 import { estimateRowHeight } from "../src/features/home/ActivityFeed.js";
 import { promptPreview, queryTargetExcerpt } from "../src/features/home/ResearchQueryCard.js";
 import { countNewAbove, feedScrollBehavior } from "../src/features/home/useActivityFeedState.js";
-import { journalEntryMenuItems, journalEntryUrl } from "../src/features/journal/entryMenu.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
 import { summary } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
 import {
   activityPage,
-  journalItem,
-  linkEntry,
   queryItem,
   researchQuery,
   serverSettings,
@@ -81,12 +78,10 @@ async function scrollFeedTo(top: number): Promise<void> {
   });
 }
 
-test("estimated row height corresponds to the row item type", (t) => {
+test("estimated row height grows with the card's content", (t) => {
   const plain = estimateRowHeight(queryItem(researchQuery()));
   const withRecap = estimateRowHeight(queryItem(researchQuery({ recap: "A summary." })));
   t.true(withRecap > plain, "a recap adds a line");
-  const link = estimateRowHeight(journalItem(linkEntry()));
-  t.true(link < withRecap + 300, "and a link card is the short one");
 });
 
 test("only items added above the current scroll position count as unread", (t) => {
@@ -116,86 +111,6 @@ test("an anchored follow-up quotes the passage it replies to, cut at a word", (t
   t.is(queryTargetExcerpt("a shared store"), "a shared store");
   t.is(queryTargetExcerpt("one two three four five six seven"), "one two three four five…");
   t.is(queryTargetExcerpt("   "), "");
-});
-
-test("journal entry context menus provide actions appropriate to entry status", (t) => {
-  const link = journalEntryMenuItems(linkEntry());
-  t.deepEqual(
-    link.map((item) => [item.action, item.label]),
-    [
-      ["open", "Open link"],
-      ["copy", "Copy link"],
-      ["delete", "Delete"],
-    ],
-  );
-
-  const pending = journalEntryMenuItems({
-    id: "j2",
-    kind: "tweet",
-    url: "https://x.com/a/status/1",
-    tweetId: "1",
-    hydration: "pending",
-    createdAt: new Date().toISOString(),
-  });
-  t.deepEqual(
-    pending.map((item) => item.action),
-    ["open", "copy", "delete"],
-    "the retry action is omitted while the initial request is pending",
-  );
-  t.is(pending[0]?.label, "Open on X", "an X permalink uses the X-specific label");
-
-  const failed = journalEntryMenuItems({
-    id: "j3",
-    kind: "tweet",
-    url: "https://x.com/a/status/2",
-    tweetId: "2",
-    hydration: "failed",
-    createdAt: new Date().toISOString(),
-  });
-  t.deepEqual(
-    failed.map((item) => [item.action, item.label]),
-    [
-      ["open", "Open on X"],
-      ["copy", "Copy link"],
-      ["retry", "Retry tweet"],
-      ["delete", "Delete"],
-    ],
-  );
-});
-
-test("journal menu actions target the canonical permalink of hydrated social posts", (t) => {
-  t.is(journalEntryUrl(linkEntry()), "https://example.com/a");
-  t.is(
-    journalEntryUrl({
-      id: "j4",
-      kind: "tweet",
-      url: "https://twitter.com/a/status/3",
-      tweetId: "3",
-      hydration: "ok",
-      createdAt: new Date().toISOString(),
-      tweet: {
-        id: "3",
-        url: "https://x.com/a/status/3",
-        author: { name: "A", handle: "a" },
-        runs: [],
-        partial: false,
-        media: [],
-      },
-    }),
-    "https://x.com/a/status/3",
-    "the canonical URL takes precedence over the entered URL",
-  );
-});
-
-test("entries with non-navigable URLs disable link-opening actions", (t) => {
-  // `journal.add` only stores web URLs, but `journal.restore` takes a whole
-  // entry from the client, so the renderer gates the stored URL itself.
-  const hostile = { ...linkEntry(), url: "javascript:alert(1)" };
-  t.is(journalEntryUrl(hostile), null);
-  t.deepEqual(
-    journalEntryMenuItems(hostile).map((item) => item.action),
-    ["copy", "delete"],
-  );
 });
 
 const feedResponses = (page: unknown) => ({
@@ -313,62 +228,6 @@ test.serial("renders pagination for a cursor and fetches the next page on click"
     sourceRank: 1,
     id: "n1",
   });
-  app.unmount();
-});
-
-test.serial("removing a journal entry offers an undo that restores the same row", async (t) => {
-  useNavigationStore.setState({ feedAnchorByView: {} });
-  const app = await renderApp(`/?feed=${WORKSPACE_ID}`, {
-    queryClient: testQueryClient(),
-    responses: {
-      ...feedResponses(activityPage([journalItem(linkEntry())])),
-      "journal.remove": true,
-      "journal.restore": true,
-    },
-  });
-
-  await waitUntil(
-    t,
-    () => screen.queryAllByLabelText("Entry actions").length > 0,
-    "the journal card is on the feed",
-  );
-  fireEvent.click(screen.getAllByLabelText("Entry actions")[0] as HTMLElement);
-  await waitUntil(t, () => screen.queryAllByRole("menu").length > 0, "its menu opens");
-  const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
-  // No single-letter keycaps: a Base UI menu binds no letter but typeahead,
-  // so "D" would move the highlight rather than delete.
-  t.is(
-    menu.querySelectorAll("kbd").length,
-    0,
-    "menu items omit keyboard shortcuts without handlers",
-  );
-  fireEvent.click(within(menu).getByText("Delete"));
-
-  await waitUntil(
-    t,
-    () => app.trpc.calls.some((call) => call.path === "journal.remove"),
-    "the entry is removed",
-  );
-  await waitUntil(
-    t,
-    () => screen.queryAllByText("Entry removed").length > 0,
-    "and an undo appears",
-  );
-
-  fireEvent.click(screen.getByText("Undo"));
-  await waitUntil(
-    t,
-    () => app.trpc.calls.some((call) => call.path === "journal.restore"),
-    "which hands the whole entry back",
-  );
-  t.deepEqual(
-    (
-      app.trpc.calls.find((call) => call.path === "journal.restore")?.input as {
-        entry: { id: string };
-      }
-    ).entry.id,
-    "j1",
-  );
   app.unmount();
 });
 
@@ -618,7 +477,7 @@ test.serial("unmounting the feed does not replace a saved offset with scrollTop 
   );
 });
 
-/** A hydrated post, as `journal/tweets.ts` normalizes one. */
+/** A hydrated post, as `shared/journal/tweets.ts` normalizes one. */
 function tweetSnapshot() {
   return {
     id: "20",

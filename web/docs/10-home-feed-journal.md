@@ -24,20 +24,21 @@ Sections top to bottom:
    by the deployment; a model without a provider is hidden from the pickers,
    unless no model has one, in which case all are listed, disabled.
 5. Activity feed (§2).
-6. Delete-undo bar for journal removals (`journalUndo`, `App.tsx:6460`).
+6. The delete-undo bar for journal removals was removed with journal entries
+   in phase 2.0.
 
 ## 2. Activity feed
 
 Data: `useInfiniteQuery(["activity", { scope, workspaceId }])`
 over `feed.recentActivity`, page size 50, `getNextPageParam = nextCursor`.
 `all` reads every public post, `mine` reads the signed-in account across all
-workspaces, and `workspace` preserves the existing account-wide journal plus
-workspace-filtered research behavior. Items are `RecentActivityItem` (`journal`
-or `research-query`).
+workspaces, and `workspace` reads one workspace. Items are
+`RecentActivityItem` (`research-query`; the `journal` kind was removed in
+phase 2.0).
 
 Live updates: `feed.item.upserted` and `feed.item.removed` patch or invalidate
 only cache keys whose author/workspace scope matches. Existing node
-and journal events still patch in-place status, title, recap, and hydration
+events still patch in-place status, title, recap, and hydration
 fields. New items
 arriving while the user is scrolled down increment a counter shown on the
 "new activity" button, which scrolls to top and clears it (desktop behavior).
@@ -69,24 +70,11 @@ Cards:
   the sidebar (`ResearchTreeMenuItems`, including Generate summary) with
   rename and delete dialogs rendered inline in the feed
   (`ResearchActivityFeed.tsx:1408-1441`). Click → `/r/$treeId?node=<nodeId>`.
-- `JournalEntryCard` (link): favicon-less title/URL row, `ActivityMetadataLine`,
-  menu (`journalEntryMenuItems`, `ResearchActivityFeed.tsx:162-185`): Open
-  link, Copy link, separator, Delete. Single-letter shortcut badges from the desktop UI were removed because Base UI menus reserve typed letters for typeahead list navigation rather than shortcut execution.
-- `JournalTweetCard`: tweet entries render directly via the tweet card component without an outer container (`journal.css:1-5`);
-  `TweetEmbed` ported unchanged; placeholder while `hydration === "pending"`,
-  failure state with Retry (`journal.hydrateTweet`); menu: Open on X, Copy
-  link, Refresh tweet or Retry tweet, separator, Delete.
-- Delete → `journal.remove` with the removed entry kept in the undo bar; Undo
-  → `journal.restore(entry)`.
-
-Adding to the journal (new on the web): the desktop currently has no UI
-that creates journal entries; `App.tsx` only restores, updates, and deletes
-them (`App.tsx:433-435`, `:6451`, `:6513`), and entries exist only from
-legacy data and imports. The web app adds `journal.add`: the Home composer
-accepts a bare URL. If `tweetIdFromUrl` matches, it creates a tweet entry;
-otherwise, it creates a link entry. The server hydrates tweets and caches the
-snapshot. This
-is an addition beyond desktop parity and is marked as such in the checklist.
+- Journal cards (`JournalEntryCard`, its menu, the undo bar) and saving a
+  bare URL from the composer were removed with journal entries in phase 2.0.
+  A bare URL now starts a research run like any other prompt until link posts
+  arrive in phase 2.3. `TweetEmbed` stays: it renders the X posts a question
+  links to.
 
 ## 3. Bookmarks (removed)
 

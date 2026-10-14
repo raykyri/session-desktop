@@ -1,8 +1,7 @@
-// The keyset cursor for the mixed Home feed. Journal entries and research
-// questions come from two tables and are merged under one order:
-// `occurredAt` DESC, `sourceRank` DESC, `id` DESC. Source rank is a
-// deterministic tie-breaker for items captured in the same millisecond —
-// research (1) sorts ahead of journal (0).
+// The keyset cursor for the Home feed: `occurredAt` DESC, `sourceRank` DESC,
+// `id` DESC. Source rank is a tie-breaker between item sources captured in the
+// same millisecond; research questions are the only source since journal
+// entries were removed, and they keep rank 1.
 //
 // Ported from the desktop `src/lib/journal.ts`; the server's SQL keyset
 // predicate must apply the same comparison (`02-domain-model-and-database.md`
@@ -13,21 +12,19 @@
 import type { RecentActivityItem } from "../types/activity.js";
 import type { RecentActivityCursor } from "../types/research.js";
 
-export const JOURNAL_ACTIVITY_SOURCE_RANK = 0;
 export const RESEARCH_ACTIVITY_SOURCE_RANK = 1;
 
-/** Feed-wide identity of an item: ids are unique per source, not across
+/** Feed-wide identity of an item. Ids are unique per source, not across
  * sources, so the source prefix is part of the identity. */
 export function recentActivityItemId(item: RecentActivityItem): string {
-  return item.kind === "journal" ? `journal:${item.entry.id}` : `research:${item.query.nodeId}`;
+  return `research:${item.query.nodeId}`;
 }
 
 export function recentActivityItemCursor(item: RecentActivityItem): RecentActivityCursor {
   return {
     occurredAt: item.occurredAt,
-    sourceRank:
-      item.kind === "journal" ? JOURNAL_ACTIVITY_SOURCE_RANK : RESEARCH_ACTIVITY_SOURCE_RANK,
-    id: item.kind === "journal" ? item.entry.id : item.query.nodeId,
+    sourceRank: RESEARCH_ACTIVITY_SOURCE_RANK,
+    id: item.query.nodeId,
   };
 }
 
@@ -53,8 +50,7 @@ function compareIds(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-/** Feed order: newest first, research before journal on a tie, then by id
- * descending. */
+/** Feed order: newest first, then by source rank and id descending. */
 export function compareRecentActivityItems(
   left: RecentActivityItem,
   right: RecentActivityItem,

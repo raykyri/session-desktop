@@ -6,7 +6,6 @@
 import { sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
-import { backfill as backfillFeedItems } from "../repos/feedgen.js";
 import { backfills } from "../schema/backfills.js";
 import { now } from "../time.js";
 
@@ -18,13 +17,9 @@ export interface Backfill {
   run: (db: SessionDatabase) => void;
 }
 
-export const BACKFILLS: readonly Backfill[] = [
-  {
-    id: "2026-09-19-feed-items",
-    description: "materialize journal entries and research roots in the Home feed",
-    run: backfillFeedItems,
-  },
-];
+/** Empty since the database was reset to a single initial migration; the
+ * framework stays for the next data migration. */
+export const BACKFILLS: readonly Backfill[] = [];
 
 /** Applies every backfill supported by this build that the database has not recorded.
  * Returns the ids applied, so boot can log them. */

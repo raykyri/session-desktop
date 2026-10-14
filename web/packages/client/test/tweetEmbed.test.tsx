@@ -1,8 +1,8 @@
 // The embedded post's markup, against the same fixtures and the same
 // assertions the desktop pins (`tests/journal.test.ts:317-381`). The card is
-// mounted by three surfaces — a journal entry, a Home research card, and a
-// thread's question — so what it renders is a contract rather than one
-// screen's detail, and the desktop's shape is the contract.
+// mounted by two surfaces — a Home research card and a thread's question — so
+// what it renders is a contract rather than one screen's detail, and the
+// desktop's shape is the contract.
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

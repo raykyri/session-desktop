@@ -25,7 +25,6 @@ export interface RateLimitResult {
 /** The limits from `06` §8, named so the call sites read as the document does. */
 export const RATE_LIMITS = {
   mutations: { limit: 60, windowMs: 60_000 },
-  fetchTweet: { limit: 10, windowMs: 60_000 },
   uploads: { limit: 20, windowMs: 60 * 60_000 },
   auth: { limit: 20, windowMs: 60_000 },
 } as const satisfies Record<string, BucketSpec>;

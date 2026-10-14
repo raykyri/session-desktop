@@ -6,7 +6,6 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
 import {
-  bareUrl,
   composerModels,
   nextComposerModel,
 } from "../src/features/composer/ResearchQueryComposer.js";
@@ -39,15 +38,6 @@ function model(overrides: Partial<ModelInfo> = {}): ModelInfo {
     ...overrides,
   };
 }
-
-test("classifies single URLs as web links and all other inputs as research prompts", (t) => {
-  t.is(bareUrl("https://example.com/a"), "https://example.com/a");
-  t.is(bareUrl("  https://example.com/a  "), "https://example.com/a");
-  t.is(bareUrl("https://example.com/a what is this"), null);
-  t.is(bareUrl("javascript:alert(1)"), null);
-  t.is(bareUrl("collective memory"), null);
-  t.is(bareUrl(""), null);
-});
 
 test("the model list hides admin-only models from everyone else", (t) => {
   const models = [model(), model({ id: "claude-fable", label: "Claude", adminOnly: true })];
@@ -190,49 +180,6 @@ test.serial("the draft keeps the prompt and the model", async (t) => {
   );
   const draft = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID));
   t.is(draft?.model, "gemini-flash");
-  app.unmount();
-});
-
-test.serial("a bare URL is saved to the journal instead of launching a run", async (t) => {
-  useDraftsStore.setState({ byKey: {} });
-  const app = await renderApp("/", {
-    responses: {
-      ...homeResponses,
-      "journal.add": {
-        id: "j1",
-        kind: "link",
-        url: "https://example.com/a",
-        createdAt: new Date().toISOString(),
-      },
-    },
-  });
-  await waitUntil(
-    t,
-    () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
-    "the composer is on Home",
-  );
-
-  const field = screen.getByLabelText(PROMPT_LABEL);
-  fireEvent.change(field, { target: { value: "https://example.com/a" } });
-  fireEvent.keyDown(field, { key: "Enter", ctrlKey: true, metaKey: true });
-
-  await waitUntil(
-    t,
-    () => app.trpc.calls.some((call) => call.path === "journal.add"),
-    "the URL becomes a journal entry",
-  );
-  t.deepEqual(app.trpc.calls.find((call) => call.path === "journal.add")?.input, {
-    url: "https://example.com/a",
-  });
-  t.false(
-    app.trpc.calls.some((call) => call.path === "research.createTree"),
-    "and no run is launched",
-  );
-  await waitUntil(
-    t,
-    () => useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)) === undefined,
-    "a submitted composer is not still a draft",
-  );
   app.unmount();
 });
 

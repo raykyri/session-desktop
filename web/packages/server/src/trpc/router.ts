@@ -11,8 +11,8 @@ import {
   usageRouter,
 } from "./routers/account.js";
 import { artifactsRouter, eventsRouter } from "./routers/events.js";
+import { feedRouter } from "./routers/feed.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
-import { feedRouter, journalRouter } from "./routers/journal.js";
 import { researchRouter } from "./routers/research.js";
 import { systemRouter } from "./routers/system.js";
 import { foldersRouter, workspacesRouter } from "./routers/workspaces.js";
@@ -30,7 +30,6 @@ export const appRouter = router({
   highlights: highlightsRouter,
   recaps: recapsRouter,
   feed: feedRouter,
-  journal: journalRouter,
   artifacts: artifactsRouter,
   events: eventsRouter,
 });

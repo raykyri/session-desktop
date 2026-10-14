@@ -14,7 +14,7 @@ export interface FeedStreamOptions {
 }
 
 export interface FeedStreamRow {
-  source: "journal" | "research";
+  source: "research";
   occurredAt: number;
   sourceRank: number;
   id: string;
@@ -24,7 +24,7 @@ export interface FeedStreamRow {
 
 export interface FeedItemDescriptor {
   id: string;
-  kind: "journal" | "research";
+  kind: "research";
   authorId: string;
   occurredAt: number;
   sourceRank: number;
@@ -42,7 +42,7 @@ export function stream(db: SessionDatabase, options: FeedStreamOptions): FeedStr
       ${options.scope === "all" ? sql`` : sql`AND fi.author_id = ${options.userId}`}
       ${
         options.scope === "workspace" && options.workspaceId
-          ? sql`AND (fi.kind = 'journal' OR fi.workspace_id = ${options.workspaceId})`
+          ? sql`AND fi.workspace_id = ${options.workspaceId}`
           : sql``
       }
       ${
@@ -65,10 +65,6 @@ function descriptors(db: SessionDatabase, predicate: ReturnType<typeof sql>): Fe
     FROM feed_items fi
     WHERE ${predicate}
   `);
-}
-
-export function forJournal(db: SessionDatabase, journalId: string): FeedItemDescriptor | null {
-  return descriptors(db, sql`fi.journal_id = ${journalId}`)[0] ?? null;
 }
 
 export function forNode(db: SessionDatabase, nodeId: string): FeedItemDescriptor | null {

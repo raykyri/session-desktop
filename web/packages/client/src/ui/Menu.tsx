@@ -37,7 +37,7 @@ export interface MenuProps {
 }
 
 /**
- * Dropdown menus (08 §4): tree row menus, the settings menu, journal card
+ * Dropdown menus (08 §4): tree row menus, the settings menu, feed card
  * menus. Base UI handles roving focus, typeahead, and Escape, so the desktop's
  * `clampContextMenuToViewport` math is gone (ADR-9).
  */

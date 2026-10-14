@@ -9,11 +9,6 @@ interface FeedEventDeps {
   eventBus: EventBus;
 }
 
-export function emitFeedItemUpsertedForJournal(deps: FeedEventDeps, journalId: string): void {
-  const event = feeds.eventItemForJournal(deps.db, journalId);
-  if (event) deps.eventBus.emitAll(sessionEvent("feed.item.upserted", { ...event }));
-}
-
 export function emitFeedItemUpsertedForNode(deps: FeedEventDeps, nodeId: string): void {
   const event = feeds.eventItemForNode(deps.db, nodeId);
   if (event) deps.eventBus.emitAll(sessionEvent("feed.item.upserted", { ...event }));

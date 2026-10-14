@@ -14,10 +14,8 @@
 // leaving the cache stale.
 
 import type {
-  JournalEntry,
   ParsedResearchEvent,
   RecentActivityItem,
-  RecentActivityPage,
   User,
   ResearchFolderState,
   ResearchHighlightFeedItem,
@@ -42,7 +40,7 @@ import {
   removeResearchDetailNodes,
   researchSummaryFromDetail,
 } from "@session/shared";
-import { notifyManager, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
@@ -302,7 +300,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
 
 interface FeedEventMetadata {
   id: string;
-  kind: "journal" | "research";
+  kind: "research";
   authorId: string;
   workspaceId: string | null;
 }
@@ -314,7 +312,7 @@ function feedEventMetadata(payload: Record<string, unknown>): FeedEventMetadata 
   const workspaceId = payload["workspaceId"];
   if (
     typeof id !== "string" ||
-    (kind !== "journal" && kind !== "research") ||
+    kind !== "research" ||
     typeof authorId !== "string" ||
     (workspaceId !== null && typeof workspaceId !== "string")
   ) {
@@ -348,7 +346,7 @@ function feedItemBelongs(
 ): boolean {
   if (scope.scope === "all") return true;
   if (userId === null || metadata.authorId !== userId) return false;
-  if (scope.scope === "mine" || metadata.kind === "journal") return true;
+  if (scope.scope === "mine") return true;
   return metadata.workspaceId === scope.workspaceId;
 }
 
@@ -360,7 +358,7 @@ function applyFeedItemUpserted(client: QueryClient, payload: Record<string, unkn
     return;
   }
   const item: RecentActivityItem = parsed.data;
-  const expectedId = `${metadata.kind === "journal" ? "journal" : "research"}:${metadata.id}`;
+  const expectedId = `research:${metadata.id}`;
   if (recentActivityItemId(item) !== expectedId) {
     invalidate(client, ["activity"]);
     return;
@@ -383,7 +381,7 @@ function applyFeedItemRemoved(client: QueryClient, payload: Record<string, unkno
     return;
   }
   const userId = client.getQueryData<User>(queryKeys.me())?.id ?? null;
-  const id = `${metadata.kind === "journal" ? "journal" : "research"}:${metadata.id}`;
+  const id = `research:${metadata.id}`;
   for (const scope of cachedActivityScopes(client)) {
     if (feedItemBelongs(scope, metadata, userId)) {
       removeActivityFeedItem(client, queryKeys.activity(scope), id);
@@ -401,20 +399,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
     case "feed.item.removed":
       applyFeedItemRemoved(client, payload);
       return;
-
-    case "journal.entry.updated": {
-      const entry = payload["entry"] as JournalEntry | undefined;
-      if (!entry || typeof entry.id !== "string") return;
-      replaceJournalEntry(client, entry);
-      return;
-    }
-
-    case "journal.entry.removed": {
-      const id = payload["id"];
-      if (typeof id !== "string") return;
-      removeJournalEntry(client, id);
-      return;
-    }
 
     case "workspace.created":
     case "workspace.updated": {
@@ -485,37 +469,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
     default:
       return;
   }
-}
-
-function replaceJournalEntry(client: QueryClient, entry: JournalEntry): boolean {
-  let found = false;
-  client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey: ["activity"] }, (data) => {
-    if (!data) return data;
-    const pages = data.pages.map((page) => {
-      const items = page.items.map((item) => {
-        if (item.kind !== "journal" || item.entry.id !== entry.id) return item;
-        found = true;
-        return { ...item, entry };
-      });
-      return found ? { ...page, items } : page;
-    });
-    return found ? { ...data, pages } : data;
-  });
-  return found;
-}
-
-function removeJournalEntry(client: QueryClient, id: string): void {
-  client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey: ["activity"] }, (data) => {
-    if (!data) return data;
-    let changed = false;
-    const pages = data.pages.map((page) => {
-      const items = page.items.filter((item) => !(item.kind === "journal" && item.entry.id === id));
-      if (items.length === page.items.length) return page;
-      changed = true;
-      return { ...page, items };
-    });
-    return changed ? { ...data, pages } : data;
-  });
 }
 
 /* -------------------------------------------------------------------------

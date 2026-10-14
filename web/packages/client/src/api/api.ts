@@ -11,7 +11,6 @@
 // flow, a retry outside React) is not forced through a hook.
 
 import type {
-  JournalEntry,
   RecentActivityCursor,
   RecentActivityPage,
   RecentActivityScope,
@@ -325,7 +324,7 @@ export function applyResearchRecapCandidate(request: {
 }
 
 /* -------------------------------------------------------------------------
- * feed and journal
+ * feed
  * ---------------------------------------------------------------------- */
 
 export function listRecentActivity(input?: {
@@ -343,30 +342,6 @@ export function listRecentResearchQueries(input?: {
   before?: RecentResearchQueryCursor | null;
 }) {
   return trpc().feed.recentQueries.query(input);
-}
-
-export function addJournalEntry(url: string): Promise<JournalEntry> {
-  return trpc().journal.add.mutate({ url });
-}
-
-export function restoreJournalEntry(entry: JournalEntry): Promise<boolean> {
-  return trpc().journal.restore.mutate({ entry });
-}
-
-export function updateJournalEntry(id: string, entry: JournalEntry): Promise<boolean> {
-  return trpc().journal.update.mutate({ id, entry });
-}
-
-export function deleteJournalEntry(id: string): Promise<boolean> {
-  return trpc().journal.remove.mutate({ id });
-}
-
-export function fetchJournalTweet(id: string, token: string): Promise<string> {
-  return trpc().journal.fetchTweet.mutate({ id, token });
-}
-
-export function hydrateJournalTweet(entryId: string): Promise<JournalEntry> {
-  return trpc().journal.hydrateTweet.mutate({ entryId });
 }
 
 /* -------------------------------------------------------------------------

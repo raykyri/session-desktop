@@ -115,21 +115,16 @@ Login start/callback are plain Hono routes (`/auth/github`,
 ### `feed`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` keeps journal account-wide and filters research by `workspaceId` |
+| `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` filters by `workspaceId` |
 | `feed.recentQueries` | Q | `{ limit?, before? }` → `RecentResearchQueryPage` | `list_recent_research_queries` |
 
-### `journal`
-| Procedure | Kind | Input → Output | Desktop |
-| --- | --- | --- | --- |
-| `journal.add` | M | `{ url }` → entry (server classifies link vs tweet, schedules hydration) | — (new; the desktop has no creation UI, entries exist only from legacy data) |
-| `journal.restore` | M | `{ entry }` → boolean | `journal_restore` |
-| `journal.update` | M | `{ id, entry }` → boolean | `journal_update` |
-| `journal.remove` | M | `{ id }` → boolean | `journal_remove` |
-| `journal.fetchTweet` | M | `{ id, token }` → `string` (raw JSON) | `journal_fetch_tweet` |
-| `journal.hydrateTweet` | M | `{ entryId }` → entry | client loop over `journal_fetch_tweet` |
+### X posts
 
-Hydration (`journal/tweets.ts`) is one cache-first pipeline shared by journal
-entries and research attachments, with two providers in order:
+The `journal` router (`add`, `restore`, `update`, `remove`, `fetchTweet`,
+`hydrateTweet`) was removed with journal entries in phase 2.0.
+
+Hydration (`journal/tweets.ts`) is one cache-first pipeline for research
+attachments, with two providers in order:
 `cdn.syndication.twimg.com/tweet-result` for the whole post (media, quoted
 post, link card, counts), then `publish.twitter.com/oembed` for the author,
 text and date when syndication does not serve it. The provider that answered
@@ -206,8 +201,6 @@ unless noted:
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |
 | `workspace.created` / `updated` / `removed` | `{ workspace }` / `{ workspaceId }` | replaces `group.*` |
 | `folders.updated` | `{ workspaceId, state }` | new (desktop kept folders client-side) |
-| `journal.entry.updated` | `{ entry }` | add, hydrate, update, restore |
-| `journal.entry.removed` | `{ id }` | remove |
 | `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, item }` | public feed source create/update/restore |
 | `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId }` | source delete or archive |
 | `settings.updated` | `{ settings }` | another tab changed settings |

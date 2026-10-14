@@ -8,7 +8,6 @@ export * from "./encyclopedia.js";
 export * from "./folders.js";
 export * from "./feedItems.js";
 export * from "./highlights.js";
-export * from "./journal.js";
 export * from "./nodes.js";
 export * from "./preferences.js";
 export * from "./runs.js";

@@ -72,7 +72,7 @@ Options
 4. GraphQL.
 
 Choice: option 3. Procedures mirror the Tauri command names in camelCase
-(`research.createTree`, `research.forkNode`, `journal.fetchTweet`). The event
+(`research.createTree`, `research.forkNode`). The event
 stream is a tRPC subscription (`events.subscribe`) transported over SSE using
 tRPC's `httpSubscriptionLink`. Reconnection does not replay: run events include
 per-node sequence numbers and clients resynchronize from a snapshot

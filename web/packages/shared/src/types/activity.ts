@@ -1,9 +1,8 @@
-// The mixed Home feed: journal entries and research questions in one
-// keyset-paginated stream. Ported from the desktop `src/lib/journal.ts`.
+// The Home feed: root research questions in one keyset-paginated stream.
+// Ported from the desktop `src/lib/journal.ts`; journal entries were removed.
 
 import { z } from "zod";
 
-import { journalEntrySchema } from "./journal.js";
 import { recentActivityCursorSchema, recentResearchQuerySchema } from "./research.js";
 
 export const recentActivityScopeSchema = z.enum(["all", "mine", "workspace"]);
@@ -11,11 +10,6 @@ export const recentActivityScopeSchema = z.enum(["all", "mine", "workspace"]);
 export type RecentActivityScope = z.infer<typeof recentActivityScopeSchema>;
 
 export const recentActivityItemSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("journal"),
-    occurredAt: z.number(),
-    entry: journalEntrySchema,
-  }),
   z.object({
     kind: z.literal("research-query"),
     occurredAt: z.number(),

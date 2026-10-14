@@ -1,88 +1,45 @@
-import type { JournalEntry, RecentActivityCursor, RecentActivityItem } from "@session/shared";
+import type { RecentActivityCursor, RecentActivityItem } from "@session/shared";
 import test from "ava";
 
-import {
-  feedgen,
-  feedItems,
-  feeds,
-  journal,
-  nodes,
-  schema,
-  trees,
-  workspaces,
-} from "../src/index.js";
+import { feedgen, feedItems, feeds, nodes, trees, workspaces } from "../src/index.js";
 
 import { addUser, createFixture } from "./helpers.js";
 
-function linkEntry(id: string, at: number): JournalEntry {
-  return {
-    id,
-    kind: "link",
-    url: `https://example.com/${id}`,
-    createdAt: new Date(at).toISOString(),
-  };
-}
-
 function itemId(item: RecentActivityItem): string {
-  return item.kind === "journal" ? item.entry.id : item.query.nodeId;
+  return item.query.nodeId;
 }
 
-test("the feed merges both sources under one cursor, newest first", (t) => {
+/** A root question whose `created_at` is pinned, so the feed order is known. */
+function rootAt(fixture: ReturnType<typeof createFixture>, nodeId: string, at: number): void {
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: `Question ${nodeId}`,
+    model: "gemini-flash",
+    nodeId,
+  });
+  fixture.db.$client
+    .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
+    .run(at, detail.tree.rootNodeId);
+  feedgen.upsertResearchRoot(fixture.db, detail.tree.rootNodeId);
+}
+
+test("the feed lists root questions newest first", (t) => {
   const fixture = createFixture(t);
   const base = 1_700_000_000_000;
-  journal.add(fixture.db, fixture.userId, linkEntry("j1", base + 1000));
-  const research = trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "A question",
-    model: "gemini-flash",
-    nodeId: "n1",
-  });
-  fixture.db.$client
-    .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
-    .run(base + 2000, research.tree.rootNodeId);
-  feedgen.upsertResearchRoot(fixture.db, research.tree.rootNodeId);
-  journal.add(fixture.db, fixture.userId, linkEntry("j2", base + 3000));
+  rootAt(fixture, "n1", base + 1000);
+  rootAt(fixture, "n2", base + 3000);
+  rootAt(fixture, "n3", base + 2000);
 
   const page = feeds.recentActivity(fixture.db, fixture.userId, { limit: 10 });
-  t.deepEqual(page.items.map(itemId), ["j2", "n1", "j1"]);
+  t.deepEqual(page.items.map(itemId), ["n2", "n3", "n1"]);
   t.is(page.nextCursor, null);
-});
-
-test("a tie in occurredAt is broken by source rank, research first", (t) => {
-  const fixture = createFixture(t);
-  const at = 1_700_000_000_000;
-  journal.add(fixture.db, fixture.userId, linkEntry("j1", at));
-  const research = trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "A question",
-    model: "gemini-flash",
-    nodeId: "n1",
-  });
-  fixture.db.$client
-    .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
-    .run(at, research.tree.rootNodeId);
-  feedgen.upsertResearchRoot(fixture.db, research.tree.rootNodeId);
-  const page = feeds.recentActivity(fixture.db, fixture.userId, { limit: 10 });
-  t.deepEqual(page.items.map(itemId), ["n1", "j1"]);
 });
 
 test("pagination walks the whole feed exactly once across ties", (t) => {
   const fixture = createFixture(t);
   const at = 1_700_000_000_000;
-  for (let index = 0; index < 4; index += 1) {
-    journal.add(fixture.db, fixture.userId, linkEntry(`j${index}`, at));
-  }
-  for (let index = 0; index < 4; index += 1) {
-    const detail = trees.admitRoot(fixture.db, fixture.userId, {
-      workspaceId: fixture.workspaceId,
-      prompt: `Question ${index}`,
-      model: "gemini-flash",
-      nodeId: `n${index}`,
-    });
-    fixture.db.$client
-      .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
-      .run(at, detail.tree.rootNodeId);
-    feedgen.upsertResearchRoot(fixture.db, detail.tree.rootNodeId);
+  for (let index = 0; index < 8; index += 1) {
+    rootAt(fixture, `n${index}`, at);
   }
   const seen: string[] = [];
   let cursor: RecentActivityCursor | null = null;
@@ -96,13 +53,13 @@ test("pagination walks the whole feed exactly once across ties", (t) => {
   }
   t.is(seen.length, 8);
   t.is(new Set(seen).size, 8);
-  t.deepEqual(seen, ["n3", "n2", "n1", "n0", "j3", "j2", "j1", "j0"]);
+  t.deepEqual(seen, ["n7", "n6", "n5", "n4", "n3", "n2", "n1", "n0"]);
 });
 
 test("the limit is clamped to 1..100", (t) => {
   const fixture = createFixture(t);
   for (let index = 0; index < 3; index += 1) {
-    journal.add(fixture.db, fixture.userId, linkEntry(`j${index}`, 1_700_000_000_000 + index));
+    rootAt(fixture, `n${index}`, 1_700_000_000_000 + index);
   }
   t.is(feeds.recentActivity(fixture.db, fixture.userId, { limit: 0 }).items.length, 1);
   t.is(feeds.recentActivity(fixture.db, fixture.userId, { limit: -5 }).items.length, 1);
@@ -134,21 +91,18 @@ test("excludes archived threads and follow-ups from the feed while including thr
   t.deepEqual(page.items.map(itemId), ["root-1"]);
   const item = page.items[0];
   t.is(item?.kind, "research-query");
-  if (item?.kind === "research-query") {
-    t.deepEqual(
-      (item.query.children ?? []).map((child) => child.nodeId),
-      ["child-1", "child-2"],
-    );
-  }
+  t.deepEqual(
+    (item?.query.children ?? []).map((child) => child.nodeId),
+    ["child-1", "child-2"],
+  );
 
   trees.archive(fixture.db, fixture.userId, detail.tree.id);
   t.deepEqual(feeds.recentActivity(fixture.db, fixture.userId, { limit: 10 }).items, []);
 });
 
-test("the workspace filter narrows research and keeps journal entries", (t) => {
+test("the workspace filter narrows the feed to one workspace", (t) => {
   const fixture = createFixture(t);
   const other = workspaces.create(fixture.db, fixture.userId, "Reading");
-  journal.add(fixture.db, fixture.userId, linkEntry("j1", 1_700_000_000_000));
   trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     prompt: "Here",
@@ -161,21 +115,15 @@ test("the workspace filter narrows research and keeps journal entries", (t) => {
     model: "gemini-flash",
     nodeId: "there",
   });
-  fixture.db.$client
-    .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
-    .run(1_700_000_002_000, "here");
-  feedgen.upsertResearchRoot(fixture.db, "here");
   const page = feeds.recentActivity(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     limit: 10,
   });
-  t.deepEqual(page.items.map(itemId), ["here", "j1"], "the journal keeps its place in the order");
+  t.deepEqual(page.items.map(itemId), ["here"]);
 });
 
 test("feedgen materializes writes and removes archived or deleted sources", (t) => {
   const fixture = createFixture(t);
-  const entry = linkEntry("journal-row", 1_700_000_000_000);
-  journal.add(fixture.db, fixture.userId, entry);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     prompt: "Root",
@@ -190,7 +138,7 @@ test("feedgen materializes writes and removes archived or deleted sources", (t) 
   });
   nodes.setStatus(fixture.db, fixture.userId, "child-row", "cancelled");
 
-  t.is(feedItems.forJournal(fixture.db, entry.id)?.authorId, fixture.userId);
+  t.is(feedItems.forNode(fixture.db, "root-row")?.authorId, fixture.userId);
   t.is(feedItems.forNode(fixture.db, "root-row")?.workspaceId, fixture.workspaceId);
   t.is(feedItems.forNode(fixture.db, "child-row"), null);
 
@@ -198,8 +146,6 @@ test("feedgen materializes writes and removes archived or deleted sources", (t) 
   t.is(feedItems.forNode(fixture.db, "root-row"), null);
   trees.restore(fixture.db, fixture.userId, detail.tree.id);
   t.truthy(feedItems.forNode(fixture.db, "root-row"));
-  journal.remove(fixture.db, fixture.userId, entry.id);
-  t.is(feedItems.forJournal(fixture.db, entry.id), null);
   trees.remove(fixture.db, fixture.userId, detail.tree.id);
   t.is(feedItems.forNode(fixture.db, "root-row"), null);
 });
@@ -208,7 +154,6 @@ test("all, mine, and workspace scopes read one materialized stream", (t) => {
   const fixture = createFixture(t);
   const otherWorkspace = workspaces.create(fixture.db, fixture.userId, "Other");
   const stranger = addUser(fixture.db, "stranger-feed");
-  journal.add(fixture.db, fixture.userId, linkEntry("mine-journal", 1_700_000_000_000));
   trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     prompt: "Mine here",
@@ -221,7 +166,6 @@ test("all, mine, and workspace scopes read one materialized stream", (t) => {
     model: "gemini-flash",
     nodeId: "mine-elsewhere",
   });
-  journal.add(fixture.db, stranger.userId, linkEntry("stranger-journal", 1_700_000_000_001));
   trees.admitRoot(fixture.db, stranger.userId, {
     workspaceId: stranger.workspaceId,
     prompt: "Stranger root",
@@ -232,38 +176,16 @@ test("all, mine, and workspace scopes read one materialized stream", (t) => {
   const all = feeds.recentActivity(fixture.db, null, { scope: "all", limit: 20 });
   t.deepEqual(
     all.items.map(itemId).sort(),
-    ["mine-journal", "mine-here", "mine-elsewhere", "stranger-journal", "stranger-root"].sort(),
+    ["mine-here", "mine-elsewhere", "stranger-root"].sort(),
   );
   const mine = feeds.recentActivity(fixture.db, fixture.userId, { scope: "mine", limit: 20 });
-  t.deepEqual(
-    mine.items.map(itemId).sort(),
-    ["mine-journal", "mine-here", "mine-elsewhere"].sort(),
-  );
+  t.deepEqual(mine.items.map(itemId).sort(), ["mine-here", "mine-elsewhere"].sort());
   const workspace = feeds.recentActivity(fixture.db, fixture.userId, {
     scope: "workspace",
     workspaceId: fixture.workspaceId,
     limit: 20,
   });
-  t.deepEqual(workspace.items.map(itemId).sort(), ["mine-journal", "mine-here"].sort());
-});
-
-test("the feed_items backfill is idempotent", (t) => {
-  const fixture = createFixture(t);
-  journal.add(fixture.db, fixture.userId, linkEntry("backfill-journal", 1_700_000_000_000));
-  trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "Backfill root",
-    model: "gemini-flash",
-    nodeId: "backfill-root",
-  });
-  fixture.db.delete(schema.feedItems).run();
-
-  feedgen.backfill(fixture.db);
-  feedgen.backfill(fixture.db);
-
-  t.truthy(feedItems.forJournal(fixture.db, "backfill-journal"));
-  t.truthy(feedItems.forNode(fixture.db, "backfill-root"));
-  t.is(feeds.recentActivity(fixture.db, fixture.userId, { limit: 20 }).items.length, 2);
+  t.deepEqual(workspace.items.map(itemId), ["mine-here"]);
 });
 
 test("paginates only root research questions in recentQueries", (t) => {
@@ -299,6 +221,6 @@ test("paginates only root research questions in recentQueries", (t) => {
 
 test("another account's rows never appear", (t) => {
   const fixture = createFixture(t);
-  journal.add(fixture.db, fixture.userId, linkEntry("j1", 1_700_000_000_000));
+  rootAt(fixture, "n1", 1_700_000_000_000);
   t.deepEqual(feeds.recentActivity(fixture.db, "someone-else", { limit: 10 }).items, []);
 });

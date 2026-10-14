@@ -15,7 +15,7 @@ import {
 } from "../src/embeds/storage.js";
 import { resolveMessageAttachments } from "../src/journal/attachments.js";
 import { oembedRequestUrl, tweetSnapshotFromOembed } from "../src/journal/oembed.js";
-import { resolveTweet } from "../src/journal/tweets.js";
+import { resolveTweet, validateTweetFetchArgs } from "../src/journal/tweets.js";
 import { researchUserText } from "../src/runs/prompts.js";
 
 import { createHarness } from "./helpers.js";
@@ -209,8 +209,8 @@ test("a tombstone is an answer, not a transport failure", async (t) => {
 test("an id that is not a status id is answered without asking either provider", async (t) => {
   const log: string[] = [];
   const harness = createHarness(t, { fetch: routedFetch(log) });
-  // `journal.restore` hands back a whole entry the client was holding, so the
-  // id reaching hydration is not always one this server derived.
+  // The id reaching hydration is not always one this server derived from a
+  // permalink it parsed itself.
   const resolved = await resolveTweet(
     { db: harness.db, fetch: harness.deps.fetch ?? globalThis.fetch },
     "20; drop table",
@@ -425,4 +425,14 @@ test("an asset nothing has asked for in long enough is evicted and then forgotte
   });
   t.is(forgotten.prunedRows, 2, "the avatar and the photo");
   t.is(embeds.get(harness.db, avatarHash), null);
+});
+
+test("the syndication argument shapes match the desktop's", (t) => {
+  t.notThrows(() => validateTweetFetchArgs(TWEET_ID, "abc123"));
+  t.throws(() => validateTweetFetchArgs("12a", "abc"), {
+    message: "Invalid tweet ID: expected a numeric string of at most 25 characters.",
+  });
+  t.throws(() => validateTweetFetchArgs(TWEET_ID, "a".repeat(33)), {
+    message: "Invalid tweet token: expected an alphanumeric string of at most 32 characters.",
+  });
 });

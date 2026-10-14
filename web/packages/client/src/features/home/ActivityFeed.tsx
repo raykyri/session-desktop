@@ -5,16 +5,10 @@
 // search over them, a `ResizeObserver` per row. TanStack Virtual does the same
 // job with dynamic measurement, so what is left here is the feed's own
 // behavior: live rows patched into page 0 by the event bridge, a counter for
-// arrivals the reader has scrolled past, keyset pagination with a Retry, and an
-// undo bar for a removed journal entry.
+// arrivals the reader has scrolled past, and keyset pagination with a Retry.
 
-import {
-  buildRecentActivityFromItems,
-  normalizeJournalEntry,
-  recentActivityItemId,
-} from "@session/shared";
+import { buildRecentActivityFromItems, recentActivityItemId } from "@session/shared";
 import type {
-  JournalEntry,
   RecentActivityItem,
   RecentActivityScope,
   RecentResearchQuery,
@@ -22,18 +16,12 @@ import type {
   ResearchNodeContent,
   ResearchTreeSummary,
 } from "@session/shared";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, Undo2, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import {
-  deleteJournalEntry,
-  getResearchNodeContent,
-  hydrateJournalTweet,
-  restoreJournalEntry,
-} from "../../api/api.js";
+import { getResearchNodeContent } from "../../api/api.js";
 import {
   useActivityFeed,
   useSignedIn,
@@ -43,20 +31,17 @@ import {
   useTreeSummaries,
   useFolders,
 } from "../../api/queries.js";
-import { writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
-import { errorMessage, pushErrorToast, pushToast } from "../../lib/toast.js";
+import { errorMessage, pushErrorToast } from "../../lib/toast.js";
 import {
   useNavigationStore,
   type FeedMode,
   type FeedScrollAnchor,
 } from "../../stores/navigation.js";
 import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
-import { ControlButton, IconButton } from "../../ui/Button.js";
+import { ControlButton } from "../../ui/Button.js";
 import { Menu, MenuItem } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
-import { JournalEntryCard } from "../journal/JournalEntryCard.js";
-import { journalEntryUrl, type JournalMenuAction } from "../journal/entryMenu.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../research/treeMenu.js";
 
@@ -72,16 +57,11 @@ import {
  * shapes differ by an order of magnitude, so one average would make every
  * scrollbar wrong (`ResearchActivityFeed.tsx:494`). */
 export function estimateRowHeight(item: RecentActivityItem): number {
-  if (item.kind === "research-query") {
-    const hasTweet = item.query.attachments?.some(
-      (attachment) => attachment.status === "resolved" && attachment.tweet,
-    );
-    if (hasTweet) return item.query.recap?.trim() ? 430 : 384;
-    return item.query.recap?.trim() ? 136 : 90;
-  }
-  const entry = item.entry;
-  if (entry.kind === "tweet" && entry.hydration === "ok") return 326;
-  return 104;
+  const hasTweet = item.query.attachments?.some(
+    (attachment) => attachment.status === "resolved" && attachment.tweet,
+  );
+  if (hasTweet) return item.query.recap?.trim() ? 430 : 384;
+  return item.query.recap?.trim() ? 136 : 90;
 }
 
 const EMPTY_FOLDER_STATE: ResearchFolderState = {
@@ -105,9 +85,6 @@ export interface ActivityFeedProps {
    * off the whole column. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
-
-/** How long the "Entry removed" undo offer stays, matching a toast. */
-const UNDO_MS = 8000;
 
 function captureFeedAnchor(
   scroller: HTMLElement,
@@ -148,7 +125,6 @@ export function ActivityFeed({
   "use no memo";
 
   const navigate = useNavigate();
-  const client = useQueryClient();
   const feed = useActivityFeed({ scope, workspaceId });
   const summaries = useTreeSummaries({ workspaceId });
   const folders = useFolders(workspaceId);
@@ -180,7 +156,6 @@ export function ActivityFeed({
     initialScrollOffset.current = useNavigationStore.getState().feedAnchorFor(view)?.top ?? 0;
   }
 
-  const [undoEntry, setUndoEntry] = useState<JournalEntry | null>(null);
   const [newCount, setNewCount] = useState(0);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
@@ -189,16 +164,7 @@ export function ActivityFeed({
   // card on screen.
   const [recapContent, setRecapContent] = useState<ResearchNodeContent | null>(null);
 
-  const items = useMemo(() => {
-    const pages = feed.data?.pages ?? [];
-    return pages.flatMap((page) =>
-      page.items.flatMap((item): RecentActivityItem[] => {
-        if (item.kind === "research-query") return [item];
-        const entry = normalizeJournalEntry(item.entry);
-        return entry ? [{ ...item, entry }] : [];
-      }),
-    );
-  }, [feed.data]);
+  const items = useMemo(() => (feed.data?.pages ?? []).flatMap((page) => page.items), [feed.data]);
 
   const trees = useMemo(() => summaries.data ?? [], [summaries.data]);
   const treeById = useMemo(() => new Map(trees.map((tree) => [tree.id, tree])), [trees]);
@@ -217,11 +183,7 @@ export function ActivityFeed({
     estimateSize: (index) => {
       const event = events[index];
       if (!event) return 120;
-      const item = itemBySourceId.get(
-        event.source.kind === "journal"
-          ? `journal:${event.source.entry.id}`
-          : `research:${event.source.query.nodeId}`,
-      );
+      const item = itemBySourceId.get(`research:${event.source.query.nodeId}`);
       return item ? estimateRowHeight(item) : 120;
     },
     getItemKey: (index) => events[index]?.id ?? index,
@@ -356,40 +318,6 @@ export function ActivityFeed({
     });
   };
 
-  const runEntryAction = (entry: JournalEntry, action: JournalMenuAction) => {
-    const url = journalEntryUrl(entry);
-    switch (action) {
-      case "open":
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
-        return;
-      case "copy":
-        void writeClipboardText(url ?? "")
-          .then(() => pushToast({ title: "Link copied", tone: "success" }))
-          .catch((error: unknown) => pushErrorToast("The link could not be copied", error));
-        return;
-      case "retry":
-        void hydrateJournalTweet(entry.id).catch((error: unknown) =>
-          pushErrorToast("The post could not be loaded", error),
-        );
-        return;
-      case "delete":
-        // Retain the deleted entry locally so undo can restore it without
-        // refetching.
-        setUndoEntry(entry);
-        window.setTimeout(
-          () => setUndoEntry((current) => (current?.id === entry.id ? null : current)),
-          UNDO_MS,
-        );
-        void deleteJournalEntry(entry.id)
-          .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
-          .catch((error: unknown) => {
-            setUndoEntry(null);
-            pushErrorToast("The entry could not be removed", error);
-          });
-        return;
-    }
-  };
-
   const openRecapDialog = (nodeId: string) => {
     void getResearchNodeContent(nodeId)
       .then(setRecapContent)
@@ -471,34 +399,6 @@ export function ActivityFeed({
 
           {header}
 
-          {undoEntry ? (
-            <div
-              role="status"
-              className="border-border-divider bg-surface-panel my-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
-            >
-              <span className="flex-1">Entry removed</span>
-              <ControlButton
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  const entry = undoEntry;
-                  setUndoEntry(null);
-                  void restoreJournalEntry(entry)
-                    .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
-                    .catch((error: unknown) =>
-                      pushErrorToast("The entry could not be restored", error),
-                    );
-                }}
-              >
-                <Undo2 size={12} aria-hidden="true" />
-                <span>Undo</span>
-              </ControlButton>
-              <IconButton label="Dismiss undo" onClick={() => setUndoEntry(null)}>
-                <X size={12} aria-hidden="true" />
-              </IconButton>
-            </div>
-          ) : null}
-
           {newCount > 0 ? (
             <div className="sticky top-2 z-1 flex justify-center" role="status" aria-live="polite">
               <ControlButton
@@ -539,35 +439,18 @@ export function ActivityFeed({
                       aria-posinset={virtualRow.index + 1}
                       aria-setsize={feed.hasNextPage ? -1 : events.length}
                     >
-                      {source.kind === "journal" ? (
-                        <>
-                          <ActivityMetadataLine event={event} />
-                          <JournalEntryCard
-                            entry={source.entry}
-                            {...(canManage
-                              ? {
-                                  onAction: (action: JournalMenuAction) =>
-                                    runEntryAction(source.entry, action),
-                                }
-                              : {})}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <ActivityMetadataLine event={event} showTime={false} />
-                          <ResearchQueryCard
-                            query={source.query}
-                            tree={treeById.get(source.query.treeId)}
-                            menuItems={
-                              canManage
-                                ? treeMenu(treeById.get(source.query.treeId), source.query)
-                                : null
-                            }
-                            onOpen={() => openQuery(source.query)}
-                            onOpenChild={openQuery}
-                          />
-                        </>
-                      )}
+                      <ActivityMetadataLine event={event} showTime={false} />
+                      <ResearchQueryCard
+                        query={source.query}
+                        tree={treeById.get(source.query.treeId)}
+                        menuItems={
+                          canManage
+                            ? treeMenu(treeById.get(source.query.treeId), source.query)
+                            : null
+                        }
+                        onOpen={() => openQuery(source.query)}
+                        onOpenChild={openQuery}
+                      />
                     </div>
                   </div>
                 );
@@ -575,7 +458,7 @@ export function ActivityFeed({
             </div>
 
             {nothingYet ? (
-              <QueryState empty="No recent activity yet. Run a query or save a source to see it here." />
+              <QueryState empty="No recent activity yet. Run a query to see it here." />
             ) : null}
 
             <div aria-live="polite" className="flex flex-col items-start gap-2 py-4">

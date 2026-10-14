@@ -4,7 +4,6 @@
 // shapes only Phase 6's views read.
 
 import type {
-  JournalEntry,
   RecentActivityItem,
   RecentActivityPage,
   RecentResearchQuery,
@@ -68,16 +67,6 @@ export function researchQuery(overrides: Partial<RecentResearchQuery> = {}): Rec
   };
 }
 
-export function linkEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
-  return {
-    id: "j1",
-    kind: "link",
-    url: "https://example.com/a",
-    createdAt: new Date(1_700_000_000_000).toISOString(),
-    ...overrides,
-  } as JournalEntry;
-}
-
 export function activityPage(
   items: RecentActivityItem[],
   nextCursor: RecentActivityPage["nextCursor"] = null,
@@ -87,10 +76,6 @@ export function activityPage(
 
 export function queryItem(query: RecentResearchQuery): RecentActivityItem {
   return { kind: "research-query", occurredAt: query.createdAt, query };
-}
-
-export function journalItem(entry: JournalEntry): RecentActivityItem {
-  return { kind: "journal", occurredAt: Date.parse(entry.createdAt), entry };
 }
 
 export function highlightItem(

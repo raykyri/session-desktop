@@ -1,10 +1,8 @@
-// The menu-row helper the sidebar, the workspace switcher and the journal
-// cards share.
+// The menu-row helper the sidebar and the workspace switcher share.
 //
 // The thread rows themselves come from `features/research/treeMenu.tsx`, which
-// the research document view handles; what is left here is the leading-glyph row,
-// because a journal entry's menu is not a thread menu and has no home over
-// there.
+// the research document view handles; what is left here is the leading-glyph
+// row.
 //
 // There is no keycap helper any more: these rows sit on Base UI menus, whose
 // only key behaviour is typeahead, so a single-letter badge advertised a key

@@ -8,7 +8,7 @@
 // added here, and the count assertion below is what makes leaving it out
 // visible.
 
-import { journal as journalRepo, snapshots } from "@session/db";
+import { snapshots } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
@@ -22,7 +22,6 @@ interface Owned {
   childNodeId: string;
   highlightId: string;
   responseRevision: string;
-  journalEntryId: string;
 }
 
 /** Everything one account owns that another could name. */
@@ -55,8 +54,6 @@ async function seedOwner(
   });
   const childNodeId = child.id;
 
-  const entry = await caller.journal.add({ url: "https://example.com/an-article" });
-
   const owned: Owned = {
     workspaceId: workspace.id,
     treeId: detail.tree.id,
@@ -64,7 +61,6 @@ async function seedOwner(
     childNodeId,
     highlightId: highlight.id,
     responseRevision: committed.revision,
-    journalEntryId: entry.id,
   };
   return owned;
 }
@@ -226,41 +222,6 @@ const ATTEMPTS: readonly Attempt[] = [
       }),
   },
 
-  // ── journal ───────────────────────────────────────────────────────────────
-  {
-    name: "journal.update",
-    run: ({ caller, owned }) =>
-      caller.journal.update({
-        id: owned.journalEntryId,
-        entry: {
-          id: owned.journalEntryId,
-          kind: "link",
-          url: "https://evil.example/taken-over",
-          createdAt: new Date().toISOString(),
-        },
-      }),
-  },
-  {
-    name: "journal.restore",
-    run: ({ caller, owned }) =>
-      caller.journal.restore({
-        entry: {
-          id: owned.journalEntryId,
-          kind: "link",
-          url: "https://evil.example/taken-over",
-          createdAt: new Date().toISOString(),
-        },
-      }),
-  },
-  {
-    name: "journal.remove",
-    run: ({ caller, owned }) => caller.journal.remove({ id: owned.journalEntryId }),
-  },
-  {
-    name: "journal.hydrateTweet",
-    run: ({ caller, owned }) => caller.journal.hydrateTweet({ entryId: owned.journalEntryId }),
-  },
-
   // ── workspaces ────────────────────────────────────────────────────────────
   {
     name: "workspaces.rename",
@@ -308,11 +269,6 @@ test("prevents cross-account access and returns NOT_FOUND for unauthorized entit
 
   // Nothing the owner can see moved.
   t.deepEqual(await ownerState(ownerCaller, owned), before, "none of the owner's state changed");
-  t.true(
-    journalRepo.get(harness.db, owner.id, owned.journalEntryId)?.url ===
-      "https://example.com/an-article",
-    "the owner's journal entry was not taken over",
-  );
 });
 
 test("global feed reads cross accounts while personal scopes and fields stay bounded", async (t) => {
@@ -333,20 +289,18 @@ test("global feed reads cross accounts while personal scopes and fields stay bou
     model: "gemini-flash",
     workspaceId: secondWorkspace.id,
   });
-  await firstCaller.journal.add({ url: "https://example.com/first" });
-  await secondCaller.journal.add({ url: "https://example.com/second" });
 
   const itemIds = (page: Awaited<ReturnType<typeof firstCaller.feed.recentActivity>>) =>
-    page.items.map((item) => (item.kind === "journal" ? item.entry.id : item.query.nodeId)).sort();
+    page.items.map((item) => item.query.nodeId).sort();
   const all = await firstCaller.feed.recentActivity({ scope: "all" });
   const strangerAll = await secondCaller.feed.recentActivity({ scope: "all" });
   const guestAll = await harness.caller(null).feed.recentActivity();
   t.deepEqual(itemIds(strangerAll), itemIds(all));
   t.deepEqual(itemIds(guestAll), itemIds(all));
-  t.is(all.items.length, 4);
+  t.is(all.items.length, 2);
 
   const mine = await firstCaller.feed.recentActivity({ scope: "mine" });
-  t.is(mine.items.length, 2);
+  t.is(mine.items.length, 1);
   const workspace = await firstCaller.feed.recentActivity({
     scope: "workspace",
     workspaceId: firstWorkspace.id,
@@ -375,18 +329,25 @@ test("feed item events fan out to other signed-in accounts", async (t) => {
   const subscription = harness.eventBus.subscribe(observer.id, "feed-observer");
   const caller = harness.caller(author);
 
-  const entry = await caller.journal.add({ url: "https://example.com/broadcast" });
+  // An imported report is a complete root, so the thread can be deleted at once.
+  const workspace = await caller.workspaces.ensureDefault();
+  const detail = await caller.research.importReport({
+    markdown: "# Broadcast\n\nA report.\n",
+    prompt: "Broadcast",
+    workspaceId: workspace.id,
+  });
+  const rootId = detail.tree.rootNodeId;
   const upserted = await subscription.events.next();
   const upsertedEvent = upserted.value as SessionEvent | undefined;
   t.false(upserted.done);
   t.is(upsertedEvent?.type, "feed.item.upserted");
-  t.is((upsertedEvent?.payload["item"] as { entry?: { id?: string } }).entry?.id, entry.id);
+  t.is((upsertedEvent?.payload["item"] as { query?: { nodeId?: string } }).query?.nodeId, rootId);
 
-  await caller.journal.remove({ id: entry.id });
+  await caller.research.removeTree({ treeId: detail.tree.id });
   const removed = await subscription.events.next();
   const removedEvent = removed.value as SessionEvent | undefined;
   t.false(removed.done);
   t.is(removedEvent?.type, "feed.item.removed");
-  t.is(removedEvent?.payload["id"], entry.id);
+  t.is(removedEvent?.payload["id"], rootId);
   subscription.close();
 });

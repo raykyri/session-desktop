@@ -3,14 +3,13 @@
 //
 // Ported from the desktop `src/lib/activity.ts`. Surfaces render the semantic
 // slots below rather than hand-building a slightly different metadata sentence
-// per source, so "You saved a Link from example.com" and "You asked a
-// follow-up in Collective memory" come out of one vocabulary.
+// per source, so "You asked a follow-up in Collective memory" comes out of one
+// vocabulary.
 //
 // `execution` carries the registry model id (`models/registry.ts`) where the
 // desktop carried an adapter name plus an optional model.
 
 import type { RecentActivityItem } from "../types/activity.js";
-import type { JournalEntry } from "../types/journal.js";
 import type {
   RecentActivityCursor,
   RecentResearchQuery,
@@ -43,8 +42,7 @@ export interface ActivityEvent<TSource = unknown> {
   source: TSource;
 }
 
-export type RecentActivitySource =
-  { kind: "journal"; entry: JournalEntry } | { kind: "research-query"; query: RecentResearchQuery };
+export type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
 
 export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 
@@ -115,36 +113,6 @@ export function upsertRecentResearchQuery(
   );
 }
 
-function journalTimestamp(entry: JournalEntry): number {
-  const timestamp = Date.parse(entry.createdAt);
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function journalObject(entry: JournalEntry): ActivityEvent["object"] {
-  if (entry.kind === "link") {
-    return { kind: "link", id: entry.id, label: "Link" };
-  }
-  return { kind: "post", id: entry.id, label: "Post" };
-}
-
-export function activityEventFromJournalEntry(entry: JournalEntry): RecentActivityEvent {
-  const sourceLabel =
-    entry.kind === "tweet"
-      ? entry.tweet?.author.handle
-        ? `@${entry.tweet.author.handle}`
-        : "X"
-      : (URL.parse(entry.url)?.hostname ?? "Saved link");
-  return {
-    id: `journal:${entry.id}`,
-    actor: { kind: "user", label: "You" },
-    action: { kind: "saved", label: "saved" },
-    object: journalObject(entry),
-    ...(sourceLabel ? { context: { kind: "source" as const, label: sourceLabel } } : {}),
-    occurredAt: journalTimestamp(entry),
-    source: { kind: "journal", entry },
-  };
-}
-
 /** The states worth naming in a feed row. A completed answer says so by
  * showing its recap, so it carries no badge. */
 function visibleResearchState(status: ResearchNodeStatus): ActivityEvent["state"] {
@@ -191,24 +159,13 @@ export function activityEventFromResearchQuery(
 }
 
 export function buildRecentActivity(
-  entries: JournalEntry[],
   queries: RecentResearchQuery[],
   trees: ResearchTreeSummary[],
 ): RecentActivityEvent[] {
   const treeById = new Map(trees.map((tree) => [tree.id, tree]));
-  return [
-    ...entries.map(activityEventFromJournalEntry),
-    ...queries.map((query) => activityEventFromResearchQuery(query, treeById.get(query.treeId))),
-  ].sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
-}
-
-export function recentActivityItemFromJournalEntry(entry: JournalEntry): RecentActivityItem {
-  const occurredAt = Date.parse(entry.createdAt);
-  return {
-    kind: "journal",
-    occurredAt: Number.isFinite(occurredAt) ? occurredAt : 0,
-    entry,
-  };
+  return queries
+    .map((query) => activityEventFromResearchQuery(query, treeById.get(query.treeId)))
+    .sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
 }
 
 export function recentActivityItemFromResearchQuery(
@@ -270,13 +227,7 @@ export function buildRecentActivityFromItems(
 ): RecentActivityEvent[] {
   const treeById = new Map(trees.map((tree) => [tree.id, tree]));
   return items
-    .filter(
-      (item) => item.kind === "journal" || treeById.get(item.query.treeId)?.archivedAt == null,
-    )
-    .map((item) =>
-      item.kind === "journal"
-        ? activityEventFromJournalEntry(item.entry)
-        : activityEventFromResearchQuery(item.query, treeById.get(item.query.treeId)),
-    )
+    .filter((item) => treeById.get(item.query.treeId)?.archivedAt == null)
+    .map((item) => activityEventFromResearchQuery(item.query, treeById.get(item.query.treeId)))
     .sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
 }

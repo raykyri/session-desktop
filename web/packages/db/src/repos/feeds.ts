@@ -1,16 +1,14 @@
 // The Home feed (`docs/02-domain-model-and-database.md` §5.9).
 //
-// Journal entries and root research questions are materialized into
-// `feed_items` by the source repositories. Reads apply one keyset predicate to
-// that stream, then project the selected source rows into their public feed
-// shapes.
+// Root research questions are materialized into `feed_items` by the source
+// repositories. Reads apply one keyset predicate to that stream, then project
+// the selected source rows into their public feed shapes.
 //
-// The order is `(occurred_at DESC, source_rank DESC, id DESC)` with journal
-// rank 0 and research rank 1, matching the shared cursor comparator so the
-// client and the server agree about what "before this item" means.
+// The order is `(occurred_at DESC, source_rank DESC, id DESC)`, matching the
+// shared cursor comparator so the client and the server agree about what
+// "before this item" means.
 
 import type {
-  JournalEntry,
   RecentActivityCursor,
   RecentActivityItem,
   RecentActivityPage,
@@ -19,7 +17,6 @@ import type {
   RecentResearchQueryPage,
 } from "@session/shared";
 import {
-  journalEntrySchema,
   researchHighlightAnchorSchema,
   researchMessageAttachmentSchema,
   researchRecapSchema,
@@ -85,13 +82,7 @@ export function toRecentResearchQuery(row: NodeRow, workspaceId?: string): Recen
   };
 }
 
-/**
- * One page of the mixed feed, newest first.
- *
- * `workspaceId` filters the research side only: journal entries belong to the
- * account rather than to a workspace, and hiding a saved link because the
- * sidebar is pointed elsewhere would lose it.
- */
+/** One page of the feed, newest first. */
 export function recentActivity(
   db: SessionDatabase,
   userId: string | null,
@@ -107,32 +98,10 @@ export function recentActivity(
   });
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
-  const journalIds = page.filter((row) => row.source === "journal").map((row) => row.id);
-  const researchIds = page.filter((row) => row.source === "research").map((row) => row.id);
+  const researchIds = page.map((row) => row.id);
   const workspaceByResearchId = new Map(
-    page
-      .filter((row) => row.source === "research")
-      .map((row) => [row.id, row.workspaceId ?? undefined] as const),
+    page.map((row) => [row.id, row.workspaceId ?? undefined] as const),
   );
-  const entries = new Map<string, JournalEntry>();
-  if (journalIds.length > 0) {
-    for (const row of db.all<{ id: string; entryJson: string }>(sql`
-      SELECT id, entry_json AS entryJson FROM journal_entries
-      WHERE id IN (${sql.join(
-        journalIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})
-    `)) {
-      entries.set(
-        row.id,
-        parseJsonColumn(
-          journalEntrySchema,
-          JSON.parse(row.entryJson) as unknown,
-          "journal_entries.entry_json",
-        ),
-      );
-    }
-  }
   const queries = new Map<string, RecentResearchQuery>();
   const childrenByParent = new Map<string, RecentResearchQuery[]>();
   if (researchIds.length > 0) {
@@ -161,10 +130,6 @@ export function recentActivity(
     }
   }
   const items: RecentActivityItem[] = page.flatMap((row): RecentActivityItem[] => {
-    if (row.source === "journal") {
-      const entry = entries.get(row.id);
-      return entry ? [{ kind: "journal" as const, occurredAt: row.occurredAt, entry }] : [];
-    }
     const query = queries.get(row.id);
     if (!query) {
       return [];
@@ -195,24 +160,6 @@ export function eventItem(
   db: SessionDatabase,
   descriptor: FeedItemDescriptor,
 ): FeedEventItem | null {
-  if (descriptor.kind === "journal") {
-    const row = db.get<{ entryJson: string }>(sql`
-      SELECT entry_json AS entryJson FROM journal_entries WHERE id = ${descriptor.id}
-    `);
-    if (!row) return null;
-    return {
-      ...descriptor,
-      item: {
-        kind: "journal",
-        occurredAt: descriptor.occurredAt,
-        entry: parseJsonColumn(
-          journalEntrySchema,
-          JSON.parse(row.entryJson) as unknown,
-          "journal_entries.entry_json",
-        ),
-      },
-    };
-  }
   const row = db.get<NodeRow>(sql`SELECT * FROM nodes WHERE id = ${descriptor.id}`);
   if (!row) return null;
   const query = toRecentResearchQuery(normalizeNodeRow(row), descriptor.workspaceId ?? undefined);
@@ -235,11 +182,6 @@ export function eventItem(
       query: { ...query, children },
     },
   };
-}
-
-export function eventItemForJournal(db: SessionDatabase, journalId: string): FeedEventItem | null {
-  const descriptor = feedItemsRepo.forJournal(db, journalId);
-  return descriptor ? eventItem(db, descriptor) : null;
 }
 
 export function eventItemForNode(db: SessionDatabase, nodeId: string): FeedEventItem | null {

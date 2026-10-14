@@ -282,7 +282,7 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
   // `models.updated` is parsed despite its prefix; other non-research types
   // stay unrelated, so the unsupported path keeps meaning "a research event
   // this build does not know".
-  t.deepEqual(parseResearchEvent(sessionEvent("journal.entry.updated", {})), {
+  t.deepEqual(parseResearchEvent(sessionEvent("settings.updated", {})), {
     kind: "notResearch",
   });
   t.deepEqual(parseResearchEvent(sessionEvent("research.future.changed", {})), {

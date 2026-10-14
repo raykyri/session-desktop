@@ -326,8 +326,8 @@ export const recentResearchQueryPageSchema = z.object({
 
 export type RecentResearchQueryPage = z.infer<typeof recentResearchQueryPageSchema>;
 
-/** Stable keyset cursor for the mixed Recent Activity feed. Source rank is a
- * deterministic tie-breaker: research (1) sorts ahead of journal (0). */
+/** Stable keyset cursor for the Recent Activity feed. Source rank is a
+ * deterministic tie-breaker between item sources (`journal/cursor.ts`). */
 export const recentActivityCursorSchema = z.object({
   occurredAt: z.number(),
   sourceRank: z.number(),

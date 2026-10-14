@@ -5,9 +5,10 @@
 Build a web application at `https://session.dev` that mirrors the Session
 desktop application: a research workspace where a user launches long-running
 investigations with AI models, reads answers as documents, branches with
-follow-ups anchored to highlighted passages, keeps journal links and X posts
-in a Home feed and organizes
-everything into workspaces and folders.
+follow-ups anchored to highlighted passages, keeps questions (with the X
+posts they link to) in a Home feed and organizes everything into workspaces
+and folders. (Journal links were removed in phase 2.0 of the desktop parity
+plan.)
 
 The desktop app is a Tauri shell: a Rust backend (`src-tauri/src`) and a
 React frontend (`src/`, one 12k-line `App.tsx` plus ~90 library modules).
@@ -32,7 +33,7 @@ Goals
 - Functional parity for the research product: Home / Highlights,
   research documents with streaming answers, follow-ups (inline and branching),
   highlight-anchored asks, retry/cancel, recaps, titles,
-  journal links and X posts, workspaces and folders, report import, settings,
+  X posts in questions, workspaces and folders, report import, settings,
   keyboard shortcuts, command palette, notifications.
 - Models: Gemini 3.8 Flash (default; also a Google-Search-grounded
   variant), DeepSeek V4.1 Flash and GPT-5.6 Luna via OpenRouter on
@@ -252,16 +253,11 @@ specs under `e2e/`.
       renders its recap and its follow-up questions" and "feed card menu omits
       folder actions"; `research.dialogs.test.tsx` covers the Generate summary
       row.
-- [x] **Verified** — Journal link and X post cards with hydration, menu
-      rows (without shortcut badges: Base UI menus do not support letter shortcuts), undo delete; adding a
-      link or X URL from the composer (web addition).
-      `features/journal/JournalEntryCard.tsx`, `entryMenu.ts`,
-      `server/trpc/routers/journal.ts`; `feed.test.tsx` "the journal menu
-      displays only actions supported by the entry", "journal actions use a
-      hydrated post's canonical permalink", "an entry with an invalid stored
-      URL omits actions that require it", "removing a journal entry displays an
-      undo action that restores the same row"; `composer.test.tsx` "a bare URL is saved to
-      the journal instead of launching a run"; `packages/server/test/journal.test.ts`.
+- [x] **Removed** — Journal link and X post cards, the undo bar, and saving a
+      bare URL from the composer were removed in phase 2.0 of the desktop
+      parity plan. X posts in questions are still resolved and embedded
+      (`server/src/journal/{tweets,oembed,attachments}.ts`,
+      `features/journal/TweetEmbed.tsx`); link posts return in phase 2.3.
 - [ ] **Partial** — Highlights tab with day headers, refresh, and focus
       scroll. (The Bookmarks tab was removed in phase 2.0.)
       `features/highlights/HighlightsFeed.tsx`;

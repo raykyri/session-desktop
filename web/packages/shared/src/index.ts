@@ -21,7 +21,6 @@ export * from "./app/taggedInstructions.js";
 
 export * from "./journal/activity.js";
 export * from "./journal/cursor.js";
-export * from "./journal/entries.js";
 export * from "./journal/tweets.js";
 
 export * from "./markdown/imageMarkers.js";
@@ -54,7 +53,6 @@ export * from "./research/threads.js";
 export * from "./types/account.js";
 export * from "./types/activity.js";
 export * from "./types/events.js";
-export * from "./types/journal.js";
 export * from "./types/research.js";
 export * from "./types/turn.js";
 export * from "./types/tweet.js";

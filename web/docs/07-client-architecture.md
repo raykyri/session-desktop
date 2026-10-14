@@ -161,7 +161,7 @@ Per event type:
   `tree`, `activity`, `highlightsFeed`, `activeNodes` caches; `malformed` or
   `unsupported` → `invalidateQueries` for the affected scope.
 - `research.turn.delta|committed|run.*` → `liveTurns` store.
-- `journal.*`, `workspace.*`, `folders.updated`,
+- `workspace.*`, `folders.updated`,
   `settings.updated`, `models.updated` → targeted `setQueryData` or
   invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.

@@ -1,12 +1,10 @@
 import test from "ava";
 
 import {
-  activityEventFromJournalEntry,
   activityEventFromResearchQuery,
   buildRecentActivity,
   buildRecentActivityFromItems,
   mergeRecentActivityItems,
-  recentActivityItemFromJournalEntry,
   recentResearchQueryFromNode,
   reconcileRecentActivityHead,
   upsertRecentActivityItem,
@@ -14,7 +12,6 @@ import {
   upsertRecentResearchQuery,
 } from "../src/journal/activity.js";
 import type { RecentActivityItem } from "../src/types/activity.js";
-import type { JournalEntry } from "../src/types/journal.js";
 import type {
   RecentResearchQuery,
   ResearchNode,
@@ -100,34 +97,12 @@ test("a top-level imported query keeps its provenance", (t) => {
   t.deepEqual(event.execution, { model: "gpt-luna", origin: "imported" });
 });
 
-test("saved metadata resolves type and source context", (t) => {
-  const link: JournalEntry = {
-    kind: "link",
-    id: "saved",
-    createdAt: "2026-08-30T12:00:00.000Z",
-    url: "https://example.com/paper",
-  };
-  const event = activityEventFromJournalEntry(link);
-  t.is(event.object.label, "Link");
-  t.is(event.context?.label, "example.com");
-  t.is(event.state, undefined);
-  // A URL that is not parseable still names the entry.
-  t.is(activityEventFromJournalEntry({ ...link, url: "not a url" }).context?.label, "Saved link");
-});
-
-test("mixed activity sorts deterministically and malformed saved dates last", (t) => {
-  const entries: JournalEntry[] = [
-    { kind: "link", id: "bad", createdAt: "not-a-date", url: "https://example.com/old" },
-    {
-      kind: "link",
-      id: "new",
-      createdAt: "1970-01-01T00:00:00.300Z",
-      url: "https://example.com/new",
-    },
-  ];
+test("activity sorts newest first, then by id", (t) => {
+  const older = { ...query, nodeId: "older", createdAt: 100 };
+  const tied = { ...query, nodeId: "tied", createdAt: 200 };
   t.deepEqual(
-    buildRecentActivity(entries, [query], [tree]).map((event) => event.id),
-    ["journal:new", "research:child", "journal:bad"],
+    buildRecentActivity([older, query, tied], [tree]).map((event) => event.id),
+    ["research:tied", "research:child", "research:older"],
   );
 });
 
@@ -139,25 +114,19 @@ test("Home hides archived research and shows it again when restored", (t) => {
       occurredAt: 150,
       query: { ...query, nodeId: "active", treeId: "active-tree", createdAt: 150 },
     },
-    recentActivityItemFromJournalEntry({
-      kind: "link",
-      id: "saved",
-      createdAt: "1970-01-01T00:00:00.100Z",
-      url: "https://example.com/paper",
-    }),
   ];
   const activeTree = { ...tree, id: "active-tree" };
   t.deepEqual(
     buildRecentActivityFromItems(items, [{ ...tree, archivedAt: 300 }, activeTree]).map(
       (event) => event.id,
     ),
-    ["research:active", "journal:saved"],
+    ["research:active"],
   );
   t.deepEqual(
     buildRecentActivityFromItems(items, [{ ...tree, archivedAt: null }, activeTree]).map(
       (event) => event.id,
     ),
-    ["research:child", "research:active", "journal:saved"],
+    ["research:child", "research:active"],
   );
 });
 
@@ -215,18 +184,13 @@ test("live follow-ups stay under their root and survive root updates", (t) => {
   t.deepEqual(upsertRecentActivityResearchNode([], child), []);
 });
 
-test("mixed activity pages merge by one deterministic source-aware order", (t) => {
-  const link = recentActivityItemFromJournalEntry({
-    kind: "link",
-    id: "link",
-    createdAt: "1970-01-01T00:00:00.200Z",
-    url: "https://example.com/same-time",
-  });
-  const research: RecentActivityItem = { kind: "research-query", occurredAt: 200, query };
-  t.deepEqual(
-    mergeRecentActivityItems([link], [research]).map((item) => item.kind),
-    ["research-query", "journal"],
-  );
+test("activity pages merge by one deterministic order", (t) => {
+  const first = asItem({ ...query, nodeId: "a", createdAt: 200 });
+  const second = asItem({ ...query, nodeId: "b", createdAt: 200 });
+  const replaced = asItem({ ...query, nodeId: "a", createdAt: 200, title: "Replaced" });
+  const merged = mergeRecentActivityItems([first], [second, replaced]);
+  t.deepEqual(nodeIds(merged), ["b", "a"]);
+  t.is(merged[1]?.query.title, "Replaced");
 });
 
 test("live upserts insert into the sorted position without disturbing peers", (t) => {

@@ -2,7 +2,6 @@ import test from "ava";
 
 import { DEFAULT_USER_SETTINGS, userSettingsSchema } from "../src/types/account.js";
 import { sessionEventSchema } from "../src/types/events.js";
-import { journalEntrySchema } from "../src/types/journal.js";
 import {
   researchHighlightAnchorSchema,
   researchNodeSchema,
@@ -174,25 +173,6 @@ test("an unknown block type is rejected", (t) => {
       role: "assistant",
       sourceIndex: 0,
       blocks: [{ type: "thinking", text: "…" }],
-    }).success,
-  );
-});
-
-test("journal entries are links and tweets only", (t) => {
-  t.true(
-    journalEntrySchema.safeParse({
-      id: "j1",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      kind: "link",
-      url: "https://example.com",
-    }).success,
-  );
-  t.false(
-    journalEntrySchema.safeParse({
-      id: "j2",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      kind: "note",
-      text: "…",
     }).success,
   );
 });

@@ -106,8 +106,8 @@ volume — but until an automated procedure is implemented, account deletion mus
 
 ## 8. Rate limits
 
-Request-level (from launch): per user 60 mutations/min, 10
-`journal.fetchTweet`/min; per IP on `/auth/*` 20/min.
+Request-level (from launch): per user 60 mutations/min; per IP on `/auth/*`
+20/min.
 In-memory token buckets in Hono middleware (single process).
 
 Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):

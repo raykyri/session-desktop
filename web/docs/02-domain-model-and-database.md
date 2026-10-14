@@ -18,12 +18,12 @@ packages/db/
       users.ts  sessions.ts  preferences.ts
       workspaces.ts  folders.ts  trees.ts  nodes.ts  highlights.ts
       snapshots.ts  runs.ts (run_turns, run_attempts, run_queue, node_messages, node_summaries)
-      usage.ts  journal.ts  tweets.ts
+      usage.ts  tweets.ts
       feedItems.ts  drafts.ts  index.ts
     repos/
       users.ts  auth.ts  workspaces.ts  folders.ts  trees.ts  nodes.ts
       highlights.ts  snapshots.ts  recaps.ts  feeds.ts
-      feedItems.ts  feedgen.ts  journal.ts  drafts.ts
+      feedItems.ts  feedgen.ts  drafts.ts
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -59,9 +59,8 @@ zod schemas alongside:
 `UpdateResearchDocumentResult`, `RecentResearchQuery`,
 `RecentResearchQueryCursor`, `RecentActivityCursor`, `RecentActivityItem`,
 `RecentActivityPage`, `ResearchMessageAttachment` / `ResearchTweetAttachment`,
-`TweetSnapshot` and its parts (from `src/lib/journalTweets.ts`),
-`JournalLinkEntry`, `JournalTweetEntry` (from `src/lib/journal.ts`; the
-hidden legacy `note` kind is dropped), `Turn`, `TurnBlock`,
+`TweetSnapshot` and its parts (from `src/lib/journalTweets.ts`), `Turn`,
+`TurnBlock`,
 `ResearchFolder`,
 `ResearchFolderState`, `SessionEvent`.
 
@@ -84,9 +83,9 @@ frontend receives `ResearchNodeView`, which replaces the run's process
 bindings with `sessionReady` and `holdsProcess`. The web model is not aligned
 with it and keeps the flat `run | document` node described here, because:
 
-- The web app has no posts. Saved links and tweets are `journal_entries` rows
-  (`JournalLinkEntry`, `JournalTweetEntry`), not research nodes, and there is
-  no network delivery or replies.
+- The web app has no posts. Saved links and tweets were `journal_entries`
+  rows until journal entries were removed in phase 2.0; link posts return as
+  research nodes in phase 2.3. There is no network delivery or replies.
 - It has no terminal transcripts, so `source: transcript` has nothing to hold.
 - It has no local process bindings; the fields the desktop moved into the
   exchange binding were already dropped from the web wire type.
@@ -244,27 +243,18 @@ tree, as in `membership: HashMap<treeId, folderId>`.
   `provider` text, `enqueued_at`, `claimed_at` null, `not_before` integer
   null (backoff)
 
-### 3.4 Journal and X posts
+### 3.4 Feed items and X posts
 
-`journal_entries`
-- `id` PK, `user_id` FK, `kind` text (`link | tweet`)
-- `created_at` integer
-- `url` text null, `tweet_id` text null, `hydration` text null
-  (`pending | ok | failed`), `text` text null
-- `entry_json` text — the full entry as the frontend's `journal.ts` defines it
-- Index (`user_id`, `created_at`, `id`)
+`journal_entries` was removed with journal entries in phase 2.0.
 
 `feed_items`
-- `id` text PK, `author_id` FK, `kind` text (`journal | research`)
-- `occurred_at`, `source_rank`; nullable source FKs `journal_id`, `node_id`,
-  `tree_id`, `workspace_id`
+- `id` text PK, `author_id` FK, `kind` text (`research`)
+- `occurred_at`, `source_rank`; nullable source FKs `node_id`, `tree_id`,
+  `workspace_id`
 - Indexes (`occurred_at DESC`, `source_rank DESC`, `id DESC`) and
-  (`author_id`, `occurred_at DESC`); unique source indexes on `journal_id` and
-  `node_id`
-- Written synchronously in the same transaction as journal/root changes;
-  source deletion or tree archiving removes the row. Backfill
-  `2026-09-19-feed-items` materializes existing journal entries and
-  non-archived roots once.
+  (`author_id`, `occurred_at DESC`); unique source index on `node_id`
+- Written synchronously in the same transaction as root changes; source
+  deletion or tree archiving removes the row.
 
 `tweet_cache`
 - `tweet_id` PK, `payload_json` text (raw provider body, ≤ 1 MiB),
@@ -447,10 +437,10 @@ Each item names the desktop source and the enforcing function.
 ### 5.9 Feeds
 - `feeds.recentActivity(userId, { scope, workspaceId, limit, cursor })` reads
   `feed_items` under one cursor `(occurredAt DESC, sourceRank DESC, id DESC)`
-  with `sourceRank` journal = 0, research = 1. `all` reads public feed rows from
-  every account, `mine` filters `author_id` without a workspace predicate, and
-  `workspace` filters the caller's research roots by `workspace_id` while
-  keeping that caller's journal account-wide. `limit` is clamped to 1..100.
+  with `sourceRank` research = 1. `all` reads public feed rows from every
+  account, `mine` filters `author_id` without a workspace predicate, and
+  `workspace` filters the caller's research roots by `workspace_id`. `limit`
+  is clamped to 1..100.
   Source rows are projected after keyset selection; direct research children
   are attached per root in `(created_at, id)` ascending order.
 - `feeds.highlights(userId)` returns newest-first items from non-archived
@@ -469,8 +459,8 @@ Each item names the desktop source and the enforcing function.
   deletion cascades membership via FK, which is the web equivalent of
   `remove_trees_from_research_folders`.
 
-### 5.12 Journal
-- Entries are stored intact in `entry_json`; indexed columns are extracted projections validated with a strict Zod schema, eliminating the need to tolerate unvalidated blobs.
+### 5.12 Journal (removed)
+- Journal entries were removed in phase 2.0.
 
 ## 6. Data volumes and performance notes
 

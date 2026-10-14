@@ -1,6 +1,6 @@
 // X posts: recognizing a permalink, finding the permalinks in a message, and
 // normalizing X's syndication payload into the `TweetSnapshot` that is stored
-// on a journal entry or a research message attachment.
+// on a research message attachment.
 //
 // Ported from the desktop `src/lib/journalTweets.ts` (permalink parsing, the
 // syndication token, and the snapshot normalizers) and `src-tauri/src/
