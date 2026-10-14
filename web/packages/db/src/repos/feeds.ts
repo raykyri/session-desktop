@@ -24,6 +24,7 @@ import type { SessionDatabase } from "../connection.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 
+import { treeReadableBy } from "./access.js";
 import * as feedItemsRepo from "./feedItems.js";
 import type { FeedItemDescriptor, FeedScope } from "./feedItems.js";
 import type { NodeRow } from "./mappers.js";
@@ -229,7 +230,7 @@ export const MAX_FEED_TREE_IDS = 200;
 
 /** The root entries of the named threads, with their direct follow-ups: the
  * desktop's `list_recent_activity_for_trees`, which loads the Home cards whose
- * roots the newest feed page did not include. Threads of another account,
+ * roots the newest feed page did not include. Threads the caller cannot read,
  * archived threads and threads in the Trash are left out; a repeated id is
  * read once. The result follows the order of `treeIds`. */
 export function recentQueriesForTrees(
@@ -248,7 +249,7 @@ export function recentQueriesForTrees(
     .where(
       and(
         inArray(trees.id, ids),
-        eq(trees.ownerId, userId),
+        treeReadableBy(userId),
         isNull(nodes.parentNodeId),
         isNull(trees.archivedAt),
         isNull(trees.trashedAt),

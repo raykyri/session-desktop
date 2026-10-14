@@ -14,7 +14,7 @@
 // as the desktop's client-side queue does.
 
 import type { SessionDatabase } from "@session/db";
-import { feedItems, followups, users } from "@session/db";
+import { feedItems, followups, sharing, users } from "@session/db";
 import type { ResearchNode } from "@session/shared";
 import { DEFAULT_MODEL_ID } from "@session/shared";
 
@@ -26,6 +26,7 @@ import type { Logger } from "../logger.js";
 import type { RunsService } from "../runs/service.js";
 
 import { launchRefusal, queuePositionOf } from "./admission.js";
+import { notifyNewNode } from "./notifications.js";
 
 export interface FollowupDeps {
   config: Config;
@@ -38,41 +39,48 @@ export interface FollowupDeps {
 /** The message stored when the account that queued an item is gone. */
 export const AUTHOR_MISSING = "The account that asked this follow-up no longer exists.";
 
-/** `research.queue.changed` with the chain's whole queue after a change. */
+/** `research.queue.changed` with the chain's whole queue after a change, to
+ * the thread's audience and to `actorId`. */
 export function publishQueue(
   deps: Pick<FollowupDeps, "db" | "eventBus">,
-  ownerId: string,
+  actorId: string,
   treeId: string,
   headNodeId: string,
 ): void {
-  deps.eventBus.emit(
-    ownerId,
+  // Read as the owner, who can always read the thread.
+  const reader = sharing.audience(deps.db, treeId)?.ownerId ?? actorId;
+  deps.eventBus.emitToTree(
+    treeId,
     sessionEvent("research.queue.changed", {
       treeId,
       headNodeId,
-      items: followups.listForHead(deps.db, ownerId, headNodeId),
+      items: followups.listForHead(deps.db, reader, headNodeId),
     }),
+    [actorId],
   );
 }
 
 /** The events a follow-up admitted from the queue (or sent at once by
- * `followups.ask`) publishes, the same ones `research.forkNode` does. */
+ * `followups.ask`) publishes, the same ones `research.forkNode` does, and
+ * the notifications for it. */
 export function publishAdmittedFollowup(
   deps: Pick<FollowupDeps, "db" | "eventBus">,
-  ownerId: string,
+  actorId: string,
   node: ResearchNode,
 ): void {
-  deps.eventBus.emit(ownerId, sessionEvent("research.node.created", { node }));
-  const queuePosition = queuePositionOf({ db: deps.db, user: { id: ownerId } }, node.id);
-  deps.eventBus.emit(
-    ownerId,
+  deps.eventBus.emitToTree(node.treeId, sessionEvent("research.node.created", { node }), [actorId]);
+  const queuePosition = queuePositionOf({ db: deps.db, user: null }, node.id);
+  deps.eventBus.emitToTree(
+    node.treeId,
     sessionEvent("research.node.updated", {
       node,
       ...(queuePosition === undefined ? {} : { queuePosition }),
     }),
+    [actorId],
   );
   const feedItem = feedItems.forTree(deps.db, node.treeId);
   if (feedItem) emitFeedItemUpsertedForNode(deps, feedItem.id);
+  notifyNewNode(deps, node.authorId ?? actorId, node);
 }
 
 /**

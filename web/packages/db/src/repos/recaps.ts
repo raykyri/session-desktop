@@ -11,10 +11,9 @@ import { transact } from "../connection.js";
 import { newId } from "../ids.js";
 import { nodes } from "../schema/nodes.js";
 import { responseSnapshots } from "../schema/snapshots.js";
-import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy, rejectTrashed } from "./access.js";
+import { nodeReadableBy, rejectTrashed, requireNodeAccess } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode } from "./nodes.js";
 
@@ -61,7 +60,7 @@ export function save(
     const node = tx
       .select()
       .from(nodes)
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeReadableBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node || node.status !== "complete") {
       return null;
@@ -117,15 +116,8 @@ export function applyCandidate(
   input: ApplyCandidateInput,
 ): ResearchNode {
   return transact(db, (tx) => {
-    const node = tx
-      .select()
-      .from(nodes)
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
-      .get();
-    if (!node) {
-      throw new Error(`research node ${input.nodeId} was not found`);
-    }
-    const tree = tx.select().from(trees).where(eq(trees.id, node.treeId)).get();
+    // Recaps are shared; a commenter may replace one for everyone.
+    const { node, tree } = requireNodeAccess(tx, userId, input.nodeId, "commenter");
     if (tree?.archivedAt != null) {
       throw new Error("Cannot update summary of archived research: restore the thread first.");
     }
@@ -187,7 +179,7 @@ export function clear(db: SessionDatabase, userId: string, nodeId: string): void
     const row = tx
       .update(nodes)
       .set({ recapJson: null })
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+      .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
       .returning({ id: nodes.id })
       .get();
     if (row) upsertResearchRoot(tx, row.id);

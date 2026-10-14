@@ -46,6 +46,7 @@ import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
+import { useNotificationsStore } from "../stores/notifications.js";
 import { useRecapPendingStore } from "../stores/recapPending.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
@@ -326,6 +327,34 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       );
       return;
     }
+
+    case "notification.requested": {
+      // The bridge is the only ingress for server notifications, so the
+      // `showNotifications` preference is enforced here.
+      if (!useSettingsStore.getState().settings.showNotifications) return;
+      const { id, title, body, tone, timeoutMs, createdAt, href } = event.notification;
+      useNotificationsStore.getState().push({
+        id,
+        title,
+        body,
+        tone,
+        timeoutMs,
+        createdAt,
+        ...(href === undefined ? {} : { href }),
+      });
+      return;
+    }
+
+    case "research.sharing.changed":
+      // Access, members or visibility changed: the lists and the thread
+      // refetch.
+      invalidate(client, ["trees"], queryKeys.tree(event.treeId));
+      return;
+
+    case "research.presence.changed":
+    case "research.invites.changed":
+      // No cache reads these yet (the sharing UI).
+      return;
 
     case "research.run.started":
     case "research.run.thinking":

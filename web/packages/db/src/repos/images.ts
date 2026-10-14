@@ -25,6 +25,8 @@ import { newId } from "../ids.js";
 import { researchImages } from "../schema/images.js";
 import { now } from "../time.js";
 
+import { treeReadableBy } from "./access.js";
+
 export type ImageRow = typeof researchImages.$inferSelect;
 
 /** How long an image nothing names is kept for a composer, draft editor or
@@ -70,6 +72,47 @@ export function get(db: SessionDatabase, userId: string, imageId: string): Image
       .where(and(eq(researchImages.ownerId, userId), eq(researchImages.id, imageId)))
       .get() ?? null
   );
+}
+
+/**
+ * The image if `userId` (null: a guest) may see it: they uploaded it, or a
+ * node or queued follow-up of a thread they may read names it
+ * (`access.treeReadableBy`). An image in a draft is its owner's alone.
+ */
+export function readable(
+  db: SessionDatabase,
+  userId: string | null,
+  imageId: string,
+): ImageRow | null {
+  const row = findById(db, imageId);
+  if (!row) {
+    return null;
+  }
+  if (userId !== null && row.ownerId === userId) {
+    return row;
+  }
+  const pattern = `%"id":${JSON.stringify(imageId)}%`;
+  const named = db.get<{ found: number } | undefined>(sql`
+    select 1 as found
+      from nodes
+      inner join trees on trees.id = nodes.tree_id
+      , json_each(nodes.message_json, '$.attachments') as attachment
+     where nodes.message_json like ${pattern}
+       and json_extract(attachment.value, '$.kind') = 'image'
+       and json_extract(attachment.value, '$.id') = ${imageId}
+       and ${treeReadableBy(userId)}
+    union all
+    select 1 as found
+      from followup_queue
+      inner join trees on trees.id = followup_queue.tree_id
+      , json_each(followup_queue.message_json, '$.attachments') as attachment
+     where followup_queue.message_json like ${pattern}
+       and json_extract(attachment.value, '$.kind') = 'image'
+       and json_extract(attachment.value, '$.id') = ${imageId}
+       and ${treeReadableBy(userId)}
+     limit 1
+  `);
+  return named ? row : null;
 }
 
 /** The image whoever owns it, for a reader that already holds a message

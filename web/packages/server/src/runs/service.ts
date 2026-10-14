@@ -20,6 +20,7 @@ import type { Logger } from "../logger.js";
 import { createLogger } from "../logger.js";
 import type { FollowupDeps } from "../research/followups.js";
 import { dispatchTree } from "../research/followups.js";
+import { notifyRunFinished } from "../research/notifications.js";
 
 import { backoffFor, MAX_RATE_LIMIT_REQUEUES } from "./errors.js";
 import type { LoopDeps } from "./loop.js";
@@ -198,8 +199,13 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   let ticking: Promise<void> | null = null;
   let tickAgain = false;
 
+  /** A node event to everyone reading the node's thread, and to `userId`
+   * (the run's asker). */
   const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
-    deps.eventBus.emit(userId, sessionEvent(type, payload));
+    const event = sessionEvent(type, payload);
+    const treeId = (payload["node"] as ResearchNode | undefined)?.treeId;
+    if (treeId === undefined) deps.eventBus.emit(userId, event);
+    else deps.eventBus.emitToTree(treeId, event, [userId]);
   };
 
   /** Broadcasts updated queue positions to waiting clients. */
@@ -319,7 +325,11 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           settleRateLimited(userId, nodeId);
         } else {
           queueRepo.release(deps.db, nodeId);
+          // The asker hears that their run finished or failed.
+          const settled = nodesRepo.get(deps.db, userId, nodeId);
+          if (settled) notifyRunFinished(deps, settled);
         }
+
         if (result.outcome === "complete") {
           if (result.scheduleTitle === true) {
             service.enqueueMetadata({ kind: "title", userId, nodeId });

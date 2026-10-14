@@ -1,6 +1,7 @@
 // Metadata runs: titles, recaps, and context summaries.
 
 import {
+  access as accessRepo,
   nodes as nodesRepo,
   recaps as recapsRepo,
   snapshots as snapshotsRepo,
@@ -8,7 +9,7 @@ import {
   newId,
 } from "@session/db";
 import type { SessionDatabase } from "@session/db";
-import type { ResearchRecapCandidate } from "@session/shared";
+import type { ResearchNode, ResearchRecapCandidate, ResearchTree } from "@session/shared";
 import {
   DEFAULT_RECAP_INSTRUCTIONS,
   METADATA_MODEL_ID,
@@ -34,6 +35,7 @@ import type { EventBus } from "../events/bus.js";
 import { sessionEvent } from "../events/bus.js";
 import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
+import { sharedTree } from "../research/access.js";
 
 import { classifyRunError } from "./errors.js";
 import type { Providers } from "./providers.js";
@@ -108,8 +110,28 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
   >();
   const pendingRecaps = new Set<string>();
 
+  /** A thread event to its audience and to `userId`, who asked for the job
+   * (or for the run it follows). A tree goes to the others without the
+   * asker's per-person fields. */
   const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
-    deps.eventBus.emit(userId, sessionEvent(type, payload));
+    const tree = payload["tree"] as ResearchTree | undefined;
+    const node = payload["node"] as ResearchNode | undefined;
+    const nodeId = typeof payload["nodeId"] === "string" ? payload["nodeId"] : undefined;
+    const treeId =
+      tree?.id ??
+      node?.treeId ??
+      (nodeId === undefined ? null : accessRepo.nodeTreeId(deps.db, nodeId));
+    if (treeId === null) {
+      deps.eventBus.emit(userId, sessionEvent(type, payload));
+      return;
+    }
+    if (tree !== undefined) {
+      deps.eventBus.emit(userId, sessionEvent(type, payload));
+      const others = sessionEvent(type, { ...payload, tree: sharedTree(tree) });
+      deps.eventBus.emitToTree(treeId, others, [], [userId]);
+      return;
+    }
+    deps.eventBus.emitToTree(treeId, sessionEvent(type, payload), [userId]);
   };
 
   /** One structured metadata call with usage accounting and failure logging. */

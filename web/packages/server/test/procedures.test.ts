@@ -72,17 +72,32 @@ test("guests read the public catalog and cannot mutate it", async (t) => {
   });
 
   const guest = harness.caller(null);
-  const listed = await guest.workspaces.list();
-  t.is(listed[0]?.id, workspace.id);
-  const trees = await guest.research.listTrees({ workspaceId: workspace.id });
+  // Nothing is public yet: the catalog is empty and the thread unreadable.
+  t.deepEqual(await guest.research.listTrees(), []);
+  await t.throwsAsync(guest.research.getTree({ treeId: created.tree.id }), {
+    message: /not found/,
+  });
+  await signedIn.sharing.setVisibility({ treeId: created.tree.id, visibility: "public" });
+
+  // Guests have no workspaces; the catalog is every account's public threads.
+  t.deepEqual(await guest.workspaces.list(), []);
+  const trees = await guest.research.listTrees();
   t.is(trees.length, 1);
   t.is(trees[0]?.title, "What is collective memory?");
+  t.is(trees[0]?.role, "viewer");
   const detail = await guest.research.getTree({ treeId: created.tree.id });
   t.is(detail.tree.id, created.tree.id);
+  t.is(detail.tree.role, "viewer");
   const content = await guest.research.getNodeContent({ nodeId });
   t.is(content.node.id, nodeId);
   const activity = await guest.feed.recentActivity({ scope: "all" });
-  t.is(activity.items.length, 2);
+  t.deepEqual(
+    activity.items.map((item) => item.query.treeId),
+    [created.tree.id],
+  );
+  // Another account opens the public thread too.
+  const opened = await otherCaller.research.getTree({ treeId: created.tree.id });
+  t.is(opened.tree.role, "viewer");
 
   const otherSeesOwner = await otherCaller.research.listTrees({ workspaceId: workspace.id });
   t.is(otherSeesOwner.length, 0);

@@ -27,7 +27,16 @@ import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy, rejectTrashed, rejectTrashedNode } from "./access.js";
+import {
+  ACCESS_MESSAGES,
+  TreeAccessError,
+  nodeReadableBy,
+  rejectTrashed,
+  rejectTrashedNode,
+  requireNodeAccess,
+  treeAccess,
+  treeReadableBy,
+} from "./access.js";
 import { admitChild } from "./nodes.js";
 import { enqueue } from "./queue.js";
 import type { NodeAgentInput } from "./trees.js";
@@ -79,7 +88,7 @@ function rowsForHead(db: SessionDatabase, headNodeId: string): FollowupRow[] {
 /** A tree's queues, keyed by chain head, each in send order. */
 export function listForTree(
   db: SessionDatabase,
-  userId: string,
+  userId: string | null,
   treeId: string,
 ): Record<string, FollowupItem[]> {
   const queues: Record<string, FollowupItem[]> = {};
@@ -87,7 +96,7 @@ export function listForTree(
     .select({ item: followupQueue })
     .from(followupQueue)
     .innerJoin(trees, eq(trees.id, followupQueue.treeId))
-    .where(and(eq(trees.ownerId, userId), eq(followupQueue.treeId, treeId)))
+    .where(and(treeReadableBy(userId), eq(followupQueue.treeId, treeId)))
     .orderBy(asc(followupQueue.headNodeId), asc(followupQueue.position), asc(followupQueue.id))
     .all()) {
     const item = toItem(row.item);
@@ -96,18 +105,18 @@ export function listForTree(
   return queues;
 }
 
-/** One chain's queue in send order; empty when the head is not the
- * caller's or has nothing queued. */
+/** One chain's queue in send order; empty when the caller cannot read the
+ * thread or nothing is queued. */
 export function listForHead(
   db: SessionDatabase,
-  userId: string,
+  userId: string | null,
   headNodeId: string,
 ): FollowupItem[] {
   return db
     .select({ item: followupQueue })
     .from(followupQueue)
     .innerJoin(trees, eq(trees.id, followupQueue.treeId))
-    .where(and(eq(trees.ownerId, userId), eq(followupQueue.headNodeId, headNodeId)))
+    .where(and(treeReadableBy(userId), eq(followupQueue.headNodeId, headNodeId)))
     .orderBy(asc(followupQueue.position), asc(followupQueue.id))
     .all()
     .map((row) => toItem(row.item));
@@ -148,7 +157,7 @@ function threadState(db: SessionDatabase, userId: string, nodeId: string): Threa
     })
     .from(nodes)
     .innerJoin(trees, eq(trees.id, nodes.treeId))
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!row) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -178,7 +187,8 @@ function admitInline(
     inline: true,
     authorId: input.authorId,
   });
-  enqueue(tx, userId, {
+  // The run is billed to whoever asked (`run_queue.user_id`).
+  enqueue(tx, input.authorId, {
     nodeId: node.id,
     pool: "research",
     // `run_queue.provider` keys the per-provider cap.
@@ -219,6 +229,7 @@ export function ask(db: SessionDatabase, userId: string, input: AskInput): AskRe
       : {}),
   };
   return transact(db, (tx) => {
+    requireNodeAccess(tx, userId, input.headNodeId, "commenter");
     const state = threadState(tx, userId, input.headNodeId);
     if (state.archived) {
       throw new Error(
@@ -388,23 +399,33 @@ export function markFailed(db: SessionDatabase, itemId: string, reason: string):
   return toItem(row);
 }
 
-function ownedRow(db: SessionDatabase, userId: string, itemId: string): FollowupRow {
-  const row = db
-    .select({ item: followupQueue })
-    .from(followupQueue)
-    .innerJoin(trees, eq(trees.id, followupQueue.treeId))
-    .where(and(eq(trees.ownerId, userId), eq(followupQueue.id, itemId)))
-    .get();
-  if (!row) {
+/**
+ * A queued item the caller may change: its author's, or for a cancel also
+ * the thread owner's. Retry is the author's alone, because the author pays
+ * for the run it sends. An item in a thread the caller cannot read is not
+ * found.
+ */
+function itemRow(
+  db: SessionDatabase,
+  userId: string,
+  itemId: string,
+  action: "cancel" | "retry",
+): FollowupRow {
+  const row = db.select().from(followupQueue).where(eq(followupQueue.id, itemId)).get();
+  const access = row ? treeAccess(db, userId, row.treeId) : null;
+  if (!row || !access) {
     throw new Error(`queued follow-up ${itemId} was not found`);
   }
-  return row.item;
+  if (row.authorId !== userId && !(action === "cancel" && access.role === "owner")) {
+    throw new TreeAccessError(ACCESS_MESSAGES.ownFollowup);
+  }
+  return row;
 }
 
 /** Removes a queued follow-up; the ones after it move up. */
 export function cancel(db: SessionDatabase, userId: string, itemId: string): FollowupItem {
   return transact(db, (tx) => {
-    const row = ownedRow(tx, userId, itemId);
+    const row = itemRow(tx, userId, itemId, "cancel");
     tx.delete(followupQueue).where(eq(followupQueue.id, row.id)).run();
     return toItem(row);
   });
@@ -414,8 +435,9 @@ export function cancel(db: SessionDatabase, userId: string, itemId: string): Fol
  * Refused while the thread is in the Trash. */
 export function retry(db: SessionDatabase, userId: string, itemId: string): FollowupItem {
   return transact(db, (tx) => {
-    const row = ownedRow(tx, userId, itemId);
+    const row = itemRow(tx, userId, itemId, "retry");
     rejectTrashedNode(tx, row.headNodeId);
+
     const updated = tx
       .update(followupQueue)
       .set({ failedReason: null })

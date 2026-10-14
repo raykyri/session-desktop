@@ -6,8 +6,10 @@ import type {
   PostFormat,
   ResearchNodeStatus,
   ResearchNodeType,
+  ResearchParticipant,
   ResearchTree,
   ResearchTreeDetail,
+  ResearchTreeRole,
   ResearchTreeSummary,
   UserMessage,
 } from "@session/shared";
@@ -24,14 +26,25 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from "dr
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
-import { folders, treeFolderMembership } from "../schema/folders.js";
+import { treeMembers, treeSubscriptions } from "../schema/collaboration.js";
+import { collapsedGroups, folders, treeFolderMembership } from "../schema/folders.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { treeViews, trees } from "../schema/trees.js";
+import { users } from "../schema/users.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
-import { rejectTrashed } from "./access.js";
+import {
+  ACCESS_MESSAGES,
+  TreeAccessError,
+  memberRow,
+  rejectTrashed,
+  requireTreeAccess,
+  roleFor,
+  treeAccess,
+} from "./access.js";
+import type { MemberRow, TreeAccess, TreeRole } from "./access.js";
 import { forTree as feedItemForTree } from "./feedItems.js";
 import type { FeedItemDescriptor } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
@@ -97,20 +110,38 @@ function positionedPredicate(ownerId: string, workspaceId: string, archived: boo
   );
 }
 
-export function requireTreeRow(db: SessionDatabase, userId: string, treeId: string): TreeRow {
-  const row = db
-    .select()
-    .from(trees)
-    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
-    .get();
-  if (!row) {
-    throw new Error(`research tree ${treeId} was not found`);
-  }
-  return row;
+/** The tree row, for a caller with at least `minimum` there
+ * (`access.requireTreeAccess`). The default is the owner: most tree-level
+ * changes are the owner's. */
+export function requireTreeRow(
+  db: SessionDatabase,
+  userId: string | null,
+  treeId: string,
+  minimum: TreeRole = "owner",
+): TreeRow {
+  return requireTreeAccess(db, userId, treeId, minimum).tree;
+}
+
+/** Whether `userId` follows the thread (`tree_subscriptions`). */
+export function isFollowing(db: SessionDatabase, userId: string, treeId: string): boolean {
+  return (
+    db
+      .select({ treeId: treeSubscriptions.treeId })
+      .from(treeSubscriptions)
+      .where(and(eq(treeSubscriptions.userId, userId), eq(treeSubscriptions.treeId, treeId)))
+      .get() !== undefined
+  );
 }
 
 /** When `userId` last viewed the thread, or null. */
-export function lastViewedAt(db: SessionDatabase, userId: string, treeId: string): number | null {
+export function lastViewedAt(
+  db: SessionDatabase,
+  userId: string | null,
+  treeId: string,
+): number | null {
+  if (userId === null) {
+    return null;
+  }
   return (
     db
       .select({ at: treeViews.lastViewedAt })
@@ -120,18 +151,25 @@ export function lastViewedAt(db: SessionDatabase, userId: string, treeId: string
   );
 }
 
-/** A tree row as `userId` sees it. */
-export function treeFor(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
-  return toResearchTree(row, lastViewedAt(db, userId, row.id));
+/** A tree row as `userId` (null: a guest) sees it: their role, their own
+ * Archive, Trash and last view, and whether they follow it. */
+export function treeFor(db: SessionDatabase, userId: string | null, row: TreeRow): ResearchTree {
+  const standing = roleFor(db, userId, row) ?? { role: "viewer" as const, member: null };
+  return toResearchTree(row, lastViewedAt(db, userId, row.id), {
+    role: standing.role,
+    member: standing.member,
+    ...(userId === null ? {} : { followed: isFollowing(db, userId, row.id) }),
+  });
 }
 
-export function get(db: SessionDatabase, userId: string, treeId: string): ResearchTree | null {
-  const row = db
-    .select()
-    .from(trees)
-    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
-    .get();
-  return row ? treeFor(db, userId, row) : null;
+/** The tree, when `userId` (null: a guest) may read it. */
+export function get(
+  db: SessionDatabase,
+  userId: string | null,
+  treeId: string,
+): ResearchTree | null {
+  const access = treeAccess(db, userId, treeId);
+  return access ? treeFor(db, userId, access.tree) : null;
 }
 
 function writeView(db: SessionDatabase, userId: string, treeId: string, at: number): void {
@@ -263,11 +301,66 @@ export function admitRoot(
 
 /** Every node of a tree, ordered `(created_at, id)` — the one ordering the
  * domain uses (`docs/02` §5.1). */
-export function detail(db: SessionDatabase, userId: string, treeId: string): ResearchTreeDetail {
-  return detailFromRow(db, userId, requireTreeRow(db, userId, treeId));
+export function detail(
+  db: SessionDatabase,
+  userId: string | null,
+  treeId: string,
+): ResearchTreeDetail {
+  return detailFromRow(db, userId, requireTreeRow(db, userId, treeId, "viewer"));
 }
 
-function detailFromRow(db: SessionDatabase, userId: string, treeRow: TreeRow): ResearchTreeDetail {
+/**
+ * The people a thread names: its owner, its members, and every author of a
+ * node or highlight in it, in that order, each once. Accounts that are gone
+ * are left out (their content's author is null).
+ */
+export function participants(db: SessionDatabase, treeRow: TreeRow): ResearchParticipant[] {
+  const ids: string[] = [treeRow.ownerId];
+  const add = (id: string | null): void => {
+    if (id !== null && !ids.includes(id)) ids.push(id);
+  };
+  for (const row of db
+    .select({ userId: treeMembers.userId })
+    .from(treeMembers)
+    .where(eq(treeMembers.treeId, treeRow.id))
+    .orderBy(asc(treeMembers.createdAt), asc(treeMembers.userId))
+    .all()) {
+    add(row.userId);
+  }
+  for (const row of db
+    .selectDistinct({ authorId: nodes.authorId })
+    .from(nodes)
+    .where(and(eq(nodes.treeId, treeRow.id), isNotNull(nodes.authorId)))
+    .all()) {
+    add(row.authorId);
+  }
+  for (const row of db
+    .selectDistinct({ authorId: highlights.authorId })
+    .from(highlights)
+    .innerJoin(nodes, eq(nodes.id, highlights.nodeId))
+    .where(and(eq(nodes.treeId, treeRow.id), isNotNull(highlights.authorId)))
+    .all()) {
+    add(row.authorId);
+  }
+  const people = new Map(
+    db
+      .select({ id: users.id, login: users.login, name: users.name, avatarUrl: users.avatarUrl })
+      .from(users)
+      .where(inArray(users.id, ids))
+      .all()
+      .map((row) => [row.id, row]),
+  );
+  return ids.flatMap((id) => {
+    const person = people.get(id);
+    return person ? [person] : [];
+  });
+}
+
+function detailFromRow(
+  db: SessionDatabase,
+  userId: string | null,
+  treeRow: TreeRow,
+): ResearchTreeDetail {
   const nodeRows = db
     .select()
     .from(nodes)
@@ -296,6 +389,7 @@ function detailFromRow(db: SessionDatabase, userId: string, treeRow: TreeRow): R
         highlights: highlightsByNode.get(row.id) ?? [],
       }),
     ),
+    participants: participants(db, treeRow),
   };
 }
 
@@ -312,7 +406,7 @@ export function summaries(
   userId: string,
   options: TreeListOptions = {},
 ): ResearchTreeSummary[] {
-  const treeRows = db
+  const owned = db
     .select({ tree: trees, lastViewedAt: treeViews.lastViewedAt })
     .from(trees)
     .leftJoin(treeViews, and(eq(treeViews.treeId, trees.id), eq(treeViews.userId, userId)))
@@ -333,7 +427,140 @@ export function summaries(
         ? [desc(trees.trashedAt), asc(trees.id)]
         : [asc(trees.position), asc(trees.id)]),
     )
+    .all()
+    .map((row) => ({ ...row, member: null }));
+  // Shared threads the caller filed in one of this workspace's folders are
+  // listed with the workspace, after its own threads (`folders.getState`
+  // reports their membership).
+  const filed =
+    options.workspaceId && options.trashed !== true
+      ? memberRows(db, userId, {
+          includeArchived: options.includeArchived === true,
+          folderWorkspaceId: options.workspaceId,
+        })
+      : [];
+  return summarize(db, [...owned, ...filed]);
+}
+
+/** Where `sharedSummaries` looks: the shared threads listed in the
+ * caller's Shared place, their Archive, or their Trash. */
+export type SharedPlace = "shared" | "archive" | "trash";
+
+interface ListedRow {
+  tree: TreeRow;
+  lastViewedAt: number | null;
+  member: MemberRow | null;
+}
+
+/** The caller's member rows outside the owner's Trash, with their trees. */
+function memberRows(
+  db: SessionDatabase,
+  userId: string,
+  options: {
+    includeArchived?: boolean;
+    trashed?: boolean;
+    archivedOnly?: boolean;
+    folderWorkspaceId?: string;
+  },
+): ListedRow[] {
+  return db
+    .select({ tree: trees, member: treeMembers, lastViewedAt: treeViews.lastViewedAt })
+    .from(treeMembers)
+    .innerJoin(trees, eq(trees.id, treeMembers.treeId))
+    .leftJoin(treeViews, and(eq(treeViews.treeId, trees.id), eq(treeViews.userId, userId)))
+    .leftJoin(folders, eq(folders.id, treeMembers.folderId))
+    .where(
+      and(
+        eq(treeMembers.userId, userId),
+        isNull(trees.trashedAt),
+        options.trashed === true ? isNotNull(treeMembers.trashedAt) : isNull(treeMembers.trashedAt),
+        options.trashed === true || options.includeArchived === true
+          ? undefined
+          : options.archivedOnly === true
+            ? sql`coalesce(${treeMembers.archivedAt}, ${trees.archivedAt}) is not null`
+            : sql`coalesce(${treeMembers.archivedAt}, ${trees.archivedAt}) is null`,
+        options.folderWorkspaceId === undefined
+          ? undefined
+          : and(
+              eq(folders.workspaceId, options.folderWorkspaceId),
+              eq(folders.ownerId, userId),
+              isNull(folders.trashedAt),
+            ),
+      ),
+    )
+    .orderBy(
+      options.trashed === true ? desc(treeMembers.trashedAt) : desc(trees.updatedAt),
+      asc(trees.id),
+    )
     .all();
+}
+
+/**
+ * The threads shared with the caller (they are a member, not the owner), for
+ * the web's Shared place: `shared` lists those outside their Archive and
+ * Trash, most recently updated first; `archive` those in their Archive or
+ * archived by the owner; `trash` those in their own Trash, most recently
+ * trashed first. A thread in its owner's Trash is in none of them.
+ */
+export function sharedSummaries(
+  db: SessionDatabase,
+  userId: string,
+  place: SharedPlace = "shared",
+): ResearchTreeSummary[] {
+  return summarize(
+    db,
+    memberRows(
+      db,
+      userId,
+      place === "trash" ? { trashed: true } : { archivedOnly: place === "archive" },
+    ),
+  );
+}
+
+/** Most public threads one `publicSummaries` call returns. */
+const PUBLIC_LIST_LIMIT = 200;
+
+/**
+ * Public threads of every account, most recently updated first, outside
+ * their owner's Archive and Trash: the guest catalog. A signed-in caller sees
+ * their own role in each.
+ */
+export function publicSummaries(
+  db: SessionDatabase,
+  userId: string | null,
+  options: { workspaceId?: string | null | undefined } = {},
+): ResearchTreeSummary[] {
+  const rows = db
+    .select({ tree: trees })
+    .from(trees)
+    .where(
+      and(
+        eq(trees.visibility, "public"),
+        isNull(trees.trashedAt),
+        isNull(trees.archivedAt),
+        options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
+      ),
+    )
+    .orderBy(desc(trees.updatedAt), asc(trees.id))
+    .limit(PUBLIC_LIST_LIMIT)
+    .all();
+  return summarize(
+    db,
+    rows.map(({ tree }) => ({
+      tree,
+      lastViewedAt: lastViewedAt(db, userId, tree.id),
+      member: userId === null ? null : memberRow(db, userId, tree.id),
+    })),
+    userId,
+  );
+}
+
+/** Counts, flags and per-person fields for listed rows, in their order. */
+function summarize(
+  db: SessionDatabase,
+  treeRows: readonly ListedRow[],
+  userId?: string | null,
+): ResearchTreeSummary[] {
   if (treeRows.length === 0) {
     return [];
   }
@@ -395,10 +622,17 @@ export function summaries(
     entry.latestSettlement = merge(entry.latestSettlement, row.latestSettlement);
     counts.set(row.treeId, entry);
   }
-  return treeRows.map(({ tree: row, lastViewedAt: viewedAt }) => {
+  return treeRows.map(({ tree: row, lastViewedAt: viewedAt, member }) => {
     const entry = counts.get(row.id);
     const unseen = (settledAt: number | null | undefined): boolean =>
       settledAt !== null && settledAt !== undefined && (viewedAt === null || settledAt > viewedAt);
+    const role: ResearchTreeRole =
+      member !== null
+        ? member.role
+        : userId === undefined || (userId !== null && row.ownerId === userId)
+          ? "owner"
+          : "viewer";
+    const trashedAt = role === "owner" ? row.trashedAt : (member?.trashedAt ?? null);
     return {
       id: row.id,
       title: row.title,
@@ -410,10 +644,13 @@ export function summaries(
       completedCount: entry?.completed ?? 0,
       cancelledCount: entry?.cancelled ?? 0,
       updatedAt: row.updatedAt,
-      archivedAt: row.archivedAt,
-      ...(row.trashedAt === null ? {} : { trashedAt: row.trashedAt }),
+      archivedAt: (role === "owner" ? null : member?.archivedAt) ?? row.archivedAt,
+      ...(trashedAt === null ? {} : { trashedAt }),
       hasUnseenUpdate: unseen(entry?.latestSettlement),
       hasUnseenFailure: unseen(entry?.latestFailure),
+      ownerId: row.ownerId,
+      visibility: row.visibility,
+      role,
     };
   });
 }
@@ -518,10 +755,45 @@ function setFlag(
 /** Viewing acknowledges unseen updates and failures, for this person only. */
 export function markViewed(db: SessionDatabase, userId: string, treeId: string): ResearchTree {
   return transact(db, (tx) => {
-    const row = requireTreeRow(tx, userId, treeId);
+    const row = requireTreeRow(tx, userId, treeId, "viewer");
     writeView(tx, userId, row.id, now());
     return treeFor(tx, userId, row);
   });
+}
+
+/**
+ * The caller's member row, for the per-person operations a member performs
+ * on a shared thread (Archive, Trash, leaving). Refused for the owner, who
+ * changes the thread itself, and for a reader who is not a member.
+ */
+export function requireMember(db: SessionDatabase, userId: string, treeId: string): TreeAccess {
+  const access = requireTreeAccess(db, userId, treeId, "viewer");
+  if (access.member === null) {
+    throw new TreeAccessError(ACCESS_MESSAGES.owner);
+  }
+  return access;
+}
+
+/** Sets or clears a member's own Archive or Trash flag. */
+export function setMemberFlag(
+  db: SessionDatabase,
+  userId: string,
+  treeId: string,
+  patch: Partial<Pick<MemberRow, "archivedAt" | "trashedAt">>,
+): ResearchTree {
+  if (Object.keys(patch).length > 0) {
+    db.update(treeMembers)
+      .set(patch)
+      .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
+      .run();
+  }
+  return treeFor(db, userId, requireTreeRow(db, userId, treeId, "viewer"));
+}
+
+/** The caller's role in the thread, when they may read it; for the
+ * procedures that act differently for the owner and for a member. */
+export function roleOf(db: SessionDatabase, userId: string, treeId: string): TreeRole {
+  return requireTreeAccess(db, userId, treeId, "viewer").role;
 }
 
 /** Where Home lists a tree: the Trash, the Archive, Drafts, a folder outside
@@ -630,6 +902,15 @@ function unarchiveRow(db: SessionDatabase, userId: string, row: TreeRow): Resear
  */
 export function archiveGroup(db: SessionDatabase, userId: string, treeId: string): TreeGroupChange {
   return transact(db, (tx) => {
+    if (roleOf(tx, userId, treeId) !== "owner") {
+      // A member's Archive is their own: the thread alone, for them alone.
+      requireMember(tx, userId, treeId);
+      return {
+        tree: setMemberFlag(tx, userId, treeId, { archivedAt: now() }),
+        children: [],
+        removedFeedItems: [],
+      };
+    }
     const row = requireTreeRow(tx, userId, treeId);
     rejectTrashed(row);
     const childRows = groupChildren(tx, row);
@@ -648,6 +929,16 @@ export function archive(db: SessionDatabase, userId: string, treeId: string): Re
  * first, so that the parent ends up at position 0. */
 export function restoreGroup(db: SessionDatabase, userId: string, treeId: string): TreeGroupChange {
   return transact(db, (tx) => {
+    if (roleOf(tx, userId, treeId) !== "owner") {
+      // Clears the member's own Archive; a thread its owner archived stays
+      // archived for everyone until the owner restores it.
+      requireMember(tx, userId, treeId);
+      return {
+        tree: setMemberFlag(tx, userId, treeId, { archivedAt: null }),
+        children: [],
+        removedFeedItems: [],
+      };
+    }
     const row = requireTreeRow(tx, userId, treeId);
     rejectTrashed(row);
     const children = groupChildren(tx, row).map((child) => unarchiveRow(tx, userId, child));
@@ -672,7 +963,7 @@ export function trashRow(
   if (row.trashedAt !== null) {
     return treeFor(db, userId, row);
   }
-  const tree = setFlag(db, userId, row.id, { trashedAt: at });
+  const tree = setFlag(db, userId, row.id, { trashedAt: at, trashedBy: userId });
   removeResearchTree(db, row.id);
   return tree;
 }
@@ -690,7 +981,7 @@ export function untrashRow(db: SessionDatabase, userId: string, row: TreeRow): R
       and(sectionPredicate(userId, row.workspaceId, archived), gte(trees.position, row.position)),
     )
     .run();
-  const tree = setFlag(db, userId, row.id, { trashedAt: null });
+  const tree = setFlag(db, userId, row.id, { trashedAt: null, trashedBy: null });
   markArchived(db, row.id, archived);
   return tree;
 }
@@ -703,6 +994,31 @@ export interface RemovedTrees {
   trashed: boolean;
   /** Their Home feed rows, for `feed.item.removed`. */
   removedFeedItems: FeedItemDescriptor[];
+  /** True when the caller was a member and left the thread instead: nothing
+   * was deleted, and only the caller no longer has it. */
+  left?: boolean;
+}
+
+/**
+ * Removes the caller's membership of a shared thread (`sharing.leave`, and
+ * Delete or Empty Trash by a member). Their nodes and highlights stay in the
+ * thread. Returns the member row that was removed.
+ */
+export function leave(db: SessionDatabase, userId: string, treeId: string): MemberRow {
+  return transact(db, (tx) => {
+    const access = requireMember(tx, userId, treeId);
+    tx.delete(treeMembers)
+      .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
+      .run();
+    tx.delete(treeSubscriptions)
+      .where(and(eq(treeSubscriptions.treeId, treeId), eq(treeSubscriptions.userId, userId)))
+      .run();
+    tx.delete(collapsedGroups)
+      .where(and(eq(collapsedGroups.treeId, treeId), eq(collapsedGroups.userId, userId)))
+      .run();
+    // `requireMember` refuses a caller without a row.
+    return access.member as MemberRow;
+  });
 }
 
 /**
@@ -714,6 +1030,18 @@ export interface RemovedTrees {
  */
 export function remove(db: SessionDatabase, userId: string, treeId: string): RemovedTrees {
   return transact(db, (tx) => {
+    const access = requireTreeAccess(tx, userId, treeId, "viewer");
+    if (access.role !== "owner") {
+      // A member's Delete is leaving: the thread stays for everyone else.
+      const member = leave(tx, userId, treeId);
+      return {
+        workspaceId: access.tree.workspaceId,
+        treeIds: [treeId],
+        trashed: member.trashedAt !== null,
+        removedFeedItems: [],
+        left: true,
+      };
+    }
     const row = requireTreeRow(tx, userId, treeId);
     const group = [...groupChildren(tx, row), row];
     const ids = group.map((member) => member.id);

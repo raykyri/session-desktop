@@ -1,5 +1,6 @@
-// Toasts. Client code pushes them through `lib/toast.ts`; the server emits no
-// notification events yet (`03-api-and-events.md` §3). `NotificationStack`
+// Toasts. Client code pushes them through `lib/toast.ts`; the event bridge
+// pushes the server's `notification.requested` (`api/events.ts`,
+// `03-api-and-events.md` §3). `NotificationStack`
 // renders at most the first three and the list is capped at twenty so a burst
 // cannot grow without bound.
 

@@ -21,6 +21,7 @@ import { EventBus } from "../src/events/bus.js";
 import type { Logger } from "../src/logger.js";
 import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
+import { treeDirectory } from "../src/research/access.js";
 import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
 import { createAppContext } from "../src/trpc/base.js";
@@ -95,7 +96,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     rmSync(directory, { recursive: true, force: true });
   });
   const logger = createLogger({ level: "error", write: () => undefined });
-  const eventBus = new EventBus();
+  const eventBus = new EventBus(treeDirectory(db));
   const runs = createNoopRunsService();
   const limiter = new RateLimiter();
   const base = {

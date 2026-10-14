@@ -13,6 +13,7 @@
 
 import type { SessionDatabase } from "@session/db";
 import {
+  access as accessRepo,
   messages as messagesRepo,
   nodes as nodesRepo,
   preferences as preferencesRepo,
@@ -175,8 +176,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     return seq;
   };
+  // A run's events go to everyone reading its thread, and to its asker.
   const emit = (type: string, payload: Record<string, unknown>): void => {
-    eventBus.emit(userId, sessionEvent(type, payload));
+    eventBus.emitToTree(node.treeId, sessionEvent(type, payload), [userId]);
   };
   const publishNode = (
     updated: ResearchNode,
@@ -619,8 +621,12 @@ function settleFailure(
     node = nodesRepo.get(db, userId, nodeId);
   }
   const next = runsRepo.advanceSeq(db, userId, nodeId, (seq ?? 0) + 1);
-  eventBus.emit(
-    userId,
+  const treeId = accessRepo.nodeTreeId(db, nodeId);
+  const emit = (event: ReturnType<typeof sessionEvent>): void => {
+    if (treeId === null) eventBus.emit(userId, event);
+    else eventBus.emitToTree(treeId, event, [userId]);
+  };
+  emit(
     sessionEvent("research.run.finished", {
       nodeId,
       attempt,
@@ -630,7 +636,7 @@ function settleFailure(
     }),
   );
   if (node) {
-    eventBus.emit(userId, sessionEvent("research.node.updated", { node }));
+    emit(sessionEvent("research.node.updated", { node }));
     emitFeedItemUpsertedForNode(deps, node.id);
   }
 }

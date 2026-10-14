@@ -14,17 +14,19 @@
 // desktop, where the client sets the folder's `trashedAt`. Emptying the Trash
 // deletes both kinds.
 //
-// Phase 5: the Trash is per person and private. Today only the owner can
-// reach a thread, so the owner's Trash is the thread's `trashed_at`. When
-// members arrive, a member moving a shared thread to the Trash hides it for
-// that member alone (a per-person row), and only the owner's Trash sets
-// `trashed_at` and hides it for everyone.
+// The Trash is per person and private. The owner's Trash is the thread's
+// `trashed_at` (and `trashed_by`), which hides the thread from everyone else
+// until the owner restores it. A member's Trash is `trashed_at` on their
+// member row: the thread is listed only in their Trash and nothing changes
+// for anyone else. Emptying the Trash deletes the owner's threads and makes
+// the member leave the shared ones.
 
 import type { ResearchTree, ResearchTreeSummary } from "@session/shared";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
+import { treeMembers } from "../schema/collaboration.js";
 import { collapsedPlaces, folders } from "../schema/folders.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
@@ -36,7 +38,11 @@ import {
   deleteTreeRows,
   feedItemsOf,
   groupChildren,
+  leave,
+  requireMember,
   requireTreeRow,
+  roleOf,
+  setMemberFlag,
   summaries,
   trashRow,
   untrashRow,
@@ -59,8 +65,11 @@ export interface TrashChange {
 
 /** What `empty` deleted. */
 export interface EmptiedTrash {
+  /** The trees gone from the caller's Trash: deleted, or left. */
   treeIds: string[];
   folderIds: string[];
+  /** Of `treeIds`, the shared threads the caller left. */
+  leftTreeIds: string[];
 }
 
 /** Trees among `treeIds` with a run the server still owns: queued, running,
@@ -96,6 +105,17 @@ export function list(
  */
 export function trashTree(db: SessionDatabase, userId: string, treeId: string): TrashChange {
   return transact(db, (tx) => {
+    if (roleOf(tx, userId, treeId) !== "owner") {
+      // A member's Trash is theirs alone and does not wait for runs.
+      const access = requireMember(tx, userId, treeId);
+      const changed = access.member?.trashedAt === null;
+      return {
+        tree: setMemberFlag(tx, userId, treeId, changed ? { trashedAt: now() } : {}),
+        children: [],
+        changedTreeIds: changed ? [treeId] : [],
+        removedFeedItems: [],
+      };
+    }
     const row = requireTreeRow(tx, userId, treeId);
     const children = groupChildren(tx, row);
     const group = [row, ...children];
@@ -123,6 +143,16 @@ export function trashTree(db: SessionDatabase, userId: string, treeId: string): 
  * folder (or Drafts, Unfiled or the Archive) at its old position. */
 export function restoreTree(db: SessionDatabase, userId: string, treeId: string): TrashChange {
   return transact(db, (tx) => {
+    if (roleOf(tx, userId, treeId) !== "owner") {
+      const access = requireMember(tx, userId, treeId);
+      const changed = access.member?.trashedAt !== null;
+      return {
+        tree: setMemberFlag(tx, userId, treeId, { trashedAt: null }),
+        children: [],
+        changedTreeIds: changed ? [treeId] : [],
+        removedFeedItems: [],
+      };
+    }
     const row = requireTreeRow(tx, userId, treeId);
     const children = groupChildren(tx, row);
     const changedTreeIds = [row, ...children]
@@ -161,6 +191,17 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
     const active = activeTreeIds(tx, trashedTreeIds);
     const treeIds = trashedTreeIds.filter((id) => !active.has(id)).sort();
     deleteTreeRows(tx, treeIds);
+    // Shared threads in the caller's own Trash: they leave them.
+    const leftTreeIds = tx
+      .select({ treeId: treeMembers.treeId })
+      .from(treeMembers)
+      .where(and(eq(treeMembers.userId, userId), isNotNull(treeMembers.trashedAt)))
+      .all()
+      .map((row) => row.treeId)
+      .sort();
+    for (const treeId of leftTreeIds) {
+      leave(tx, userId, treeId);
+    }
     const folderIds = tx
       .select({ id: folders.id })
       .from(folders)
@@ -185,6 +226,6 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
         )
         .run();
     }
-    return { treeIds, folderIds };
+    return { treeIds: [...treeIds, ...leftTreeIds], folderIds, leftTreeIds };
   });
 }

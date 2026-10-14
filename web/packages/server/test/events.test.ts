@@ -168,3 +168,60 @@ test("a reused connection id replaces the older stream rather than unseating the
   second.close();
   t.is(bus.connectionCount("user-1"), 0);
 });
+
+test("emitToTree reaches the owner, the members and declared public readers", async (t) => {
+  let isPublic = false;
+  let now = 1_000;
+  const bus = new EventBus(
+    {
+      audience: () => ({ ownerId: "owner", memberIds: ["member"], public: isPublic }),
+      viewer: (userId) => ({ userId, login: userId, name: null, avatarUrl: null }),
+    },
+    { now: () => now },
+  );
+  const owner = bus.subscribe("owner", "o");
+  const member = bus.subscribe("member", "m");
+  const reader = bus.subscribe("reader", "r");
+  const watcher = bus.subscribe("watcher", "w");
+  bus.setInterest("watcher", "w", [], ["tree-1"]);
+  bus.setInterest("reader", "r", [], ["tree-1"]);
+  t.deepEqual(
+    bus.viewers("tree-1").map((viewer) => viewer.userId),
+    ["reader", "watcher"],
+  );
+  // A declaration that is not renewed lapses; renewing keeps it.
+  now += 60_000;
+  bus.setInterest("reader", "r", [], ["tree-1"]);
+  now += 40_000;
+  bus.expirePresence();
+  t.deepEqual(
+    bus.viewers("tree-1").map((viewer) => viewer.userId),
+    ["reader"],
+  );
+  watcher.close();
+  const ownerEvents = drain(owner, 4);
+  const memberEvents = drain(member, 4);
+
+  bus.emitToTree("tree-1", sessionEvent("research.node.updated", { node: { id: "n" } }));
+  isPublic = true;
+  const readerEvents = drain(reader, 1);
+  bus.emitToTree("tree-1", sessionEvent("research.tree.updated", { tree: { id: "tree-1" } }));
+
+  // Presence changes (two arrivals, one lapse) reached the audience before
+  // the node update; the reader got nothing while the thread was private.
+  t.deepEqual(
+    (await ownerEvents).map((event) => event.type),
+    [
+      "research.presence.changed",
+      "research.presence.changed",
+      "research.presence.changed",
+      "research.node.updated",
+    ],
+  );
+  t.deepEqual((await memberEvents).map((event) => event.type).at(-1), "research.node.updated");
+  t.deepEqual(
+    (await readerEvents).map((event) => event.type),
+    ["research.tree.updated"],
+  );
+  bus.closeAll();
+});

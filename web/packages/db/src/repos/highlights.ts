@@ -25,7 +25,13 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { highlightOwnedBy, nodeOwnedBy, rejectTrashedNode } from "./access.js";
+import {
+  ACCESS_MESSAGES,
+  TreeAccessError,
+  highlightReadableBy,
+  rejectTrashedNode,
+  requireNodeAccess,
+} from "./access.js";
 import { rowPrompt, toResearchHighlight } from "./mappers.js";
 
 /** Shown when an anchor was captured against an answer that has since been
@@ -35,13 +41,13 @@ export const REVISION_MISMATCH =
 
 export function listForNode(
   db: SessionDatabase,
-  userId: string,
+  userId: string | null,
   nodeId: string,
 ): ResearchHighlight[] {
   return db
     .select()
     .from(highlights)
-    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightReadableBy(userId), eq(highlights.nodeId, nodeId)))
     .orderBy(asc(highlights.createdAt), asc(highlights.id))
     .all()
     .map(toResearchHighlight);
@@ -65,14 +71,9 @@ export function create(
 ): ResearchHighlight {
   validateHighlightAnchor(anchor);
   return transact(db, (tx) => {
-    const node = tx
-      .select({ id: nodes.id })
-      .from(nodes)
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
-      .get();
-    if (!node) {
-      throw new Error(`research node ${nodeId} was not found`);
-    }
+    // Highlights are shared: a commenter saves them for everyone who reads
+    // the thread.
+    requireNodeAccess(tx, userId, nodeId, "commenter");
     rejectTrashedNode(tx, nodeId);
     const snapshot = tx
       .select({ revision: responseSnapshots.revision })
@@ -88,7 +89,7 @@ export function create(
         `Maximum highlight limit reached: each response allows up to ${MAX_RESEARCH_HIGHLIGHTS_PER_NODE} highlights.`,
       );
     }
-    const candidate: ResearchHighlight = { id, anchor, createdAt: now() };
+    const candidate: ResearchHighlight = { id, anchor, createdAt: now(), authorId: userId };
     const added = highlightStorageBytes(candidate);
     const nodeBytes = existing.reduce(
       (total, highlight) => total + highlightStorageBytes(highlight),
@@ -128,24 +129,55 @@ export function userStorageBytes(db: SessionDatabase, userId: string): number {
     .reduce((total, row) => total + highlightStorageBytes(toResearchHighlight(row)), 0);
 }
 
+/**
+ * Refuses a commenter removing highlights someone else saved; the owner may
+ * remove any. A highlight id not on the node is left to the caller.
+ */
+function assertMayRemove(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  highlightIds: readonly string[],
+): void {
+  const access = requireNodeAccess(db, userId, nodeId, "commenter");
+  if (access.role === "owner") {
+    return;
+  }
+  const foreign = db
+    .select({ id: highlights.id })
+    .from(highlights)
+    .where(
+      and(
+        eq(highlights.nodeId, nodeId),
+        inArray(highlights.id, [...highlightIds]),
+        sql`(${highlights.authorId} is null or ${highlights.authorId} <> ${userId})`,
+      ),
+    )
+    .get();
+  if (foreign) {
+    throw new TreeAccessError(ACCESS_MESSAGES.ownHighlight);
+  }
+}
+
 export function remove(
   db: SessionDatabase,
   userId: string,
   nodeId: string,
   highlightId: string,
 ): ResearchHighlight {
-  rejectTrashedNode(db, nodeId);
-  const row = db
-    .delete(highlights)
-    .where(
-      and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId), eq(highlights.id, highlightId)),
-    )
-    .returning()
-    .get();
-  if (!row) {
-    throw new Error(`research highlight ${highlightId} was not found`);
-  }
-  return toResearchHighlight(row);
+  return transact(db, (tx) => {
+    assertMayRemove(tx, userId, nodeId, [highlightId]);
+    rejectTrashedNode(tx, nodeId);
+    const row = tx
+      .delete(highlights)
+      .where(and(eq(highlights.nodeId, nodeId), eq(highlights.id, highlightId)))
+      .returning()
+      .get();
+    if (!row) {
+      throw new Error(`research highlight ${highlightId} was not found`);
+    }
+    return toResearchHighlight(row);
+  });
 }
 
 export function removeMany(
@@ -157,19 +189,16 @@ export function removeMany(
   if (highlightIds.length === 0) {
     return [];
   }
-  rejectTrashedNode(db, nodeId);
-  return db
-    .delete(highlights)
-    .where(
-      and(
-        highlightOwnedBy(userId),
-        eq(highlights.nodeId, nodeId),
-        inArray(highlights.id, highlightIds),
-      ),
-    )
-    .returning()
-    .all()
-    .map(toResearchHighlight);
+  return transact(db, (tx) => {
+    assertMayRemove(tx, userId, nodeId, highlightIds);
+    rejectTrashedNode(tx, nodeId);
+    return tx
+      .delete(highlights)
+      .where(and(eq(highlights.nodeId, nodeId), inArray(highlights.id, highlightIds)))
+      .returning()
+      .all()
+      .map(toResearchHighlight);
+  });
 }
 
 /** Every highlight on a node, removed at once — what a markdown rewrite does
@@ -177,7 +206,7 @@ export function removeMany(
 export function removeAllForNode(db: SessionDatabase, userId: string, nodeId: string): number {
   return db
     .delete(highlights)
-    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightReadableBy(userId), eq(highlights.nodeId, nodeId)))
     .returning({ id: highlights.id })
     .all().length;
 }
@@ -241,11 +270,12 @@ export function feed(
 }
 
 /** Number of highlights associated with a node for UI limit reporting. */
-export function countForNode(db: SessionDatabase, userId: string, nodeId: string): number {
+export function countForNode(db: SessionDatabase, userId: string | null, nodeId: string): number {
   const row = db
     .select({ value: sql<number>`count(*)` })
     .from(highlights)
-    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightReadableBy(userId), eq(highlights.nodeId, nodeId)))
+
     .get();
   return row?.value ?? 0;
 }

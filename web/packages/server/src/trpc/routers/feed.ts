@@ -6,7 +6,6 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { protectedProcedure, publicProcedure, router } from "../base.js";
-import { catalogUserId } from "../catalog.js";
 import { repo } from "../errors.js";
 
 export const feedRouter = router({
@@ -47,8 +46,10 @@ export const feedRouter = router({
         .optional(),
     )
     .query(({ ctx, input }) => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) return { items: [], nextCursor: null };
+      // The caller's own questions and notes; a guest reads All Users
+      // (`recentActivity`).
+      if (ctx.user === null) return { items: [], nextCursor: null };
+      const userId = ctx.user.id;
       return repo(() =>
         feeds.recentQueries(ctx.db, userId, {
           workspaceId: input?.workspaceId ?? null,
@@ -58,9 +59,10 @@ export const feedRouter = router({
       );
     }),
 
-  /** The root entries of the signed-in account's named threads, for the Home
+  /** The root entries of named threads the caller may read, for the Home
    * cards the newest feed page did not include (the desktop's
    * `list_recent_activity_for_trees`). */
+
   recentQueriesForTrees: protectedProcedure
     .input(z.object({ treeIds: z.array(z.string()).max(feeds.MAX_FEED_TREE_IDS) }))
     .query(({ ctx, input }) =>

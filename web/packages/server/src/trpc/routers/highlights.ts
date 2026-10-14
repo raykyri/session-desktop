@@ -11,10 +11,22 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { emitFeedItemUpsertedForNode } from "../../events/feed.js";
+import { requireNodeRole, treeIdOfNode } from "../../research/access.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
-import { catalogUserId } from "../catalog.js";
-import { publish } from "../emit.js";
+import type { EmitterContext } from "../emit.js";
+import { publishToTree } from "../emit.js";
 import { repo, required } from "../errors.js";
+
+/** A node event to the audience of the node's thread. */
+function publishForNode(
+  ctx: EmitterContext,
+  nodeId: string,
+  type: string,
+  payload: Record<string, unknown>,
+): void {
+  const treeId = treeIdOfNode(ctx.db, nodeId);
+  if (treeId !== null) publishToTree(ctx, treeId, type, payload);
+}
 
 export const highlightsRouter = router({
   create: protectedProcedure
@@ -23,7 +35,10 @@ export const highlightsRouter = router({
       const highlight = repo(() =>
         highlights.create(ctx.db, ctx.user.id, input.nodeId, input.anchor),
       );
-      publish(ctx, "research.highlight.created", { nodeId: input.nodeId, highlight });
+      publishForNode(ctx, input.nodeId, "research.highlight.created", {
+        nodeId: input.nodeId,
+        highlight,
+      });
       return highlight;
     }),
 
@@ -35,7 +50,7 @@ export const highlightsRouter = router({
       );
       // The desktop has no single-highlight event; one removal is a list of
       // one.
-      publish(ctx, "research.highlights.removed", {
+      publishForNode(ctx, input.nodeId, "research.highlights.removed", {
         nodeId: input.nodeId,
         highlightIds: [input.highlightId],
       });
@@ -45,9 +60,8 @@ export const highlightsRouter = router({
   removeMany: protectedProcedure
     .input(z.object({ nodeId: z.string(), highlightIds: z.array(z.string()) }))
     .mutation(({ ctx, input }) => {
-      // The delete is already scoped to the account, so a foreign id removes
-      // nothing; the node is checked so the *answer* matches `remove`'s —
-      // `NOT_FOUND` for someone else's node rather than a silent empty list
+      // The node is checked so the *answer* matches `remove`'s — `NOT_FOUND`
+      // for a node the caller cannot read rather than a silent empty list
       // that reads like a successful no-op (`06-auth-and-users.md` §4).
       required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
@@ -56,7 +70,7 @@ export const highlightsRouter = router({
       const removed = repo(() =>
         highlights.removeMany(ctx.db, ctx.user.id, input.nodeId, input.highlightIds),
       );
-      publish(ctx, "research.highlights.removed", {
+      publishForNode(ctx, input.nodeId, "research.highlights.removed", {
         nodeId: input.nodeId,
         highlightIds: removed.map((highlight) => highlight.id),
       });
@@ -66,8 +80,9 @@ export const highlightsRouter = router({
   listFeed: publicProcedure
     .input(z.object({ workspaceId: z.string().optional() }).optional())
     .query(({ ctx, input }) => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) return [];
+      // The caller's own threads; a guest has none.
+      if (ctx.user === null) return [];
+      const userId = ctx.user.id;
       return repo(() => highlights.feed(ctx.db, userId, input?.workspaceId ?? null));
     }),
 });
@@ -92,8 +107,14 @@ export const recapsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Recaps are shared, and the requester pays for this one: a commenter
+      // or the owner, refused before the run.
+      const { tree } = requireNodeRole(ctx, input.nodeId, "commenter");
       const instructions = repo(() => validateRecapInstructions(input.instructions));
-      publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: true });
+      publishToTree(ctx, tree.id, "research.recap.pending", {
+        nodeId: input.nodeId,
+        pending: true,
+      });
       try {
         const candidate = await ctx.runs.requestRecapCandidate(
           ctx.user.id,
@@ -117,7 +138,10 @@ export const recapsRouter = router({
         });
       } finally {
         // Every exit path settles the flag (`04-agent-runtime.md` §9).
-        publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: false });
+        publishToTree(ctx, tree.id, "research.recap.pending", {
+          nodeId: input.nodeId,
+          pending: false,
+        });
       }
     }),
 
@@ -144,10 +168,14 @@ export const recapsRouter = router({
           candidate: issued ?? input.candidate,
         }),
       );
-      publish(ctx, "research.node.updated", { node });
+      publishToTree(ctx, node.treeId, "research.node.updated", { node });
       emitFeedItemUpsertedForNode(ctx, node.id);
       // Every exit path settles the pending flag (`04-agent-runtime.md` §9).
-      publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: false });
+      publishToTree(ctx, node.treeId, "research.recap.pending", {
+        nodeId: input.nodeId,
+        pending: false,
+      });
+
       return node;
     }),
 });

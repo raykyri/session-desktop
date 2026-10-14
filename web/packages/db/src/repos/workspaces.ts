@@ -12,7 +12,6 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
 import { removeResearchTree } from "./feedgen.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
 import { activeRun, deleteNodesOfTrees } from "./subtrees.js";
@@ -126,7 +125,7 @@ export function remove(
       .select({ id: nodes.id })
       .from(nodes)
       .innerJoin(trees, eq(trees.id, nodes.treeId))
-      .where(and(nodeOwnedBy(userId), eq(trees.workspaceId, workspaceId), activeRun()))
+      .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), activeRun()))
       .get();
     if (active) {
       throw new Error("Cannot delete workspace: all active research runs must be cancelled first.");

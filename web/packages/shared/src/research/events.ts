@@ -8,6 +8,7 @@
 import { parseResearchEvent } from "../lib/researchEvents.js";
 import { isTurn } from "../schemas/turn.js";
 import type { ModelInfo, ModelProvider } from "../types/account.js";
+import type { NotificationPayload, ThreadViewer } from "../types/sharing.js";
 import type {
   ParsedResearchEvent,
   ResearchNodeContent,
@@ -79,10 +80,51 @@ interface ModelsUpdatedEvent {
 export type ResearchRunEvent =
   RunStartedEvent | RunThinkingEvent | TurnDeltaEvent | TurnCommittedEvent | RunFinishedEvent;
 
+/** A server notification for this person: a run they asked finished, a new
+ * question or note in a thread they follow, a branch from their answer, an
+ * invitation. In-app only; there is no inbox. */
+export interface NotificationRequestedEvent {
+  type: "notification.requested";
+  notification: NotificationPayload;
+  timestamp: number;
+}
+
+/** Who has a thread open changed. */
+export interface ResearchPresenceChangedEvent {
+  type: "research.presence.changed";
+  treeId: string;
+  viewers: ThreadViewer[];
+  timestamp: number;
+}
+
+/** The caller's access to a thread, or its members or visibility, changed:
+ * lists and the thread refetch. */
+export interface ResearchSharingChangedEvent {
+  type: "research.sharing.changed";
+  treeId: string;
+  timestamp: number;
+}
+
+/** An invitation addressed to the caller's login was created. */
+export interface ResearchInvitesChangedEvent {
+  type: "research.invites.changed";
+  treeId: string;
+  timestamp: number;
+}
+
+/** The web's collaboration events (`03-api-and-events.md` §3). */
+export type CollaborationEvent =
+  | NotificationRequestedEvent
+  | ResearchPresenceChangedEvent
+  | ResearchSharingChangedEvent
+  | ResearchInvitesChangedEvent;
+
 /** Every event this build can apply: the desktop's research events, the run
- * events and `models.updated`. A closed union, so a new server event takes
- * the explicit recovery path until its client effects are implemented. */
-export type ParsedSessionEvent = ParsedResearchEvent | ResearchRunEvent | ModelsUpdatedEvent;
+ * events, `models.updated` and the collaboration events. A closed union, so a
+ * new server event takes the explicit recovery path until its client effects
+ * are implemented. */
+export type ParsedSessionEvent =
+  ParsedResearchEvent | ResearchRunEvent | ModelsUpdatedEvent | CollaborationEvent;
 
 export type SessionEventParseResult =
   | { kind: "event"; event: ParsedSessionEvent }
@@ -180,12 +222,98 @@ function parseRunEvent(
   }
 }
 
+const NOTIFICATION_TONES = new Set(["info", "success", "warning", "error"]);
+const NOTIFICATION_KINDS = new Set(["runFinished", "followUp", "branch", "invite"]);
+
+/** Narrows a `notification.requested` payload. Anything missing a required
+ * field is refused rather than shown as a half-empty toast. */
+function notificationOf(payload: Record<string, unknown>): NotificationPayload | null {
+  const { id, title, body, tone, timeoutMs, createdAt, href, kind, treeId } = payload;
+  if (
+    typeof id !== "string" ||
+    typeof title !== "string" ||
+    typeof body !== "string" ||
+    !isFiniteNumber(timeoutMs) ||
+    !isFiniteNumber(createdAt)
+  ) {
+    return null;
+  }
+  return {
+    id,
+    title,
+    body,
+    tone:
+      typeof tone === "string" && NOTIFICATION_TONES.has(tone)
+        ? (tone as NotificationPayload["tone"])
+        : "info",
+    timeoutMs,
+    createdAt,
+    ...(typeof href === "string" && href.startsWith("/") ? { href } : {}),
+    ...(typeof kind === "string" && NOTIFICATION_KINDS.has(kind)
+      ? { kind: kind as NonNullable<NotificationPayload["kind"]> }
+      : {}),
+    ...(typeof treeId === "string" ? { treeId } : {}),
+  };
+}
+
+function isViewer(value: unknown): value is ThreadViewer {
+  return (
+    isRecord(value) &&
+    typeof value.userId === "string" &&
+    typeof value.login === "string" &&
+    (value.name === null || typeof value.name === "string") &&
+    (value.avatarUrl === null || typeof value.avatarUrl === "string")
+  );
+}
+
+/** The collaboration events, or undefined for another type. */
+function parseCollaborationEvent(event: SessionEvent): SessionEventParseResult | undefined {
+  const { type, payload, timestamp } = event;
+  if (
+    type !== "notification.requested" &&
+    type !== "research.presence.changed" &&
+    type !== "research.sharing.changed" &&
+    type !== "research.invites.changed"
+  ) {
+    return undefined;
+  }
+  if (!isFiniteNumber(timestamp) || !isRecord(payload)) {
+    return { kind: "malformed", type };
+  }
+  switch (type) {
+    case "notification.requested": {
+      const notification = notificationOf(payload);
+      return notification
+        ? { kind: "event", event: { type, notification, timestamp } }
+        : { kind: "malformed", type };
+    }
+    case "research.presence.changed":
+      return typeof payload.treeId === "string" &&
+        Array.isArray(payload.viewers) &&
+        payload.viewers.every(isViewer)
+        ? {
+            kind: "event",
+            event: { type, treeId: payload.treeId, viewers: payload.viewers, timestamp },
+          }
+        : { kind: "malformed", type };
+    case "research.sharing.changed":
+    case "research.invites.changed":
+      return typeof payload.treeId === "string"
+        ? { kind: "event", event: { type, treeId: payload.treeId, timestamp } }
+        : { kind: "malformed", type };
+  }
+}
+
 /**
  * Narrows a server event into the closed union the client's reducers accept.
- * Run events and `models.updated` are parsed here; every other research event
- * goes through the desktop's `parseResearchEvent`.
+ * Run events, `models.updated` and the collaboration events are parsed here;
+ * every other research event goes through the desktop's `parseResearchEvent`.
  */
 export function parseSessionEvent(event: SessionEvent): SessionEventParseResult {
+  const collaboration = parseCollaborationEvent(event);
+  if (collaboration !== undefined) {
+    return collaboration;
+  }
   if (event.type === "models.updated") {
     const models = isRecord(event.payload) ? event.payload.models : undefined;
     return isFiniteNumber(event.timestamp) && Array.isArray(models) && models.every(isModelInfo)

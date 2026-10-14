@@ -172,13 +172,17 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
   });
 
   app.get("/images/:id", async (c) => {
+    // Readable by whoever may read a thread that names the image, guests
+    // included for a public thread, and always by its uploader
+    // (`images.readable`).
     const user = c.get("user");
-    if (!user) {
-      return refuse(c, 401, "Authentication required. Sign in to continue.");
-    }
-    const row = images.get(deps.db, user.id, c.req.param("id"));
+    const row = images.readable(deps.db, user?.id ?? null, c.req.param("id"));
     if (!row) {
-      return refuse(c, 404, "Not found");
+      return refuse(
+        c,
+        user ? 404 : 401,
+        user ? "Not found" : "Authentication required. Sign in to continue.",
+      );
     }
     let bytes: Buffer;
     try {
@@ -205,7 +209,8 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        // An id names one immutable file; only its owner may read it.
+        // An id names one immutable file; who may read it depends on the
+        // threads that name it, so shared caches must not keep it.
         "Cache-Control": "private, max-age=31536000, immutable",
         "Content-Length": String(bytes.byteLength),
         "Cross-Origin-Resource-Policy": "same-origin",

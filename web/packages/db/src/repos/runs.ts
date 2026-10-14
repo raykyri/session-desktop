@@ -14,17 +14,17 @@ import { nodes } from "../schema/nodes.js";
 import { runAttempts, runTurns } from "../schema/runs.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodeReadableBy } from "./access.js";
 
 function requireNode(
   db: SessionDatabase,
-  userId: string,
+  userId: string | null,
   nodeId: string,
 ): typeof nodes.$inferSelect {
   const row = db
     .select()
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!row) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -178,7 +178,7 @@ export interface LiveWindow {
 
 /** The snapshot half of the streaming protocol for an active node
  * (`docs/05` §4). */
-export function liveWindow(db: SessionDatabase, userId: string, nodeId: string): LiveWindow {
+export function liveWindow(db: SessionDatabase, userId: string | null, nodeId: string): LiveWindow {
   const node = requireNode(db, userId, nodeId);
   const rows = db
     .select()

@@ -22,6 +22,7 @@ import { EventBus } from "./events/bus.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
+import { treeDirectory } from "./research/access.js";
 import { dispatchAll } from "./research/followups.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
@@ -92,6 +93,10 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
 
 /** Interval for removing expired sessions and state records. */
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
+
+/** How often presence drops open-thread declarations that were not renewed
+ * (`EventBus.expirePresence`). */
+const PRESENCE_SWEEP_MS = 15_000;
 
 /** How often the document archive is shipped (`13-deployment-fly.md` §6). */
 export const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -248,7 +253,12 @@ export function main(): RunningServer {
   writeVertexCredentials(config);
 
   const db = openDatabase(config.databasePath, { migrationsFolder: MIGRATIONS_DIRECTORY });
-  const eventBus = new EventBus();
+  // The bus reads a thread's audience from the database (`research/access.ts`).
+  const eventBus = new EventBus(treeDirectory(db));
+  const presence = setInterval(() => {
+    eventBus.expirePresence();
+  }, PRESENCE_SWEEP_MS);
+  presence.unref();
   // The agent loop is constructed before reconciliation so the nodes the last
   // process left behind are picked up by the claim loop as soon as they are
   // back in the queue (`05-run-lifecycle-and-streaming.md` §7).
@@ -307,6 +317,7 @@ export function main(): RunningServer {
     readiness.drain();
     clearInterval(maintenance);
     clearInterval(nightly);
+    clearInterval(presence);
     logger.info({ signal }, "shutting down");
     // Stop admitting first, then let open attempts persist their checkpoint
     // and mark themselves `interrupted` with `resume_pending`.

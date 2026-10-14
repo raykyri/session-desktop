@@ -1,13 +1,13 @@
 // `workspaces` and `folders` (`03-api-and-events.md` §2).
 
-import { feedItems, folders, workspaces } from "@session/db";
+import { feedItems, folders, sharing, workspaces } from "@session/db";
 import type { Workspace } from "@session/shared";
 import { emptyResearchFolderState, researchFolderStateSchema } from "@session/shared";
 import { z } from "zod";
 
+import { sessionEvent } from "../../events/bus.js";
 import { emitFeedItemRemoved } from "../../events/feed.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
-import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
@@ -26,9 +26,11 @@ function listWithCounts(
 }
 
 export const workspacesRouter = router({
+  /** The caller's workspaces; a guest has none (the guest catalog is
+   * `research.listTrees` and the All Users feed). */
   list: publicProcedure.query(({ ctx }) => {
-    const userId = catalogUserId(ctx);
-    if (userId === null) return [];
+    if (ctx.user === null) return [];
+    const userId = ctx.user.id;
     return repo(() => listWithCounts(ctx.db, userId));
   }),
 
@@ -67,10 +69,16 @@ export const workspacesRouter = router({
         `research workspace ${input.workspaceId} was not found`,
       );
       const removedFeedItems = feedItems.forWorkspace(ctx.db, input.workspaceId);
+      // The members of the threads going with the workspace, read while
+      // their rows exist.
+      const members = sharing.workspaceMembers(ctx.db, ctx.user.id, input.workspaceId);
       const result = repo(() => workspaces.remove(ctx.db, ctx.user.id, input.workspaceId));
       for (const item of removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
       for (const treeId of result.removedTreeIds) {
-        publish(ctx, "research.tree.removed", { treeId });
+        ctx.eventBus.emitToUsers(
+          [ctx.user.id, ...(members.get(treeId) ?? [])],
+          sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
+        );
       }
       publish(ctx, "research.folders.changed", { workspaceId: input.workspaceId });
       publish(ctx, "workspace.removed", { workspaceId: input.workspaceId });
@@ -101,8 +109,8 @@ export const workspacesRouter = router({
  * collapsed trays, nesting (`parents`) and collapsed groups. */
 export const foldersRouter = router({
   get: publicProcedure.input(z.object({ workspaceId: z.string() })).query(({ ctx, input }) => {
-    const userId = catalogUserId(ctx);
-    if (userId === null) return emptyResearchFolderState();
+    if (ctx.user === null) return emptyResearchFolderState();
+    const userId = ctx.user.id;
     return repo(() => folders.getState(ctx.db, userId, input.workspaceId));
   }),
 

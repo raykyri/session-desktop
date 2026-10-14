@@ -19,7 +19,7 @@ import {
 } from "@session/shared";
 import { reanchorResearchQuote } from "@session/shared/lib/researchAnchors";
 import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -29,7 +29,13 @@ import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now, strictlyAfter } from "../time.js";
 
-import { nodeOwnedBy, rejectTrashed, rejectTrashedNode } from "./access.js";
+import {
+  assertMayEditText,
+  rejectTrashed,
+  rejectTrashedNode,
+  requireNodeAccess,
+} from "./access.js";
+import type { NodeAccess, TreeRole } from "./access.js";
 import { imageIdsOf, markAttached } from "./images.js";
 import { toResearchHighlight } from "./mappers.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
@@ -95,8 +101,9 @@ export function admitFollowUpNote(
 ): ResearchNode {
   const body = noteText(text, "note cannot be empty");
   return transact(db, (tx) => {
-    // Ownership first, so a foreign id is not found rather than refused.
-    if (getNode(tx, userId, parentNodeId)) rejectTrashedNode(tx, parentNodeId);
+    // Access first, so a foreign id is not found rather than refused.
+    requireNodeAccess(tx, userId, parentNodeId, "commenter");
+    rejectTrashedNode(tx, parentNodeId);
     const node = admitChild(tx, userId, {
       parentNodeId,
       type: "post",
@@ -111,23 +118,19 @@ interface LoadedPost {
   node: NodeRow;
   tree: TreeRow;
   message: UserMessage;
+  access: NodeAccess;
 }
 
-/** A post `userId` may change: found, a post, and in a thread that is not in
- * the Trash. */
-function loadPost(db: SessionDatabase, userId: string, nodeId: string): LoadedPost {
-  const node = db
-    .select()
-    .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
-    .get();
-  if (!node) {
-    throw new Error(`research node ${nodeId} was not found`);
-  }
-  const tree = db.select().from(trees).where(eq(trees.id, node.treeId)).get();
-  if (!tree) {
-    throw new Error(`research tree ${node.treeId} was not found`);
-  }
+/** A post `userId` has at least `minimum` on: found, a post, and in a thread
+ * that is not in the Trash. */
+function loadPost(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  minimum: TreeRole = "viewer",
+): LoadedPost {
+  const access = requireNodeAccess(db, userId, nodeId, minimum);
+  const { node, tree } = access;
   if (node.type !== "post" || node.messageJson === null) {
     throw new Error("only a note can be edited");
   }
@@ -135,6 +138,7 @@ function loadPost(db: SessionDatabase, userId: string, nodeId: string): LoadedPo
   return {
     node,
     tree,
+    access,
     message: parseWireColumn<UserMessage>(
       userMessageSchema,
       node.messageJson,
@@ -178,7 +182,8 @@ export function updatePost(
 ): UpdatePostResult {
   const text = noteText(input.text, "the note cannot be empty");
   return transact(db, (tx) => {
-    const { node, tree, message } = loadPost(tx, userId, input.nodeId);
+    const { node, tree, message, access } = loadPost(tx, userId, input.nodeId, "commenter");
+    assertMayEditText(tx, access, userId);
     if (tree.archivedAt !== null) {
       throw new Error("restore archived research before editing its note");
     }
@@ -219,6 +224,7 @@ export function updatePost(
         messageJson: { ...message, text },
         format: postFormatOf(text),
         editedAt: at,
+        editedBy: userId,
       })
       .where(eq(nodes.id, node.id))
       .run();
@@ -267,7 +273,8 @@ export function replaceTweetAttachments(
   replacements: readonly ResearchMessageAttachment[],
 ): ResearchNode {
   return transact(db, (tx) => {
-    const { node, message: current } = loadPost(tx, userId, nodeId);
+    const { node, message: current } = loadPost(tx, userId, nodeId, "commenter");
+
     const byTweet = new Map(
       replacements.flatMap((attachment) =>
         attachment.kind === "tweet" ? [[attachment.tweetId, attachment] as const] : [],

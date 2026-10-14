@@ -1,16 +1,18 @@
-// Thread sharing. Phase 5 (collaboration) uses these tables; nothing reads or
-// writes them yet. They are in the initial migration because the database is
-// reset before the first deploy, which saves a second migration.
+// Thread sharing (`docs/02-domain-model-and-database.md` §3.5). The tables
+// are in the initial migration; `0001_collaboration` adds the per-member
+// Archive, Trash and folder columns and `trees.trashed_by`.
 
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+import { folders } from "./folders.js";
 import { trees } from "./trees.js";
 import { users } from "./users.js";
 
-const MEMBER_ROLES = ["commenter", "viewer"] as const;
+export const MEMBER_ROLES = ["commenter", "viewer"] as const;
 
-/** People a private thread is shared with. The owner is `trees.owner_id` and
- * has no row here. */
+/** People a thread is shared with. The owner is `trees.owner_id` and has no
+ * row here. A member's Archive, Trash and folder filing are per person and
+ * live on the member's row; the owner's are the tree's own columns. */
 export const treeMembers = sqliteTable(
   "tree_members",
   {
@@ -23,6 +25,13 @@ export const treeMembers = sqliteTable(
     role: text("role", { enum: MEMBER_ROLES }).notNull(),
     invitedBy: text("invited_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: integer("created_at").notNull(),
+    /** Set while the thread is in this member's Archive. */
+    archivedAt: integer("archived_at"),
+    /** Set while the thread is in this member's Trash: it is listed only
+     * there for them, and nothing changes for anyone else. */
+    trashedAt: integer("trashed_at"),
+    /** The member's own folder the thread is filed in; null is unfiled. */
+    folderId: text("folder_id").references(() => folders.id, { onDelete: "set null" }),
   },
   (table) => [
     primaryKey({ columns: [table.treeId, table.userId] }),

@@ -1,7 +1,17 @@
 import type { RecentActivityCursor, RecentActivityItem } from "@session/shared";
 import test from "ava";
 
-import { feedgen, feedItems, feeds, nodes, posts, trash, trees, workspaces } from "../src/index.js";
+import {
+  feedgen,
+  feedItems,
+  feeds,
+  nodes,
+  posts,
+  sharing,
+  trash,
+  trees,
+  workspaces,
+} from "../src/index.js";
 
 import { addUser, createFixture } from "./helpers.js";
 
@@ -155,7 +165,7 @@ test("feedgen materializes writes and removes archived or deleted sources", (t) 
   t.is(feedItems.forNode(fixture.db, "root-row"), null);
 });
 
-test("all, mine, and workspace scopes read one materialized stream", (t) => {
+test("all lists public threads only; mine and workspace read the caller's own", (t) => {
   const fixture = createFixture(t);
   const otherWorkspace = workspaces.create(fixture.db, fixture.userId, "Other");
   const stranger = addUser(fixture.db, "stranger-feed");
@@ -173,19 +183,31 @@ test("all, mine, and workspace scopes read one materialized stream", (t) => {
     agent: { model: "gemini-flash" },
     nodeId: "mine-elsewhere",
   });
-  trees.admitRoot(fixture.db, stranger.userId, {
+  const strangerRoot = trees.admitRoot(fixture.db, stranger.userId, {
     type: "exchange",
     workspaceId: stranger.workspaceId,
     message: { text: "Stranger root" },
     agent: { model: "gemini-flash" },
     nodeId: "stranger-root",
   });
+  trees.admitRoot(fixture.db, stranger.userId, {
+    type: "exchange",
+    workspaceId: stranger.workspaceId,
+    message: { text: "Stranger private" },
+    agent: { model: "gemini-flash" },
+    nodeId: "stranger-private",
+  });
+  sharing.setVisibility(fixture.db, stranger.userId, strangerRoot.tree.id, "public");
+  for (const detail of trees.summaries(fixture.db, fixture.userId)) {
+    sharing.setVisibility(fixture.db, fixture.userId, detail.id, "public");
+  }
 
   const all = feeds.recentActivity(fixture.db, null, { scope: "all", limit: 20 });
   t.deepEqual(
     all.items.map(itemId).sort(),
     ["mine-here", "mine-elsewhere", "stranger-root"].sort(),
   );
+
   const mine = feeds.recentActivity(fixture.db, fixture.userId, { scope: "mine", limit: 20 });
   t.deepEqual(mine.items.map(itemId).sort(), ["mine-here", "mine-elsewhere"].sort());
   const workspace = feeds.recentActivity(fixture.db, fixture.userId, {

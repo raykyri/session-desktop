@@ -1,6 +1,7 @@
 // Client-originated toasts (`10-home-feed-journal.md` §8): a copy confirmation
 // or a failed action. They are pushed to the notifications store past the
-// `showNotifications` preference check. The server emits no toasts yet.
+// `showNotifications` preference check, as the server's
+// `notification.requested` events are in `api/events.ts`.
 
 import { useNotificationsStore, type NotificationTone } from "../stores/notifications.js";
 import { useSettingsStore } from "../stores/settings.js";

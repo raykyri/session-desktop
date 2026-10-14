@@ -23,10 +23,11 @@ import {
   RESEARCH_DRAFTS_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
 } from "@session/shared/lib/researchFolders";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
+import { treeMembers } from "../schema/collaboration.js";
 import {
   collapsedGroups,
   collapsedPlaces,
@@ -219,6 +220,11 @@ export function getState(
       groups.push(row.treeId);
     }
   }
+  // Shared threads the caller filed in this workspace's folders (their own
+  // filing; the owner's stays the owner's).
+  for (const row of filedSharedTrees(db, userId, workspaceId)) {
+    membership[row.treeId] = row.folderId;
+  }
   const collapsed = db
     .select({ placeId: collapsedPlaces.placeId })
     .from(collapsedPlaces)
@@ -238,6 +244,30 @@ export function getState(
     parents,
     collapsedGroups: groups,
   };
+}
+
+/** The shared threads `userId` is a member of and filed in one of their
+ * folders of `workspaceId`. */
+function filedSharedTrees(
+  db: SessionDatabase,
+  userId: string,
+  workspaceId: string,
+): { treeId: string; folderId: string }[] {
+  return db
+    .select({ treeId: treeMembers.treeId, folderId: folders.id })
+    .from(treeMembers)
+    .innerJoin(folders, eq(folders.id, treeMembers.folderId))
+    .innerJoin(trees, eq(trees.id, treeMembers.treeId))
+    .where(
+      and(
+        eq(treeMembers.userId, userId),
+        eq(folders.ownerId, userId),
+        eq(folders.workspaceId, workspaceId),
+        isNull(trees.trashedAt),
+      ),
+    )
+    .orderBy(asc(treeMembers.treeId))
+    .all();
 }
 
 /** JSON with object keys sorted, for comparing two states. */
@@ -290,6 +320,17 @@ export function replaceState(
         .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId)))
         .all()
         .map((row) => row.id),
+    );
+    // Shared threads can be filed in the caller's own folders; their nesting
+    // and the owner's filing are the owner's.
+    const sharedTreeIds = new Set(
+      tx
+        .select({ treeId: treeMembers.treeId })
+        .from(treeMembers)
+        .innerJoin(trees, eq(trees.id, treeMembers.treeId))
+        .where(and(eq(treeMembers.userId, userId), isNull(trees.trashedAt)))
+        .all()
+        .map((row) => row.treeId),
     );
     const existingFolderIds = new Set(current.folders.map((folder) => folder.id));
     const candidateFolders = normalized.folders
@@ -385,8 +426,23 @@ export function replaceState(
         )
         .run();
     }
+    // A member's filing of a shared thread: set where the state files it in
+    // a kept folder, cleared where it was filed in this workspace and no
+    // longer is.
+    const filedBefore = new Set(filedSharedTrees(tx, userId, workspaceId).map((row) => row.treeId));
+    for (const treeId of sharedTreeIds) {
+      const place = normalized.membership[treeId];
+      const folderId = place !== undefined && keptFolderIds.has(place) ? place : null;
+      if (folderId !== null || filedBefore.has(treeId)) {
+        tx.update(treeMembers)
+          .set({ folderId })
+          .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
+          .run();
+      }
+    }
     for (const treeId of knownTreeIds) {
       const parentTreeId = parents[treeId] ?? null;
+
       if (parentTreeId !== (current.parents[treeId] ?? null)) {
         tx.update(trees).set({ parentTreeId }).where(eq(trees.id, treeId)).run();
       }

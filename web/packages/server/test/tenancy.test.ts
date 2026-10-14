@@ -1,354 +1,400 @@
-// Every mutating procedure, called by the wrong account
-// (`06-auth-and-users.md` §4, `03-api-and-events.md` §2).
+// Who may call what on a thread: a role × procedure matrix
+// (`06-auth-and-users.md` §4, `02-domain-model-and-database.md` §5.16).
 //
-// Cross-tenant resource queries return NOT_FOUND to prevent ID enumeration and unauthorized modifications.
+// Every procedure that names a thread, a node, a highlight or a member is
+// called by each kind of caller:
+// - `owner`: the thread's creator;
+// - `commenter` and `viewer`: members with that role;
+// - `reader`: a signed-in account that is not a member, on a public thread;
+// - `stranger`: a signed-in account that is not a member, on a private
+//   thread;
+// - `guest`: no session, on a public thread.
 //
-// Written as a table rather than as one test per procedure because the risk is
-// a procedure nobody thought about: a new mutation that takes an id has to be
-// added here, and the count assertion below is what makes leaving it out
-// visible.
+// The matrix checks access only. "ok" means the call got past the access
+// rules: it succeeded, or failed for another reason (a run still queued, a
+// stale revision). A role too low answers `FORBIDDEN`; a thread the caller
+// may not read answers `NOT_FOUND`, the same as an id that does not exist, so
+// a private id is never an existence oracle; a guest calling a signed-in
+// procedure answers `UNAUTHORIZED`. Each cell runs on a thread of its own.
 
-import { snapshots } from "@session/db";
-import type { SessionEvent } from "@session/shared";
-import type { TRPCError } from "@trpc/server";
+import type { SessionDatabase } from "@session/db";
+import { highlights, nodes, sharing, snapshots, trees, workspaces } from "@session/db";
+import type { User } from "@session/shared";
+import { TRPCError } from "@trpc/server";
 import test from "ava";
 
 import { anchorFor, answerTurn, createHarness, type Caller } from "./helpers.js";
 
-interface Owned {
-  workspaceId: string;
+type Role = "owner" | "commenter" | "viewer" | "reader" | "stranger" | "guest";
+
+type Outcome = "ok" | "FORBIDDEN" | "NOT_FOUND" | "UNAUTHORIZED";
+
+const ROLES: readonly Role[] = ["owner", "commenter", "viewer", "reader", "stranger", "guest"];
+
+interface Seeded {
   treeId: string;
-  nodeId: string;
-  childNodeId: string;
+  rootId: string;
+  childId: string;
   highlightId: string;
-  responseRevision: string;
+  revision: string;
+  viewerId: string;
 }
 
-/** Everything one account owns that another could name. */
-async function seedOwner(
-  harness: ReturnType<typeof createHarness>,
-  caller: Caller,
-  userId: string,
-) {
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.createTree({
-    prompt: "What is a bloom filter?",
-    model: "gemini-flash",
+interface Accounts {
+  owner: User;
+  commenter: User;
+  viewer: User;
+  reader: User;
+  stranger: User;
+}
+
+/** A thread with a complete answer, an owner's highlight and a queued inline
+ * follow-up, shared with the commenter and the viewer; public when the cell
+ * is the reader's or the guest's. Written through the repositories, so the
+ * seeding spends none of the callers' mutation budget. */
+function seed(db: SessionDatabase, accounts: Accounts, isPublic: boolean): Seeded {
+  const workspace = workspaces.ensureDefault(db, accounts.owner.id);
+  const detail = trees.admitRoot(db, accounts.owner.id, {
+    type: "exchange",
     workspaceId: workspace.id,
+    message: { text: "What is a bloom filter?" },
+    agent: { model: "gemini-flash" },
   });
-  const nodeId = detail.nodes[0]?.id ?? "";
-  const answer = "A bloom filter is a probabilistic set membership structure.";
-  const committed = snapshots.commit(harness.db, userId, {
-    nodeId,
-    turns: [answerTurn(nodeId, answer)],
+  const rootId = detail.tree.rootNodeId;
+  const committed = snapshots.commit(db, accounts.owner.id, {
+    nodeId: rootId,
+    turns: [answerTurn(rootId, "A bloom filter is a probabilistic set membership structure.")],
     outcome: { status: "complete" },
   });
-  const highlight = await caller.highlights.create({
-    nodeId,
-    anchor: anchorFor(committed.revision, "bloom filter", 2),
-  });
-  const child = await caller.research.forkNode({
-    parentNodeId: nodeId,
-    prompt: "And what is a cuckoo filter?",
+  nodes.setStatus(db, accounts.owner.id, rootId, "complete");
+  const highlight = highlights.create(
+    db,
+    accounts.owner.id,
+    rootId,
+    anchorFor(committed.revision, "bloom filter", 2),
+  );
+  const child = nodes.admitChild(db, accounts.owner.id, {
+    parentNodeId: rootId,
+    message: { text: "And a cuckoo filter?" },
     inline: true,
   });
-  const childNodeId = child.id;
-
-  const owned: Owned = {
-    workspaceId: workspace.id,
+  for (const [user, role] of [
+    [accounts.commenter, "commenter"],
+    [accounts.viewer, "viewer"],
+  ] as const) {
+    const invite = sharing.createInvite(db, accounts.owner.id, { treeId: detail.tree.id, role });
+    sharing.acceptInvite(db, user, { token: invite.token });
+  }
+  if (isPublic) {
+    sharing.setVisibility(db, accounts.owner.id, detail.tree.id, "public");
+  }
+  return {
     treeId: detail.tree.id,
-    nodeId,
-    childNodeId,
+    rootId,
+    childId: child.id,
     highlightId: highlight.id,
-    responseRevision: committed.revision,
+    revision: committed.revision,
+    viewerId: accounts.viewer.id,
   };
-  return owned;
 }
 
-/** What the owner can see, so the test can prove none of it moved. */
-function ownerState(caller: Caller, owned: Owned) {
-  return Promise.all([
-    caller.research.getTree({ treeId: owned.treeId }),
-    caller.research.getNodeContent({ nodeId: owned.nodeId }),
-    caller.highlights.listFeed({ workspaceId: owned.workspaceId }),
-    caller.feed.recentActivity({ scope: "workspace", workspaceId: owned.workspaceId }),
-  ]);
-}
-
-interface AttemptContext {
-  /** The account that owns nothing in `owned`. */
-  caller: Caller;
-  owned: Owned;
-  /** The stranger's own workspace, for the calls that mix one id of each. */
-  ownWorkspaceId: string;
-  harness: ReturnType<typeof createHarness>;
-  strangerId: string;
-}
-
-interface Attempt {
+interface Row {
   name: string;
-  run: (ctx: AttemptContext) => Promise<unknown>;
+  run: (caller: Caller, seeded: Seeded) => Promise<unknown>;
+  expect: Record<Role, Outcome>;
 }
 
-/** One entry per mutating procedure that takes an id of something owned. */
-const ATTEMPTS: readonly Attempt[] = [
-  // ── research ──────────────────────────────────────────────────────────────
+/** Outcomes by role, in `ROLES` order. */
+function by(
+  owner: Outcome,
+  commenter: Outcome,
+  viewer: Outcome,
+  reader: Outcome,
+  stranger: Outcome,
+  guest: Outcome,
+): Record<Role, Outcome> {
+  return { owner, commenter, viewer, reader, stranger, guest };
+}
+
+/** Readable by everyone who may read the thread, guests included. */
+const PUBLIC_READ = by("ok", "ok", "ok", "ok", "NOT_FOUND", "ok");
+/** Readable by every signed-in reader. */
+const SIGNED_IN_READ = by("ok", "ok", "ok", "ok", "NOT_FOUND", "UNAUTHORIZED");
+/** A commenter's or the owner's: asking, noting, highlighting, recaps. */
+const COMMENTER = by("ok", "ok", "FORBIDDEN", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED");
+/** The owner's alone. */
+const OWNER = by("ok", "FORBIDDEN", "FORBIDDEN", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED");
+/** Per person, for anyone with a place for the thread: the owner and its
+ * members (Archive, Trash, Delete as leaving). */
+const MEMBER = by("ok", "ok", "ok", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED");
+
+const ROWS: readonly Row[] = [
+  // ── reading ───────────────────────────────────────────────────────────────
   {
-    name: "research.createTree into another account's workspace",
-    run: ({ caller, owned }) =>
-      caller.research.createTree({
-        prompt: "Whose workspace is this?",
-        model: "gemini-flash",
-        workspaceId: owned.workspaceId,
-      }),
+    name: "research.getTree",
+    run: (caller, s) => caller.research.getTree({ treeId: s.treeId }),
+    expect: PUBLIC_READ,
   },
   {
-    name: "research.forkNode under another account's node",
-    run: ({ caller, owned }) =>
-      caller.research.forkNode({ parentNodeId: owned.nodeId, prompt: "And then?", inline: true }),
+    name: "research.getNodeContent",
+    run: (caller, s) => caller.research.getNodeContent({ nodeId: s.rootId }),
+    expect: PUBLIC_READ,
   },
   {
-    name: "research.retryNode",
-    run: ({ caller, owned }) => caller.research.retryNode({ nodeId: owned.nodeId }),
+    name: "followups.list",
+    run: (caller, s) => caller.followups.list({ treeId: s.treeId }),
+    expect: SIGNED_IN_READ,
   },
   {
-    name: "research.cancelNode",
-    run: ({ caller, owned }) => caller.research.cancelNode({ nodeId: owned.childNodeId }),
+    name: "sharing.listMembers",
+    run: (caller, s) => caller.sharing.listMembers({ treeId: s.treeId }),
+    expect: SIGNED_IN_READ,
   },
   {
-    name: "research.renameTree",
-    run: ({ caller, owned }) =>
-      caller.research.renameTree({ treeId: owned.treeId, title: "Mine now" }),
-  },
-  {
-    name: "research.renameNode",
-    run: ({ caller, owned }) =>
-      caller.research.renameNode({ nodeId: owned.nodeId, title: "Mine now" }),
-  },
-  {
-    name: "research.updateDocument",
-    run: ({ caller, owned }) =>
-      caller.research.updateDocument({
-        nodeId: owned.nodeId,
-        markdown: "# Rewritten by a stranger",
-        expectedTitle: "",
-        expectedResponseRevision: owned.responseRevision,
-      }),
+    name: "events.presence",
+    run: (caller, s) => caller.events.presence({ treeId: s.treeId }),
+    expect: SIGNED_IN_READ,
   },
   {
     name: "research.markTreeViewed",
-    run: ({ caller, owned }) => caller.research.markTreeViewed({ treeId: owned.treeId }),
+    run: (caller, s) => caller.research.markTreeViewed({ treeId: s.treeId }),
+    expect: SIGNED_IN_READ,
   },
   {
-    name: "research.archiveTree",
-    run: ({ caller, owned }) => caller.research.archiveTree({ treeId: owned.treeId }),
-  },
-  {
-    name: "research.restoreTree",
-    run: ({ caller, owned }) => caller.research.restoreTree({ treeId: owned.treeId }),
-  },
-  {
-    name: "research.removeTree",
-    run: ({ caller, owned }) => caller.research.removeTree({ treeId: owned.treeId }),
-  },
-  {
-    name: "research.removeBranch",
-    run: ({ caller, owned }) => caller.research.removeBranch({ nodeId: owned.childNodeId }),
-  },
-  {
-    name: "research.reorderTrees",
-    run: async ({ caller, owned, ownWorkspaceId }) => {
-      // A section with a thread of the caller's own, so the foreign id is what
-      // the reorder trips over rather than an empty section.
-      await caller.research.createTree({
-        prompt: "My own thread",
-        model: "gemini-flash",
-        workspaceId: ownWorkspaceId,
-      });
-      return caller.research.reorderTrees({
-        workspaceId: ownWorkspaceId,
-        archived: false,
-        treeIds: [owned.treeId],
-      });
-    },
-  },
-  {
-    name: "research.generateTitle",
-    run: ({ caller, owned }) => caller.research.generateTitle({ nodeId: owned.nodeId }),
-  },
-  {
-    name: "research.importReport into another account's workspace",
-    run: ({ caller, owned }) =>
-      caller.research.importReport({
-        markdown: "# A report\n\nBody.",
-        prompt: "An import",
-        workspaceId: owned.workspaceId,
-      }),
+    name: "subscriptions.set",
+    run: (caller, s) => caller.subscriptions.set({ treeId: s.treeId, value: true }),
+    expect: SIGNED_IN_READ,
   },
 
-  // ── highlights and recaps ─────────────────────────────────────────────────
+  // ── asking, notes, highlights, recaps ─────────────────────────────────────
+  {
+    name: "research.forkNode",
+    run: (caller, s) => caller.research.forkNode({ parentNodeId: s.rootId, prompt: "Branch" }),
+    expect: COMMENTER,
+  },
+  {
+    name: "followups.ask",
+    run: (caller, s) => caller.followups.ask({ headNodeId: s.rootId, prompt: "And then?" }),
+    expect: COMMENTER,
+  },
   {
     name: "highlights.create",
-    run: ({ caller, owned }) =>
+    run: (caller, s) =>
       caller.highlights.create({
-        nodeId: owned.nodeId,
-        anchor: anchorFor(owned.responseRevision, "probabilistic", 15),
+        nodeId: s.rootId,
+        anchor: anchorFor(s.revision, "probabilistic", 15),
       }),
+    expect: COMMENTER,
   },
   {
-    name: "highlights.remove",
-    run: ({ caller, owned }) =>
-      caller.highlights.remove({ nodeId: owned.nodeId, highlightId: owned.highlightId }),
-  },
-  {
-    name: "highlights.removeMany",
-    run: ({ caller, owned }) =>
-      caller.highlights.removeMany({ nodeId: owned.nodeId, highlightIds: [owned.highlightId] }),
+    name: "recaps.generateCandidate",
+    run: (caller, s) =>
+      caller.recaps.generateCandidate({
+        nodeId: s.rootId,
+        expectedResponseRevision: s.revision,
+        instructions: "Summarize.",
+      }),
+    expect: COMMENTER,
   },
   {
     name: "recaps.applyCandidate",
-    run: ({ caller, owned }) =>
+    run: (caller, s) =>
       caller.recaps.applyCandidate({
-        nodeId: owned.nodeId,
-        expectedResponseRevision: owned.responseRevision,
+        nodeId: s.rootId,
+        expectedResponseRevision: s.revision,
         candidate: {
           id: "cand-1",
-          text: "A stranger's summary.",
-          responseRevision: owned.responseRevision,
+          text: "A summary.",
+          responseRevision: s.revision,
           instructions: "Summarize.",
           generatedAt: Date.now(),
           adapter: "gemini",
           model: "gemini-flash",
         },
       }),
+    expect: COMMENTER,
   },
 
-  // ── workspaces ────────────────────────────────────────────────────────────
+  // ── someone else's content (the owner's) ──────────────────────────────────
   {
-    name: "workspaces.rename",
-    run: ({ caller, owned }) =>
-      caller.workspaces.rename({ workspaceId: owned.workspaceId, name: "X" }),
+    name: "highlights.remove of the owner's highlight",
+    run: (caller, s) => caller.highlights.remove({ nodeId: s.rootId, highlightId: s.highlightId }),
+    expect: OWNER,
   },
   {
-    name: "workspaces.remove",
-    run: ({ caller, owned }) => caller.workspaces.remove({ workspaceId: owned.workspaceId }),
+    name: "highlights.removeMany of the owner's highlight",
+    run: (caller, s) =>
+      caller.highlights.removeMany({ nodeId: s.rootId, highlightIds: [s.highlightId] }),
+    expect: OWNER,
   },
   {
-    name: "settings.update pointing at another account's workspace",
-    run: ({ caller, owned }) => caller.settings.update({ defaultWorkspaceId: owned.workspaceId }),
+    name: "research.renameNode of the owner's question",
+    run: (caller, s) => caller.research.renameNode({ nodeId: s.rootId, title: "Renamed" }),
+    expect: OWNER,
+  },
+  {
+    name: "research.generateTitle of the owner's question",
+    run: (caller, s) => caller.research.generateTitle({ nodeId: s.rootId }),
+    expect: OWNER,
+  },
+  {
+    name: "research.removeBranch of the owner's follow-up",
+    run: (caller, s) => caller.research.removeBranch({ nodeId: s.childId }),
+    expect: OWNER,
+  },
+  {
+    name: "research.cancelNode of the owner's follow-up",
+    run: (caller, s) => caller.research.cancelNode({ nodeId: s.childId }),
+    expect: OWNER,
+  },
+  {
+    name: "research.retryNode of the owner's question",
+    run: (caller, s) => caller.research.retryNode({ nodeId: s.rootId }),
+    expect: OWNER,
+  },
+  {
+    name: "research.rerunNode of the owner's question",
+    run: (caller, s) => caller.research.rerunNode({ nodeId: s.rootId }),
+    expect: OWNER,
+  },
+
+  // ── the thread itself ─────────────────────────────────────────────────────
+  {
+    name: "research.renameTree",
+    run: (caller, s) => caller.research.renameTree({ treeId: s.treeId, title: "Renamed" }),
+    expect: OWNER,
+  },
+  {
+    name: "research.setChainOrder",
+    run: (caller, s) =>
+      caller.research.setChainOrder({ headNodeId: s.rootId, nodeIds: [s.childId, s.rootId] }),
+    expect: OWNER,
+  },
+  {
+    name: "sharing.setVisibility",
+    run: (caller, s) => caller.sharing.setVisibility({ treeId: s.treeId, visibility: "public" }),
+    expect: OWNER,
+  },
+  {
+    name: "sharing.setRole",
+    run: (caller, s) =>
+      caller.sharing.setRole({ treeId: s.treeId, userId: s.viewerId, role: "commenter" }),
+    expect: OWNER,
+  },
+  {
+    name: "sharing.removeMember",
+    run: (caller, s) => caller.sharing.removeMember({ treeId: s.treeId, userId: s.viewerId }),
+    expect: OWNER,
+  },
+  {
+    name: "invites.create",
+    run: (caller, s) => caller.invites.create({ treeId: s.treeId, role: "viewer" }),
+    expect: OWNER,
+  },
+  {
+    name: "invites.list",
+    run: (caller, s) => caller.invites.list({ treeId: s.treeId }),
+    expect: OWNER,
+  },
+
+  // ── per person ────────────────────────────────────────────────────────────
+  {
+    name: "research.archiveTree",
+    run: (caller, s) => caller.research.archiveTree({ treeId: s.treeId }),
+    expect: MEMBER,
+  },
+  {
+    name: "research.restoreTree",
+    run: (caller, s) => caller.research.restoreTree({ treeId: s.treeId }),
+    expect: MEMBER,
+  },
+  {
+    name: "research.trashTree",
+    run: (caller, s) => caller.research.trashTree({ treeId: s.treeId }),
+    expect: MEMBER,
+  },
+  {
+    name: "research.restoreTreeFromTrash",
+    run: (caller, s) => caller.research.restoreTreeFromTrash({ treeId: s.treeId }),
+    expect: MEMBER,
+  },
+  {
+    name: "research.removeTree",
+    run: (caller, s) => caller.research.removeTree({ treeId: s.treeId }),
+    expect: MEMBER,
+  },
+  {
+    name: "sharing.leave",
+    run: (caller, s) => caller.sharing.leave({ treeId: s.treeId }),
+    expect: by("FORBIDDEN", "ok", "ok", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED"),
   },
 ];
 
-test("prevents cross-account access and returns NOT_FOUND for unauthorized entity IDs", async (t) => {
-  const harness = createHarness(t);
-  const owner = harness.addUser("owner");
-  const ownerCaller = harness.caller(owner);
-  const stranger = harness.addUser("stranger");
-  const strangerCaller = harness.caller(stranger);
-  const owned = await seedOwner(harness, ownerCaller, owner.id);
-  const strangerWorkspace = await strangerCaller.workspaces.ensureDefault();
-  const before = await ownerState(ownerCaller, owned);
+const ACCESS_CODES = new Set(["FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED"]);
 
-  for (const attempt of ATTEMPTS) {
-    const error = await t.throwsAsync<TRPCError>(
-      attempt.run({
-        caller: strangerCaller,
-        owned,
-        ownWorkspaceId: strangerWorkspace.id,
-        harness,
-        strangerId: stranger.id,
-      }),
-      undefined,
-      `${attempt.name} is refused`,
-    );
-    t.is(
-      error?.code,
-      "NOT_FOUND",
-      `${attempt.name} answers NOT_FOUND rather than leaking that the id exists`,
-    );
+async function outcomeOf(promise: Promise<unknown>): Promise<string> {
+  try {
+    await promise;
+    return "ok";
+  } catch (error) {
+    if (!(error instanceof TRPCError)) throw error;
+    if (error.code === "INTERNAL_SERVER_ERROR") return `internal: ${error.message}`;
+    return ACCESS_CODES.has(error.code) ? error.code : "ok";
   }
+}
 
-  // Nothing the owner can see moved.
-  t.deepEqual(await ownerState(ownerCaller, owned), before, "none of the owner's state changed");
-});
+for (const row of ROWS) {
+  test(`access matrix: ${row.name}`, async (t) => {
+    const harness = createHarness(t);
+    const accounts: Accounts = {
+      owner: harness.addUser("matrix-owner"),
+      commenter: harness.addUser("matrix-commenter"),
+      viewer: harness.addUser("matrix-viewer"),
+      reader: harness.addUser("matrix-reader"),
+      stranger: harness.addUser("matrix-stranger"),
+    };
+    for (const role of ROLES) {
+      const seeded = seed(harness.db, accounts, role === "reader" || role === "guest");
+      const caller = harness.caller(role === "guest" ? null : accounts[role]);
+      t.is(await outcomeOf(row.run(caller, seeded)), row.expect[role], `${row.name} as ${role}`);
+    }
+  });
+}
 
-test("global feed reads cross accounts while personal scopes and fields stay bounded", async (t) => {
+test("workspaces are their owner's: another account's ids are not found", async (t) => {
   const harness = createHarness(t);
-  const first = harness.addUser("first-feed-owner");
-  const second = harness.addUser("second-feed-owner");
-  const firstCaller = harness.caller(first);
-  const secondCaller = harness.caller(second);
-  const firstWorkspace = await firstCaller.workspaces.ensureDefault();
-  const secondWorkspace = await secondCaller.workspaces.ensureDefault();
-  await firstCaller.research.createTree({
-    prompt: "First public root",
-    model: "gemini-flash",
-    workspaceId: firstWorkspace.id,
-  });
-  await secondCaller.research.createTree({
-    prompt: "Second public root",
-    model: "gemini-flash",
-    workspaceId: secondWorkspace.id,
-  });
-
-  const itemIds = (page: Awaited<ReturnType<typeof firstCaller.feed.recentActivity>>) =>
-    page.items.map((item) => item.query.nodeId).sort();
-  const all = await firstCaller.feed.recentActivity({ scope: "all" });
-  const strangerAll = await secondCaller.feed.recentActivity({ scope: "all" });
-  const guestAll = await harness.caller(null).feed.recentActivity();
-  t.deepEqual(itemIds(strangerAll), itemIds(all));
-  t.deepEqual(itemIds(guestAll), itemIds(all));
-  t.is(all.items.length, 2);
-
-  const mine = await firstCaller.feed.recentActivity({ scope: "mine" });
-  t.is(mine.items.length, 1);
-  const workspace = await firstCaller.feed.recentActivity({
-    scope: "workspace",
-    workspaceId: firstWorkspace.id,
-  });
-  t.deepEqual(itemIds(workspace), itemIds(mine));
-
-  const publicQuery = all.items.find((item) => item.kind === "research-query");
-  t.is(publicQuery?.kind, "research-query");
-  if (publicQuery?.kind === "research-query") {
-    t.false("userId" in publicQuery.query);
-    t.false("error" in publicQuery.query);
-    t.false("highlights" in publicQuery.query);
+  const owner = harness.addUser("ws-owner");
+  const stranger = harness.addUser("ws-stranger");
+  const workspace = workspaces.ensureDefault(harness.db, owner.id);
+  const caller = harness.caller(stranger);
+  const attempts: [string, () => Promise<unknown>][] = [
+    [
+      "research.createTree",
+      () =>
+        caller.research.createTree({
+          prompt: "Whose workspace?",
+          model: "gemini-flash",
+          workspaceId: workspace.id,
+        }),
+    ],
+    [
+      "research.importReport",
+      () =>
+        caller.research.importReport({
+          markdown: "# A report\n\nBody.",
+          prompt: "An import",
+          workspaceId: workspace.id,
+        }),
+    ],
+    ["workspaces.rename", () => caller.workspaces.rename({ workspaceId: workspace.id, name: "X" })],
+    ["workspaces.remove", () => caller.workspaces.remove({ workspaceId: workspace.id })],
+    ["settings.update", () => caller.settings.update({ defaultWorkspaceId: workspace.id })],
+    ["research.listTrash", () => caller.research.listTrash({ workspaceId: workspace.id })],
+  ];
+  for (const [name, run] of attempts) {
+    const outcome = await outcomeOf(run());
+    // An empty list is the same answer as a refusal for a list.
+    t.true(outcome === "NOT_FOUND" || name === "research.listTrash", `${name}: ${outcome}`);
   }
-
-  const guest = harness.caller(null);
-  await t.throwsAsync(guest.feed.recentActivity({ scope: "mine" }), { message: /sign in/ });
-  await t.throwsAsync(guest.feed.recentActivity({ scope: "workspace" }), {
-    message: /sign in/,
-  });
-});
-
-test("feed item events fan out to other signed-in accounts", async (t) => {
-  const harness = createHarness(t);
-  const author = harness.addUser("feed-event-author");
-  const observer = harness.addUser("feed-event-observer");
-  const subscription = harness.eventBus.subscribe(observer.id, "feed-observer");
-  const caller = harness.caller(author);
-
-  // An imported report is a complete root, so the thread can be deleted at once.
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.importReport({
-    markdown: "# Broadcast\n\nA report.\n",
-    prompt: "Broadcast",
-    workspaceId: workspace.id,
-  });
-  const rootId = detail.tree.rootNodeId;
-  const upserted = await subscription.events.next();
-  const upsertedEvent = upserted.value as SessionEvent | undefined;
-  t.false(upserted.done);
-  t.is(upsertedEvent?.type, "feed.item.upserted");
-  t.is((upsertedEvent?.payload["item"] as { query?: { nodeId?: string } }).query?.nodeId, rootId);
-
-  await caller.research.removeTree({ treeId: detail.tree.id });
-  const removed = await subscription.events.next();
-  const removedEvent = removed.value as SessionEvent | undefined;
-  t.false(removed.done);
-  t.is(removedEvent?.type, "feed.item.removed");
-  t.is(removedEvent?.payload["id"], rootId);
-  subscription.close();
+  t.deepEqual(await caller.research.listTrash({ workspaceId: workspace.id }), []);
 });

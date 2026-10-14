@@ -6,27 +6,34 @@
 // The Trash is private: these procedures need a signed-in user and are never
 // served from the guest catalog.
 
-import { trash } from "@session/db";
+import { sharing, trash } from "@session/db";
 import type { ResearchTree, ResearchTreeSummary } from "@session/shared";
 import { z } from "zod";
 
+import { sessionEvent } from "../../../events/bus.js";
 import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { protectedProcedure } from "../../base.js";
 import { publish } from "../../emit.js";
 import { repo } from "../../errors.js";
 
-import { dispatchFollowups } from "./common.js";
+import { dispatchFollowups, publishSharingChanged, treeAudienceIds } from "./common.js";
 
 export const trashProcedures = {
   /** Moves a thread, and the children listed under it, to the Trash.
    * Refused while any of them has an active run. Open views drop each moved
-   * thread as they do a deleted one (`research.tree.removed`). */
+   * thread as they do a deleted one (`research.tree.removed`). The owner's
+   * Trash hides the thread from its members too; a member's Trash is theirs
+   * alone. */
   trashTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
       const change = repo(() => trash.trashTree(ctx.db, ctx.user.id, input.treeId));
+      const owner = change.tree.role === "owner";
       for (const treeId of change.changedTreeIds) {
-        publish(ctx, "research.tree.removed", { treeId });
+        ctx.eventBus.emitToUsers(
+          [ctx.user.id, ...(owner ? memberIdsOf(ctx, treeId) : [])],
+          sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
+        );
       }
       for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
       if (change.changedTreeIds.length > 0) {
@@ -44,7 +51,14 @@ export const trashProcedures = {
       for (const tree of [change.tree, ...change.children]) {
         if (!changed.has(tree.id)) continue;
         publish(ctx, "research.tree.restored", { tree });
+        if (tree.role !== "owner") continue;
         emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
+        // The members get the thread back.
+        publishSharingChanged(
+          ctx,
+          tree.id,
+          treeAudienceIds(ctx, tree.id).filter((id) => id !== ctx.user.id),
+        );
       }
       if (changed.size > 0) {
         publish(ctx, "research.trash.changed", { workspaceId: change.tree.workspaceId });
@@ -69,7 +83,12 @@ export const trashProcedures = {
     .mutation(({ ctx, input }): { treeIds: string[]; folderIds: string[] } => {
       const emptied = repo(() => trash.empty(ctx.db, ctx.user.id, input.workspaceId));
       for (const treeId of emptied.treeIds) {
-        publish(ctx, "research.tree.removed", { treeId });
+        publish(ctx, "research.tree.removed", { treeId, removedBy: ctx.user.id });
+      }
+      // The owners of the shared threads the caller left see their members
+      // change.
+      for (const treeId of emptied.leftTreeIds) {
+        publishSharingChanged(ctx, treeId, treeAudienceIds(ctx, treeId));
       }
       if (emptied.folderIds.length > 0) {
         publish(ctx, "research.folders.changed", { workspaceId: input.workspaceId });
@@ -77,6 +96,12 @@ export const trashProcedures = {
       if (emptied.treeIds.length > 0 || emptied.folderIds.length > 0) {
         publish(ctx, "research.trash.changed", { workspaceId: input.workspaceId });
       }
-      return emptied;
+      return { treeIds: emptied.treeIds, folderIds: emptied.folderIds };
     }),
 };
+
+/** The members of a thread the owner just moved to the Trash: its audience
+ * is the owner alone now, so they are read from the member rows. */
+function memberIdsOf(ctx: { db: Parameters<typeof sharing.memberIds>[0] }, treeId: string) {
+  return sharing.memberIds(ctx.db, treeId);
+}

@@ -30,14 +30,17 @@ export const trees = sqliteTable(
     /** Set while the thread is in the Trash. Every list but the Trash's own
      * leaves these threads out. */
     trashedAt: integer("trashed_at"),
+    /** Who moved the thread to the Trash (its owner) while `trashed_at` is
+     * set. */
+    trashedBy: text("trashed_by").references(() => users.id, { onDelete: "set null" }),
     /** The thread this one is listed under on Home: the desktop folder
      * state's `parents` map. One level deep, enforced by the repository. */
     parentTreeId: text("parent_tree_id").references((): AnySQLiteColumn => trees.id, {
       onDelete: "set null",
     }),
-    /** `public` threads are readable by anyone and appear in the All Users
-     * feed; `private` threads only by their owner and, from phase 5, their
-     * members. */
+    /** `public` threads are readable by anyone, guests included, and appear
+     * in the All Users feed; `private` threads only by their owner and their
+     * members (`repos/access.ts`). */
     visibility: text("visibility", { enum: ["private", "public"] })
       .notNull()
       .default("private"),

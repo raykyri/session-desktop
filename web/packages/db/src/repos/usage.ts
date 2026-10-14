@@ -12,7 +12,7 @@ import { runAttempts } from "../schema/runs.js";
 import { usageEvents } from "../schema/usage.js";
 import { now, startOfUtcDay } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodePaidBy } from "./access.js";
 import { getUserLimits } from "./auth.js";
 
 /** Deployment defaults, overridden per account in `user_limits`. */
@@ -95,7 +95,7 @@ export function dailyTotals(db: SessionDatabase, userId: string, at: number = no
     .innerJoin(nodes, eq(nodes.id, runAttempts.nodeId))
     .where(
       and(
-        nodeOwnedBy(userId),
+        nodePaidBy(userId),
         gte(runAttempts.startedAt, day),
         lt(runAttempts.startedAt, day + 86_400_000),
       ),

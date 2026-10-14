@@ -2,7 +2,7 @@
 // order, cancel, rename, content, document edits, branch removal and titles (`03-api-and-events.md`
 // §2).
 
-import { feedItems, nodes, queue, researchDocuments } from "@session/db";
+import { access, feedItems, nodes, queue, researchDocuments } from "@session/db";
 import type {
   ResearchBranchRemoval,
   ResearchNode,
@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
+import { requireNodeRole } from "../../../research/access.js";
 import {
   assertEffortAccepted,
   assertModelUsable,
@@ -31,9 +32,9 @@ import {
   markImagesAttached,
   resolveImageAttachments,
 } from "../../../research/images.js";
+import { notifyNewNode } from "../../../research/notifications.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
-import { catalogUserId } from "../../catalog.js";
-import { publish } from "../../emit.js";
+import { publishToTree } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
 import { detailWithQueues, dispatchFollowups, publishNode } from "./common.js";
@@ -64,6 +65,8 @@ export const nodeProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
+      // A viewer is refused before anything is resolved or charged.
+      requireNodeRole(ctx, input.parentNodeId, "commenter");
       const parent = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.parentNodeId)),
         `research node ${input.parentNodeId} was not found`,
@@ -107,19 +110,21 @@ export const nodeProcedures = {
       markImagesAttached(ctx.db, images);
       enqueueRun(ctx, node.id, model);
       if (admitted.replacedNodeId !== null) {
-        publish(ctx, "research.node.removed", {
+        publishToTree(ctx, node.treeId, "research.node.removed", {
           treeId: node.treeId,
           parentNodeId: input.parentNodeId,
           removedNodeIds: [admitted.replacedNodeId],
+          removedBy: ctx.user.id,
         });
       }
-      publish(ctx, "research.node.created", { node });
+      publishToTree(ctx, node.treeId, "research.node.created", { node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
       if (admitted.reorderedHead) {
         publishNode(ctx, admitted.reorderedHead);
       }
       const feedItem = feedItems.forTree(ctx.db, node.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
+      notifyNewNode(ctx, ctx.user.id, node);
       return node;
     }),
 
@@ -179,10 +184,24 @@ export const nodeProcedures = {
    * chain's last node.
    */
   setChainOrder: protectedProcedure
-    .input(z.object({ headNodeId: z.string(), nodeIds: z.array(z.string()) }))
+    .input(
+      z.object({
+        headNodeId: z.string(),
+        nodeIds: z.array(z.string()),
+        /** The display order the caller reordered from. When given, a column
+         * someone else reordered since is refused with `CONFLICT`. */
+        expectedOrder: z.array(z.string()).optional(),
+      }),
+    )
     .mutation(({ ctx, input }): ResearchNode => {
       const result = repo(() =>
-        nodes.setChainOrder(ctx.db, ctx.user.id, input.headNodeId, input.nodeIds),
+        nodes.setChainOrder(
+          ctx.db,
+          ctx.user.id,
+          input.headNodeId,
+          input.nodeIds,
+          input.expectedOrder,
+        ),
       );
       if (result.changed) {
         publishNode(ctx, result.node);
@@ -194,6 +213,11 @@ export const nodeProcedures = {
   cancelNode: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(({ ctx, input }): ResearchNode => {
+      // The person who asked, or the thread's owner, may stop a run.
+      const standing = requireNodeRole(ctx, input.nodeId, "commenter");
+      if (standing.role !== "owner" && standing.node.authorId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: access.ACCESS_MESSAGES.ownContent });
+      }
       const existing = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,
@@ -226,16 +250,10 @@ export const nodeProcedures = {
 
   getNodeContent: publicProcedure
     .input(z.object({ nodeId: z.string() }))
-    .query(({ ctx, input }): ResearchNodeContent => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `research node ${input.nodeId} was not found`,
-        });
-      }
-      return nodeContent({ db: ctx.db, user: { id: userId } }, input.nodeId);
-    }),
+    .query(({ ctx, input }): ResearchNodeContent =>
+      // Guests read public threads (`access.treeAccess`).
+      nodeContent({ db: ctx.db, user: ctx.user }, input.nodeId),
+    ),
 
   updateDocument: protectedProcedure
     .input(
@@ -261,7 +279,7 @@ export const nodeProcedures = {
             : { expectedHighlightIds: input.expectedHighlightIds }),
         }),
       );
-      publish(ctx, "research.document.updated", {
+      publishToTree(ctx, result.tree.id, "research.document.updated", {
         tree: result.tree,
         node: result.node,
         responseRevision: result.responseRevision,
@@ -276,10 +294,11 @@ export const nodeProcedures = {
     .input(z.object({ nodeId: z.string() }))
     .mutation(({ ctx, input }): ResearchBranchRemoval => {
       const removal = repo(() => nodes.removeBranch(ctx.db, ctx.user.id, input.nodeId));
-      publish(ctx, "research.node.removed", {
+      publishToTree(ctx, removal.treeId, "research.node.removed", {
         treeId: removal.treeId,
         parentNodeId: removal.parentNodeId,
         removedNodeIds: removal.removedNodeIds,
+        removedBy: ctx.user.id,
       });
       const feedItem = feedItems.forTree(ctx.db, removal.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
@@ -296,6 +315,10 @@ export const nodeProcedures = {
   generateTitle: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(async ({ ctx, input }): Promise<string> => {
+      // A title is a rename: the owner's, or the author's of their own node
+      // (`access.assertMayChangeNode`); the requester pays for the run.
+      const standing = requireNodeRole(ctx, input.nodeId, "commenter");
+      repo(() => access.assertMayChangeNode(ctx.db, standing, ctx.user.id));
       const node = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,

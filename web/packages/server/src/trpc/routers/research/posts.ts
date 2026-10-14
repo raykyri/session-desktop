@@ -16,12 +16,14 @@ import { z } from "zod";
 import { emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import { resolveTweet } from "../../../journal/tweets.js";
+import { requireNodeRole } from "../../../research/access.js";
 import { resolveImageAttachments } from "../../../research/images.js";
+import { notifyNewNode } from "../../../research/notifications.js";
 import { protectedProcedure } from "../../base.js";
-import { publish } from "../../emit.js";
+import { publish, publishToTree } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
-import { publishNode } from "./common.js";
+import { publishNode, publishTree } from "./common.js";
 
 /** The registry model and effort a note's AI follow-ups default to. A note
  * never runs, so the deployment need not be able to reach the model; the
@@ -90,6 +92,8 @@ export const postProcedures = {
   createPostFollowUp: protectedProcedure
     .input(z.object({ parentNodeId: z.string(), body: z.string().min(1) }))
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
+      // A viewer is refused before the note's links are fetched.
+      requireNodeRole(ctx, input.parentNodeId, "commenter");
       const tweets = await resolveMessageAttachments(
         { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
         input.body,
@@ -97,8 +101,9 @@ export const postProcedures = {
       const node = repo(() =>
         posts.admitFollowUpNote(ctx.db, ctx.user.id, input.parentNodeId, input.body, tweets),
       );
-      publish(ctx, "research.node.created", { node });
+      publishToTree(ctx, node.treeId, "research.node.created", { node });
       refreshFeedCard(ctx, node.treeId);
+      notifyNewNode(ctx, ctx.user.id, node);
       return node;
     }),
 
@@ -108,8 +113,9 @@ export const postProcedures = {
       const result = repo(() => posts.updatePost(ctx.db, ctx.user.id, input));
       publishNode(ctx, result.node);
       if (result.titleChanged) {
-        publish(ctx, "research.tree.updated", { tree: result.tree });
+        publishTree(ctx, "research.tree.updated", result.tree);
       }
+
       refreshFeedCard(ctx, result.tree.id);
       return {
         tree: result.tree,

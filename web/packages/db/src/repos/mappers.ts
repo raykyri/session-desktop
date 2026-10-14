@@ -10,6 +10,7 @@ import type {
   ResearchNodeBase,
   ResearchRecap,
   ResearchTree,
+  ResearchTreeRole,
   UserMessage,
 } from "@session/shared";
 import {
@@ -27,11 +28,12 @@ import {
   parseWireColumn,
   stringListSchema,
 } from "../json.js";
-import type { highlights, nodes, trees } from "../schema/index.js";
+import type { highlights, nodes, treeMembers, trees } from "../schema/index.js";
 
 export type HighlightRow = typeof highlights.$inferSelect;
 export type NodeRow = typeof nodes.$inferSelect;
 export type TreeRow = typeof trees.$inferSelect;
+type MemberRow = typeof treeMembers.$inferSelect;
 
 export function toResearchHighlight(row: HighlightRow): ResearchHighlight {
   return {
@@ -42,14 +44,31 @@ export function toResearchHighlight(row: HighlightRow): ResearchHighlight {
       "highlights.anchor_json",
     ),
     createdAt: row.createdAt,
+    authorId: row.authorId,
   };
+}
+
+/** The reader's standing in a thread, for the per-person fields of its wire
+ * form. Absent: the owner's view. */
+export interface TreeView {
+  role: ResearchTreeRole;
+  /** The reader's member row, for a member's own Archive and Trash. */
+  member?: Pick<MemberRow, "archivedAt" | "trashedAt"> | null | undefined;
+  followed?: boolean | undefined;
 }
 
 /**
  * A tree as one person sees it. `lastViewedAt` is that person's row in
- * `tree_views`; it is null for a reader who has never opened the thread.
+ * `tree_views`; it is null for a reader who has never opened the thread. A
+ * member sees their own Archive and Trash: the thread is archived for them
+ * when they archived it or its owner did.
  */
-export function toResearchTree(row: TreeRow, lastViewedAt: number | null = null): ResearchTree {
+export function toResearchTree(
+  row: TreeRow,
+  lastViewedAt: number | null = null,
+  view: TreeView = { role: "owner" },
+): ResearchTree {
+  const member = view.role === "owner" ? null : (view.member ?? null);
   return {
     id: row.id,
     title: row.title,
@@ -57,9 +76,14 @@ export function toResearchTree(row: TreeRow, lastViewedAt: number | null = null)
     workspaceId: row.workspaceId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    archivedAt: row.archivedAt,
-    trashedAt: row.trashedAt,
+    archivedAt: member?.archivedAt ?? row.archivedAt,
+    trashedAt: view.role === "owner" ? row.trashedAt : (member?.trashedAt ?? null),
     lastViewedAt,
+    ownerId: row.ownerId,
+    visibility: row.visibility,
+    role: view.role,
+    ...(view.role === "owner" && row.trashedAt !== null ? { trashedBy: row.trashedBy } : {}),
+    ...(view.followed === undefined ? {} : { followed: view.followed }),
   };
 }
 
@@ -121,6 +145,7 @@ export function toResearchNode(row: NodeRow, relations: NodeRelations): Research
     createdAt: row.createdAt,
     highlights: relations.highlights,
     ...(chainOrder === null ? {} : { chainOrder }),
+    authorId: row.authorId,
   };
   switch (row.type) {
     case "post":
@@ -131,6 +156,7 @@ export function toResearchNode(row: NodeRow, relations: NodeRelations): Research
         format: row.format ?? "text",
         followUpAgent: rowAgent(row),
         editedAt: row.editedAt,
+        editedBy: row.editedBy,
       };
     case "exchange": {
       const status = row.status ?? "failed";
@@ -168,6 +194,7 @@ export function toResearchNode(row: NodeRow, relations: NodeRelations): Research
         responseSnapshotAt: row.responseSnapshotAt,
         ...(recap === null ? {} : { recap }),
         editedAt: row.editedAt,
+        editedBy: row.editedBy,
       };
     }
   }

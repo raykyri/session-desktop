@@ -39,7 +39,12 @@ export function stream(db: SessionDatabase, options: FeedStreamOptions): FeedStr
       fi.id, fi.author_id AS authorId, fi.workspace_id AS workspaceId
     FROM feed_items fi
     WHERE 1 = 1
-      ${options.scope === "all" ? sql`` : sql`AND fi.author_id = ${options.userId}`}
+      ${
+        options.scope === "all"
+          ? // All Users lists public threads only (`trees.visibility`).
+            sql`AND EXISTS (SELECT 1 FROM trees t WHERE t.id = fi.tree_id AND t.visibility = 'public')`
+          : sql`AND fi.author_id = ${options.userId}`
+      }
       ${
         options.scope === "workspace" && options.workspaceId
           ? sql`AND fi.workspace_id = ${options.workspaceId}`

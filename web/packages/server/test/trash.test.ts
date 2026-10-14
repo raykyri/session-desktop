@@ -47,7 +47,7 @@ async function setup(t: Parameters<typeof createHarness>[0]) {
 }
 
 test("trashing, restoring and emptying publish the desktop's events", async (t) => {
-  const { harness, caller, workspace, post } = await setup(t);
+  const { harness, user, caller, workspace, post } = await setup(t);
   const kept = await post("Kept");
   const tree = await post("Binned");
   const events = recordEvents(harness);
@@ -55,7 +55,7 @@ test("trashing, restoring and emptying publish the desktop's events", async (t) 
   const trashed = await caller.research.trashTree({ treeId: tree.id });
   t.not(trashed.trashedAt, null);
   t.deepEqual(summary(events), [
-    ["research.tree.removed", { treeId: tree.id }],
+    ["research.tree.removed", { treeId: tree.id, removedBy: user.id }],
     ["research.trash.changed", { workspaceId: workspace.id }],
   ]);
   t.true(events.some((event) => event.type === "feed.item.removed"));
@@ -95,7 +95,7 @@ test("trashing, restoring and emptying publish the desktop's events", async (t) 
   const emptied = await caller.research.emptyTrash({ workspaceId: workspace.id });
   t.deepEqual(emptied, { treeIds: [tree.id], folderIds: ["f1"] });
   t.deepEqual(summary(events), [
-    ["research.tree.removed", { treeId: tree.id }],
+    ["research.tree.removed", { treeId: tree.id, removedBy: user.id }],
     ["research.folders.changed", { workspaceId: workspace.id }],
     ["research.trash.changed", { workspaceId: workspace.id }],
   ]);
@@ -104,14 +104,14 @@ test("trashing, restoring and emptying publish the desktop's events", async (t) 
 });
 
 test("Delete from the Trash removes the thread and refreshes the Trash", async (t) => {
-  const { harness, caller, workspace, post } = await setup(t);
+  const { harness, user, caller, workspace, post } = await setup(t);
   const tree = await post("Binned");
   await caller.research.trashTree({ treeId: tree.id });
   const events = recordEvents(harness);
   const removed = await caller.research.removeTree({ treeId: tree.id });
   t.deepEqual(removed, { ok: true, treeIds: [tree.id] });
   t.deepEqual(summary(events), [
-    ["research.tree.removed", { treeId: tree.id }],
+    ["research.tree.removed", { treeId: tree.id, removedBy: user.id }],
     ["research.trash.changed", { workspaceId: workspace.id }],
   ]);
   const missing = await t.throwsAsync<TRPCError>(caller.research.removeTree({ treeId: tree.id }));

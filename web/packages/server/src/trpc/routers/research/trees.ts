@@ -5,9 +5,9 @@ import { researchDocuments, trees } from "@session/db";
 import type { ResearchTree, ResearchTreeDetail, ResearchTreeSummary } from "@session/shared";
 import { METADATA_MODEL_ID } from "@session/shared";
 import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { sessionEvent } from "../../../events/bus.js";
 import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import {
@@ -24,11 +24,17 @@ import {
   resolveImageAttachments,
 } from "../../../research/images.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
-import { catalogUserId } from "../../catalog.js";
 import { publish } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
-import { detailWithQueues, dispatchFollowups, publishNode } from "./common.js";
+import {
+  detailWithQueues,
+  dispatchFollowups,
+  publishNode,
+  publishSharingChanged,
+  publishTree,
+  treeAudienceIds,
+} from "./common.js";
 
 export const treeProcedures = {
   listTrees: publicProcedure
@@ -38,8 +44,14 @@ export const treeProcedures = {
         .optional(),
     )
     .query(({ ctx, input }): ResearchTreeSummary[] => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) return [];
+      // A guest's list is the public catalog: every account's public
+      // threads.
+      if (ctx.user === null) {
+        return repo(() =>
+          trees.publicSummaries(ctx.db, null, { workspaceId: input?.workspaceId ?? null }),
+        );
+      }
+      const userId = ctx.user.id;
       return repo(() =>
         trees.summaries(ctx.db, userId, {
           workspaceId: input?.workspaceId ?? null,
@@ -62,13 +74,9 @@ export const treeProcedures = {
   getTree: publicProcedure
     .input(z.object({ treeId: z.string() }))
     .query(({ ctx, input }): ResearchTreeDetail => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `research tree ${input.treeId} was not found`,
-        });
-      }
+      // Anyone who may read the thread: its owner, its members, and anyone,
+      // guests included, for a public thread (`access.treeAccess`).
+      const userId = ctx.user?.id ?? null;
       required(
         repo(() => trees.get(ctx.db, userId, input.treeId)),
         `research tree ${input.treeId} was not found`,
@@ -160,7 +168,7 @@ export const treeProcedures = {
     .input(z.object({ treeId: z.string(), title: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
       const tree = repo(() => trees.rename(ctx.db, ctx.user.id, input.treeId, input.title));
-      publish(ctx, "research.tree.updated", { tree });
+      publishTree(ctx, "research.tree.updated", tree);
       return tree;
     }),
 
@@ -178,7 +186,9 @@ export const treeProcedures = {
     .mutation(({ ctx, input }): ResearchTree => {
       const change = repo(() => trees.archiveGroup(ctx.db, ctx.user.id, input.treeId));
       for (const tree of [...change.children, change.tree]) {
-        publish(ctx, "research.tree.archived", { tree });
+        // The owner's Archive is the thread's; a member's is their own.
+        if (tree.role === "owner") publishTree(ctx, "research.tree.archived", tree);
+        else publish(ctx, "research.tree.archived", { tree });
       }
       for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
       return change.tree;
@@ -190,7 +200,11 @@ export const treeProcedures = {
     .mutation(({ ctx, input }): ResearchTree => {
       const change = repo(() => trees.restoreGroup(ctx.db, ctx.user.id, input.treeId));
       for (const tree of [...change.children, change.tree]) {
-        publish(ctx, "research.tree.restored", { tree });
+        if (tree.role !== "owner") {
+          publish(ctx, "research.tree.restored", { tree });
+          continue;
+        }
+        publishTree(ctx, "research.tree.restored", tree);
         emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
         // Queues wait while their thread is archived.
         dispatchFollowups(ctx, tree.id);
@@ -199,15 +213,31 @@ export const treeProcedures = {
     }),
 
   /** Deletes the thread now, in or out of the Trash, with the children
-   * listed under it. */
+   * listed under it. For a member, Delete leaves the thread instead: it
+   * stays for everyone else. */
   removeTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
+      // Read before the delete, which takes the members' access with it.
+      const audience = treeAudienceIds(ctx, input.treeId);
       const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
       for (const treeId of removed.treeIds) {
-        publish(ctx, "research.tree.removed", { treeId });
+        if (removed.left === true) {
+          publish(ctx, "research.tree.removed", { treeId, removedBy: ctx.user.id });
+          publishSharingChanged(
+            ctx,
+            treeId,
+            audience.filter((id) => id !== ctx.user.id),
+          );
+        } else {
+          ctx.eventBus.emitToUsers(
+            [ctx.user.id, ...(treeId === input.treeId ? audience : [])],
+            sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
+          );
+        }
       }
       for (const item of removed.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+
       if (removed.trashed) {
         publish(ctx, "research.trash.changed", { workspaceId: removed.workspaceId });
       }

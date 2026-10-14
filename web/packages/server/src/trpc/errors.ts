@@ -35,6 +35,18 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /belongs to a different answer/, code: "CONFLICT" },
   { pattern: /contains a duplicate/, code: "CONFLICT" },
   { pattern: /^The conversation changed/, code: "CONFLICT" },
+  // Stale revisions of shared content: someone else changed it first
+  // (`02-domain-model-and-database.md` §5.16).
+  { pattern: /^Reorder conflict/, code: "CONFLICT" },
+  { pattern: /has been updated; please reselect/, code: "CONFLICT" },
+  { pattern: /^Summary conflict/, code: "CONFLICT" },
+  { pattern: /^Response revision conflict/, code: "CONFLICT" },
+  { pattern: /^Document (title|content) conflict/, code: "CONFLICT" },
+  { pattern: /^Highlight conflict/, code: "CONFLICT" },
+  // Invitations (`repos/sharing.ts`).
+  { pattern: /^This invitation was not found/, code: "NOT_FOUND" },
+  { pattern: /^This invitation is for another GitHub account/, code: "FORBIDDEN" },
+  { pattern: /^A thread can (have|be shared with) at most/, code: "PRECONDITION_FAILED" },
   // The follow-up queue's own bound (`followups.ask`).
   { pattern: /follow-ups queued\. Wait/, code: "TOO_MANY_REQUESTS" },
   // Preconditions on the run state machine and on archived content.
@@ -115,6 +127,11 @@ export function trpcCodeForError(error: unknown): Code {
   }
   if (isInfrastructureError(error)) {
     return UNCLASSIFIED;
+  }
+  // A role too low for the action, in a thread the caller may read
+  // (`repos/access.ts`). A thread they may not read is "not found" instead.
+  if (error.name === "TreeAccessError") {
+    return "FORBIDDEN";
   }
   return matchRepoErrorMessage(error.message) ?? REFUSAL;
 }

@@ -156,12 +156,14 @@ export function enqueueRun(ctx: LaunchContext, nodeId: string, modelId: string):
   ctx.runs.start(nodeId);
 }
 
-/** 1-based place in the queue while the node waits, absent once it is claimed. */
+/** 1-based place in the queue while the node waits, absent once it is
+ * claimed. Whoever pays for the run; the caller has checked that `ctx.user`
+ * may read the node. */
 export function queuePositionOf(
-  ctx: { db: AppContext["db"]; user: { id: string } },
+  ctx: { db: AppContext["db"]; user: { id: string } | null },
   nodeId: string,
 ): number | undefined {
-  const position = queue.position(ctx.db, ctx.user.id, nodeId);
+  const position = queue.position(ctx.db, null, nodeId);
   return position > 0 ? position : undefined;
 }
 
@@ -172,18 +174,20 @@ export function queuePositionOf(
  * that produced nothing readable.
  */
 export function nodeContent(
-  ctx: { db: AppContext["db"]; user: { id: string } },
+  ctx: { db: AppContext["db"]; user: { id: string } | null },
   nodeId: string,
 ): ResearchNodeContent {
+  // Anyone who may read the thread, guests included for a public one.
+  const userId = ctx.user?.id ?? null;
   const node = required(
-    repo(() => nodes.get(ctx.db, ctx.user.id, nodeId)),
+    repo(() => nodes.get(ctx.db, userId, nodeId)),
     `research node ${nodeId} was not found`,
   );
   // The snapshot is read first so `seq`, read with the live window, is never
   // older than the turns returned beside it: a snapshot committed between the
   // two reads costs the client a refetch, not a silently stale sequence.
-  const snapshot = repo(() => snapshots.read(ctx.db, ctx.user.id, nodeId));
-  const live = repo(() => runsRepo.liveWindow(ctx.db, ctx.user.id, nodeId));
+  const snapshot = repo(() => snapshots.read(ctx.db, userId, nodeId));
+  const live = repo(() => runsRepo.liveWindow(ctx.db, userId, nodeId));
 
   const content: ResearchNodeContent = {
     node,

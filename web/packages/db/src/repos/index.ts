@@ -8,6 +8,7 @@
 // namespace import, so this spelling is what keeps a module that nothing uses
 // visible as an error rather than silently retained.
 
+import * as access from "./access.js";
 import * as auth from "./auth.js";
 import * as drafts from "./drafts.js";
 import * as embeds from "./embeds.js";
@@ -28,6 +29,7 @@ import * as recaps from "./recaps.js";
 import * as researchDocuments from "./researchDocuments.js";
 import * as researchDrafts from "./researchDrafts.js";
 import * as runs from "./runs.js";
+import * as sharing from "./sharing.js";
 import * as snapshots from "./snapshots.js";
 import * as subtrees from "./subtrees.js";
 import * as trash from "./trash.js";
@@ -39,6 +41,7 @@ import * as widgets from "./widgets.js";
 import * as workspaces from "./workspaces.js";
 
 export {
+  access,
   auth,
   drafts,
   embeds,
@@ -59,6 +62,7 @@ export {
   researchDocuments,
   researchDrafts,
   runs,
+  sharing,
   snapshots,
   subtrees,
   trash,

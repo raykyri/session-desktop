@@ -3,9 +3,11 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { SessionEvent } from "@session/shared";
+import type { SessionEvent, ThreadViewer } from "@session/shared";
 import { z } from "zod";
 
+import { MAX_OPEN_TREES } from "../../events/bus.js";
+import { requireTreeRole, treeRole } from "../../research/access.js";
 import { protectedProcedure, router } from "../base.js";
 
 export const eventsRouter = router({
@@ -34,11 +36,40 @@ export const eventsRouter = router({
       }
     }),
 
+  /**
+   * Which active nodes this connection wants turn deltas for and, with
+   * `treeIds`, which threads it has open. Open threads are what a reader of
+   * a public thread who is not a member receives that thread's events
+   * through, and what presence (`research.presence.changed`) reports;
+   * sending the same `treeIds` again renews presence, which lapses after
+   * `PRESENCE_TTL_MS` without a renewal. Ids of threads the caller may not
+   * read are dropped.
+   */
   setInterest: protectedProcedure
-    .input(z.object({ connectionId: z.string(), nodeIds: z.array(z.string()).max(200) }))
+    .input(
+      z.object({
+        connectionId: z.string(),
+        nodeIds: z.array(z.string()).max(200),
+        treeIds: z.array(z.string()).max(MAX_OPEN_TREES).optional(),
+      }),
+    )
     .mutation(({ ctx, input }) => ({
       // False when the connection has already gone; the client's next
       // subscribe publishes its interest again.
-      applied: ctx.eventBus.setInterest(ctx.user.id, input.connectionId, input.nodeIds),
+      applied: ctx.eventBus.setInterest(
+        ctx.user.id,
+        input.connectionId,
+        input.nodeIds,
+        input.treeIds?.filter((treeId) => treeRole(ctx.db, ctx.user.id, treeId) !== null),
+      ),
     })),
+
+  /** Who has the thread open now (`research.presence.changed` reports
+   * changes). */
+  presence: protectedProcedure
+    .input(z.object({ treeId: z.string() }))
+    .query(({ ctx, input }): ThreadViewer[] => {
+      requireTreeRole(ctx, input.treeId, "viewer");
+      return ctx.eventBus.viewers(input.treeId);
+    }),
 });

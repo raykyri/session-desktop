@@ -11,7 +11,7 @@ import { nodes } from "../schema/nodes.js";
 import { runQueue } from "../schema/runs.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodeReadableBy } from "./access.js";
 
 /**
  * Which cap a queued row is admitted under.
@@ -41,7 +41,7 @@ export function enqueue(db: SessionDatabase, userId: string, input: EnqueueInput
   const node = db
     .select({ id: nodes.id })
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, input.nodeId)))
     .get();
   if (!node) {
     throw new Error(`research node ${input.nodeId} was not found`);
@@ -230,14 +230,19 @@ export function wakeChildrenOf(db: SessionDatabase, parentNodeId: string): numbe
  */
 export function position(
   db: SessionDatabase,
-  userId: string,
+  /** The account that pays for the run, or null for any: a reader of a
+   * shared thread sees the place of someone else's question. The caller
+   * checks that the reader may read the node. */
+  userId: string | null,
   nodeId: string,
   at: number = now(),
 ): number {
   const row = db
     .select()
     .from(runQueue)
-    .where(and(eq(runQueue.userId, userId), eq(runQueue.nodeId, nodeId)))
+    .where(
+      and(userId === null ? undefined : eq(runQueue.userId, userId), eq(runQueue.nodeId, nodeId)),
+    )
     .get();
   if (!row || row.claimedAt !== null) {
     return 0;

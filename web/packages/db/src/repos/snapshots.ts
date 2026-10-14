@@ -17,7 +17,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now, strictlyAfter } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodeReadableBy } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode, isTerminalStatus } from "./nodes.js";
 import { touchTree } from "./trees.js";
@@ -94,7 +94,7 @@ export function commit(db: SessionDatabase, userId: string, input: CommitInput):
     const node = tx
       .select()
       .from(nodes)
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeReadableBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node) {
       throw new Error(`research node ${input.nodeId} was not found`);
@@ -168,12 +168,16 @@ export function commit(db: SessionDatabase, userId: string, input: CommitInput):
   });
 }
 
-export function read(db: SessionDatabase, userId: string, nodeId: string): StoredSnapshot | null {
+export function read(
+  db: SessionDatabase,
+  userId: string | null,
+  nodeId: string,
+): StoredSnapshot | null {
   const row = db
     .select({ snapshot: responseSnapshots })
     .from(responseSnapshots)
     .innerJoin(nodes, eq(nodes.id, responseSnapshots.nodeId))
-    .where(and(nodeOwnedBy(userId), eq(responseSnapshots.nodeId, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(responseSnapshots.nodeId, nodeId)))
     .get();
   if (!row) {
     return null;
@@ -198,12 +202,16 @@ export function read(db: SessionDatabase, userId: string, nodeId: string): Store
 }
 
 /** The revision alone, for checks that only compare it. */
-export function revision(db: SessionDatabase, userId: string, nodeId: string): string | null {
+export function revision(
+  db: SessionDatabase,
+  userId: string | null,
+  nodeId: string,
+): string | null {
   const row = db
     .select({ revision: responseSnapshots.revision })
     .from(responseSnapshots)
     .innerJoin(nodes, eq(nodes.id, responseSnapshots.nodeId))
-    .where(and(nodeOwnedBy(userId), eq(responseSnapshots.nodeId, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(responseSnapshots.nodeId, nodeId)))
     .get();
   return row?.revision ?? null;
 }
@@ -240,7 +248,7 @@ export function applyReplacedTurns(
   const node = tx
     .select()
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -292,7 +300,7 @@ export function remove(db: SessionDatabase, userId: string, nodeId: string): boo
   const node = db
     .select({ id: nodes.id })
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     return false;

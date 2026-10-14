@@ -24,7 +24,7 @@ import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { requireNodeAccess } from "./access.js";
 import { removeAllForNode, listForNode } from "./highlights.js";
 import { get as getNode } from "./nodes.js";
 import { applyReplacedTurns, read as readSnapshot } from "./snapshots.js";
@@ -92,18 +92,9 @@ export function update(
   const markdown = input.markdown.trim();
   validateDocumentMarkdown(markdown);
   return withFullSync(db, (tx) => {
-    const node = tx
-      .select()
-      .from(nodes)
-      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
-      .get();
-    if (!node) {
-      throw new Error(`research node ${input.nodeId} was not found`);
-    }
-    const tree = tx.select().from(trees).where(eq(trees.id, node.treeId)).get();
-    if (!tree) {
-      throw new Error(`research tree ${node.treeId} was not found`);
-    }
+    // A document is a thread's root, and saving it renames the thread: the
+    // owner's.
+    const { node, tree } = requireNodeAccess(tx, userId, input.nodeId, "owner");
     if (
       node.type !== "document" ||
       node.source === "transcript" ||
@@ -163,7 +154,7 @@ export function update(
       responseRevision = applyReplacedTurns(tx, userId, node.id, [
         documentTurn(node.id, markdown),
       ]).revision;
-      tx.update(nodes).set({ editedAt: at }).where(eq(nodes.id, node.id)).run();
+      tx.update(nodes).set({ editedAt: at, editedBy: userId }).where(eq(nodes.id, node.id)).run();
     }
     const treeRow = tx
       .update(trees)

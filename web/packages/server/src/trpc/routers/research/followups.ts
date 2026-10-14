@@ -12,6 +12,7 @@ import { inlineChainFor } from "@session/shared/lib/researchChains";
 import { z } from "zod";
 
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
+import { requireNodeRole } from "../../../research/access.js";
 import {
   assertEffortAccepted,
   assertModelUsable,
@@ -67,6 +68,8 @@ export const followupProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }): Promise<AskFollowupResult> => {
+      // A viewer cannot ask; refused before anything is resolved or charged.
+      requireNodeRole(ctx, input.headNodeId, "commenter");
       const tail = chainTail(ctx, ctx.user.id, input.headNodeId);
       const model = input.model ?? nodeModelId(tail);
       const effort =

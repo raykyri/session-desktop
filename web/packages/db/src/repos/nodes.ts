@@ -35,7 +35,17 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy, rejectTrashed } from "./access.js";
+import {
+  assertMayChangeNode,
+  assertMayEditText,
+  assertMayRelaunch,
+  nodeReadableBy,
+  payerOf,
+  rejectTrashed,
+  requireNodeAccess,
+  treeJoinedBy,
+} from "./access.js";
+import type { NodeAccess, TreeRole } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
@@ -107,25 +117,17 @@ export interface AdmittedChild {
   reorderedHead: ResearchNode | null;
 }
 
-interface LoadedNode {
-  node: NodeRow;
-  tree: TreeRow;
-}
+type LoadedNode = NodeAccess;
 
-function loadNode(db: SessionDatabase, userId: string, nodeId: string): LoadedNode {
-  const node = db
-    .select()
-    .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
-    .get();
-  if (!node) {
-    throw new Error(`research node ${nodeId} was not found`);
-  }
-  const tree = db.select().from(trees).where(eq(trees.id, node.treeId)).get();
-  if (!tree) {
-    throw new Error(`research tree ${node.treeId} was not found`);
-  }
-  return { node, tree };
+/** A node and its thread, for a caller with at least `minimum` there. The
+ * run pipeline acts as the run's asker, who can read the thread. */
+function loadNode(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  minimum: TreeRole = "viewer",
+): LoadedNode {
+  return requireNodeAccess(db, userId, nodeId, minimum);
 }
 
 function relationsFor(db: SessionDatabase, node: NodeRow, tree: TreeRow) {
@@ -141,11 +143,16 @@ function relationsFor(db: SessionDatabase, node: NodeRow, tree: TreeRow) {
   };
 }
 
-export function get(db: SessionDatabase, userId: string, nodeId: string): ResearchNode | null {
+/** The node, when `userId` (null: a guest) may read its thread. */
+export function get(
+  db: SessionDatabase,
+  userId: string | null,
+  nodeId: string,
+): ResearchNode | null {
   const node = db
     .select()
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     return null;
@@ -268,7 +275,8 @@ export function admitChildDetailed(
       : {}),
   };
   return transact(db, (tx) => {
-    const { node: parent, tree } = loadNode(tx, userId, input.parentNodeId);
+    const access = loadNode(tx, userId, input.parentNodeId, "commenter");
+    const { node: parent, tree } = access;
     if (tree.archivedAt !== null) {
       throw new Error(
         "Cannot create follow-up on archived research: restore the research thread first.",
@@ -292,6 +300,11 @@ export function admitChildDetailed(
         replaced !== undefined &&
         tx.select({ id: nodes.id }).from(nodes).where(eq(nodes.parentNodeId, replaced.id)).get() ===
           undefined;
+      if (replaced) {
+        // Editing a question is changing its text: its author's, while
+        // nobody else has replied under it.
+        assertMayEditText(tx, { ...access, node: replaced }, userId);
+      }
       if (
         !replaced ||
         replaced.parentNodeId !== parent.id ||
@@ -394,9 +407,12 @@ export function setChainOrder(
   userId: string,
   headNodeId: string,
   nodeIds: readonly string[],
+  /** The display order the caller reordered from; another person's reorder
+   * since is refused. Absent: not checked. */
+  expectedOrder?: readonly string[],
 ): { node: ResearchNode; changed: boolean } {
   return transact(db, (tx) => {
-    const { node: head, tree } = loadNode(tx, userId, headNodeId);
+    const { node: head, tree } = loadNode(tx, userId, headNodeId, "owner");
     if (chainHeadRow(tx, head).id !== head.id) {
       throw new Error(`Research node ${headNodeId} does not start a conversation.`);
     }
@@ -414,6 +430,16 @@ export function setChainOrder(
       throw new Error("The conversation changed; refresh before reordering its messages.");
     }
     const current = storedChainOrder(head);
+    if (expectedOrder !== undefined) {
+      // The column as the caller saw it: the stored order, or oldest first.
+      const shown = current ?? chain;
+      if (
+        shown.length !== expectedOrder.length ||
+        shown.some((id, index) => id !== expectedOrder[index])
+      ) {
+        throw new Error("The conversation changed; refresh before reordering its messages.");
+      }
+    }
     const changed =
       current === null ||
       current.length !== nodeIds.length ||
@@ -527,6 +553,7 @@ function relaunch(
   tx.delete(nodeMessages).where(eq(nodeMessages.nodeId, node.id)).run();
   tx.delete(responseSnapshots).where(eq(responseSnapshots.nodeId, node.id)).run();
   const at = now();
+  const tree = tx.select().from(trees).where(eq(trees.id, node.treeId)).get();
   tx.update(nodes)
     .set({
       status: "queued",
@@ -543,7 +570,8 @@ function relaunch(
     })
     .where(eq(nodes.id, node.id))
     .run();
-  enqueueForRun(tx, userId, node.id, model ?? rowModel(node), at);
+  // The question's author pays for every attempt of it.
+  enqueueForRun(tx, tree ? payerOf(node, tree) : userId, node.id, model ?? rowModel(node), at);
   touchTree(tx, node.treeId, at);
   syncFeedItem(tx, node);
   return reload(tx, userId, node.id);
@@ -564,8 +592,10 @@ export function resetForRetry(
   model?: string,
 ): ResearchNode {
   return transact(db, (tx) => {
-    const { node, tree } = loadNode(tx, userId, nodeId);
+    const access = loadNode(tx, userId, nodeId, "commenter");
+    const { node, tree } = access;
     rejectTrashed(tree);
+    assertMayRelaunch(access, userId);
     const status = runStatus(node);
     if (status !== "failed" && status !== "cancelled" && status !== "interrupted") {
       throw new Error(
@@ -593,8 +623,10 @@ function runActive(node: NodeRow): boolean {
  */
 export function resetForRerun(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
-    const { node, tree } = loadNode(tx, userId, nodeId);
+    const access = loadNode(tx, userId, nodeId, "commenter");
+    const { node, tree } = access;
     rejectTrashed(tree);
+    assertMayRelaunch(access, userId);
     if (tree.archivedAt !== null) {
       throw new Error("Restore archived research before rerunning a question.");
     }
@@ -630,7 +662,7 @@ export function resetForRerun(db: SessionDatabase, userId: string, nodeId: strin
  */
 export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
-    const { node } = loadNode(tx, userId, nodeId);
+    const { node, tree } = loadNode(tx, userId, nodeId);
     if (runStatus(node) !== "interrupted") {
       throw new Error("Cannot resume run: only runs with status 'interrupted' can be resumed.");
     }
@@ -654,7 +686,7 @@ export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: strin
       })
       .where(eq(nodes.id, nodeId))
       .run();
-    enqueueForRun(tx, userId, node.id, rowModel(node), 0);
+    enqueueForRun(tx, payerOf(node, tree), node.id, rowModel(node), 0);
     touchTree(tx, node.treeId, at);
     syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
@@ -834,7 +866,8 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
     const orphanedQueued = tx
       .select({
         id: nodes.id,
-        userId: trees.ownerId,
+        // The asker pays (`access.payerOf`).
+        userId: sql<string>`coalesce(${nodes.authorId}, ${trees.ownerId})`,
         model: nodes.model,
         createdAt: nodes.createdAt,
       })
@@ -858,7 +891,11 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
     // 0 sorts ahead of any real timestamp, and the ULID tie-break keeps the
     // original order among them.
     const pending = tx
-      .select({ id: nodes.id, userId: trees.ownerId, model: nodes.model })
+      .select({
+        id: nodes.id,
+        userId: sql<string>`coalesce(${nodes.authorId}, ${trees.ownerId})`,
+        model: nodes.model,
+      })
       .from(nodes)
       .innerJoin(trees, eq(trees.id, nodes.treeId))
       .where(eq(nodes.resumePending, true))
@@ -888,8 +925,10 @@ export function rename(
     throw new Error("Research node title is required.");
   }
   return transact(db, (tx) => {
-    const { node, tree } = loadNode(tx, userId, nodeId);
+    const access = loadNode(tx, userId, nodeId, "commenter");
+    const { node, tree } = access;
     rejectTrashed(tree);
+    assertMayChangeNode(tx, access, userId);
     tx.update(nodes).set({ title: clean }).where(eq(nodes.id, nodeId)).run();
     touchTree(tx, node.treeId);
     syncFeedItem(tx, node);
@@ -897,12 +936,18 @@ export function rename(
   });
 }
 
-/** Active nodes across the account's threads, for the activity rail. */
+/** Active nodes across the threads the account owns or is a member of, for
+ * the activity rail. */
 export function listActive(db: SessionDatabase, userId: string): ResearchNode[] {
   const rows = db
     .select()
     .from(nodes)
-    .where(and(nodeOwnedBy(userId), inArray(nodes.status, ["queued", "running", "interrupted"])))
+    .where(
+      and(
+        sql`exists (select 1 from ${trees} where ${trees.id} = ${nodes.treeId} and ${treeJoinedBy(userId)})`,
+        inArray(nodes.status, ["queued", "running", "interrupted"]),
+      ),
+    )
     .orderBy(asc(nodes.createdAt), asc(nodes.id))
     .all();
   return rows.flatMap((row) => {
@@ -919,8 +964,10 @@ export function removeBranch(
   nodeId: string,
 ): ResearchBranchRemoval {
   return transact(db, (tx) => {
-    const { node, tree } = loadNode(tx, userId, nodeId);
+    const access = loadNode(tx, userId, nodeId, "commenter");
+    const { node, tree } = access;
     rejectTrashed(tree);
+    assertMayChangeNode(tx, access, userId);
     if (node.parentNodeId === null) {
       throw new Error(
         "Cannot delete root node individually: delete the entire research thread instead.",
@@ -941,6 +988,7 @@ export function removeBranch(
       treeId: tree.id,
       parentNodeId: node.parentNodeId,
       removedNodeIds: ordered,
+      removedBy: userId,
     };
   });
 }

@@ -476,3 +476,86 @@ test("the activity list holds queued, running, and interrupted work", (t) => {
   t.is(researchNodeIsActivity(settled), false);
   t.deepEqual(upsertResearchActivity(stillListed, settled), []);
 });
+
+test("the collaboration events parse, and a half-empty notification is refused", (t) => {
+  const envelope = (type: string, payload: Record<string, unknown>): SessionEvent => ({
+    type,
+    payload,
+    timestamp: 5,
+  });
+  t.deepEqual(
+    parseSessionEvent(
+      envelope("notification.requested", {
+        id: "n1",
+        title: "Research finished",
+        body: "What is a bloom filter?",
+        tone: "success",
+        timeoutMs: 8000,
+        createdAt: 4,
+        href: "/r/t1?sel=n",
+        kind: "runFinished",
+        treeId: "t1",
+      }),
+    ),
+    {
+      kind: "event",
+      event: {
+        type: "notification.requested",
+        notification: {
+          id: "n1",
+          title: "Research finished",
+          body: "What is a bloom filter?",
+          tone: "success",
+          timeoutMs: 8000,
+          createdAt: 4,
+          href: "/r/t1?sel=n",
+          kind: "runFinished",
+          treeId: "t1",
+        },
+        timestamp: 5,
+      },
+    },
+  );
+  t.is(
+    parseSessionEvent(envelope("notification.requested", { id: "n1", title: "No body" })).kind,
+    "malformed",
+  );
+  // An external link is dropped rather than followed.
+  const external = parseSessionEvent(
+    envelope("notification.requested", {
+      id: "n2",
+      title: "x",
+      body: "y",
+      timeoutMs: 1,
+      createdAt: 1,
+      href: "https://example.com",
+    }),
+  );
+  t.true(
+    external.kind === "event" &&
+      external.event.type === "notification.requested" &&
+      external.event.notification.href === undefined,
+  );
+  t.deepEqual(
+    parseSessionEvent(
+      envelope("research.presence.changed", {
+        treeId: "t1",
+        viewers: [{ userId: "u", login: "u", name: null, avatarUrl: null }],
+      }),
+    ),
+    {
+      kind: "event",
+      event: {
+        type: "research.presence.changed",
+        treeId: "t1",
+        viewers: [{ userId: "u", login: "u", name: null, avatarUrl: null }],
+        timestamp: 5,
+      },
+    },
+  );
+  t.deepEqual(parseSessionEvent(envelope("research.sharing.changed", { treeId: "t1" })), {
+    kind: "event",
+    event: { type: "research.sharing.changed", treeId: "t1", timestamp: 5 },
+  });
+  t.is(parseSessionEvent(envelope("research.sharing.changed", {})).kind, "malformed");
+});
