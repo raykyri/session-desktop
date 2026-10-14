@@ -67,6 +67,7 @@ import {
 } from "@session/shared/lib/researchThreadView";
 import { toggleResearchTile } from "@session/shared/lib/researchTileClamp";
 import { widgetChangePrompt } from "@session/shared/lib/sessionWidgetActions";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import {
@@ -81,8 +82,12 @@ import {
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 
-import { getResearchNodeContent, renameResearchNode } from "../../api/api.js";
+import { getResearchNodeContent, getResearchTree, renameResearchNode } from "../../api/api.js";
 import {
+  queryKeys,
+  useSetThreadFollowed,
+  useThreadInterest,
+  useThreadPresence,
   useAskResearchFollowup,
   useCancelResearchNode,
   useCreateResearchPostFollowUp,
@@ -107,6 +112,20 @@ import { nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { RecapDialog } from "../research/RecapDialog.js";
+import { PresenceAvatars } from "../sharing/PresenceAvatars.js";
+import { ShareDialog } from "../sharing/ShareDialog.js";
+import {
+  StaleEditDialog,
+  isConflictError,
+  type StaleEditSubject,
+} from "../sharing/StaleEditDialog.js";
+import { ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
+import {
+  mayCancelQueued,
+  mayEditText,
+  mayRetryQueued,
+  threadPermissions,
+} from "../sharing/permissions.js";
 import { WidgetChangeContext, type WidgetChangeHandler } from "../widgets/context.js";
 
 import {
@@ -202,6 +221,24 @@ function ThreadView({ treeId }: { treeId: string }) {
   const nodes = detail?.nodes ?? NO_NODES;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
   const archived = Boolean(detail?.tree.archivedAt);
+
+  // Collaboration (web only): what the reader may do here, who wrote what,
+  // and who else has the thread open. A viewer or a guest reads only.
+  const queryClient = useQueryClient();
+  const meId = me?.id ?? null;
+  const detailTree = detail?.tree;
+  const permissions = useMemo(() => threadPermissions(detailTree, meId), [detailTree, meId]);
+  const participants = detail?.participants;
+  const people = useMemo(() => threadPeople({ participants }, meId), [participants, meId]);
+  const collaboration = useMemo(() => ({ permissions, people }), [people, permissions]);
+  const permissionsRef = useLatest(permissions);
+  const readOnly = !permissions.canContribute;
+  useThreadInterest(treeId, me !== null);
+  const viewers = useThreadPresence(treeId);
+  const setFollowed = useSetThreadFollowed();
+  const [sharing, setSharing] = useState(false);
+  const [staleEdit, setStaleEdit] = useState<{ subject: StaleEditSubject } | null>(null);
+  const [staleReloading, setStaleReloading] = useState(false);
   const treeTitle = detail?.tree.title ?? "";
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const nodesRef = useLatest(nodes);
@@ -626,7 +663,7 @@ function ThreadView({ treeId }: { treeId: string }) {
    * level; its ask box takes focus. */
   const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null, text = "") => {
-      if (archived) return;
+      if (readOnly) return;
       const previous = pendingRef.current;
       if (previous && previous.parentNodeId !== parentNodeId) {
         clearPendingBranch(treeId, previous.parentNodeId);
@@ -650,14 +687,14 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (text) setComposerText((current) => ({ ...current, [`pending:${parentNodeId}`]: text }));
       requestFocus({ kind: "composer", key: `pending:${parentNodeId}` }, "settle");
     },
-    [historyRef, levelPathRef, nodesRef, pendingRef, archived, requestFocus, selectionWith, treeId],
+    [historyRef, levelPathRef, nodesRef, pendingRef, readOnly, requestFocus, selectionWith, treeId],
   );
 
   // A widget's "Ask for changes" opens a branch from its answer with the
   // change request in the branch's composer, as on the desktop.
   const widgetChange = useMemo<WidgetChangeHandler | null>(
     () =>
-      archived
+      readOnly
         ? null
         : {
             ask: (answer, html) => {
@@ -676,7 +713,7 @@ function ThreadView({ treeId }: { treeId: string }) {
               }));
             },
           },
-    [archived, nodesRef, openPendingBranch],
+    [readOnly, nodesRef, openPendingBranch],
   );
 
   const cancelPending = useCallback(() => {
@@ -830,17 +867,23 @@ function ThreadView({ treeId }: { treeId: string }) {
   const reorderChain = useCallback(
     (headId: string, nodeId: string, beforeId: string | null): string[] | null => {
       const displayIds = chainDisplayIds(headId);
-      if (archived || !displayIds.includes(nodeId)) return null;
+      if (!permissionsRef.current.canReorder || !displayIds.includes(nodeId)) return null;
       const next = reorderedIds([...displayIds], nodeId, beforeId);
       if (next.length === displayIds.length && next.every((id, index) => id === displayIds[index]))
         return null;
       chainOrderMutate(
-        { headNodeId: headId, nodeIds: next },
-        { onError: (error) => fail("The messages could not be reordered", error) },
+        // The order the column showed: a change made since is refused.
+        { headNodeId: headId, nodeIds: next, expectedOrder: [...displayIds] },
+        {
+          onError: (error) => {
+            if (isConflictError(error)) setStaleEdit({ subject: "order" });
+            else fail("The messages could not be reordered", error);
+          },
+        },
       );
       return next;
     },
-    [archived, chainDisplayIds, chainOrderMutate, fail],
+    [permissionsRef, chainDisplayIds, chainOrderMutate, fail],
   );
   const startMessageDrag = useMessageDrag({
     onMove: (nodeId, place, beforeId) => {
@@ -850,7 +893,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const moveFocusedMessage = useCallback(
     (row: HTMLElement, level: number, step: -1 | 1) => {
       const nodeId = row.dataset["nodeId"];
-      if (!nodeId || archived) return;
+      if (!nodeId || !permissionsRef.current.canReorder) return;
       const headId = inlineChainFor(nodesRef.current, nodeId)[0] ?? nodeId;
       const ids = chainDisplayIds(headId);
       const target = stepReorderTarget([...ids], nodeId, step);
@@ -876,7 +919,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       };
       requestAnimationFrame(refocus);
     },
-    [nodesRef, announce, archived, chainDisplayIds, reorderChain],
+    [nodesRef, permissionsRef, announce, chainDisplayIds, reorderChain],
   );
 
   /* ------------------------------------------------------- selection */
@@ -1042,7 +1085,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       const currentDetail = detailRef.current;
       const prompt = (composerTextRef.current[headId] ?? "").trim();
       const images = composerImagesRef.current[headId] ?? NO_IMAGES;
-      if (!currentDetail || !prompt || archived || submittingKeyRef.current) return;
+      if (!currentDetail || !prompt || readOnly || submittingKeyRef.current) return;
       const chain = inlineChainFor(currentDetail.nodes, headId)
         .map((id) => currentDetail.nodes.find((node) => node.id === id))
         .filter((node): node is ResearchNode => Boolean(node));
@@ -1124,7 +1167,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       editingByHeadRef,
       stripRef,
       submittingKeyRef,
-      archived,
+      readOnly,
       askMutate,
       clearComposer,
       fail,
@@ -1143,7 +1186,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     const key = `pending:${current.parentNodeId}`;
     const prompt = (composerTextRef.current[key] ?? "").trim();
     const images = composerImagesRef.current[key] ?? NO_IMAGES;
-    if (!prompt || submittingKeyRef.current || archived) return;
+    if (!prompt || submittingKeyRef.current || readOnly) return;
     const parent = nodesRef.current.find((node) => node.id === current.parentNodeId);
     const choice = choiceRef.current(key, parent);
     setSubmittingKey(key);
@@ -1176,7 +1219,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     nodesRef,
     pendingRef,
     submittingKeyRef,
-    archived,
+    readOnly,
     clearComposer,
     fail,
     forkMutate,
@@ -1309,6 +1352,12 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (!node || !currentDetail || archived) return;
       const isRoot = nodeId === currentDetail.tree.rootNodeId;
       if (!isRoot && nodeType(node) !== "post") return;
+      // A document is the owner's to edit; a note its author's (web only).
+      const allowed =
+        nodeType(node) === "post"
+          ? mayEditText(permissionsRef.current, nodesRef.current, node)
+          : permissionsRef.current.isOwner;
+      if (!allowed) return;
       let session: EditorSession;
       if (isRoot && node.type === "document") {
         const published = answersRef.current[nodeId];
@@ -1371,7 +1420,17 @@ function ThreadView({ treeId }: { treeId: string }) {
       }
       requestFocus({ kind: "editor" }, "settle");
     },
-    [answersRef, detailRef, levelPathRef, nodesRef, archived, dropPending, navigate, requestFocus],
+    [
+      answersRef,
+      detailRef,
+      levelPathRef,
+      nodesRef,
+      permissionsRef,
+      archived,
+      dropPending,
+      navigate,
+      requestFocus,
+    ],
   );
 
   /** A double-click on a note edits it, unless the editor is busy or the
@@ -1484,10 +1543,93 @@ function ThreadView({ treeId }: { treeId: string }) {
       } catch (error) {
         setEditorError(errorText(error));
         setEditorSaving(false);
+        // Someone saved a newer version first: offer to reload it, keeping
+        // the text in the field.
+        if (isConflictError(error)) {
+          setStaleEdit({ subject: session.kind === "post" ? "note" : "document" });
+        }
       }
     },
     [editorRef, closeEditor, editorSaving, toast, updateDocumentMutate, updatePostMutate],
   );
+
+  /** After a stale-edit refusal: the editor's base becomes the latest saved
+   * version (what the next save expects the server to hold, and what the
+   * preview compares with); the field keeps the reader's text. A refused
+   * reorder refetches the thread. */
+  const reloadLatest = useCallback(async () => {
+    const subject = staleEdit?.subject;
+    const session = editorRef.current;
+    setStaleReloading(true);
+    try {
+      const fresh = await queryClient.fetchQuery({
+        queryKey: queryKeys.tree(treeId),
+        queryFn: () => getResearchTree(treeId),
+        staleTime: 0,
+      });
+      if ((subject === "note" || subject === "document") && session) {
+        const node = fresh.nodes.find((candidate) => candidate.id === session.nodeId);
+        if (!node) {
+          setEditorError("This was deleted while you were editing it.");
+        } else if (session.kind === "post") {
+          const latest = nodePrompt(node);
+          setEditor((current) =>
+            current && current.nodeId === session.nodeId
+              ? {
+                  ...current,
+                  initialText: latest,
+                  expectedText: latest,
+                  highlightAnchors: node.highlights.map((highlight) => highlight.anchor),
+                }
+              : current,
+          );
+          setEditorError(null);
+        } else {
+          const content = await queryClient.fetchQuery({
+            queryKey: queryKeys.nodeContent(node.id),
+            queryFn: () => getResearchNodeContent(node.id),
+            staleTime: 0,
+          });
+          const markdown = buildSegmentView({
+            node,
+            content,
+            turns: content.turns,
+            showAllTurns: true,
+            showFullTrace: false,
+          }).editableDocumentMarkdown;
+          const revision = content.responseRevision;
+          if (markdown == null || !revision) {
+            setEditorError("The document content is unavailable.");
+          } else {
+            setEditor((current) =>
+              current && current.nodeId === session.nodeId
+                ? {
+                    ...current,
+                    initialText: markdown,
+                    expectedText: markdown,
+                    initialTitle: fresh.tree.title,
+                    expectedTitle: fresh.tree.title,
+                    responseRevision: revision,
+                    highlightIds: node.highlights.map((highlight) => highlight.id),
+                    highlightAnchors: node.highlights.map((highlight) => highlight.anchor),
+                    branchAnchors: fresh.nodes.flatMap((child) => {
+                      const anchor = child.parentNodeId === node.id ? passageAnchor(child) : null;
+                      return anchor ? [anchor] : [];
+                    }),
+                  }
+                : current,
+            );
+            setEditorError(null);
+          }
+        }
+      }
+      setStaleEdit(null);
+    } catch (error) {
+      fail("The latest version could not be loaded", error);
+    } finally {
+      setStaleReloading(false);
+    }
+  }, [editorRef, fail, queryClient, staleEdit?.subject, treeId]);
 
   const createTreeMutate = createTree.mutateAsync;
   const askEditorAsQuestion = useCallback(
@@ -1752,6 +1894,8 @@ function ThreadView({ treeId }: { treeId: string }) {
         setQueuedView({ headId, itemId: item.id });
         requestFocus({ kind: "row", level: Math.max(0, path.indexOf(tail.id)) }, "reveal");
       },
+      canCancel: (item) => mayCancelQueued(permissions, item),
+      canRetry: (item) => mayRetryQueued(permissions, item),
       onCancel: (item) => cancelQueued(headId, item),
       onRetry: (item, row) => {
         queuedMutate(
@@ -1766,6 +1910,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   };
   const rowsShared: ChainRowsShared = {
     archived,
+    reorderable: permissions.canReorder,
     treeTitle,
     nodeById,
     branchesByParent,
@@ -1789,6 +1934,8 @@ function ThreadView({ treeId }: { treeId: string }) {
       menu.anchor.element.hasAttribute("data-research-head-menu"),
     onOpen: (trigger: HTMLButtonElement) => openAnswerMenu(trigger, headId),
   });
+  // The root header shows who else has the thread open.
+  const presence = <PresenceAvatars viewers={viewers} meId={meId} />;
   const modelControl = (key: string, node: ResearchNode | undefined) => {
     const choice = choiceFor(key, node);
     return choice
@@ -1814,13 +1961,14 @@ function ThreadView({ treeId }: { treeId: string }) {
       .filter((node): node is ResearchNode => Boolean(node));
     const head = chain[0];
     const tail = chain[chain.length - 1];
-    if (!head || !tail || nodeType(head) === "post" || !me) return null;
+    // A viewer or a guest has no ask boxes.
+    if (!head || !tail || nodeType(head) === "post" || !me || !permissions.contributor) return null;
     const editing = Boolean(editingByHead[headId]);
     const queued = (detail.queues?.[headId] ?? NO_QUEUE).length > 0;
     const step = researchQueueStep(tail);
     const tailActive = runActive(tail);
     const canSend =
-      !archived &&
+      permissions.canContribute &&
       (editing || step === "wait" || queued || (step === "send" && canFollowUpFrom(tail)));
     const stalled = step === "stalled" && !editing && !queued;
     const note = editing
@@ -1938,10 +2086,11 @@ function ThreadView({ treeId }: { treeId: string }) {
             scrollRef={undefined}
             onSelectNode={(nodeId) => navigate(nodeId)}
             onEdit={
-              researchNoteEditable(post, archived)
+              researchNoteEditable(post, archived) && mayEditText(permissions, nodes, post)
                 ? () => editNoteOnDoubleClick(post.id, null)
                 : undefined
             }
+            headerExtra={level === 0 ? presence : null}
           />
         );
       }
@@ -2004,6 +2153,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             composer={chainComposer(headId, level)}
             queue={chainQueue(headId, column.level.chainIds)}
             onScroll={onColumnScroll(column)}
+            headerExtra={level === 0 ? presence : null}
           />
         );
       }
@@ -2137,143 +2287,187 @@ function ThreadView({ treeId }: { treeId: string }) {
   const menuNode = menu ? nodeById.get(menu.nodeId) : undefined;
   const rerunTarget = rerunNodeId && !archived ? (nodeById.get(rerunNodeId) ?? null) : null;
 
+  const followed = detail.tree.followed === true;
   return (
-    <WidgetChangeContext.Provider value={widgetChange}>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div ref={workspaceRef} className="research-thread-page contents" onKeyDown={onKeyDown}>
-        {strip.columns.map(renderColumn)}
-        <div
-          className="text-fg-faint flex min-w-60 flex-1 items-center justify-center px-8 text-center text-sm"
-          aria-hidden={!strip.endsWithAnswer || undefined}
-        >
-          {strip.endsWithAnswer ? (
-            <p className="max-w-64">
-              Select a passage or a branch marker beside the answer to open it as the next pair.
-            </p>
-          ) : null}
+    <ThreadCollaborationContext.Provider value={collaboration}>
+      <WidgetChangeContext.Provider value={widgetChange}>
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+        <div ref={workspaceRef} className="research-thread-page contents" onKeyDown={onKeyDown}>
+          {strip.columns.map(renderColumn)}
+          <div
+            className="text-fg-faint flex min-w-60 flex-1 items-center justify-center px-8 text-center text-sm"
+            aria-hidden={!strip.endsWithAnswer || undefined}
+          >
+            {strip.endsWithAnswer ? (
+              <p className="max-w-64">
+                Select a passage or a branch marker beside the answer to open it as the next pair.
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
-      {layout?.overlay ? createPortal(searchBar, layout.overlay) : searchBar}
-      <div className="sr-only" role="status" aria-live="polite">
-        {announcement}
-      </div>
-      {menu && menuNode ? (
-        <ThreadMenu
-          menu={menu}
-          nodes={nodes}
-          nodeById={nodeById}
-          rootNodeId={rootNodeId}
-          treeTitle={treeTitle}
-          archived={archived || !me}
-          hiddenHighlights={hiddenHighlightsByNode[menu.nodeId] ?? 0}
-          fullTrace={Boolean(fullTraceNodes[menu.nodeId])}
-          openBranchIds={openBranchIds}
-          relaunchPending={retryingNodeId !== null}
-          actions={{
-            onClose: closeMenu,
-            onOpenBranch: (parentNodeId, branchId) => {
-              const level = levelPathRef.current.indexOf(parentNodeId);
-              if (level >= 0) goBranch(level, branchId);
-            },
-            onBranch: (parentNodeId, anchor) => openPendingBranch(parentNodeId, anchor),
-            onRemoveHighlight: (nodeId, highlightId) =>
-              void highlightActions
-                .remove(nodeId, [highlightId])
-                .catch((error: unknown) => fail("The highlight could not be removed", error)),
-            onEdit: startEditing,
-            onToggleFullTrace: toggleFullTrace,
-            onCopyAnswer: copyAnswer,
-            onCopyNote: copyNote,
-            onCopyThread: (chainIds) => void copyThread(chainIds),
-            onRerun: (nodeId) => {
-              const target = nodeById.get(nodeId);
-              if (target && researchRerunConfirms(target)) setRerunNodeId(nodeId);
-              else handleRetry(nodeId);
-            },
-            onGenerateRecap: setRecapNodeId,
-            onRename: (nodeId, value) => setRenameTarget({ nodeId, value }),
-            onDelete: setDeletingNodeId,
-          }}
-        />
-      ) : null}
-      {markerTip ? (
-        <MarkerTip
-          anchor={markerTip.element}
-          items={markerTip.branchIds.flatMap((branchId) => {
-            const branch = nodeById.get(branchId);
-            if (!branch) return [];
-            const anchor = passageAnchor(branch);
-            return [
-              {
-                id: branchId,
-                question: nodePrompt(branch),
-                source: anchor ? `“${researchQuoteText(anchor.exact)}”` : "Whole answer",
-                messages: inlineChainFor(nodes, branchId).length,
-                state:
-                  levels[markerTip.level + 1]?.headId === branchId
-                    ? ("open" as const)
-                    : branchStates.ofBranch(branchId),
+        {layout?.overlay ? createPortal(searchBar, layout.overlay) : searchBar}
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        {menu && menuNode ? (
+          <ThreadMenu
+            menu={menu}
+            nodes={nodes}
+            nodeById={nodeById}
+            rootNodeId={rootNodeId}
+            treeTitle={treeTitle}
+            archived={archived || !me}
+            hiddenHighlights={hiddenHighlightsByNode[menu.nodeId] ?? 0}
+            fullTrace={Boolean(fullTraceNodes[menu.nodeId])}
+            openBranchIds={openBranchIds}
+            relaunchPending={retryingNodeId !== null}
+            followed={followed}
+            actions={{
+              onClose: closeMenu,
+              ...(me
+                ? {
+                    onShare: () => setSharing(true),
+                    onToggleFollow: () =>
+                      setFollowed.mutate(
+                        { treeId, value: !followed },
+                        {
+                          onSuccess: (tree) =>
+                            toast(
+                              tree.followed
+                                ? "You’ll get a notification for new questions and notes here."
+                                : "Notifications for this thread are off.",
+                            ),
+                          onError: (error) => fail("Notifications could not be changed", error),
+                        },
+                      ),
+                  }
+                : {}),
+              onOpenBranch: (parentNodeId, branchId) => {
+                const level = levelPathRef.current.indexOf(parentNodeId);
+                if (level >= 0) goBranch(level, branchId);
               },
-            ];
-          })}
-          opensNext={markerTip.branchIds.includes(levels[markerTip.level + 1]?.headId ?? "")}
-          onDismiss={dismissMarkerTip}
-        />
-      ) : null}
-      {textSelection.action && me ? (
-        <SelectionToolbar
-          action={textSelection.action}
-          saving={textSelection.saving}
-          branchBlocker={textSelection.branchBlocker}
-          onBranch={textSelection.branchFromSelection}
-          onHighlight={() => void textSelection.applyHighlight()}
-          onCopy={() => void textSelection.copySelection()}
-          onDismiss={textSelection.clearAction}
-        />
-      ) : null}
-      {rerunTarget ? (
-        <RerunDialog
-          node={rerunTarget}
-          parent={
-            rerunTarget.parentNodeId ? (nodeById.get(rerunTarget.parentNodeId) ?? null) : null
-          }
-          pending={retryingNodeId !== null}
-          onConfirm={() => {
-            setRerunNodeId(null);
-            handleRetry(rerunTarget.id);
-          }}
-          onClose={() => setRerunNodeId(null)}
-        />
-      ) : null}
-      {renameTarget ? (
-        <RenameDialog
-          key={renameTarget.nodeId}
-          initialValue={renameTarget.value}
-          isRoot={renameTarget.nodeId === rootNodeId}
-          onRename={(title) => renameNode(renameTarget.nodeId, title)}
-          onClose={() => setRenameTarget(null)}
-        />
-      ) : null}
-      {recapNodeId ? (
-        <ThreadRecapDialog
-          nodeId={recapNodeId}
-          onClose={() => setRecapNodeId(null)}
-          onApplied={() => toast("Recap updated")}
-        />
-      ) : null}
-      {deletingNodeId ? (
-        <DeleteDialog
-          key={deletingNodeId}
-          nodes={nodes}
-          nodeId={deletingNodeId}
-          rootNodeId={rootNodeId}
-          treeTitle={treeTitle}
-          onTrashRoot={trashRoot}
-          onRemove={removeNode}
-          onClose={() => setDeletingNodeId(null)}
-        />
-      ) : null}
-    </WidgetChangeContext.Provider>
+              onBranch: (parentNodeId, anchor) => openPendingBranch(parentNodeId, anchor),
+              onRemoveHighlight: (nodeId, highlightId) =>
+                void highlightActions
+                  .remove(nodeId, [highlightId])
+                  .catch((error: unknown) => fail("The highlight could not be removed", error)),
+              onEdit: startEditing,
+              onToggleFullTrace: toggleFullTrace,
+              onCopyAnswer: copyAnswer,
+              onCopyNote: copyNote,
+              onCopyThread: (chainIds) => void copyThread(chainIds),
+              onRerun: (nodeId) => {
+                const target = nodeById.get(nodeId);
+                if (target && researchRerunConfirms(target)) setRerunNodeId(nodeId);
+                else handleRetry(nodeId);
+              },
+              onGenerateRecap: setRecapNodeId,
+              onRename: (nodeId, value) => setRenameTarget({ nodeId, value }),
+              onDelete: setDeletingNodeId,
+            }}
+          />
+        ) : null}
+        {markerTip ? (
+          <MarkerTip
+            anchor={markerTip.element}
+            items={markerTip.branchIds.flatMap((branchId) => {
+              const branch = nodeById.get(branchId);
+              if (!branch) return [];
+              const anchor = passageAnchor(branch);
+              return [
+                {
+                  id: branchId,
+                  question: nodePrompt(branch),
+                  source: anchor ? `“${researchQuoteText(anchor.exact)}”` : "Whole answer",
+                  messages: inlineChainFor(nodes, branchId).length,
+                  state:
+                    levels[markerTip.level + 1]?.headId === branchId
+                      ? ("open" as const)
+                      : branchStates.ofBranch(branchId),
+                },
+              ];
+            })}
+            opensNext={markerTip.branchIds.includes(levels[markerTip.level + 1]?.headId ?? "")}
+            onDismiss={dismissMarkerTip}
+          />
+        ) : null}
+        {textSelection.action ? (
+          <SelectionToolbar
+            action={textSelection.action}
+            saving={textSelection.saving}
+            canAnnotate={permissions.canContribute}
+            branchBlocker={textSelection.branchBlocker}
+            onBranch={textSelection.branchFromSelection}
+            onHighlight={() => void textSelection.applyHighlight()}
+            onCopy={() => void textSelection.copySelection()}
+            onDismiss={textSelection.clearAction}
+          />
+        ) : null}
+        {rerunTarget ? (
+          <RerunDialog
+            node={rerunTarget}
+            parent={
+              rerunTarget.parentNodeId ? (nodeById.get(rerunTarget.parentNodeId) ?? null) : null
+            }
+            pending={retryingNodeId !== null}
+            onConfirm={() => {
+              setRerunNodeId(null);
+              handleRetry(rerunTarget.id);
+            }}
+            onClose={() => setRerunNodeId(null)}
+          />
+        ) : null}
+        {renameTarget ? (
+          <RenameDialog
+            key={renameTarget.nodeId}
+            initialValue={renameTarget.value}
+            isRoot={renameTarget.nodeId === rootNodeId}
+            onRename={(title) => renameNode(renameTarget.nodeId, title)}
+            onClose={() => setRenameTarget(null)}
+          />
+        ) : null}
+        {recapNodeId ? (
+          <ThreadRecapDialog
+            nodeId={recapNodeId}
+            onClose={() => setRecapNodeId(null)}
+            onApplied={() => toast("Recap updated")}
+          />
+        ) : null}
+        {deletingNodeId ? (
+          <DeleteDialog
+            key={deletingNodeId}
+            nodes={nodes}
+            nodeId={deletingNodeId}
+            rootNodeId={rootNodeId}
+            treeTitle={treeTitle}
+            onTrashRoot={trashRoot}
+            onRemove={removeNode}
+            onClose={() => setDeletingNodeId(null)}
+          />
+        ) : null}
+        {sharing ? (
+          <ShareDialog
+            tree={detail.tree}
+            meId={meId}
+            onClose={() => setSharing(false)}
+            onLeft={leaveTree}
+          />
+        ) : null}
+        {staleEdit ? (
+          <StaleEditDialog
+            subject={staleEdit.subject}
+            keptText={
+              staleEdit.subject === "note" || staleEdit.subject === "document"
+                ? (editor?.text ?? null)
+                : null
+            }
+            pending={staleReloading}
+            onReload={() => void reloadLatest()}
+            onClose={() => setStaleEdit(null)}
+          />
+        ) : null}
+      </WidgetChangeContext.Provider>
+    </ThreadCollaborationContext.Provider>
   );
 }
 

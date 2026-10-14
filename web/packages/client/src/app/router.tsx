@@ -22,8 +22,16 @@ import {
 import { AdminPage } from "../routes/admin.js";
 import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
+import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
-import { ArchivePage, DraftPage, DraftsPage, FolderPage, TrashPage } from "../routes/places.js";
+import {
+  ArchivePage,
+  DraftPage,
+  DraftsPage,
+  FolderPage,
+  SharedPage,
+  TrashPage,
+} from "../routes/places.js";
 import { ThreadPage } from "../routes/research.$treeId.js";
 import { SettingsPage } from "../routes/settings.js";
 
@@ -225,6 +233,23 @@ const trashRoute = createRoute({
   component: TrashPage,
 });
 
+/** Web only: the threads shared with the reader. */
+const sharedRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/shared",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: SharedPage,
+});
+
+/** Web only: an invitation link (`invites.create`'s `url`). Signed out, the
+ * page sends the reader to sign in and back here. */
+const inviteRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/invite/$token",
+  component: InvitePage,
+});
+
 const researchRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/r/$treeId",
@@ -274,6 +299,8 @@ export const routeTree = rootRoute.addChildren([
     draftRoute,
     archiveRoute,
     trashRoute,
+    sharedRoute,
+    inviteRoute,
     researchRoute,
     settingsRoute,
     adminRoute,

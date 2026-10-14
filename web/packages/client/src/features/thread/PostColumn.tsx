@@ -23,6 +23,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { AuthorChip, useAuthorName } from "../sharing/AuthorChip.js";
+import { editedByOther, useThreadCollaboration } from "../sharing/context.js";
 
 import { MessageBody } from "./Turn.js";
 
@@ -104,6 +106,8 @@ export function PostColumnBody({
     : null;
   const parentExcerpt = parent ? postFollowUpSourceExcerpt(parent, 60) : null;
   const editedAt = nodeEditedAt(post);
+  const editedBy = useAuthorName(editedByOther(post));
+  const { people } = useThreadCollaboration();
   return (
     <article className="flex flex-col gap-2 px-6 pt-5 pb-6">
       {parent && parentExcerpt !== null ? (
@@ -127,6 +131,8 @@ export function PostColumnBody({
         />
       </div>
       <div className="text-fg-faint flex items-center gap-1.5 text-[length:calc(12px+var(--font-ui-size-offset))]">
+        <AuthorChip authorId={post.authorId} className="text-fg-secondary" />
+        {people.shared && post.authorId ? <span aria-hidden="true">·</span> : null}
         <time
           dateTime={new Date(post.createdAt).toISOString()}
           title={new Date(post.createdAt).toLocaleString()}
@@ -136,7 +142,9 @@ export function PostColumnBody({
         {editedAt ? (
           <>
             <span aria-hidden="true">·</span>
-            <span title={`Edited ${new Date(editedAt).toLocaleString()}`}>Edited</span>
+            <span title={`Edited ${new Date(editedAt).toLocaleString()}`}>
+              {editedBy ? `Edited by ${editedBy}` : "Edited"}
+            </span>
           </>
         ) : null}
       </div>

@@ -51,6 +51,14 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
     "research.listActivity": [],
     "feed.recentActivity": { items: [], nextCursor: null },
     "folders.get": { folders: [], membership: {}, collapsed: [] },
+    // Web-only collaboration reads: nothing shared, no invitations, nobody
+    // else viewing.
+    "sharing.listShared": [],
+    "sharing.listMembers": [],
+    "invites.received": [],
+    "invites.list": [],
+    "events.presence": [],
+    "events.setInterest": { applied: true },
     "events.subscribe": undefined,
   };
 }

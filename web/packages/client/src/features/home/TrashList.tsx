@@ -1,6 +1,7 @@
 // The rows of the Trash (the desktop's `ResearchTrashList.tsx`), in its Home
 // tray and in its own view, most recently trashed first. Rows don't open;
-// each has Restore and Delete now.
+// each has Restore and Delete now (for a thread shared with the reader, web
+// only, Delete now leaves it).
 
 import { researchThreadKind } from "@session/shared/lib/researchRowGlyph";
 import type { ResearchTrashEntry } from "@session/shared/lib/researchTrash";
@@ -72,7 +73,11 @@ export function TrashList({
               {entry.title}
             </span>
             <span className="text-fg-faint text-xs" title={trashedTooltip(entry.trashedAt)}>
-              {entry.kind === "folder" ? "Folder · " : ""}
+              {entry.kind === "folder"
+                ? "Folder · "
+                : entry.tree.role !== undefined && entry.tree.role !== "owner"
+                  ? "Shared with you · "
+                  : ""}
               {shortWhen(entry.trashedAt, reference)}
             </span>
           </span>

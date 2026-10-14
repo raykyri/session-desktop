@@ -119,6 +119,7 @@ test("an invitation by login notifies its account, and accepting it tells the ow
   await settle();
   const notification = inviteeEvents.of("notification.requested")[0]?.payload;
   t.is(notification?.["kind"], "invite");
+  t.is(notification?.["href"], "/shared");
   t.is(notification?.["treeId"], detail.tree.id);
   t.true(inviteeEvents.types().includes("research.invites.changed"));
   // Not readable until accepted.

@@ -1,7 +1,8 @@
 // The place views (`10-home-feed-journal.md` §1): a folder (`/f/$folderId`),
 // Drafts (`/drafts`) and one draft (`/drafts/$draftId`), Archive
-// (`/archive`) and Trash (`/trash`). A folder and Drafts end with the ask
-// box, and what it creates is filed there.
+// (`/archive`), Trash (`/trash`) and, web only, Shared with me (`/shared`).
+// A folder and Drafts end with the ask box, and what it creates is filed
+// there.
 
 import { RESEARCH_DRAFTS_FOLDER_ID } from "@session/shared/lib/researchFolders";
 import { useParams } from "@tanstack/react-router";
@@ -75,4 +76,12 @@ export function TrashPage() {
   const { workspaceId } = useWorkspaceScope();
   if (workspaceId === "") return null;
   return <FeedView key={workspaceId} view={{ kind: "trash" }} workspaceId={workspaceId} />;
+}
+
+/** Web only: the threads shared with the reader, and the invitations
+ * addressed to them. */
+export function SharedPage() {
+  const { workspaceId } = useWorkspaceScope();
+  if (workspaceId === "") return null;
+  return <FeedView key={workspaceId} view={{ kind: "shared" }} workspaceId={workspaceId} />;
 }

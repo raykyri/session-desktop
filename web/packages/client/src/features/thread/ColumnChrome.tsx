@@ -61,6 +61,7 @@ export function PairHeader({
   menu = null,
   current = true,
   spanned = false,
+  extra = null,
 }: {
   title: string;
   /** A branch: its number of messages ("Branch · 2 messages"), or "new". */
@@ -81,6 +82,8 @@ export function PairHeader({
   current?: boolean;
   /** A messages column's header, widened across its answer column. */
   spanned?: boolean;
+  /** Shown before the … button: the root header's viewers (web only). */
+  extra?: ReactNode;
 }) {
   const smaller = branch !== null || count !== null;
   return (
@@ -148,6 +151,7 @@ export function PairHeader({
             Archived
           </span>
         ) : null}
+        {extra}
         {menu ? (
           <button
             type="button"

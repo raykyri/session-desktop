@@ -195,7 +195,15 @@ export function AppShell() {
       </main>
       <ImageLightbox />
       <DiagramLightbox />
-      <NotificationStack notifications={notifications} onDismiss={dismiss} />
+      <NotificationStack
+        notifications={notifications}
+        onDismiss={dismiss}
+        // A server notification names the in-app path it is about
+        // (`notification.requested` `href`).
+        onOpen={(href) => {
+          if (href.startsWith("/") && !href.startsWith("//")) void navigate({ href });
+        }}
+      />
       {signedIn ? <FolderDialogsHost /> : null}
       <CommandPalette
         open={paletteOpen}

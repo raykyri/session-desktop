@@ -8,7 +8,9 @@
 // Both calls carry the response revision the dialog opened against, and apply
 // also carries the recap id it is replacing, so a recap generated against an
 // answer that has since been re-run is refused by the server rather than
-// silently attached to different text.
+// silently attached to different text. On such a refusal (CONFLICT, also
+// when someone else applied a recap first) the dialog offers to reload the
+// latest answer and recap; the instructions stay as typed.
 
 import { MAX_RECAP_INSTRUCTIONS_CHARS } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, ResearchRecapCandidate } from "@session/shared";
@@ -19,11 +21,13 @@ import { useEffect, useState } from "react";
 import {
   applyResearchRecapCandidate,
   generateResearchRecapCandidate,
+  getResearchNodeContent,
   getResearchRecapDefaultInstructions,
 } from "../../api/api.js";
 import { ControlButton } from "../../ui/Button.js";
 import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { Textarea } from "../../ui/Field.js";
+import { StaleEditDialog, isConflictError } from "../sharing/StaleEditDialog.js";
 
 export interface RecapDialogProps {
   content: ResearchNodeContent;
@@ -35,10 +39,36 @@ export interface RecapDialogProps {
 export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogProps) {
   // Pin the revision token when the dialog opens so streaming updates do not
   // invalidate the optimistic concurrency check used when applying changes.
-  const [baseline] = useState(() => ({
+  const [baseline, setBaseline] = useState(() => ({
     responseRevision: content.responseRevision ?? "",
     recap: nodeRecap(content.node) ?? null,
   }));
+  const [stale, setStale] = useState(false);
+  const [reloading, setReloading] = useState(false);
+
+  /** After a stale refusal: the latest answer and recap become the baseline;
+   * the candidate, generated against the old one, goes. */
+  const reload = () => {
+    setReloading(true);
+    getResearchNodeContent(content.node.id)
+      .then((latest) => {
+        setBaseline({
+          responseRevision: latest.responseRevision ?? "",
+          recap: nodeRecap(latest.node) ?? null,
+        });
+        setCandidate(null);
+        setError(null);
+        setStale(false);
+      })
+      .catch((caught: unknown) =>
+        setError(caught instanceof Error ? caught.message : String(caught)),
+      )
+      .finally(() => setReloading(false));
+  };
+  const refused = (caught: unknown) => {
+    setError(caught instanceof Error ? caught.message : String(caught));
+    if (isConflictError(caught)) setStale(true);
+  };
 
   const [instructions, setInstructions] = useState(baseline.recap?.instructions?.trim() ?? "");
   const [loadingDefaults, setLoadingDefaults] = useState(true);
@@ -79,9 +109,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
       instructions: instructions.trim(),
     })
       .then(setCandidate)
-      .catch((caught: unknown) =>
-        setError(caught instanceof Error ? caught.message : String(caught)),
-      )
+      .catch(refused)
       .finally(() => setGenerating(false));
   };
 
@@ -99,9 +127,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
         onApplied(node);
         onClose();
       })
-      .catch((caught: unknown) =>
-        setError(caught instanceof Error ? caught.message : String(caught)),
-      )
+      .catch(refused)
       .finally(() => setApplying(false));
   };
 
@@ -177,6 +203,14 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
         <p className="text-status-failed mt-3 text-sm" role="alert">
           {error}
         </p>
+      ) : null}
+      {stale ? (
+        <StaleEditDialog
+          subject="recap"
+          pending={reloading}
+          onReload={reload}
+          onClose={() => setStale(false)}
+        />
       ) : null}
     </Dialog>
   );

@@ -19,6 +19,7 @@ import type { ReactNode, UIEvent } from "react";
 import { cn } from "../../lib/cn.js";
 import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { AuthorChip } from "../sharing/AuthorChip.js";
 
 import { PairHeader, type ThreadHistoryNav } from "./ColumnChrome.js";
 import { ColumnResizer } from "./ColumnResizer.js";
@@ -101,6 +102,10 @@ export interface QueueProps {
   onSelect: (item: ResearchFollowupQueueItem) => void;
   onCancel: (item: ResearchFollowupQueueItem) => void;
   onRetry: (item: ResearchFollowupQueueItem, row: HTMLElement | null) => void;
+  /** Whether the reader may cancel or retry an item (web only: its author,
+   * and the owner for Cancel). Absent: they may. */
+  canCancel?: (item: ResearchFollowupQueueItem) => boolean;
+  canRetry?: (item: ResearchFollowupQueueItem) => boolean;
 }
 
 function QueuedFollowup({
@@ -113,6 +118,8 @@ function QueuedFollowup({
   onCancel,
   onRetry,
   onToggleExpanded,
+  canCancel,
+  canRetry,
 }: Omit<QueueProps, "items" | "tailStalled"> & {
   item: ResearchFollowupQueueItem;
   stalled: boolean;
@@ -123,6 +130,8 @@ function QueuedFollowup({
   const labelId = `research-queued-${item.id}`;
   const { id: clampId, setBox, className: clampClass, overflows } = useTileClamp(expanded);
   const failed = item.failedReason;
+  const cancellable = canCancel?.(item) ?? true;
+  const retryable = canRetry?.(item) ?? true;
   return (
     <li
       className={cn(
@@ -141,6 +150,10 @@ function QueuedFollowup({
         onClick={() => onSelect(item)}
       />
       <div id={labelId} className="pointer-events-none relative z-[1] flow-root px-3 pt-2.5 pb-0.5">
+        <AuthorChip
+          authorId={item.authorId}
+          className="text-fg-faint mb-1 flex text-[length:calc(12px+var(--font-ui-size-offset))]"
+        />
         <div
           ref={setBox}
           id={clampId}
@@ -174,19 +187,21 @@ function QueuedFollowup({
         ) : (
           <span className="mr-1">Queued</span>
         )}
-        <button
-          type="button"
-          className={cn(
-            "text-fg-muted hover:bg-surface-fill-hover hover:text-fg-primary pointer-events-auto rounded-sm px-[5px] py-px",
-            FOCUS_RING,
-          )}
-          aria-label="Cancel this queued message"
-          data-research-queue-cancel=""
-          disabled={busy}
-          onClick={() => onCancel(item)}
-        >
-          Cancel
-        </button>
+        {cancellable ? (
+          <button
+            type="button"
+            className={cn(
+              "text-fg-muted hover:bg-surface-fill-hover hover:text-fg-primary pointer-events-auto rounded-sm px-[5px] py-px",
+              FOCUS_RING,
+            )}
+            aria-label="Cancel this queued message"
+            data-research-queue-cancel=""
+            disabled={busy}
+            onClick={() => onCancel(item)}
+          >
+            Cancel
+          </button>
+        ) : null}
       </div>
       {failed || stalled ? (
         <p
@@ -196,7 +211,7 @@ function QueuedFollowup({
           {failed ?? "The last answer stopped; retry it, or cancel this question."}
         </p>
       ) : null}
-      {failed ? (
+      {failed && retryable ? (
         <div className="relative z-[1] mt-1 pr-2 pl-3">
           <button
             type="button"
@@ -219,6 +234,8 @@ function QueuedFollowup({
 /** What every list of a chain's messages shares. */
 export interface ChainRowsShared {
   archived: boolean;
+  /** The reader may reorder the messages (the owner, outside the Archive). */
+  reorderable: boolean;
   treeTitle: string;
   nodeById: ReadonlyMap<string, ResearchNode>;
   branchesByParent: ReadonlyMap<string, ResearchNode[]>;
@@ -251,7 +268,7 @@ export function ChainRows({
   queue: QueueProps;
 }) {
   const {
-    archived,
+    reorderable,
     treeTitle,
     nodeById,
     branchesByParent,
@@ -259,7 +276,7 @@ export function ChainRows({
     isUnread,
     branchStateOf,
   } = shared;
-  const dragPlace = !archived && displayIds.length > 1 ? chainDropPlace(headId) : null;
+  const dragPlace = reorderable && displayIds.length > 1 ? chainDropPlace(headId) : null;
   const selectedRowId = queue.selectedId === null ? selectedId : null;
   return (
     <ul
@@ -303,6 +320,8 @@ export function ChainRows({
           onCancel={queue.onCancel}
           onRetry={queue.onRetry}
           onToggleExpanded={shared.rowActions.onToggleExpanded}
+          {...(queue.canCancel ? { canCancel: queue.canCancel } : {})}
+          {...(queue.canRetry ? { canRetry: queue.canRetry } : {})}
         />
       ))}
     </ul>
@@ -323,6 +342,7 @@ export function MessagesColumn({
   composer,
   queue,
   onScroll,
+  headerExtra = null,
 }: {
   column: Extract<ResearchColumn, { role: "messages" }>;
   current: boolean;
@@ -337,6 +357,8 @@ export function MessagesColumn({
   composer: ReactNode;
   queue: QueueProps;
   onScroll: ((event: UIEvent<HTMLElement>) => void) | undefined;
+  /** In the header before the … button (the root's viewers). */
+  headerExtra?: ReactNode;
 }) {
   const { index: level, chainIds, displayIds, headId, selectedId } = column.level;
   return (
@@ -358,6 +380,7 @@ export function MessagesColumn({
         archived={level === 0 && shared.archived}
         current={current}
         spanned
+        extra={headerExtra}
       />
       <div className={COLUMN_SCROLL} data-research-scroll="" onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">

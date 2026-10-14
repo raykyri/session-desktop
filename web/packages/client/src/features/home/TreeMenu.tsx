@@ -11,7 +11,7 @@ import {
   RESEARCH_UNFILED_FOLDER_ID,
 } from "@session/shared/lib/researchFolders";
 import { researchTrashTreeSentence } from "@session/shared/lib/researchTrash";
-import { ArchiveRestore, House, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArchiveRestore, House, Pencil, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { errorMessage } from "../../lib/toast.js";
@@ -24,11 +24,18 @@ import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import { PlaceIcon } from "./FeedTray.js";
 
-/** Every place a question can be moved to, in sidebar order. */
-export function moveTargets(folders: ResearchFolder[]) {
+/** Web only: the place id of Shared with me, as a Move to target. */
+const SHARED_TARGET = "system:shared";
+
+/** Every place a question can be moved to, in sidebar order. A thread shared
+ * with the reader (web only) goes to Shared with me alone, one of their
+ * folders or their Archive. */
+export function moveTargets(folders: ResearchFolder[], shared = false) {
   return [
-    { place: RESEARCH_UNFILED_FOLDER_ID, name: "Unfiled" },
-    { place: RESEARCH_DRAFTS_FOLDER_ID, name: "Drafts" },
+    shared
+      ? { place: SHARED_TARGET, name: "Shared with me" }
+      : { place: RESEARCH_UNFILED_FOLDER_ID, name: "Unfiled" },
+    ...(shared ? [] : [{ place: RESEARCH_DRAFTS_FOLDER_ID, name: "Drafts" }]),
     ...folders.map((folder) => ({ place: folder.id, name: folder.name })),
     { place: RESEARCH_ARCHIVE_FOLDER_ID, name: "Archive" },
   ];
@@ -39,19 +46,23 @@ export function moveTargets(folders: ResearchFolder[]) {
 export function MoveToItems({
   currentPlace,
   folders,
+  shared = false,
   onMove,
   onNewFolder,
 }: {
   currentPlace: string;
   folders: ResearchFolder[];
+  /** The thread is shared with the reader (web only). */
+  shared?: boolean;
   onMove: (place: string) => void;
-  onNewFolder: () => void;
+  /** New folder…; absent, the item is not offered. */
+  onNewFolder?: () => void;
 }) {
   return (
     <>
       <BaseMenu.Group>
         <MenuGroupLabel>Move to</MenuGroupLabel>
-        {moveTargets(folders).map((target) => {
+        {moveTargets(folders, shared).map((target) => {
           const here = target.place === currentPlace;
           return (
             <MenuItem
@@ -62,7 +73,9 @@ export function MoveToItems({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="text-fg-muted inline-flex shrink-0">
-                  {target.place === RESEARCH_UNFILED_FOLDER_ID ? (
+                  {target.place === SHARED_TARGET ? (
+                    <Users size={15} aria-hidden="true" />
+                  ) : target.place === RESEARCH_UNFILED_FOLDER_ID ? (
                     <House size={15} aria-hidden="true" />
                   ) : (
                     <PlaceIcon place={target.place} size={15} />
@@ -74,10 +87,14 @@ export function MoveToItems({
           );
         })}
       </BaseMenu.Group>
-      <MenuSeparator />
-      <IconMenuItem icon={<Plus size={15} aria-hidden="true" />} onClick={onNewFolder}>
-        New folder…
-      </IconMenuItem>
+      {onNewFolder ? (
+        <>
+          <MenuSeparator />
+          <IconMenuItem icon={<Plus size={15} aria-hidden="true" />} onClick={onNewFolder}>
+            New folder…
+          </IconMenuItem>
+        </>
+      ) : null}
     </>
   );
 }
@@ -214,12 +231,16 @@ export function TreeRenameDialog({
  * Home go with it. */
 export function treeDeleteDialogProps({
   tree,
+  shared = false,
   groupChildren = [],
   onClose,
   onTrash,
   onRemove,
 }: {
   tree: ResearchTreeSummary;
+  /** Shared with the reader (web only): the Trash is the reader's own, and
+   * Delete now leaves the thread. */
+  shared?: boolean;
   groupChildren?: readonly ResearchTreeSummary[];
   onClose: () => void;
   onTrash: (treeId: string) => Promise<void>;
@@ -227,6 +248,33 @@ export function treeDeleteDialogProps({
 }): DeleteDialogProps {
   const count = groupChildren.length;
   const children = `${count} ${count === 1 ? "child" : "children"}`;
+  if (shared) {
+    return {
+      trash: {
+        title: `Delete “${tree.title}”?`,
+        body: (
+          <p className="m-0">
+            It moves to your Trash. Its owner and the other people in it still have it.
+          </p>
+        ),
+        onConfirm: () => onTrash(tree.id),
+      },
+      remove: {
+        title: `Leave “${tree.title}”?`,
+        body: (
+          <p className="m-0">
+            It is shared with you. Deleting it removes you from it; its owner and the other people
+            in it keep it.
+          </p>
+        ),
+        label: "Leave",
+        pendingLabel: "Leaving…",
+        onConfirm: () => onRemove(tree.id),
+      },
+      disabledReason: null,
+      onClose,
+    };
+  }
   return {
     trash: {
       title: count > 0 ? `Delete “${tree.title}” and its ${children}?` : `Delete “${tree.title}”?`,

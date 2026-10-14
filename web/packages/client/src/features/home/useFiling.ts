@@ -150,7 +150,7 @@ function withActiveOrder(
   order: readonly string[],
 ): ResearchTreeSummary[] {
   const isActive = (tree: ResearchTreeSummary) =>
-    tree.workspaceId === workspaceId && tree.archivedAt == null;
+    tree.workspaceId === workspaceId && tree.archivedAt == null && ownTree(tree);
   const active = summaries.filter(isActive);
   if (active.length !== order.length) return summaries;
   const byId = new Map(active.map((tree) => [tree.id, tree]));
@@ -160,9 +160,17 @@ function withActiveOrder(
   return summaries.map((tree) => (isActive(tree) ? (queue[index++] ?? tree) : tree));
 }
 
+/** Web only: a thread the reader owns. A shared thread a member filed in
+ * one of their folders is listed with the workspace's threads, but its order
+ * and nesting are its owner's: `research.reorderTrees` takes the reader's
+ * own threads only. */
+export function ownTree(tree: Pick<ResearchTreeSummary, "role">): boolean {
+  return tree.role === undefined || tree.role === "owner";
+}
+
 /** Rejects a place's archived-ness: the Archive has its own order. */
 function activeOrder(trees: readonly ResearchTreeSummary[]): string[] {
-  return trees.filter((tree) => tree.archivedAt == null).map((tree) => tree.id);
+  return trees.filter((tree) => tree.archivedAt == null && ownTree(tree)).map((tree) => tree.id);
 }
 
 /* -------------------------------------------------------------------------
@@ -314,7 +322,11 @@ export function useFiling(workspaceId: string): Filing {
         const archive = place === RESEARCH_ARCHIVE_FOLDER_ID;
         if (archive && !wasArchived) await archiveResearchTree(treeId);
         else if (!archive && wasArchived) await restoreResearchTree(treeId);
-        if (reorderable && (position || (from !== place && place !== RESEARCH_UNFILED_FOLDER_ID))) {
+        if (
+          ownTree(tree) &&
+          reorderable &&
+          (position || (from !== place && place !== RESEARCH_UNFILED_FOLDER_ID))
+        ) {
           const flat = activeOrder(currentTrees());
           const withTree = flat.includes(treeId) ? flat : [treeId, ...flat];
           const topLevel = topLevelIds(place, currentState());

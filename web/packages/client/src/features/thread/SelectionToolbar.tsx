@@ -44,6 +44,7 @@ export function SelectionToolbar({
   onHighlight,
   onCopy,
   onDismiss,
+  canAnnotate = true,
 }: {
   action: SelectionAction;
   saving: boolean;
@@ -53,11 +54,14 @@ export function SelectionToolbar({
   onHighlight: () => void;
   onCopy: () => void;
   onDismiss: () => void;
+  /** Branch and Highlight are offered (web only: not to a viewer or a
+   * guest, who get Copy alone). */
+  canAnnotate?: boolean;
 }) {
   const barRef = useRef<HTMLDivElement | null>(null);
   const sizeRef = useRef(INITIAL_SIZE);
   const [placement, setPlacement] = useState<Placement | null>(null);
-  const handlersRef = useLatest({ saving, onBranch, onHighlight, onDismiss });
+  const handlersRef = useLatest({ saving, canAnnotate, onBranch, onHighlight, onDismiss });
 
   useLayoutEffect(() => {
     const bar = barRef.current;
@@ -94,6 +98,7 @@ export function SelectionToolbar({
         return;
       }
       if (handlersRef.current.saving || isEditableEventTarget(event.target)) return;
+      if (!handlersRef.current.canAnnotate) return;
       if (isResearchAskActionShortcut(event)) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -154,38 +159,42 @@ export function SelectionToolbar({
       }}
     >
       <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          className={item}
-          disabled={saving || branchBlocker !== null}
-          aria-keyshortcuts="A"
-          title={branchBlocker ?? "Branch to right (A)"}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onBranch}
-        >
-          <ArrowUpRight size={14} aria-hidden="true" />
-          <span>Branch to right</span>
-        </button>
-        <button
-          type="button"
-          className={item}
-          disabled={saving || action.live}
-          aria-keyshortcuts="H"
-          title={action.live ? "Wait for the answer to finish" : "Highlight (H)"}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onHighlight}
-        >
-          <Highlighter size={14} aria-hidden="true" />
-          <span>
-            {saving
-              ? "Saving…"
-              : action.expandAnchor || action.highlightIds.length === 0
-                ? "Highlight"
-                : action.highlightIds.length > 1
-                  ? "Remove highlights"
-                  : "Remove highlight"}
-          </span>
-        </button>
+        {canAnnotate ? (
+          <>
+            <button
+              type="button"
+              className={item}
+              disabled={saving || branchBlocker !== null}
+              aria-keyshortcuts="A"
+              title={branchBlocker ?? "Branch to right (A)"}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onBranch}
+            >
+              <ArrowUpRight size={14} aria-hidden="true" />
+              <span>Branch to right</span>
+            </button>
+            <button
+              type="button"
+              className={item}
+              disabled={saving || action.live}
+              aria-keyshortcuts="H"
+              title={action.live ? "Wait for the answer to finish" : "Highlight (H)"}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onHighlight}
+            >
+              <Highlighter size={14} aria-hidden="true" />
+              <span>
+                {saving
+                  ? "Saving…"
+                  : action.expandAnchor || action.highlightIds.length === 0
+                    ? "Highlight"
+                    : action.highlightIds.length > 1
+                      ? "Remove highlights"
+                      : "Remove highlight"}
+              </span>
+            </button>
+          </>
+        ) : null}
         <button
           type="button"
           className={item}
@@ -197,7 +206,7 @@ export function SelectionToolbar({
           <span>Copy</span>
         </button>
       </div>
-      {action.live ? (
+      {!canAnnotate ? null : action.live ? (
         <div className="text-fg-muted px-2 pt-1 pb-0.5 text-xs">
           Highlighting and branching are available when the answer finishes.
         </div>

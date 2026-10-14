@@ -23,6 +23,9 @@ import type { Ref } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { Avatar, useAuthorName } from "../sharing/AuthorChip.js";
+import { useThreadCollaboration } from "../sharing/context.js";
+import { mayEditText, mayRelaunch } from "../sharing/permissions.js";
 
 import type { ComposerHandle } from "./ConversationComposer.js";
 import type { ModelChoice } from "./ModelPicker.js";
@@ -105,13 +108,14 @@ export function PostThread({
     setLastOpen(openNodeId);
     if (openNodeId) setActiveKey(openNodeId);
   }
+  const { permissions } = useThreadCollaboration();
   const followUps = useMemo(() => postThreadEntries(nodes, post), [nodes, post]);
   const tabKey = followUps.some((node) => node.id === activeKey)
     ? activeKey
     : (followUps[0]?.id ?? null);
   return (
     <div className="flex flex-col">
-      {!archived ? (
+      {!archived && permissions.canContribute ? (
         <PostFollowUpField
           key={post.id}
           models={models}
@@ -134,7 +138,9 @@ export function PostThread({
               onOpen={onOpenFollowUp}
               onOpenContextMenu={onOpenContextMenu}
               onEdit={
-                onEditNote && researchNoteEditable(node, archived)
+                onEditNote &&
+                researchNoteEditable(node, archived) &&
+                mayEditText(permissions, nodes, node)
                   ? (row) => onEditNote(node.id, row)
                   : undefined
               }
@@ -163,6 +169,7 @@ function FollowUpStatus({
 }) {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { permissions } = useThreadCollaboration();
   if (runActive(child)) {
     return (
       <div className="text-fg-muted flex items-center gap-1.5 text-xs" role="status">
@@ -178,7 +185,7 @@ function FollowUpStatus({
   return (
     <div className="text-status-failed relative z-[1] flex flex-wrap items-center gap-1 text-xs">
       <span>{error ?? label}</span>
-      {!archived ? (
+      {!archived && mayRelaunch(permissions, child) ? (
         <>
           <span aria-hidden="true">·</span>
           <button
@@ -232,6 +239,10 @@ function FollowUpRow({
   const labelId = useId();
   const note = nodeType(child) === "post";
   const model = findModel(nodeModelId(child))?.label ?? "AI";
+  const { people } = useThreadCollaboration();
+  const authorName = useAuthorName(child.authorId);
+  const author = people.shared ? (authorName ?? "Someone") : "You";
+  const authorPerson = child.authorId ? people.byId.get(child.authorId) : undefined;
   return (
     <li
       className={cn(
@@ -275,7 +286,10 @@ function FollowUpRow({
       </span>
       <div className="pointer-events-none relative z-[1] flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="text-fg-faint flex items-center gap-1 text-xs">
-          <span className="text-fg-secondary font-medium">You</span>
+          {people.shared && authorPerson ? <Avatar person={authorPerson} size={14} /> : null}
+          <span className="text-fg-secondary font-medium" data-author-chip={child.authorId}>
+            {author}
+          </span>
           {note ? null : <span>{`asked ${model}`}</span>}
           <span aria-hidden="true">·</span>
           <time

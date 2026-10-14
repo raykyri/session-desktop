@@ -30,6 +30,9 @@ import { formatRelativeTime } from "../../lib/relativeTime.js";
 import { errorMessage } from "../../lib/toast.js";
 import { useLiveTurnsStore } from "../../stores/liveTurns.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { useAuthorName } from "../sharing/AuthorChip.js";
+import { editedByOther, useThreadCollaboration } from "../sharing/context.js";
+import { mayCancel, mayEditText, mayRelaunch } from "../sharing/permissions.js";
 
 import { SpannedHeaderSlot } from "./ColumnChrome.js";
 import { ColumnResizer } from "./ColumnResizer.js";
@@ -60,6 +63,7 @@ export interface MarkerActions {
 }
 
 const NO_TURNS: readonly Turn[] = [];
+const NO_NODES: readonly ResearchNode[] = [];
 
 function MarkerButton({
   level,
@@ -201,6 +205,8 @@ export function AnswerColumn({
   const status = nodeStatus(node);
   const footTime = status === "complete" ? (nodeRun(node)?.completedAt ?? node.createdAt) : null;
   const editedAt = nodeEditedAt(node);
+  const { permissions } = useThreadCollaboration();
+  const editedBy = useAuthorName(editedByOther(node));
   const refetch = content.refetch;
   const paneHandlers = useMemo<AnswerPaneHandlers>(
     () => ({ ...handlers, onRetryContentLoad: () => refetch() }),
@@ -258,9 +264,15 @@ export function AnswerColumn({
               cancelling={cancelling}
               recapPending={recapPending}
               pointerOverAnnotation={pointerOverAnnotation}
-              canRetry={answerRetryable(node, archived)}
+              canRetry={answerRetryable(node, archived) && mayRelaunch(permissions, node)}
               retrying={retrying}
-              canEditQuestion={!archived && status === "failed" && Boolean(node.parentNodeId)}
+              canEditQuestion={
+                !archived &&
+                status === "failed" &&
+                Boolean(node.parentNodeId) &&
+                mayEditText(permissions, NO_NODES, node)
+              }
+              canCancel={mayCancel(permissions, node)}
               handlers={paneHandlers}
             />
           )}
@@ -291,7 +303,8 @@ export function AnswerColumn({
                     <>
                       <span aria-hidden="true"> · </span>
                       <span title={new Date(editedAt).toLocaleString()}>
-                        Edited {formatRelativeTime(editedAt)}
+                        Edited {editedBy ? `by ${editedBy} ` : ""}
+                        {formatRelativeTime(editedAt)}
                       </span>
                     </>
                   ) : null}

@@ -147,8 +147,9 @@ export function notifyInvite(
     kind: "invite",
     treeId,
     title: `${inviterLogin} shared a thread with you`,
-    // No link: the thread opens once the invitation is accepted
+    // The thread opens once the invitation is accepted, from Shared with me
     // (`invites.received`, `invites.accept`).
     body: treeTitle(deps.db, treeId),
+    href: "/shared",
   });
 }

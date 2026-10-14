@@ -8,6 +8,11 @@
 // Card content is the thread's root entry (`useFeedRoot`), read per rendered
 // card and batched per tick; the structure (order, places, groups) is the
 // thread list and the folder state, as on the desktop.
+//
+// Web only: Shared with me lists the threads shared with the reader, with the
+// invitations addressed to them. A shared thread can be filed in the
+// reader's own folders and has their own Archive and Trash entries; its
+// order and nesting are its owner's, and Delete leaves it.
 
 import { Menu as BaseMenu } from "@base-ui/react/menu";
 import type {
@@ -24,6 +29,7 @@ import {
   researchCardTitle,
   researchPlaceIsReorderable,
   researchPlaceName,
+  researchFolderStateWithMembership,
   researchTreePlace,
   stepReorderTarget,
   type ResearchDropPosition,
@@ -44,6 +50,7 @@ import {
   researchTrashEntries,
   type ResearchTrashEntry,
 } from "@session/shared/lib/researchTrash";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -69,7 +76,10 @@ import {
 } from "react";
 
 import { getResearchNodeContent } from "../../api/api.js";
+import { invalidateKeys } from "../../api/cache.js";
 import {
+  useArchiveResearchTree,
+  useSharedTrees,
   useDeleteResearchDraft,
   useEmptyResearchTrash,
   useFeedRoot,
@@ -79,7 +89,7 @@ import {
   useResearchTrash,
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { pushErrorToast } from "../../lib/toast.js";
+import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { AnchoredMenu, type MenuAnchor } from "../../ui/AnchoredMenu.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -88,6 +98,7 @@ import { MenuGroupLabel, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { RecapDialog } from "../research/RecapDialog.js";
+import { ReceivedInvites } from "../sharing/ReceivedInvites.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import { CardBody, CardQuestion } from "./CardBody.js";
@@ -103,19 +114,39 @@ import {
 } from "./TreeMenu.js";
 import { feedText, shortName } from "./feedText.js";
 import { useCardDrag } from "./useCardDrag.js";
-import { useFiling } from "./useFiling.js";
+import { commitFolderState, ownTree, useFiling } from "./useFiling.js";
 import { useGroupActions } from "./useGroupActions.js";
 
-/** The lists of the feed column. */
+/** The lists of the feed column. `shared` is the web's Shared with me. */
 export type FeedPlaceView =
   | { kind: "home" }
   | { kind: "folder"; folderId: string }
   | { kind: "drafts" }
   | { kind: "archive" }
-  | { kind: "trash" };
+  | { kind: "trash" }
+  | { kind: "shared" };
+
+/** Web only: the place id of Shared with me (cards' `data-research-place`;
+ * it takes no drops). */
+export const SHARED_PLACE_ID = "system:shared";
 
 const EMPTY_DRAFTS: ResearchDraft[] = [];
 const EMPTY_TREES: ResearchTreeSummary[] = [];
+
+/** Each thread once, the first listing kept: a shared thread the reader
+ * filed in a folder is in both the workspace's list and a shared list. */
+function uniqueTrees(...lists: readonly (readonly ResearchTreeSummary[])[]): ResearchTreeSummary[] {
+  const seen = new Set<string>();
+  const out: ResearchTreeSummary[] = [];
+  for (const list of lists) {
+    for (const tree of list) {
+      if (seen.has(tree.id)) continue;
+      seen.add(tree.id);
+      out.push(tree);
+    }
+  }
+  return out;
+}
 /** The feed's rows: the open buttons of its cards. */
 const FEED_ROW_SELECTOR = "[data-research-card-hit]";
 
@@ -173,6 +204,8 @@ export function feedViewTitle(view: FeedPlaceView, folders: ResearchFolder[]): s
       return "Archive";
     case "trash":
       return "Trash";
+    case "shared":
+      return "Shared with me";
     case "folder":
       return researchPlaceName(view.folderId, folders);
   }
@@ -187,6 +220,8 @@ function soloPlaceOf(view: FeedPlaceView): string | null {
       return RESEARCH_ARCHIVE_FOLDER_ID;
     case "trash":
       return RESEARCH_TRASH_FOLDER_ID;
+    case "shared":
+      return SHARED_PLACE_ID;
     case "folder":
       return view.folderId;
     default:
@@ -229,7 +264,14 @@ export function FeedView({
   const drafts = draftsQuery.data ?? EMPTY_DRAFTS;
   const trashQuery = useResearchTrash(workspaceId);
   const trashTrees = trashQuery.data ?? EMPTY_TREES;
+  // Web only: the threads shared with the reader, outside their Archive and
+  // Trash, in their Archive, and in their Trash.
+  const sharedTrees = useSharedTrees("shared").data ?? EMPTY_TREES;
+  const sharedArchive = useSharedTrees("archive").data ?? EMPTY_TREES;
+  const sharedTrash = useSharedTrees("trash").data ?? EMPTY_TREES;
   const group = useGroupActions(filing, trashTrees);
+  const queryClient = useQueryClient();
+  const archiveTree = useArchiveResearchTree();
   const renameTree = useRenameResearchTree();
   const deleteDraft = useDeleteResearchDraft();
   const moveDraftMutation = useMoveResearchDraft();
@@ -256,7 +298,17 @@ export function FeedView({
   // After every render: rows come and go with views, trays and pages.
   useLayoutEffect(() => applyFeedRoving(scrollRef.current, rovingRowRef.current));
 
-  const treeById = useMemo(() => new Map(trees.map((tree) => [tree.id, tree])), [trees]);
+  const treeById = useMemo(
+    () =>
+      new Map(
+        uniqueTrees(trees, sharedTrees, sharedArchive, sharedTrash).map((tree) => [tree.id, tree]),
+      ),
+    [sharedArchive, sharedTrash, sharedTrees, trees],
+  );
+  const archivedTrees = useMemo(
+    () => archivedFeedTrees(uniqueTrees(trees, sharedArchive)),
+    [sharedArchive, trees],
+  );
   const activeTrees = useMemo(() => trees.filter((tree) => tree.archivedAt == null), [trees]);
   const parents = folderState.parents;
   const collapsedGroups = useMemo(
@@ -267,8 +319,12 @@ export function FeedView({
     (tree: ResearchTreeSummary) => researchTreePlace(tree, folderState),
     [folderState],
   );
-  const treeHoldsChildren = (treeId: string) =>
-    researchTreeHoldsChildren(treeById.get(treeId)?.type);
+  // A shared thread's nesting is its owner's: it neither holds nor joins a
+  // group of the reader's.
+  const treeHoldsChildren = (treeId: string) => {
+    const tree = treeById.get(treeId);
+    return researchTreeHoldsChildren(tree?.type) && (!tree || ownTree(tree));
+  };
 
   /** A place's threads in the flat order (not the Archive's). */
   const treesIn = useCallback(
@@ -295,10 +351,24 @@ export function FeedView({
       ? rows.map((row) => row.tree.id)
       : groupsIn(place).map((entry) => entry.tree.id);
 
-  const trashEntries = useMemo(
-    () => researchTrashEntries(trashTrees, folderState.folders, workspaceId),
-    [folderState.folders, trashTrees, workspaceId],
-  );
+  // A member's Trash also holds the shared threads they moved there, from
+  // any workspace: Empty Trash leaves them all.
+  const trashEntries = useMemo(() => {
+    const own = researchTrashEntries(trashTrees, folderState.folders, workspaceId);
+    const ownIds = new Set(own.map((entry) => entry.id));
+    const shared: ResearchTrashEntry[] = sharedTrash
+      .filter((tree) => !ownIds.has(tree.id))
+      .map((tree) => ({
+        kind: "tree",
+        id: tree.id,
+        title: tree.title,
+        trashedAt: tree.trashedAt ?? 0,
+        tree,
+      }));
+    return [...own, ...shared].sort(
+      (left, right) => right.trashedAt - left.trashedAt || left.id.localeCompare(right.id),
+    );
+  }, [folderState.folders, sharedTrash, trashTrees, workspaceId]);
 
   /* ---------------------------------------------------------------------
    * Navigation
@@ -335,7 +405,15 @@ export function FeedView({
   const onDragStart = useCardDrag({
     onMoveTree: (treeId, place, position) => moveTreeFromDrop(treeId, place, position),
     onMoveDraft: (draftId, beforeId) => moveDraft(draftId, beforeId),
-    onNestTree: (treeId, parentId, beforeId) => group.nestTree(treeId, parentId, beforeId),
+    onNestTree: (treeId, parentId, beforeId) => {
+      const tree = treeById.get(treeId);
+      const parent = treeById.get(parentId);
+      if ((tree && !ownTree(tree)) || (parent && !ownTree(parent))) {
+        announce("Shared threads can’t be nested.");
+        return;
+      }
+      group.nestTree(treeId, parentId, beforeId);
+    },
     onSpringOpen: (place) => {
       if (place === RESEARCH_TRASH_FOLDER_ID) return;
       filing.setTrayCollapsed(place, false);
@@ -346,7 +424,53 @@ export function FeedView({
   /** A drop between cards may name a card after the last rendered one
    * (`afterId`, a virtualized list); the place's own list resolves it. */
   function moveTreeFromDrop(treeId: string, place: string, position: ResearchDropPosition | null) {
+    const tree = treeById.get(treeId);
+    if (tree && !ownTree(tree)) {
+      void fileSharedTree(tree, place);
+      return;
+    }
     group.moveTree(treeId, place, position);
+  }
+
+  /** Web only: files a shared thread in one of the reader's folders, takes
+   * it out of them (back to Shared with me alone), or moves it to their
+   * Archive. Its order among the owner's threads is not the reader's. */
+  async function fileSharedTree(tree: ResearchTreeSummary, place: string) {
+    const current = sharedPlaceOf(tree);
+    if (place === current) return;
+    if (place === RESEARCH_DRAFTS_FOLDER_ID) {
+      pushToast({ title: "Shared threads can’t be filed in Drafts.", tone: "info" });
+      return;
+    }
+    try {
+      if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
+        await archiveTree.mutateAsync({ treeId: tree.id, archived: true });
+      } else {
+        if (tree.archivedAt != null) {
+          await archiveTree.mutateAsync({ treeId: tree.id, archived: false });
+        }
+        const target = place === SHARED_PLACE_ID ? RESEARCH_UNFILED_FOLDER_ID : place;
+        await commitFolderState(queryClient, workspaceId, (state) =>
+          researchFolderStateWithMembership(state, tree.id, target),
+        );
+      }
+      invalidateKeys(queryClient, ["trees"], ["shared"]);
+      const name =
+        place === SHARED_PLACE_ID || place === RESEARCH_UNFILED_FOLDER_ID
+          ? "Shared with me"
+          : researchPlaceName(place, folders);
+      pushToast({ title: `Moved to ${name}.` });
+    } catch (failure) {
+      pushErrorToast("Couldn’t move the question", failure);
+    }
+  }
+
+  /** Where a shared thread is for its card's Move to: the reader's folder,
+   * their Archive, or Shared with me. */
+  function sharedPlaceOf(tree: ResearchTreeSummary): string {
+    if (tree.archivedAt != null) return RESEARCH_ARCHIVE_FOLDER_ID;
+    const place = researchTreePlace(tree, folderState);
+    return place === RESEARCH_UNFILED_FOLDER_ID ? SHARED_PLACE_ID : place;
   }
 
   function moveDraft(draftId: string, beforeId: string | null) {
@@ -446,6 +570,10 @@ export function FeedView({
     const focused = focusedTreeCard(control);
     if (!focused) return;
     const { card, tree, place } = focused;
+    if (!ownTree(tree)) {
+      announce("Shared threads can’t be nested.");
+      return;
+    }
     if (card.dataset["researchParent"]) {
       announce("Already in a group. Nesting is one level deep.");
       return;
@@ -542,7 +670,8 @@ export function FeedView({
   const menuDraft =
     menu?.kind === "draft" ? (drafts.find((draft) => draft.id === menu.draftId) ?? null) : null;
 
-  const menuGroupTree = menuTree && menuTree.archivedAt == null ? menuTree : null;
+  const menuShared = menuTree !== null && !ownTree(menuTree);
+  const menuGroupTree = menuTree && menuTree.archivedAt == null && !menuShared ? menuTree : null;
   const menuGroupParent = menuGroupTree ? listedParentOf(menuGroupTree) : null;
   const menuGroupPlace = menuGroupTree ? placeOf(menuGroupTree) : null;
   const menuGroupChildCount =
@@ -593,14 +722,18 @@ export function FeedView({
       parentId,
       parentName,
       childTrees = [],
+      place: listedPlace,
     }: {
       virtual?: boolean;
       parentId?: string;
       parentName?: string;
       childTrees?: readonly ResearchTreeSummary[];
+      /** The place the card is listed in, when it is not the thread's own. */
+      place?: string;
     } = {},
   ) {
-    const place = tree.archivedAt != null ? RESEARCH_ARCHIVE_FOLDER_ID : placeOf(tree);
+    const place =
+      listedPlace ?? (tree.archivedAt != null ? RESEARCH_ARCHIVE_FOLDER_ID : placeOf(tree));
     const groupCollapsed = collapsedGroups.has(tree.id);
     return (
       <TreeCard
@@ -706,11 +839,28 @@ export function FeedView({
       );
     }
     if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
-      const archived = archivedFeedTrees(trees);
-      return archived.length === 0 ? (
+      return archivedTrees.length === 0 ? (
         <FeedEmpty>{placeEmptyText(RESEARCH_ARCHIVE_FOLDER_ID)}</FeedEmpty>
       ) : (
-        archived.map((tree) => archivedCard(tree))
+        archivedTrees.map((tree) => archivedCard(tree))
+      );
+    }
+    if (place === SHARED_PLACE_ID) {
+      return (
+        <>
+          <ReceivedInvites />
+          {sharedTrees.length === 0 ? (
+            <FeedEmpty>
+              Threads other people share with you appear here. Open an invite link to join one.
+            </FeedEmpty>
+          ) : (
+            sharedTrees.map((tree) => (
+              <div key={tree.id} data-research-unit="">
+                {treeCard(tree, { place: SHARED_PLACE_ID })}
+              </div>
+            ))
+          )}
+        </>
       );
     }
     const placeTrees = treesIn(place);
@@ -731,9 +881,7 @@ export function FeedView({
   }
 
   function placeCount(place: string): number {
-    if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
-      return trees.filter((tree) => tree.archivedAt != null).length;
-    }
+    if (place === RESEARCH_ARCHIVE_FOLDER_ID) return archivedTrees.length;
     if (place === RESEARCH_TRASH_FOLDER_ID) return trashEntries.length;
     return treesIn(place).length + (place === RESEARCH_DRAFTS_FOLDER_ID ? drafts.length : 0);
   }
@@ -881,6 +1029,9 @@ export function FeedView({
         Empty Trash
       </button>
     ) : null;
+  const emptyingLeaves = trashEntries.filter(
+    (entry) => entry.kind === "tree" && !ownTree(entry.tree),
+  ).length;
 
   return (
     <div className="bg-surface-feed relative flex h-full min-h-0 flex-col" data-research-feed="">
@@ -1006,12 +1157,18 @@ export function FeedView({
             <section
               className="min-h-[50%] rounded-[10px] border border-transparent pt-1.5"
               aria-label={title}
-              data-research-drop={soloPlace === RESEARCH_TRASH_FOLDER_ID ? undefined : soloPlace}
+              data-research-drop={
+                soloPlace === RESEARCH_TRASH_FOLDER_ID || soloPlace === SHARED_PLACE_ID
+                  ? undefined
+                  : soloPlace
+              }
             >
               {placeCards(soloPlace)}
             </section>
           ) : null}
-          {soloPlace && view.kind !== "archive" && view.kind !== "trash" ? composerBlock : null}
+          {soloPlace && view.kind !== "archive" && view.kind !== "trash" && view.kind !== "shared"
+            ? composerBlock
+            : null}
         </div>
       </div>
       <div className="sr-only" role="status" aria-live="polite">
@@ -1093,16 +1250,25 @@ export function FeedView({
               <MenuSeparator />
             </>
           ) : null}
-          <MoveToItems
-            currentPlace={placeOf(menuTree)}
-            folders={folders}
-            onMove={(place) => group.moveTree(menuTree.id, place)}
-            onNewFolder={() => openNewFolder(menuTree.id, menu.button)}
-          />
+          {menuShared ? (
+            <MoveToItems
+              currentPlace={sharedPlaceOf(menuTree)}
+              folders={folders}
+              shared
+              onMove={(place) => void fileSharedTree(menuTree, place)}
+            />
+          ) : (
+            <MoveToItems
+              currentPlace={placeOf(menuTree)}
+              folders={folders}
+              onMove={(place) => group.moveTree(menuTree.id, place)}
+              onNewFolder={() => openNewFolder(menuTree.id, menu.button)}
+            />
+          )}
           <MenuSeparator />
           <MenuTreeLifecycle
             tree={menuTree}
-            onRename={setRenamingTree}
+            onRename={menuShared ? undefined : setRenamingTree}
             onRestore={(treeId) => void group.unarchiveGroup(treeId)}
             onDelete={setDeletingTree}
             onRecap={openRecapDialog}
@@ -1141,6 +1307,7 @@ export function FeedView({
         <DeleteDialog
           {...treeDeleteDialogProps({
             tree: deletingTree,
+            shared: !ownTree(deletingTree),
             groupChildren: group.groupChildren(deletingTree.id),
             onClose: () => setDeletingTree(null),
             onTrash: group.trashGroup,
@@ -1148,7 +1315,23 @@ export function FeedView({
           })}
         />
       ) : null}
-      {deletingTrashEntry ? (
+      {deletingTrashEntry?.kind === "tree" && !ownTree(deletingTrashEntry.tree) ? (
+        <DeleteDialog
+          remove={{
+            title: `Leave “${deletingTrashEntry.title}”?`,
+            body: (
+              <p className="m-0">
+                It is shared with you. Deleting it removes you from it; its owner and the other
+                people in it keep it.
+              </p>
+            ),
+            label: "Leave",
+            pendingLabel: "Leaving…",
+            onConfirm: () => deleteTrashEntry(deletingTrashEntry),
+          }}
+          onClose={() => setDeletingTrashEntry(null)}
+        />
+      ) : deletingTrashEntry ? (
         <DeleteDialog
           remove={{
             body: (
@@ -1172,6 +1355,9 @@ export function FeedView({
             body: (
               <p className="m-0">
                 {researchTrashCount(trashEntries.length)} will be deleted. This can’t be undone.
+                {emptyingLeaves > 0
+                  ? ` You’ll leave the ${emptyingLeaves === 1 ? "thread" : `${emptyingLeaves} threads`} shared with you; their owners keep them.`
+                  : ""}
               </p>
             ),
             label: "Empty Trash",
@@ -1210,13 +1396,15 @@ function MenuTreeLifecycle({
   onRecap,
 }: {
   tree: ResearchTreeSummary;
-  onRename: (tree: ResearchTreeSummary) => void;
+  onRename: ((tree: ResearchTreeSummary) => void) | undefined;
   onRestore: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
   onRecap: (nodeId: string) => void;
 }) {
   const archived = tree.archivedAt != null;
   const root = useFeedRoot(tree.id, !archived).data ?? undefined;
+  // A viewer of a shared thread cannot generate its recap.
+  const recaps = tree.role === undefined || tree.role === "owner" || tree.role === "commenter";
   return (
     <TreeLifecycleItems
       tree={tree}
@@ -1225,7 +1413,7 @@ function MenuTreeLifecycle({
       onRestore={onRestore}
       onDelete={onDelete}
       onRegenerateRecap={
-        root && !archived && root.status === "complete" && root.recap?.trim()
+        recaps && root && !archived && root.status === "complete" && root.recap?.trim()
           ? () => onRecap(root.nodeId)
           : undefined
       }
@@ -1317,7 +1505,10 @@ function TreeCard({
       // A double-click on a note's card edits the note, unless the thread is
       // archived (researchNoteEditable).
       onEdit={
-        query && researchNoteEditable(query, archived) ? () => onEditNote(query.nodeId) : undefined
+        // A shared thread's note is its author's to edit, not this reader's.
+        query && ownTree(tree) && researchNoteEditable(query, archived)
+          ? () => onEditNote(query.nodeId)
+          : undefined
       }
       onMenu={onMenu}
       onContextMenu={onContextMenu}

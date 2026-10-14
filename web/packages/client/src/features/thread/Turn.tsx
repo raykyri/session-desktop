@@ -55,6 +55,8 @@ import {
   timelineContextStatusClass,
   timelineStatusClass,
 } from "../markdown/index.js";
+import { AuthorChip } from "../sharing/AuthorChip.js";
+import { useThreadCollaboration } from "../sharing/context.js";
 import { SessionWidgetStreamingContext, WidgetAnswerContext } from "../widgets/context.js";
 
 import { Recap } from "./Recap.js";
@@ -278,6 +280,7 @@ export const AnswerPane = memo(function AnswerPane({
   canRetry,
   retrying,
   canEditQuestion,
+  canCancel = true,
   handlers,
 }: {
   view: SegmentView;
@@ -292,6 +295,8 @@ export const AnswerPane = memo(function AnswerPane({
   canRetry: boolean;
   retrying: boolean;
   canEditQuestion: boolean;
+  /** The reader may stop the run (web only: its asker or the owner). */
+  canCancel?: boolean;
   handlers: AnswerPaneHandlers;
 }) {
   const status = nodeStatus(node);
@@ -323,7 +328,7 @@ export const AnswerPane = memo(function AnswerPane({
         <span>{retrying ? "Retrying…" : label}</span>
       </button>
     ) : null;
-  const stopButton = (
+  const stopButton = !canCancel ? null : (
     <button
       className={TURN_BUTTON_GHOST}
       type="button"
@@ -802,6 +807,8 @@ export const MessageRow = memo(function MessageRow({
   const labelId = useId();
   const status = nodeStatus(node);
   const settled = !runActive(node);
+  const { people } = useThreadCollaboration();
+  const authorShown = people.shared && Boolean(node.authorId);
   const imported = documentSource(node) === "imported";
   const state = messageRowState(node);
   const stateWord = messageStateWord(state);
@@ -913,6 +920,15 @@ export const MessageRow = memo(function MessageRow({
           showBranches && "pr-8",
         )}
       >
+        {authorShown ? (
+          <AuthorChip
+            authorId={node.authorId}
+            className={cn(
+              "mb-1 flex text-[length:calc(12px+var(--font-ui-size-offset))]",
+              selected ? "text-fg-muted" : "text-fg-faint",
+            )}
+          />
+        ) : null}
         {prompt}
       </div>
       {overflows ? (

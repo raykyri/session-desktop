@@ -1,5 +1,5 @@
 // The sidebar's places (the desktop's `ResearchSidebarNav.tsx`): Home,
-// Highlights, then the Folders section (Drafts, the workspace's folders,
+// Highlights, Shared with me (web only), then the Folders section (Drafts, the workspace's folders,
 // Archive, Trash) with New folder. Rows carry no counts. Every row but
 // Highlights and Trash takes card drops; a folder row has a … menu with
 // Rename and Delete.
@@ -13,7 +13,7 @@ import {
   researchPlaceName,
 } from "@session/shared/lib/researchFolders";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Ellipsis, Highlighter, House, Pencil, Plus, Trash2 } from "lucide-react";
+import { Ellipsis, Highlighter, House, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
@@ -27,7 +27,7 @@ import { SIDEBAR_ROW, SIDEBAR_ROW_SELECTED, SIDEBAR_SECTION_HEADING } from "./ro
 
 interface NavEntry {
   /** The route path the row opens. */
-  to: "/" | "/highlights" | "/drafts" | "/archive" | "/trash" | "/f/$folderId";
+  to: "/" | "/highlights" | "/shared" | "/drafts" | "/archive" | "/trash" | "/f/$folderId";
   folderId?: string;
   label: string;
   icon: ReactNode;
@@ -61,6 +61,7 @@ function placeEntries(folders: ResearchFolder[]): NavEntry[] {
 function currentKey(pathname: string): string | null {
   if (pathname === "/") return "home";
   if (pathname === "/highlights") return "highlights";
+  if (pathname === "/shared") return "shared";
   if (pathname === "/drafts" || pathname.startsWith("/drafts/")) return RESEARCH_DRAFTS_FOLDER_ID;
   if (pathname === "/archive") return RESEARCH_ARCHIVE_FOLDER_ID;
   if (pathname === "/trash") return RESEARCH_TRASH_FOLDER_ID;
@@ -106,6 +107,13 @@ export function SidebarNav({
             to: "/highlights" as const,
             label: "Highlights",
             icon: <Highlighter size={14} aria-hidden="true" />,
+          },
+          // Web only: the threads other people share with the reader.
+          {
+            key: "shared",
+            to: "/shared" as const,
+            label: "Shared with me",
+            icon: <Users size={14} aria-hidden="true" />,
           },
         ]
       : []),

@@ -24,13 +24,34 @@ import {
   researchNodeLabel,
 } from "@session/shared/lib/researchThreadView";
 import { formatRunDuration } from "@session/shared/lib/shortTime";
-import { ArrowUpRight, Copy, Files, Pencil, RefreshCw, ScrollText, Trash2, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bell,
+  BellOff,
+  Copy,
+  Files,
+  Pencil,
+  RefreshCw,
+  ScrollText,
+  Trash2,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useMemo } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import { useNodeContent } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { POPOVER_SURFACE } from "../../ui/surfaces.js";
+import { AuthorChip } from "../sharing/AuthorChip.js";
+import { useThreadCollaboration } from "../sharing/context.js";
+import {
+  mayChangeNode,
+  mayEditText,
+  mayRelaunch,
+  mayRemoveHighlight,
+  type ThreadPermissions,
+} from "../sharing/permissions.js";
 
 import { RerunMenuItem } from "./RerunMenuItem.js";
 import { ThreadMenuItem, ThreadMenuMeta, ThreadMenuSeparator } from "./ThreadMenuItem.js";
@@ -137,6 +158,61 @@ export interface ThreadMenuActions {
   onGenerateRecap: (nodeId: string) => void;
   onRename: (nodeId: string, title: string) => void;
   onDelete: (nodeId: string) => void;
+  /** Opens the Share dialog (web only). */
+  onShare?: () => void;
+  /** Turns Notify me on or off (web only). */
+  onToggleFollow?: () => void;
+}
+
+/** The thread-level items of the root's menus (web only): Share… and Notify
+ * me. Nothing for a guest. */
+function ThreadSharingItems({
+  permissions,
+  followed,
+  actions,
+}: {
+  permissions: ThreadPermissions;
+  followed: boolean;
+  actions: ThreadMenuActions;
+}) {
+  const { onClose, onShare, onToggleFollow } = actions;
+  if (!permissions.canFollow || (!onShare && !onToggleFollow)) return null;
+  return (
+    <>
+      {onShare ? (
+        <ThreadMenuItem
+          icon={<UserPlus size={15} aria-hidden="true" />}
+          label="Share…"
+          onSelect={() => {
+            onClose();
+            onShare();
+          }}
+        />
+      ) : null}
+      {onToggleFollow ? (
+        <ThreadMenuItem
+          icon={
+            followed ? (
+              <BellOff size={15} aria-hidden="true" />
+            ) : (
+              <Bell size={15} aria-hidden="true" />
+            )
+          }
+          label={followed ? "Stop notifying me" : "Notify me"}
+          title={
+            followed
+              ? "Stop notifications for new questions and notes in this thread"
+              : "Get a notification for new questions and notes in this thread"
+          }
+          onSelect={() => {
+            onClose();
+            onToggleFollow();
+          }}
+        />
+      ) : null}
+      <ThreadMenuSeparator />
+    </>
+  );
 }
 
 export function ThreadMenu({
@@ -150,6 +226,7 @@ export function ThreadMenu({
   fullTrace,
   openBranchIds,
   relaunchPending,
+  followed = false,
   actions,
 }: {
   menu: ThreadMenuState;
@@ -162,8 +239,11 @@ export function ThreadMenu({
   fullTrace: boolean;
   openBranchIds: ReadonlySet<string>;
   relaunchPending: boolean;
+  /** The reader follows the thread (Notify me is on). */
+  followed?: boolean;
   actions: ThreadMenuActions;
 }) {
+  const { permissions } = useThreadCollaboration();
   const node = nodeById.get(menu.nodeId) ?? null;
   if (!node) return null;
   const trigger = menu.anchor.kind === "element" ? menu.anchor.element : null;
@@ -175,6 +255,11 @@ export function ThreadMenu({
     const blocker = researchBranchBlocker(node, archived);
     return (
       <MenuFrame anchor={menu.anchor} label="Passage" onClose={onClose}>
+        {highlight?.authorId ? (
+          <ThreadMenuMeta>
+            <AuthorChip authorId={highlight.authorId} prefix="Highlighted by" />
+          </ThreadMenuMeta>
+        ) : null}
         {menu.branchIds.map((branchId) => (
           <ThreadMenuItem
             key={branchId}
@@ -187,7 +272,7 @@ export function ThreadMenu({
             }}
           />
         ))}
-        {highlight ? (
+        {highlight && permissions.contributor ? (
           <>
             <ThreadMenuItem
               icon={<BranchIcon size={15} />}
@@ -199,14 +284,16 @@ export function ThreadMenu({
                 actions.onBranch(menu.nodeId, highlight.anchor);
               }}
             />
-            <ThreadMenuItem
-              icon={<X size={15} aria-hidden="true" />}
-              label="Remove highlight"
-              onSelect={() => {
-                onClose();
-                actions.onRemoveHighlight(menu.nodeId, highlight.id);
-              }}
-            />
+            {mayRemoveHighlight(permissions, highlight) ? (
+              <ThreadMenuItem
+                icon={<X size={15} aria-hidden="true" />}
+                label="Remove highlight"
+                onSelect={() => {
+                  onClose();
+                  actions.onRemoveHighlight(menu.nodeId, highlight.id);
+                }}
+              />
+            ) : null}
           </>
         ) : null}
       </MenuFrame>
@@ -215,24 +302,34 @@ export function ThreadMenu({
   if (menu.kind === "post") {
     const isRoot = node.id === rootNodeId;
     const info = isRoot ? null : branchInfo(nodes, node.id);
+    const owner = permissions.isOwner;
+    // In the Archive the owner keeps seeing the items, disabled, as on the
+    // desktop; a commenter sees what they may change.
+    const editsText = archived ? owner : mayEditText(permissions, nodes, node);
+    const deletes = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
     return (
       <MenuFrame anchor={menu.anchor} label="Note actions" onClose={onClose}>
-        <ThreadMenuItem
-          icon={<Pencil size={15} aria-hidden="true" />}
-          label="Edit note"
-          disabled={!researchNoteEditable(node, archived)}
-          title={
-            !archived
-              ? undefined
-              : isRoot
-                ? "Move this note out of Archive to edit it"
-                : "Move this thread out of Archive to edit its notes"
-          }
-          onSelect={() => {
-            onClose();
-            actions.onEdit(node.id, trigger);
-          }}
-        />
+        {isRoot ? (
+          <ThreadSharingItems permissions={permissions} followed={followed} actions={actions} />
+        ) : null}
+        {editsText ? (
+          <ThreadMenuItem
+            icon={<Pencil size={15} aria-hidden="true" />}
+            label="Edit note"
+            disabled={!researchNoteEditable(node, archived)}
+            title={
+              !archived
+                ? undefined
+                : isRoot
+                  ? "Move this note out of Archive to edit it"
+                  : "Move this thread out of Archive to edit its notes"
+            }
+            onSelect={() => {
+              onClose();
+              actions.onEdit(node.id, trigger);
+            }}
+          />
+        ) : null}
         <ThreadMenuItem
           icon={<Copy size={15} aria-hidden="true" />}
           label="Copy note"
@@ -241,7 +338,7 @@ export function ThreadMenu({
             actions.onCopyNote(node.id);
           }}
         />
-        {info || isRoot ? (
+        {(info || isRoot) && deletes ? (
           <>
             <ThreadMenuSeparator />
             <ThreadMenuItem
@@ -278,6 +375,8 @@ export function ThreadMenu({
       hiddenHighlights={hiddenHighlights}
       fullTrace={fullTrace}
       relaunchPending={relaunchPending}
+      followed={followed}
+      permissions={permissions}
       actions={actions}
     />
   );
@@ -295,6 +394,8 @@ function AnswerMenu({
   hiddenHighlights,
   fullTrace,
   relaunchPending,
+  followed,
+  permissions,
   actions,
 }: {
   node: ResearchNode;
@@ -308,6 +409,8 @@ function AnswerMenu({
   hiddenHighlights: number;
   fullTrace: boolean;
   relaunchPending: boolean;
+  followed: boolean;
+  permissions: ThreadPermissions;
   actions: ThreadMenuActions;
 }) {
   const { onClose } = actions;
@@ -331,6 +434,7 @@ function AnswerMenu({
   const content = loaded.content;
   const canGenerateRecap = Boolean(
     !archived &&
+    permissions.canContribute &&
     content?.responseRevision &&
     nodeStatus(node) === "complete" &&
     node.type === "exchange",
@@ -359,8 +463,14 @@ function AnswerMenu({
     nodeStatus(node) === "complete" ? (view.conversationCopyText ?? view.rawAnswer) : null;
   const branchBlocker = researchBranchBlocker(node, archived);
   const recap = nodeRecap(node);
+  const owner = permissions.isOwner;
+  const renames = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
+  const deletes = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
   return (
     <MenuFrame anchor={menu.anchor} label="Answer actions" onClose={onClose}>
+      {isRoot ? (
+        <ThreadSharingItems permissions={permissions} followed={followed} actions={actions} />
+      ) : null}
       {stats || hiddenHighlights > 0 ? (
         <div>
           {stats ? <ThreadMenuMeta>{stats}</ThreadMenuMeta> : null}
@@ -383,16 +493,18 @@ function AnswerMenu({
         />
       ) : null}
       {stats || hiddenHighlights > 0 ? <ThreadMenuSeparator /> : null}
-      <ThreadMenuItem
-        icon={<BranchIcon size={15} />}
-        label="Branch to right"
-        disabled={branchBlocker !== null}
-        title={branchBlocker ?? undefined}
-        onSelect={() => {
-          onClose();
-          actions.onBranch(node.id, null);
-        }}
-      />
+      {permissions.contributor ? (
+        <ThreadMenuItem
+          icon={<BranchIcon size={15} />}
+          label="Branch to right"
+          disabled={branchBlocker !== null}
+          title={branchBlocker ?? undefined}
+          onSelect={() => {
+            onClose();
+            actions.onBranch(node.id, null);
+          }}
+        />
+      ) : null}
       {copyText ? (
         <ThreadMenuItem
           icon={<Copy size={15} aria-hidden="true" />}
@@ -426,7 +538,7 @@ function AnswerMenu({
       <RerunMenuItem
         node={node}
         parent={node.parentNodeId ? (nodeById.get(node.parentNodeId) ?? null) : null}
-        archived={archived}
+        archived={archived || !mayRelaunch(permissions, node)}
         pending={relaunchPending}
         onRerun={() => {
           onClose();
@@ -444,7 +556,7 @@ function AnswerMenu({
           }}
         />
       ) : null}
-      {isRoot || !node.inline ? (
+      {(isRoot || !node.inline) && renames ? (
         <ThreadMenuItem
           icon={<Pencil size={15} aria-hidden="true" />}
           label="Rename…"
@@ -454,7 +566,7 @@ function AnswerMenu({
           }}
         />
       ) : null}
-      {isRoot && documentHoldsMarkdown(node) ? (
+      {isRoot && documentHoldsMarkdown(node) && owner ? (
         <ThreadMenuItem
           icon={<Pencil size={15} aria-hidden="true" />}
           label="Edit document"
@@ -472,20 +584,26 @@ function AnswerMenu({
           }}
         />
       ) : null}
-      <ThreadMenuSeparator />
-      <ThreadMenuItem
-        icon={<Trash2 size={15} aria-hidden="true" />}
-        label={deleteLabel}
-        danger
-        disabled={info.hasActiveRuns}
-        title={
-          info.hasActiveRuns ? "This branch must finish or be cancelled before deletion" : undefined
-        }
-        onSelect={() => {
-          onClose();
-          actions.onDelete(node.id);
-        }}
-      />
+      {deletes ? (
+        <>
+          <ThreadMenuSeparator />
+          <ThreadMenuItem
+            icon={<Trash2 size={15} aria-hidden="true" />}
+            label={deleteLabel}
+            danger
+            disabled={info.hasActiveRuns}
+            title={
+              info.hasActiveRuns
+                ? "This branch must finish or be cancelled before deletion"
+                : undefined
+            }
+            onSelect={() => {
+              onClose();
+              actions.onDelete(node.id);
+            }}
+          />
+        </>
+      ) : null}
     </MenuFrame>
   );
 }

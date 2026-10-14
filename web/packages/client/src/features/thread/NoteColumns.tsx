@@ -7,7 +7,7 @@
 import type { ModelInfo, ResearchNode, ResearchTreeDetail } from "@session/shared";
 import { columnAttributes, type ResearchColumn } from "@session/shared/lib/researchColumns";
 import { NOTE_DOUBLE_CLICK_IGNORE_SELECTOR } from "@session/shared/lib/researchNoteEdit";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { cn } from "../../lib/cn.js";
 
@@ -37,6 +37,7 @@ export function NoteColumn({
   scrollRef,
   onSelectNode,
   onEdit,
+  headerExtra = null,
 }: {
   column: Extract<ResearchColumn, { role: "post" }>;
   current: boolean;
@@ -52,7 +53,9 @@ export function NoteColumn({
   };
   scrollRef: Ref<HTMLDivElement> | undefined;
   onSelectNode: (nodeId: string) => void;
-  onEdit?: () => void;
+  onEdit?: (() => void) | undefined;
+  /** In the header before the … button (the root's viewers). */
+  headerExtra?: ReactNode;
 }) {
   const editProps = noteDoubleClickProps(
     onEdit ? () => onEdit() : undefined,
@@ -74,6 +77,7 @@ export function NoteColumn({
         archived={archived}
         current={current}
         menu={{ label: "Note actions", open: menu.open, onOpen: menu.onOpen }}
+        extra={headerExtra}
       />
       <div
         ref={scrollRef}

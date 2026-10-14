@@ -108,7 +108,7 @@ test.serial("a refused folder change restores the state it replaced and rejects"
 });
 
 test.serial(
-  "the sidebar lists Home, Highlights, then Drafts, the folders, Archive and Trash",
+  "the sidebar lists Home, Highlights, Shared with me, then Drafts, the folders, Archive and Trash",
   async (t) => {
     const app = await renderApp("/", {
       queryClient: testQueryClient(),
@@ -123,7 +123,7 @@ test.serial(
 
     t.deepEqual(
       rows("Research").map((row) => row.textContent),
-      ["Home", "Highlights"],
+      ["Home", "Highlights", "Shared with me"],
     );
     t.deepEqual(
       rows("Folders").map((row) => row.textContent),
@@ -133,7 +133,15 @@ test.serial(
     const drops = [...rows("Research"), ...rows("Folders")].map(
       (row) => row.parentElement?.dataset["researchDrop"] ?? null,
     );
-    t.deepEqual(drops, ["system:unfiled", null, "system:drafts", "f1", "system:archive", null]);
+    t.deepEqual(drops, [
+      "system:unfiled",
+      null,
+      null,
+      "system:drafts",
+      "f1",
+      "system:archive",
+      null,
+    ]);
     t.is(rows("Research")[0]?.getAttribute("aria-current"), "page");
     app.unmount();
   },

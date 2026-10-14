@@ -124,12 +124,14 @@ export function useRerunResearchNode() {
 }
 
 /** Stores a chain's display order. The cached head takes the order at once
- * and goes back to the stored one if the server refuses it. */
+ * and goes back to the stored one if the server refuses it. `expectedOrder`
+ * is the order the column showed: a change someone else made since is
+ * refused with CONFLICT. */
 export function useSetChainOrder(treeId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { headNodeId: string; nodeIds: string[] }) =>
-      setResearchChainOrder(input.headNodeId, input.nodeIds),
+    mutationFn: (input: { headNodeId: string; nodeIds: string[]; expectedOrder?: string[] }) =>
+      setResearchChainOrder(input.headNodeId, input.nodeIds, input.expectedOrder),
     onMutate: (input) => {
       const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(treeId));
       const previous = detail?.nodes.find((node) => node.id === input.headNodeId)?.chainOrder;
