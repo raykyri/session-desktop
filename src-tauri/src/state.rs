@@ -4781,8 +4781,9 @@ impl AppState {
             .filter(|group| group.scope == WorkspaceScope::Research)
             .cloned()
             .ok_or_else(|| format!("research workspace {workspace_id} was not found"))?;
-        // managed_dir is installation-local bookkeeping and is deleted after
-        // detach. Runtime agent membership must not cross an import boundary.
+        // managed_dir is an installation-local path (unused, see
+        // `GroupInfo::managed_dir`). Runtime agent membership must not cross
+        // an import boundary.
         workspace.managed_dir.clear();
         workspace.agents.clear();
         workspace.imported_research_archive_id = None;
@@ -6372,7 +6373,6 @@ fn migrate_legacy_research_workspaces(
                     && research_workspace_dir_key(&group.dir) == dir_key
             })
             .cloned();
-        let created_research_group = existing_research_group.is_none();
         let mut research_group = match existing_research_group {
             Some(group) => group,
             None => match crate::workspace::clone_group_record_for_scope(
@@ -6407,34 +6407,6 @@ fn migrate_legacy_research_workspaces(
                 .agents
                 .retain(|agent_id| !research_agent_ids.contains(agent_id));
         }
-        if let Err(err) = crate::workspace::write_group_manifest(&research_group) {
-            warnings.push(format!(
-                "could not finish migrated research workspace {}: {err}",
-                research_group.id
-            ));
-            if created_research_group {
-                let _ = std::fs::remove_dir_all(&research_group.managed_dir);
-            }
-            continue;
-        }
-        if let Some(source) = &updated_source
-            && let Err(err) = crate::workspace::write_group_manifest(source)
-        {
-            warnings.push(format!(
-                "could not update legacy terminal workspace {legacy_group_id}: {err}"
-            ));
-            if created_research_group {
-                let _ = std::fs::remove_dir_all(&research_group.managed_dir);
-            } else if let Some(original) = persisted
-                .groups
-                .iter()
-                .find(|group| group.id == research_group.id)
-            {
-                let _ = crate::workspace::write_group_manifest(original);
-            }
-            continue;
-        }
-
         let research_group_id = research_group.id.clone();
         for tree in persisted.research_trees.values_mut() {
             if tree.workspace_id == legacy_group_id {
@@ -10574,13 +10546,12 @@ mod tests {
     }
 
     #[test]
-    fn research_workspace_manifest_failure_leaves_legacy_binding_for_retry() {
+    fn legacy_research_migration_writes_no_group_manifest() {
         let workspace = temp_workspace();
         let mut group = sample_terminal_group();
         group.dir = workspace.display().to_string();
-        // The target manifest can be staged, but updating this source manifest
-        // must fail. Reconciliation must therefore leave the in-memory shape
-        // untouched and remove the staged target directory.
+        // Group manifests are no longer written, so a managed directory that
+        // cannot hold one does not stop the migration.
         group.managed_dir = "/dev/null".to_string();
         group.agents.clear();
         let tree = ResearchTree {
@@ -10645,25 +10616,21 @@ mod tests {
 
         let (changed, warnings) = migrate_legacy_research_workspaces(&state, &mut persisted);
 
-        assert!(!changed);
-        assert_eq!(persisted.groups.len(), 1);
-        assert_eq!(persisted.groups[0].scope, WorkspaceScope::Terminal);
+        assert!(changed);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let research = persisted
+            .groups
+            .iter()
+            .find(|group| group.scope == WorkspaceScope::Research)
+            .unwrap();
         assert_eq!(
             persisted.research_trees["tree-retry"].workspace_id,
-            group.id
+            research.id
         );
-        assert!(
-            warnings
-                .iter()
-                .any(|warning| warning.contains("could not update legacy"))
-        );
-        assert!(
-            std::fs::read_dir(&workspace).unwrap().all(|entry| entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                == ".session")
-        );
+        // The new group's managed directory is a path only.
+        assert!(!research.managed_dir.is_empty());
+        assert!(!std::path::Path::new(&research.managed_dir).exists());
+        assert_eq!(std::fs::read_dir(&workspace).unwrap().count(), 0);
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

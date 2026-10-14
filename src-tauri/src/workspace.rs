@@ -1,17 +1,14 @@
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static RESEARCH_WORKSPACE_CREATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 static AGENT_WORKSPACE_CREATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-static MANIFEST_TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Serializes research-workspace mutations against research launches. The
 /// folder-replace and remove commands make a compound decision — "no active
@@ -65,7 +62,12 @@ pub struct GroupInfo {
     pub name_override: Option<String>,
     /// User-facing working directory represented by this group.
     pub dir: String,
-    /// Session-owned storage for the group's manifest.
+    /// Where earlier builds wrote the group's manifest
+    /// (`<managedDir>/.session/group.json`). Nothing reads that file, and
+    /// this build neither writes it nor creates the directory. A new group
+    /// still gets a path under the workspace root, because earlier builds
+    /// require the field and write their manifest there. Existing
+    /// directories are left on disk.
     pub managed_dir: String,
     pub base_repo: Option<String>,
     pub created_at: u128,
@@ -244,15 +246,11 @@ fn create_research_workspace_locked(
             WorkspaceScope::Research,
         )?;
         group.imported_research_archive_id = Some(bundle.archive.archive_id.clone());
-        if let Err(err) = write_group_manifest(&group) {
-            let _ = fs::remove_dir_all(&group.managed_dir);
-            return Err(err);
-        }
         // Before the nodes that attach them. If the import then fails, the
         // copies are unreferenced and the next clean startup returns them to
         // pending.
         crate::research_images::import_archived(&state.config().workspace_root, &bundle.images);
-        let imported = match state.import_detached_research(
+        let imported = state.import_detached_research(
             group.clone(),
             bundle.archive.tree_order,
             bundle.archive.trees,
@@ -261,13 +259,7 @@ fn create_research_workspace_locked(
             bundle.archive.parents,
             bundle.archive.nodes,
             bundle.responses,
-        ) {
-            Ok(imported) => imported,
-            Err(err) => {
-                let _ = fs::remove_dir_all(&group.managed_dir);
-                return Err(err);
-            }
-        };
+        )?;
         if let Err(err) = reconcile_imported_research_archive(state, &imported) {
             // The global import and its cleanup receipt are already durable.
             // Startup retries this exact archive instead of risking deletion
@@ -324,7 +316,6 @@ fn reconcile_imported_research_archive(state: &AppState, group: &GroupInfo) -> R
     }
     let mut updated = group.clone();
     updated.imported_research_archive_id = None;
-    write_group_manifest(&updated)?;
     state.update_group(updated)
 }
 
@@ -362,7 +353,7 @@ pub fn rename_research_workspace(
     name: Option<String>,
 ) -> Result<GroupInfo, String> {
     // Keep rename and removal serialized so their read-modify-write updates
-    // cannot silently revert one another in the model or durable manifest.
+    // cannot silently revert one another in the model.
     let _guard = lock_research_workspace_mutations()?;
     let workspace = require_research_workspace(state, workspace_id)?;
     rename_group_record(state, workspace, name)
@@ -468,7 +459,6 @@ pub fn move_research_workspace(
     }
     workspace.dir = canonical.display().to_string();
     workspace.name = group_name_for_dir(&canonical);
-    write_group_manifest(&workspace)?;
     state.update_group(workspace.clone())?;
     state.emit(crate::events::SessionEvent::new(
         "group.updated",
@@ -512,7 +502,6 @@ pub fn remove_research_workspace(
         // deleted from disk, and fail outright on a read-only folder —
         // leaving an *unused* folder impossible to remove.
         state.commit_research_workspace_detach(workspace_id, &archive)?;
-        remove_research_workspace_manifest_dir(&workspace);
         return Ok(detached_tree_ids);
     }
     let mut responses = HashMap::new();
@@ -589,27 +578,7 @@ pub fn remove_research_workspace(
             eprintln!("session: failed to remove detached global response {node_id}: {err}");
         }
     }
-    remove_research_workspace_manifest_dir(&workspace);
     Ok(detached_tree_ids)
-}
-
-/// The manifest directory is session-internal bookkeeping for this group and
-/// nothing else: research runs never create worktrees under it, so once the
-/// record is gone it holds only the stale group.json. Deleting it here (and
-/// only here — Terminal groups may own worktrees) keeps removed folders
-/// from accumulating on disk forever. Best-effort, with a guard against a
-/// record that ever pointed managed_dir at the user's own folder.
-fn remove_research_workspace_manifest_dir(workspace: &GroupInfo) {
-    if workspace.managed_dir != workspace.dir
-        && Path::new(&workspace.managed_dir).join(".session").is_dir()
-        && let Err(err) = fs::remove_dir_all(&workspace.managed_dir)
-        && !matches!(err.kind(), std::io::ErrorKind::NotFound)
-    {
-        eprintln!(
-            "session: failed to remove research workspace manifest dir {}: {err}",
-            workspace.managed_dir
-        );
-    }
 }
 
 fn require_research_workspace(state: &AppState, workspace_id: &str) -> Result<GroupInfo, String> {
@@ -639,8 +608,8 @@ fn create_scoped_group(
     Ok(group)
 }
 
-/// Allocates and persists a group manifest without inserting it into AppState.
-/// Startup migration uses this to construct scoped workspace records before the
+/// Allocates a group record without inserting it into AppState. Startup
+/// migration uses this to construct scoped workspace records before the
 /// persisted model is hydrated.
 pub(crate) fn create_group_record(
     state: &AppState,
@@ -662,10 +631,7 @@ pub(crate) fn create_group_record(
         .clone()
         .unwrap_or_else(|| generated_name.clone());
     let managed_dir = unique_group_dir(&state.config().workspace_root, &display_name)?;
-    fs::create_dir_all(managed_dir.join(".session"))
-        .map_err(|err| format!("failed to create group dir {}: {err}", dir.display()))?;
-
-    let group = GroupInfo {
+    Ok(GroupInfo {
         id,
         name: generated_name,
         name_override,
@@ -676,13 +642,7 @@ pub(crate) fn create_group_record(
         scope,
         imported_research_archive_id: None,
         agents: Vec::new(),
-    };
-
-    if let Err(err) = write_group_manifest(&group) {
-        let _ = fs::remove_dir_all(&managed_dir);
-        return Err(err);
-    }
-    Ok(group)
+    })
 }
 
 /// Creates a distinct scoped record from a legacy group without requiring its
@@ -699,13 +659,7 @@ pub(crate) fn clone_group_record_for_scope(
         source.name_override.as_deref().unwrap_or(&source.name)
     );
     let managed_dir = unique_group_dir(&state.config().workspace_root, &display_name)?;
-    fs::create_dir_all(managed_dir.join(".session")).map_err(|err| {
-        format!(
-            "failed to create migrated research workspace {}: {err}",
-            managed_dir.display()
-        )
-    })?;
-    let group = GroupInfo {
+    Ok(GroupInfo {
         id: state.next_id("group"),
         name: source.name.clone(),
         name_override: Some(display_name),
@@ -715,15 +669,9 @@ pub(crate) fn clone_group_record_for_scope(
         created_at: now_millis(),
         scope,
         imported_research_archive_id: None,
-        // Research runs entirely on the local machine; a research clone of a
-        // remote group deliberately drops the binding.
+        // A research clone starts with no agents of its own.
         agents: Vec::new(),
-    };
-    if let Err(err) = write_group_manifest(&group) {
-        let _ = fs::remove_dir_all(&managed_dir);
-        return Err(err);
-    }
-    Ok(group)
+    })
 }
 
 fn rename_group_record(
@@ -734,7 +682,6 @@ fn rename_group_record(
     group.name_override = name
         .map(|name| name.trim().to_string())
         .filter(|name| !name.is_empty());
-    write_group_manifest(&group)?;
     state.update_group(group.clone())?;
     state.emit(crate::events::SessionEvent::new(
         "group.updated",
@@ -788,7 +735,6 @@ fn prepare_agent_workspace_locked(
     };
 
     group.agents.push(agent_id);
-    write_group_manifest(&group)?;
     state.update_group(group)?;
     state.insert_agent(agent.clone())?;
     Ok(agent)
@@ -827,6 +773,8 @@ fn default_group_name() -> String {
         .unwrap_or_else(|| format!("group-{}", now_millis()))
 }
 
+/// The `managed_dir` path of a new group: a name under the workspace root no
+/// file or directory has yet. It is not created.
 fn unique_group_dir(root: &Path, requested_name: &str) -> Result<PathBuf, String> {
     unique_dir(root, requested_name, "group")
 }
@@ -868,77 +816,6 @@ fn sanitize_path_segment(value: &str) -> String {
         default_group_name()
     } else {
         sanitized
-    }
-}
-
-pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
-    let manifest_path = PathBuf::from(&group.managed_dir).join(".session/group.json");
-    let parent = manifest_path
-        .parent()
-        .ok_or_else(|| format!("group manifest {} has no parent", manifest_path.display()))?;
-    fs::create_dir_all(parent).map_err(|err| {
-        format!(
-            "failed to create group manifest directory {}: {err}",
-            parent.display()
-        )
-    })?;
-    remove_stale_manifest_tmp_files(parent);
-    let raw = serde_json::to_string_pretty(group)
-        .map_err(|err| format!("failed to encode group manifest: {err}"))?;
-    let seq = MANIFEST_TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = parent.join(format!(".group.json.tmp-{}-{seq}", std::process::id()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&tmp)
-        .map_err(|err| format!("failed to create {}: {err}", tmp.display()))?;
-    if let Err(err) = file
-        .write_all(raw.as_bytes())
-        .and_then(|()| file.sync_all())
-    {
-        let _ = fs::remove_file(&tmp);
-        return Err(format!("failed to write {}: {err}", tmp.display()));
-    }
-    fs::rename(&tmp, &manifest_path).map_err(|err| {
-        let _ = fs::remove_file(&tmp);
-        format!("failed to commit {}: {err}", manifest_path.display())
-    })?;
-    if let Ok(dir) = fs::File::open(parent) {
-        let _ = dir.sync_all();
-    }
-    Ok(())
-}
-
-/// Removes manifest scratch files (`.group.json.tmp-<pid>-<seq>`) left by
-/// a writer that died between creating its temp and renaming it into place —
-/// nothing else ever revisits them. Runs on the next manifest write for the
-/// group, with the same best-effort pid-liveness contract as
-/// `persistence::remove_stale_tmp_files`.
-fn remove_stale_manifest_tmp_files(parent: &Path) {
-    let Ok(entries) = fs::read_dir(parent) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else {
-            continue;
-        };
-        let Some(rest) = name.strip_prefix(".group.json.tmp-") else {
-            continue;
-        };
-        let Some((pid, seq)) = rest.split_once('-') else {
-            continue;
-        };
-        if seq.parse::<u64>().is_err() {
-            continue;
-        }
-        let Ok(pid) = pid.parse::<u32>() else {
-            continue;
-        };
-        if pid != std::process::id() && !crate::persistence::process_is_alive(pid) {
-            let _ = fs::remove_file(entry.path());
-        }
     }
 }
 
@@ -1846,7 +1723,6 @@ mod tests {
         crate::research::commit_detached_research(&project).unwrap();
         let mut cleanup_receipt = restored.clone();
         cleanup_receipt.imported_research_archive_id = Some(archive.archive.archive_id.clone());
-        write_group_manifest(&cleanup_receipt).unwrap();
         state.update_group(cleanup_receipt).unwrap();
         reconcile_imported_research_archives(&state);
         assert!(

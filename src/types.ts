@@ -69,6 +69,8 @@ export interface GroupInfo {
   name: string;
   nameOverride?: string | null;
   dir: string;
+  /** Unused: where earlier builds wrote the group's manifest
+   * (GroupInfo::managed_dir in src-tauri/src/workspace.rs). */
   managedDir: string;
   baseRepo?: string | null;
   createdAt: number;
