@@ -78,6 +78,10 @@ export interface ResearchRecapPendingEvent {
 export interface ResearchTreeRemovedEvent {
   type: "research.tree.removed";
   treeId: string;
+  /** True when the tree moved to the Trash and can be restored; absent when
+   * it was deleted. A client keeps a trashed tree's local state (drafts,
+   * queued questions, selection) for Restore and drops it on deletion. */
+  trashed?: true;
   timestamp: number;
 }
 

@@ -295,3 +295,23 @@ test("a removal replaces the visit on screen when it is to the same message", ()
   assert.deepEqual(after, { entries: [visit(["a"]), visit(["a", "b"]), visit(["c"])], index: 1 });
   assert.equal(canGoResearchForward(after), true);
 });
+
+test("back and forward pass over visits to a thread in the Trash and keep them for Restore", () => {
+  // A, then the trashed thread T, then Home (where trashing T left the window).
+  const history = pushAll(EMPTY_RESEARCH_VISITS, [at("a", "a1"), at("t", "t1"), home]);
+  const trashed = new Set(["t"]);
+  const hidden = (entry: ResearchVisit) => entry.kind === "node" && trashed.has(entry.treeId);
+  const back = researchVisitBack(history, hidden);
+  assert.deepEqual(back?.visit, at("a", "a1"));
+  assert.equal(back?.history.index, 0);
+  assert.equal(canGoResearchForward(back!.history, hidden), true);
+  assert.deepEqual(researchVisitForward(back!.history, hidden)?.visit, home);
+  // Past a hidden visit, a visit repeating the one on screen is passed too.
+  const homes = pushAll(EMPTY_RESEARCH_VISITS, [home, at("t", "t1"), home]);
+  assert.equal(canGoResearchBack(homes, hidden), false);
+  assert.equal(researchVisitBack(homes, hidden), null);
+  assert.equal(canGoResearchBack(homes), true);
+  // After Restore nothing is hidden and the visit is reachable again.
+  trashed.clear();
+  assert.deepEqual(researchVisitBack(history, hidden)?.visit, at("t", "t1"));
+});

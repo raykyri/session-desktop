@@ -137,6 +137,21 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
   }
 });
 
+test("a tree removal says whether the tree moved to the Trash", () => {
+  const removal = (payload: Record<string, unknown>) =>
+    parseResearchEvent(sessionEvent("research.tree.removed", payload));
+  assert.deepEqual(removal({ treeId: "tree-1", trashed: true }), {
+    kind: "event",
+    event: { type: "research.tree.removed", treeId: "tree-1", trashed: true, timestamp: 100 },
+  });
+  for (const payload of [{ treeId: "tree-1" }, { treeId: "tree-1", trashed: false }]) {
+    assert.deepEqual(removal(payload), {
+      kind: "event",
+      event: { type: "research.tree.removed", treeId: "tree-1", timestamp: 100 },
+    });
+  }
+});
+
 test("parseResearchEvent separates unrelated, unsupported, and malformed events", () => {
   assert.deepEqual(parseResearchEvent(sessionEvent("pane.created", {})), {
     kind: "notResearch",

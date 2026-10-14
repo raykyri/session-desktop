@@ -6,6 +6,7 @@ import {
   listRecentActivity,
   listRecentActivityForTrees,
   listResearchActivity,
+  listResearchTrash,
   listResearchTrees,
   markResearchTreeViewed,
 } from "../lib/api";
@@ -115,6 +116,9 @@ export function useResearchNavigation(
     clearActiveResearchTree,
     setActiveResearchTree,
     clearResearchUnseen,
+    trashedResearchTreeIds,
+    trashedResearchTreeIdsRef,
+    setResearchTreesTrashed,
   } = data;
   const {
     feedOpen,
@@ -170,10 +174,12 @@ export function useResearchNavigation(
     recentActivityRootRequestSeqRef.current += 1;
     researchNavRefreshInFlightRef.current += 1;
     try {
-      const [trees, activity, recentActivity] = await Promise.all([
+      const [trees, activity, recentActivity, trash] = await Promise.all([
         listResearchTrees(true),
         listResearchActivity(),
         listRecentActivity(),
+        // Without the Trash, state kept for Restore is not pruned.
+        listResearchTrash().catch(() => null),
       ]);
       if (researchNavRefreshSeqRef.current !== requestSeq) {
         return null;
@@ -214,12 +220,19 @@ export function useResearchNavigation(
         recordResearchVisit({ kind: "home" });
         clearActiveResearchTree();
       }
-      // Navigation restoration state for trees that no longer exist would
-      // otherwise accumulate in localStorage forever.
-      pruneResearchNavigation(trees.map((tree) => tree.id));
-      // Prune deleted trees from history.
-      const knownTreeIds = new Set(trees.map((tree) => tree.id));
-      pruneResearchTreeVisits((id) => knownTreeIds.has(id));
+      if (trash) {
+        setResearchTreesTrashed(
+          trash.map((tree) => tree.id),
+          true,
+          { replace: true },
+        );
+        // Navigation restoration state and visits for trees that no longer
+        // exist would otherwise accumulate forever. A tree in the Trash keeps
+        // them for Restore.
+        const knownTreeIds = new Set([...trees, ...trash].map((tree) => tree.id));
+        pruneResearchNavigation(knownTreeIds);
+        pruneResearchTreeVisits((id) => knownTreeIds.has(id));
+      }
       return trees;
     } finally {
       researchNavRefreshInFlightRef.current -= 1;
@@ -238,6 +251,7 @@ export function useResearchNavigation(
     setRecentActivityItems,
     setResearchActivity,
     setResearchTrees,
+    setResearchTreesTrashed,
   ]);
 
   const markVisibleResearchTreeViewed = useCallback(
@@ -498,22 +512,34 @@ export function useResearchNavigation(
     },
     [activeResearchTreeIdRef, selectResearchTree, showFeed],
   );
+  // Visits to a thread in the Trash stay in the history for Restore; back
+  // and forward pass over them.
+  const researchVisitHidden = useCallback(
+    (visit: ResearchVisit) =>
+      visit.kind === "node" && trashedResearchTreeIdsRef.current.has(visit.treeId),
+    [trashedResearchTreeIdsRef],
+  );
+  // The same over the rendered set, for the buttons' enabled state.
+  const researchVisitHiddenNow = useCallback(
+    (visit: ResearchVisit) => visit.kind === "node" && trashedResearchTreeIds.has(visit.treeId),
+    [trashedResearchTreeIds],
+  );
   const goResearchBack = useCallback(() => {
-    const step = researchVisitBack(researchVisitsRef.current);
+    const step = researchVisitBack(researchVisitsRef.current, researchVisitHidden);
     if (!step) {
       return;
     }
     updateResearchVisits(() => step.history);
     applyResearchVisit(step.visit);
-  }, [applyResearchVisit, researchVisitsRef, updateResearchVisits]);
+  }, [applyResearchVisit, researchVisitHidden, researchVisitsRef, updateResearchVisits]);
   const goResearchForward = useCallback(() => {
-    const step = researchVisitForward(researchVisitsRef.current);
+    const step = researchVisitForward(researchVisitsRef.current, researchVisitHidden);
     if (!step) {
       return;
     }
     updateResearchVisits(() => step.history);
     applyResearchVisit(step.visit);
-  }, [applyResearchVisit, researchVisitsRef, updateResearchVisits]);
+  }, [applyResearchVisit, researchVisitHidden, researchVisitsRef, updateResearchVisits]);
   // User navigation in the thread page pushes a visit; an automatic selection
   // (the message restored on opening)
   // replaces the visit on screen when that is a visit to this thread.
@@ -554,14 +580,14 @@ export function useResearchNavigation(
   // or the empty column's with no thread open).
   const researchHistoryNav = useMemo(
     () => ({
-      canGoBack: canGoResearchBack(researchVisits),
-      canGoForward: canGoResearchForward(researchVisits),
+      canGoBack: canGoResearchBack(researchVisits, researchVisitHiddenNow),
+      canGoForward: canGoResearchForward(researchVisits, researchVisitHiddenNow),
       backTitle: `Back (${IS_MAC ? "⌘[" : "Ctrl+["})`,
       forwardTitle: `Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`,
       onBack: goResearchBack,
       onForward: goResearchForward,
     }),
-    [goResearchBack, goResearchForward, researchVisits],
+    [goResearchBack, goResearchForward, researchVisitHiddenNow, researchVisits],
   );
 
   // Focuses a tree that a composer just created: the new tree selected with

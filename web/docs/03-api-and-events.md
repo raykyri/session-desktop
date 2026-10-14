@@ -355,7 +355,7 @@ unless noted:
 | `research.tree.created` | `{ tree, node }` | createTree, createPost, importReport |
 | `research.tree.updated` | `{ tree }` | rename, viewed, updatePost when the root title followed the text |
 | `research.tree.archived` / `restored` | `{ tree }` | archive/restore, once per tree of the group; `restored` also by restoreTreeFromTrash |
-| `research.tree.removed` | `{ treeId }` (web: also `removedBy`) | removeTree, trashTree, emptyTrash (once per tree), workspace remove; web: to every member who loses the thread, and to a member who leaves or is removed |
+| `research.tree.removed` | `{ treeId, trashed? }` (web: also `removedBy`); `trashed: true` when the tree moved to the Trash, so a client keeps its unsent drafts, queued questions and selection for Restore and drops them only on deletion (desktop sends it; the parser accepts its absence) | removeTree, trashTree, emptyTrash (once per tree), workspace remove; web: to every member who loses the thread, and to a member who leaves or is removed |
 | `research.trash.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | trashTree, restoreTreeFromTrash, emptyTrash, removeTree of a tree in the Trash; only when something changed |
 | `research.folders.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | folders.set when the stored state changed, emptyTrash when it deleted folders, workspace remove. Carries no state: clients refetch `folders.get` |
 | `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch, createPostFollowUp |

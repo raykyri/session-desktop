@@ -4184,10 +4184,11 @@ impl AppState {
     /// Moves a tree to the Trash. Nothing is deleted: its nodes, response
     /// snapshots, artifacts, folder membership, position in the tree order
     /// and archive state stay, so `restore_research_tree_from_trash` puts it
-    /// back where it was. Open windows drop it as they do a deleted tree
-    /// (`research.tree.removed`) and refetch the Trash
-    /// (`research.trash.changed`). Refused while the tree has active runs, as
-    /// deleting is.
+    /// back where it was. Open windows drop it from their lists as they do a
+    /// deleted tree (`research.tree.removed`, with `trashed: true` so they
+    /// keep its unsent drafts, queued questions and selection for Restore)
+    /// and refetch the Trash (`research.trash.changed`). Refused while the
+    /// tree has active runs, as deleting is.
     pub fn trash_research_tree(&self, tree_id: &str) -> Result<ResearchTree, String> {
         let _document_guard = self
             .inner
@@ -4226,7 +4227,7 @@ impl AppState {
                 "research.tree.removed",
                 None,
                 None,
-                json!({ "treeId": tree_id }),
+                json!({ "treeId": tree_id, "trashed": true }),
             ));
             self.emit_research_trash_changed();
         }
@@ -9336,9 +9337,26 @@ mod tests {
 
         let trashed = state.trash_research_tree(&filed.tree.id).unwrap();
         assert!(trashed.trashed_at.is_some());
+        let events = state.take_emitted_events();
+        let events = events
+            .iter()
+            .filter(|event| {
+                event.event_type.starts_with("research.tree")
+                    || event.event_type == "research.trash.changed"
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
-            emitted_types(&state),
+            events
+                .iter()
+                .map(|event| event.event_type.as_str())
+                .collect::<Vec<_>>(),
             ["research.tree.removed", "research.trash.changed"]
+        );
+        // The removal says the tree is in the Trash, so windows keep its
+        // unsent state for Restore.
+        assert_eq!(
+            events[0].payload,
+            json!({ "treeId": filed.tree.id, "trashed": true })
         );
         // Trashing again changes nothing and emits nothing.
         state.trash_research_tree(&filed.tree.id).unwrap();
@@ -9483,9 +9501,17 @@ mod tests {
         assert!(state.list_research_trash().unwrap().is_empty());
         assert_eq!(state.list_research_trees().unwrap()[0].id, kept.tree.id);
 
-        // Deleting a tree outside the Trash leaves the Trash alone.
+        // Deleting a tree outside the Trash leaves the Trash alone. A deletion
+        // carries no `trashed` flag.
         state.remove_research_tree(&kept.tree.id).unwrap();
-        assert_eq!(emitted_types(&state), ["research.tree.removed"]);
+        let events = state.take_emitted_events();
+        let removed = events
+            .iter()
+            .filter(|event| event.event_type.starts_with("research.tree"))
+            .collect::<Vec<_>>();
+        assert_eq!(removed.len(), 1);
+        assert_eq!(removed[0].event_type, "research.tree.removed");
+        assert_eq!(removed[0].payload, json!({ "treeId": kept.tree.id }));
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

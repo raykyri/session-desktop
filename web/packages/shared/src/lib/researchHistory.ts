@@ -157,30 +157,69 @@ export function replaceResearchVisit(
   return collapseResearchVisits(entries, history.index);
 }
 
-export function canGoResearchBack(history: ResearchVisitHistory): boolean {
-  return history.index > 0;
+/** Whether back has a visit to move to. With `hidden`, see researchVisitBack. */
+export function canGoResearchBack(
+  history: ResearchVisitHistory,
+  hidden?: (visit: ResearchVisit) => boolean,
+): boolean {
+  return hidden ? researchVisitBack(history, hidden) !== null : history.index > 0;
 }
 
-export function canGoResearchForward(history: ResearchVisitHistory): boolean {
-  return history.index >= 0 && history.index < history.entries.length - 1;
+/** Whether forward has a visit to move to. With `hidden`, see
+ * researchVisitForward. */
+export function canGoResearchForward(
+  history: ResearchVisitHistory,
+  hidden?: (visit: ResearchVisit) => boolean,
+): boolean {
+  return hidden
+    ? researchVisitForward(history, hidden) !== null
+    : history.index >= 0 && history.index < history.entries.length - 1;
 }
 
-/** Moves the cursor back one entry, or null if already at the start. */
-export function researchVisitBack(history: ResearchVisitHistory): ResearchVisitStep | null {
-  if (!canGoResearchBack(history)) {
+/** Moves the cursor `direction` entries at a time, past the visits `hidden`
+ * rejects (to a thread in the Trash, which the history keeps for Restore)
+ * and past a visit that, once one was passed, repeats the visit on screen. */
+function researchVisitStep(
+  history: ResearchVisitHistory,
+  direction: -1 | 1,
+  hidden: ((visit: ResearchVisit) => boolean) | undefined,
+): ResearchVisitStep | null {
+  const current = currentResearchVisit(history);
+  if (!current) {
     return null;
   }
-  const index = history.index - 1;
-  return { history: { entries: history.entries, index }, visit: history.entries[index]! };
+  let passed = false;
+  for (
+    let index = history.index + direction;
+    index >= 0 && index < history.entries.length;
+    index += direction
+  ) {
+    const visit = history.entries[index]!;
+    if (hidden?.(visit) || (passed && sameResearchVisit(visit, current, true))) {
+      passed = true;
+      continue;
+    }
+    return { history: { entries: history.entries, index }, visit };
+  }
+  return null;
 }
 
-/** Moves the cursor forward one entry, or null if already at the end. */
-export function researchVisitForward(history: ResearchVisitHistory): ResearchVisitStep | null {
-  if (!canGoResearchForward(history)) {
-    return null;
-  }
-  const index = history.index + 1;
-  return { history: { entries: history.entries, index }, visit: history.entries[index]! };
+/** Moves the cursor back one entry (past the visits `hidden` rejects), or
+ * null if there is none. */
+export function researchVisitBack(
+  history: ResearchVisitHistory,
+  hidden?: (visit: ResearchVisit) => boolean,
+): ResearchVisitStep | null {
+  return researchVisitStep(history, -1, hidden);
+}
+
+/** Moves the cursor forward one entry (past the visits `hidden` rejects), or
+ * null if there is none. */
+export function researchVisitForward(
+  history: ResearchVisitHistory,
+  hidden?: (visit: ResearchVisit) => boolean,
+): ResearchVisitStep | null {
+  return researchVisitStep(history, 1, hidden);
 }
 
 /** Merges adjacent matching entries and preserves the cursor position. */

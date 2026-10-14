@@ -304,6 +304,24 @@ test("malformed run and model events are rejected rather than applied", (t) => {
   }
 });
 
+test("a tree removal says whether the tree moved to the Trash", (t) => {
+  // The desktop sends `trashed: true` for a move to the Trash; the web server
+  // adds `removedBy`. A deletion carries neither flag, and `trashed: false`
+  // reads as a deletion.
+  const removal = (payload: Record<string, unknown>) =>
+    parseSessionEvent(sessionEvent("research.tree.removed", payload));
+  t.deepEqual(removal({ treeId: "tree-1", trashed: true, removedBy: "user-1" }), {
+    kind: "event",
+    event: { type: "research.tree.removed", treeId: "tree-1", trashed: true, timestamp: 100 },
+  });
+  for (const payload of [{ treeId: "tree-1" }, { treeId: "tree-1", trashed: false }]) {
+    t.deepEqual(removal(payload), {
+      kind: "event",
+      event: { type: "research.tree.removed", treeId: "tree-1", timestamp: 100 },
+    });
+  }
+});
+
 test("parseSessionEvent separates unrelated, unsupported, and malformed events", (t) => {
   // `models.updated` is parsed despite its prefix; other non-research types
   // stay unrelated, so the unsupported path keeps meaning "a research event

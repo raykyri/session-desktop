@@ -406,7 +406,18 @@ export function recordResearchComposerImages(
   saveResearchNavigation();
 }
 
-/** Drops navigation state for trees that no longer exist. */
+/** Drops the navigation state of a deleted tree. */
+export function removeResearchNavigation(treeId: string): void {
+  const current = researchNavigationStore();
+  if (!(treeId in current)) {
+    return;
+  }
+  delete current[treeId];
+  saveResearchNavigation();
+}
+
+/** Drops navigation state for trees that no longer exist. `validTreeIds`
+ * includes the trees in the Trash, whose state Restore brings back. */
 export function pruneResearchNavigation(validTreeIds: Iterable<string>): void {
   const valid = new Set(validTreeIds);
   const current = researchNavigationStore();

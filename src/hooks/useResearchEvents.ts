@@ -21,7 +21,7 @@ import {
   upsertResearchActivity,
   type ParsedResearchEvent,
 } from "@session/shared/lib/researchEvents";
-import { pruneResearchNavigation, pruneResearchNavigationNodes } from "../lib/researchNavigation";
+import { pruneResearchNavigationNodes, removeResearchNavigation } from "../lib/researchNavigation";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
 import {
@@ -61,7 +61,6 @@ export function useResearchEvents(
 ) {
   const {
     setResearchTrees,
-    researchTreesRef,
     setArchivedResearchTrees,
     archivedResearchTreesRef,
     setResearchActivity,
@@ -77,6 +76,7 @@ export function useResearchEvents(
     researchNavRefreshSeqRef,
     researchNavRefreshInFlightRef,
     recentActivityRootRequestSeqRef,
+    setResearchTreesTrashed,
   } = data;
   const {
     refreshResearchNavigation,
@@ -452,6 +452,8 @@ export function useResearchEvents(
           });
           if (event.type === "research.tree.archived") {
             pruneResearchTreeVisits((id) => id !== event.tree.id);
+          } else {
+            setResearchTreesTrashed([event.tree.id], false);
           }
           break;
         }
@@ -556,15 +558,19 @@ export function useResearchEvents(
               researchNodeEventCacheRef.current.delete(nodeId);
             }
           }
-          pruneResearchNavigation(
-            [...researchTreesRef.current, ...archivedResearchTreesRef.current]
-              .filter((tree) => tree.id !== event.treeId)
-              .map((tree) => tree.id),
-          );
           if (activeResearchTreeIdRef.current === event.treeId) {
             focusResearchHome();
           }
-          pruneResearchTreeVisits((id) => id !== event.treeId);
+          if (event.trashed) {
+            // Restore (or Undo) brings the thread back with its unsent
+            // drafts, pending branches, queued questions and selection, so
+            // its navigation state and visits stay.
+            setResearchTreesTrashed([event.treeId], true);
+          } else {
+            setResearchTreesTrashed([event.treeId], false);
+            removeResearchNavigation(event.treeId);
+            pruneResearchTreeVisits((id) => id !== event.treeId);
+          }
           break;
         }
       }

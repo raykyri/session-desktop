@@ -69,6 +69,33 @@ export function useResearchData() {
   // one is fetched again.
   const recentActivityRootRequestSeqRef = useRef(0);
   const recentActivityHeadRequestSeqRef = useRef(0);
+  // Trees in the Trash: those the last navigation refresh found there, and
+  // those moved there since (research.tree.removed with `trashed`). Their
+  // saved navigation state and back/forward visits are kept for Restore;
+  // back and forward pass over the visits while they stay trashed. The ref
+  // is current at event time; the state re-renders the back/forward buttons.
+  const [trashedResearchTreeIds, setTrashedResearchTreeIdsState] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  const trashedResearchTreeIdsRef = useRef(trashedResearchTreeIds);
+  /** Marks `treeIds` as in the Trash (`trashed`) or out of it; with
+   * `replace`, `treeIds` is the whole Trash. */
+  const setResearchTreesTrashed = useCallback(
+    (treeIds: Iterable<string>, trashed: boolean, options: { replace?: boolean } = {}) => {
+      const current = trashedResearchTreeIdsRef.current;
+      const next = new Set(options.replace ? [] : current);
+      for (const treeId of treeIds) {
+        if (trashed) next.add(treeId);
+        else next.delete(treeId);
+      }
+      if (next.size === current.size && [...next].every((treeId) => current.has(treeId))) {
+        return;
+      }
+      trashedResearchTreeIdsRef.current = next;
+      setTrashedResearchTreeIdsState(next);
+    },
+    [],
+  );
 
   /** Clears the open tree: no selection, detail or error, nothing restored. */
   const clearActiveResearchTree = useCallback(() => {
@@ -124,6 +151,9 @@ export function useResearchData() {
     researchNavRefreshInFlightRef,
     recentActivityRootRequestSeqRef,
     recentActivityHeadRequestSeqRef,
+    trashedResearchTreeIds,
+    trashedResearchTreeIdsRef,
+    setResearchTreesTrashed,
     clearActiveResearchTree,
     setActiveResearchTree,
     clearResearchUnseen,

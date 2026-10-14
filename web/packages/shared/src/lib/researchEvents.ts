@@ -318,7 +318,12 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
       return typeof payload.treeId === "string"
         ? {
             kind: "event",
-            event: { type: event.type, treeId: payload.treeId, timestamp: event.timestamp },
+            event: {
+              type: event.type,
+              treeId: payload.treeId,
+              ...(payload.trashed === true ? { trashed: true as const } : {}),
+              timestamp: event.timestamp,
+            },
           }
         : malformed();
     case "research.node.removed":

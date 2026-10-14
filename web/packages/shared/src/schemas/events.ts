@@ -65,6 +65,7 @@ export const parsedResearchEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("research.tree.removed"),
     treeId: z.string(),
+    trashed: z.literal(true).optional(),
     timestamp: z.number(),
   }),
   z.object({

@@ -70,6 +70,7 @@ export function useResearchActions(
     recentActivityItemsRef,
     activeResearchTreeIdRef,
     setActiveResearchDetail,
+    setResearchTreesTrashed,
   } = data;
   const {
     refreshResearchNavigation,
@@ -308,17 +309,18 @@ export function useResearchActions(
     [focusResearchHome, pruneResearchTreeVisits],
   );
   // Moving to the Trash closes the thread the same way; the backend's
-  // research.tree.removed event updates the lists in every window.
+  // research.tree.removed event updates the lists in every window. The
+  // thread's visits and saved navigation state stay for Restore.
   const trashResearchTreeAndSelectFallback = useCallback(
     async (treeId: string) => {
       setError(null);
       await trashResearchTree(treeId);
+      setResearchTreesTrashed([treeId], true);
       if (activeResearchTreeIdRef.current === treeId) {
         focusResearchHome();
       }
-      pruneResearchTreeVisits((id) => id !== treeId);
     },
-    [focusResearchHome, pruneResearchTreeVisits],
+    [focusResearchHome, setResearchTreesTrashed],
   );
   const createResearchFollowup = useCallback(
     async (
