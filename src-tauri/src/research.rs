@@ -5702,9 +5702,8 @@ mod tests {
         std::fs::remove_dir_all(moved).unwrap();
     }
 
-    /// The stored shape of a post with every optional field set: a shared
-    /// delivery with a member reply and the author's response to it, and an
-    /// edit. Field names and tags come from serde
+    /// The stored shape of a post with every optional field set: a follow-up
+    /// agent with a model, and an edit. Field names and tags come from serde
     /// attributes, not type names, and must not change without a migration.
     const STORED_POST_NODE: &str = concat!(
         r#"{"id":"post-1","treeId":"tree-1","parentNodeId":"post-0","title":"Who has tried X?","#,
