@@ -62,6 +62,9 @@ import { errorMessage, pushErrorToast, pushToast } from "../../lib/toast.js";
 const EMPTY_FOLDER_STATE: ResearchFolderState = emptyResearchFolderState();
 const EMPTY_TREES: ResearchTreeSummary[] = [];
 
+/** A refused reorder, as the person reads it. */
+export const REORDER_FAILED_MESSAGE = "The list changed elsewhere and was reloaded. Try again.";
+
 /* -------------------------------------------------------------------------
  * The folder state's writes, per workspace
  * ---------------------------------------------------------------------- */
@@ -255,7 +258,10 @@ export function useFiling(workspaceId: string): Filing {
         await reorderResearchTrees({ workspaceId, archived: false, treeIds: order });
       } catch (failure) {
         invalidateKeys(client, ["trees"]);
-        throw failure;
+        // The server's refusals name thread ids ("… is not in the requested
+        // sidebar section"); every one of them means the list it was sent
+        // from is out of date, which the refetch above corrects.
+        throw new Error(REORDER_FAILED_MESSAGE, { cause: failure });
       }
     },
     [client, workspaceId],

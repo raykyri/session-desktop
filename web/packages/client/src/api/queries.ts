@@ -11,6 +11,7 @@ import type {
   RecentResearchQuery,
   ResearchDraft,
   ResearchFolderState,
+  ResearchNode,
   ResearchNodeContent,
   ResearchTree,
   ResearchTreeDetail,
@@ -33,7 +34,6 @@ import {
   patchResearchSummaryForRemovedNodes,
   patchResearchSummaryTree,
   removeResearchDetailNodes,
-  researchSummaryFromDetail,
 } from "@session/shared/lib/researchEvents";
 import { nodeResponseSnapshotAt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import {
@@ -123,6 +123,7 @@ import {
   patchDetail,
   patchDetailQueue,
   queryKeys,
+  writeDetailSummary,
 } from "./cache.js";
 import { addNodeInterest, addTreeInterest } from "./events.js";
 
@@ -712,18 +713,17 @@ function writeTree(client: QueryClient, tree: ResearchTree): void {
   patchDetail(client, tree.id, (detail) => patchResearchDetailTree(detail, tree));
 }
 
-/** A whole detail: the authoritative shape, so the summary is recomputed from
- * it rather than patched field by field. */
-function writeDetail(client: QueryClient, detail: ResearchTreeDetail): void {
+/** A whole detail: the authoritative shape, so the summary's counts are
+ * recomputed from it rather than patched field by field. `insert` adds the
+ * thread to the reader's own lists for its workspace when they do not hold it
+ * (a thread just created); a retry only updates the lists that do. */
+function writeDetail(
+  client: QueryClient,
+  detail: ResearchTreeDetail,
+  options: { insert: boolean },
+): void {
   client.setQueryData(queryKeys.tree(detail.tree.id), detail);
-  const summary = researchSummaryFromDetail(detail);
-  eachTreeList(client, (summaries) => {
-    const index = summaries.findIndex((existing) => existing.id === summary.id);
-    if (index === -1) return [summary, ...summaries];
-    const next = [...summaries];
-    next[index] = summary;
-    return next;
-  });
+  writeDetailSummary(client, detail, options);
   for (const node of detail.nodes) patchActiveNodes(client, node);
 }
 
@@ -740,7 +740,7 @@ export function useCreateResearchTree() {
   return useMutation({
     mutationFn: createResearchTree,
     onSuccess: (detail) => {
-      writeDetail(client, detail);
+      writeDetail(client, detail, { insert: true });
       writeFeedRoot(client, detail);
       // A new root question is a new feed row, and the feed is keyset
       // paginated: there is no correct place to splice it in by hand.
@@ -749,18 +749,26 @@ export function useCreateResearchTree() {
   });
 }
 
+/** A node a mutation just created. The summary counts are a delta, so they
+ * move only when no cache held the node yet: the `research.node.created`
+ * event may have arrived before the response and counted it already. */
+function writeCreatedNode(client: QueryClient, node: ResearchNode): void {
+  const known = cachedNode(client, node.treeId, node.id) !== undefined;
+  patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+  if (!known) {
+    mapSummaries(client, (summary) =>
+      patchResearchSummaryForCreatedNode(summary, node, Date.now()),
+    );
+  }
+  patchActiveNodes(client, node);
+}
+
 export function useForkResearchNode() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: forkResearchNode,
     onSuccess: (node) => {
-      // Apply optimistic tree and node summary updates so the subsequent server
-      // event does not duplicate the count change.
-      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
-      mapSummaries(client, (summary) =>
-        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
-      );
-      patchActiveNodes(client, node);
+      writeCreatedNode(client, node);
       // A follow-up question is a new feed row, and the feed is keyset
       // paginated: there is no correct place to splice it in by hand.
       invalidateKeys(client, ["activity"]);
@@ -786,12 +794,7 @@ export function useAskResearchFollowup() {
         });
         return;
       }
-      const { node } = result;
-      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
-      mapSummaries(client, (summary) =>
-        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
-      );
-      patchActiveNodes(client, node);
+      writeCreatedNode(client, result.node);
       invalidateKeys(client, ["activity"]);
     },
   });
@@ -825,7 +828,7 @@ export function useRetryResearchNode() {
     mutationFn: (input: { nodeId: string; model?: string }) =>
       retryResearchNode(input.nodeId, input.model),
     onSuccess: (detail, input) => {
-      writeDetail(client, detail);
+      writeDetail(client, detail, { insert: false });
       // The retried node starts a fresh attempt from sequence zero.
       invalidateKeys(client, queryKeys.nodeContent(input.nodeId));
     },
@@ -990,7 +993,7 @@ export function useCreateResearchPost() {
   return useMutation({
     mutationFn: createResearchPost,
     onSuccess: (detail) => {
-      writeDetail(client, detail);
+      writeDetail(client, detail, { insert: true });
       writeFeedRoot(client, detail);
       invalidateKeys(client, ["activity"]);
     },
@@ -1003,10 +1006,7 @@ export function useCreateResearchPostFollowUp() {
   return useMutation({
     mutationFn: createResearchPostFollowUp,
     onSuccess: (node) => {
-      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
-      mapSummaries(client, (summary) =>
-        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
-      );
+      writeCreatedNode(client, node);
       invalidateKeys(client, ["activity"], queryKeys.feedRoot(node.treeId));
     },
   });

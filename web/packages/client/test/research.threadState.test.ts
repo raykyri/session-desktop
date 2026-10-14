@@ -5,7 +5,10 @@
 import test from "ava";
 
 import { composerEnterAction } from "../src/features/thread/ConversationComposer.js";
-import { postFollowUpCopy } from "../src/features/thread/PostFollowUpField.js";
+import {
+  postFollowUpAskLabel,
+  postFollowUpCopy,
+} from "../src/features/thread/PostFollowUpField.js";
 import {
   COLUMN_WIDTH_KEYS,
   columnResize,
@@ -143,6 +146,14 @@ test("a tree's selection, scroll and expansions survive a reload", (t) => {
   t.is(savedSelection("t2"), null);
 });
 
+test.serial("leaving the page writes a save the debounce still holds", (t) => {
+  localStorage.removeItem(THREAD_NAVIGATION_KEY);
+  recordSelection("t7", ["n7"]);
+  t.is(localStorage.getItem(THREAD_NAVIGATION_KEY), null, "the write waits for the debounce");
+  window.dispatchEvent(new Event("pagehide"));
+  t.truthy(localStorage.getItem(THREAD_NAVIGATION_KEY)?.includes("n7"), "pagehide writes it");
+});
+
 test("the unsent branch is kept until it is sent or cancelled", (t) => {
   recordPendingBranch("t1", "n1", ANCHOR, "Why?");
   flushThreadNavigation();
@@ -198,6 +209,30 @@ test("a note follow-up says the agent does not see it", (t) => {
   t.deepEqual(postFollowUpCopy(true), {
     placeholder: "Add a note (not visible to agent)",
     sendName: "Add note",
+    sendTitle: "Add note",
   });
-  t.deepEqual(postFollowUpCopy(false), { placeholder: "Ask a follow-up", sendName: "Ask" });
+  t.deepEqual(postFollowUpCopy(false, "Ask Gemini 3.8 Flash"), {
+    placeholder: "Ask a follow-up",
+    sendName: "Ask",
+    sendTitle: "Ask Gemini 3.8 Flash",
+  });
+});
+
+test("the Ask segment names the model, as the desktop's Ask {agent} {model}", (t) => {
+  const models = [
+    {
+      id: "gemini-flash",
+      label: "Gemini 3.8 Flash",
+      provider: "vertex" as const,
+      adminOnly: false,
+      available: true,
+      supportsFiles: true,
+      supportsImages: true,
+    },
+  ];
+  t.is(
+    postFollowUpAskLabel(models, { model: "gemini-flash", effort: null }),
+    "Ask Gemini 3.8 Flash",
+  );
+  t.is(postFollowUpAskLabel(models, null), "Ask AI");
 });

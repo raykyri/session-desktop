@@ -126,6 +126,16 @@ export function flushThreadNavigation(): void {
   }
 }
 
+/** `pagehide` writes a save the debounce still holds: the timer would not
+ * fire once the page is unloading or entering the back/forward cache. */
+export function flushPendingThreadNavigation(): void {
+  if (timer !== null) flushThreadNavigation();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPendingThreadNavigation);
+}
+
 function scheduleSave(): void {
   if (timer !== null) clearTimeout(timer);
   timer = setTimeout(flushThreadNavigation, SAVE_DEBOUNCE_MS);

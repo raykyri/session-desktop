@@ -49,12 +49,23 @@ export function patchNodeHighlights(
   });
 }
 
+/** Adds a created highlight unless the `research.highlight.created` event,
+ * which can arrive before the response, already added it. */
+export function withHighlight(
+  highlights: ResearchHighlight[],
+  created: ResearchHighlight,
+): ResearchHighlight[] {
+  return highlights.some(({ id }) => id === created.id) ? highlights : [...highlights, created];
+}
+
 export function useHighlightMutations(treeId: string): HighlightActions {
   const client = useQueryClient();
   const create = useCallback(
     async (nodeId: string, anchor: ResearchHighlightAnchor) => {
       const created = await createResearchHighlight(nodeId, anchor);
-      patchNodeHighlights(client, treeId, nodeId, (highlights) => [...highlights, created]);
+      patchNodeHighlights(client, treeId, nodeId, (highlights) =>
+        withHighlight(highlights, created),
+      );
     },
     [client, treeId],
   );
@@ -75,10 +86,12 @@ export function useHighlightMutations(treeId: string): HighlightActions {
       const created = await createResearchHighlight(nodeId, anchor);
       const removed = absorbed.length > 0 ? await removeResearchHighlights(nodeId, absorbed) : [];
       const removedIds = new Set(removed.map(({ id }) => id));
-      patchNodeHighlights(client, treeId, nodeId, (highlights) => [
-        ...highlights.filter(({ id }) => !removedIds.has(id)),
-        created,
-      ]);
+      patchNodeHighlights(client, treeId, nodeId, (highlights) =>
+        withHighlight(
+          highlights.filter(({ id }) => !removedIds.has(id)),
+          created,
+        ),
+      );
     },
     [client, treeId],
   );

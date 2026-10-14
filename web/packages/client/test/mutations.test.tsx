@@ -21,12 +21,16 @@ import { queryKeys } from "../src/api/cache.js";
 import { applyEventBatch } from "../src/api/events.js";
 import {
   queryClientDefaults,
+  useAskResearchFollowup,
   useCancelResearchNode,
+  useCreateResearchTree,
   useForkResearchNode,
   useRemoveResearchBranch,
+  useRetryResearchNode,
 } from "../src/api/queries.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { AppProviders } from "../src/app/providers.js";
+import { useHighlightMutations } from "../src/features/thread/mutations.js";
 
 import { node, summary, tree } from "./fixtures.js";
 import { resetDocumentRoot } from "./helpers.js";
@@ -163,4 +167,139 @@ test.serial("removing a branch subtracts its counts once", async (t) => {
   });
 
   t.is(counts(queryClient)?.runningCount, 1, "the rows are gone, so the event subtracts nothing");
+});
+
+test.serial("a fork whose event arrived before the response is counted once", async (t) => {
+  const forked = node({ id: "n2", parentNodeId: "n1", status: "queued" });
+  install({ "research.forkNode": forked });
+  const queryClient = seeded([node({ status: "running" })]);
+
+  act(() => {
+    applyEventBatch([event("research.node.created", { node: forked })], queryClient);
+  });
+  t.is(counts(queryClient)?.runningCount, 2, "the event counts the new question");
+
+  const { result } = renderHook(() => useForkResearchNode(), { wrapper: wrapper(queryClient) });
+  await act(async () => {
+    await result.current.mutateAsync({ parentNodeId: "n1", prompt: "and then?" });
+  });
+  t.is(counts(queryClient)?.runningCount, 2, "the response finds it counted");
+});
+
+test.serial("a follow-up sent at once is counted once whichever half lands first", async (t) => {
+  const sent = node({ id: "n2", parentNodeId: "n1", status: "queued", inline: true });
+  install({ "followups.ask": { kind: "sent", node: sent } });
+  const queryClient = seeded([node({ status: "complete", completedAt: 1 })], { runningCount: 0 });
+
+  act(() => {
+    applyEventBatch([event("research.node.created", { node: sent })], queryClient);
+  });
+  const { result } = renderHook(() => useAskResearchFollowup(), { wrapper: wrapper(queryClient) });
+  await act(async () => {
+    await result.current.mutateAsync({ headNodeId: "n1", prompt: "and then?" });
+  });
+  t.is(counts(queryClient)?.runningCount, 1);
+});
+
+test.serial(
+  "retrying in someone else's thread updates the lists that hold it and adds it to none",
+  async (t) => {
+    const shared = tree({ id: "t9", rootNodeId: "n9", ownerId: "owner", role: "commenter" });
+    const detail: ResearchTreeDetail = {
+      tree: shared,
+      nodes: [node({ id: "n9", treeId: "t9", status: "queued" })],
+    };
+    install({ "research.retryNode": detail });
+    const queryClient = seeded([node({ status: "running" })]);
+    // The reader's other workspace, and the shared list that holds the thread.
+    queryClient.setQueryData(queryKeys.trees({ workspaceId: "w2", includeArchived: false }), []);
+    queryClient.setQueryData(queryKeys.shared("shared"), [
+      summary({ id: "t9", rootNodeId: "n9", workspaceId: "owner-ws", role: "commenter" }),
+    ]);
+
+    const { result } = renderHook(() => useRetryResearchNode(), { wrapper: wrapper(queryClient) });
+    await act(async () => {
+      await result.current.mutateAsync({ nodeId: "n9" });
+    });
+
+    t.deepEqual(
+      queryClient
+        .getQueryData<ResearchTreeSummary[]>(queryKeys.trees(TREES_SCOPE))
+        ?.map((entry) => entry.id),
+      ["t1"],
+      "not added to the reader's own workspace",
+    );
+    t.deepEqual(
+      queryClient.getQueryData(queryKeys.trees({ workspaceId: "w2", includeArchived: false })),
+      [],
+    );
+    const sharedRow = queryClient.getQueryData<ResearchTreeSummary[]>(
+      queryKeys.shared("shared"),
+    )?.[0];
+    t.is(sharedRow?.runningCount, 1, "the shared row takes the new counts");
+    t.is(sharedRow?.role, "commenter", "and keeps the reader's role");
+    t.is(sharedRow?.workspaceId, "owner-ws");
+  },
+);
+
+test.serial("a thread created in another workspace is added only to its lists", async (t) => {
+  const created = tree({ id: "t2", rootNodeId: "n2", workspaceId: "w2", role: "owner" });
+  const detail: ResearchTreeDetail = {
+    tree: created,
+    nodes: [node({ id: "n2", treeId: "t2", groupId: "w2", status: "queued" })],
+  };
+  install({ "research.createTree": detail });
+  const queryClient = seeded([node({ status: "running" })]);
+  const w2 = queryKeys.trees({ workspaceId: "w2", includeArchived: false });
+  queryClient.setQueryData(w2, []);
+
+  const { result } = renderHook(() => useCreateResearchTree(), { wrapper: wrapper(queryClient) });
+  await act(async () => {
+    await result.current.mutateAsync({ prompt: "q", model: "gemini-flash", workspaceId: "w2" });
+  });
+
+  t.deepEqual(
+    queryClient
+      .getQueryData<ResearchTreeSummary[]>(queryKeys.trees(TREES_SCOPE))
+      ?.map((entry) => entry.id),
+    ["t1"],
+  );
+  const added = queryClient.getQueryData<ResearchTreeSummary[]>(w2);
+  t.deepEqual(
+    added?.map((entry) => entry.id),
+    ["t2"],
+  );
+  t.is(added?.[0]?.role, "owner", "with the reader's role");
+});
+
+test.serial("a highlight the event already added is not added twice", async (t) => {
+  const anchor = {
+    version: 1 as const,
+    projection: "answer-v1" as const,
+    responseRevision: "r",
+    start: 0,
+    end: 4,
+    exact: "Some",
+    prefix: "",
+    suffix: "",
+  };
+  const highlight = { id: "h1", nodeId: "n1", anchor, createdAt: 1 };
+  install({ "highlights.create": highlight });
+  const queryClient = seeded([node({ status: "complete", completedAt: 1 })]);
+  act(() => {
+    applyEventBatch(
+      [event("research.highlight.created", { nodeId: "n1", highlight })],
+      queryClient,
+    );
+  });
+  const { result } = renderHook(() => useHighlightMutations("t1"), {
+    wrapper: wrapper(queryClient),
+  });
+  await act(async () => {
+    await result.current.create("n1", anchor);
+  });
+  t.is(
+    queryClient.getQueryData<ResearchTreeDetail>(queryKeys.tree("t1"))?.nodes[0]?.highlights.length,
+    1,
+  );
 });

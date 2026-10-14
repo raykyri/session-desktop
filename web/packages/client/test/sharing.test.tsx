@@ -9,6 +9,7 @@ import type {
   ResearchParticipant,
   ResearchTree,
   ResearchTreeDetail,
+  ResearchTreeSummary,
   SessionEvent,
   ThreadInvite,
   ThreadMember,
@@ -42,7 +43,7 @@ import { useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
 
-import { node, tree } from "./fixtures.js";
+import { node, summary, tree } from "./fixtures.js";
 import { renderApp, resetDocumentRoot, waitUntil } from "./helpers.js";
 import { createTrpcStub } from "./trpcStub.js";
 
@@ -697,6 +698,75 @@ test("a tree event without the reader's own fields keeps them", (t) => {
   t.is(detail?.tree.title, "New");
   t.is(detail?.tree.role, "commenter");
   t.true(detail?.tree.followed);
+});
+
+test("another person's tree event keeps the reader's own Archive and Trash", (t) => {
+  // The server leaves a member's per-person state out of everyone else's
+  // copy of a tree event (`research/access.ts:sharedTree`).
+  const cached = tree({ role: "commenter", archivedAt: 7, trashedAt: 9, trashedBy: ME });
+  const incoming = tree({ title: "Renamed" });
+  for (const field of ["archivedAt", "trashedAt", "lastViewedAt"] as const) {
+    delete (incoming as Partial<ResearchTree>)[field];
+  }
+  const merged = mergeTreeEvent(cached, incoming);
+  t.is(merged.archivedAt, 7);
+  t.is(merged.trashedAt, 9);
+  t.is(merged.trashedBy, ME);
+  // The person who caused it gets their own copy, which speaks for itself.
+  const own = mergeTreeEvent(cached, tree({ archivedAt: null, trashedAt: null }));
+  t.is(own.archivedAt, null);
+  t.is(own.trashedBy, undefined, "out of the Trash, trashedBy is not carried");
+
+  const client = testQueryClient();
+  const scope = { workspaceId: "w1", includeArchived: true };
+  client.setQueryData<ResearchTreeDetail>(queryKeys.tree("t1"), { tree: cached, nodes: [] });
+  client.setQueryData(queryKeys.trees(scope), [summary({ archivedAt: 7 })]);
+  applyEventBatch(
+    [{ type: "research.tree.updated", payload: { tree: incoming }, timestamp: 1 }],
+    client,
+  );
+  t.is(client.getQueryData<ResearchTreeDetail>(queryKeys.tree("t1"))?.tree.archivedAt, 7);
+  const row = client.getQueryData<ResearchTreeSummary[]>(queryKeys.trees(scope))?.[0];
+  t.is(row?.title, "Renamed");
+  t.is(row?.archivedAt, 7, "the summary keeps the reader's Archive too");
+  t.false(client.getQueryState(queryKeys.tree("t1"))?.isInvalidated ?? false);
+
+  // Another person's Archive or restore is read back from the server.
+  applyEventBatch(
+    [{ type: "research.tree.archived", payload: { tree: incoming }, timestamp: 2 }],
+    client,
+  );
+  t.true(client.getQueryState(queryKeys.tree("t1"))?.isInvalidated);
+});
+
+test("a created thread is listed only for its owner, in its workspace", (t) => {
+  const client = testQueryClient();
+  client.setQueryData(queryKeys.me(), { id: ME });
+  const w1 = queryKeys.trees({ workspaceId: "w1", includeArchived: false });
+  const w2 = queryKeys.trees({ workspaceId: "w2", includeArchived: false });
+  client.setQueryData(w1, []);
+  client.setQueryData(w2, []);
+  const created = (id: string, overrides: Partial<ResearchTree>) =>
+    ({
+      type: "research.tree.created",
+      payload: {
+        tree: tree({ id, rootNodeId: `${id}-root`, ...overrides }),
+        node: node({ id: `${id}-root`, treeId: id, groupId: overrides.workspaceId ?? "w1" }),
+      },
+      timestamp: 1,
+    }) satisfies SessionEvent;
+  applyEventBatch(
+    [
+      created("own-w2", { workspaceId: "w2", ownerId: ME, role: "owner" }),
+      created("theirs", { workspaceId: "w1", ownerId: OWNER }),
+    ],
+    client,
+  );
+  t.deepEqual(client.getQueryData<ResearchTreeSummary[]>(w1), []);
+  t.deepEqual(
+    client.getQueryData<ResearchTreeSummary[]>(w2)?.map((entry) => entry.id),
+    ["own-w2"],
+  );
 });
 
 test("presence and invitation events reach their caches", (t) => {

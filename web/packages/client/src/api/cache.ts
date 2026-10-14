@@ -20,7 +20,11 @@ import type {
   ResearchTreeSummary,
 } from "@session/shared";
 import { recentActivityItemId } from "@session/shared";
-import { upsertResearchActivity } from "@session/shared/lib/researchEvents";
+import {
+  patchResearchSummaryTree,
+  researchSummaryFromDetail,
+  upsertResearchActivity,
+} from "@session/shared/lib/researchEvents";
 import { nodeRecap, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 
@@ -139,8 +143,25 @@ export function dropFromSharedLists(client: QueryClient, treeIds: ReadonlySet<st
 
 /** The fields of a tree that are the reader's own (web only). The server
  * leaves them out of a tree event it sends to everyone but the person who
- * caused it (`research/access.ts:sharedTree`). */
-const PER_PERSON_TREE_FIELDS = ["role", "lastViewedAt", "followed"] as const;
+ * caused it (`research/access.ts:sharedTree`): a member's Archive and Trash
+ * are per person, so another person's change says nothing about them.
+ * `trashedBy` is handled apart because the server omits it whenever the
+ * thread is out of the Trash; it is the reader's own only when `trashedAt`
+ * is left out too. */
+const PER_PERSON_TREE_FIELDS = [
+  "role",
+  "lastViewedAt",
+  "followed",
+  "archivedAt",
+  "trashedAt",
+] as const;
+
+/** Whether a tree event left out the reader's own Archive and Trash state:
+ * the change was someone else's, and what it means for the reader's copy has
+ * to be read back from the server. */
+export function treeEventOmitsOwnState(tree: ResearchTree): boolean {
+  return !("archivedAt" in tree);
+}
 
 /**
  * A tree from an event, over the copy the cache holds: a per-person field the
@@ -153,12 +174,106 @@ export function mergeTreeEvent(
 ): ResearchTree {
   if (!previous || previous.id !== next.id) return next;
   let merged: ResearchTree | null = null;
-  for (const field of PER_PERSON_TREE_FIELDS) {
-    if (field in next || previous[field] === undefined) continue;
+  const keep = (field: keyof ResearchTree) => {
     merged ??= { ...next };
     (merged as unknown as Record<string, unknown>)[field] = previous[field];
+  };
+  for (const field of PER_PERSON_TREE_FIELDS) {
+    if (field in next || previous[field] === undefined) continue;
+    keep(field);
+  }
+  if (!("trashedAt" in next) && !("trashedBy" in next) && previous.trashedBy !== undefined) {
+    keep("trashedBy");
   }
   return merged ?? next;
+}
+
+/** `patchResearchSummaryTree` for a tree from an event: a summary keeps its
+ * own `archivedAt` when the event leaves it out (`mergeTreeEvent`). */
+export function patchSummaryFromTreeEvent(
+  summary: ResearchTreeSummary,
+  tree: ResearchTree,
+): ResearchTreeSummary {
+  if (summary.id !== tree.id) return summary;
+  return patchResearchSummaryTree(
+    summary,
+    "archivedAt" in tree ? tree : { ...tree, archivedAt: summary.archivedAt ?? null },
+  );
+}
+
+/** Whether the reader owns a thread. A tree without `role` (an event sent to
+ * the rest of the audience) is the reader's only when its `ownerId` is the
+ * signed-in account's; a tree with neither field is treated as the reader's. */
+export function readerOwnsTree(client: QueryClient, tree: ResearchTree): boolean {
+  if (tree.role !== undefined) return tree.role === "owner";
+  if (tree.ownerId === undefined) return true;
+  const me = client.getQueryData<{ id: string } | null>(queryKeys.me());
+  return me?.id === tree.ownerId;
+}
+
+/** A detail's summary with the web-only fields the shared projection leaves
+ * out (owner, visibility, the reader's role). */
+export function summaryFromDetail(detail: ResearchTreeDetail): ResearchTreeSummary {
+  const summary = researchSummaryFromDetail(detail);
+  const { ownerId, visibility, role } = detail.tree;
+  return {
+    ...summary,
+    ...(ownerId === undefined ? {} : { ownerId }),
+    ...(visibility === undefined ? {} : { visibility }),
+    ...(role === undefined ? {} : { role }),
+  };
+}
+
+/**
+ * Writes a thread's summary from its detail into the lists. A list that
+ * holds the thread gets the new counts and title merged over its own copy,
+ * which keeps what a detail cannot speak for (the list's workspace, the
+ * Trash's `trashedAt`). A list that does not hold it gets it only when
+ * `insert` is set and the list is one the server would put it in: the
+ * reader's own thread, in that list's workspace, out of the Trash, and out of
+ * the Archive unless the list includes archived threads. The shared lists
+ * are only merged into; which of them lists a thread is the server's answer.
+ * `keepExisting` leaves a row a list already holds as it is (a redelivered
+ * `research.tree.created`, whose one-node detail is older than the row).
+ */
+export function writeDetailSummary(
+  client: QueryClient,
+  detail: ResearchTreeDetail,
+  options: { insert: boolean; keepExisting?: boolean },
+): void {
+  const fresh = summaryFromDetail(detail);
+  const replace = (summaries: ResearchTreeSummary[]): ResearchTreeSummary[] | null => {
+    const index = summaries.findIndex((existing) => existing.id === fresh.id);
+    if (index === -1) return null;
+    if (options.keepExisting === true) return summaries;
+    const existing = summaries[index] as ResearchTreeSummary;
+    const next = [...summaries];
+    next[index] = {
+      ...existing,
+      ...fresh,
+      workspaceId: existing.workspaceId,
+      ...(existing.trashedAt === undefined ? {} : { trashedAt: existing.trashedAt }),
+    };
+    return next;
+  };
+  const tree = detail.tree;
+  const insertable =
+    options.insert && readerOwnsTree(client, tree) && (tree.trashedAt ?? null) === null;
+  for (const query of client.getQueryCache().findAll({ queryKey: ["trees"] })) {
+    const summaries = query.state.data as ResearchTreeSummary[] | undefined;
+    if (!summaries) continue;
+    const replaced = replace(summaries);
+    if (replaced) {
+      client.setQueryData(query.queryKey, replaced);
+      continue;
+    }
+    const scope = query.queryKey[1] as
+      { workspaceId?: string; includeArchived?: boolean } | undefined;
+    if (!insertable || scope?.workspaceId !== tree.workspaceId) continue;
+    if ((tree.archivedAt ?? null) !== null && scope.includeArchived !== true) continue;
+    client.setQueryData(query.queryKey, [fresh, ...summaries]);
+  }
+  eachSharedList(client, (summaries) => replace(summaries) ?? summaries);
 }
 
 /** Patches a tree detail already in the cache. A no-op when nothing is cached for it. */

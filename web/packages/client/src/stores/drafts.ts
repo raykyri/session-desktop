@@ -53,6 +53,11 @@ const pending = new Map<DraftKey, ComposerDraft | null>();
 const editedKeys = new Set<DraftKey>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
+/** Forgets which keys were edited in this tab (tests share the module). */
+export function resetEditedDraftKeysForTests(): void {
+  editedKeys.clear();
+}
+
 /** Marks a key as edited in this tab, so a later server restore does not replace it. */
 export function markDraftEdited(key: DraftKey): void {
   editedKeys.add(key);

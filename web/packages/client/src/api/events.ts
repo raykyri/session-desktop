@@ -38,9 +38,7 @@ import {
   patchResearchSummaryForCreatedNode,
   patchResearchSummaryForNode,
   patchResearchSummaryForRemovedNodes,
-  patchResearchSummaryTree,
   removeResearchDetailNodes,
-  researchSummaryFromDetail,
 } from "@session/shared/lib/researchEvents";
 import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
@@ -67,9 +65,12 @@ import {
   patchActivityFeedNode,
   patchDetail,
   patchDetailQueue,
+  patchSummaryFromTreeEvent,
   queryKeys,
   removeActivityFeedItem,
+  treeEventOmitsOwnState,
   treeIdForNode,
+  writeDetailSummary,
   type ActivityQueryScope,
 } from "./cache.js";
 import { trpc, type SessionTrpcClient } from "./trpc.js";
@@ -132,13 +133,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
   switch (event.type) {
     case "research.tree.created": {
       const detail: ResearchTreeDetail = { tree: event.tree, nodes: [event.node] };
-      client.setQueryData(queryKeys.tree(event.tree.id), detail);
-      const summary = researchSummaryFromDetail(detail);
-      eachTreeList(client, (summaries) =>
-        summaries.some((existing) => existing.id === summary.id)
-          ? summaries
-          : [summary, ...summaries],
-      );
+      // A redelivery must not replace a detail that has moved on since.
+      if (client.getQueryData(queryKeys.tree(event.tree.id)) === undefined) {
+        client.setQueryData(queryKeys.tree(event.tree.id), detail);
+      }
+      // Only the reader's own lists for the thread's workspace gain the row.
+      writeDetailSummary(client, detail, { insert: true, keepExisting: true });
       patchActiveNodes(client, event.node);
       // The new thread's Home card reads its root from here, so it shows
       // without a round trip.
@@ -153,13 +153,17 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     case "research.tree.archived":
     case "research.tree.restored": {
       invalidateHighlightLabels(client, cachedTreeTitle(client, event.tree.id), event.tree.title);
-      mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
       // Another person's change arrives without the reader's own fields
-      // (role, last view, Follow); those keep the values the cache holds.
+      // (role, last view, Follow, Archive and Trash); those keep the values
+      // the cache holds.
+      mapSummaries(client, (summary) => patchSummaryFromTreeEvent(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) =>
         patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree)),
       );
       if (event.type !== "research.tree.updated") {
+        // What another person's Archive or restore means for the reader's
+        // copy (the owner's Archive shows to members) is the server's answer.
+        if (treeEventOmitsOwnState(event.tree)) invalidate(client, queryKeys.tree(event.tree.id));
         // Archiving moves the thread between the `includeArchived` scopes,
         // and which list it belongs to is the server's answer, not a patch's.
         // The highlights feed reads from unarchived threads only
@@ -284,7 +288,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         knownNode === undefined ? undefined : (knownNode.title ?? null),
         event.node.title ?? null,
       );
-      mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
+      mapSummaries(client, (summary) => patchSummaryFromTreeEvent(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) => {
         const withTree = patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree));
         return patchResearchDetailNode(withTree, event.node);
