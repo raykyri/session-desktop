@@ -169,13 +169,33 @@ release.
 
 ### 2. DNS and certificates, for both hostnames
 
-The app is reached by two names: `session.dev` for the app, and
-`artifacts.session.dev` for widget previews. They must be **different
-hostnames on the same Fly app**, because the session cookie is scoped to the
-app host and must never reach the origin the preview iframe is same-origin
-with. The server enforces this by comparing the `Host` header against
+The app is reached by two names: `session.dev` for the app, and a second
+name for widget pages (`SESSION_ARTIFACT_ORIGIN`). They must be **different
+hostnames on the same Fly app**: the session cookie is host-only on the app
+host and must never reach the origin that serves widget pages. The server
+enforces this by comparing the `Host` header against
 `SESSION_ARTIFACT_ORIGIN`, so both names have to resolve to the same machines
-and the database they share.
+and the database they share, and it refuses to start when the two origins
+have the same host.
+
+**Widget scripts need the widget host on another registrable domain.** A
+subdomain of the app's domain, such as `artifacts.session.dev` beside
+`session.dev`, is the same _site_: browsers treat requests between the two
+as same-site, and a cookie scoped to `session.dev` reaches both. With a
+same-site artifact origin the server serves only the static widget page,
+shows "Scripts off" on every widget, and logs at boot:
+
+```
+SESSION_ARTIFACT_ORIGIN (https://artifacts.session.dev) is on the same site (session.dev) as SESSION_PUBLIC_ORIGIN (https://session.dev). Widget scripts are off ...
+```
+
+To run widget scripts, register a second domain that is not under the app's
+domain (for example `<name>-usercontent.dev` for an app on `session.dev`), add
+it below in place of `artifacts.session.dev`, and set
+`SESSION_ARTIFACT_ORIGIN` in `fly.toml` to `https://` plus that host. The rule
+uses the Public Suffix List with its private section, so two names under a
+shared hosting suffix such as `fly.dev` count as different sites
+(`11-artifacts-and-browser.md` §2.1).
 
 Fly routes by IP rather than by hostname, so any name pointing at the app's
 addresses arrives at it, and the original `Host` is passed through untouched.

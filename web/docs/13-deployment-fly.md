@@ -11,6 +11,12 @@ CNAMEs.
 `SESSION_PUBLIC_ORIGIN=https://session.dev`,
 `SESSION_ARTIFACT_ORIGIN=https://artifacts.session.dev`.
 
+`artifacts.session.dev` is the same site as `session.dev`, so with this pair
+the server serves static widget pages only and logs "Widget scripts are off"
+at boot. Widget scripts need `SESSION_ARTIFACT_ORIGIN` on a host under
+another registrable domain, with its own certificate and DNS records
+(`web/SETUP.md` §2, `11-artifacts-and-browser.md` §2.1).
+
 ## 2. `web/fly.toml`
 
 The file is `web/fly.toml`; `kill_signal` and `kill_timeout` are top-level

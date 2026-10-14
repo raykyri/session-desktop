@@ -32,6 +32,9 @@ kill_timeout = "30s"
   PORT = "8080"
   NODE_ENV = "production"
   SESSION_PUBLIC_ORIGIN = "https://session.dev"
+  # The same site as session.dev, so widget scripts are off and widgets show
+  # their static page (the boot log says so). Widget scripts need a host on
+  # another registrable domain here (web/SETUP.md §2).
   SESSION_ARTIFACT_ORIGIN = "https://artifacts.session.dev"
   SESSION_DATA_DIR = "/data"
   SESSION_RUNS_PER_USER = "2"

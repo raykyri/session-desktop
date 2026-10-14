@@ -43,7 +43,7 @@ packages/client/
       connection.ts          SSE status
     ui/                      design-system wrappers (08-design-system-and-styling.md)
     features/
-      artifacts/  composer/  highlights/  home/  import/
+      composer/  highlights/  home/  import/  widgets/
       journal/  markdown/  palette/  research/  sidebar/
     lib/                     client-only helpers (clipboard, keyboard, dom search)
     styles/

@@ -44,8 +44,8 @@ each replaces; "—" means new.
 `features.artifactOrigin` is the artifact origin that serves widget previews
 (`11-artifacts-and-browser.md` §2). Because the origin is configured per
 deployment, runtime configuration provides it instead of the client bundle.
-No client code reads it since the document preview panel was removed in
-phase 2.0.
+The client reads widget page URLs from `artifacts.prepareWidget` instead; no
+client code reads this field.
 
 ### `auth`
 | Procedure | Kind | Input → Output | Desktop |
@@ -199,7 +199,15 @@ inside that window.
 ### `artifacts`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `artifacts.prepareWidget` | M | `{ nodeId, sha256 }` → `{ url, expiresAt }` | `research_widget_prepare` |
+| `artifacts.prepareWidget` | M | `{ nodeId, sha256 }` (a block of a stored answer) or `{ treeId, artifactId, revision }` (a stored revision) → `{ staticUrl, runUrl \| null, expiresAt }`; `runUrl` is null while widget scripts are off | `research_widget_prepare` |
+| `artifacts.register` | M | `{ nodeId, slot, html, meta }` → `ResearchArtifactRevision`; the block must be a complete widget with that fence metadata in the node's stored answer | `research_artifact_register` |
+| `artifacts.history` | Q | `{ treeId, artifactId }` → `{ revisions: ResearchArtifactRevision[], unresolved }`, lineage order, after recording the thread's named revisions of the artifact | `research_artifact_history` |
+| `artifacts.getState` | Q | `{ treeId, artifactId, revision }` → `ResearchArtifactState { enabled, value }`, the caller's own | `research_artifact_state_get` |
+| `artifacts.updateState` | M | `{ reference, action: "enable" \| "disable" \| "save" \| "reset" \| "migrate", value? }` → `ResearchArtifactState`; per person, JSON of at most 16 KiB | `research_artifact_state_update` |
+
+The `artifacts.*` procedures share a budget of 600 calls a minute per account
+(`RATE_LIMITS.widgets`) in place of the mutation budget. Semantics are in
+`11-artifacts-and-browser.md` §3–§5.
 
 `documents.*` and `artifacts.mintToken` were removed with uploaded documents
 in phase 2.0.
@@ -306,7 +314,7 @@ snapshot → `run_turns` → `sourceError` for finished nodes without a snapshot
 | `GET /embeds/:hash` | one cached image of an embedded post (public, `immutable`); the hash is SHA-256 of the origin URL and names an `embed_assets` row, whose bytes are fetched on the first request and may be swept back off the volume (`13-deployment-fly.md` §6) |
 | `POST /api/images` | uploads one image attachment (multipart, one `file` field) and answers `201` with its `ResearchImageAttachment`; signed in, CSRF-guarded, 120 uploads an hour per account (`RATE_LIMITS.uploads`), 512 MiB of images per account. The type is read from the bytes (PNG, JPEG, GIF, WebP; else `415`); files over 20 MB are `413`; a PNG or JPEG over 5 MB or 8000 px on a side is downscaled to 2048 px and stored as JPEG, a GIF or WebP must already fit (`413`). The image is pending until a message or draft names its id (`02` §5.15) |
 | `GET /images/:id[?thumb]` | an image attachment, to its owner only (`401` signed out, `404` otherwise); `?thumb` serves the 256 px JPEG thumbnail of a PNG or JPEG image, written again when missing, and a GIF or WebP image whole. `Cache-Control: private, immutable` |
-| `GET /w/:token` | a widget preview page, on `artifacts.session.dev` only |
+| `GET /w/:token` | a widget page (static or run), on the artifact host only and only as a frame document (`Sec-Fetch-Dest: iframe`); `11-artifacts-and-browser.md` §2–§3 |
 | `GET /*` | built client `index.html` (SPA fallback) and hashed assets |
 
 Security headers on every response: `Content-Security-Policy` (see

@@ -75,7 +75,9 @@ client only hides UI.
   session` header that the server requires on mutations (a second, cheap
   CSRF barrier since cross-origin custom headers trigger CORS preflight).
 - No CORS allowances; the API is same-origin only. The artifact origin
-  (Phase 7) uses token URLs and never sees the session cookie.
+  serves widget pages by token URL, never reads or sets a cookie, and the
+  host-only session cookie is not sent to it. Widget scripts run only when it
+  is a different site from the app (`11-artifacts-and-browser.md` §2).
 
 ## 6. Per-user settings
 

@@ -52,7 +52,7 @@ The web imports the same modules through the package's subpath exports.
 
 | Path | Contents | Imported by |
 | --- | --- | --- |
-| `src/wire/` | The research wire model as plain types: `ResearchNode` (an envelope with a `post`, `exchange` or `document` body), `NodeAnchor`, `UserMessage`, `AgentSpec`, `RunState`, trees, folder state, drafts, `Turn`, `SessionEvent`, `ParsedResearchEvent`. No runtime code. | desktop (`src/types.ts` re-exports it); web from phase 2 |
+| `src/wire/` | The research wire model as plain types: `ResearchNode` (an envelope with a `post`, `exchange` or `document` body), `NodeAnchor`, `UserMessage`, `AgentSpec`, `RunState`, trees, folder state, drafts, widget artifact revisions and saved inputs (`wire/artifacts.ts`), `Turn`, `SessionEvent`, `ParsedResearchEvent`. No runtime code. | desktop (`src/types.ts` re-exports it); web from phase 2 |
 | `src/schemas/` | Zod schemas for the wire types. `test/wireSchemas.test.ts` fails to compile when a schema and its type differ. | server |
 | `src/lib/` | Pure modules moved from the desktop's `src/lib`, under their desktop names, written against the wire model. Their tests are the desktop's `tests/*.test.ts`. | desktop; web from phase 2 |
 | `markdown/mathDelimiters`, `markdown/wikilinks`, `markdown/sessionWidgets`, `app/taggedInstructions`, `research/snapshots`, `util/tokenEstimate` | Modules the two apps share unchanged. | desktop and web |

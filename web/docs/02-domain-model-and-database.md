@@ -367,13 +367,18 @@ nothing reads or writes them yet.
 
 `widget_revisions` (the desktop's research artifact store)
 
-- `tree_id` FK, `artifact_id`, `revision` (content hash), `node_id` FK,
+- `tree_id` FK, `artifact_id`, `revision` (the desktop's revision id: the
+  SHA-256 of `[artifact_id, node_id, content_hash, parent]`), `node_id` FK,
   `slot`, `title`, `content_hash`, `parent_revision` null, `html`,
   `created_at`; PK (`tree_id`, `artifact_id`, `revision`)
+- `parent_revision` is the fence's declared `parent=` as written (at most 128
+  characters). A value that is not a 64-hex revision id is the desktop's
+  `invalidParent`: the wire revision has no parent and `unresolvedParent`.
+- Rows are immutable; they go with their node or tree (`repos/widgets.ts`).
 
 `widget_state`: saved widget inputs per person and revision; `state_json`
-(`{ enabled, value? }`), `updated_at`; PK (`tree_id`, `artifact_id`,
-`revision`, `user_id`), FK to `widget_revisions`.
+(`{ enabled, value? }`, the value JSON of at most 16 KiB), `updated_at`; PK
+(`tree_id`, `artifact_id`, `revision`, `user_id`), FK to `widget_revisions`.
 
 `documents`, `document_text`, `node_documents` and `artifact_tokens` were
 removed with the uploaded-documents feature in phase 2.0.

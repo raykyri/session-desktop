@@ -126,7 +126,12 @@ handler → `interrupted` + `resume_pending` → boot → re-queued → resumed 
 the committed tool exchanges as context and no duplicate turns), admission
 and per-provider caps with queue positions, 429 re-queue backoff, interest
 filtering, tweet proxy validation and caching, the artifact host's
-isolation, the volume file sweep (`storage.test.ts`).
+isolation, widget pages (both pages' CSP, the same-site rule, revisions and
+per-person saved inputs, `widgets.test.ts`), the volume file sweep
+(`storage.test.ts`). `e2e/widgets.spec.ts` runs a widget's script and checks
+from inside the frame that cookies, storage, the parent's DOM, `fetch` to the
+app and top-level navigation are refused, and that saved inputs survive a
+reload.
 
 ### 3.5 Client
 
