@@ -20,7 +20,7 @@ import test from "ava";
 
 import { queryClientDefaults } from "../src/api/queries.js";
 import { resetThreadNavigationForTests } from "../src/features/thread/persistence.js";
-import { useDraftsStore } from "../src/stores/drafts.js";
+import { resetEditedDraftKeysForTests, useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
 
@@ -146,6 +146,7 @@ test.afterEach.always(() => {
   useOverlaysStore.getState().clear();
   useLiveTurnsStore.getState().clearAll();
   useDraftsStore.setState({ byKey: {} });
+  resetEditedDraftKeysForTests();
   localStorage.clear();
   sessionStorage.clear();
   resetThreadNavigationForTests();
@@ -829,4 +830,202 @@ test.serial("a passage branch's source quotes the passage", async (t) => {
   const branches = screen.getByRole("region", { name: "Branches" });
   t.truthy(within(branches).getByText("“Root”"));
   t.truthy(within(branches).getByRole("heading", { name: /^Branches ?· 1$/ }));
+});
+
+/* ------------------------------------------------- review round 2 parity */
+
+function queuedItem(overrides: Partial<ResearchFollowupQueueItem> = {}): ResearchFollowupQueueItem {
+  return {
+    id: "q1",
+    treeId: "t1",
+    headNodeId: "n1",
+    authorId: "u1",
+    message: { text: "A queued question" },
+    agent: { adapter: "gemini", model: "gemini-flash", effort: null },
+    position: 0,
+    createdAt: 1_700_000_000_000,
+    failedReason: null,
+    ...overrides,
+  };
+}
+
+const IMAGE = { kind: "image" as const, id: "img1", mimeType: "image/png", byteSize: 10 };
+
+test.serial("Edit question on a stalled queued item moves it into the ask box", async (t) => {
+  const root = node({ id: "n1", status: "failed", error: "Stopped." });
+  const { trpc } = await mount({
+    nodes: [root],
+    queues: {
+      n1: [queuedItem({ message: { text: "A queued question", attachments: [IMAGE] } })],
+    },
+    contentByNode: { n1: contentFor(root, [], { responseRevision: undefined }) },
+    responses: { "followups.cancel": [] },
+  });
+  await waitUntil(t, () => screen.queryByText("A queued question") !== null, "the item shows");
+  const row = screen.getByText("A queued question").closest("li") as HTMLElement;
+  t.truthy(within(row).getByText("The last answer stopped; retry it, or edit this question."));
+
+  // Only into an empty ask box, as on the desktop.
+  const field = screen.getByRole("textbox", { name: "Follow-up in this conversation" });
+  fireEvent.change(field, { target: { value: "Something else" } });
+  fireEvent.click(within(row).getByRole("button", { name: "Edit question" }));
+  await waitUntil(
+    t,
+    () => screen.queryByText("Clear the ask box to edit this question.") !== null,
+    "the toast",
+  );
+  t.false(trpc.calls.some((call) => call.path === "followups.cancel"));
+
+  fireEvent.change(field, { target: { value: "" } });
+  fireEvent.click(within(row).getByRole("button", { name: "Edit question" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "followups.cancel"),
+    "the item leaves the queue",
+  );
+  t.deepEqual(trpc.calls.find((call) => call.path === "followups.cancel")?.input, { itemId: "q1" });
+  await waitUntil(
+    t,
+    () =>
+      screen.getByRole<HTMLTextAreaElement>("textbox", {
+        name: "Follow-up in this conversation",
+      }).value === "A queued question",
+    "its text is in the ask box",
+  );
+  t.truthy(document.querySelector('img[src*="img1"]'), "with its image");
+});
+
+test.serial("Edit question on a failed answer brings its images back", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const failed = node({
+    id: "n2",
+    parentNodeId: "n1",
+    inline: true,
+    status: "failed",
+    prompt: "A failed question",
+    attachments: [IMAGE],
+  });
+  await mount({
+    nodes: [root, failed],
+    contentByNode: {
+      n1: contentFor(root, [assistantTurn("t1", "Root answer.")]),
+      n2: contentFor(failed, [], { responseRevision: undefined }),
+    },
+  });
+  fireEvent.click(await waitFor(() => screen.getByRole("button", { name: "Edit question" })));
+  const field = await waitFor(() =>
+    screen.getByRole("textbox", { name: "Edit the failed question" }),
+  );
+  const composer = field.closest("[data-research-composer]") as HTMLElement;
+  t.truthy(composer.querySelector('img[src*="img1"]'), "the image is in the ask box");
+});
+
+test.serial("an imported report shows no citation handles", async (t) => {
+  const report = node({ id: "n1", type: "document", status: "complete" });
+  await mount({
+    nodes: [report],
+    contentByNode: {
+      n1: contentFor(report, [
+        assistantTurn("t1", "Bloom filters trade space for error.citeturn0search3"),
+      ]),
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText(/Bloom filters trade space for error\./) !== null,
+    "the report renders",
+  );
+  t.false(document.body.textContent?.includes("turn0search3") ?? true);
+});
+
+test.serial("a running answer shows its tool calls open", async (t) => {
+  const running = node({ id: "n1", status: "running" });
+  await mount({
+    nodes: [running],
+    contentByNode: { n1: contentFor(running, [searchTurn("t1")], { seq: 1 }) },
+  });
+  fireEvent.click(await waitFor(() => screen.getByRole("button", { name: "Show trace" })));
+  await waitUntil(t, () => document.querySelector("details") !== null, "the activity renders");
+  t.true(
+    (document.querySelector("details") as HTMLDetailsElement).open,
+    "as the desktop's expandActivities",
+  );
+});
+
+test.serial("Generate recap is offered only for an answer that has a recap", async (t) => {
+  const plain = node({ id: "n1", status: "complete", completedAt: 1_700_000_050_000 });
+  await mount({
+    nodes: [plain],
+    contentByNode: { n1: contentFor(plain, [assistantTurn("t1", "An answer.")]) },
+  });
+  await waitUntil(t, () => screen.queryByText("An answer.") !== null, "the answer renders");
+  fireEvent.click(screen.getAllByRole("button", { name: "Answer actions" })[0] as HTMLElement);
+  await waitFor(() => screen.getByRole("menu"));
+  t.is(screen.queryByRole("menuitem", { name: "Generate recap" }), null);
+});
+
+test.serial("the root note's menu has no Delete", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const note = {
+    ...root,
+    type: "post",
+    format: "text",
+    message: { text: "A root note" },
+  } as unknown as ResearchNode;
+  await mount({ nodes: [note], contentByNode: {} });
+  const trigger = await waitFor(() => screen.getAllByRole("button", { name: /actions/i })[0]);
+  fireEvent.click(trigger as HTMLElement);
+  await waitFor(() => screen.getByRole("menu"));
+  t.truthy(screen.getByRole("menuitem", { name: "Copy note" }));
+  t.is(screen.queryByRole("menuitem", { name: /^Delete/ }), null);
+});
+
+test.serial("the root ask box reads its draft back from the server", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+    responses: {
+      "interfaceDrafts.get": (input: { key: string }) => ({
+        value:
+          input.key === "node:tree:t1"
+            ? JSON.stringify({ text: "Written on another device", updatedAt: 5 })
+            : null,
+      }),
+    },
+  });
+  await waitUntil(
+    t,
+    () =>
+      screen.queryByRole<HTMLTextAreaElement>("textbox", {
+        name: "Follow-up in this conversation",
+      })?.value === "Written on another device",
+    "the saved draft fills the ask box",
+  );
+  t.pass();
+});
+
+test.serial("a thread that is gone says so without its id", async (t) => {
+  const queryClient = testQueryClient();
+  queryClient.setDefaultOptions({
+    ...queryClient.getDefaultOptions(),
+    queries: { ...queryClient.getDefaultOptions().queries, retry: false },
+  });
+  await renderApp("/r/t1", {
+    queryClient,
+    responses: {
+      "research.getTree": () => {
+        throw Object.assign(new Error("research tree t1 was not found"), {
+          data: { code: "NOT_FOUND" },
+        });
+      },
+      "system.runtimeConfig": { version: "0.0.0", models: MODELS, limits: {}, features: {} },
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText("This thread was deleted or is no longer shared with you.") !== null,
+    "the readable message",
+  );
+  t.is(screen.queryByText(/was not found/), null);
 });

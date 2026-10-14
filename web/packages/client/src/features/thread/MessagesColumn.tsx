@@ -106,6 +106,10 @@ export interface QueueProps {
    * and the owner for Cancel). Absent: they may. */
   canCancel?: (item: ResearchFollowupQueueItem) => boolean;
   canRetry?: (item: ResearchFollowupQueueItem) => boolean;
+  /** Edit question on an item that cannot send: it leaves the queue and its
+   * text goes into the chain's ask box. Offered when `canEdit` allows. */
+  onEdit?: (item: ResearchFollowupQueueItem) => void;
+  canEdit?: (item: ResearchFollowupQueueItem) => boolean;
 }
 
 function QueuedFollowup({
@@ -117,9 +121,11 @@ function QueuedFollowup({
   onSelect,
   onCancel,
   onRetry,
+  onEdit,
   onToggleExpanded,
   canCancel,
   canRetry,
+  canEdit,
 }: Omit<QueueProps, "items" | "tailStalled"> & {
   item: ResearchFollowupQueueItem;
   stalled: boolean;
@@ -132,6 +138,7 @@ function QueuedFollowup({
   const failed = item.failedReason;
   const cancellable = canCancel?.(item) ?? true;
   const retryable = canRetry?.(item) ?? true;
+  const editable = onEdit !== undefined && (canEdit?.(item) ?? true);
   return (
     <li
       className={cn(
@@ -208,23 +215,38 @@ function QueuedFollowup({
           className="text-fg-muted pointer-events-none relative z-[1] m-0 pr-2 pl-3 text-[length:calc(12.5px+var(--font-ui-size-offset))]"
           role={failed ? "alert" : undefined}
         >
-          {failed ?? "The last answer stopped; retry it, or cancel this question."}
+          {failed ?? "The last answer stopped; retry it, or edit this question."}
         </p>
       ) : null}
-      {failed && retryable ? (
-        <div className="relative z-[1] mt-1 pr-2 pl-3">
-          <button
-            type="button"
-            className={cn(
-              "border-border-control bg-control text-fg-control hover:bg-control-hover inline-flex min-h-[26px] items-center gap-1.5 rounded-md border px-2 text-sm",
-              FOCUS_RING,
-            )}
-            disabled={busy}
-            onClick={(event) => onRetry(item, event.currentTarget.closest("li"))}
-          >
-            <RefreshCw size={13} aria-hidden="true" />
-            <span>Retry</span>
-          </button>
+      {(failed && retryable) || ((failed || stalled) && editable) ? (
+        <div className="relative z-[1] mt-1 flex flex-wrap gap-1 pr-2 pl-3">
+          {failed && retryable ? (
+            <button
+              type="button"
+              className={cn(
+                "border-border-control bg-control text-fg-control hover:bg-control-hover inline-flex min-h-[26px] items-center gap-1.5 rounded-md border px-2 text-sm",
+                FOCUS_RING,
+              )}
+              disabled={busy}
+              onClick={(event) => onRetry(item, event.currentTarget.closest("li"))}
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              <span>Retry</span>
+            </button>
+          ) : null}
+          {editable ? (
+            <button
+              type="button"
+              className={cn(
+                "text-fg-muted hover:bg-surface-fill-hover hover:text-fg-primary inline-flex min-h-[26px] items-center rounded-md border border-transparent bg-transparent px-2 text-sm",
+                FOCUS_RING,
+              )}
+              disabled={busy}
+              onClick={() => onEdit(item)}
+            >
+              Edit question
+            </button>
+          ) : null}
         </div>
       ) : null}
     </li>
@@ -322,6 +344,8 @@ export function ChainRows({
           onToggleExpanded={shared.rowActions.onToggleExpanded}
           {...(queue.canCancel ? { canCancel: queue.canCancel } : {})}
           {...(queue.canRetry ? { canRetry: queue.canRetry } : {})}
+          {...(queue.onEdit ? { onEdit: queue.onEdit } : {})}
+          {...(queue.canEdit ? { canEdit: queue.canEdit } : {})}
         />
       ))}
     </ul>

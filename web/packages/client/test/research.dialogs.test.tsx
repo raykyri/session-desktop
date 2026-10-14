@@ -167,6 +167,7 @@ function deleteDialog(
   nodes: Parameters<typeof DeleteDialog>[0]["nodes"],
   nodeId: string,
   calls: string[] = [],
+  groupChildCount = 0,
 ) {
   render(
     <DeleteDialog
@@ -174,6 +175,7 @@ function deleteDialog(
       nodeId={nodeId}
       rootNodeId="n1"
       treeTitle="Collective memory"
+      groupChildCount={groupChildCount}
       onTrashRoot={() => {
         calls.push("trash");
         return Promise.resolve();
@@ -227,6 +229,23 @@ test.serial(
     t.deepEqual(calls, ["remove:n1", "close"]);
   },
 );
+
+test.serial("deleting the research names the Home children that go with it", (t) => {
+  const root = node({ id: "n1", status: "complete", title: "Collective memory" });
+  deleteDialog([root], "n1", [], 2);
+  t.truthy(screen.getByRole("heading", { name: "Delete “Collective memory” and its 2 children?" }));
+  t.truthy(
+    screen.getByText(
+      "It moves to the Trash with its 2 children. Restoring it restores its children too.",
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Delete now" }));
+  t.truthy(
+    screen.getByText(
+      "“Collective memory” and its 2 children will be deleted. This can’t be undone.",
+    ),
+  );
+});
 
 /* ------------------------------------------------------------------- rerun */
 

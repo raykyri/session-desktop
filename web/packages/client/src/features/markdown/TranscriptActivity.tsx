@@ -220,19 +220,25 @@ function ToolEntryView({
   showChevron,
   maxPayloadCharacters,
   showResultTokenCount,
+  defaultOpen,
 }: {
   entry: ToolEntry;
   className?: string;
   showChevron: boolean;
   maxPayloadCharacters?: number;
   showResultTokenCount: boolean;
+  defaultOpen: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // Open on mount only: a later change of `defaultOpen` (the run settling)
+  // leaves the reader's own open or closed state alone.
+  const [initiallyOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(initiallyOpen);
   const argument = toolSummaryArgument(entry);
   const name = showChevron ? entry.name : `Called ${entry.name}`;
   const summary = argument ? `${name} ${argument}` : name;
   return (
     <details
+      open={initiallyOpen || undefined}
       className={cn(
         "tool-block",
         DISCLOSURE,
@@ -276,16 +282,20 @@ function ThinkingView({
   showChevron,
   maxPayloadCharacters,
   deferPayloads,
+  defaultOpen,
 }: {
   item: ThinkingItem;
   className?: string;
   showChevron: boolean;
   maxPayloadCharacters?: number;
   deferPayloads: boolean;
+  defaultOpen: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [initiallyOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState(initiallyOpen);
   return (
     <details
+      open={initiallyOpen || undefined}
       className={cn(
         "thinking-block",
         DISCLOSURE,
@@ -335,6 +345,7 @@ function ActivityGroupView({
   maxPayloadCharacters,
   deferPayloads,
   showResultTokenCount,
+  defaultOpen,
 }: {
   group: ActivityGroupItem;
   className?: string;
@@ -342,9 +353,12 @@ function ActivityGroupView({
   maxPayloadCharacters?: number;
   deferPayloads: boolean;
   showResultTokenCount: boolean;
+  defaultOpen: boolean;
 }) {
+  const [initiallyOpen] = useState(defaultOpen);
   return (
     <details
+      open={initiallyOpen || undefined}
       className={cn(
         "activity-group-block",
         DISCLOSURE,
@@ -378,6 +392,7 @@ export function TranscriptActivityItem({
   maxPayloadCharacters,
   deferPayloads = false,
   showResultTokenCount = true,
+  defaultOpen = false,
 }: {
   item: ActivityItem;
   className?: string;
@@ -386,6 +401,9 @@ export function TranscriptActivityItem({
   maxPayloadCharacters?: number;
   deferPayloads?: boolean;
   showResultTokenCount?: boolean;
+  /** Open when first rendered: a running answer shows its tool calls and
+   * reasoning as they arrive (the desktop's `expandActivities`). */
+  defaultOpen?: boolean;
 }) {
   switch (item.type) {
     case "tool":
@@ -396,6 +414,7 @@ export function TranscriptActivityItem({
           showChevron={!isRootActivity}
           {...(maxPayloadCharacters === undefined ? {} : { maxPayloadCharacters })}
           showResultTokenCount={showResultTokenCount}
+          defaultOpen={defaultOpen}
         />
       );
     case "thinking":
@@ -406,6 +425,7 @@ export function TranscriptActivityItem({
           showChevron={!isRootActivity}
           {...(maxPayloadCharacters === undefined ? {} : { maxPayloadCharacters })}
           deferPayloads={deferPayloads}
+          defaultOpen={defaultOpen}
         />
       );
     case "activityGroup":
@@ -417,6 +437,7 @@ export function TranscriptActivityItem({
           {...(maxPayloadCharacters === undefined ? {} : { maxPayloadCharacters })}
           deferPayloads={deferPayloads}
           showResultTokenCount={showResultTokenCount}
+          defaultOpen={defaultOpen}
         />
       );
   }

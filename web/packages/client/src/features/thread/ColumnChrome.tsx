@@ -8,9 +8,7 @@ import { Ellipsis, Terminal, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { useNavigationStore } from "../../stores/navigation.js";
 import { HistoryNav } from "../../ui/HistoryNav.js";
-import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
 import { BranchIcon } from "./icons.js";
@@ -30,15 +28,12 @@ const HEAD_BUTTON =
   "hover:bg-surface-fill-hover hover:text-fg-primary " +
   FOCUS_RING;
 
-/** The bar's left part: the sidebar's restore button while it is collapsed,
- * then Back and Forward. */
+/** The bar's left part: Back and Forward. (A collapsed sidebar is its icon
+ * rail, whose Expand sidebar button restores it.) */
 function HeaderLead({ history }: { history: ThreadHistoryNav | null }) {
-  const collapsed = useNavigationStore((state) => state.sidebarCollapsed);
-  const restore = useNavigationStore((state) => state.setSidebarCollapsed);
   if (!history) return null;
   return (
     <div className="-ml-2 flex shrink-0 items-center" role="group" aria-label="Research history">
-      {collapsed ? <SidebarRestoreButton onRestore={() => restore(false)} /> : null}
       <HistoryNav
         canGoBack={history.canGoBack}
         canGoForward={history.canGoForward}

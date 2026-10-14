@@ -13,6 +13,7 @@ import type {
   Turn,
 } from "@session/shared";
 import { researchImageUrl, visibleResearchPrompt } from "@session/shared";
+import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
 import {
   documentSource,
   nodeAttachments,
@@ -81,11 +82,13 @@ function MessageBlockView({
   role,
   nodeId,
   conversation,
+  imported,
 }: {
   block: MessageBlock;
   role: string;
   nodeId: string;
   conversation: boolean;
+  imported: boolean;
 }) {
   if (block.type === "text") {
     // A conversation transcript's user messages are content, not leakage.
@@ -93,8 +96,11 @@ function MessageBlockView({
       return (
         <ResearchMarkdown
           widgetNodeId={role === "assistant" ? nodeId : undefined}
-          markdown={block.text}
-          oversized={OVERSIZED_MARKDOWN_POLICY}
+          // An imported report keeps the citation handles of the tool that
+          // wrote it, which point nowhere here.
+          markdown={imported ? stripImportedReportCitations(block.text) : block.text}
+          // Imported in full: it is the document itself.
+          {...(imported ? {} : { oversized: OVERSIZED_MARKDOWN_POLICY })}
         />
       );
     }
@@ -145,10 +151,17 @@ export const TimelineItem = memo(function TimelineItem({
   item,
   nodeId,
   conversation = false,
+  imported = false,
+  expandActivities = false,
 }: {
   item: MessageItem;
   nodeId: string;
   conversation?: boolean;
+  /** An imported report (`documentSource`), whose citation handles are
+   * removed. */
+  imported?: boolean;
+  /** Tool calls and reasoning start open: the answer is still running. */
+  expandActivities?: boolean;
 }) {
   const unexpected = !conversation && item.role !== "assistant" && item.blocks.length > 0;
   const prompt = conversation && item.role === "user";
@@ -183,6 +196,7 @@ export const TimelineItem = memo(function TimelineItem({
               role={item.role}
               nodeId={nodeId}
               conversation={conversation}
+              imported={imported}
             />
           ))}
         </div>
@@ -195,6 +209,7 @@ export const TimelineItem = memo(function TimelineItem({
           maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
           deferPayloads
           showResultTokenCount={false}
+          defaultOpen={expandActivities}
         />
       ))}
     </section>
@@ -501,7 +516,13 @@ export const AnswerPane = memo(function AnswerPane({
             <SessionWidgetStreamingContext.Provider value={active}>
               {view.visibleTimelineItems.map((item) => (
                 <WidgetAnswerScope key={item.key} node={node} item={item}>
-                  <TimelineItem item={item} nodeId={nodeId} conversation={view.isConversation} />
+                  <TimelineItem
+                    item={item}
+                    nodeId={nodeId}
+                    conversation={view.isConversation}
+                    imported={documentSource(node) === "imported"}
+                    expandActivities={active}
+                  />
                 </WidgetAnswerScope>
               ))}
             </SessionWidgetStreamingContext.Provider>

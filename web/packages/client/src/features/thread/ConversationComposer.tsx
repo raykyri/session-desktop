@@ -17,7 +17,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 import { isApplePlatform } from "../../lib/platform.js";
 import { ComposerSubmitShortcutGlyph } from "../../ui/ComposerSubmitShortcut.js";
-import { FOCUS_RING } from "../../ui/surfaces.js";
+import { FOCUS_RING, SHORTCUT_HINT } from "../../ui/surfaces.js";
 import { QuestionModelPicker, type ModelChoice } from "../composer/QuestionModelPicker.js";
 import { ImageStrip, useImageInput, type ImagesUpdate } from "../composer/images.js";
 
@@ -67,6 +67,9 @@ export const ConversationComposer = forwardRef<
     } | null;
     /** The label of the send button ("Send", "Queue"). */
     sendLabel?: string;
+    /** The ⌘J hint, shown in the current column's box while ⌘ is held
+     * (`lib/shortcutHints`). */
+    shortcutHint?: string | null;
     onChange: (value: string) => void;
     onSubmit: () => void;
     onSubmitBranch?: () => void;
@@ -85,6 +88,7 @@ export const ConversationComposer = forwardRef<
     onImagesChange,
     model = null,
     sendLabel = "Send",
+    shortcutHint = null,
     onChange,
     onSubmit,
     onSubmitBranch,
@@ -181,7 +185,7 @@ export const ConversationComposer = forwardRef<
       />
       <form
         className={cn(
-          "border-border-control bg-surface-field flex flex-col gap-1 rounded-lg border px-2.5 pt-2 pb-1.5",
+          "border-border-control bg-surface-field relative flex flex-col gap-1 rounded-lg border px-2.5 pt-2 pb-1.5",
           "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
           disabled && "opacity-60",
         )}
@@ -190,6 +194,11 @@ export const ConversationComposer = forwardRef<
           if (ready && !submitting) onSubmit();
         }}
       >
+        {shortcutHint ? (
+          <span className={cn(SHORTCUT_HINT, "absolute top-2.5 right-2.5")} aria-hidden="true">
+            {shortcutHint}
+          </span>
+        ) : null}
         <textarea
           ref={textareaRef}
           value={value}

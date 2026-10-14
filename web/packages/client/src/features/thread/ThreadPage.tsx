@@ -48,6 +48,7 @@ import { reorderedIds, stepReorderTarget } from "@session/shared/lib/researchFol
 import {
   documentSource,
   nodeAgent,
+  nodeAttachments,
   nodeMessage,
   nodePrompt,
   nodeStatus,
@@ -107,11 +108,15 @@ import {
   useNodeContent,
 } from "../../api/queries.js";
 import { writeClipboardText } from "../../lib/clipboard.js";
-import { pushErrorToast, pushToast } from "../../lib/toast.js";
-import { nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
+import { formatChord } from "../../lib/platform.js";
+import { researchImages } from "../../lib/researchImages.js";
+import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
+import { ITEM_UNAVAILABLE_MESSAGE, pushToast, threadErrorMessage } from "../../lib/toast.js";
+import { markDraftEdited, nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { useUsableModels, type ModelChoice } from "../composer/QuestionModelPicker.js";
+import { useRemoteComposerDraft } from "../composer/useRemoteComposerDraft.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { PresenceAvatars } from "../sharing/PresenceAvatars.js";
 import { ShareDialog } from "../sharing/ShareDialog.js";
@@ -274,7 +279,17 @@ function ThreadView({ treeId }: { treeId: string }) {
   const recapPendingNodeIds = useRecapPendingStore((state) => state.nodeIds);
 
   const toast = useCallback((title: string) => pushToast({ title, tone: "info" }), []);
-  const fail = useCallback((title: string, error: unknown) => pushErrorToast(title, error), []);
+  // The ⌘J hint in the current column's ask box (`lib/shortcutHints`).
+  const hintsShown = useShortcutHintsShown();
+  const fail = useCallback(
+    (title: string, error: unknown) =>
+      pushToast({
+        title,
+        body: threadErrorMessage(error, ITEM_UNAVAILABLE_MESSAGE),
+        tone: "error",
+      }),
+    [],
+  );
 
   /* --------------------------------------------------------- selection */
 
@@ -411,12 +426,21 @@ function ThreadView({ treeId }: { treeId: string }) {
       current[rootNodeId] ? current : { ...current, [rootNodeId]: saved },
     );
   }, [rootDraftKey, rootNodeId]);
+  // The saved copy on the server, for a draft written on another device or
+  // before the local one was cleared; an edit made here first wins.
+  useRemoteComposerDraft(rootDraftKey, (draft) => {
+    if (!rootNodeId || !draft.text) return;
+    setComposerText((current) =>
+      current[rootNodeId] ? current : { ...current, [rootNodeId]: draft.text },
+    );
+  });
   const setComposerValue = useCallback(
     (key: string, value: string) => {
       setComposerText((current) =>
         current[key] === value ? current : { ...current, [key]: value },
       );
       if (key === rootNodeId) {
+        markDraftEdited(rootDraftKey);
         if (value) setDraft(rootDraftKey, { text: value });
         else clearDraft(rootDraftKey);
       }
@@ -1084,6 +1108,15 @@ function ThreadView({ treeId }: { treeId: string }) {
     [setComposerValue],
   );
 
+  /** Replaces an ask box's images (an edited question's own). */
+  const replaceComposerImages = useCallback(
+    (key: string, images: readonly ResearchImageAttachment[]) =>
+      setComposerImages((current) =>
+        images.length === 0 ? withoutKeys(current, [key]) : { ...current, [key]: [...images] },
+      ),
+    [],
+  );
+
   const forkMutate = fork.mutateAsync;
   const askMutate = ask.mutateAsync;
   /** Sends a chain's ask box: continues the chain through the server's
@@ -1246,9 +1279,11 @@ function ThreadView({ treeId }: { treeId: string }) {
       const headId = inlineChainFor(nodesRef.current, nodeId)[0] ?? nodeId;
       setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
       setComposerValue(headId, nodePrompt(node));
+      // The question's images go back into the ask box with its text.
+      replaceComposerImages(headId, researchImages(nodeAttachments(node)));
       requestFocus({ kind: "composer", key: headId }, "reveal");
     },
-    [nodesRef, requestFocus, setComposerValue],
+    [nodesRef, replaceComposerImages, requestFocus, setComposerValue],
   );
 
   /* ------------------------------------------------------------ queue */
@@ -1264,6 +1299,43 @@ function ThreadView({ treeId }: { treeId: string }) {
       requestFocus({ kind: "composer", key: headId }, "none");
     },
     [fail, queuedMutate, requestFocus, treeId],
+  );
+
+  /** Edit question on a queued follow-up that cannot send (it failed, or the
+   * answer before it stopped), as on the desktop: the item leaves the queue
+   * and its text and images go into the chain's ask box. Only into an empty
+   * one; the ask box is shown first when the chain's group is not. */
+  const editQueued = useCallback(
+    (headId: string, item: ResearchFollowupQueueItem, tailId: string | null) => {
+      const text = composerTextRef.current[headId] ?? "";
+      if (text.trim() || (composerImagesRef.current[headId] ?? NO_IMAGES).length > 0) {
+        toast("Clear the ask box to edit this question.");
+        return;
+      }
+      queuedMutate(
+        { action: "cancel", treeId, headNodeId: headId, itemId: item.id },
+        { onError: (error) => fail("The follow-up could not be cancelled", error) },
+      );
+      setQueuedView((current) => (current?.itemId === item.id ? null : current));
+      setComposerValue(headId, item.message.text);
+      replaceComposerImages(headId, researchImages(item.message.attachments));
+      const shown = composerRefs.current.has(headId);
+      if (!shown && tailId) navigate(selectionWith(tailId));
+      requestFocus({ kind: "composer", key: headId }, shown ? "none" : "reveal");
+    },
+    [
+      composerImagesRef,
+      composerTextRef,
+      fail,
+      navigate,
+      queuedMutate,
+      replaceComposerImages,
+      requestFocus,
+      selectionWith,
+      setComposerValue,
+      toast,
+      treeId,
+    ],
   );
 
   /* ----------------------------------------------------------- menus */
@@ -1854,7 +1926,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             <>
               <h1 className="text-fg-heading m-0 text-base font-semibold">Research unavailable</h1>
               <p className="text-fg-muted m-0 text-sm" role="alert">
-                {errorText(detailQuery.error)}
+                {threadErrorMessage(detailQuery.error)}
               </p>
               <button
                 type="button"
@@ -1918,7 +1990,10 @@ function ThreadView({ treeId }: { treeId: string }) {
       },
       canCancel: (item) => mayCancelQueued(permissions, item),
       canRetry: (item) => mayRetryQueued(permissions, item),
+      // Into the reader's own ask box, so only the item's author edits it.
+      canEdit: (item) => permissions.canContribute && mayRetryQueued(permissions, item),
       onCancel: (item) => cancelQueued(headId, item),
+      onEdit: (item) => editQueued(headId, item, tail?.id ?? null),
       onRetry: (item, row) => {
         queuedMutate(
           { action: "retry", treeId, headNodeId: headId, itemId: item.id },
@@ -2049,6 +2124,7 @@ function ThreadView({ treeId }: { treeId: string }) {
         onImagesChange={imagesUpdate(headId)}
         model={modelControl(headId, tail)}
         sendLabel={waiting && !editing ? "Queue" : "Send"}
+        shortcutHint={hintsShown && currentLevel === level ? formatChord("mod+j") : null}
         onChange={(value) => setComposerValue(headId, value)}
         onSubmit={() => void submitComposer(headId)}
         onSubmitBranch={() => void submitComposer(headId, { branch: true })}
@@ -2473,6 +2549,9 @@ function ThreadView({ treeId }: { treeId: string }) {
             nodeId={deletingNodeId}
             rootNodeId={rootNodeId}
             treeTitle={treeTitle}
+            groupChildCount={
+              filing.group && filing.group.parent === null ? filing.group.children.length : 0
+            }
             onTrashRoot={trashRoot}
             onRemove={removeNode}
             onClose={() => setDeletingNodeId(null)}

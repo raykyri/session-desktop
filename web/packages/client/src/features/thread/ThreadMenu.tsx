@@ -379,17 +379,19 @@ export function ThreadMenu({
             actions.onCopyNote(node.id);
           }}
         />
-        {(info || isRoot) && deletes ? (
+        {/* The root note is the thread: it is deleted with the thread, from
+            Home, as on the desktop. */}
+        {info && deletes ? (
           <>
             <ThreadMenuSeparator />
             <ThreadMenuItem
               icon={<Trash2 size={15} aria-hidden="true" />}
-              label={isRoot ? "Delete research" : "Delete note"}
+              label="Delete note"
               shortcut="D"
               danger
-              disabled={Boolean(info?.hasActiveRuns)}
+              disabled={info.hasActiveRuns}
               title={
-                info?.hasActiveRuns
+                info.hasActiveRuns
                   ? "Finish or cancel all follow-ups before deleting this note"
                   : undefined
               }
@@ -484,12 +486,13 @@ function AnswerMenu({
   const chainIds = inlineChainFor(nodes, node.id);
   const deleteLabel = researchDeleteLabel(isRoot, node.inline, info.descendantCount);
   const content = loaded.content;
+  // Offered only to replace a recap the answer already has, as on the
+  // desktop: a new answer gets one automatically.
   const canGenerateRecap = Boolean(
     !archived &&
     permissions.canContribute &&
     content?.responseRevision &&
-    nodeStatus(node) === "complete" &&
-    node.type === "exchange",
+    (nodeRecap(node) ?? nodeRecap(content.node))?.text.trim(),
   );
   const run = nodeRun(node);
   const active = runActive(node);
@@ -514,7 +517,6 @@ function AnswerMenu({
   const copyText =
     nodeStatus(node) === "complete" ? (view.conversationCopyText ?? view.rawAnswer) : null;
   const branchBlocker = researchBranchBlocker(node, archived);
-  const recap = nodeRecap(node);
   const owner = permissions.isOwner;
   const renames = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
   const deletes = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
@@ -601,7 +603,6 @@ function AnswerMenu({
         <ThreadMenuItem
           icon={<RefreshCw size={15} aria-hidden="true" />}
           label="Generate recap"
-          title={recap?.text.trim() ? "Write a new recap of this answer" : undefined}
           onSelect={() => {
             onClose();
             actions.onGenerateRecap(node.id);

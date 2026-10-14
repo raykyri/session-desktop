@@ -144,6 +144,7 @@ export function DeleteDialog({
   nodeId,
   rootNodeId,
   treeTitle,
+  groupChildCount = 0,
   onTrashRoot,
   onRemove,
   onClose,
@@ -152,6 +153,9 @@ export function DeleteDialog({
   nodeId: string;
   rootNodeId: string;
   treeTitle: string;
+  /** For the root: the threads listed under it on Home, which move to the
+   * Trash or are deleted with it. */
+  groupChildCount?: number;
   /** Moves the research to the Trash. */
   onTrashRoot: () => Promise<void>;
   /** Deletes the message (or the research) permanently. */
@@ -171,14 +175,27 @@ export function DeleteDialog({
     ? "It has active runs, which must finish or be cancelled before it can be deleted."
     : null;
   if (nodeId === rootNodeId) {
+    const children = `${groupChildCount} ${groupChildCount === 1 ? "child" : "children"}`;
     return (
       <SharedDeleteDialog
         trash={{
-          title: `Delete “${name}”?`,
-          body: <p className="m-0">{researchTrashTreeSentence(count)}</p>,
+          title:
+            groupChildCount > 0 ? `Delete “${name}” and its ${children}?` : `Delete “${name}”?`,
+          body: <p className="m-0">{researchTrashTreeSentence(count, groupChildCount)}</p>,
           onConfirm: onTrashRoot,
         }}
-        remove={{ onConfirm: () => onRemove(node) }}
+        remove={{
+          ...(groupChildCount > 0
+            ? {
+                body: (
+                  <p className="m-0">
+                    “{name}” and its {children} will be deleted. This can’t be undone.
+                  </p>
+                ),
+              }
+            : {}),
+          onConfirm: () => onRemove(node),
+        }}
         disabledReason={disabledReason}
         onClose={onClose}
       />
