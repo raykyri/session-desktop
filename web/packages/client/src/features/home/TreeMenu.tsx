@@ -20,6 +20,7 @@ import type { DeleteDialogProps } from "../../ui/DeleteDialog.js";
 import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { MenuGroupLabel, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { INPUT_FIELD } from "../../ui/surfaces.js";
+import { archivedByOwner, OWNER_ARCHIVED_MESSAGE } from "../sharing/permissions.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import { PlaceIcon } from "./FeedTray.js";
@@ -48,6 +49,7 @@ export function MoveToItems({
   folders,
   shared = false,
   archiveShortcut = false,
+  lockedReason = null,
   onMove,
   onNewFolder,
 }: {
@@ -55,6 +57,9 @@ export function MoveToItems({
   folders: ResearchFolder[];
   /** The thread is shared with the reader (web only). */
   shared?: boolean;
+  /** Why no other place can be chosen (a shared thread its owner archived);
+   * every target is disabled with it as the title. */
+  lockedReason?: string | null;
   /** Shows A on the Archive target, when it is not the current place, and
    * makes it the menu's A key (Home's card menu, as on the desktop). */
   archiveShortcut?: boolean;
@@ -71,7 +76,8 @@ export function MoveToItems({
           return (
             <MenuItem
               key={target.place}
-              disabled={here}
+              disabled={here || lockedReason !== null}
+              title={!here && lockedReason !== null ? lockedReason : undefined}
               selected={here}
               shortcut={
                 archiveShortcut && !here && target.place === RESEARCH_ARCHIVE_FOLDER_ID
@@ -129,6 +135,7 @@ export function TreeLifecycleItems({
 }) {
   const running = tree.runningCount > 0;
   const rename = archived ? undefined : onRename;
+  const ownerArchived = archivedByOwner(tree);
   return (
     <>
       {onRegenerateRecap ? (
@@ -145,6 +152,8 @@ export function TreeLifecycleItems({
       {archived && onRestore ? (
         <IconMenuItem
           icon={<ArchiveRestore size={15} aria-hidden="true" />}
+          disabled={ownerArchived}
+          title={ownerArchived ? OWNER_ARCHIVED_MESSAGE : undefined}
           onClick={() => onRestore(tree.id)}
         >
           Unarchive research
@@ -237,6 +246,39 @@ export function TreeRenameDialog({
   );
 }
 
+/** The delete confirmation's steps for a thread shared with the reader (web
+ * only): the Trash is the reader's own, and Delete now leaves the thread.
+ * Home's card menu and the thread page use the same sentences. */
+export function sharedTreeDeleteSteps(
+  title: string,
+  onTrash: () => Promise<void>,
+  onLeave: () => Promise<void>,
+): Pick<DeleteDialogProps, "trash" | "remove"> {
+  return {
+    trash: {
+      title: `Delete “${title}”?`,
+      body: (
+        <p className="m-0">
+          It moves to your Trash. Its owner and the other people in it still have it.
+        </p>
+      ),
+      onConfirm: onTrash,
+    },
+    remove: {
+      title: `Leave “${title}”?`,
+      body: (
+        <p className="m-0">
+          It is shared with you. Deleting it removes you from it; its owner and the other people in
+          it keep it.
+        </p>
+      ),
+      label: "Leave",
+      pendingLabel: "Leaving…",
+      onConfirm: onLeave,
+    },
+  };
+}
+
 /** A thread's delete confirmation: Move to Trash (the default), with a
  * Delete now link to the permanent deletion. The children listed under it in
  * Home go with it. */
@@ -261,27 +303,11 @@ export function treeDeleteDialogProps({
   const children = `${count} ${count === 1 ? "child" : "children"}`;
   if (shared) {
     return {
-      trash: {
-        title: `Delete “${tree.title}”?`,
-        body: (
-          <p className="m-0">
-            It moves to your Trash. Its owner and the other people in it still have it.
-          </p>
-        ),
-        onConfirm: () => onTrash(tree.id),
-      },
-      remove: {
-        title: `Leave “${tree.title}”?`,
-        body: (
-          <p className="m-0">
-            It is shared with you. Deleting it removes you from it; its owner and the other people
-            in it keep it.
-          </p>
-        ),
-        label: "Leave",
-        pendingLabel: "Leaving…",
-        onConfirm: () => onRemove(tree.id),
-      },
+      ...sharedTreeDeleteSteps(
+        tree.title,
+        () => onTrash(tree.id),
+        () => onRemove(tree.id),
+      ),
       disabledReason: null,
       onClose,
     };

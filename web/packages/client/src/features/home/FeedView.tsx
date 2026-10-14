@@ -99,6 +99,7 @@ import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { ReceivedInvites } from "../sharing/ReceivedInvites.js";
+import { archivedByOwner, OWNER_ARCHIVED_MESSAGE } from "../sharing/permissions.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import { CardBody, CardQuestion } from "./CardBody.js";
@@ -460,6 +461,10 @@ export function FeedView({
     if (place === current) return;
     if (place === RESEARCH_DRAFTS_FOLDER_ID) {
       pushToast({ title: "Shared threads can’t be filed in Drafts.", tone: "info" });
+      return;
+    }
+    if (archivedByOwner(tree)) {
+      pushToast({ title: OWNER_ARCHIVED_MESSAGE, tone: "info" });
       return;
     }
     try {
@@ -1309,6 +1314,7 @@ export function FeedView({
               currentPlace={sharedPlaceOf(menuTree)}
               folders={folders}
               shared
+              lockedReason={archivedByOwner(menuTree) ? OWNER_ARCHIVED_MESSAGE : null}
               onMove={(place) => void fileSharedTree(menuTree, place)}
             />
           ) : (

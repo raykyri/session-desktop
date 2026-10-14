@@ -74,6 +74,26 @@ export function threadPermissions(
   };
 }
 
+/** Why a member cannot unarchive a shared thread its owner archived (the
+ * server's refusal, `trees.unarchive`). */
+export const OWNER_ARCHIVED_MESSAGE =
+  "This thread was archived by its owner; only they can unarchive it.";
+
+/** A shared thread in the reader's Archive because its owner archived it:
+ * only the owner can take it out. Read from the summary's `archivedBy`
+ * marker (`"owner"` or `"me"`); a summary without it is not treated as the
+ * owner's, so the server's refusal is the fallback. */
+export function archivedByOwner(
+  tree: Pick<ResearchTree, "archivedAt" | "role"> & { archivedBy?: unknown },
+): boolean {
+  return (
+    tree.archivedAt != null &&
+    tree.role !== undefined &&
+    tree.role !== "owner" &&
+    tree.archivedBy === "owner"
+  );
+}
+
 /** Every node under `nodeId`, not including it. */
 function descendants(nodes: readonly ResearchNode[], nodeId: string): ResearchNode[] {
   const children = new Map<string, ResearchNode[]>();

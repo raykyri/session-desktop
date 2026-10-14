@@ -70,7 +70,10 @@ function Visibility({
     {
       value: "private" as const,
       label: "Private",
-      detail: "Only you and the people you share it with.",
+      // The owner sets it; anyone else reads who has it.
+      detail: editable
+        ? "Only you and the people you share it with."
+        : "Only its owner and the people it is shared with.",
     },
     {
       value: "public" as const,
@@ -345,7 +348,7 @@ export function ShareDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={`Share “${tree.title}”`}
+      title={owner ? `Share “${tree.title}”` : `People in “${tree.title}”`}
       className="w-[min(520px,calc(100vw-32px))]"
       footer={
         confirmingLeave ? (

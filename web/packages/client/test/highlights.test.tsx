@@ -58,6 +58,25 @@ test("only a highlight in a thread the reader owns offers Remove", (t) => {
   t.false(mayRemoveFeedHighlight(item, [summary({ id: "t1", role: "commenter" })]));
 });
 
+test("with the author and role on the row, its author or the owner may remove it", (t) => {
+  const row = (fields: { authorId?: string | null; role?: string }) => ({
+    ...highlightItem({ treeId: "t1" }),
+    ...fields,
+  });
+  t.true(mayRemoveFeedHighlight(row({ authorId: "u2", role: "owner" }), [], "u1"));
+  t.true(mayRemoveFeedHighlight(row({ authorId: "u1", role: "commenter" }), [], "u1"));
+  t.false(mayRemoveFeedHighlight(row({ authorId: "u2", role: "commenter" }), [], "u1"));
+  t.false(mayRemoveFeedHighlight(row({ authorId: null, role: "viewer" }), [], "u1"));
+  // The row's fields win over a cached list.
+  t.false(
+    mayRemoveFeedHighlight(
+      row({ authorId: "u2", role: "commenter" }),
+      [summary({ id: "t1", role: "owner" })],
+      "u1",
+    ),
+  );
+});
+
 function responses(
   items = [highlightItem({ nodeLabel: "Roots", treeTitle: "Collective memory" })],
 ) {

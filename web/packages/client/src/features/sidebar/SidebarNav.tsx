@@ -16,6 +16,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Ellipsis, Globe, Highlighter, House, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { useReceivedInvites } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
 import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
@@ -26,7 +27,13 @@ import { PlaceIcon } from "../home/FeedTray.js";
 import { useFolderDialogStore, useRequestFolderDelete } from "../home/FolderDialogsHost.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
-import { SIDEBAR_ROW, SIDEBAR_ROW_SELECTED, SIDEBAR_SECTION_HEADING } from "./rows.js";
+import {
+  INVITE_BADGE,
+  invitationCountLabel,
+  SIDEBAR_ROW,
+  SIDEBAR_ROW_SELECTED,
+  SIDEBAR_SECTION_HEADING,
+} from "./rows.js";
 
 interface NavEntry {
   /** The route path the row opens. */
@@ -97,6 +104,9 @@ export function SidebarNav({
     },
   });
   const selected = currentKey(pathname, feed);
+  // Invitations waiting for the reader, counted on Shared with me, where
+  // they are accepted.
+  const invitations = useReceivedInvites().data?.length ?? 0;
   const [menu, setMenu] = useState<{ folderId: string; anchor: HTMLElement } | null>(null);
   const openNew = useFolderDialogStore((state) => state.openNew);
   const openRename = useFolderDialogStore((state) => state.openRename);
@@ -165,6 +175,14 @@ export function SidebarNav({
         >
           <span className="text-fg-muted inline-flex shrink-0">{entry.icon}</span>
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+          {entry.key === "shared" && invitations > 0 ? (
+            <>
+              <span className={INVITE_BADGE} aria-hidden="true" data-invite-count={invitations}>
+                {invitations}
+              </span>
+              <span className="sr-only">, {invitationCountLabel(invitations)}</span>
+            </>
+          ) : null}
           {entry.key === "home" && hintsShown ? (
             <span className={SHORTCUT_HINT} aria-hidden="true">
               {formatChord("mod+shift+h")}

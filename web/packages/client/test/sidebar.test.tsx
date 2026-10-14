@@ -422,3 +422,35 @@ test.serial("the workspace menu has the desktop's items, without Move up or down
   t.false(items.some((item) => /^Move (up|down)$/.test(item)));
   app.unmount();
 });
+
+test.serial(
+  "invitations waiting are counted on Shared with me, in the sidebar and the rail",
+  async (t) => {
+    const invite = (id: string) => ({
+      id,
+      treeId: `t-${id}`,
+      treeTitle: "An invited thread",
+      role: "viewer",
+      invitedBy: "u2",
+      invitedByLogin: "ada",
+      createdAt: 0,
+      expiresAt: 1_800_000_000_000,
+    });
+    const responses = { ...sidebarResponses(), "invites.received": [invite("i1"), invite("i2")] };
+    let app = await renderApp("/", { queryClient: testQueryClient(), responses });
+    const row = await screen.findByRole("link", { name: "Shared with me, 2 invitations" });
+    t.is(row.querySelector("[data-invite-count]")?.textContent, "2");
+    app.unmount();
+
+    useNavigationStore.setState({ sidebarCollapsed: true });
+    try {
+      app = await renderApp("/", { queryClient: testQueryClient(), responses });
+      const rail = await screen.findByRole("complementary", { name: "Sidebar" });
+      const icon = await within(rail).findByRole("link", { name: "Shared with me, 2 invitations" });
+      t.is(icon.querySelector("[data-invite-count]")?.textContent, "2");
+      app.unmount();
+    } finally {
+      useNavigationStore.setState({ sidebarCollapsed: false });
+    }
+  },
+);

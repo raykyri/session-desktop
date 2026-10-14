@@ -128,7 +128,7 @@ import {
   isConflictError,
   type StaleEditSubject,
 } from "../sharing/StaleEditDialog.js";
-import { ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
+import { stalledChainNote, ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
 import {
   mayCancelQueued,
   mayChangeHighlights,
@@ -2142,9 +2142,14 @@ function ThreadView({ treeId }: { treeId: string }) {
       : archived
         ? "Archived questions are read-only. Move the question out of Archive to continue."
         : stalled
-          ? nodeStatus(tail) === "failed"
-            ? "The last answer stopped with an error. Retry it or edit its question to continue."
-            : "The last answer was stopped. Run it again to continue."
+          ? stalledChainNote(
+              {
+                authorId: tail.authorId,
+                status: nodeStatus(tail) === "failed" ? "failed" : "cancelled",
+              },
+              permissions,
+              people,
+            )
           : null;
     const waiting = tailActive || queued;
     const placeholder = editing
@@ -2623,6 +2628,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             groupChildCount={
               filing.group && filing.group.parent === null ? filing.group.children.length : 0
             }
+            shared={!permissions.isOwner}
             onTrashRoot={trashRoot}
             onRemove={removeNode}
             onClose={() => setDeletingNodeId(null)}

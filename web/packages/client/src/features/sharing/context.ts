@@ -55,6 +55,31 @@ export function participantName(participant: Pick<ResearchParticipant, "name" | 
   return participant.name?.trim() || participant.login;
 }
 
+/**
+ * The note above a chain's ask box when its last answer failed or was
+ * stopped, for the reader. The person who pays for that answer gets the
+ * desktop's sentences (Retry, or edit the question). Anyone else cannot
+ * retry it: they are told who can, and that the owner can delete it; the
+ * owner is told to delete it. Either can branch from the answer before it.
+ */
+export function stalledChainNote(
+  tail: Pick<ResearchNode, "authorId"> & { status: "failed" | "cancelled" },
+  permissions: Pick<ThreadPermissions, "userId" | "ownerId" | "isOwner">,
+  people: Pick<ThreadPeople, "byId">,
+): string {
+  const payer = tail.authorId == null ? permissions.ownerId : tail.authorId;
+  if (payer === permissions.userId) {
+    return tail.status === "failed"
+      ? "The last answer stopped with an error. Retry it or edit its question to continue."
+      : "The last answer was stopped. Run it again to continue.";
+  }
+  const person = payer === null ? undefined : people.byId.get(payer);
+  const name = person ? participantName(person) : "the person who asked it";
+  return permissions.isOwner
+    ? `The last answer stopped. Only ${name} can retry it. Delete it, or branch from the answer before it to continue.`
+    : `The last answer stopped. Only ${name} can retry it; the owner can delete it. Branch from the answer before it to continue.`;
+}
+
 /** Who last replaced a note's or document's text, when that was not its
  * author: the "Edited" mark then names them. */
 export function editedByOther(node: ResearchNode): string | null {

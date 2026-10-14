@@ -27,6 +27,8 @@ import {
   resetNodeInterest,
 } from "../src/api/events.js";
 import { queryClientDefaults, queryKeys } from "../src/api/queries.js";
+import { TreeLifecycleItems } from "../src/features/home/TreeMenu.js";
+import { stalledChainNote } from "../src/features/sharing/context.js";
 import {
   mayCancel,
   mayChangeHighlights,
@@ -34,18 +36,31 @@ import {
   mayEditText,
   mayRelaunch,
   mayRemoveHighlight,
+  OWNER_ARCHIVED_MESSAGE,
+  archivedByOwner,
   threadPermissions,
 } from "../src/features/sharing/permissions.js";
 import { SelectionToolbar } from "../src/features/thread/SelectionToolbar.js";
+import { DeleteDialog as ThreadDeleteDialog } from "../src/features/thread/ThreadDialogs.js";
 import { resetThreadNavigationForTests } from "../src/features/thread/persistence.js";
 import type { SelectionAction } from "../src/features/thread/selectionCapture.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
+import { Menu } from "../src/ui/Menu.js";
 
 import { node, summary, tree } from "./fixtures.js";
 import { renderApp, resetDocumentRoot, waitUntil } from "./helpers.js";
 import { createTrpcStub } from "./trpcStub.js";
+
+/** Card lifecycle items inside an open menu. */
+function TreeLifecycleItemsHarness({ tree: summaryRow }: { tree: ResearchTreeSummary }) {
+  return (
+    <Menu open label="Card" trigger={<button type="button">Open</button>}>
+      <TreeLifecycleItems tree={summaryRow} archived onRestore={() => {}} onDelete={() => {}} />
+    </Menu>
+  );
+}
 
 const REVISION = "c".repeat(64);
 const OWNER = "u0";
@@ -188,6 +203,76 @@ test.afterEach.always(() => {
 });
 
 /* --------------------------------------------------------- permissions */
+
+test("a stalled chain's note says who can retry it", (t) => {
+  const people = {
+    byId: new Map([[OWNER, { id: OWNER, login: "ada", name: "Ada", avatarUrl: null }]]),
+  };
+  const commenter = threadPermissions({ role: "commenter", ownerId: OWNER }, ME);
+  const owner = threadPermissions({ role: "owner", ownerId: OWNER }, OWNER);
+  // The payer gets the desktop's sentences.
+  t.is(
+    stalledChainNote({ authorId: ME, status: "failed" }, commenter, people),
+    "The last answer stopped with an error. Retry it or edit its question to continue.",
+  );
+  t.is(
+    stalledChainNote({ authorId: OWNER, status: "cancelled" }, owner, people),
+    "The last answer was stopped. Run it again to continue.",
+  );
+  // Someone else's answer: who can retry it, and that the owner can delete it.
+  t.is(
+    stalledChainNote({ authorId: OWNER, status: "failed" }, commenter, people),
+    "The last answer stopped. Only Ada can retry it; the owner can delete it. Branch from the answer before it to continue.",
+  );
+  t.is(
+    stalledChainNote({ authorId: "u-gone", status: "failed" }, owner, people),
+    "The last answer stopped. Only the person who asked it can retry it. Delete it, or branch from the answer before it to continue.",
+  );
+});
+
+test("an owner-archived shared thread can't be unarchived by a member", (t) => {
+  const archived = summary({ archivedAt: 5, role: "commenter", ownerId: OWNER });
+  t.true(archivedByOwner({ ...archived, archivedBy: "owner" }));
+  t.false(archivedByOwner({ ...archived, archivedBy: "me" }));
+  t.false(archivedByOwner(archived), "without the marker the server decides");
+  t.false(archivedByOwner({ ...archived, role: "owner", archivedBy: "owner" }));
+  render(
+    <TreeLifecycleItemsHarness
+      tree={{ ...archived, archivedBy: "owner" } as ResearchTreeSummary}
+    />,
+  );
+  const item = screen.getByRole("menuitem", { name: "Unarchive research" });
+  t.is(item.getAttribute("aria-disabled") ?? String(item.hasAttribute("data-disabled")), "true");
+  t.is(item.getAttribute("title"), OWNER_ARCHIVED_MESSAGE);
+  cleanup();
+});
+
+test("the thread page's Delete for a member moves it to their Trash or leaves", (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  render(
+    <ThreadDeleteDialog
+      nodes={[root]}
+      nodeId="n1"
+      rootNodeId="n1"
+      treeTitle="Collective memory"
+      shared
+      onTrashRoot={() => Promise.resolve()}
+      onRemove={() => Promise.resolve()}
+      onClose={() => {}}
+    />,
+  );
+  const dialog = screen.getByRole("dialog", { name: /^Delete “.+”\?$/ });
+  t.truthy(
+    within(dialog).getByText(
+      "It moves to your Trash. Its owner and the other people in it still have it.",
+    ),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete now" }));
+  const leave = screen.getByRole("dialog", { name: /^Leave “.+”\?$/ });
+  t.truthy(within(leave).getByRole("button", { name: "Leave" }));
+  t.is(screen.queryByText("Delete permanently?"), null);
+  cleanup();
+});
 
 test("the permission rules follow the server's", (t) => {
   const nodes = [
@@ -567,10 +652,14 @@ test.serial("a member sees the people read-only and can leave", async (t) => {
   });
   await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer loads");
   fireEvent.click(screen.getByRole("button", { name: "Thread actions" }));
-  fireEvent.click(await waitFor(() => screen.getByRole("menuitem", { name: "Share…" })));
-  const dialog = await waitFor(() => screen.getByRole("dialog", { name: /^Share/ }));
+  // Not the owner: the item and the dialog name the people, not sharing.
+  fireEvent.click(await waitFor(() => screen.getByRole("menuitem", { name: "People…" })));
+  const dialog = await waitFor(() =>
+    screen.getByRole("dialog", { name: "People in “Collective memory”" }),
+  );
   await waitUntil(t, () => within(dialog).queryByText("Ada") !== null, "the members load");
   t.is(within(dialog).queryByRole("radio"), null, "visibility is the owner's");
+  t.truthy(within(dialog).getByText("Only its owner and the people it is shared with."));
   t.is(within(dialog).queryByRole("textbox", { name: "GitHub username" }), null);
   t.is(within(dialog).queryByRole("button", { name: /^Remove/ }), null);
   t.truthy(within(dialog).getByText("Viewer"));

@@ -2,6 +2,15 @@
 // Tailwind sorter and the color-literal lint rule can read them (08 §2); every
 // value resolves through a token.
 
+/** The count of invitations waiting on Shared with me (web only). */
+export const INVITE_BADGE =
+  "bg-accent text-fg-on-accent inline-flex min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[11px] leading-4 font-semibold tabular-nums";
+
+/** "2 invitations": the badge's text for assistive technology. */
+export function invitationCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "invitation" : "invitations"}`;
+}
+
 export const SIDEBAR_ROW =
   "flex min-h-control-md w-full min-w-0 cursor-pointer items-center gap-2 rounded-md " +
   "px-2.5 text-[length:calc(var(--fs-reading)-1px)] text-fg-secondary no-underline " +

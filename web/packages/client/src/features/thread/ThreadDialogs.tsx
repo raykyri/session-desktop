@@ -20,6 +20,7 @@ import { ControlButton } from "../../ui/Button.js";
 import { DeleteDialog as SharedDeleteDialog } from "../../ui/DeleteDialog.js";
 import { ConfirmDialog, ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { INPUT_FIELD } from "../../ui/surfaces.js";
+import { sharedTreeDeleteSteps } from "../home/TreeMenu.js";
 
 import { branchInfo } from "./ThreadMenu.js";
 
@@ -145,10 +146,14 @@ export function DeleteDialog({
   rootNodeId,
   treeTitle,
   groupChildCount = 0,
+  shared = false,
   onTrashRoot,
   onRemove,
   onClose,
 }: {
+  /** The thread is shared with the reader (web only): deleting the root
+   * moves it to the reader's Trash or leaves it, with Home's sentences. */
+  shared?: boolean;
   nodes: ResearchNode[];
   nodeId: string;
   rootNodeId: string;
@@ -174,6 +179,15 @@ export function DeleteDialog({
   const disabledReason = info.hasActiveRuns
     ? "It has active runs, which must finish or be cancelled before it can be deleted."
     : null;
+  if (nodeId === rootNodeId && shared) {
+    return (
+      <SharedDeleteDialog
+        {...sharedTreeDeleteSteps(name, onTrashRoot, () => onRemove(node))}
+        disabledReason={null}
+        onClose={onClose}
+      />
+    );
+  }
   if (nodeId === rootNodeId) {
     const children = `${groupChildCount} ${groupChildCount === 1 ? "child" : "children"}`;
     return (

@@ -35,6 +35,7 @@ import {
   ScrollText,
   Trash2,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { useMemo } from "react";
@@ -184,8 +185,15 @@ function ThreadSharingItems({
     <>
       {onShare ? (
         <ThreadMenuItem
-          icon={<UserPlus size={15} aria-hidden="true" />}
-          label="Share…"
+          icon={
+            permissions.canShare ? (
+              <UserPlus size={15} aria-hidden="true" />
+            ) : (
+              <Users size={15} aria-hidden="true" />
+            )
+          }
+          // The owner shares; anyone else sees the people it is shared with.
+          label={permissions.canShare ? "Share…" : "People…"}
           onSelect={() => {
             onClose();
             onShare();

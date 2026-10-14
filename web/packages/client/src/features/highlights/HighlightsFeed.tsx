@@ -13,7 +13,7 @@ import { RotateCw, X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { removeResearchHighlights } from "../../api/api.js";
-import { queryKeys, useHighlightsFeed, useSignedIn } from "../../api/queries.js";
+import { queryKeys, useHighlightsFeed, useMe, useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast } from "../../lib/toast.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -68,14 +68,27 @@ export function groupHighlightsByThread(
   }));
 }
 
-/** Whether the reader may remove a feed highlight (web only). The feed lists
- * the reader's own threads (`highlights.listFeed`), whose owner may remove
- * any highlight; a thread a cached list says the reader does not own is
- * left alone, since the feed row does not say who made the highlight. */
+/** A feed row with the fields the server adds for shared threads (web
+ * only): who made the highlight and the reader's role in its thread. Read
+ * defensively, since a row from an older server has neither. */
+type FeedHighlightAccess = Pick<ResearchHighlightFeedItem, "treeId"> & {
+  authorId?: string | null;
+  role?: string;
+};
+
+/** Whether the reader may remove a feed highlight (web only), as in a
+ * thread: its author, or the thread's owner. A row without the author and
+ * role falls back to the thread's role in a cached list (a list that does
+ * not hold it: the reader's own thread, which the feed used to be limited
+ * to). */
 export function mayRemoveFeedHighlight(
-  item: Pick<ResearchHighlightFeedItem, "treeId">,
+  item: FeedHighlightAccess,
   summaries: readonly ResearchTreeSummary[],
+  meId: string | null = null,
 ): boolean {
+  if (item.role !== undefined || item.authorId !== undefined) {
+    return item.role === "owner" || (meId !== null && item.authorId === meId);
+  }
   const role = summaries.find((summary) => summary.id === item.treeId)?.role;
   return role === undefined || role === "owner";
 }
@@ -84,6 +97,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const signedIn = useSignedIn();
+  const meId = useMe().data?.id ?? null;
   const highlights = useHighlightsFeed(workspaceId);
   const items = useMemo(() => highlights.data ?? [], [highlights.data]);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -182,7 +196,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
                     const suffix = highlightExcerptContext(item.suffix, "suffix");
                     const turn =
                       item.nodeLabel && item.nodeLabel !== item.treeTitle ? item.nodeLabel : null;
-                    const removable = signedIn && mayRemoveFeedHighlight(item, summaries());
+                    const removable = signedIn && mayRemoveFeedHighlight(item, summaries(), meId);
                     return (
                       <article key={item.highlightId} className="group/highlight relative">
                         <button

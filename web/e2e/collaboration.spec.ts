@@ -68,11 +68,12 @@ async function completedThread(page: Page, prompt: string): Promise<Detail> {
   return detail;
 }
 
-/** Opens the root's menu and the Share dialog on a thread page. */
-async function openShareDialog(page: Page) {
+/** Opens the root's menu and the Share dialog on a thread page; for anyone
+ * but the owner it is "People…" and "People in “…”". */
+async function openShareDialog(page: Page, { owner = true }: { owner?: boolean } = {}) {
   await page.getByRole("button", { name: "Thread actions" }).click();
-  await page.getByRole("menuitem", { name: "Share…" }).click();
-  return page.getByRole("dialog", { name: /^Share “/ });
+  await page.getByRole("menuitem", { name: owner ? "Share…" : "People…" }).click();
+  return page.getByRole("dialog", { name: owner ? /^Share “/ : /^People in “/ });
 }
 
 /** Copies an invite link from the open Share dialog and reads it back. */
@@ -146,7 +147,7 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
     await expect(
       viewer.page.getByRole("textbox", { name: "Follow-up in this conversation" }),
     ).toHaveCount(0);
-    const people = await openShareDialog(viewer.page);
+    const people = await openShareDialog(viewer.page, { owner: false });
     await expect(people.locator(`[data-share-member="${viewer.user.login}"]`)).toContainText(
       "Viewer",
     );

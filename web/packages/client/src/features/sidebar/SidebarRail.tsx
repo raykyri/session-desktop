@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useReceivedInvites } from "../../api/queries.js";
 import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
@@ -37,6 +38,8 @@ import { Tooltip } from "../../ui/Tooltip.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { PlaceIcon } from "../home/FeedTray.js";
 import { useFolderDialogStore } from "../home/FolderDialogsHost.js";
+
+import { INVITE_BADGE, invitationCountLabel } from "./rows.js";
 
 /** The rail is this wide (the desktop's 52px). */
 export const SIDEBAR_RAIL_WIDTH = 52;
@@ -136,6 +139,7 @@ export function SidebarRail({
     },
   });
   const selected = currentKey(pathname, feed);
+  const invitations = useReceivedInvites().data?.length ?? 0;
   const openNew = useFolderDialogStore((state) => state.openNew);
   const search = (previous: Record<string, unknown>) => ({
     ws: (previous["ws"] as string | undefined) ?? (workspaceId || undefined),
@@ -160,8 +164,25 @@ export function SidebarRail({
           {
             key: "shared",
             to: "/shared" as const,
-            label: "Shared with me",
-            icon: <Users size={16} aria-hidden="true" />,
+            label:
+              invitations > 0
+                ? `Shared with me, ${invitationCountLabel(invitations)}`
+                : "Shared with me",
+            tooltip: "Shared with me",
+            icon: (
+              <>
+                <Users size={16} aria-hidden="true" />
+                {invitations > 0 ? (
+                  <span
+                    className={cn(INVITE_BADGE, "absolute -top-0.5 -right-0.5")}
+                    aria-hidden="true"
+                    data-invite-count={invitations}
+                  >
+                    {invitations}
+                  </span>
+                ) : null}
+              </>
+            ),
           },
           {
             key: "all-users",
