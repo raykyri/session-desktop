@@ -25,7 +25,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { highlightOwnedBy, nodeOwnedBy } from "./access.js";
+import { highlightOwnedBy, nodeOwnedBy, rejectTrashedNode } from "./access.js";
 import { rowPrompt, toResearchHighlight } from "./mappers.js";
 
 /** Shown when an anchor was captured against an answer that has since been
@@ -73,6 +73,7 @@ export function create(
     if (!node) {
       throw new Error(`research node ${nodeId} was not found`);
     }
+    rejectTrashedNode(tx, nodeId);
     const snapshot = tx
       .select({ revision: responseSnapshots.revision })
       .from(responseSnapshots)
@@ -133,6 +134,7 @@ export function remove(
   nodeId: string,
   highlightId: string,
 ): ResearchHighlight {
+  rejectTrashedNode(db, nodeId);
   const row = db
     .delete(highlights)
     .where(
@@ -155,6 +157,7 @@ export function removeMany(
   if (highlightIds.length === 0) {
     return [];
   }
+  rejectTrashedNode(db, nodeId);
   return db
     .delete(highlights)
     .where(

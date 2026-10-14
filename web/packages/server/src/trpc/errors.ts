@@ -36,6 +36,8 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   // Preconditions on the run state machine and on archived content.
   { pattern: /^only /, code: "PRECONDITION_FAILED" },
   { pattern: /^restore archived /, code: "PRECONDITION_FAILED" },
+  { pattern: /^restore this research from the Trash/, code: "PRECONDITION_FAILED" },
+  { pattern: /^cannot move research to the Trash while/, code: "PRECONDITION_FAILED" },
   { pattern: /^cancel (this|the) /, code: "PRECONDITION_FAILED" },
   { pattern: /require a completed parent/, code: "PRECONDITION_FAILED" },
   { pattern: /cannot be removed$/, code: "PRECONDITION_FAILED" },

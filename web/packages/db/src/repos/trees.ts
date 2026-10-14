@@ -12,18 +12,28 @@ import type {
   UserMessage,
 } from "@session/shared";
 import { defaultTitle, sanitizeResearchTitle } from "@session/shared";
+import {
+  RESEARCH_ARCHIVE_FOLDER_ID,
+  RESEARCH_DRAFTS_FOLDER_ID,
+  RESEARCH_TRASH_FOLDER_ID,
+  RESEARCH_UNFILED_FOLDER_ID,
+} from "@session/shared/lib/researchFolders";
 import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
+import { folders, treeFolderMembership } from "../schema/folders.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { treeViews, trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
+import { rejectTrashed } from "./access.js";
+import { forTree as feedItemForTree } from "./feedItems.js";
+import type { FeedItemDescriptor } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import type { TreeRow } from "./mappers.js";
@@ -59,6 +69,9 @@ export interface AdmitRootInput {
 export interface TreeListOptions {
   workspaceId?: string | null | undefined;
   includeArchived?: boolean | undefined;
+  /** The Trash instead of the sidebar: trees in the Trash, archived or not,
+   * most recently trashed first. */
+  trashed?: boolean | undefined;
 }
 
 /** The trees one sidebar section lists: not archived (or archived), and not
@@ -72,7 +85,19 @@ function sectionPredicate(ownerId: string, workspaceId: string, archived: boolea
   );
 }
 
-function requireTreeRow(db: SessionDatabase, userId: string, treeId: string): TreeRow {
+/** Every tree positioned in one sidebar section, including those in the
+ * Trash: a tree in the Trash keeps its position and moves down with the
+ * others when a tree is inserted above it, so Restore returns it to the same
+ * place relative to them. */
+function positionedPredicate(ownerId: string, workspaceId: string, archived: boolean) {
+  return and(
+    eq(trees.ownerId, ownerId),
+    eq(trees.workspaceId, workspaceId),
+    archived ? isNotNull(trees.archivedAt) : isNull(trees.archivedAt),
+  );
+}
+
+export function requireTreeRow(db: SessionDatabase, userId: string, treeId: string): TreeRow {
   const row = db
     .select()
     .from(trees)
@@ -174,10 +199,10 @@ export function admitRoot(
     const title =
       (input.title === undefined ? undefined : sanitizeResearchTitle(input.title)) ??
       defaultTitle(message?.text ?? "");
-    // New roots take position 0; everything visible in the section moves down.
+    // New roots take position 0; everything in the section moves down.
     tx.update(trees)
       .set({ position: sql`${trees.position} + 1` })
-      .where(sectionPredicate(userId, input.workspaceId, false))
+      .where(positionedPredicate(userId, input.workspaceId, false))
       .run();
     const treeRow = tx
       .insert(trees)
@@ -271,7 +296,8 @@ function detailFromRow(db: SessionDatabase, userId: string, treeRow: TreeRow): R
 
 /**
  * The sidebar list with its counts and attention flags
- * (`docs/02` §5.9). Trees in the Trash are left out. `interrupted` counts in
+ * (`docs/02` §5.9). Trees in the Trash are left out, unless `trashed` asks
+ * for them alone (`trash.list`). `interrupted` counts in
  * no bucket and raises no flag: it is shown in the activity rail, and a run
  * the server is about to resume is not something the user has to act on.
  * Posts and documents have no run and count in no bucket either.
@@ -289,11 +315,19 @@ export function summaries(
       and(
         eq(trees.ownerId, userId),
         options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
-        options.includeArchived === true ? undefined : isNull(trees.archivedAt),
-        isNull(trees.trashedAt),
+        options.trashed === true
+          ? isNotNull(trees.trashedAt)
+          : and(
+              options.includeArchived === true ? undefined : isNull(trees.archivedAt),
+              isNull(trees.trashedAt),
+            ),
       ),
     )
-    .orderBy(asc(trees.position), asc(trees.id))
+    .orderBy(
+      ...(options.trashed === true
+        ? [desc(trees.trashedAt), asc(trees.id)]
+        : [asc(trees.position), asc(trees.id)]),
+    )
     .all();
   if (treeRows.length === 0) {
     return [];
@@ -372,6 +406,7 @@ export function summaries(
       cancelledCount: entry?.cancelled ?? 0,
       updatedAt: row.updatedAt,
       archivedAt: row.archivedAt,
+      ...(row.trashedAt === null ? {} : { trashedAt: row.trashedAt }),
       hasUnseenUpdate: unseen(entry?.latestSettlement),
       hasUnseenFailure: unseen(entry?.latestFailure),
     };
@@ -442,16 +477,19 @@ export function rename(
   if (clean === undefined) {
     throw new Error("Research thread title is required.");
   }
-  const row = db
-    .update(trees)
-    .set({ title: clean, updatedAt: now() })
-    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
-    .returning()
-    .get();
-  if (!row) {
-    throw new Error(`research tree ${treeId} was not found`);
-  }
-  return treeFor(db, userId, row);
+  return transact(db, (tx) => {
+    rejectTrashed(requireTreeRow(tx, userId, treeId));
+    const row = tx
+      .update(trees)
+      .set({ title: clean, updatedAt: now() })
+      .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
+      .returning()
+      .get();
+    if (!row) {
+      throw new Error(`research tree ${treeId} was not found`);
+    }
+    return treeFor(tx, userId, row);
+  });
 }
 
 function setFlag(
@@ -481,60 +519,225 @@ export function markViewed(db: SessionDatabase, userId: string, treeId: string):
   });
 }
 
-/** Moves the thread into the archived section at position 0. */
+/** Where Home lists a tree: the Trash, the Archive, Drafts, a folder outside
+ * the Trash, or Unfiled. The desktop's `researchTreePlace`
+ * (`lib/researchFolders.ts`), with the Trash ahead of the rest. */
+function listedPlace(db: SessionDatabase, row: TreeRow): string {
+  if (row.trashedAt !== null) return RESEARCH_TRASH_FOLDER_ID;
+  if (row.archivedAt !== null) return RESEARCH_ARCHIVE_FOLDER_ID;
+  const membership = db
+    .select({
+      systemPlace: treeFolderMembership.systemPlace,
+      folderId: folders.id,
+      folderTrashedAt: folders.trashedAt,
+    })
+    .from(treeFolderMembership)
+    .leftJoin(folders, eq(folders.id, treeFolderMembership.folderId))
+    .where(eq(treeFolderMembership.treeId, row.id))
+    .get();
+  if (membership?.systemPlace === "drafts") return RESEARCH_DRAFTS_FOLDER_ID;
+  if (membership?.folderId != null && membership.folderTrashedAt === null) {
+    return membership.folderId;
+  }
+  return RESEARCH_UNFILED_FOLDER_ID;
+}
+
+/**
+ * The children that go with a tree when it is archived, unarchived, moved to
+ * or out of the Trash, or deleted: the trees whose `parent_tree_id` names it
+ * and that are listed in the same place (the desktop's `groupChildren` in
+ * `useResearchGroupActions.tsx`). A child has no children of its own, so a
+ * child's group is empty. Sidebar order.
+ */
+export function groupChildren(db: SessionDatabase, row: TreeRow): TreeRow[] {
+  if (row.parentTreeId !== null) {
+    return [];
+  }
+  const place = listedPlace(db, row);
+  return db
+    .select()
+    .from(trees)
+    .where(
+      and(
+        eq(trees.parentTreeId, row.id),
+        ne(trees.id, row.id),
+        eq(trees.ownerId, row.ownerId),
+        eq(trees.workspaceId, row.workspaceId),
+      ),
+    )
+    .orderBy(asc(trees.position), asc(trees.id))
+    .all()
+    .filter((child) => listedPlace(db, child) === place);
+}
+
+/** A tree a group operation changed, and the children that went with it. */
+export interface TreeGroupChange {
+  tree: ResearchTree;
+  children: ResearchTree[];
+  /** The Home feed rows the operation deleted, for `feed.item.removed`. */
+  removedFeedItems: FeedItemDescriptor[];
+}
+
+/** The feed rows of `rows`, read before an operation deletes them. */
+export function feedItemsOf(db: SessionDatabase, rows: readonly TreeRow[]): FeedItemDescriptor[] {
+  return rows.flatMap((row) => feedItemForTree(db, row.id) ?? []);
+}
+
+function archiveRow(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
+  if (row.archivedAt !== null) {
+    return treeFor(db, userId, row);
+  }
+  const at = now();
+  db.update(trees)
+    .set({ position: sql`${trees.position} + 1` })
+    .where(positionedPredicate(userId, row.workspaceId, true))
+    .run();
+  const tree = setFlag(db, userId, row.id, {
+    archivedAt: at,
+    position: 0,
+    updatedAt: strictlyAfter(row.updatedAt, at),
+  });
+  markArchived(db, row.id, true);
+  return tree;
+}
+
+function unarchiveRow(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
+  if (row.archivedAt === null) {
+    return treeFor(db, userId, row);
+  }
+  const at = now();
+  db.update(trees)
+    .set({ position: sql`${trees.position} + 1` })
+    .where(positionedPredicate(userId, row.workspaceId, false))
+    .run();
+  const tree = setFlag(db, userId, row.id, {
+    archivedAt: null,
+    position: 0,
+    updatedAt: strictlyAfter(row.updatedAt, at),
+  });
+  markArchived(db, row.id, false);
+  return tree;
+}
+
+/**
+ * Moves the thread, and the children listed under it, into the archived
+ * section. The children go first so that the parent ends up at position 0.
+ */
+export function archiveGroup(db: SessionDatabase, userId: string, treeId: string): TreeGroupChange {
+  return transact(db, (tx) => {
+    const row = requireTreeRow(tx, userId, treeId);
+    rejectTrashed(row);
+    const childRows = groupChildren(tx, row);
+    const removedFeedItems = feedItemsOf(tx, [row, ...childRows]);
+    const children = childRows.map((child) => archiveRow(tx, userId, child));
+    return { tree: archiveRow(tx, userId, row), children, removedFeedItems };
+  });
+}
+
+/** `archiveGroup`, answering with the thread alone. */
 export function archive(db: SessionDatabase, userId: string, treeId: string): ResearchTree {
+  return archiveGroup(db, userId, treeId).tree;
+}
+
+/** Unarchives the thread and its children in the Archive, the children
+ * first, so that the parent ends up at position 0. */
+export function restoreGroup(db: SessionDatabase, userId: string, treeId: string): TreeGroupChange {
   return transact(db, (tx) => {
     const row = requireTreeRow(tx, userId, treeId);
-    if (row.archivedAt !== null) {
-      return treeFor(tx, userId, row);
-    }
-    const at = now();
-    tx.update(trees)
-      .set({ position: sql`${trees.position} + 1` })
-      .where(sectionPredicate(userId, row.workspaceId, true))
-      .run();
-    const tree = setFlag(tx, userId, treeId, {
-      archivedAt: at,
-      position: 0,
-      updatedAt: strictlyAfter(row.updatedAt, at),
-    });
-    markArchived(tx, treeId, true);
-    return tree;
+    rejectTrashed(row);
+    const children = groupChildren(tx, row).map((child) => unarchiveRow(tx, userId, child));
+    return { tree: unarchiveRow(tx, userId, row), children, removedFeedItems: [] };
   });
 }
 
+/** `restoreGroup`, answering with the thread alone. */
 export function restore(db: SessionDatabase, userId: string, treeId: string): ResearchTree {
-  return transact(db, (tx) => {
-    const row = requireTreeRow(tx, userId, treeId);
-    if (row.archivedAt === null) {
-      return treeFor(tx, userId, row);
-    }
-    const at = now();
-    tx.update(trees)
-      .set({ position: sql`${trees.position} + 1` })
-      .where(sectionPredicate(userId, row.workspaceId, false))
-      .run();
-    const tree = setFlag(tx, userId, treeId, {
-      archivedAt: null,
-      position: 0,
-      updatedAt: strictlyAfter(row.updatedAt, at),
-    });
-    markArchived(tx, treeId, false);
-    return tree;
-  });
+  return restoreGroup(db, userId, treeId).tree;
 }
 
-/** Deletes the thread and everything under it. Refused while a run in it is
- * still the server's responsibility, for the reason `workspaces.remove`
- * gives. */
-export function remove(db: SessionDatabase, userId: string, treeId: string): void {
-  transact(db, (tx) => {
+/** Sets `trashed_at` on one tree and drops its Home feed row. Its position,
+ * archive state, folder membership and parent stay, so Restore puts it
+ * back. */
+export function trashRow(
+  db: SessionDatabase,
+  userId: string,
+  row: TreeRow,
+  at: number,
+): ResearchTree {
+  if (row.trashedAt !== null) {
+    return treeFor(db, userId, row);
+  }
+  const tree = setFlag(db, userId, row.id, { trashedAt: at });
+  removeResearchTree(db, row.id);
+  return tree;
+}
+
+/** Clears `trashed_at` on one tree. The trees at or after its position in
+ * its section move down one, so it returns to that position. */
+export function untrashRow(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
+  if (row.trashedAt === null) {
+    return treeFor(db, userId, row);
+  }
+  const archived = row.archivedAt !== null;
+  db.update(trees)
+    .set({ position: sql`${trees.position} + 1` })
+    .where(
+      and(sectionPredicate(userId, row.workspaceId, archived), gte(trees.position, row.position)),
+    )
+    .run();
+  const tree = setFlag(db, userId, row.id, { trashedAt: null });
+  markArchived(db, row.id, archived);
+  return tree;
+}
+
+/** What `remove` deleted. */
+export interface RemovedTrees {
+  workspaceId: string;
+  treeIds: string[];
+  /** Whether any of them was in the Trash. */
+  trashed: boolean;
+  /** Their Home feed rows, for `feed.item.removed`. */
+  removedFeedItems: FeedItemDescriptor[];
+}
+
+/**
+ * Deletes the thread and everything under it, in or out of the Trash, with
+ * the children listed under it (`groupChildren`). Refused while a run in any
+ * of them is still the server's responsibility, for the reason
+ * `workspaces.remove` gives. A child listed elsewhere stays and loses its
+ * parent (`parent_tree_id` is `ON DELETE SET NULL`).
+ */
+export function remove(db: SessionDatabase, userId: string, treeId: string): RemovedTrees {
+  return transact(db, (tx) => {
     const row = requireTreeRow(tx, userId, treeId);
-    if (hasActiveNodes(tx, [row.id])) {
+    const group = [...groupChildren(tx, row), row];
+    const ids = group.map((member) => member.id);
+    if (hasActiveNodes(tx, ids)) {
       throw new Error("Cannot delete research thread with an active run: cancel the run first.");
     }
-    removeResearchTree(tx, row.id);
-    deleteNodesOfTrees(tx, [row.id]);
-    tx.delete(trees).where(eq(trees.id, row.id)).run();
+    const removedFeedItems = feedItemsOf(tx, group);
+    deleteTreeRows(tx, ids);
+    return {
+      workspaceId: row.workspaceId,
+      treeIds: ids,
+      trashed: group.some((member) => member.trashedAt !== null),
+      removedFeedItems,
+    };
   });
+}
+
+/** Deletes trees, their feed rows and everything under them. The caller has
+ * checked for active runs. Membership, collapsed groups and views cascade;
+ * children elsewhere lose their parent. */
+export function deleteTreeRows(db: SessionDatabase, treeIds: readonly string[]): void {
+  if (treeIds.length === 0) {
+    return;
+  }
+  for (const treeId of treeIds) {
+    removeResearchTree(db, treeId);
+  }
+  deleteNodesOfTrees(db, treeIds);
+  db.delete(trees)
+    .where(inArray(trees.id, [...treeIds]))
+    .run();
 }

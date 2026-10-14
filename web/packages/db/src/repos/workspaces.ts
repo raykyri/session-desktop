@@ -2,7 +2,7 @@
 // `docs/03-api-and-events.md` §2).
 
 import type { Workspace } from "@session/shared";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -229,12 +229,13 @@ export function setDefault(db: SessionDatabase, userId: string, workspaceId: str
   });
 }
 
-/** Returns the total count of research trees per workspace for sidebar display badges. */
+/** The number of research trees per workspace for sidebar display badges,
+ * archived ones included and those in the Trash left out. */
 export function treeCounts(db: SessionDatabase, userId: string): Map<string, number> {
   const rows = db
     .select({ workspaceId: trees.workspaceId, value: sql<number>`count(*)` })
     .from(trees)
-    .where(eq(trees.ownerId, userId))
+    .where(and(eq(trees.ownerId, userId), isNull(trees.trashedAt)))
     .groupBy(trees.workspaceId)
     .all();
   return new Map(rows.map((row) => [row.workspaceId, row.value]));

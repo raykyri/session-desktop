@@ -1,7 +1,7 @@
 // `research.*` procedures on whole threads: listing, ordering, creating,
 // renaming, viewing, archiving and deleting (`03-api-and-events.md` §2).
 
-import { feedItems, researchDocuments, trees } from "@session/db";
+import { researchDocuments, trees } from "@session/db";
 import type { ResearchTree, ResearchTreeDetail, ResearchTreeSummary } from "@session/shared";
 import { METADATA_MODEL_ID } from "@session/shared";
 import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
@@ -155,36 +155,43 @@ export const treeProcedures = {
       return tree;
     }),
 
+  /** Archives the thread with the children listed under it. */
   archiveTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
-      const feedItem = feedItems.forTree(ctx.db, input.treeId);
-      const tree = repo(() => trees.archive(ctx.db, ctx.user.id, input.treeId));
-      publish(ctx, "research.tree.archived", { tree });
-      emitFeedItemRemoved(ctx.eventBus, feedItem);
-      return tree;
+      const change = repo(() => trees.archiveGroup(ctx.db, ctx.user.id, input.treeId));
+      for (const tree of [...change.children, change.tree]) {
+        publish(ctx, "research.tree.archived", { tree });
+      }
+      for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      return change.tree;
     }),
 
+  /** Unarchives the thread with its children in the Archive. */
   restoreTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
-      const tree = repo(() => trees.restore(ctx.db, ctx.user.id, input.treeId));
-      publish(ctx, "research.tree.restored", { tree });
-      emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
-      return tree;
+      const change = repo(() => trees.restoreGroup(ctx.db, ctx.user.id, input.treeId));
+      for (const tree of [...change.children, change.tree]) {
+        publish(ctx, "research.tree.restored", { tree });
+        emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
+      }
+      return change.tree;
     }),
 
+  /** Deletes the thread now, in or out of the Trash, with the children
+   * listed under it. */
   removeTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
-      required(
-        repo(() => trees.get(ctx.db, ctx.user.id, input.treeId)),
-        `research tree ${input.treeId} was not found`,
-      );
-      const feedItem = feedItems.forTree(ctx.db, input.treeId);
-      repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
-      publish(ctx, "research.tree.removed", { treeId: input.treeId });
-      emitFeedItemRemoved(ctx.eventBus, feedItem);
-      return { ok: true };
+      const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
+      for (const treeId of removed.treeIds) {
+        publish(ctx, "research.tree.removed", { treeId });
+      }
+      for (const item of removed.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      if (removed.trashed) {
+        publish(ctx, "research.trash.changed", { workspaceId: removed.workspaceId });
+      }
+      return { ok: true, treeIds: removed.treeIds };
     }),
 };

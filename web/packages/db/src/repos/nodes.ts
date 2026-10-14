@@ -29,7 +29,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodeOwnedBy, rejectTrashed } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
@@ -345,7 +345,8 @@ export function resetForRetry(
   model?: string,
 ): ResearchNode {
   return transact(db, (tx) => {
-    const { node } = loadNode(tx, userId, nodeId);
+    const { node, tree } = loadNode(tx, userId, nodeId);
+    rejectTrashed(tree);
     const status = runStatus(node);
     if (status !== "failed" && status !== "cancelled" && status !== "interrupted") {
       throw new Error(
@@ -648,7 +649,8 @@ export function rename(
     throw new Error("Research node title is required.");
   }
   return transact(db, (tx) => {
-    const { node } = loadNode(tx, userId, nodeId);
+    const { node, tree } = loadNode(tx, userId, nodeId);
+    rejectTrashed(tree);
     tx.update(nodes).set({ title: clean }).where(eq(nodes.id, nodeId)).run();
     touchTree(tx, node.treeId);
     syncFeedItem(tx, node);
@@ -679,6 +681,7 @@ export function removeBranch(
 ): ResearchBranchRemoval {
   return transact(db, (tx) => {
     const { node, tree } = loadNode(tx, userId, nodeId);
+    rejectTrashed(tree);
     if (node.parentNodeId === null) {
       throw new Error(
         "Cannot delete root node individually: delete the entire research thread instead.",

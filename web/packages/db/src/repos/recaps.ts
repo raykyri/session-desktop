@@ -14,7 +14,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { nodeOwnedBy } from "./access.js";
+import { nodeOwnedBy, rejectTrashed } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode } from "./nodes.js";
 
@@ -128,6 +128,9 @@ export function applyCandidate(
     const tree = tx.select().from(trees).where(eq(trees.id, node.treeId)).get();
     if (tree?.archivedAt != null) {
       throw new Error("Cannot update summary of archived research: restore the thread first.");
+    }
+    if (tree) {
+      rejectTrashed(tree);
     }
     if (node.type !== "exchange" || node.status !== "complete") {
       throw new Error("Cannot update summary: the research run has not completed.");
