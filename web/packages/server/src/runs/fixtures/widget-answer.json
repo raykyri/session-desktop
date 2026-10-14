@@ -1,0 +1,41 @@
+{
+  "scenario": "widget-answer",
+  "description": "An answer with a session-html widget whose script probes the sandbox (cookies, fetch to the app, top-level navigation) and saves its input through window.sessionWidgetState. Used by the widget end-to-end test.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "The widget below reports what its script can reach from the sandbox.\n\n"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "```session-html id=sandbox-probe title=\"Sandbox probe\"\n<label class=\"form-label\" for=\"note\">Note</label><input id=\"note\" class=\"form-control\">\n<p id=\"status\">Scripts have not run.</p>\n<p id=\"cookie\">cookie: not read</p>\n<p id=\"fetch\">fetch: not tried</p>\n<p id=\"top\">top navigation: not tried</p>\n"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "<script>\nconst out = (id, text) => { document.getElementById(id).textContent = text; };\nout('status', 'Scripts ran.');\ntry { out('cookie', 'cookie: ' + JSON.stringify(document.cookie)); } catch (error) { out('cookie', 'cookie: blocked (' + error.name + ')'); }\nconst app = location.ancestorOrigins && location.ancestorOrigins[0];\nif (app) { fetch(app + '/api/trpc/auth.me', { credentials: 'include' }).then((response) => out('fetch', 'fetch: status ' + response.status), (error) => out('fetch', 'fetch: failed (' + error.name + ')')); } else { out('fetch', 'fetch: no app origin'); }\ntry { top.location.href = (app || 'https://example.com') + '/widget-navigated'; out('top', 'top navigation: allowed'); } catch (error) { out('top', 'top navigation: blocked (' + error.name + ')'); }\nconst note = document.getElementById('note');\nwindow.sessionWidgetState.onRestore((value) => { note.value = value && value.version === 1 && typeof value.text === 'string' ? value.text : ''; });\nnote.addEventListener('input', () => window.sessionWidgetState.save({ version: 1, text: note.value }));\n</script>\n```\n\n"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Every conclusion is in the prose: the widget only illustrates the sandbox."
+        },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "end_turn" },
+          "usage": {
+            "inputTokens": { "total": 500, "noCache": 500, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 260, "text": 250, "reasoning": 10 }
+          }
+        }
+      ]
+    }
+  ]
+}
