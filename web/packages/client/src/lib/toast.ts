@@ -1,10 +1,9 @@
 // Client-originated toasts (`10-home-feed-journal.md` §8): a copy confirmation
-// or a failed action. They are pushed to the notifications store past the
-// `showNotifications` preference check, as the server's
-// `notification.requested` events are in `api/events.ts`.
+// or a failed action. They always show: they report an action the reader just
+// took. The `showNotifications` preference applies only to the server's
+// `notification.requested` events (`api/events.ts`).
 
 import { useNotificationsStore, type NotificationTone } from "../stores/notifications.js";
-import { useSettingsStore } from "../stores/settings.js";
 
 /** How long a client toast stays. Short: these confirm an action the user just
  * took, and the action itself is the evidence. */
@@ -19,9 +18,8 @@ export interface ClientToast {
   /** Re-pushing the same id replaces the visible toast rather than stacking a
    * second copy of it (`stores/notifications.ts`). */
   id?: string;
-  /** Undo after a move or a move to the Trash. A toast with an action is
-   * shown even with notifications turned off, since it is the only way to
-   * take the action back, and it stays longer. */
+  /** Undo after a move or a move to the Trash. A toast with an action stays
+   * longer. */
   undo?: () => void;
 }
 
@@ -30,7 +28,6 @@ export interface ClientToast {
 export const UNDO_TOAST_TIMEOUT_MS = 8_000;
 
 export function pushToast(toast: ClientToast): void {
-  if (!toast.undo && !useSettingsStore.getState().settings.showNotifications) return;
   counter += 1;
   useNotificationsStore.getState().push({
     id: toast.id ?? `client:${counter}`,

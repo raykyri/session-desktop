@@ -8,6 +8,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import test from "ava";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
+import { applyEventBatch } from "../src/api/events.js";
 import { ThemeEffects } from "../src/app/ThemeEffects.js";
 import { ResearchMarkdown } from "../src/features/markdown/ResearchMarkdown.js";
 import { PostFollowUpField } from "../src/features/thread/PostFollowUpField.js";
@@ -151,6 +152,32 @@ test.serial("a toast is bottom centre, one at a time; a notification top right",
   const region = screen.getByRole("region", { name: "Notifications" });
   t.truthy(within(region).getByText("Answer ready"));
   t.true(region.className.includes("top-4"));
+});
+
+test.serial("Notifications off hides server notifications but not client toasts", (t) => {
+  useSettingsStore.getState().patch({ showNotifications: false });
+  pushToast({ title: "Couldn’t delete the draft", tone: "error" });
+  applyEventBatch(
+    [
+      {
+        type: "notification.requested",
+        payload: {
+          notification: {
+            id: "server",
+            title: "Answer ready",
+            body: "",
+            tone: "info",
+            timeoutMs: 5_000,
+            createdAt: 1,
+          },
+        },
+        timestamp: 1,
+      },
+    ],
+    testQueryClient(),
+  );
+  const titles = useNotificationsStore.getState().items.map((item) => item.title);
+  t.deepEqual(titles, ["Couldn’t delete the draft"]);
 });
 
 test.serial("the settings page lists the desktop's settings", async (t) => {

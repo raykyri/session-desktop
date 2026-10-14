@@ -159,7 +159,14 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
       });
       // The draft is gone once its question is asked; a failure to remove it
       // leaves it listed rather than failing the send.
-      void deleteResearchDraft(draft.id).catch(() => undefined);
+      void deleteResearchDraft(draft.id).then(
+        () => pushToast({ title: "Sent. Moved from Drafts to Unfiled." }),
+        (failure: unknown) =>
+          pushToast({
+            title: `The question was sent, but its draft couldn't be deleted. ${errorMessage(failure)}`,
+            tone: "error",
+          }),
+      );
       void navigate({
         to: "/r/$treeId",
         params: { treeId: detail.tree.id },

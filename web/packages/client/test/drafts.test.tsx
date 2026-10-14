@@ -10,6 +10,7 @@ import {
   createResearchDraftAutosave,
   createResearchDraftImageSave,
 } from "../src/lib/researchDraftAutosave.js";
+import { useNotificationsStore } from "../src/stores/notifications.js";
 
 import { node, tree } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
@@ -170,6 +171,29 @@ test.serial("Drafts lists the drafts; a draft's card opens its view", async (t) 
   app.unmount();
 });
 
+test.serial("a draft card's Delete removes the draft and says so", async (t) => {
+  const app = await renderApp("/drafts", {
+    queryClient: testQueryClient(),
+    responses: draftResponses(),
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("button", { name: "Draft actions" }) !== null,
+    "the draft's card",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Draft actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  await waitUntil(
+    t,
+    () => useNotificationsStore.getState().items.some((item) => item.title === "Draft deleted."),
+    "the desktop's toast",
+  );
+  t.deepEqual(app.trpc.calls.find((call) => call.path === "drafts.remove")?.input, {
+    draftId: "d1",
+  });
+  app.unmount();
+});
+
 test.serial("an edit saves after a pause, and ⌘S saves at once", async (t) => {
   const app = await renderApp("/drafts/d1", {
     queryClient: testQueryClient(),
@@ -225,6 +249,14 @@ test.serial("Send asks the question, removes the draft and opens the thread", as
     t,
     () => screen.queryByRole("textbox", { name: "Draft question" }) === null,
     "the thread replaces the draft",
+  );
+  await waitUntil(
+    t,
+    () =>
+      useNotificationsStore
+        .getState()
+        .items.some((item) => item.title === "Sent. Moved from Drafts to Unfiled."),
+    "the desktop's toast",
   );
   app.unmount();
 });

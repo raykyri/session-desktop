@@ -34,6 +34,7 @@ import {
   RESEARCH_MESSAGE_IMAGE_SIZE_ERROR,
 } from "../src/lib/researchImages.js";
 import { homeDraftKey, useDraftsStore } from "../src/stores/drafts.js";
+import { useNotificationsStore } from "../src/stores/notifications.js";
 
 import { node, summary, tree } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
@@ -349,6 +350,10 @@ test.serial("Save draft keeps the question in Drafts and clears the box", async 
     t,
     () => screen.getByRole<HTMLTextAreaElement>("textbox", { name: FIELD }).value === "",
     "the box clears",
+  );
+  t.true(
+    useNotificationsStore.getState().items.some((item) => item.title === "Saved to Drafts."),
+    "the desktop's toast",
   );
   app.unmount();
 });

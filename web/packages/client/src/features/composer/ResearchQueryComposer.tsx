@@ -27,7 +27,7 @@ import {
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages.js";
-import { errorMessage } from "../../lib/toast.js";
+import { errorMessage, pushToast } from "../../lib/toast.js";
 import { homeDraftKey, markDraftEdited, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
@@ -325,6 +325,7 @@ export function ResearchQueryComposer({
       setImages([]);
       setError(null);
       persist({ ...current, text: "", images: [] });
+      pushToast({ title: "Saved to Drafts." });
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {

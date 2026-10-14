@@ -12,7 +12,8 @@ export interface UserNotificationsApi {
  *
  * The desktop hook owned the list in `useState` and decided on arrival whether
  * a toast was requested. Here the list is stored so code outside a React tree
- * can push to it, `lib/toast.ts` enforces the `showNotifications` preference,
+ * can push to it, `api/events.ts` applies the `showNotifications` preference to
+ * server notifications,
  * and the hook is only the read side.
  */
 export function useUserNotifications(): UserNotificationsApi {

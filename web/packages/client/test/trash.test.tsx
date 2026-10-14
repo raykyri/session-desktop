@@ -9,6 +9,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import test from "ava";
 
 import { TrashList } from "../src/features/home/TrashList.js";
+import { useNotificationsStore } from "../src/stores/notifications.js";
 import { DeleteDialog } from "../src/ui/DeleteDialog.js";
 
 import { summary } from "./fixtures.js";
@@ -180,6 +181,11 @@ test.serial("the Trash view restores a thread and a folder", async (t) => {
     t,
     () => app.trpc.calls.some((call) => call.path === "research.restoreTreeFromTrash"),
     "the thread is restored",
+  );
+  await waitUntil(
+    t,
+    () => useNotificationsStore.getState().items.some((item) => item.title === "Restored."),
+    "the desktop's toast",
   );
   fireEvent.click(screen.getByRole("button", { name: "Restore Papers" }));
   await waitUntil(

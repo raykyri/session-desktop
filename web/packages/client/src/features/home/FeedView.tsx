@@ -914,6 +914,7 @@ export function FeedView({
     try {
       if (entry.kind === "tree") await group.restoreGroupFromTrash(entry.id);
       else await filing.setFolderTrashed(entry.id, false);
+      pushToast({ title: "Restored." });
     } catch (failure) {
       pushErrorToast("Couldn’t restore", failure);
     }
@@ -1334,6 +1335,7 @@ export function FeedView({
             icon={<Trash2 size={15} aria-hidden="true" />}
             onClick={() =>
               deleteDraft.mutate(menuDraft, {
+                onSuccess: () => pushToast({ title: "Draft deleted." }),
                 onError: (failure) => pushErrorToast("Couldn’t delete the draft", failure),
               })
             }
