@@ -7,6 +7,7 @@
 
 import { statSync, statfsSync } from "node:fs";
 
+import { documentBackupsConfigured, documentsBackupAgeSeconds } from "./backups.js";
 import type { Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
 import type { HealthState } from "./health.js";
@@ -234,6 +235,16 @@ export function renderMetrics(options: RenderMetricsOptions): string {
   lines.push(
     `session_db_size_bytes${labels({ file: "wal" })} ${fileSize(`${config.databasePath}-wal`)}`,
   );
+
+  if (documentBackupsConfigured(config)) {
+    // Alert on it: the archive should run once a day (`backups.ts`).
+    const age = documentsBackupAgeSeconds(config, options.at ?? Date.now());
+    lines.push(
+      "# HELP session_documents_backup_age_seconds Seconds since the last successful document archive; +Inf before the first.",
+    );
+    lines.push("# TYPE session_documents_backup_age_seconds gauge");
+    lines.push(`session_documents_backup_age_seconds ${age === null ? "+Inf" : age}`);
+  }
 
   const usage = dailyUsageByProvider(deps, options.at ?? Date.now());
   lines.push("# HELP session_daily_tokens Tokens billed today (UTC), by provider.");

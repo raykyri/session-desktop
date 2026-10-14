@@ -221,6 +221,19 @@ export function recordSignupAttempt(
     .run();
 }
 
+/** How long a sign-up attempt is kept: long enough to read back an abuse
+ * pattern, not forever. */
+export const SIGNUP_ATTEMPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Deletes sign-up attempts recorded before `before`; returns how many. */
+export function deleteSignupAttemptsBefore(db: SessionDatabase, before: number): number {
+  return db
+    .delete(signupAttempts)
+    .where(lt(signupAttempts.attemptedAt, before))
+    .returning({ id: signupAttempts.id })
+    .all().length;
+}
+
 /** Attempts from one IP since `since`, the input to per-IP throttling. */
 export function countSignupAttempts(db: SessionDatabase, ipHash: string, since: number): number {
   const row = db

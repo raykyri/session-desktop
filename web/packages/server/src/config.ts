@@ -33,7 +33,8 @@ const flag = (fallback: boolean) =>
       return z.NEVER;
     });
 
-const positiveInteger = (fallback: number) =>
+/** An integer variable, at least `minimum` (0 unless given). */
+const positiveInteger = (fallback: number, minimum = 0) =>
   z
     .string()
     .trim()
@@ -43,8 +44,14 @@ const positiveInteger = (fallback: number) =>
         return fallback;
       }
       const parsed = Number(value);
-      if (!Number.isSafeInteger(parsed) || parsed < 0) {
-        ctx.addIssue({ code: "custom", message: `expected a non-negative integer, got ${value}` });
+      if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            minimum === 0
+              ? `expected a non-negative integer, got ${value}`
+              : `expected an integer of at least ${minimum}, got ${value}`,
+        });
         return z.NEVER;
       }
       return parsed;
@@ -118,11 +125,13 @@ const envSchema = z.object({
   TAVILY_API_KEY: optionalString,
   SESSION_SEARCH_VENDOR: z.enum(["parallel", "tavily"]).default("parallel"),
 
-  SESSION_RUNS_PER_USER: positiveInteger(2),
-  SESSION_QUEUED_PER_USER: positiveInteger(20),
-  SESSION_RUNS_GEMINI: positiveInteger(8),
-  SESSION_RUNS_OPENROUTER: positiveInteger(8),
-  SESSION_RUNS_ANTHROPIC: positiveInteger(2),
+  // Concurrency caps and the queue bound: 0 would admit nothing, and runs
+  // would wait in the queue for good, so each is at least 1.
+  SESSION_RUNS_PER_USER: positiveInteger(2, 1),
+  SESSION_QUEUED_PER_USER: positiveInteger(20, 1),
+  SESSION_RUNS_GEMINI: positiveInteger(8, 1),
+  SESSION_RUNS_OPENROUTER: positiveInteger(8, 1),
+  SESSION_RUNS_ANTHROPIC: positiveInteger(2, 1),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
 
   /** Bytes the embed-asset cache may hold on the volume before the sweep

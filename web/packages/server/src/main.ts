@@ -6,20 +6,21 @@
 // runs interrupted by the previous process are back in the queue before the
 // port is listening.
 
-import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
-import { auth, closeDatabase, nodes, openDatabase } from "@session/db";
+import { auth, closeDatabase, nodes, openDatabase, tweets } from "@session/db";
 
 import { createApp } from "./app.js";
+import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
 import { sweepEmbeds } from "./embeds/storage.js";
 import { EventBus } from "./events/bus.js";
 import { createReadiness } from "./health.js";
+import { TWEET_CACHE_TTL_MS } from "./journal/tweets.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { treeDirectory } from "./research/access.js";
@@ -109,58 +110,35 @@ export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
  * (`EventBus.expirePresence`). */
 const PRESENCE_SWEEP_MS = 15_000;
 
-/** How often the document archive is shipped (`13-deployment-fly.md` §6). */
-export const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-/** `web/scripts/backup-documents.sh`, resolved the way the migrations
- * directory is: this module and the esbuild bundle both sit one directory
- * below `packages/server`, so the same URL points at `web/scripts` in
- * development and at `/app/scripts` in the image. */
-export const BACKUP_DOCUMENTS_SCRIPT = fileURLToPath(
-  new URL("../../../scripts/backup-documents.sh", import.meta.url),
-);
-
-/**
- * The nightly document archive. Litestream replicates `session.db`
- * continuously; `/data/documents` is files on a volume that nothing else
- * copies, so losing the volume would lose every uploaded file.
- *
- * Run in process rather than from an external scheduler because the
- * deployment is one machine with one process: a Fly scheduled machine would
- * need the volume this one holds, and an operator-run cron is a step that is
- * documented and then not done. A failure is logged and the next day tries
- * again — a missed archive is not worth refusing to serve over.
- */
-export function backupDocuments(config: Config, logger: Logger): Promise<void> {
-  if (config.documentsReplicaUrl === null && config.litestreamReplicaUrl === null) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    execFile(
-      BACKUP_DOCUMENTS_SCRIPT,
-      { env: process.env, timeout: 30 * 60 * 1000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          logger.error({ error, stderr: String(stderr).slice(0, 2000) }, "document backup failed");
-        } else {
-          logger.info({ output: String(stdout).trim().slice(0, 2000) }, "document backup complete");
-        }
-        resolve();
-      },
-    );
-  });
-}
+// The document archive moved to `backups.ts`; these names stay importable
+// from here.
+export {
+  BACKUP_CHECK_INTERVAL_MS,
+  BACKUP_DOCUMENTS_SCRIPT,
+  DAILY_INTERVAL_MS,
+  backupDocuments,
+} from "./backups.js";
 
 /**
  * Rows and buckets that expire on their own clock: nothing reads them again,
  * so without this they are kept forever — one rate-limit bucket per address
- * seen, one `sessions` row per sign-in.
+ * seen, one `sessions` row per sign-in, one `tweet_cache` row per post ever
+ * linked, one `signup_attempts` row per sign-in attempt.
  */
-export function sweepExpired(deps: ServerDeps, limiter: RateLimiter, logger: Logger): void {
+export function sweepExpired(
+  deps: ServerDeps,
+  limiter: RateLimiter,
+  logger: Logger,
+  at: number = Date.now(),
+): void {
   const swept = {
     buckets: limiter.sweep(),
     sessions: auth.deleteExpiredSessions(deps.db),
     oauthStates: auth.deleteExpiredOAuthStates(deps.db),
+    // A cached post older than its lifetime is never served again
+    // (`journal/tweets.ts`); the next request fetches it anew.
+    tweets: tweets.prune(deps.db, at - TWEET_CACHE_TTL_MS),
+    signupAttempts: auth.deleteSignupAttemptsBefore(deps.db, at - auth.SIGNUP_ATTEMPT_RETENTION_MS),
   };
   logger.debug(swept, "swept expired state");
 }
@@ -302,9 +280,14 @@ export function main(): RunningServer {
     void runMaintenance(deps, limiter, logger);
   }, MAINTENANCE_INTERVAL_MS);
   maintenance.unref();
+  // The document archive runs when the last successful one is a day old:
+  // checked at boot and every hour, since a machine restarted at least daily
+  // would never reach a 24-hour timer (`backups.ts`).
+  const backups = createDocumentBackupScheduler(config, logger);
+  void backups.check();
   const nightly = setInterval(() => {
-    void backupDocuments(config, logger);
-  }, DAILY_INTERVAL_MS);
+    void backups.check();
+  }, BACKUP_CHECK_INTERVAL_MS);
   nightly.unref();
 
   // Migrations ran inside `openDatabase` and the previous process's runs are
