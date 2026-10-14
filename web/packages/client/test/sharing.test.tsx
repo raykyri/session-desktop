@@ -393,13 +393,18 @@ test.serial("a commenter asks and changes only what they wrote", async (t) => {
 
   const ownerItems = menuItems(await openMenuOf("What is collective memory?"));
   t.true(ownerItems.includes("Branch to right"));
-  t.false(
-    ownerItems.some((item) => item.startsWith("Delete")),
-    ownerItems.join("|"),
-  );
   t.false(ownerItems.includes("Rerun"), "someone else's run is not theirs to pay for");
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-  await waitUntil(t, () => screen.queryByRole("menu") === null, "the menu closes");
+  // The root's Delete is the thread's, as on Home: their Trash, or Leave.
+  t.true(ownerItems.includes("Delete research"), ownerItems.join("|"));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete research" }));
+  const dialog = await waitFor(() => screen.getByRole("dialog", { name: /^Delete “/ }));
+  t.truthy(
+    within(dialog).getByText(
+      "It moves to your Trash. Its owner and the other people in it still have it.",
+    ),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await waitUntil(t, () => screen.queryByRole("dialog") === null, "the dialog closes");
 
   const mineItems = menuItems(await openMenuOf("And my follow-up?"));
   t.true(

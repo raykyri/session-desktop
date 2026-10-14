@@ -530,7 +530,10 @@ function AnswerMenu({
   const branchBlocker = researchBranchBlocker(node, archived);
   const owner = permissions.isOwner;
   const renames = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
-  const deletes = owner || (!isRoot && mayChangeNode(permissions, nodes, node));
+  // A commenter (always a member) deletes the thread as on Home: it moves to
+  // their Trash, or they leave it.
+  const deletes =
+    owner || (isRoot ? permissions.role === "commenter" : mayChangeNode(permissions, nodes, node));
   return (
     <MenuFrame anchor={menu.anchor} label="Answer actions" onClose={onClose}>
       {isRoot ? (
