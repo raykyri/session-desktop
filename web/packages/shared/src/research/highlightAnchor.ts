@@ -18,7 +18,7 @@
 // The error messages are shown to the user verbatim, so they are kept
 // unchanged from the desktop.
 
-import type { ResearchHighlight, ResearchHighlightAnchor } from "../types/research.js";
+import type { ResearchHighlight, ResearchHighlightAnchor } from "../wire/index.js";
 
 import { isResponseRevision } from "./revision.js";
 

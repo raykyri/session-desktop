@@ -16,14 +16,14 @@ import {
   translateResearchGapAfterInsertion,
   visibleResearchTreeIds,
 } from "../src/research/folders.js";
-import type { ResearchFolderState, ResearchTreeSummary } from "../src/types/research.js";
+import type { ResearchFolderState, ResearchTreeSummary } from "../src/wire/index.js";
 
 function tree(id: string): ResearchTreeSummary {
   return {
     id,
     title: id,
     rootNodeId: `${id}-root`,
-    kind: "run",
+    type: "exchange",
     workspaceId: "workspace-1",
     runningCount: 0,
     failedCount: 0,
@@ -43,6 +43,8 @@ function state(): ResearchFolderState {
     ],
     membership: { one: "folder-a", two: "folder-a", three: "folder-b" },
     collapsed: ["folder-a"],
+    parents: {},
+    collapsedGroups: [],
   };
 }
 

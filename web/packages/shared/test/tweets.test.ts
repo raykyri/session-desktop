@@ -11,7 +11,7 @@ import {
   tweetSnapshotFromSyndication,
   visibleResearchPrompt,
 } from "../src/journal/tweets.js";
-import type { TweetSnapshot } from "../src/types/tweet.js";
+import type { TweetSnapshot } from "../src/wire/index.js";
 
 import video from "./fixtures/journal/1585341984679469056.json" with { type: "json" };
 import quote from "./fixtures/journal/1599367266448994304.json" with { type: "json" };
@@ -349,7 +349,7 @@ test("a trailing permalink that embedded is dropped from the message as shown", 
   // A post that did not resolve leaves its permalink readable.
   t.is(
     visibleResearchPrompt(`What about this? ${url}`, [
-      { ...resolved, status: "unavailable", tweet: undefined, failure: "notFound" },
+      { ...resolved, status: "unavailable", failure: "notFound" },
     ]),
     `What about this? ${url}`,
   );

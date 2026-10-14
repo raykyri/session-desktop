@@ -5,24 +5,24 @@ import {
   buildRecentActivity,
   buildRecentActivityFromItems,
   mergeRecentActivityItems,
-  recentResearchQueryFromNode,
   reconcileRecentActivityHead,
   upsertRecentActivityItem,
   upsertRecentActivityResearchNode,
   upsertRecentResearchQuery,
 } from "../src/journal/activity.js";
+import { recentResearchQueryFromNode } from "../src/lib/activity.js";
 import type { RecentActivityItem } from "../src/types/activity.js";
 import type {
   RecentResearchQuery,
-  ResearchNode,
+  ResearchExchangeNode,
   ResearchTreeSummary,
-} from "../src/types/research.js";
+} from "../src/wire/index.js";
 
 const tree: ResearchTreeSummary = {
   id: "tree-1",
   title: "Collective memory",
   rootNodeId: "root",
-  kind: "run",
+  type: "exchange",
   workspaceId: "workspace",
   runningCount: 0,
   failedCount: 0,
@@ -40,20 +40,21 @@ const query: RecentResearchQuery = {
   inline: false,
   prompt: "How does retrieval change the result?",
   title: "Retrieval",
+  adapter: "openai",
   model: "gpt-luna",
   status: "running",
   createdAt: 200,
 };
 
-const node: ResearchNode = {
+const node: ResearchExchangeNode = {
   id: "root",
   treeId: tree.id,
-  workspaceId: "workspace",
+  groupId: "workspace",
   parentNodeId: null,
-  prompt: "Question",
-  model: "gpt-luna",
-  status: "complete",
-  attempt: 1,
+  type: "exchange",
+  message: { text: "Question" },
+  agent: { adapter: "openai", model: "gpt-luna", effort: null },
+  run: { status: "complete", sessionReady: true, attempt: 1 },
   createdAt: 100,
   highlights: [],
 };
@@ -88,13 +89,13 @@ test("run states are labeled and a completed answer carries no badge", (t) => {
   t.is(labelOf("complete"), undefined);
 });
 
-test("a top-level imported query keeps its provenance", (t) => {
+test("a top-level imported document keeps its source", (t) => {
   const event = activityEventFromResearchQuery(
-    { ...query, parentNodeId: null, origin: "imported" },
+    { ...query, parentNodeId: null, type: "document", source: "imported" },
     tree,
   );
   t.is(event.relationship?.label, "Top-level");
-  t.deepEqual(event.execution, { model: "gpt-luna", origin: "imported" });
+  t.deepEqual(event.execution, { model: "gpt-luna", source: "imported" });
 });
 
 test("activity sorts newest first, then by id", (t) => {
@@ -130,22 +131,30 @@ test("Home hides archived research and shows it again when restored", (t) => {
   );
 });
 
-test("only top-level run nodes enter the Home feed", (t) => {
+test("only top-level nodes enter the Home feed", (t) => {
   t.is(recentResearchQueryFromNode(node)?.nodeId, "root");
   t.is(recentResearchQueryFromNode({ ...node, parentNodeId: "root" }), null);
-  t.is(recentResearchQueryFromNode({ ...node, kind: "document" }), null);
   t.deepEqual(upsertRecentResearchQuery([query], { ...query, status: "failed" }), [
     { ...query, status: "failed" },
   ]);
 });
 
-test("a node's feed row carries its model, origin, and recap", (t) => {
+test("a node's feed row carries its type, model, source, and recap", (t) => {
   const imported = recentResearchQueryFromNode({
-    ...node,
-    origin: "imported",
+    id: "root",
+    treeId: tree.id,
+    groupId: "workspace",
+    parentNodeId: null,
+    type: "document",
+    message: { text: "Question" },
+    source: "imported",
+    followUpAgent: { adapter: "openai", model: "gpt-luna", effort: null },
+    createdAt: 100,
+    highlights: [],
     recap: { text: "  Summary  ", responseRevision: "revision" },
   });
-  t.is(imported?.origin, "imported");
+  t.is(imported?.type, "document");
+  t.is(imported?.source, "imported");
   t.is(imported?.model, "gpt-luna");
   t.is(imported?.recap, "Summary");
   t.is(recentResearchQueryFromNode(node)?.recap, undefined);
@@ -157,18 +166,21 @@ test("live follow-ups stay under their root and survive root updates", (t) => {
     ...node,
     id: "child",
     parentNodeId: node.id,
-    prompt: "Follow up",
+    message: { text: "Follow up" },
     createdAt: 300,
   };
   items = upsertRecentActivityResearchNode(items, child);
   items = upsertRecentActivityResearchNode(items, { ...child, id: "earlier", createdAt: 200 });
-  items = upsertRecentActivityResearchNode(items, { ...child, prompt: "Updated follow up" });
+  items = upsertRecentActivityResearchNode(items, {
+    ...child,
+    message: { text: "Updated follow up" },
+  });
   items = upsertRecentActivityResearchNode(items, {
     ...child,
     id: "grandchild",
     parentNodeId: child.id,
   });
-  items = upsertRecentActivityResearchNode(items, { ...node, prompt: "Updated root" });
+  items = upsertRecentActivityResearchNode(items, { ...node, message: { text: "Updated root" } });
   t.is(items.length, 1);
   const item = items[0];
   t.is(item?.kind, "research-query");

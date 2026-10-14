@@ -12,10 +12,10 @@
 // Recaps are derived metadata: generation never delays research completion,
 // and every rejection here is silent — the answer simply has no summary.
 
+import { documentSource, nodePrompt, nodeResponseSnapshotAt } from "../lib/researchNodeTypes.js";
 import { stripSessionWidgetBlocks } from "../markdown/widgetProjection.js";
 import { stripWikilinks } from "../markdown/wikilinks.js";
-import type { ResearchNode } from "../types/research.js";
-import type { Turn } from "../types/turn.js";
+import type { ResearchNode, Turn } from "../wire/index.js";
 
 import { normalizedText, turnIsInActiveContext } from "./preview.js";
 
@@ -159,12 +159,9 @@ export function extractRecapSource(turns: readonly Turn[], imported: boolean): s
   return withinBounds ? plain : undefined;
 }
 
-/** {@link extractRecapSource} for a node, accounting for imported nodes. */
-export function recapSourceForNode(
-  node: Pick<ResearchNode, "origin">,
-  turns: readonly Turn[],
-): string | undefined {
-  return extractRecapSource(turns, node.origin === "imported");
+/** {@link extractRecapSource} for a node, accounting for imported reports. */
+export function recapSourceForNode(node: ResearchNode, turns: readonly Turn[]): string | undefined {
+  return extractRecapSource(turns, documentSource(node) === "imported");
 }
 
 /**
@@ -172,14 +169,11 @@ export function recapSourceForNode(
  * budget. Checked after extraction because the prompt is charged against the
  * same budget; imported reports are exempt, as in {@link extractRecapSource}.
  */
-export function recapSourceFitsBudget(
-  node: Pick<ResearchNode, "origin" | "prompt">,
-  source: string,
-): boolean {
-  if (node.origin === "imported") {
+export function recapSourceFitsBudget(node: ResearchNode, source: string): boolean {
+  if (documentSource(node) === "imported") {
     return true;
   }
-  return utf8ByteLength(source) + utf8ByteLength(node.prompt) <= MAX_RECAP_SOURCE_BYTES;
+  return utf8ByteLength(source) + utf8ByteLength(nodePrompt(node)) <= MAX_RECAP_SOURCE_BYTES;
 }
 
 const SUMMARY_LABELS = ["Summary:", "summary:"];
@@ -214,21 +208,18 @@ export function validateRecapInstructions(value: string): string {
   return trimmed;
 }
 
-type SchedulableNode = Pick<ResearchNode, "kind" | "status" | "responseSnapshotAt" | "recap">;
-
 /**
  * Whether an automatic recap should be scheduled for a settled node. The node
- * must be a completed research run with a durable snapshot and no existing
- * recap. User-authored documents are excluded. A node whose kind is
- * absent is a run, as the wire types define it.
+ * must be a completed exchange with a durable snapshot and no existing recap.
+ * Posts and documents are excluded; an imported report's recap is asked for
+ * explicitly.
  */
-export function shouldScheduleRecap(node: SchedulableNode): boolean {
+export function shouldScheduleRecap(node: ResearchNode): boolean {
   return (
-    (node.kind ?? "run") === "run" &&
-    node.status === "complete" &&
-    node.responseSnapshotAt !== null &&
-    node.responseSnapshotAt !== undefined &&
-    node.recap === undefined
+    node.type === "exchange" &&
+    node.run.status === "complete" &&
+    node.run.responseSnapshotAt != null &&
+    node.recap == null
   );
 }
 
@@ -239,6 +230,6 @@ export function shouldScheduleRecap(node: SchedulableNode): boolean {
  * one process served every workspace on disk; node ids are unique across the
  * web database, so the id and the snapshot time are enough.
  */
-export function recapJobKey(node: Pick<ResearchNode, "id" | "responseSnapshotAt">): string {
-  return `${node.id}:${node.responseSnapshotAt ?? ""}`;
+export function recapJobKey(node: ResearchNode): string {
+  return `${node.id}:${nodeResponseSnapshotAt(node) ?? ""}`;
 }

@@ -13,8 +13,13 @@ import {
   shouldScheduleRecap,
   validateRecapInstructions,
 } from "../src/research/recap.js";
-import type { ResearchNode } from "../src/types/research.js";
-import type { Turn, TurnBlock } from "../src/types/turn.js";
+import type {
+  ResearchDocumentNode,
+  ResearchExchangeNode,
+  RunState,
+  Turn,
+  TurnBlock,
+} from "../src/wire/index.js";
 
 function turn(role: string, blocks: TurnBlock[]): Turn {
   return { id: "t1", agentId: "node-1", role, blocks, sourceIndex: 0 };
@@ -30,19 +35,41 @@ function recapSource(turns: Turn[]): string | undefined {
   return extractRecapSource(turns, false);
 }
 
-function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
+function node(
+  overrides: Partial<ResearchExchangeNode> = {},
+  run: Partial<RunState> = {},
+): ResearchExchangeNode {
   return {
     id: "node-1",
     treeId: "tree-1",
-    workspaceId: "workspace-1",
-    prompt: "Question",
-    model: "claude-sonnet",
-    status: "complete",
-    attempt: 1,
-    responseSnapshotAt: 1_700_000_000_000,
+    groupId: "workspace-1",
+    type: "exchange",
+    message: { text: "Question" },
+    agent: { adapter: "claude", model: "claude-fable", effort: null },
+    run: {
+      status: "complete",
+      sessionReady: true,
+      attempt: 1,
+      responseSnapshotAt: 1_700_000_000_000,
+      ...run,
+    },
     createdAt: 1,
     highlights: [],
     ...overrides,
+  };
+}
+
+function importedReport(prompt = "Question"): ResearchDocumentNode {
+  return {
+    id: "node-1",
+    treeId: "tree-1",
+    groupId: "workspace-1",
+    type: "document",
+    message: { text: prompt },
+    source: "imported",
+    responseSnapshotAt: 1_700_000_000_000,
+    createdAt: 1,
+    highlights: [],
   };
 }
 
@@ -125,7 +152,7 @@ test("generates summaries for imported reports regardless of length", (t) => {
   t.is(extractRecapSource(turns, false), undefined);
   t.is(extractRecapSource(turns, true), "Short imported report.");
   t.is(extractRecapSource([turn("assistant", [text("  ")])], true), undefined);
-  t.is(recapSourceForNode(node({ origin: "imported" }), turns), "Short imported report.");
+  t.is(recapSourceForNode(importedReport(), turns), "Short imported report.");
   t.is(recapSourceForNode(node(), turns), undefined);
 });
 
@@ -135,9 +162,9 @@ test("an oversized source is skipped unless the report was imported", (t) => {
   t.not(extractRecapSource([turn("assistant", [text(huge)])], true), undefined);
   // The prompt is charged against the same budget as the answer.
   const source = "x".repeat(MAX_RECAP_SOURCE_BYTES - 10);
-  t.true(recapSourceFitsBudget(node({ prompt: "short" }), source));
-  t.false(recapSourceFitsBudget(node({ prompt: "a longer question" }), source));
-  t.true(recapSourceFitsBudget(node({ prompt: "a longer question", origin: "imported" }), source));
+  t.true(recapSourceFitsBudget(node({ message: { text: "short" } }), source));
+  t.false(recapSourceFitsBudget(node({ message: { text: "a longer question" } }), source));
+  t.true(recapSourceFitsBudget(importedReport("a longer question"), source));
 });
 
 test("a recap is plain and bounded", (t) => {
@@ -165,21 +192,20 @@ test("custom instructions are non-empty and bounded", (t) => {
   t.notThrows(() => validateRecapInstructions("é".repeat(MAX_RECAP_INSTRUCTIONS_CHARS)));
 });
 
-test("only a settled run without a recap is scheduled", (t) => {
+test("only a settled exchange without a recap is scheduled", (t) => {
   t.true(shouldScheduleRecap(node()));
-  t.true(shouldScheduleRecap(node({ kind: "run" })));
-  t.false(shouldScheduleRecap(node({ kind: "document" })));
-  t.false(shouldScheduleRecap(node({ status: "running" })));
-  t.false(shouldScheduleRecap(node({ status: "failed" })));
-  t.false(shouldScheduleRecap(node({ responseSnapshotAt: null })));
+  t.false(shouldScheduleRecap(importedReport()));
+  t.false(shouldScheduleRecap(node({}, { status: "running" })));
+  t.false(shouldScheduleRecap(node({}, { status: "failed" })));
+  t.false(shouldScheduleRecap(node({}, { responseSnapshotAt: null })));
   t.false(
     shouldScheduleRecap(node({ recap: { text: "Done.", responseRevision: "a".repeat(64) } })),
   );
 });
 
 test("the job key changes only with a new answer", (t) => {
-  t.is(recapJobKey(node()), recapJobKey(node({ status: "running" })));
-  t.not(recapJobKey(node()), recapJobKey(node({ responseSnapshotAt: 2 })));
+  t.is(recapJobKey(node()), recapJobKey(node({}, { status: "running" })));
+  t.not(recapJobKey(node()), recapJobKey(node({}, { responseSnapshotAt: 2 })));
   t.not(recapJobKey(node()), recapJobKey(node({ id: "node-2" })));
 });
 

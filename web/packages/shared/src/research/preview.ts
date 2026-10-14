@@ -15,7 +15,7 @@
 // the boundary argument is gone.
 
 import { stripWikilinks } from "../markdown/wikilinks.js";
-import type { Turn } from "../types/turn.js";
+import type { Turn } from "../wire/index.js";
 
 /** Longest response preview stored on a node, in code points. */
 const PREVIEW_MAX_CHARS = 220;

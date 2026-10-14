@@ -34,6 +34,10 @@ export interface ResearchDocumentUpdatedEvent {
 export interface ResearchNodeEvent {
   type: "research.node.created" | "research.node.updated";
   node: ResearchNode;
+  /** Web only: 1-based place in the admission queue while the node is
+   * `queued`, so a waiting reader's position advances without a refetch.
+   * Absent once the run is claimed. */
+  queuePosition?: number;
   timestamp: number;
 }
 

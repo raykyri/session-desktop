@@ -6,9 +6,8 @@
 
 import { z } from "zod";
 
-import { tweetSnapshotSchema } from "../types/tweet.js";
-
 import { turnSchema } from "./turn.js";
+import { tweetSnapshotSchema } from "./tweet.js";
 
 export const researchNodeStatusSchema = z.enum([
   "queued",
@@ -54,7 +53,7 @@ export const researchTweetAttachmentSchema = z.object({
   sourceUrl: z.string(),
   tweetId: z.string(),
   placement: z.enum(["inline", "trailing"]),
-  provider: z.literal("xSyndication"),
+  provider: z.enum(["xSyndication", "xOembed"]),
   status: z.enum(["resolved", "unavailable"]),
   attemptedAt: z.number(),
   fetchedAt: z.number().optional(),
@@ -108,6 +107,8 @@ export const runStateSchema = z.object({
   completedAt: z.number().nullish(),
   responseSnapshotAt: z.number().nullish(),
   sessionReady: z.boolean(),
+  attempt: z.number().optional(),
+  responsePreview: z.string().nullish(),
 });
 
 export const researchRecapSchema = z.object({
@@ -176,7 +177,9 @@ export const researchNodeSchema = z.discriminatedUnion("type", [
 ]);
 
 export const recentResearchQuerySchema = z.object({
-  get children() {
+  // Annotated so the emitted declaration keeps the recursion; without it the
+  // `.d.ts` elides the nested object to `any`.
+  get children(): z.ZodOptional<z.ZodArray<typeof recentResearchQuerySchema>> {
     return z.array(recentResearchQuerySchema).optional();
   },
   nodeId: z.string(),
@@ -272,6 +275,9 @@ export const researchNodeContentSchema = z.object({
   turns: z.array(turnSchema),
   sourceError: z.string().optional(),
   responseRevision: z.string().optional(),
+  inFlightText: z.string().optional(),
+  seq: z.number().optional(),
+  queuePosition: z.number().optional(),
 });
 
 export const updateResearchDocumentResultSchema = z.object({

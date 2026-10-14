@@ -7,17 +7,20 @@
 // per source, so "You asked a follow-up in Collective memory" comes out of one
 // vocabulary.
 //
-// `execution` carries the registry model id (`models/registry.ts`) where the
-// desktop carried an adapter name plus an optional model.
+// The web's feed items carry a keyset cursor of their own
+// (`journal/cursor.ts`), so the reducers here work on `RecentActivityItem`;
+// the entries inside them are the desktop's `RecentResearchQuery`, built by
+// `recentResearchQueryFromNode` in `lib/activity.ts`.
 
-import type { RecentActivityItem } from "../types/activity.js";
+import { recentResearchQueryFromNode } from "../lib/activity.js";
+import type { RecentActivityCursor, RecentActivityItem } from "../types/activity.js";
 import type {
-  RecentActivityCursor,
+  DocumentSource,
   RecentResearchQuery,
   ResearchNode,
   ResearchNodeStatus,
   ResearchTreeSummary,
-} from "../types/research.js";
+} from "../wire/index.js";
 
 import {
   activityCursorIsBefore,
@@ -37,7 +40,8 @@ export interface ActivityEvent<TSource = unknown> {
   };
   context?: { kind: "research" | "source" | "workspace"; label: string };
   relationship?: { kind: "top-level" | "follow-up"; label: string };
-  execution?: { model: string; origin?: string | null };
+  /** The registry model id, and a document's source. */
+  execution?: { model: string; source?: DocumentSource | null };
   state?: { kind: ResearchNodeStatus | "ready"; label: string };
   occurredAt: number;
   source: TSource;
@@ -46,30 +50,6 @@ export interface ActivityEvent<TSource = unknown> {
 export type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
 
 export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
-
-/** The feed row for a node, or null when the node does not belong in the feed:
- * only run nodes appear, and only roots unless follow-ups were asked for. */
-export function recentResearchQueryFromNode(
-  node: ResearchNode,
-  includeFollowUps = false,
-): RecentResearchQuery | null {
-  if ((node.kind && node.kind !== "run") || (!includeFollowUps && node.parentNodeId)) return null;
-  return {
-    nodeId: node.id,
-    treeId: node.treeId,
-    parentNodeId: node.parentNodeId,
-    inline: Boolean(node.inline),
-    prompt: node.prompt,
-    queryTarget: node.queryAnchor?.exact,
-    attachments: node.attachments,
-    title: node.title,
-    model: node.model,
-    ...(node.origin ? { origin: node.origin } : {}),
-    status: node.status,
-    createdAt: node.createdAt,
-    recap: node.recap?.text.trim() || undefined,
-  };
-}
 
 /** Live node events update children within their loaded root, without changing
  * feed order. */
@@ -101,8 +81,13 @@ export function upsertRecentActivityResearchNode(
   const existing = items.find(
     (item) => item.kind === "research-query" && item.query.nodeId === query.nodeId,
   );
-  if (existing?.kind === "research-query") query.children = existing.query.children;
-  return upsertRecentActivityItem(items, recentActivityItemFromResearchQuery(query));
+  if (existing?.kind === "research-query" && existing.query.children) {
+    query.children = existing.query.children;
+  }
+  return upsertRecentActivityItem(
+    items,
+    recentActivityItemFromResearchQuery(query, existing?.workspaceId ?? node.groupId),
+  );
 }
 
 export function upsertRecentResearchQuery(
@@ -120,6 +105,7 @@ function visibleResearchState(status: ResearchNodeStatus): ActivityEvent["state"
   switch (status) {
     case "queued":
       return { kind: status, label: "Queued" };
+    case "starting":
     case "running":
       return { kind: status, label: "Running" };
     case "failed":
@@ -150,8 +136,8 @@ export function activityEventFromResearchQuery(
       label: followUp ? "Follow-up" : "Top-level",
     },
     execution: {
-      model: query.model,
-      ...(query.origin ? { origin: query.origin } : {}),
+      model: query.model ?? query.adapter,
+      ...(query.source ? { source: query.source } : {}),
     },
     ...(state ? { state } : {}),
     occurredAt: query.createdAt,
@@ -171,8 +157,14 @@ export function buildRecentActivity(
 
 export function recentActivityItemFromResearchQuery(
   query: RecentResearchQuery,
+  workspaceId?: string | null,
 ): RecentActivityItem {
-  return { kind: "research-query", occurredAt: query.createdAt, query };
+  return {
+    kind: "research-query",
+    occurredAt: query.createdAt,
+    ...(workspaceId == null ? {} : { workspaceId }),
+    query,
+  };
 }
 
 /** Insert or replace one item, keeping the feed's order without re-sorting it. */

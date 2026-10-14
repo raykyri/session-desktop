@@ -1,7 +1,7 @@
-// The hydrated form of an X post, stored on a research message attachment. Ported from the desktop `src/lib/journalTweets.ts`.
-// The snapshot — not the raw syndication payload — is the persisted format,
-// so its shape changes deliberately; `journal/tweets.ts` defines the
-// normalization that produces it.
+// Zod schemas for the tweet snapshots stored on research message attachments
+// (`../wire/tweet.ts` has the types). The snapshot, not the raw syndication
+// payload, is the persisted format, so its shape changes deliberately;
+// `journal/tweets.ts` defines the normalization that produces it.
 
 import { z } from "zod";
 
@@ -17,8 +17,6 @@ export const tweetMediaSchema = z.object({
   durationMillis: z.number().optional(),
 });
 
-export type TweetMedia = z.infer<typeof tweetMediaSchema>;
-
 /** One span of the tweet text: plain text, or a t.co entity expanded into a
  * link labeled with its display form. Structured runs rather than markdown so
  * tweet text that happens to contain markdown syntax renders literally. */
@@ -32,8 +30,6 @@ export const tweetTextRunSchema = z.object({
   tco: z.string().optional(),
 });
 
-export type TweetTextRun = z.infer<typeof tweetTextRunSchema>;
-
 /** A link preview the tweet carries — the bordered card X renders under the
  * text for a shared URL. `large` is the wide-image variant. */
 export const tweetLinkCardSchema = z.object({
@@ -44,8 +40,6 @@ export const tweetLinkCardSchema = z.object({
   imageUrl: z.string().optional(),
   large: z.boolean(),
 });
-
-export type TweetLinkCard = z.infer<typeof tweetLinkCardSchema>;
 
 const tweetSnapshotCoreSchema = z.object({
   id: z.string(),
@@ -76,11 +70,7 @@ const tweetSnapshotCoreSchema = z.object({
 /** A quoted post carries no quote of its own and no reply target. */
 export const quotedTweetSnapshotSchema = tweetSnapshotCoreSchema;
 
-export type QuotedTweetSnapshot = z.infer<typeof quotedTweetSnapshotSchema>;
-
 export const tweetSnapshotSchema = tweetSnapshotCoreSchema.extend({
   replyTo: z.object({ handle: z.string(), id: z.string().optional() }).optional(),
   quoted: quotedTweetSnapshotSchema.optional(),
 });
-
-export type TweetSnapshot = z.infer<typeof tweetSnapshotSchema>;

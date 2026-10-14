@@ -14,8 +14,11 @@
 // instruction and tweet reference material. Exported-conversation builders
 // were removed with terminal conversations (`04-agent-runtime.md` §5).
 
-import type { ResearchMessageAttachment } from "../types/research.js";
-import type { QuotedTweetSnapshot, TweetSnapshot } from "../types/tweet.js";
+import type {
+  QuotedTweetSnapshot,
+  ResearchMessageAttachment,
+  TweetSnapshot,
+} from "../wire/index.js";
 
 import { normalizedText } from "./preview.js";
 
@@ -302,7 +305,11 @@ export function promptWithResearchAttachments(
   attachments: readonly ResearchMessageAttachment[],
 ): string {
   const tweets = attachments
-    .map((attachment) => (attachment.status === "resolved" ? attachment.tweet : undefined))
+    .map((attachment) =>
+      attachment.kind === "tweet" && attachment.status === "resolved"
+        ? attachment.tweet
+        : undefined,
+    )
     .filter((tweet): tweet is TweetSnapshot => tweet !== undefined);
   if (tweets.length === 0) {
     return prompt;

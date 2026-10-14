@@ -9,8 +9,7 @@
 // unit, matching the byte-wise comparison the desktop backend used for the
 // ASCII ids both sides generate.
 
-import type { RecentActivityItem } from "../types/activity.js";
-import type { RecentActivityCursor } from "../types/research.js";
+import type { RecentActivityCursor, RecentActivityItem } from "../types/activity.js";
 
 export const RESEARCH_ACTIVITY_SOURCE_RANK = 1;
 

@@ -20,8 +20,9 @@ type ResearchEventParseResult =
   | { kind: "unsupported"; type: string }
   | { kind: "malformed"; type: string };
 
-// The statuses the desktop backend sends. The web's `interrupted` is not
-// accepted yet; a node event that carries it is malformed here.
+// The statuses the desktop backend sends, plus the web's `interrupted` (a
+// deploy or crash stopped a run the server resumes). The desktop backend never
+// sends `interrupted`.
 const RESEARCH_STATUSES = new Set<ResearchNodeStatus>([
   "queued",
   "starting",
@@ -29,6 +30,7 @@ const RESEARCH_STATUSES = new Set<ResearchNodeStatus>([
   "complete",
   "failed",
   "cancelled",
+  "interrupted",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -236,10 +238,18 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
         : malformed();
     case "research.node.created":
     case "research.node.updated":
-      return isResearchNode(payload.node)
+      return isResearchNode(payload.node) && isOptionalFiniteNumber(payload.queuePosition)
         ? {
             kind: "event",
-            event: { type: event.type, node: payload.node, timestamp: event.timestamp },
+            event: {
+              type: event.type,
+              node: payload.node,
+              // Web only; the desktop backend never sends it.
+              ...(isFiniteNumber(payload.queuePosition)
+                ? { queuePosition: payload.queuePosition }
+                : {}),
+              timestamp: event.timestamp,
+            },
           }
         : malformed();
     case "research.tree.updated":
@@ -434,7 +444,9 @@ export function researchNodeIsActivity(node: ResearchNode): boolean {
   return (
     nodeStatus(node) === "queued" ||
     nodeStatus(node) === "starting" ||
-    nodeStatus(node) === "running"
+    nodeStatus(node) === "running" ||
+    // The web's status for a run the server resumes after a restart.
+    nodeStatus(node) === "interrupted"
   );
 }
 

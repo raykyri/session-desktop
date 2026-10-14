@@ -9,14 +9,14 @@
 //
 // `timelineItemsAfterLastToolCall` + `assistantTextFromTimelineItems` are the
 // `answer-v1` projection: the collapsed, activity-free answer text that saved
-// highlights anchor into (`types/research.ts`, `ResearchHighlightAnchor`).
+// highlights anchor into (`wire/research.ts`, `ResearchHighlightAnchor`).
 
 import {
   stripTaggedInstructionBlocks,
   stripTaggedUserInstructionBlocks,
   taggedUserInstructionDetails,
 } from "../app/taggedInstructions.js";
-import type { ThreadParticipant, Turn, TurnBlock } from "../types/turn.js";
+import type { ThreadParticipant, Turn, TurnBlock } from "../wire/index.js";
 
 import { stripWikilinks } from "./wikilinks.js";
 

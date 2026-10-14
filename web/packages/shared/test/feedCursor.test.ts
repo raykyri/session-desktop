@@ -7,8 +7,7 @@ import {
   recentActivityItemCursor,
   recentActivityItemId,
 } from "../src/journal/cursor.js";
-import type { RecentActivityItem } from "../src/types/activity.js";
-import type { RecentActivityCursor } from "../src/types/research.js";
+import type { RecentActivityItem, RecentActivityCursor } from "../src/types/activity.js";
 
 function researchItem(nodeId: string, occurredAt: number): RecentActivityItem {
   return {
@@ -20,6 +19,7 @@ function researchItem(nodeId: string, occurredAt: number): RecentActivityItem {
       parentNodeId: null,
       inline: false,
       prompt: "Question",
+      adapter: "gemini",
       model: "gemini-flash",
       status: "complete",
       createdAt: occurredAt,

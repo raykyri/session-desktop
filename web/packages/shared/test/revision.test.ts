@@ -5,8 +5,8 @@ import {
   isResponseRevision,
   responseRevision,
 } from "../src/research/revision.js";
-import type { Turn, TurnBlock } from "../src/types/turn.js";
 import { sha256Hex } from "../src/util/sha256.js";
+import type { Turn, TurnBlock } from "../src/wire/index.js";
 
 function turn(role: string, blocks: TurnBlock[]): Turn {
   return { id: "t1", agentId: "node-1", role, blocks, sourceIndex: 0 };
@@ -47,7 +47,9 @@ test("key insertion order does not change the canonical json or the revision", a
 });
 
 test("undefined properties are omitted and null is kept", (t) => {
-  const withUndefined: Turn = { ...turn("assistant", []), timestamp: undefined };
+  // A JS caller can still hand over an explicit undefined, which the wire
+  // type does not allow.
+  const withUndefined = { ...turn("assistant", []), timestamp: undefined } as unknown as Turn;
   const withNull: Turn = { ...turn("assistant", []), timestamp: null };
   t.false(canonicalTurnsJson([withUndefined]).includes("timestamp"));
   t.true(canonicalTurnsJson([withNull]).includes('"timestamp":null'));

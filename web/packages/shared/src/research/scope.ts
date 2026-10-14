@@ -3,7 +3,7 @@
 // `src/lib/researchScope.ts`, where the unit was a research-scoped `GroupInfo`.
 
 import type { Workspace } from "../types/account.js";
-import type { ResearchTreeSummary } from "../types/research.js";
+import type { ResearchTreeSummary } from "../wire/index.js";
 
 /** The displayed workspace id. Null is only used before any workspace exists. */
 export type ResearchFolderScope = string | null;

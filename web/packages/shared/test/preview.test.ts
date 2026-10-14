@@ -8,7 +8,7 @@ import {
   responsePreview,
   sanitizeResearchTitle,
 } from "../src/research/preview.js";
-import type { Turn, TurnBlock } from "../src/types/turn.js";
+import type { Turn, TurnBlock } from "../src/wire/index.js";
 
 function turn(role: string, blocks: TurnBlock[]): Turn {
   return { id: "t1", agentId: "node-1", role, blocks, sourceIndex: 0 };

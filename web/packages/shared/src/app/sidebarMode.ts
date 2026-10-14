@@ -3,7 +3,7 @@
 // single "active row" value cover the whole sidebar.
 
 import { type ResearchFolderScope, workspaceIsInResearchScope } from "../research/scope.js";
-import type { ResearchTreeSummary } from "../types/research.js";
+import type { ResearchTreeSummary } from "../wire/index.js";
 
 export const RESEARCH_HOME_TAB_ID = "__research_home__";
 export const RESEARCH_HIGHLIGHTS_TAB_ID = "__research_highlights__";

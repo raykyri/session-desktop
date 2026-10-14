@@ -53,6 +53,6 @@ export function cycleTabId(
 }
 
 // Turn validation is defined with its schema, as `isTurn` in
-// `types/turn.ts`. It used to be duplicated here as a cheaper shape check, but
+// `schemas/turn.ts`. It used to be duplicated here as a cheaper shape check, but
 // the copy read a different set of fields than the one in `research/events.ts`
 // and neither matched the schema.

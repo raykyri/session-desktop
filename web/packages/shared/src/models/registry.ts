@@ -3,15 +3,14 @@
 // render the model picker), so the two cannot disagree about which models
 // exist, who may use them, or what they cost.
 //
-// Reasoning effort is fixed at medium for every model and is not exposed in
-// the UI; `effortProviderOptions` returns the per-provider spelling of that.
+// Each entry lists the reasoning efforts its provider accepts and the one a
+// run uses when none was chosen; `effortProviderOptions` returns the
+// per-provider spelling of an effort.
 
 import type { ModelInfo, ModelProvider, User } from "../types/account.js";
 
-/** Reasoning effort. Only `medium` is used today (`04-agent-runtime.md` §1);
- * the type carries the whole range the providers accept — Anthropic's effort
- * scale for Fable 5.1 runs `low` through `max` — so raising it later is a call
- * site change rather than a type change. */
+/** Reasoning effort: the whole range the providers accept. Anthropic's effort
+ * scale for Fable 5.1 runs `low` through `max`; the others stop at `high`. */
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium";
@@ -25,6 +24,10 @@ export interface ModelPricing {
 export interface ModelEntry {
   id: string;
   label: string;
+  /** The model family, stable across model versions. Sent as the wire
+   * `AgentSpec.adapter`, where the desktop sends its agent adapter id
+   * (`claude`, `codex`, `grok`). */
+  adapter: string;
   provider: ModelProvider;
   /** The provider-side model identifier: a Vertex model name, an OpenRouter
    * slug, or an Anthropic model id. */
@@ -37,12 +40,19 @@ export interface ModelEntry {
   /** Search comes from the provider's own grounding rather than the app's
    * `web_search` tool. */
   nativeSearch: boolean;
+  /** The efforts the provider accepts for this model, lowest first. */
+  efforts: readonly ReasoningEffort[];
+  /** The effort a run uses when the node names none. */
+  defaultEffort: ReasoningEffort;
   pricing: ModelPricing;
 }
+
+const STANDARD_EFFORTS: readonly ReasoningEffort[] = ["low", "medium", "high"];
 
 export const MODEL_REGISTRY: readonly ModelEntry[] = [
   {
     id: "gemini-flash",
+    adapter: "gemini",
     label: "Gemini 3.8 Flash",
     provider: "vertex",
     route: "gemini-3.8-flash",
@@ -50,10 +60,13 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: true,
+    efforts: STANDARD_EFFORTS,
+    defaultEffort: "medium",
     pricing: { input: 0.75, output: 3.75 },
   },
   {
     id: "deepseek-flash",
+    adapter: "deepseek",
     label: "DeepSeek V4.1 Flash",
     provider: "openrouter",
     route: "deepseek/deepseek-v4.1-flash",
@@ -62,10 +75,13 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     supportsFiles: false,
     supportsImages: false,
     nativeSearch: false,
+    efforts: STANDARD_EFFORTS,
+    defaultEffort: "medium",
     pricing: { input: 0.15, output: 0.6 },
   },
   {
     id: "gpt-luna",
+    adapter: "openai",
     label: "GPT-5.6 Luna",
     provider: "openrouter",
     route: "~openai/gpt-luna-latest",
@@ -74,10 +90,13 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: false,
+    efforts: STANDARD_EFFORTS,
+    defaultEffort: "medium",
     pricing: { input: 0.2, output: 1.2 },
   },
   {
     id: "claude-fable",
+    adapter: "claude",
     label: "Claude Fable 5.1",
     provider: "anthropic",
     route: "claude-fable-5-1",
@@ -85,6 +104,8 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     supportsFiles: true,
     supportsImages: true,
     nativeSearch: false,
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    defaultEffort: "medium",
     pricing: { input: 10, output: 50 },
   },
 ];
@@ -146,6 +167,17 @@ export const OPENROUTER_PROVIDER_PREFERENCES = {
   zdr: true,
   data_collection: "deny",
 } as const;
+
+/** The effort a run on `model` uses: `requested` when the model accepts it,
+ * otherwise the model's default. A stored effort the model no longer offers
+ * falls back rather than failing the run. */
+export function resolveEffort(
+  model: ModelEntry,
+  requested: string | null | undefined,
+): ReasoningEffort {
+  const match = model.efforts.find((effort) => effort === requested);
+  return match ?? model.defaultEffort;
+}
 
 /** The AI SDK `providerOptions` that request `effort` from a model's own
  * provider. Gemini takes a thinking level, OpenRouter a reasoning effort, and

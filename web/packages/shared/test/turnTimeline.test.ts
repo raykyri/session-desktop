@@ -16,7 +16,7 @@ import {
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
 } from "../src/markdown/turnTimeline.js";
-import type { Turn, TurnBlock } from "../src/types/turn.js";
+import type { Turn, TurnBlock } from "../src/wire/index.js";
 
 let nextIndex = 0;
 

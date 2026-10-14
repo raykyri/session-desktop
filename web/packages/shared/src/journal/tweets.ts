@@ -19,14 +19,19 @@ import type { Nodes } from "mdast";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 
-import type { ResearchMessageAttachment, TweetAttachmentProvider } from "../types/research.js";
 import type {
   QuotedTweetSnapshot,
+  ResearchMessageAttachment,
+  ResearchTweetAttachment,
   TweetLinkCard,
   TweetMedia,
   TweetSnapshot,
   TweetTextRun,
-} from "../types/tweet.js";
+} from "../wire/index.js";
+
+/** Which pipeline produced a snapshot: the syndication payload, or the
+ * reduced oEmbed one (`server/src/journal/oembed.ts`). */
+export type TweetAttachmentProvider = ResearchTweetAttachment["provider"];
 
 /** At most four posts are embedded per message; the rest of a link-heavy
  * message stays plain text. */
@@ -434,9 +439,9 @@ export function storableTweetSnapshot(snapshot: TweetSnapshot): TweetSnapshot | 
 /** Where an embedded post sits in the message that referenced it. A trailing
  * permalink is presentation-only: the card replaces it, so the text does not
  * repeat the URL. An inline one keeps its place in the sentence. */
-export type TweetAttachmentPlacement = ResearchMessageAttachment["placement"];
+export type TweetAttachmentPlacement = ResearchTweetAttachment["placement"];
 
-export type TweetAttachmentFailure = NonNullable<ResearchMessageAttachment["failure"]>;
+export type TweetAttachmentFailure = NonNullable<ResearchTweetAttachment["failure"]>;
 
 export interface TweetReference {
   sourceUrl: string;
@@ -596,7 +601,7 @@ export function tweetAttachment(
   reference: TweetReference,
   resolution: TweetResolution,
   attemptedAt: number,
-): ResearchMessageAttachment {
+): ResearchTweetAttachment {
   const base = {
     kind: "tweet",
     schemaVersion: TWEET_ATTACHMENT_SCHEMA_VERSION,
@@ -627,7 +632,7 @@ export function tweetAttachmentFromFetch(
   reference: TweetReference,
   outcome: TweetFetchOutcome,
   attemptedAt: number,
-): ResearchMessageAttachment {
+): ResearchTweetAttachment {
   if (!outcome.ok) {
     return tweetAttachment(
       reference,
@@ -667,6 +672,7 @@ export function visibleResearchPrompt(
   let visible = prompt;
   for (const attachment of [...attachments].reverse()) {
     if (
+      attachment.kind !== "tweet" ||
       attachment.status !== "resolved" ||
       attachment.placement !== "trailing" ||
       !attachment.tweet

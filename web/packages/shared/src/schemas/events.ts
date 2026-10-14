@@ -31,6 +31,7 @@ export const parsedResearchEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.enum(["research.node.created", "research.node.updated"]),
     node: researchNodeSchema,
+    queuePosition: z.number().optional(),
     timestamp: z.number(),
   }),
   z.object({

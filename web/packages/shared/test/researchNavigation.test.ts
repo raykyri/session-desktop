@@ -1,11 +1,11 @@
 import test from "ava";
 
-import { researchBranchInfo } from "../src/research/branches.js";
+import { researchBranchInfo } from "../src/lib/researchBranches.js";
 import {
   intersectingResearchHighlightIds,
   isResearchHighlightActionShortcut,
   resolveResearchHighlightOffset,
-} from "../src/research/highlights.js";
+} from "../src/lib/researchHighlights.js";
 import {
   RESEARCH_SCROLL_POSITION_TTL_MS,
   isResearchNodeSelectionChange,
@@ -35,7 +35,7 @@ import type {
   ResearchNodeStatus,
   ResearchTreeDetail,
   ResearchTreeSummary,
-} from "../src/types/research.js";
+} from "../src/wire/index.js";
 
 function node(
   id: string,
@@ -45,12 +45,12 @@ function node(
   return {
     id,
     treeId: "tree",
-    workspaceId: "workspace",
+    groupId: "workspace",
     parentNodeId,
-    prompt: id,
-    model: "gemini-flash",
-    attempt: 1,
-    status,
+    type: "exchange",
+    message: { text: id },
+    agent: { adapter: "gemini", model: "gemini-flash", effort: null },
+    run: { status, sessionReady: status === "complete", attempt: 1 },
     createdAt: 1,
     highlights: [],
   };
@@ -79,7 +79,7 @@ function tree(id: string, workspaceId: string): ResearchTreeSummary {
     id,
     title: id,
     rootNodeId: `${id}-root`,
-    kind: "run",
+    type: "exchange",
     workspaceId,
     runningCount: 0,
     failedCount: 0,
@@ -272,12 +272,11 @@ test("branch info detects active descendants", (t) => {
       ?.hasActiveRuns,
     true,
   );
-  // An interrupted node has no live run: nothing is executing until the server
-  // resumes it, so the branch does not report active runs.
+  // An interrupted run counts as active: the server resumes it.
   t.is(
     researchBranchInfo([node("branch", "root"), node("child", "branch", "interrupted")], "branch")
       ?.hasActiveRuns,
-    false,
+    true,
   );
   t.is(researchBranchInfo(running, "missing"), null);
 });
@@ -412,7 +411,7 @@ test("research snapshot reconciliation replaces only changed collection records"
 test("research detail reconciliation retains identical nested snapshots", (t) => {
   const detail = treeDetail([node("root", null), node("child", "root")]);
   const incoming: ResearchTreeDetail = {
-    tree: { ...detail.tree, archivedAt: undefined },
+    tree: { ...detail.tree },
     nodes: detail.nodes.map((entry) => ({ ...entry, highlights: [...entry.highlights] })),
   };
 
@@ -425,7 +424,7 @@ test("research detail reconciliation preserves unchanged node identities", (t) =
   const detail = treeDetail([root, child]);
   const reconciled = reconcileResearchTreeDetail(detail, {
     tree: { ...detail.tree },
-    nodes: [{ ...root }, { ...child, responsePreview: "New preview" }],
+    nodes: [{ ...root }, { ...child, title: "New title" }],
   });
 
   t.not(reconciled, detail);

@@ -18,8 +18,15 @@ import {
 /** The statuses of a run that has been admitted but not settled. One list,
  * shared by the branch and chain math and the thread page, so a future status
  * cannot fall out of sync between them. Mirrors the backend's
- * ResearchNodeStatus::is_active (src-tauri/src/research.rs). */
-const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = ["queued", "starting", "running"];
+ * ResearchNodeStatus::is_active (src-tauri/src/research.rs). The web's
+ * `interrupted` is active too: the server resumes the run. The desktop
+ * backend never sends it. */
+const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = [
+  "queued",
+  "starting",
+  "running",
+  "interrupted",
+];
 
 export function isActiveResearchStatus(status: ResearchNodeStatus): boolean {
   return ACTIVE_RESEARCH_STATUSES.includes(status);
@@ -192,10 +199,13 @@ export function chainDisplayOrder(
 
 /** Whether a settled node can be retried in place (same node id, same launch
  * inputs, relaunched through the ordinary machinery): it failed or was
- * cancelled. Archived-tree gating stays the caller's job, matching
- * canContinueChain. */
+ * cancelled. On the web, also an `interrupted` run, which the server stops
+ * resuming after repeated failures; Retry is then the way out. The desktop
+ * backend never sends `interrupted`. Archived-tree gating stays the caller's
+ * job, matching canContinueChain. */
 export function canRetryResearchNode(node: ResearchNode): boolean {
-  return nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
+  const status = nodeStatus(node);
+  return status === "failed" || status === "cancelled" || status === "interrupted";
 }
 
 /** Whether a settled exchange can be rerun in place: as canRetryResearchNode,

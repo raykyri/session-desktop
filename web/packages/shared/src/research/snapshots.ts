@@ -6,8 +6,8 @@
 // meaning and hand back the records and collections the client already holds.
 //
 // Shared by the desktop and the web. The functions are generic over the record
-// shapes they read, so they accept both the wire model (`../wire/research.ts`)
-// and the web's current flat types (`../types/research.ts`).
+// shapes they read: the wire model (`../wire/research.ts`) and anything
+// carrying the same fields.
 
 /** The fields `clearResearchTreeAttention` reads from a tree summary. */
 interface AttentionSummary {

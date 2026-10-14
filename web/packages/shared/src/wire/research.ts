@@ -1,8 +1,9 @@
 // Research wire types: trees, nodes, folders, drafts and the payloads that
 // carry them. The desktop backend serializes these (src-tauri/src/research.rs,
 // `ResearchNodeView` and its neighbours), so every field here must stay
-// compatible with what it sends. The web adopts the same envelope in phase 2
-// and replaces its flat `types/research.ts` with it.
+// compatible with what it sends. The web server sends the same shapes; the
+// few fields only the web sends are marked "Web only" and are optional, so
+// the desktop never has to produce them.
 //
 // Optional fields are written `?: T | null`, as the backend omits or nulls
 // them. Values arrive as JSON, which has no `undefined`.
@@ -60,7 +61,11 @@ export interface ResearchTweetAttachment {
   sourceUrl: string;
   tweetId: string;
   placement: "inline" | "trailing";
-  provider: "xSyndication";
+  /** `xSyndication` is the full payload (media, quotes, cards, counts).
+   * `xOembed` is the reduced one the web server falls back to when
+   * syndication refuses a post: author, text and date only. The desktop only
+   * produces `xSyndication`. */
+  provider: "xSyndication" | "xOembed";
   status: "resolved" | "unavailable";
   attemptedAt: number;
   fetchedAt?: number;
@@ -126,8 +131,14 @@ export interface RunState {
   /** Set after the durable response snapshot is written so viewers can refetch
    * content they may have read before the adapter finished flushing. */
   responseSnapshotAt?: number | null;
-  /** The native session was recorded, so a follow-up can fork it. */
+  /** The native session was recorded, so a follow-up can fork it. The web
+   * stores the conversation when the run completes, so it sets this once the
+   * status is `complete`. */
   sessionReady: boolean;
+  /** Web only: 1 for the first run; incremented by Retry and by auto-resume. */
+  attempt?: number;
+  /** Web only: the opening of the answer, for compact cards. */
+  responsePreview?: string | null;
 }
 
 export interface ResearchRecap {
@@ -166,7 +177,8 @@ export interface ResearchNodeBase {
   /** Short generated title for breadcrumbs and menus; the message stays the
    * displayed text. */
   title?: string | null;
-  /** The workspace the node was created in; the tree's is authoritative. */
+  /** The workspace the node was created in; the tree's is authoritative.
+   * The desktop's name for it; the web sends its workspace id here. */
   groupId: string;
   createdAt: number;
   highlights: ResearchHighlight[];
@@ -343,6 +355,15 @@ export interface ResearchNodeContent {
   sourceError?: string;
   /** Present only when the displayed turns came from a durable full snapshot. */
   responseRevision?: string;
+  /** Web only: text streamed since the last committed turn, for the live
+   * tail. Absent once the run completes. */
+  inFlightText?: string;
+  /** Web only: the node sequence number this content was read at. A client
+   * applies only run events with a greater `seq` and refetches on a gap. */
+  seq?: number;
+  /** Web only: 1-based place in the admission queue while the run is
+   * `queued`. */
+  queuePosition?: number;
 }
 
 export interface UpdateResearchDocumentResult {

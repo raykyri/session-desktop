@@ -13,7 +13,7 @@ import {
   validateHighlightBudget,
   validateHighlightCollection,
 } from "../src/research/highlightAnchor.js";
-import type { ResearchHighlight, ResearchHighlightAnchor } from "../src/types/research.js";
+import type { ResearchHighlight, ResearchHighlightAnchor } from "../src/wire/index.js";
 
 const REVISION = "a".repeat(64);
 

@@ -12,8 +12,7 @@ import {
   queryFollowupPrompt,
   sanitizedResearchLaunchInstruction,
 } from "../src/research/prompts.js";
-import type { ResearchMessageAttachment } from "../src/types/research.js";
-import type { TweetSnapshot } from "../src/types/tweet.js";
+import type { ResearchMessageAttachment, TweetSnapshot } from "../src/wire/index.js";
 
 function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).length;

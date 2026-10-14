@@ -10,7 +10,7 @@
 // hydration (using `isSavedResearchAnchor` to validate persisted anchors) and
 // its persistence.
 
-import type { ResearchHighlightAnchor } from "../types/research.js";
+import type { ResearchHighlightAnchor } from "../wire/index.js";
 
 export interface SavedResearchScrollPosition {
   top: number;

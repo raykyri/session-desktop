@@ -3,7 +3,7 @@
 // `research.trees.reorder`, which replaces exactly one visible subsequence
 // (`02-domain-model-and-database.md` §5.1).
 
-import type { ResearchTreeSummary } from "../types/research.js";
+import type { ResearchTreeSummary } from "../wire/index.js";
 
 /** Moves one id to a gap in the original list (0..length), matching the
  * pointer-drop coordinates the sidebar rows report. */

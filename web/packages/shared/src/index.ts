@@ -1,15 +1,16 @@
 // The root surface of `@session/shared`: `db`, `server`, and `client` import
-// the web's current types and logic from here. The package also exports
-// subpaths that the desktop imports too, through the `@session/shared/*`
-// alias in the repository root's tsconfig.json and vite.config.ts:
+// the research wire model, its zod schemas, and the web's own types and logic
+// from here. The package also exports subpaths that the desktop imports too,
+// through the `@session/shared/*` alias in the repository root's
+// tsconfig.json and vite.config.ts:
 //
-// - `@session/shared/wire`: the research wire model as plain types.
-// - `@session/shared/schemas`: zod schemas for the wire model.
+// - `@session/shared/wire`: the research wire model as plain types,
+//   re-exported here.
+// - `@session/shared/schemas`: zod schemas for the wire model, re-exported
+//   here.
 // - `@session/shared/lib/<module>`: research logic on the wire model, moved
-//   from the desktop's `src/lib`.
-//
-// Phase 2 of the desktop-parity work replaces the flat types in
-// `types/research.ts` with the wire model and moves the web onto `lib/`.
+//   from the desktop's `src/lib`. The web imports these by subpath; they are
+//   not re-exported here, so a lib module and a web module may share a name.
 
 /** Product name used in page titles, prompts, and user-facing copy. */
 export const appName = "Session";
@@ -19,6 +20,9 @@ export const appName = "Session";
  * client and server built from different commits can be told apart.
  */
 export const version = "0.0.0";
+
+export type * from "./wire/index.js";
+export * from "./schemas/index.js";
 
 export * from "./app/composerTextarea.js";
 export * from "./app/helpers.js";
@@ -38,14 +42,12 @@ export * from "./markdown/plugins.js";
 export * from "./markdown/turnTimeline.js";
 export * from "./markdown/wikilinks.js";
 
+export * from "./models/agents.js";
 export * from "./models/registry.js";
 
-export * from "./research/branches.js";
-export * from "./research/documents.js";
 export * from "./research/events.js";
 export * from "./research/folders.js";
 export * from "./research/highlightAnchor.js";
-export * from "./research/highlights.js";
 export * from "./research/history.js";
 export * from "./research/navigation.js";
 export * from "./research/order.js";
@@ -56,14 +58,9 @@ export * from "./research/revision.js";
 export * from "./research/scope.js";
 export * from "./research/selection.js";
 export * from "./research/snapshots.js";
-export * from "./research/threads.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";
-export * from "./types/events.js";
-export * from "./types/research.js";
-export * from "./types/turn.js";
-export * from "./types/tweet.js";
 
 export * from "./util/sha256.js";
 export * from "./util/tokenEstimate.js";

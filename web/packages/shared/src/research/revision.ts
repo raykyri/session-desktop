@@ -27,8 +27,8 @@
 // and in the browser; there is no synchronous digest available under that
 // constraint.
 
-import type { Turn } from "../types/turn.js";
 import { sha256Hex } from "../util/sha256.js";
+import type { Turn } from "../wire/index.js";
 
 /** A revision as `responseRevision` emits it: 64 lowercase hex digits. */
 const RESPONSE_REVISION_PATTERN = /^[0-9a-f]{64}$/;

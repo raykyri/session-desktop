@@ -1,14 +1,14 @@
 import test from "ava";
 
-import { DEFAULT_USER_SETTINGS, userSettingsSchema } from "../src/types/account.js";
-import { sessionEventSchema } from "../src/types/events.js";
+import { sessionEventSchema } from "../src/schemas/events.js";
 import {
   researchHighlightAnchorSchema,
   researchNodeSchema,
   researchNodeStatusSchema,
   researchNodeContentSchema,
-} from "../src/types/research.js";
-import { isTurn, turnSchema } from "../src/types/turn.js";
+} from "../src/schemas/research.js";
+import { isTurn, turnSchema } from "../src/schemas/turn.js";
+import { DEFAULT_USER_SETTINGS, userSettingsSchema } from "../src/types/account.js";
 
 const anchor = {
   version: 1,
@@ -24,18 +24,19 @@ const anchor = {
 const node = {
   id: "n1",
   treeId: "t1",
-  workspaceId: "w1",
-  prompt: "why",
-  model: "gemini-flash",
-  status: "running",
-  attempt: 1,
+  groupId: "w1",
+  type: "exchange",
+  message: { text: "why" },
+  agent: { adapter: "gemini", model: "gemini-flash", effort: null },
+  run: { status: "running", sessionReady: false, attempt: 1 },
   createdAt: 1,
   highlights: [],
 };
 
-test("the status enum is the web's lifecycle, not the desktop's", (t) => {
+test("the status enum is the desktop's lifecycle plus the web's interrupted", (t) => {
   t.deepEqual(researchNodeStatusSchema.options, [
     "queued",
+    "starting",
     "running",
     "complete",
     "failed",
@@ -44,29 +45,44 @@ test("the status enum is the web's lifecycle, not the desktop's", (t) => {
   ]);
 });
 
-test("a minimal node parses", (t) => {
+test("a minimal exchange parses", (t) => {
   t.deepEqual(researchNodeSchema.parse(node), node);
 });
 
-test("a node without workspaceId, model or attempt is rejected", (t) => {
-  for (const missing of ["workspaceId", "model", "attempt"]) {
+test("an exchange without groupId, agent or run is rejected", (t) => {
+  for (const missing of ["groupId", "agent", "run"]) {
     const partial: Record<string, unknown> = { ...node };
     delete partial[missing];
     t.false(researchNodeSchema.safeParse(partial).success, `${missing} is required`);
   }
 });
 
-test("the desktop's dropped node fields are not carried on the wire", (t) => {
+test("each node type parses with its own body", (t) => {
+  const base = { id: "n2", treeId: "t1", groupId: "w1", createdAt: 1, highlights: [] };
+  t.true(
+    researchNodeSchema.safeParse({
+      ...base,
+      type: "post",
+      message: { text: "https://example.com" },
+      format: "link",
+      followUpAgent: { adapter: "gemini", model: "gemini-flash" },
+    }).success,
+  );
+  t.true(researchNodeSchema.safeParse({ ...base, type: "document", source: "authored" }).success);
+  t.false(
+    researchNodeSchema.safeParse({ ...base, type: "post", message: { text: "x" } }).success,
+    "a post needs a format and a follow-up agent",
+  );
+});
+
+test("fields the wire does not define are stripped", (t) => {
   const parsed = researchNodeSchema.parse({
     ...node,
-    groupId: "g1",
     worktreeDir: "/tmp",
-    adapter: "claude",
     agentId: "a1",
     paneId: "p1",
-    effort: "high",
   });
-  for (const dropped of ["groupId", "worktreeDir", "adapter", "agentId", "paneId", "effort"]) {
+  for (const dropped of ["worktreeDir", "agentId", "paneId"]) {
     t.false(dropped in parsed, `${dropped} is stripped`);
   }
 });
@@ -136,7 +152,6 @@ test("node content carries the live-stream fields", (t) => {
   const content = researchNodeContentSchema.parse({
     node,
     turns: [],
-    children: [],
     inFlightText: "partial",
     seq: 12,
     queuePosition: 3,
@@ -177,17 +192,14 @@ test("an unknown block type is rejected", (t) => {
   );
 });
 
-test("the event envelope has no paneId or agentId", (t) => {
+test("the event envelope keeps its payload", (t) => {
   const event = sessionEventSchema.parse({
     type: "research.turn.delta",
     payload: { nodeId: "n1", seq: 4, turnId: "turn-1", text: "…" },
     timestamp: 1,
-    paneId: "p1",
-    agentId: "a1",
   });
-  t.false("paneId" in event);
-  t.false("agentId" in event);
   t.is(event.payload.seq, 4);
+  t.is(event.paneId, undefined);
 });
 
 test("a stored settings blob carrying a removed key still parses", (t) => {

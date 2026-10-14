@@ -77,8 +77,11 @@ export function researchRowState(status: ResearchNodeStatus): ResearchRowState {
   switch (status) {
     case "queued":
       return "queued";
+    // `interrupted` is the web's status for a run the server resumes after a
+    // restart.
     case "starting":
     case "running":
+    case "interrupted":
       return "running";
     case "failed":
       return "failed";

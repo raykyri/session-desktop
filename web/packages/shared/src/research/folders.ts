@@ -8,16 +8,14 @@
 // Ported from an earlier desktop `src/lib/researchFolders.ts` (its current
 // version is `lib/researchFolders.ts` in this package) without its localStorage
 // load/save and storage key, which have no equivalent here: `ResearchFolder`
-// and `ResearchFolderState` are wire types in `types/research.ts`.
+// and `ResearchFolderState` are wire types in `wire/research.ts`. The web
+// sidebar does not nest trees or collapse groups yet, so these reducers carry
+// `parents` and `collapsedGroups` through unchanged.
 
-import type {
-  ResearchFolder,
-  ResearchFolderState,
-  ResearchTreeSummary,
-} from "../types/research.js";
+import type { ResearchFolder, ResearchFolderState, ResearchTreeSummary } from "../wire/index.js";
 
 export function emptyResearchFolderState(): ResearchFolderState {
-  return { folders: [], membership: {}, collapsed: [] };
+  return { folders: [], membership: {}, collapsed: [], parents: {}, collapsedGroups: [] };
 }
 
 /** No folders, memberships, or collapsed flags — nothing to persist. */
@@ -25,7 +23,9 @@ export function isEmptyResearchFolderState(state: ResearchFolderState): boolean 
   return (
     state.folders.length === 0 &&
     Object.keys(state.membership).length === 0 &&
-    state.collapsed.length === 0
+    state.collapsed.length === 0 &&
+    Object.keys(state.parents).length === 0 &&
+    state.collapsedGroups.length === 0
   );
 }
 
@@ -147,6 +147,7 @@ export function dissolveResearchFolder(
     }
   }
   return {
+    ...state,
     folders: state.folders.filter((folder) => folder.id !== folderId),
     membership,
     collapsed: state.collapsed.filter((id) => id !== folderId),
