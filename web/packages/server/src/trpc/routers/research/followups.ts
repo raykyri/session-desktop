@@ -5,10 +5,9 @@
 // question asked while an answer is still running is no longer refused.
 
 import type { SessionDatabase } from "@session/db";
-import { followups, nodes, trees } from "@session/db";
+import { followups, trees } from "@session/db";
 import type { ResearchFollowupQueueItem, ResearchNode } from "@session/shared";
 import { nodeEffort, nodeModelId } from "@session/shared";
-import { inlineChainFor } from "@session/shared/lib/researchChains";
 import { z } from "zod";
 
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
@@ -20,12 +19,7 @@ import {
   assertWithinDailyLimits,
 } from "../../../research/admission.js";
 import { publishAdmittedFollowup, publishQueue } from "../../../research/followups.js";
-import {
-  assertModelReadsImages,
-  markImagesAttached,
-  releaseImages,
-  resolveImageAttachments,
-} from "../../../research/images.js";
+import { assertModelReadsImages, resolveImageAttachments } from "../../../research/images.js";
 import { protectedProcedure } from "../../base.js";
 import { repo, required } from "../../errors.js";
 
@@ -35,16 +29,13 @@ export type AskFollowupResult =
   { kind: "sent"; node: ResearchNode } | { kind: "queued"; item: ResearchFollowupQueueItem };
 
 /** The last node of the chain `nodeId` belongs to: the node a follow-up sent
- * now would continue, and whose agent an unspecified one inherits. */
+ * now would continue, and whose agent an unspecified one inherits. Reads the
+ * chain alone (`followups.chainTail`), not the thread's detail. */
 function chainTail(ctx: { db: SessionDatabase }, userId: string, nodeId: string): ResearchNode {
-  const node = required(
-    repo(() => nodes.get(ctx.db, userId, nodeId)),
+  return required(
+    repo(() => followups.chainTail(ctx.db, userId, nodeId)),
     `research node ${nodeId} was not found`,
   );
-  const treeNodes = repo(() => trees.detail(ctx.db, userId, node.treeId)).nodes;
-  const chain = inlineChainFor(treeNodes, nodeId);
-  const tailId = chain[chain.length - 1] ?? nodeId;
-  return treeNodes.find((candidate) => candidate.id === tailId) ?? node;
 }
 
 export const followupProcedures = {
@@ -102,9 +93,6 @@ export const followupProcedures = {
           ...(ctx.user.isAdmin ? {} : { maxQueued: ctx.config.limits.queuedPerUser }),
         }),
       );
-      // Attached whether sent or queued, so the sweep keeps a queued item's
-      // images however long the chain takes to free up.
-      markImagesAttached(ctx.db, images);
       if (result.kind === "sent") {
         publishAdmittedFollowup(ctx, ctx.user.id, result.node);
         ctx.runs.start(result.node.id);
@@ -119,7 +107,6 @@ export const followupProcedures = {
     .input(z.object({ itemId: z.string() }))
     .mutation(({ ctx, input }): ResearchFollowupQueueItem[] => {
       const item = repo(() => followups.cancel(ctx.db, ctx.user.id, input.itemId));
-      releaseImages(ctx.db, item.message.attachments);
       publishQueue(ctx, ctx.user.id, item.treeId, item.headNodeId);
       // The cancelled item may have been a refused one the queue waited on.
       dispatchFollowups(ctx, item.treeId);

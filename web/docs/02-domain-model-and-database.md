@@ -105,6 +105,7 @@ threads must survive an account deletion.
 ### 3.1 Accounts
 
 `users`
+
 - `id` text PK (ULID)
 - `github_id` integer unique, `login` text, `name` text null, `avatar_url` text
 - `is_admin` integer bool (default 0; set manually with `npm run db:admin -- <login>`)
@@ -114,21 +115,25 @@ threads must survive an account deletion.
 - `created_at`, `last_login_at` integer
 
 `invites`
+
 - `code` text PK, `created_by` FK, `created_at`, `used_by` text null FK,
   `used_at` null. These are sign-up codes (the UI's name; thread
   invitations are `tree_invites`, §3.5). Sign-up requires a valid unused code
   when `SESSION_REQUIRE_INVITE=1`; codes are distributed manually at first.
 
 `signup_attempts`
+
 - `ip_hash` text, `attempted_at` integer, `outcome` text; index
   (`ip_hash`, `attempted_at`). Feeds per-IP sign-up throttling.
 
 `user_limits`
+
 - `user_id` PK FK, `daily_tokens` integer null, `daily_runs` integer null
   (null = deployment default from `SESSION_DAILY_TOKENS` = 1,000,000 and
   `SESSION_DAILY_RUNS` = 10), `updated_at`
 
 `sessions`
+
 - `id` text PK (32 random bytes, base64url) — stored as SHA-256 of the cookie value
 - `user_id` FK, `created_at`, `expires_at`, `last_seen_at` integer, `user_agent` text
 
@@ -136,6 +141,7 @@ threads must survive an account deletion.
 `created_at`, `return_to` text.
 
 `user_preferences`
+
 - `user_id` PK FK
 - `settings_json` text — `UserSettings` (appearance, theme, font, text size,
   hints, motion, cmd-enter, notifications, defaultModel)
@@ -159,8 +165,11 @@ threads must survive an account deletion.
 ### 3.2 Organization
 
 `workspaces` (desktop `GroupInfo` with `scope: research`)
+
 - `id` PK, `user_id` FK, `name` text, `position` integer
-- `created_at`, `updated_at`
+- `created_at`, `updated_at`, `deleted_at` null (a removed workspace whose
+  threads the deletion job has not finished; hidden from every workspace
+  query, §5.18)
 
 The desktop's `ResearchFolderState` is spread over four tables: `folders`,
 `tree_folder_membership` (`membership`), `collapsed_places` (`collapsed`),
@@ -200,9 +209,12 @@ The parent trees whose nested children a person has hidden. Per person.
   `archived_at IS NULL`). A tree in the Trash keeps its position and moves
   down with the others when a tree is inserted above it; reordering rewrites
   only the trees outside the Trash (§5.10)
+- `deleted_at` null: set by Delete now, Empty Trash and removing the
+  workspace. From then on no query or access check sees the tree, and the
+  deletion job removes its rows (§5.18)
 - Indexes: (`owner_id`, `workspace_id`, `archived_at`, `trashed_at`,
   `position`), (`owner_id`, `trashed_at`), (`parent_tree_id`),
-  (`visibility`, `updated_at`)
+  (`visibility`, `updated_at`), (`deleted_at`)
 
 `tree_views`
 
@@ -263,6 +275,7 @@ The parent trees whose nested children a person has hidden. Per person.
 - Indexes (`head_node_id`, `position`), (`tree_id`), (`author_id`)
 
 `response_snapshots`
+
 - `node_id` PK FK
 - `revision` text — lowercase sha256 hex of the canonical JSON of `turns`
   (§5.2)
@@ -271,6 +284,7 @@ The parent trees whose nested children a person has hidden. Per person.
 - `byte_size` integer, `version` integer (1), `updated_at`
 
 `run_turns` (live output of an active attempt; `05-run-lifecycle-and-streaming.md` §5)
+
 - `node_id` FK, `attempt` integer, `turn_id` text, `position` integer
 - `turn_json` text — `Turn`
 - `committed` integer bool (0 for the in-flight checkpoint row)
@@ -279,6 +293,7 @@ The parent trees whose nested children a person has hidden. Per person.
   snapshot commits
 
 `run_attempts`
+
 - `node_id` FK, `attempt` integer, `kind` text (`fresh | resume`), `model`
   text, `started_at`, `ended_at` null, `outcome` text null, `error_class`
   text null, `steps` integer, `tool_calls` integer, `usage_json` text null
@@ -286,6 +301,7 @@ The parent trees whose nested children a person has hidden. Per person.
   null; PK (`node_id`, `attempt`)
 
 `node_messages` (canonical conversation; `04-agent-runtime.md` §4)
+
 - `node_id` FK, `position` integer, `message_json` text (AI SDK
   `ModelMessage` including tool calls/results and provider metadata),
   `model` text (which model produced assistant messages), `created_at`;
@@ -293,10 +309,12 @@ The parent trees whose nested children a person has hidden. Per person.
   updated.
 
 `node_summaries` (context compaction cache)
+
 - `node_id` PK FK, `summary` text, `covers_through_node_id` text,
   `created_at`
 
 `run_queue` (admission control; §5.7)
+
 - `node_id` PK FK, `user_id` FK, `pool` text (`research | metadata`),
   `provider` text, `enqueued_at`, `claimed_at` null, `not_before` integer
   null (backoff)
@@ -306,6 +324,7 @@ The parent trees whose nested children a person has hidden. Per person.
 `journal_entries` was removed with journal entries in phase 2.0.
 
 `feed_items`
+
 - `id` text PK, `author_id` FK
 - `occurred_at`, `source_rank`; nullable source FKs `node_id`, `tree_id`,
   `workspace_id`
@@ -319,10 +338,11 @@ The parent trees whose nested children a person has hidden. Per person.
   filter on it until phase 5 adds the setting.
 
 `tweet_cache`
+
 - `tweet_id` PK, `payload_json` text (raw provider body, ≤ 1 MiB),
   `snapshot_json` text null (`TweetSnapshot`, ≤ 128 KiB; source URLs ≤ 8 KiB,
   `tweets.rs:18-19`), `fetched_at`, `status` text (`resolved |
-  unavailable`), `provider` text null (`xSyndication | xOembed`; which
+unavailable`), `provider` text null (`xSyndication | xOembed`; which
   pipeline produced the snapshot — null on an unavailable row and on rows
   written before the fallback existed), `failure` text null
 - Shared across accounts: a post's public payload is the same for everyone and
@@ -334,6 +354,7 @@ The parent trees whose nested children a person has hidden. Per person.
   `TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min) only.
 
 `embed_assets`
+
 - `hash` PK (SHA-256 of `source_url`, hex — the `/embeds/<hash>` a stored
   snapshot includes), `source_url` text, `content_type` text null, `bytes`
   integer, `stored_at` integer null, `last_access_at`, `created_at`
@@ -398,6 +419,13 @@ deployed with an earlier history.
   `attached_at` null (set when a node, queued follow-up or draft uses the
   image; null means pending)
 - Indexes (`owner_id`, `sha256`), (`attached_at`, `created_at`)
+- `image_refs`: one row per image a node, draft or queued follow-up names:
+  `image_id` FK (cascade), `holder_kind` (`node | draft | queue`),
+  `holder_id` (the node, draft or queue item id; no foreign key, since it
+  names a row of one of three tables), `tree_id` null FK (cascade; the
+  thread of a node or queued item, null for a draft), `created_at`; PK
+  (`image_id`, `holder_kind`, `holder_id`), indexes (`holder_kind`,
+  `holder_id`) and (`tree_id`). §5.15 has who writes it.
 - The bytes are at `${SESSION_DATA_DIR}/documents/<owner_id>/<sha256>`, with
   a 256 px JPEG thumbnail beside a PNG or JPEG image as
   `<sha256>.thumb.jpg`. Two rows of one owner with the same bytes share the
@@ -426,8 +454,9 @@ removed with the uploaded-documents feature in phase 2.0.
 ### 3.7 Usage
 
 `usage_events`
+
 - `id` PK, `user_id` FK, `node_id` text null, `kind` text (`research |
-  metadata | search | fetch`), `provider` text, `model` text null,
+metadata | search | fetch`), `provider` text, `model` text null,
   `input_tokens`, `output_tokens`, `reasoning_tokens`, `cached_tokens`
   integer, `cost_estimate_micros` integer, `created_at`
 - Index (`user_id`, `created_at`). Admission sums the current UTC day per
@@ -463,6 +492,7 @@ removed with the uploaded-documents feature in phase 2.0.
 Each item names the desktop source and the enforcing function.
 
 ### 5.1 Structure
+
 - A tree's `root_node_id` refers to a node in the same tree with
   `parent_node_id IS NULL`; a node's parent is in the same tree
   (`state.rs:2367-2404`). Enforced by `trees.admitRoot` creating both rows in
@@ -479,6 +509,7 @@ Each item names the desktop source and the enforcing function.
   and `response_snapshot_at` (`now.max(prev+1)`, `state.rs:5074`).
 
 ### 5.2 Response snapshots and revisions
+
 - `revision = sha256(canonicalJson(turns))` lowercase hex, where
   `canonicalJson` is `JSON.stringify` of the `Turn[]` with the key order the
   shared serializer emits (`shared/src/research/revision.ts`). Only the web
@@ -493,6 +524,7 @@ Each item names the desktop source and the enforcing function.
   response could not be preserved".
 
 ### 5.3 Status
+
 - `queued → running → complete | failed | cancelled | interrupted`.
   Terminal statuses are monotonic: `nodes.setStatus` prevents transitions from
   a terminal status except via `nodes.resetForRetry` (requires `failed`,
@@ -509,7 +541,7 @@ Each item names the desktop source and the enforcing function.
   needs the parent's answer to be `complete`, except for an inline follow-up
   whose parent is itself active again (rerun or retried): that rerun is
   admitted and waits in the run queue (§5.7).
-- An exchange's run is *active* while it is `queued` or `running`, or
+- An exchange's run is _active_ while it is `queued` or `running`, or
   `interrupted` with `resume_pending = 1` (`subtrees.activeRun`). An
   `interrupted` node whose resume is no longer pending
   (`nodes.clearResumePending`, after `MAX_AUTO_RESUMES`; the server then
@@ -524,6 +556,7 @@ Each item names the desktop source and the enforcing function.
   and every status change, and is returned by `getNodeContent`.
 
 ### 5.4 Follow-ups
+
 - An exchange parent must be `complete`; posts and documents take
   follow-ups at once. The tree must be neither archived nor in the Trash
   (`state.rs:5244`). Only a post takes a follow-up note (a `post` child).
@@ -556,6 +589,7 @@ Each item names the desktop source and the enforcing function.
   continues the chain's last node.
 
 ### 5.5 Highlights
+
 - Anchor validation follows `research.rs:1522-1546`, which groups the checks
   so one message covers each class of malformed anchor. The grouping defines
   the validation rules; callers cannot observe the order within a group:
@@ -577,16 +611,18 @@ Each item names the desktop source and the enforcing function.
   The Zod schema additionally requires integer,
   non-negative offsets at the tRPC boundary, and the shared
   `validateHighlightAnchor` is the single implementation.
+
 - The node must have a snapshot whose `revision` equals
   `anchor.responseRevision`; otherwise it returns "The research response has
   been updated; please reselect the text."
 - Caps: 500 per node, 512 KiB per node, 4 MiB per user (desktop: per
   state file), estimated per highlight as `160 + id.length +
-  projection.length + revision.length + 6 × (exact + prefix + suffix)`
+projection.length + revision.length + 6 × (exact + prefix + suffix)`
   (`research.rs:1548-1561`); the 160-byte base overhead causes the per-node byte limit to be reached before the count limit.
 - Highlight IDs must be unique per user; while ULID generation makes collisions virtually impossible, the database constraint remains enforced.
 
 ### 5.6 Documents
+
 - `researchDocuments.update` performs the 4-way optimistic check: node is the
   tree's root and `type = document`; tree not archived; `expectedTitle === tree.title`;
   `expectedResponseRevision === snapshot.revision`; and if markdown changed,
@@ -600,7 +636,7 @@ Each item names the desktop source and the enforcing function.
   is gone (a branch whose quote is gone keeps its anchor and is counted in
   `unmatchedBranchCount`), and clears the recap. It returns
   `{ tree, node, responseRevision, markdownChanged, removedHighlightCount,
-  unmatchedBranchCount }` and, for the server, the moved branches (each
+unmatchedBranchCount }` and, for the server, the moved branches (each
   announced as `research.node.updated`). The server then schedules a new
   recap for an imported report (§5.8), as the desktop does.
 - Limits: 10,000 words and 10 MiB (`research.rs:17-20`), checked only for a
@@ -608,6 +644,7 @@ Each item names the desktop source and the enforcing function.
   title.
 
 ### 5.7 Runs and admission
+
 - Insert node as `queued` and a `run_queue` row in one transaction. The
   server claims rows FIFO by user then time under per-user and global limits
   (`05-run-lifecycle-and-streaming.md` §8). The desktop application allowed unbounded concurrency, but the web application enforces concurrency limits because server resources are shared among multiple users.
@@ -638,6 +675,7 @@ Each item names the desktop source and the enforcing function.
   answer it follows (§5.3).
 
 ### 5.8 Recaps
+
 - A recap belongs to a completed exchange or an imported report
   (`recapEligible` in `shared/src/research/recap.ts`, the desktop's
   `recap_eligible`); posts, authored documents and transcripts take none.
@@ -656,6 +694,7 @@ Each item names the desktop source and the enforcing function.
   sent.
 
 ### 5.9 Feeds
+
 - `feeds.recentActivity(userId, { scope, workspaceId, limit, cursor })` reads
   `feed_items` under one cursor `(occurredAt DESC, sourceRank DESC, id DESC)`
   with `sourceRank` research = 1. `all` reads the feed rows of public threads
@@ -680,6 +719,7 @@ Each item names the desktop source and the enforcing function.
   (`state.rs:3770-3776`) via grouped subqueries.
 
 ### 5.10 Trash
+
 - `trash.trashTree` sets `trees.trashed_at` (`trash_research_tree`). Nothing
   is deleted: nodes, snapshots, membership, parent, archive state and
   position stay. It deletes the tree's `feed_items` row. Refused while a node
@@ -694,11 +734,13 @@ Each item names the desktop source and the enforcing function.
   workspace's trees in the Trash, archived or not, with counts and flags,
   ordered `trashed_at DESC, id`.
 - `trash.empty(workspaceId)` deletes, in one transaction, the workspace's
-  trees in the Trash (as `trees.remove` does) and its folders in the Trash
+  trees in the Trash (as `trees.remove` does: marked deleted, §5.18) and its
+  folders in the Trash
   (their memberships cascade, so their trees become Unfiled; `collapsed_places`
   rows naming them are deleted). A tree that somehow has an active run is
   left in the Trash. Returns `{ treeIds, folderIds }`.
-- `trees.remove` is Delete now, in or out of the Trash.
+- `trees.remove` is Delete now, in or out of the Trash. It marks the trees
+  deleted (§5.18).
 - Groups: a parent (`trees.parent_tree_id`, §5.11) is archived, unarchived,
   moved to and out of the Trash, and deleted together with the children
   listed under it: the trees whose parent it is and that are listed in the
@@ -725,6 +767,7 @@ Each item names the desktop source and the enforcing function.
   owner's Trash will set `trashed_at` (comment in `repos/trash.ts`).
 
 ### 5.11 Folders
+
 - `folders.replaceState(userId, workspaceId, state)` stores the desktop's
   `ResearchFolderState` for one workspace across the tables in §3.2 and
   returns the stored state with `changed`, which `folders.set` uses to decide
@@ -765,12 +808,14 @@ Each item names the desktop source and the enforcing function.
   `remove_trees_from_research_folders`.
 
 ### 5.12 Journal (removed)
+
 - Journal entries were removed in phase 2.0.
 
 ### 5.13 Follow-up queue
+
 - `followups.ask(headNodeId, message, agent)` runs in one transaction: when
   the chain has nothing queued and `researchQueueAction` (shared
-  `researchBranchView`, over the tree's wire nodes) would send, the follow-up
+  `researchBranchView`) would send, the follow-up
   is admitted as the chain tail's inline child and its run enqueued;
   otherwise it is appended at the next `position`. `headNodeId` may be any
   node of the chain; the queue is kept under the chain's head. Archived and
@@ -788,6 +833,14 @@ Each item names the desktop source and the enforcing function.
   archived or in the Trash (dispatch skips those threads, and restoring
   from the Archive or the Trash dispatches them); a tail that settled without an answer stalls the
   queue until it is retried, rerun, or removed.
+- The queue's rules read one chain, not the thread: `nodes.chainNodes`
+  returns the node's inline ancestors up to the chain's head and every
+  inline descendant of them, with one recursive query over
+  `nodes_parent_idx`, mapped without highlights. That is every node
+  `inlineChainFor`, `researchQueueAction` and the stalled-tail note look at.
+  `followups.chainTail` (the node a follow-up would continue, whose agent an
+  unspecified one inherits) uses it too; neither `ask` nor dispatch builds
+  the thread's detail.
 - `followups.send(itemId, tailId)` re-checks `nextStep` inside its
   transaction, admits the item as the tail's inline child (authored by the
   item's author), enqueues the run, and deletes the item.
@@ -806,6 +859,7 @@ Each item names the desktop source and the enforcing function.
   server announces `research.queue.changed` under both heads.
 
 ### 5.14 Posts and drafts
+
 - `posts.admitPost` (`create_research_post`, `state.rs:1912`): the text is
   trimmed, non-empty ("note cannot be empty") and at most 64 KiB of UTF-8
   (`MAX_POST_TEXT_BYTES`, "notes are limited to 65536 bytes"). The root is a
@@ -846,36 +900,41 @@ Each item names the desktop source and the enforcing function.
 - `researchDrafts.remove` deletes one draft and returns its workspace id.
 
 ### 5.15 Images
+
 - `images.resolveAttachments(userId, ids)` (`attachments_for_inputs`): ids
   are deduplicated in order; at most 8 (`MAX_IMAGES_PER_MESSAGE`) and 20 MB
   in total (`MAX_MESSAGE_IMAGE_BYTES`); each must be a row the caller owns.
   A missing and a foreign id get the same message ("An attached image is no
   longer available. Remove it and attach it again."). The server wraps it as
   `resolveImageAttachments` (`server/src/research/images.ts`).
-- What keeps an image is a reference, not the column: `images.referencedIds`
-  reads the image ids in `nodes.message_json`, `research_drafts`
-  `.attachments_json` and `followup_queue.message_json` with `json_each`.
-  `attached_at` is set when a message or draft is written
-  (`images.markAttached`, by `createTree`, `forkNode`, `followups.ask`,
-  `createPost` and `drafts.save`), returned to null for the images nothing
-  names any more when a draft is removed or its images replaced and when a
-  queued follow-up is cancelled (`images.release`), and corrected by the
-  sweep.
-- `images.sweep(at)`, run every maintenance interval: a referenced pending
-  row is marked attached; an unreferenced row older than 24 h
-  (`PENDING_IMAGE_LIFETIME_MS`) is deleted, pending or not; an unreferenced
-  attached row younger than that returns to pending. This is the desktop's
-  pending lifetime and `release`; it also covers references removed by a
-  cascade (a deleted thread, branch or workspace). The server then unlinks
+- What keeps an image is a row of `image_refs`, written in the same
+  transaction as what names the image (`repos/imageRefs.ts`):
+  `images.setRefs` when a node is admitted (`trees.admitRoot`,
+  `nodes.admitChildDetailed`), a follow-up is queued (`followups.ask`) and a
+  draft is saved with images (`researchDrafts.save`, replacing the draft's
+  rows); `images.dropRefs` when a queued item is sent, cancelled, cleared or
+  dropped with a departing member, and when a draft is removed;
+  `images.dropNodeRefs` wherever nodes are deleted (`subtrees.ts`: branch
+  removal, an edited question's replaced node, the deletion job), which also
+  drops the rows of the queued items that go with a deleted chain head.
+  Removing a workspace drops its drafts' rows with them. Writing a row marks
+  the image attached; dropping an image's last row returns it to pending
+  (the desktop's `release`). No message JSON is read for any of this.
+- `images.readable(userId, imageId)`: the uploader, or anyone who may read
+  a thread a node or queued item naming the image is in (a join of
+  `image_refs.tree_id` with `access.treeReadableBy`, so a deleted thread
+  gives no one access). An image in a draft is its owner's alone.
+- `images.sweep(at)`, run every maintenance interval: rows whose holder no
+  longer exists are dropped (a cascade the repositories did not see, such as
+  an account's deletion); a referenced pending image is marked attached; an
+  unreferenced image older than 24 h (`PENDING_IMAGE_LIFETIME_MS`) is
+  deleted, pending or not; an unreferenced attached image younger than that
+  returns to pending. Each is an indexed lookup per row. This is the
+  desktop's pending lifetime and `release`. The server then unlinks
   every file under the documents directory that no remaining row names,
   thumbnails included (`uploads/storage.ts` `sweepImages`), except files
   modified within `ORPHAN_GRACE_MS` (1 h): the upload route writes the file
   before it inserts the row, and touches a file it finds already stored.
-- `images.readable` and `images.release` read only the uploader's nodes,
-  drafts and queued follow-ups (`nodes_author_idx`,
-  `followup_queue_author_idx`, `research_drafts_order_idx`): a message or
-  draft names only images its author uploaded. The sweep's
-  `referencedIds` reads every row.
 
 ### 5.16 Access and sharing
 
@@ -885,7 +944,7 @@ caller's role there, instead of comparing an owner column. Repository
 functions take the caller's id as `userId` (the actor); `null` is a guest.
 
 - `access.treeAccess(db, userId | null, treeId)` → `{ role, tree, member } |
-  null`. `owner` when `trees.owner_id` is the caller; a member's role from
+null`. `owner` when `trees.owner_id` is the caller; a member's role from
   `tree_members`; `viewer` for anyone, guests included, on a public thread;
   null otherwise. A thread in its owner's Trash (`trees.trashed_at`) is the
   owner's alone: every other caller gets null.
@@ -938,8 +997,8 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   the workspace. The owner's folder, nesting and order are the owner's.
 - Lists: `trees.summaries` (the caller's own, plus shared threads they
   filed in that workspace), `trees.sharedSummaries(userId, "shared" |
-  "archive" | "trash")` (the Shared place), `trees.publicSummaries(userId |
-  null)` (the guest catalog: public threads outside their owner's Archive and
+"archive" | "trash")` (the Shared place), `trees.publicSummaries(userId |
+null)` (the guest catalog: public threads outside their owner's Archive and
   Trash, newest first, at most 200). Summaries and trees carry `ownerId`,
   `visibility` and the reader's `role`; `trees.detail` adds `participants`
   (owner, members, then every node and highlight author). A reader who is
@@ -992,6 +1051,49 @@ oldest first, read or not), and `prune(at)`, run by the server's
 maintenance tick (`sweepExpired`), deletes read notifications 30 days after
 they were read (`READ_NOTIFICATION_RETENTION_MS`) and trims any account
 above the cap. Deleting a thread deletes its notifications.
+
+### 5.18 Deleting threads in the background
+
+- Delete now (`trees.remove`), Empty Trash (`trash.empty`) and removing a
+  workspace (`workspaces.remove`) answer and publish as before, but only mark
+  the threads (`deletion.markTreesDeleted`), inside their transaction:
+  `trees.deleted_at` is set, a thread listed under one of them elsewhere
+  loses its parent, and the rows that tie a thread to people are deleted at
+  once (`MARK_DELETED_TABLES`: members, invitations, member removals,
+  follows, views, collapsed groups, filing, the Home feed row, inbox
+  notifications about the thread, and queued follow-ups with their image
+  references).
+- From then on the thread is hidden: `access.roleFor` gives nobody a role,
+  `treeReadableBy` and `treeJoinedBy` exclude it, and every query on
+  `trees` outside them includes `access.treeLive()` (`deleted_at IS NULL`):
+  the sidebar sections, summaries, the public catalog, Shared with me,
+  group children, folders, recent queries, the follow-up dispatch, boot
+  reconciliation, the audience the event bus reads, followers, invitations
+  and workspace counts.
+- Removing a workspace deletes its folders, collapsed trays, drafts (with
+  their image references) and feed rows at once, and points members' Trash
+  entries filed under it to their default workspace
+  (`deletion.markWorkspaceDeleted`). The row itself is deleted then when no
+  thread names it, else marked (`workspaces.deleted_at`, hidden from every
+  workspace query) and deleted by the job after its last thread.
+- `deletion.step(limits)` deletes the next bounded batch, in one
+  transaction: for the oldest marked thread, the next `limits.nodes` nodes
+  deepest first (computed from the remaining `(id, parent)` pairs each
+  step), first their rows in the tables that can hold many per node
+  (`NODE_DEPENDENT_TABLES`: run turns, messages, widget revisions,
+  highlights, attempts, snapshots, summaries) up to `limits.rows`, then the
+  nodes with their image references; when no node is left, the thread row.
+  Then marked workspaces no thread names. Null when nothing is left. The
+  default (`DEFAULT_STEP_LIMITS`) is 250 nodes and 2000 rows, a step of a few
+  to a few tens of milliseconds.
+- Nothing is kept between steps, so a restart resumes from what is left:
+  the server's job (`server/src/research/deletion.ts`) is kicked at boot and
+  after each procedure that marks threads, runs one step per `setImmediate`
+  so requests interleave, and after a step that throws waits 30 s before
+  trying again. `deletion.drain` runs every step at once (tests).
+- A test checks the three table lists against SQLite's foreign keys, so a
+  new table that references `trees`, `nodes` or `workspaces` has to be
+  placed in one of them.
 
 ## 6. Data volumes and performance notes
 

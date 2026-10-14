@@ -12,9 +12,10 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
-import { removeResearchTree } from "./feedgen.js";
+import { treeLive } from "./access.js";
+import { markTreesDeleted, markWorkspaceDeleted } from "./deletion.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
-import { activeRun, deleteNodesOfTrees } from "./subtrees.js";
+import { activeRun } from "./subtrees.js";
 
 export const DEFAULT_WORKSPACE_NAME = "Default Workspace";
 
@@ -36,11 +37,16 @@ function normalizeName(name: string): string {
   return trimmed;
 }
 
+/** A workspace not removed (`workspaces.deleted_at`, `deletion.ts`). */
+function owned(userId: string) {
+  return and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt));
+}
+
 export function list(db: SessionDatabase, userId: string): Workspace[] {
   return db
     .select()
     .from(workspaces)
-    .where(eq(workspaces.userId, userId))
+    .where(owned(userId))
     .orderBy(asc(workspaces.position), asc(workspaces.id))
     .all()
     .map(toWorkspace);
@@ -50,7 +56,7 @@ export function get(db: SessionDatabase, userId: string, workspaceId: string): W
   const row = db
     .select()
     .from(workspaces)
-    .where(and(eq(workspaces.userId, userId), eq(workspaces.id, workspaceId)))
+    .where(and(owned(userId), eq(workspaces.id, workspaceId)))
     .get();
   return row ? toWorkspace(row) : null;
 }
@@ -91,7 +97,7 @@ export function rename(
   const row = db
     .update(workspaces)
     .set({ name: normalizeName(name), updatedAt: now() })
-    .where(and(eq(workspaces.userId, userId), eq(workspaces.id, workspaceId)))
+    .where(and(owned(userId), eq(workspaces.id, workspaceId)))
     .returning()
     .get();
   if (!row) {
@@ -106,6 +112,11 @@ export function rename(
  * Rejects deletion while a run is queued or active, preventing orphaned
  * provider streams and writes to deleted node records. Cancel active runs
  * before deleting the workspace.
+ *
+ * The threads are marked deleted and the workspace's folders, drafts and
+ * trays deleted at once (`deletion.markTreesDeleted`,
+ * `markWorkspaceDeleted`); the threads' rows, and then the workspace row,
+ * are deleted by the deletion job.
  */
 export function remove(
   db: SessionDatabase,
@@ -116,7 +127,7 @@ export function remove(
     const workspace = tx
       .select()
       .from(workspaces)
-      .where(and(eq(workspaces.userId, userId), eq(workspaces.id, workspaceId)))
+      .where(and(owned(userId), eq(workspaces.id, workspaceId)))
       .get();
     if (!workspace) {
       throw new Error(`research workspace ${workspaceId} was not found`);
@@ -125,7 +136,9 @@ export function remove(
       .select({ id: nodes.id })
       .from(nodes)
       .innerJoin(trees, eq(trees.id, nodes.treeId))
-      .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), activeRun()))
+      .where(
+        and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), treeLive(), activeRun()),
+      )
       .get();
     if (active) {
       throw new Error("Cannot delete workspace: all active research runs must be cancelled first.");
@@ -133,16 +146,11 @@ export function remove(
     const removedTreeIds = tx
       .select({ id: trees.id })
       .from(trees)
-      .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId)))
+      .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), treeLive()))
       .all()
       .map((row) => row.id);
-    // Leaves before parents: `nodes.parent_node_id` is RESTRICT, so the tree
-    // cascade cannot delete a parent while its children are still there.
-    for (const treeId of removedTreeIds) removeResearchTree(tx, treeId);
-    deleteNodesOfTrees(tx, removedTreeIds);
-    tx.delete(workspaces)
-      .where(and(eq(workspaces.userId, userId), eq(workspaces.id, workspaceId)))
-      .run();
+    markTreesDeleted(tx, removedTreeIds);
+    markWorkspaceDeleted(tx, workspaceId);
     const preferences = ensurePreferences(tx, userId);
     if (preferences.defaultWorkspaceId === workspaceId) {
       updatePreferences(tx, userId, { defaultWorkspaceId: null });
@@ -159,7 +167,7 @@ export function reorder(db: SessionDatabase, userId: string, workspaceIds: strin
     const existing = tx
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(eq(workspaces.userId, userId))
+      .where(owned(userId))
       .all()
       .map((row) => row.id);
     if (existing.length !== workspaceIds.length) {
@@ -225,7 +233,7 @@ export function treeCounts(db: SessionDatabase, userId: string): Map<string, num
   const rows = db
     .select({ workspaceId: trees.workspaceId, value: sql<number>`count(*)` })
     .from(trees)
-    .where(and(eq(trees.ownerId, userId), isNull(trees.trashedAt)))
+    .where(and(eq(trees.ownerId, userId), isNull(trees.trashedAt), treeLive()))
     .groupBy(trees.workspaceId)
     .all();
   return new Map(rows.map((row) => [row.workspaceId, row.value]));

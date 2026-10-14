@@ -229,7 +229,12 @@ reconcile a run from the previous process") and left as it was, and the
 boot goes on. Documents have no run and no status, so boot does not look at
 them.
 
-Boot also starts the document archive check (§6), without waiting for it.
+Boot also starts the document archive check (§6), without waiting for it,
+and the deletion job (`research/deletion.ts`, `02` §5.18), which deletes the
+rows of threads that Delete now, Empty Trash or a workspace removal marked
+and an earlier process did not finish. It runs one bounded step per
+`setImmediate` and is stopped first on `SIGTERM`; a step interrupted by the
+exit rolls back and is done again by the next boot.
 
 ## 6. Backups and restore
 

@@ -73,6 +73,8 @@ export const workspacesRouter = router({
       // their rows exist.
       const members = sharing.workspaceMembers(ctx.db, ctx.user.id, input.workspaceId);
       const result = repo(() => workspaces.remove(ctx.db, ctx.user.id, input.workspaceId));
+      // Its threads are hidden now; their rows go in the background.
+      ctx.deletions.kick();
       for (const item of removedFeedItems) emitFeedItemRemoved(ctx, item);
       for (const treeId of result.removedTreeIds) {
         ctx.eventBus.emitToUsers(

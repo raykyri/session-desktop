@@ -27,7 +27,7 @@ import { trees } from "../schema/trees.js";
 import { users } from "../schema/users.js";
 import { now } from "../time.js";
 
-import { memberRow, requireTreeAccess } from "./access.js";
+import { memberRow, requireTreeAccess, treeLive } from "./access.js";
 import type { TreeRow } from "./mappers.js";
 import {
   contentAuthorIds,
@@ -196,7 +196,7 @@ export function workspaceMembers(
     .select({ treeId: treeMembers.treeId, userId: treeMembers.userId })
     .from(treeMembers)
     .innerJoin(trees, eq(trees.id, treeMembers.treeId))
-    .where(and(eq(trees.ownerId, ownerId), eq(trees.workspaceId, workspaceId)))
+    .where(and(eq(trees.ownerId, ownerId), eq(trees.workspaceId, workspaceId), treeLive()))
     .all()) {
     const list = result.get(row.treeId) ?? [];
     list.push(row.userId);
@@ -218,7 +218,7 @@ export function audience(db: SessionDatabase, treeId: string): TreeAudience | nu
   const tree = db
     .select({ ownerId: trees.ownerId, visibility: trees.visibility, trashedAt: trees.trashedAt })
     .from(trees)
-    .where(eq(trees.id, treeId))
+    .where(and(eq(trees.id, treeId), treeLive()))
     .get();
   if (!tree) {
     return null;
@@ -503,6 +503,7 @@ export function receivedInvites(db: SessionDatabase, login: string): ReceivedInv
         pendingPredicate(now()),
         isNull(treeInvites.acceptedAt),
         isNull(trees.trashedAt),
+        treeLive(),
       ),
     )
     .orderBy(desc(treeInvites.createdAt), desc(treeInvites.id))
@@ -586,7 +587,7 @@ export function acceptInvite(
       throw new Error(INVITE_MESSAGES.otherAccount);
     }
     const tree = tx.select().from(trees).where(eq(trees.id, row.treeId)).get();
-    if (!tree || tree.trashedAt !== null) {
+    if (!tree || tree.trashedAt !== null || tree.deletedAt !== null) {
       throw new Error(INVITE_MESSAGES.notFound);
     }
     if (tree.ownerId === user.id) {
@@ -703,7 +704,7 @@ export function followers(db: SessionDatabase, treeId: string): string[] {
     .orderBy(asc(treeSubscriptions.userId))
     .all();
   const tree = db.select().from(trees).where(eq(trees.id, treeId)).get();
-  if (!tree) {
+  if (!tree || tree.deletedAt !== null) {
     return [];
   }
   return rows

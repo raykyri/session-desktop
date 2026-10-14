@@ -5,29 +5,30 @@
 // `server/src/uploads/storage.ts`.
 //
 // An uploaded image is pending (`attached_at` null) until a node, a queued
-// follow-up or a draft names it. What decides whether an image is still
-// needed is whether any message or draft names it, not the column:
-// `attached_at` is set when a message or draft is written and corrected by
-// the sweep, which also catches references that went away with a cascade
-// (a removed thread, branch or workspace). The sweep deletes pending images
-// older than `PENDING_IMAGE_LIFETIME_MS`, and returns an image whose last
-// reference went away to pending, or deletes it when it is older than that
-// lifetime, as the desktop's `release` does. The server then unlinks the
-// files no row names.
+// follow-up or a draft names it. What names an image is `image_refs`: one
+// row per (image, holder), written by the repositories in the same
+// transaction as the message, draft or queued item (`setRefs`), and deleted
+// with it (`dropRefs`, `dropNodeRefs`). Writing a reference marks the image
+// attached; dropping the last one returns it to pending, as the desktop's
+// `release` does. The sweep deletes pending images older than
+// `PENDING_IMAGE_LIFETIME_MS`, drops references whose holder is gone, and
+// corrects `attached_at`. The server then unlinks the files no row names.
 
-import type { ResearchImageAttachment, ResearchMessageAttachment } from "@session/shared";
+import type { ResearchImageAttachment } from "@session/shared";
 import { MAX_IMAGES_PER_MESSAGE, MAX_MESSAGE_IMAGE_BYTES } from "@session/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
-import { researchImages } from "../schema/images.js";
+import type { ImageHolderKind } from "../schema/images.js";
+import { imageRefs, researchImages } from "../schema/images.js";
 import { now } from "../time.js";
 
 import { treeReadableBy } from "./access.js";
 
 export type ImageRow = typeof researchImages.$inferSelect;
+export type { ImageHolderKind };
 
 /** How long an image nothing names is kept for a composer, draft editor or
  * queue that may still send it (`PENDING_LIFETIME`). */
@@ -77,12 +78,8 @@ export function get(db: SessionDatabase, userId: string, imageId: string): Image
 /**
  * The image if `userId` (null: a guest) may see it: they uploaded it, or a
  * node or queued follow-up of a thread they may read names it
- * (`access.treeReadableBy`). An image in a draft is its owner's alone.
- *
- * Only the uploader's own nodes and queued follow-ups are read
- * (`nodes_author_idx`, `followup_queue_author_idx`): a message names only
- * images its author uploaded (`resolveAttachments`), and a queued item is
- * admitted as a node by the same author.
+ * (`access.treeReadableBy`, through `image_refs.tree_id`). An image in a
+ * draft is its owner's alone.
  */
 export function readable(
   db: SessionDatabase,
@@ -96,26 +93,12 @@ export function readable(
   if (userId !== null && row.ownerId === userId) {
     return row;
   }
-  const pattern = `%"id":${JSON.stringify(imageId)}%`;
   const named = db.get<{ found: number } | undefined>(sql`
     select 1 as found
-      from nodes
-      inner join trees on trees.id = nodes.tree_id
-      , json_each(nodes.message_json, '$.attachments') as attachment
-     where nodes.author_id = ${row.ownerId}
-       and nodes.message_json like ${pattern}
-       and json_extract(attachment.value, '$.kind') = 'image'
-       and json_extract(attachment.value, '$.id') = ${imageId}
-       and ${treeReadableBy(userId)}
-    union all
-    select 1 as found
-      from followup_queue
-      inner join trees on trees.id = followup_queue.tree_id
-      , json_each(followup_queue.message_json, '$.attachments') as attachment
-     where followup_queue.author_id = ${row.ownerId}
-       and followup_queue.message_json like ${pattern}
-       and json_extract(attachment.value, '$.kind') = 'image'
-       and json_extract(attachment.value, '$.id') = ${imageId}
+      from ${imageRefs}
+      inner join trees on trees.id = ${imageRefs.treeId}
+     where ${imageRefs.imageId} = ${imageId}
+       and ${imageRefs.holderKind} in ('node', 'queue')
        and ${treeReadableBy(userId)}
      limit 1
   `);
@@ -195,129 +178,19 @@ export function resolveAttachments(
   return attachments;
 }
 
-/** The image ids among a message's or draft's attachments. */
-export function imageIdsOf(
-  attachments: readonly ResearchMessageAttachment[] | null | undefined,
-): string[] {
-  return (attachments ?? []).flatMap((attachment) =>
-    attachment.kind === "image" ? [attachment.id] : [],
-  );
-}
-
-/** Marks images attached once a message or draft naming them is written.
- * Optional for correctness, since the sweep reads the references
- * themselves, but it keeps the column accurate between sweeps. */
-export function markAttached(db: SessionDatabase, imageIds: readonly string[], at = now()): void {
-  if (imageIds.length === 0) {
-    return;
-  }
-  db.update(researchImages)
-    .set({ attachedAt: at })
-    .where(inArray(researchImages.id, [...new Set(imageIds)]))
-    .run();
-}
-
-/**
- * Returns the images among `imageIds` that nothing names any more to
- * pending, after the message, draft or queued follow-up that named them was
- * removed or changed (the desktop's `release`). The sweep then deletes them
- * once they are older than the pending lifetime, which leaves a composer
- * that still holds one a day to send it again. Returns how many were
- * released.
- */
-export function release(db: SessionDatabase, imageIds: readonly string[]): number {
-  if (imageIds.length === 0) {
-    return 0;
-  }
-  return transact(db, (tx) => {
-    const referenced = referencedAmong(tx, imageIds);
-    const released = [...new Set(imageIds)].filter((id) => !referenced.has(id));
-    if (released.length === 0) {
-      return 0;
-    }
-    return tx
-      .update(researchImages)
-      .set({ attachedAt: null })
-      .where(inArray(researchImages.id, released))
-      .run().changes;
-  });
-}
-
-/**
- * Which of `imageIds` a node message, a draft or a queued follow-up still
- * names. Only their uploaders' nodes, drafts and queued items are read: a
- * message or draft names only images its author uploaded
- * (`resolveAttachments`).
- */
-function referencedAmong(db: SessionDatabase, imageIds: readonly string[]): Set<string> {
-  const ids = [...new Set(imageIds)];
-  if (ids.length === 0) {
-    return new Set();
-  }
-  const owners = db
-    .selectDistinct({ ownerId: researchImages.ownerId })
-    .from(researchImages)
-    .where(inArray(researchImages.id, ids))
-    .all()
-    .map((row) => row.ownerId);
-  if (owners.length === 0) {
-    return new Set();
-  }
-  const idList = sql.join(
-    ids.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const ownerList = sql.join(
-    owners.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const rows = db.all<{ id: string | null }>(sql`
-    select json_extract(attachment.value, '$.id') as id
-      from nodes, json_each(nodes.message_json, '$.attachments') as attachment
-     where nodes.author_id in (${ownerList})
-       and nodes.message_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-       and json_extract(attachment.value, '$.id') in (${idList})
-    union
-    select json_extract(attachment.value, '$.id') as id
-      from research_drafts, json_each(research_drafts.attachments_json) as attachment
-     where research_drafts.user_id in (${ownerList})
-       and research_drafts.attachments_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-       and json_extract(attachment.value, '$.id') in (${idList})
-    union
-    select json_extract(attachment.value, '$.id') as id
-      from followup_queue, json_each(followup_queue.message_json, '$.attachments') as attachment
-     where followup_queue.author_id in (${ownerList})
-       and followup_queue.message_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-       and json_extract(attachment.value, '$.id') in (${idList})
-  `);
-  return new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
-}
-
-/** Every image id a node message, a draft or a queued follow-up names, for
- * the sweep, which reads every row anyway. The `like` filters skip rows
- * without an image before their JSON is parsed. */
-export function referencedIds(db: SessionDatabase): Set<string> {
-  const rows = db.all<{ id: string | null }>(sql`
-    select json_extract(attachment.value, '$.id') as id
-      from nodes, json_each(nodes.message_json, '$.attachments') as attachment
-     where nodes.message_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-    union
-    select json_extract(attachment.value, '$.id') as id
-      from research_drafts, json_each(research_drafts.attachments_json) as attachment
-     where research_drafts.attachments_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-    union
-    select json_extract(attachment.value, '$.id') as id
-      from followup_queue, json_each(followup_queue.message_json, '$.attachments') as attachment
-     where followup_queue.message_json like '%"kind":"image"%'
-       and json_extract(attachment.value, '$.kind') = 'image'
-  `);
-  return new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
-}
+// The references themselves are written by `imageRefs.ts`, which the
+// repositories that delete nodes import without this module's access
+// dependency.
+export {
+  dropNodeRefs,
+  dropRefs,
+  imageIdsOf,
+  markAttached,
+  refsOf,
+  release,
+  setRefs,
+} from "./imageRefs.js";
+export type { ImageHolder, ImageRefRow } from "./imageRefs.js";
 
 export interface ImageSweepResult {
   /** Rows deleted: pending past their lifetime, or released and older than
@@ -327,57 +200,51 @@ export interface ImageSweepResult {
   released: number;
   /** Pending rows a message or draft names, marked attached. */
   attached: number;
+  /** References whose node, draft or queued item no longer exists (one a
+   * foreign-key cascade removed without the repositories), dropped. */
+  dangling: number;
 }
 
 /**
- * Reconciles `attached_at` with the references and deletes the images that
- * are no longer needed. Files are not touched here: the server unlinks every
- * file under the image directory that no row's `storage_path` names
- * (`storagePaths`), after this runs.
+ * Drops references whose holder is gone, reconciles `attached_at` with the
+ * references and deletes the images that are no longer needed. Every step
+ * is an indexed lookup per row; no message is parsed. Files are not touched
+ * here: the server unlinks every file under the image directory that no
+ * row's `storage_path` names (`storagePaths`), after this runs.
  */
 export function sweep(db: SessionDatabase, at: number = now()): ImageSweepResult {
   return transact(db, (tx) => {
-    const referenced = referencedIds(tx);
+    const dangling = tx.run(sql`
+      delete from ${imageRefs}
+       where (${imageRefs.holderKind} = 'node'
+              and not exists (select 1 from nodes where nodes.id = ${imageRefs.holderId}))
+          or (${imageRefs.holderKind} = 'draft'
+              and not exists (select 1 from research_drafts where research_drafts.id = ${imageRefs.holderId}))
+          or (${imageRefs.holderKind} = 'queue'
+              and not exists (select 1 from followup_queue where followup_queue.id = ${imageRefs.holderId}))
+    `).changes;
+    const unreferenced = sql`not exists (select 1 from ${imageRefs} where ${imageRefs.imageId} = ${researchImages.id})`;
     const expired = at - PENDING_IMAGE_LIFETIME_MS;
-    const result: ImageSweepResult = { deleted: 0, released: 0, attached: 0 };
-    const toDelete: string[] = [];
-    const toRelease: string[] = [];
-    const toAttach: string[] = [];
-    for (const row of tx
-      .select({
-        id: researchImages.id,
-        createdAt: researchImages.createdAt,
-        attachedAt: researchImages.attachedAt,
-      })
-      .from(researchImages)
-      .all()) {
-      if (referenced.has(row.id)) {
-        if (row.attachedAt === null) toAttach.push(row.id);
-      } else if (row.createdAt <= expired) {
-        toDelete.push(row.id);
-      } else if (row.attachedAt !== null) {
-        toRelease.push(row.id);
-      }
-    }
-    for (const ids of chunks(toDelete)) {
-      tx.delete(researchImages).where(inArray(researchImages.id, ids)).run();
-    }
-    for (const ids of chunks(toRelease)) {
-      tx.update(researchImages)
-        .set({ attachedAt: null })
-        .where(inArray(researchImages.id, ids))
-        .run();
-    }
-    for (const ids of chunks(toAttach)) {
-      tx.update(researchImages)
-        .set({ attachedAt: at })
-        .where(inArray(researchImages.id, ids))
-        .run();
-    }
-    result.deleted = toDelete.length;
-    result.released = toRelease.length;
-    result.attached = toAttach.length;
-    return result;
+    const deleted = tx
+      .delete(researchImages)
+      .where(and(sql`${researchImages.createdAt} <= ${expired}`, unreferenced))
+      .run().changes;
+    const released = tx
+      .update(researchImages)
+      .set({ attachedAt: null })
+      .where(and(sql`${researchImages.attachedAt} is not null`, unreferenced))
+      .run().changes;
+    const attached = tx
+      .update(researchImages)
+      .set({ attachedAt: at })
+      .where(
+        and(
+          sql`${researchImages.attachedAt} is null`,
+          sql`exists (select 1 from ${imageRefs} where ${imageRefs.imageId} = ${researchImages.id})`,
+        ),
+      )
+      .run().changes;
+    return { deleted, released, attached, dangling };
   });
 }
 
@@ -388,13 +255,4 @@ export function storagePaths(db: SessionDatabase): string[] {
     .from(researchImages)
     .all()
     .map((row) => row.path);
-}
-
-/** SQLite caps bound parameters; deletes and updates go in slices. */
-function chunks(ids: readonly string[], size = 500): string[][] {
-  const result: string[][] = [];
-  for (let index = 0; index < ids.length; index += size) {
-    result.push(ids.slice(index, index + size));
-  }
-  return result;
 }

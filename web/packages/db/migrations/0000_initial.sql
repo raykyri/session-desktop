@@ -190,6 +190,19 @@ CREATE TABLE `highlights` (
 --> statement-breakpoint
 CREATE INDEX `highlights_node_idx` ON `highlights` (`node_id`);--> statement-breakpoint
 CREATE INDEX `highlights_author_idx` ON `highlights` (`author_id`,`created_at`);--> statement-breakpoint
+CREATE TABLE `image_refs` (
+	`image_id` text NOT NULL,
+	`holder_kind` text NOT NULL,
+	`holder_id` text NOT NULL,
+	`tree_id` text,
+	`created_at` integer NOT NULL,
+	PRIMARY KEY(`image_id`, `holder_kind`, `holder_id`),
+	FOREIGN KEY (`image_id`) REFERENCES `research_images`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `image_refs_holder_idx` ON `image_refs` (`holder_kind`,`holder_id`);--> statement-breakpoint
+CREATE INDEX `image_refs_tree_idx` ON `image_refs` (`tree_id`);--> statement-breakpoint
 CREATE TABLE `research_images` (
 	`id` text PRIMARY KEY NOT NULL,
 	`owner_id` text NOT NULL,
@@ -393,6 +406,7 @@ CREATE TABLE `trees` (
 	`parent_tree_id` text,
 	`visibility` text DEFAULT 'private' NOT NULL,
 	`position` integer NOT NULL,
+	`deleted_at` integer,
 	FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`trashed_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
@@ -403,6 +417,7 @@ CREATE INDEX `trees_sidebar_idx` ON `trees` (`owner_id`,`workspace_id`,`archived
 CREATE INDEX `trees_trash_idx` ON `trees` (`owner_id`,`trashed_at`);--> statement-breakpoint
 CREATE INDEX `trees_parent_idx` ON `trees` (`parent_tree_id`);--> statement-breakpoint
 CREATE INDEX `trees_visibility_idx` ON `trees` (`visibility`,`updated_at`);--> statement-breakpoint
+CREATE INDEX `trees_deleted_idx` ON `trees` (`deleted_at`);--> statement-breakpoint
 CREATE TABLE `tweet_cache` (
 	`tweet_id` text PRIMARY KEY NOT NULL,
 	`payload_json` text,
@@ -510,6 +525,7 @@ CREATE TABLE `workspaces` (
 	`position` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
+	`deleted_at` integer,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint

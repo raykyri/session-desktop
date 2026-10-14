@@ -1,6 +1,6 @@
 import test from "ava";
 
-import { nodes, preferences, trees, workspaces } from "../src/index.js";
+import { deletion, nodes, preferences, trees, workspaces } from "../src/index.js";
 
 import { addUser, createFixture } from "./helpers.js";
 
@@ -91,8 +91,14 @@ test("removing a workspace deletes a whole subtree of nodes", (t) => {
     "cancelled",
   );
   workspaces.remove(fixture.db, fixture.userId, fixture.workspaceId);
+  // Gone from the account at once; the rows go in the background.
+  t.deepEqual(workspaces.list(fixture.db, fixture.userId), []);
+  t.is(workspaces.get(fixture.db, fixture.userId, fixture.workspaceId), null);
+  t.is(trees.get(fixture.db, fixture.userId, detail.tree.id), null);
+  deletion.drain(fixture.db);
   const remaining = fixture.db.$client.prepare(`SELECT count(*) AS n FROM nodes`).get();
   t.deepEqual(remaining, { n: 0 });
+  t.deepEqual(fixture.db.$client.prepare(`SELECT count(*) AS n FROM workspaces`).get(), { n: 0 });
 });
 
 test("ensureDefault creates one workspace and setDefault records the choice", (t) => {

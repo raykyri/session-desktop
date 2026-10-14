@@ -39,6 +39,7 @@ test("applies every migration to an empty database", (t) => {
         "folders",
         "followup_queue",
         "highlights",
+        "image_refs",
         "interface_drafts",
         "invites",
         "node_messages",

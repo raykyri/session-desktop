@@ -19,11 +19,7 @@ import {
   queuePositionOf,
   scheduleDocumentRecap,
 } from "../../../research/admission.js";
-import {
-  assertModelReadsImages,
-  markImagesAttached,
-  resolveImageAttachments,
-} from "../../../research/images.js";
+import { assertModelReadsImages, resolveImageAttachments } from "../../../research/images.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
 import { publish } from "../../emit.js";
 import { repo, required } from "../../errors.js";
@@ -128,7 +124,6 @@ export const treeProcedures = {
         }),
       );
       const node = required(detail.nodes[0], "the new thread has no root node");
-      markImagesAttached(ctx.db, images);
       enqueueRun(ctx, node.id, input.model);
       publish(ctx, "research.tree.created", { tree: detail.tree, node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
@@ -221,6 +216,8 @@ export const treeProcedures = {
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
       const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
+      // The threads are hidden now; their rows go in the background.
+      if (!removed.departure) ctx.deletions.kick();
       if (removed.departure) {
         // A member left: their queued follow-ups are gone and their running
         // questions stop, as for `sharing.leave`.

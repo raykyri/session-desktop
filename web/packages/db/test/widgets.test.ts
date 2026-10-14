@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import test from "ava";
 
 import type { SessionDatabase } from "../src/index.js";
-import { trees, widgets } from "../src/index.js";
+import { deletion, trees, widgets } from "../src/index.js";
 
 import { addUser, createFixture } from "./helpers.js";
 
@@ -217,6 +217,7 @@ test("removing the answer removes its revisions and their saved inputs", (t) => 
   widgets.updateState(fixture.db, fixture.userId, ref, "enable", null);
   fixture.db.$client.prepare("UPDATE nodes SET status = 'complete'").run();
   trees.remove(fixture.db, fixture.userId, owner.treeId);
+  deletion.drain(fixture.db);
   t.false(widgets.exists(fixture.db, ref));
   t.is(
     (fixture.db.$client.prepare("SELECT count(*) AS n FROM widget_state").get() as { n: number }).n,

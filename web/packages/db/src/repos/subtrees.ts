@@ -14,6 +14,8 @@ import type { SQL } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { nodes } from "../schema/nodes.js";
 
+import { dropNodeRefs } from "./imageRefs.js";
+
 /** A node and every descendant, deepest first — the order they can be
  * deleted in. */
 export function subtreeIdsDepthFirst(db: SessionDatabase, rootNodeId: string): string[] {
@@ -35,9 +37,11 @@ export function subtreeIdsDepthFirst(db: SessionDatabase, rootNodeId: string): s
   return ordered;
 }
 
-/** Deletes the listed nodes deepest-first. The caller supplies an order that
- * already satisfies the constraint; this only issues the statements. */
+/** Deletes the listed nodes deepest-first, and their image references
+ * (`imageRefs.dropNodeRefs`). The caller supplies an order that already
+ * satisfies the constraint; this only issues the statements. */
 export function deleteNodesInOrder(db: SessionDatabase, nodeIds: readonly string[]): number {
+  dropNodeRefs(db, nodeIds);
   let removed = 0;
   for (const nodeId of nodeIds) {
     removed += db
@@ -54,16 +58,13 @@ export function deleteNodesInOrder(db: SessionDatabase, nodeIds: readonly string
 const DELETE_CHUNK = 500;
 
 /**
- * Deletes every node of the given trees. The `(id, parent)` pairs are read
- * once and each node's depth computed in memory; the nodes are then deleted
- * a depth at a time, deepest first, in chunks. A row's `RESTRICT` check runs
- * as it is deleted, so one statement must not hold a parent and its child:
- * a depth never does. Linear in the number of nodes, however deep a chain
- * is; the earlier leaf-peeling loop read the whole set once per level.
+ * The nodes of the given trees by depth, root level first. The `(id,
+ * parent)` pairs are read once and each node's depth computed in memory, so
+ * this is linear in the number of nodes however deep a chain is.
  */
-export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string[]): number {
+export function nodeLevels(db: SessionDatabase, treeIds: readonly string[]): string[][] {
   if (treeIds.length === 0) {
-    return 0;
+    return [];
   }
   const rows = db
     .select({ id: nodes.id, parentId: nodes.parentNodeId })
@@ -87,18 +88,58 @@ export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string
     levels.push(frontier);
     frontier = frontier.flatMap((id) => children.get(id) ?? []);
   }
-  let removed = 0;
-  for (let depth = levels.length - 1; depth >= 0; depth -= 1) {
+  return levels;
+}
+
+/** The first `limit` nodes of `levels` deepest first, as the batches they
+ * can be deleted in: a depth at a time, in chunks. A row's `RESTRICT` check
+ * runs as it is deleted, so one statement must not hold a parent and its
+ * child: a depth never does. */
+export function deepestFirstBatches(
+  levels: readonly (readonly string[])[],
+  limit: number = Number.POSITIVE_INFINITY,
+): string[][] {
+  const batches: string[][] = [];
+  let taken = 0;
+  for (let depth = levels.length - 1; depth >= 0 && taken < limit; depth -= 1) {
     const level = levels[depth] ?? [];
-    for (let start = 0; start < level.length; start += DELETE_CHUNK) {
-      removed += db
-        .delete(nodes)
-        .where(inArray(nodes.id, level.slice(start, start + DELETE_CHUNK)))
-        .returning({ id: nodes.id })
-        .all().length;
+    for (let start = 0; start < level.length && taken < limit; start += DELETE_CHUNK) {
+      const ids = level.slice(start, start + Math.min(DELETE_CHUNK, limit - taken));
+      batches.push(ids);
+      taken += ids.length;
     }
   }
+  return batches;
+}
+
+/** Deletes the batches `deepestFirstBatches` made, in order, with their
+ * image references. Returns how many nodes were deleted. */
+export function deleteNodeBatches(db: SessionDatabase, batches: readonly string[][]): number {
+  dropNodeRefs(db, batches.flat());
+  // A deep chain is one statement per node, so the single-node delete is
+  // prepared once: building each statement would cost more than running it.
+  const deleteOne = db
+    .delete(nodes)
+    .where(eq(nodes.id, sql.placeholder("id")))
+    .prepare();
+  let removed = 0;
+  for (const ids of batches) {
+    removed +=
+      ids.length === 1
+        ? deleteOne.run({ id: ids[0] }).changes
+        : db.delete(nodes).where(inArray(nodes.id, ids)).run().changes;
+  }
   return removed;
+}
+
+/**
+ * Deletes every node of the given trees deepest first, with their image
+ * references. Linear in the number of nodes, however deep a chain is. The
+ * deletion job deletes a marked thread's nodes a bounded batch at a time
+ * instead (`deletion.ts`).
+ */
+export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string[]): number {
+  return deleteNodeBatches(db, deepestFirstBatches(nodeLevels(db, treeIds)));
 }
 
 /**

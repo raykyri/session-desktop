@@ -16,7 +16,7 @@ import {
   validateHighlightAnchor,
 } from "@session/shared";
 import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -48,6 +48,7 @@ import {
 } from "./access.js";
 import type { NodeAccess, TreeRole } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
+import { setRefs } from "./imageRefs.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
 import { enqueue } from "./queue.js";
@@ -247,6 +248,49 @@ export function chainIdsFrom(db: SessionDatabase, headId: string): string[] {
   }
 }
 
+/**
+ * The nodes the shared chain rules (`inlineChainFor`, `researchQueueAction`)
+ * read for the inline chain `nodeId` belongs to: its inline ancestors up to
+ * the chain's head, and every inline descendant of those, duplicates
+ * included. Read by one recursive query over `nodes_parent_idx`, in the
+ * thread's node order, without the rest of the thread or highlights: the
+ * follow-up queue decides on these alone (`followups.ts`). Access is the
+ * caller's to check. Empty for an unknown node.
+ */
+export function chainNodes(
+  db: SessionDatabase,
+  nodeId: string,
+  workspaceId: string,
+): ResearchNode[] {
+  const chain = sql`
+    with recursive
+      up(id, parent_node_id, inline) as (
+        select id, parent_node_id, inline from nodes where id = ${nodeId}
+        union
+        select parent.id, parent.parent_node_id, parent.inline
+          from nodes as parent
+          inner join up on parent.id = up.parent_node_id
+         where up.inline = 1
+      ),
+      chain(id) as (
+        select id from up
+        union
+        select child.id
+          from nodes as child
+          inner join chain on child.parent_node_id = chain.id
+         where child.inline = 1
+      )
+    select id from chain
+  `;
+  return db
+    .select()
+    .from(nodes)
+    .where(sql`${nodes.id} in (${chain})`)
+    .orderBy(asc(nodes.createdAt), asc(nodes.id))
+    .all()
+    .map((row) => toResearchNode(row, { workspaceId, highlights: [] }));
+}
+
 /** Whether an exchange's run is settled and no longer the server's: any
  * terminal status except an `interrupted` run with a resume pending. */
 function runSettled(node: NodeRow): boolean {
@@ -365,6 +409,7 @@ export function admitChildDetailed(
       }
       throw error;
     }
+    setRefs(tx, { kind: "node", id: nodeId, treeId: parent.treeId }, message.attachments, at);
     let movedQueue = false;
     if (replacedNodeId !== null && !inline) {
       // A branch question heads its own chain: follow-ups queued behind it
@@ -992,6 +1037,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         and(
           eq(nodes.status, "queued"),
           eq(nodes.resumePending, false),
+          isNull(trees.deletedAt),
           sql`not exists (select 1 from ${runQueue} where ${runQueue.nodeId} = ${nodes.id})`,
         ),
       )
@@ -1013,7 +1059,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       })
       .from(nodes)
       .innerJoin(trees, eq(trees.id, nodes.treeId))
-      .where(eq(nodes.resumePending, true))
+      .where(and(eq(nodes.resumePending, true), isNull(trees.deletedAt)))
       .orderBy(asc(nodes.id))
       .all();
     for (const node of pending) {

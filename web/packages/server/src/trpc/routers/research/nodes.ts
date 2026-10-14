@@ -30,11 +30,7 @@ import {
   scheduleDocumentRecap,
 } from "../../../research/admission.js";
 import { publishQueue } from "../../../research/followups.js";
-import {
-  assertModelReadsImages,
-  markImagesAttached,
-  resolveImageAttachments,
-} from "../../../research/images.js";
+import { assertModelReadsImages, resolveImageAttachments } from "../../../research/images.js";
 import { notifyNewNode } from "../../../research/notifications.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
 import { publishToTree } from "../../emit.js";
@@ -110,7 +106,6 @@ export const nodeProcedures = {
         }),
       );
       const node = admitted.node;
-      markImagesAttached(ctx.db, images);
       enqueueRun(ctx, node.id, model);
       if (admitted.replacedNodeId !== null) {
         publishToTree(ctx, node.treeId, "research.node.removed", {

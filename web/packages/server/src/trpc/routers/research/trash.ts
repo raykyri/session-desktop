@@ -103,6 +103,8 @@ export const trashProcedures = {
     .input(z.object({ workspaceId: z.string() }))
     .mutation(({ ctx, input }): { treeIds: string[]; folderIds: string[] } => {
       const emptied = repo(() => trash.empty(ctx.db, ctx.user.id, input.workspaceId));
+      // The emptied threads are hidden now; their rows go in the background.
+      ctx.deletions.kick();
       const left = new Set(emptied.leftTreeIds);
       for (const treeId of emptied.treeIds) {
         if (left.has(treeId)) continue;

@@ -10,6 +10,7 @@
 
 import * as access from "./access.js";
 import * as auth from "./auth.js";
+import * as deletion from "./deletion.js";
 import * as drafts from "./drafts.js";
 import * as embeds from "./embeds.js";
 import * as feedItems from "./feedItems.js";
@@ -44,6 +45,7 @@ import * as workspaces from "./workspaces.js";
 export {
   access,
   auth,
+  deletion,
   drafts,
   embeds,
   feedgen,

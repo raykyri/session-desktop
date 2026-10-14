@@ -3,7 +3,7 @@ import test from "ava";
 
 import { followups, nodes, queue, tableRowCount, trees } from "../src/index.js";
 
-import { createFixture, runOf } from "./helpers.js";
+import { addUser, createFixture, runOf } from "./helpers.js";
 
 type Fixture = ReturnType<typeof createFixture>;
 
@@ -258,4 +258,69 @@ test("an edited branch question takes the queue behind it and says so", (t) => {
     message: { text: "Another branch" },
   });
   t.false(plain.movedQueue);
+});
+
+test("the queue reads one chain's nodes, not the whole thread", (t) => {
+  const fixture = createFixture(t);
+  const tree = runningRoot(fixture);
+  const complete = (nodeId: string) => {
+    nodes.setStatus(fixture.db, fixture.userId, nodeId, "running");
+    nodes.setStatus(fixture.db, fixture.userId, nodeId, "complete");
+  };
+  nodes.setStatus(fixture.db, fixture.userId, tree.rootNodeId, "complete");
+  const first = nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: tree.rootNodeId,
+    message: { text: "First follow-up" },
+    inline: true,
+  });
+  complete(first.id);
+  const second = nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: first.id,
+    message: { text: "Second follow-up" },
+    inline: true,
+  });
+  // Elsewhere in the thread: a branch under the first follow-up, with its
+  // own inline chain, which the root's chain does not include.
+  const branch = nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: first.id,
+    message: { text: "A branch" },
+  });
+  complete(branch.id);
+  const branchFollowUp = nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: branch.id,
+    message: { text: "The branch's follow-up" },
+    inline: true,
+  });
+
+  const ids = (list: { id: string }[]) => list.map((node) => node.id);
+  const workspaceId = fixture.workspaceId;
+  t.deepEqual(ids(nodes.chainNodes(fixture.db, second.id, workspaceId)), [
+    tree.rootNodeId,
+    first.id,
+    second.id,
+  ]);
+  t.deepEqual(ids(nodes.chainNodes(fixture.db, tree.rootNodeId, workspaceId)), [
+    tree.rootNodeId,
+    first.id,
+    second.id,
+  ]);
+  t.deepEqual(ids(nodes.chainNodes(fixture.db, branchFollowUp.id, workspaceId)), [
+    branch.id,
+    branchFollowUp.id,
+  ]);
+  t.deepEqual(nodes.chainNodes(fixture.db, "missing", workspaceId), []);
+
+  t.is(followups.chainTail(fixture.db, fixture.userId, tree.rootNodeId)?.id, second.id);
+  t.is(followups.chainTail(fixture.db, fixture.userId, branch.id)?.id, branchFollowUp.id);
+  const stranger = addUser(fixture.db, "chain-stranger");
+  t.is(followups.chainTail(fixture.db, stranger.userId, tree.rootNodeId), null);
+
+  // The decisions are the same as over the whole thread: the root's chain
+  // waits on its running tail, and sends once it completes.
+  t.is(ask(fixture, tree.rootNodeId, "Third").kind, "queued");
+  t.deepEqual(followups.nextStep(fixture.db, fixture.userId, tree.rootNodeId), { kind: "wait" });
+  complete(second.id);
+  const step = followups.nextStep(fixture.db, fixture.userId, tree.rootNodeId);
+  t.is(step.kind, "send");
+  if (step.kind === "send") t.is(step.tailId, second.id);
 });

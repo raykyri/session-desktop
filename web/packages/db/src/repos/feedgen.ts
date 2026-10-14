@@ -20,7 +20,8 @@ export function upsertResearchRoot(db: SessionDatabase, nodeId: string): boolean
     !row ||
     row.node.parentNodeId !== null ||
     row.tree.archivedAt !== null ||
-    row.tree.trashedAt !== null
+    row.tree.trashedAt !== null ||
+    row.tree.deletedAt !== null
   ) {
     db.delete(feedItems).where(eq(feedItems.nodeId, nodeId)).run();
     return false;

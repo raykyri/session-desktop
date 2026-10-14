@@ -47,6 +47,11 @@ export const trees = sqliteTable(
     /** Sidebar order within (`workspace_id`, `archived_at IS NULL`). New roots
      * insert at 0. */
     position: integer("position").notNull(),
+    /** Set when the thread is deleted (Delete now, Empty Trash, removing its
+     * workspace). From then on no query or access check sees it
+     * (`repos/deletion.ts`), and the server's deletion job removes its rows
+     * in bounded steps, then the row itself. */
+    deletedAt: integer("deleted_at"),
   },
   (table) => [
     index("trees_sidebar_idx").on(
@@ -59,6 +64,7 @@ export const trees = sqliteTable(
     index("trees_trash_idx").on(table.ownerId, table.trashedAt),
     index("trees_parent_idx").on(table.parentTreeId),
     index("trees_visibility_idx").on(table.visibility, table.updatedAt),
+    index("trees_deleted_idx").on(table.deletedAt),
   ],
 );
 

@@ -13,7 +13,7 @@ import type {
   ResearchMessageAttachment,
 } from "@session/shared";
 import { researchMessageAttachmentSchema } from "@session/shared";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { SessionDatabase } from "../connection.js";
@@ -25,7 +25,7 @@ import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
 import { MAX_DRAFT_VALUE_BYTES } from "./drafts.js";
-import { imageIdsOf, markAttached, release } from "./images.js";
+import { dropRefs, setRefs } from "./imageRefs.js";
 
 const attachmentListSchema = z.array(researchMessageAttachmentSchema);
 
@@ -97,23 +97,20 @@ export function save(db: SessionDatabase, userId: string, input: SaveDraftInput)
     const workspace = tx
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(and(eq(workspaces.userId, userId), eq(workspaces.id, input.workspaceId)))
+      .where(
+        and(
+          eq(workspaces.userId, userId),
+          eq(workspaces.id, input.workspaceId),
+          isNull(workspaces.deletedAt),
+        ),
+      )
       .get();
     if (!workspace) {
       throw new Error(`research workspace ${input.workspaceId} was not found`);
     }
     const at = now();
     let row: DraftRow | undefined;
-    let replaced: string[] = [];
     if (input.id !== undefined && input.id !== null) {
-      const previous = tx
-        .select()
-        .from(researchDrafts)
-        .where(and(workspacePredicate(userId, input.workspaceId), eq(researchDrafts.id, input.id)))
-        .get();
-      if (previous && images !== null) {
-        replaced = imageIdsOf(toResearchDraft(previous).attachments);
-      }
       row = tx
         .update(researchDrafts)
         .set({
@@ -147,8 +144,11 @@ export function save(db: SessionDatabase, userId: string, input: SaveDraftInput)
         .returning()
         .get();
     }
-    markAttached(tx, imageIdsOf(images), at);
-    release(tx, replaced);
+    // Images replace the draft's when given (dropping the references to the
+    // ones no longer named); absent, the draft keeps its images.
+    if (images !== null) {
+      setRefs(tx, { kind: "draft", id: row.id, treeId: null }, images, at);
+    }
     return toResearchDraft(row);
   });
 }
@@ -169,7 +169,7 @@ export function remove(
     if (!row) {
       throw new Error(`research draft ${draftId} was not found`);
     }
-    release(tx, imageIdsOf(toResearchDraft(row).attachments));
+    dropRefs(tx, "draft", [row.id]);
     return { workspaceId: row.workspaceId };
   });
 }

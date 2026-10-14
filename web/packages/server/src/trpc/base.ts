@@ -12,6 +12,7 @@ import type { EventBus } from "../events/bus.js";
 import type { Logger } from "../logger.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS } from "../middleware/rateLimit.js";
+import type { DeletionJob } from "../research/deletion.js";
 import type { RunsService } from "../runs/service.js";
 
 export interface AppContext {
@@ -19,6 +20,7 @@ export interface AppContext {
   db: SessionDatabase;
   eventBus: EventBus;
   runs: RunsService;
+  deletions: DeletionJob;
   logger: Logger;
   limiter: RateLimiter;
   fetch: typeof globalThis.fetch;
@@ -46,6 +48,7 @@ export function createAppContext(
     db: deps.db,
     eventBus: deps.eventBus,
     runs: deps.runs,
+    deletions: deps.deletions,
     logger,
     limiter,
     fetch: deps.fetch ?? globalThis.fetch,

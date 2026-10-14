@@ -24,6 +24,7 @@ import { TWEET_CACHE_TTL_MS } from "./journal/tweets.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { treeDirectory } from "./research/access.js";
+import { createDeletionJob } from "./research/deletion.js";
 import { dispatchAll } from "./research/followups.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
@@ -268,15 +269,20 @@ export function main(): RunningServer {
   });
   // Fixture providers answer the procedures' own requests (an X post a saved
   // link names) in process too.
+  // Deletes what earlier Delete now, Empty Trash and workspace removals
+  // marked; kicked here so a restart resumes where the last process stopped.
+  const deletions = createDeletionJob({ db, logger });
   const deps: ServerDeps = {
     config,
     db,
     eventBus,
     runs,
+    deletions,
     logger,
     ...(config.fixtureProviders ? { fetch: fixturePageFetch } : {}),
   };
   reconcileRuns(deps, logger);
+  deletions.kick();
 
   const limiter = new RateLimiter();
   const maintenance = setInterval(() => {
@@ -315,6 +321,7 @@ export function main(): RunningServer {
     clearInterval(maintenance);
     clearInterval(nightly);
     clearInterval(presence);
+    deletions.stop();
     logger.info({ signal }, "shutting down");
     // Stop admitting first, then let open attempts persist their checkpoint
     // and mark themselves `interrupted` with `resume_pending`.

@@ -24,7 +24,7 @@
 // from (`tree_members.trash_workspace_id`).
 
 import type { ResearchTree, ResearchTreeSummary } from "@session/shared";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -35,11 +35,11 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
+import { markTreesDeleted } from "./deletion.js";
 import type { FeedItemRemoval } from "./feedItems.js";
 import { activeRun } from "./subtrees.js";
 import {
   defaultWorkspaceIdOf,
-  deleteTreeRows,
   feedItemsOf,
   groupChildren,
   removeMembership,
@@ -220,7 +220,13 @@ function memberTrashWorkspace(
   const owned = db
     .select({ id: workspaces.id })
     .from(workspaces)
-    .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)))
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.userId, userId),
+        isNull(workspaces.deletedAt),
+      ),
+    )
     .get();
   if (!owned) {
     throw new Error(`research workspace ${workspaceId} was not found`);
@@ -251,13 +257,14 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
           eq(trees.ownerId, userId),
           eq(trees.workspaceId, workspaceId),
           isNotNull(trees.trashedAt),
+          isNull(trees.deletedAt),
         ),
       )
       .all()
       .map((row) => row.id);
     const active = activeTreeIds(tx, trashedTreeIds);
     const treeIds = trashedTreeIds.filter((id) => !active.has(id)).sort();
-    deleteTreeRows(tx, treeIds);
+    markTreesDeleted(tx, treeIds);
     // Shared threads in the caller's own Trash for this workspace: they
     // leave them.
     const fallback = defaultWorkspaceIdOf(tx, userId);

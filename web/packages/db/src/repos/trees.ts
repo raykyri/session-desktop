@@ -45,14 +45,17 @@ import {
   requireTreeAccess,
   roleFor,
   treeAccess,
+  treeLive,
 } from "./access.js";
 import type { MemberRow, TreeAccess, TreeRole } from "./access.js";
+import { markTreesDeleted } from "./deletion.js";
 import { forTree as feedItemForTree } from "./feedItems.js";
 import type { FeedItemRemoval } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
+import { dropRefs, setRefs } from "./imageRefs.js";
 import { archivedByFor, toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import type { TreeRow } from "./mappers.js";
-import { activeRun, deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
+import { activeRun, hasActiveNodes } from "./subtrees.js";
 
 /** The agent a node runs on (an exchange) or defaults its follow-ups to (a
  * post or document): a registry model id and a reasoning effort, null for
@@ -97,6 +100,7 @@ function sectionPredicate(ownerId: string, workspaceId: string, archived: boolea
     eq(trees.workspaceId, workspaceId),
     archived ? isNotNull(trees.archivedAt) : isNull(trees.archivedAt),
     isNull(trees.trashedAt),
+    treeLive(),
   );
 }
 
@@ -109,6 +113,7 @@ function positionedPredicate(ownerId: string, workspaceId: string, archived: boo
     eq(trees.ownerId, ownerId),
     eq(trees.workspaceId, workspaceId),
     archived ? isNotNull(trees.archivedAt) : isNull(trees.archivedAt),
+    treeLive(),
   );
 }
 
@@ -228,7 +233,13 @@ export function admitRoot(
     const workspace = tx
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(and(eq(workspaces.userId, userId), eq(workspaces.id, input.workspaceId)))
+      .where(
+        and(
+          eq(workspaces.userId, userId),
+          eq(workspaces.id, input.workspaceId),
+          isNull(workspaces.deletedAt),
+        ),
+      )
       .get();
     if (!workspace) {
       throw new Error(`research workspace ${input.workspaceId} was not found`);
@@ -295,6 +306,7 @@ export function admitRoot(
         recapJson: null,
       })
       .run();
+    setRefs(tx, { kind: "node", id: nodeId, treeId }, message?.attachments, at);
     writeView(tx, userId, treeId, at);
     // The owner follows their own thread (`sharing.setFollowing` turns it
     // off; nothing turns it back on but the owner).
@@ -446,6 +458,7 @@ export function summaries(
     .where(
       and(
         eq(trees.ownerId, userId),
+        treeLive(),
         options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
         options.trashed === true
           ? isNotNull(trees.trashedAt)
@@ -506,6 +519,7 @@ function memberRows(
       and(
         eq(treeMembers.userId, userId),
         isNull(trees.trashedAt),
+        treeLive(),
         options.trashed === true ? isNotNull(treeMembers.trashedAt) : isNull(treeMembers.trashedAt),
         options.trashed === true || options.includeArchived === true
           ? undefined
@@ -572,7 +586,13 @@ export function defaultWorkspaceIdOf(db: SessionDatabase, userId: string): strin
     .select({ id: workspaces.id })
     .from(userPreferences)
     .innerJoin(workspaces, eq(workspaces.id, userPreferences.defaultWorkspaceId))
-    .where(and(eq(userPreferences.userId, userId), eq(workspaces.userId, userId)))
+    .where(
+      and(
+        eq(userPreferences.userId, userId),
+        eq(workspaces.userId, userId),
+        isNull(workspaces.deletedAt),
+      ),
+    )
     .get();
   if (preferred) {
     return preferred.id;
@@ -581,7 +601,7 @@ export function defaultWorkspaceIdOf(db: SessionDatabase, userId: string): strin
     db
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(eq(workspaces.userId, userId))
+      .where(and(eq(workspaces.userId, userId), isNull(workspaces.deletedAt)))
       .orderBy(asc(workspaces.position), asc(workspaces.id))
       .get()?.id ?? null
   );
@@ -608,6 +628,7 @@ export function publicSummaries(
         eq(trees.visibility, "public"),
         isNull(trees.trashedAt),
         isNull(trees.archivedAt),
+        treeLive(),
         options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
       ),
     )
@@ -913,6 +934,7 @@ export function groupChildren(db: SessionDatabase, row: TreeRow): TreeRow[] {
         ne(trees.id, row.id),
         eq(trees.ownerId, row.ownerId),
         eq(trees.workspaceId, row.workspaceId),
+        treeLive(),
       ),
     )
     .orderBy(asc(trees.position), asc(trees.id))
@@ -1119,6 +1141,11 @@ export function dropQueuedFollowups(
     .where(and(eq(followupQueue.treeId, treeId), eq(followupQueue.authorId, memberId)))
     .all();
   if (queued.length > 0) {
+    dropRefs(
+      db,
+      "queue",
+      queued.map((row) => row.id),
+    );
     db.delete(followupQueue)
       .where(
         inArray(
@@ -1193,7 +1220,9 @@ export function removeMembership(db: SessionDatabase, member: MemberRow): LeftTr
  * the children listed under it (`groupChildren`). Refused while a run in any
  * of them is still the server's responsibility, for the reason
  * `workspaces.remove` gives. A child listed elsewhere stays and loses its
- * parent (`parent_tree_id` is `ON DELETE SET NULL`).
+ * parent. The threads are marked deleted, which hides them from everyone at
+ * once; their rows are deleted afterwards by the deletion job
+ * (`deletion.ts`).
  */
 export function remove(db: SessionDatabase, userId: string, treeId: string): RemovedTrees {
   return transact(db, (tx) => {
@@ -1230,7 +1259,7 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): Rem
           .map((member) => member.userId),
       ]),
     );
-    deleteTreeRows(tx, ids);
+    markTreesDeleted(tx, ids);
     return {
       workspaceId: row.workspaceId,
       treeIds: ids,
@@ -1239,20 +1268,4 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): Rem
       memberIds,
     };
   });
-}
-
-/** Deletes trees, their feed rows and everything under them. The caller has
- * checked for active runs. Membership, collapsed groups and views cascade;
- * children elsewhere lose their parent. */
-export function deleteTreeRows(db: SessionDatabase, treeIds: readonly string[]): void {
-  if (treeIds.length === 0) {
-    return;
-  }
-  for (const treeId of treeIds) {
-    removeResearchTree(db, treeId);
-  }
-  deleteNodesOfTrees(db, treeIds);
-  db.delete(trees)
-    .where(inArray(trees.id, [...treeIds]))
-    .run();
 }

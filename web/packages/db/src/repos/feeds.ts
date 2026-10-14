@@ -202,6 +202,7 @@ export function recentQueries(
     sql`${trees.ownerId} = ${userId}`,
     sql`${trees.archivedAt} IS NULL`,
     sql`${trees.trashedAt} IS NULL`,
+    sql`${trees.deletedAt} IS NULL`,
     sql`${nodes.id} = ${trees.rootNodeId}`,
     sql`${nodes.parentNodeId} IS NULL`,
     sql`${nodes.type} <> 'document'`,

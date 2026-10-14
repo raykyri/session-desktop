@@ -17,6 +17,8 @@ import { notifications } from "../schema/notifications.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { treeLive } from "./access.js";
+
 /** Most notifications one person keeps. */
 export const MAX_NOTIFICATIONS_PER_USER = 500;
 
@@ -72,8 +74,8 @@ function capFor(db: SessionDatabase, userId: string): void {
 
 /**
  * Stores notifications, one row per recipient, and keeps each recipient
- * within the cap. A notification about a thread that no longer exists is
- * stored without its thread (and its link still names the path it had).
+ * within the cap. A notification about a thread that no longer exists (or
+ * is marked deleted, `deletion.ts`) is stored without its thread (and its link still names the path it had).
  */
 export function record(db: SessionDatabase, rows: readonly NewNotification[]): void {
   if (rows.length === 0) {
@@ -87,7 +89,7 @@ export function record(db: SessionDatabase, rows: readonly NewNotification[]): v
         : tx
             .select({ id: trees.id })
             .from(trees)
-            .where(inArray(trees.id, treeIds))
+            .where(and(inArray(trees.id, treeIds), treeLive()))
             .all()
             .map((row) => row.id),
     );

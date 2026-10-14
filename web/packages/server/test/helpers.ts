@@ -22,6 +22,7 @@ import type { Logger } from "../src/logger.js";
 import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
 import { treeDirectory } from "../src/research/access.js";
+import { createDeletionJob } from "../src/research/deletion.js";
 import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
 import { createAppContext } from "../src/trpc/base.js";
@@ -99,10 +100,13 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   const eventBus = new EventBus(treeDirectory(db));
   const runs = createNoopRunsService();
   const limiter = new RateLimiter();
+  const deletions = createDeletionJob({ db, logger });
+  t.teardown(() => deletions.stop());
   const base = {
     config,
     db,
     eventBus,
+    deletions,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
   };

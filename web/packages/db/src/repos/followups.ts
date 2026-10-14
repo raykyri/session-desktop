@@ -3,7 +3,8 @@
 // asked (`author_id`) is who the run is billed to. The desktop backend keeps
 // the same queue in its state file (src-tauri/src/state/research_followups.rs);
 // both decide what to do with the rules in `researchQueueAction` in the
-// shared `researchBranchView`, over the tree's nodes as the client sees them.
+// shared `researchBranchView`. Here they read the wire nodes of the one chain
+// concerned (`nodes.chainNodes`), which is all those rules look at.
 //
 // Asking sends at once when the chain can take a follow-up and nothing is
 // queued ahead; otherwise it appends. Sending the head item later is two
@@ -47,10 +48,10 @@ import {
   treeAccess,
   treeReadableBy,
 } from "./access.js";
-import { admitChild } from "./nodes.js";
+import { dropRefs, setRefs } from "./imageRefs.js";
+import { admitChild, chainNodes } from "./nodes.js";
 import { enqueue } from "./queue.js";
 import type { NodeAgentInput } from "./trees.js";
-import { detail } from "./trees.js";
 
 /** One queued follow-up, as the wire sends it. The server always names
  * the author (the wire leaves it optional for the desktop). */
@@ -225,6 +226,8 @@ interface ThreadState {
   headNodeId: string;
   archived: boolean;
   trashedAt: number | null;
+  /** The chain's nodes (`nodes.chainNodes`), not the whole thread's: every
+   * rule the queue applies reads only these. */
   treeNodes: ResearchNode[];
 }
 
@@ -233,6 +236,7 @@ function threadState(db: SessionDatabase, userId: string, nodeId: string): Threa
     .select({
       treeId: nodes.treeId,
       ownerId: trees.ownerId,
+      workspaceId: trees.workspaceId,
       archivedAt: trees.archivedAt,
       trashedAt: trees.trashedAt,
     })
@@ -243,7 +247,7 @@ function threadState(db: SessionDatabase, userId: string, nodeId: string): Threa
   if (!row) {
     throw new Error(`research node ${nodeId} was not found`);
   }
-  const treeNodes = detail(db, userId, row.treeId).nodes;
+  const treeNodes = chainNodes(db, nodeId, row.workspaceId);
   return {
     ownerId: row.ownerId,
     treeId: row.treeId,
@@ -252,6 +256,31 @@ function threadState(db: SessionDatabase, userId: string, nodeId: string): Threa
     trashedAt: row.trashedAt,
     treeNodes,
   };
+}
+
+/** The last node of the chain `nodeId` belongs to, when `userId` may read
+ * the thread: the node a follow-up sent now would continue, and whose agent
+ * an unspecified one inherits (`followups.ask`). */
+export function chainTail(
+  db: SessionDatabase,
+  userId: string | null,
+  nodeId: string,
+): ResearchNode | null {
+  const row = db
+    .select({ workspaceId: trees.workspaceId })
+    .from(nodes)
+    .innerJoin(trees, eq(trees.id, nodes.treeId))
+    .where(and(nodeReadableBy(userId), eq(nodes.id, nodeId)))
+    .get();
+  if (!row) {
+    return null;
+  }
+  const chain = chainNodes(db, nodeId, row.workspaceId);
+  const ids = inlineChainFor(chain, nodeId);
+  const tailId = ids[ids.length - 1] ?? nodeId;
+  return (
+    chain.find((node) => node.id === tailId) ?? chain.find((node) => node.id === nodeId) ?? null
+  );
 }
 
 /** Admits the follow-up as the chain tail's inline child and puts its run in
@@ -365,6 +394,7 @@ export function ask(db: SessionDatabase, userId: string, input: AskInput): AskRe
       })
       .returning()
       .get();
+    setRefs(tx, { kind: "queue", id: row.id, treeId: row.treeId }, message.attachments);
     return { kind: "queued", item: toItem(row), headNodeId: state.headNodeId };
   });
 }
@@ -396,6 +426,7 @@ export function pendingChains(
       and(
         isNull(trees.archivedAt),
         isNull(trees.trashedAt),
+        isNull(trees.deletedAt),
         filter.treeId === undefined ? undefined : eq(followupQueue.treeId, filter.treeId),
       ),
     )
@@ -436,11 +467,16 @@ export function nextStep(db: SessionDatabase, userId: string, headNodeId: string
  * this when the head is deleted; this covers a head the caller can no longer
  * see. */
 export function clear(db: SessionDatabase, headNodeId: string): number {
-  return db
-    .delete(followupQueue)
-    .where(eq(followupQueue.headNodeId, headNodeId))
-    .returning({ id: followupQueue.id })
-    .all().length;
+  return transact(db, (tx) => {
+    const removed = tx
+      .delete(followupQueue)
+      .where(eq(followupQueue.headNodeId, headNodeId))
+      .returning({ id: followupQueue.id })
+      .all()
+      .map((row) => row.id);
+    dropRefs(tx, "queue", removed);
+    return removed.length;
+  });
 }
 
 /**
@@ -471,6 +507,8 @@ export function send(
       message: step.item.message,
       agent: { model: row.model, effort: row.effort },
     });
+    // The node's references were written by `admitChild`; the item's go.
+    dropRefs(tx, "queue", [itemId]);
     tx.delete(followupQueue).where(eq(followupQueue.id, itemId)).run();
     return { node, item: step.item };
   });
@@ -518,6 +556,7 @@ function itemRow(
 export function cancel(db: SessionDatabase, userId: string, itemId: string): FollowupItem {
   return transact(db, (tx) => {
     const row = itemRow(tx, userId, itemId, "cancel");
+    dropRefs(tx, "queue", [row.id]);
     tx.delete(followupQueue).where(eq(followupQueue.id, row.id)).run();
     return toItem(row);
   });

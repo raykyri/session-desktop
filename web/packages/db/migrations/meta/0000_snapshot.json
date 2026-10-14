@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "569a1839-d8cc-4fac-8c8a-1325928512d5",
+  "id": "c2dfd21e-67db-40d4-bff8-1b95cb7acbae",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "backfills": {
@@ -1423,6 +1423,103 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "image_refs": {
+      "name": "image_refs",
+      "columns": {
+        "image_id": {
+          "name": "image_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "holder_kind": {
+          "name": "holder_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "holder_id": {
+          "name": "holder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tree_id": {
+          "name": "tree_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "image_refs_holder_idx": {
+          "name": "image_refs_holder_idx",
+          "columns": [
+            "holder_kind",
+            "holder_id"
+          ],
+          "isUnique": false
+        },
+        "image_refs_tree_idx": {
+          "name": "image_refs_tree_idx",
+          "columns": [
+            "tree_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "image_refs_image_id_research_images_id_fk": {
+          "name": "image_refs_image_id_research_images_id_fk",
+          "tableFrom": "image_refs",
+          "tableTo": "research_images",
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "image_refs_tree_id_trees_id_fk": {
+          "name": "image_refs_tree_id_trees_id_fk",
+          "tableFrom": "image_refs",
+          "tableTo": "trees",
+          "columnsFrom": [
+            "tree_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "image_refs_image_id_holder_kind_holder_id_pk": {
+          "columns": [
+            "image_id",
+            "holder_kind",
+            "holder_id"
+          ],
+          "name": "image_refs_image_id_holder_kind_holder_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "research_images": {
       "name": "research_images",
       "columns": {
@@ -2835,6 +2932,13 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -2869,6 +2973,13 @@
           "columns": [
             "visibility",
             "updated_at"
+          ],
+          "isUnique": false
+        },
+        "trees_deleted_idx": {
+          "name": "trees_deleted_idx",
+          "columns": [
+            "deleted_at"
           ],
           "isUnique": false
         }
@@ -3668,6 +3779,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

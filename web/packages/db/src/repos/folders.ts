@@ -37,6 +37,8 @@ import {
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { treeLive } from "./access.js";
+
 /** Home trays whose collapsed flag `collapsed` holds next to folder ids
  * (`RESEARCH_SYSTEM_FOLDER_IDS`, `research.rs`). */
 const SYSTEM_PLACE_IDS: ReadonlySet<string> = new Set([
@@ -186,7 +188,7 @@ export function getState(
   const treeRows = db
     .select({ id: trees.id, parentTreeId: trees.parentTreeId })
     .from(trees)
-    .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId)))
+    .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), treeLive()))
     .orderBy(asc(trees.id))
     .all();
   const treeIds = treeRows.map((row) => row.id);
@@ -264,6 +266,7 @@ function filedSharedTrees(
         eq(folders.ownerId, userId),
         eq(folders.workspaceId, workspaceId),
         isNull(trees.trashedAt),
+        treeLive(),
       ),
     )
     .orderBy(asc(treeMembers.treeId))
@@ -317,7 +320,7 @@ export function replaceState(
       tx
         .select({ id: trees.id })
         .from(trees)
-        .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId)))
+        .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId), treeLive()))
         .all()
         .map((row) => row.id),
     );
@@ -328,7 +331,7 @@ export function replaceState(
         .select({ treeId: treeMembers.treeId })
         .from(treeMembers)
         .innerJoin(trees, eq(trees.id, treeMembers.treeId))
-        .where(and(eq(treeMembers.userId, userId), isNull(trees.trashedAt)))
+        .where(and(eq(treeMembers.userId, userId), isNull(trees.trashedAt), treeLive()))
         .all()
         .map((row) => row.treeId),
     );

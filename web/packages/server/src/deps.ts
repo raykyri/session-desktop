@@ -8,6 +8,7 @@ import type { User } from "@session/shared";
 import type { Config } from "./config.js";
 import type { EventBus } from "./events/bus.js";
 import type { Logger } from "./logger.js";
+import type { DeletionJob } from "./research/deletion.js";
 import type { RunsService } from "./runs/service.js";
 
 export interface ServerDeps {
@@ -15,6 +16,9 @@ export interface ServerDeps {
   db: SessionDatabase;
   eventBus: EventBus;
   runs: RunsService;
+  /** Deletes the rows of threads marked deleted, between requests
+   * (`research/deletion.ts`). Kicked by the procedures that mark them. */
+  deletions: DeletionJob;
   logger?: Logger;
   /** Outbound HTTP (GitHub, the tweet syndication CDN). Injected so tests can
    * answer without a network. */

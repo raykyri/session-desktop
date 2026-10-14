@@ -4,10 +4,11 @@
 //
 // The order is: resolve the ids before the message is written (the owner
 // check, the count and size limits), refuse a model that cannot read images,
-// write the message, draft or queued follow-up, then mark the images
-// attached; release them when what held them is removed. The mark and the
-// release keep `attached_at` accurate between sweeps; the image sweep reads
-// the references themselves (`images.sweep` in `@session/db`).
+// then write the message, draft or queued follow-up. The repository that
+// writes it records the references (`image_refs`) in the same transaction,
+// which marks the images attached, and drops them when what held them is
+// removed, which releases them (`images.setRefs`, `images.dropRefs` in
+// `@session/db`).
 
 import type { SessionDatabase } from "@session/db";
 import { images } from "@session/db";
@@ -50,23 +51,4 @@ export function assertModelReadsImages(
       message: `${model?.label ?? modelId} can't read images.`,
     });
   }
-}
-
-/** Marks the images among `attachments` attached, after the message or
- * draft that names them is written. */
-export function markImagesAttached(
-  db: SessionDatabase,
-  attachments: readonly ResearchMessageAttachment[] | null | undefined,
-): void {
-  repo(() => images.markAttached(db, images.imageIdsOf(attachments)));
-}
-
-/** Returns the images among `attachments` that nothing names any more to
- * pending, after the message, draft or queued follow-up holding them was
- * removed (a cancelled follow-up). */
-export function releaseImages(
-  db: SessionDatabase,
-  attachments: readonly ResearchMessageAttachment[] | null | undefined,
-): void {
-  repo(() => images.release(db, images.imageIdsOf(attachments)));
 }
