@@ -162,7 +162,7 @@ test("the follow-up box uses Ask mode by default and adds a note in Note mode", 
     sendTitle: "Ask Claude Fable",
   });
   assert.deepEqual(postFollowUpCopy(true, "Ask a follow-up", "Ask Claude Fable"), {
-    placeholder: "Add a note (not sent to the agent)",
+    placeholder: "Add a note (not visible to agent)",
     sendName: "Add note",
     sendTitle: "Add note",
   });
