@@ -31,8 +31,8 @@ db:studio                 drizzle-kit studio
 db:admin                  tsx packages/db/bin/admin.ts <github login>   (sets users.is_admin)
 ```
 
-`test:e2e` pins the project because the Chromium browser is the only one CI
-installs and the only one containing visual baselines; a machine with WebKit can
+`test:e2e` pins the project because Chromium is the only browser CI runs
+and the only one with visual baselines; a machine with WebKit can
 run the same behavioral specs through `test:e2e:webkit`. The Playwright web
 server command builds the client itself, so `test:e2e` needs no prior build.
 
@@ -185,7 +185,10 @@ The port is `SESSION_E2E_PORT` (default 8788) and the data directory is per
 port (`$TMPDIR/session-web-e2e-<port>`). Playwright starts its own server and
 refuses a port that is already in use; `SESSION_E2E_REUSE_SERVER=1` runs
 against a server already listening there (one started by hand, for
-iteration). The queue spec does not depend on the root answer's timing past
+iteration). The server binds `::` unless `SESSION_E2E_HOST` names
+another address; on a machine or container without IPv6, set it to
+`127.0.0.1` (Chromium tries the IPv4 loopback for `localhost` when `::1`
+refuses, so the artifact origin still reaches the server). The queue spec does not depend on the root answer's timing past
 its first Queue: the second item queues behind the first, which is itself a
 paced answer, so Cancel always reaches it before it could be sent.
 
@@ -206,9 +209,10 @@ syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed (Refresh, Remove highlight); a follow-up queued while the answer streams, Cancel, and Edit question on a queued follow-up behind a stopped answer; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
 | `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload; Reduce motion and Require ⌘↵ to send taking effect and persisting |
 | `collaboration.spec.ts` | Accounts and a guest, each in its own browser context. Through the UI: the owner copies a commenter and a viewer invite link from the Share dialog; the commenter opens theirs, lands on the thread and asks (counted in their usage); the owner's open page shows the question live with the commenter's author chip and opens its answer; the viewer's page has no ask box and shows them as Viewer; a thread made Public in the dialog opens read-only for a guest; a stale note edit opens "This note changed", Reload keeps the text and the next save succeeds. Through the tRPC endpoint: invite by link and by login and accept; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and a guest; a member's page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
+| `live.spec.ts` | Changes by a thread's owner while others have it open, each person in their own context: a commenter made a viewer loses the ask box and their queued follow-up (held behind a stopped answer, so it cannot be sent first); Archive turns a member's ask box read-only while a public reader keeps reading, and Make private shows the reader the unavailable state while the member keeps the thread; Trash shows the unavailable state to a member and a public reader; a removed member gets the unavailable state and leaves the owner's presence avatars; presence avatars appear when a member opens the thread and go when they navigate away or close the tab; a public reader who left for Home and a guest each see, on going back, a question the owner asked meanwhile. Waits are on UI state: the owner's presence avatars confirm that a reader's open-thread declaration reached the server, or that it was withdrawn |
 | `admin.spec.ts` |
  `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
-| `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |
+| `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`. The account name (it carries the run's id) and relative times are masked. The Linux set is rendered by CI's `e2e` job (§4) and fails CI when missing; outside CI a platform without a set skips. The `darwin` set predates several UI changes and needs regenerating on a Mac (`npm run test:e2e:update-snapshots -- --grep @visual`) |
 
 ## 4. CI (GitHub Actions, `.github/workflows/web.yml`)
 
@@ -220,7 +224,14 @@ Triggers on pushes and PRs touching `web/**`. Jobs:
 3. `e2e`: `npm ci`, `npx playwright install --with-deps chromium`, then
    `npm run test:e2e`, which builds the client and starts the server itself.
    `web/test-results` and `web/playwright-report` are uploaded on failure.
-   Because CI only installs Chromium, `@visual` tests are skipped due to missing Linux baseline images; to generate them, run `npm run test:e2e:update-snapshots` inside the Linux test container and commit the resulting snapshots.
+   The Linux visual baselines are this job's own renders: screenshots taken
+   on another Linux machine differ (a different Chromium build or FreeType
+   moves glyph edges by a pixel across all text), so they are not used. To
+   regenerate the set after an intended UI change or a Playwright upgrade,
+   push the change; the `@visual` test fails, and the run's
+   `playwright-traces` artifact holds the new renders as
+   `test-results/visual-*/<name>-actual.png`. Check them, then commit each
+   as `web/e2e/__screenshots__/linux/<name>.png`.
 4. `docker`: build `web/Dockerfile` with the Buildx GitHub cache and never
    push it, so a Dockerfile change cannot break a deploy unnoticed.
 5. `deploy`: on a push to `main` only, needs all four, and runs
@@ -229,6 +240,14 @@ Triggers on pushes and PRs touching `web/**`. Jobs:
 
 The desktop's root `npm run preflight` is unaffected except that
 `test:integration` (the landing server test) is removed.
+
+The desktop has its own workflow, `.github/workflows/desktop.yml`:
+`frontend` (type checks of the app and the tests, the unused-module check,
+`npm run test:unit`, the production build) and `native` on macOS (`cargo fmt
+--check`, `cargo test --workspace` in `src-tauri`, and the Swift package's
+tests). A Rust test that needs an installed agent CLI must configure one
+itself, since the runners have none (`test_config_with_installed_claude` in
+`src-tauri/src/state.rs`).
 
 ## 5. Coverage targets
 

@@ -5,68 +5,17 @@
 // and the stale-edit prompt. The rest drive the server through its tRPC
 // endpoint with each context's own session cookie.
 
-import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
-import { signIn } from "./helpers.js";
-
-const MUTATION_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
-
-async function mutation<T>(request: APIRequestContext, path: string, input: unknown): Promise<T> {
-  const response = await request.post(`${APP_ORIGIN}/api/trpc/${path}`, {
-    headers: MUTATION_HEADERS,
-    data: input ?? {},
-  });
-  expect(response.ok(), `${path}: ${response.status()} ${await response.text()}`).toBe(true);
-  return ((await response.json()) as { result: { data: T } }).result.data;
-}
-
-/** A mutation expected to fail, answering with its tRPC error code. */
-async function refusal(request: APIRequestContext, path: string, input: unknown): Promise<string> {
-  const response = await request.post(`${APP_ORIGIN}/api/trpc/${path}`, {
-    headers: MUTATION_HEADERS,
-    data: input ?? {},
-  });
-  expect(response.ok(), `${path} should be refused`).toBe(false);
-  return ((await response.json()) as { error: { data: { code: string } } }).error.data.code;
-}
-
-async function query<T>(request: APIRequestContext, path: string, input: unknown): Promise<T> {
-  const search = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
-  const response = await request.get(`${APP_ORIGIN}/api/trpc/${path}${search}`);
-  expect(response.ok(), `${path}: ${response.status()} ${await response.text()}`).toBe(true);
-  return ((await response.json()) as { result: { data: T } }).result.data;
-}
-
-interface Detail {
-  tree: { id: string; role?: string };
-  nodes: { id: string; authorId?: string | null; run?: { status: string } }[];
-}
-
-async function signedInContext(browser: Browser, login: string) {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  const user = await signIn(page, { login });
-  return { context, page, user, request: page.request };
-}
-
-/** A thread whose root answer has completed. */
-async function completedThread(page: Page, prompt: string): Promise<Detail> {
-  const workspace = await mutation<{ id: string }>(page.request, "workspaces.ensureDefault", {});
-  const detail = await mutation<Detail>(page.request, "research.createTree", {
-    prompt,
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  await expect
-    .poll(
-      async () =>
-        (await query<Detail>(page.request, "research.getTree", { treeId: detail.tree.id })).nodes[0]
-          ?.run?.status,
-    )
-    .toBe("complete");
-  return detail;
-}
+import {
+  completedThread,
+  mutation,
+  query,
+  refusal,
+  signedInContext,
+  type Detail,
+} from "./helpers.js";
 
 /** Opens the root's menu and the Share dialog on a thread page; for anyone
  * but the owner it is "People…" and "People in “…”". */

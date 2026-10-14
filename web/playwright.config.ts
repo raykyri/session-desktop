@@ -13,6 +13,7 @@ import {
   APP_ORIGIN,
   ARTIFACT_ORIGIN,
   E2E_DATA_DIR,
+  E2E_HOST,
   E2E_PORT,
   E2E_REUSE_SERVER,
   E2E_RUN_ID_VARIABLE,
@@ -31,8 +32,10 @@ export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
   // `{platform}` is kept: a baseline rendered by macOS's rasterizer does not
-  // match Linux's, so the two sets live side by side and a platform without
-  // one skips the visual test rather than failing it (`visual.spec.ts`).
+  // match Linux's, so the two sets live side by side. Outside CI a platform
+  // without one skips the visual test rather than failing it
+  // (`visual.spec.ts`). The Linux set is rendered by CI's e2e job
+  // (`.github/workflows/web.yml`, `12-testing-linting-ci.md` §4).
   snapshotPathTemplate: "{testDir}/__screenshots__/{platform}/{arg}{ext}",
   fullyParallel: false,
   forbidOnly: CI,
@@ -81,10 +84,10 @@ export default defineConfig({
     stdout: "ignore",
     stderr: "pipe",
     env: {
-      // `::` rather than the config's default loopback: the suite reaches the
-      // same process as both `127.0.0.1` and `localhost`, and a v4-only bind
-      // would miss whichever of the two the browser resolves to `::1`.
-      HOST: "::",
+      // `::` (`E2E_HOST`) rather than the config's default loopback: the suite
+      // reaches the same process as both `127.0.0.1` and `localhost`, and a
+      // v4-only bind would miss `localhost` if the browser tried only `::1`.
+      HOST: E2E_HOST,
       PORT: String(E2E_PORT),
       NODE_ENV: "development",
       SESSION_PUBLIC_ORIGIN: APP_ORIGIN,

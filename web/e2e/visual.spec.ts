@@ -28,16 +28,23 @@ test.describe("@visual", () => {
   test("Home and a document in every theme and appearance", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "baselines are Chromium's");
     // Baselines are per platform, because a page rendered by macOS's
-    // rasterizer is not the same image Linux produces. A runner whose platform
-    // has no baselines skips rather than fails; to add a set, run
-    // `npm run test:e2e:update-snapshots` there and commit what it writes.
-    const updating = testInfo.config.updateSnapshots !== "none";
+    // rasterizer is not the same image Linux produces. Outside CI, a machine
+    // whose platform has no baselines skips rather than fails. CI has the
+    // Linux set and fails without it; those baselines are CI's own renders
+    // (`12-testing-linting-ci.md` §4 says how to regenerate them).
+    const updating =
+      testInfo.config.updateSnapshots === "all" || testInfo.config.updateSnapshots === "changed";
     test.skip(
-      !updating && !existsSync(testInfo.snapshotPath("home-green-blob-dark.png")),
+      !process.env["CI"] &&
+        !updating &&
+        !existsSync(testInfo.snapshotPath("home-green-blob-dark.png")),
       `no visual baselines for ${process.platform}`,
     );
 
-    await signIn(page, { login: "e2e-visual" });
+    const user = await signIn(page, { login: "e2e-visual" });
+    // Relative times change between runs, and the account name carries the
+    // run's id (`e2eLogin`).
+    const mask = [page.locator("time"), page.getByText(user.login, { exact: true })];
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
     const treeId = await startResearch(page, "What is a bloom filter?");
@@ -56,16 +63,15 @@ test.describe("@visual", () => {
       await expect(page.locator("html")).toHaveAttribute("data-appearance", appearance);
       await expect(page.locator("html")).toHaveAttribute("data-color-theme", colorTheme);
       await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
-      // Mask relative timestamp elements to prevent false visual regression diffs from dynamic time updates.
       await expect(page).toHaveScreenshot(`home-${name}.png`, {
-        mask: [page.locator("time")],
+        mask,
         animations: "disabled",
       });
 
       await page.goto(`/r/${treeId}`);
       await expect(page.getByRole("region", { name: "Sources" })).toBeVisible();
       await expect(page).toHaveScreenshot(`document-${name}.png`, {
-        mask: [page.locator("time")],
+        mask,
         animations: "disabled",
       });
     }

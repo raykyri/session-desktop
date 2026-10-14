@@ -5,7 +5,7 @@
 // session cookie the OAuth callback does, so everything downstream — the CSRF
 // header, the SSE subscription, the run queue — is the real thing.
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 
 import { APP_ORIGIN, E2E_RUN_ID_VARIABLE } from "./constants.js";
 
@@ -126,4 +126,82 @@ export async function selectAnswerText(page: Page): Promise<void> {
   await page.mouse.move(box.x + box.width * 0.6, y, { steps: 6 });
   await page.mouse.up();
   await expect(page.locator("[data-research-selection-actions]")).toBeVisible();
+}
+
+/* ---------------------------------------------- tRPC calls, accounts */
+
+/**
+ * A tRPC mutation sent with a context's own session cookie: a page's
+ * `request` shares its browser context's cookies, so the call is made as that
+ * context's account.
+ */
+export async function mutation<T>(
+  request: APIRequestContext,
+  path: string,
+  input: unknown,
+): Promise<T> {
+  const response = await request.post(`${APP_ORIGIN}/api/trpc/${path}`, {
+    headers: MUTATION_HEADERS,
+    data: input ?? {},
+  });
+  expect(response.ok(), `${path}: ${response.status()} ${await response.text()}`).toBe(true);
+  return ((await response.json()) as { result: { data: T } }).result.data;
+}
+
+/** A mutation expected to fail, answering with its tRPC error code. */
+export async function refusal(
+  request: APIRequestContext,
+  path: string,
+  input: unknown,
+): Promise<string> {
+  const response = await request.post(`${APP_ORIGIN}/api/trpc/${path}`, {
+    headers: MUTATION_HEADERS,
+    data: input ?? {},
+  });
+  expect(response.ok(), `${path} should be refused`).toBe(false);
+  return ((await response.json()) as { error: { data: { code: string } } }).error.data.code;
+}
+
+export async function query<T>(
+  request: APIRequestContext,
+  path: string,
+  input: unknown,
+): Promise<T> {
+  const search = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
+  const response = await request.get(`${APP_ORIGIN}/api/trpc/${path}${search}`);
+  expect(response.ok(), `${path}: ${response.status()} ${await response.text()}`).toBe(true);
+  return ((await response.json()) as { result: { data: T } }).result.data;
+}
+
+/** The fields of `research.getTree`'s answer that the specs read. */
+export interface Detail {
+  tree: { id: string; role?: string };
+  nodes: { id: string; authorId?: string | null; run?: { status: string } }[];
+  queues?: Record<string, readonly { id: string }[]>;
+}
+
+/** A browser context of its own, signed in as the run's `login` account. */
+export async function signedInContext(browser: Browser, login: string) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const user = await signIn(page, { login });
+  return { context, page, user, request: page.request };
+}
+
+/** A thread whose root answer has completed, created through the API. */
+export async function completedThread(page: Page, prompt: string): Promise<Detail> {
+  const workspace = await mutation<{ id: string }>(page.request, "workspaces.ensureDefault", {});
+  const detail = await mutation<Detail>(page.request, "research.createTree", {
+    prompt,
+    model: "gemini-flash",
+    workspaceId: workspace.id,
+  });
+  await expect
+    .poll(
+      async () =>
+        (await query<Detail>(page.request, "research.getTree", { treeId: detail.tree.id })).nodes[0]
+          ?.run?.status,
+    )
+    .toBe("complete");
+  return detail;
 }

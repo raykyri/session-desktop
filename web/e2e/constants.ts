@@ -31,3 +31,12 @@ export const E2E_REUSE_SERVER = process.env["SESSION_E2E_REUSE_SERVER"] === "1";
 /** The environment variable that carries the run's id from the runner to its
  * workers (`playwright.config.ts` sets it once). */
 export const E2E_RUN_ID_VARIABLE = "SESSION_E2E_RUN_ID";
+
+/**
+ * The address the suite's server binds (`SESSION_E2E_HOST`): `::` by default,
+ * which serves both `127.0.0.1` and `localhost` wherever IPv6 is available.
+ * A machine or container without IPv6 sets `127.0.0.1`; Chromium tries
+ * `127.0.0.1` for `localhost` when `::1` refuses, so the artifact origin still
+ * reaches the server.
+ */
+export const E2E_HOST = process.env["SESSION_E2E_HOST"] ?? "::";
