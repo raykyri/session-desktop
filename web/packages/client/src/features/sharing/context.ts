@@ -4,6 +4,7 @@
 // author chips and the gates sit several components below the page.
 
 import type { ResearchNode, ResearchParticipant, ResearchTreeDetail } from "@session/shared";
+import { stalledTailNote } from "@session/shared";
 import { createContext, useContext } from "react";
 
 import { threadPermissions, type ThreadPermissions } from "./permissions.js";
@@ -56,28 +57,25 @@ export function participantName(participant: Pick<ResearchParticipant, "name" | 
 }
 
 /**
- * The note above a chain's ask box when its last answer failed or was
- * stopped, for the reader. The person who pays for that answer gets the
- * desktop's sentences (Retry, or edit the question). Anyone else cannot
- * retry it: they are told who can, and that the owner can delete it; the
- * owner is told to delete it. Either can branch from the answer before it.
+ * The note above a chain's ask box when its last answer stopped, for the
+ * reader (the shared `stalledTailNote`, which the server's `followups.ask`
+ * refusal uses too). The person who pays for that answer gets the desktop's
+ * sentences; anyone else is told who can retry it and what they can do.
  */
 export function stalledChainNote(
-  tail: Pick<ResearchNode, "authorId"> & { status: "failed" | "cancelled" },
+  tail: Pick<ResearchNode, "authorId"> & { status: "failed" | "stopped" },
   permissions: Pick<ThreadPermissions, "userId" | "ownerId" | "isOwner">,
   people: Pick<ThreadPeople, "byId">,
 ): string {
   const payer = tail.authorId == null ? permissions.ownerId : tail.authorId;
-  if (payer === permissions.userId) {
-    return tail.status === "failed"
-      ? "The last answer stopped with an error. Retry it or edit its question to continue."
-      : "The last answer was stopped. Run it again to continue.";
-  }
   const person = payer === null ? undefined : people.byId.get(payer);
-  const name = person ? participantName(person) : "the person who asked it";
-  return permissions.isOwner
-    ? `The last answer stopped. Only ${name} can retry it. Delete it, or branch from the answer before it to continue.`
-    : `The last answer stopped. Only ${name} can retry it; the owner can delete it. Branch from the answer before it to continue.`;
+  return stalledTailNote({
+    status: tail.status,
+    readerIsPayer: payer === permissions.userId,
+    readerIsOwner: permissions.isOwner,
+    payerIsOwner: payer !== null && payer === permissions.ownerId,
+    payerName: person ? participantName(person) : "the person who asked it",
+  });
 }
 
 /** Who last replaced a note's or document's text, when that was not its

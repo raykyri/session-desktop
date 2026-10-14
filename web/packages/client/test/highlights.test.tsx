@@ -1,6 +1,7 @@
 // The Highlights page (`10-home-feed-journal.md` §4), as the desktop's
 // `ResearchHighlightsFeed.tsx`.
 
+import type { ResearchTreeRole } from "@session/shared";
 import { fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
@@ -59,7 +60,7 @@ test("only a highlight in a thread the reader owns offers Remove", (t) => {
 });
 
 test("with the author and role on the row, its author or the owner may remove it", (t) => {
-  const row = (fields: { authorId?: string | null; role?: string }) => ({
+  const row = (fields: { authorId?: string | null; role?: ResearchTreeRole }) => ({
     ...highlightItem({ treeId: "t1" }),
     ...fields,
   });

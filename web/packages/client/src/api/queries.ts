@@ -319,11 +319,16 @@ export function useResearchTrash(workspaceId: string) {
 
 /** Threads shared with the reader: outside their Archive and Trash
  * (`shared`), in their Archive, or in their Trash. */
-export function useSharedTrees(place: "shared" | "archive" | "trash" = "shared") {
+export function useSharedTrees(
+  place: "shared" | "archive" | "trash" = "shared",
+  /** The workspace whose Trash is listed (a member's Trash is per
+   * workspace). */
+  workspaceId?: string,
+) {
   const signedIn = useSignedIn();
   return useQuery({
-    queryKey: queryKeys.shared(place),
-    queryFn: () => listSharedResearchTrees(place),
+    queryKey: queryKeys.shared(place, workspaceId),
+    queryFn: () => listSharedResearchTrees(place, workspaceId),
     enabled: signedIn,
   });
 }
@@ -993,8 +998,9 @@ export function useEmptyResearchTrash() {
     onSuccess: (result, workspaceId) => {
       dropTrees(client, result.treeIds);
       client.setQueryData<ResearchTreeSummary[]>(queryKeys.trash(workspaceId), []);
-      // Shared threads in the Trash were left, whatever their workspace.
-      client.setQueryData<ResearchTreeSummary[]>(queryKeys.shared("trash"), []);
+      // The shared threads in this workspace's Trash were left.
+      client.setQueryData<ResearchTreeSummary[]>(queryKeys.shared("trash", workspaceId), []);
+      invalidateKeys(client, queryKeys.shared("trash"));
       if (result.folderIds.length > 0) invalidateKeys(client, queryKeys.folders(workspaceId));
     },
   });

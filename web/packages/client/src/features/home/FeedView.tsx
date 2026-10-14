@@ -270,7 +270,7 @@ export function FeedView({
   // Trash, in their Archive, and in their Trash.
   const sharedTrees = useSharedTrees("shared").data ?? EMPTY_TREES;
   const sharedArchive = useSharedTrees("archive").data ?? EMPTY_TREES;
-  const sharedTrash = useSharedTrees("trash").data ?? EMPTY_TREES;
+  const sharedTrash = useSharedTrees("trash", workspaceId).data ?? EMPTY_TREES;
   const group = useGroupActions(filing, trashTrees);
   const queryClient = useQueryClient();
   const archiveTree = useArchiveResearchTree();

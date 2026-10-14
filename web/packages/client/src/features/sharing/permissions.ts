@@ -79,12 +79,12 @@ export function threadPermissions(
 export const OWNER_ARCHIVED_MESSAGE =
   "This thread was archived by its owner; only they can unarchive it.";
 
-/** A shared thread in the reader's Archive because its owner archived it:
- * only the owner can take it out. Read from the summary's `archivedBy`
- * marker (`"owner"` or `"me"`); a summary without it is not treated as the
- * owner's, so the server's refusal is the fallback. */
+/** A shared thread in the reader's Archive because its owner archived it
+ * (`archivedBy: "owner"`): only the owner can take it out. A summary without
+ * the marker is not treated as the owner's; the server's refusal is then the
+ * fallback. */
 export function archivedByOwner(
-  tree: Pick<ResearchTree, "archivedAt" | "role"> & { archivedBy?: unknown },
+  tree: Pick<ResearchTree, "archivedAt" | "role" | "archivedBy">,
 ): boolean {
   return (
     tree.archivedAt != null &&

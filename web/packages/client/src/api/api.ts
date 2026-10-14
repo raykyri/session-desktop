@@ -313,9 +313,18 @@ export function reorderResearchDrafts(
  * Trash
  * ---------------------------------------------------------------------- */
 
-/** Moves a thread, and the children listed under it, to the Trash. */
-export function trashResearchTree(treeId: string): Promise<ResearchTree> {
-  return trpc().research.trashTree.mutate({ treeId });
+/** Moves a thread, and the children listed under it, to the Trash. A
+ * member's Trash entry for a shared thread belongs to `workspaceId`, the
+ * workspace they trashed it from. */
+export function trashResearchTree(input: {
+  treeId: string;
+  workspaceId?: string | undefined;
+}): Promise<ResearchTree> {
+  return trpc().research.trashTree.mutate(
+    input.workspaceId
+      ? { treeId: input.treeId, workspaceId: input.workspaceId }
+      : { treeId: input.treeId },
+  );
 }
 
 /** Takes a thread, and its children in the Trash, out of the Trash. */
@@ -603,8 +612,9 @@ export function leaveThread(treeId: string) {
  * their Archive, or in their Trash. */
 export function listSharedResearchTrees(
   place: "shared" | "archive" | "trash" = "shared",
+  workspaceId?: string,
 ): Promise<ResearchTreeSummary[]> {
-  return trpc().sharing.listShared.query({ place });
+  return trpc().sharing.listShared.query(workspaceId ? { place, workspaceId } : { place });
 }
 
 /** An invitation by GitHub login, or by link when `githubLogin` is absent. */

@@ -58,7 +58,10 @@ export const queryKeys = {
   trash: (workspaceId: string) => ["trash", workspaceId] as const,
   /** Threads shared with the reader (`sharing.listShared`), outside their
    * Archive and Trash, in their Archive, or in their Trash. */
-  shared: (place: "shared" | "archive" | "trash") => ["shared", place] as const,
+  /** A member's Trash is per workspace (`workspaceId`); the other places are
+   * not. */
+  shared: (place: "shared" | "archive" | "trash", workspaceId?: string) =>
+    workspaceId ? (["shared", place, workspaceId] as const) : (["shared", place] as const),
   /** A thread's owner and members (`sharing.listMembers`). */
   members: (treeId: string) => ["members", treeId] as const,
   /** A thread's pending invitations, for its owner (`invites.list`). */
@@ -187,6 +190,12 @@ export function mergeTreeEvent(
   if (!("trashedAt" in next) && !("trashedBy" in next) && previous.trashedBy !== undefined) {
     keep("trashedBy");
   }
+  // `archivedBy` is per person too, and absent while the thread is not
+  // archived for the reader: kept only from an event that also left out
+  // `archivedAt` (someone else's change).
+  if (!("archivedAt" in next) && !("archivedBy" in next) && previous.archivedBy !== undefined) {
+    keep("archivedBy");
+  }
   return merged ?? next;
 }
 
@@ -197,10 +206,16 @@ export function patchSummaryFromTreeEvent(
   tree: ResearchTree,
 ): ResearchTreeSummary {
   if (summary.id !== tree.id) return summary;
-  return patchResearchSummaryTree(
+  const patched = patchResearchSummaryTree(
     summary,
     "archivedAt" in tree ? tree : { ...tree, archivedAt: summary.archivedAt ?? null },
   );
+  // The reader's own `archivedBy` comes with their own `archivedAt`.
+  if (!("archivedAt" in tree) || patched.archivedBy === tree.archivedBy) return patched;
+  const next = { ...patched };
+  if (tree.archivedBy === undefined) delete next.archivedBy;
+  else next.archivedBy = tree.archivedBy;
+  return next;
 }
 
 /** Whether the reader owns a thread. A tree without `role` (an event sent to

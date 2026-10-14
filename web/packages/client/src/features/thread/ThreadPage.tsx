@@ -114,7 +114,12 @@ import { writeClipboardText } from "../../lib/clipboard.js";
 import { formatChord } from "../../lib/platform.js";
 import { researchImageBlockReason, researchImages } from "../../lib/researchImages.js";
 import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
-import { ITEM_UNAVAILABLE_MESSAGE, pushToast, threadErrorMessage } from "../../lib/toast.js";
+import {
+  ITEM_UNAVAILABLE_MESSAGE,
+  pushToast,
+  threadErrorMessage,
+  trpcErrorCode,
+} from "../../lib/toast.js";
 import { markDraftEdited, nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
@@ -1852,9 +1857,13 @@ function ThreadView({ treeId }: { treeId: string }) {
     ],
   );
   const trashRoot = useCallback(async () => {
-    await trashTreeMutate(treeId);
+    // A member's Trash entry belongs to the workspace they trashed it from.
+    await trashTreeMutate({
+      treeId,
+      workspaceId: permissionsRef.current.isOwner ? undefined : scopeWorkspaceId || undefined,
+    });
     leaveTree({ keepState: true });
-  }, [leaveTree, trashTreeMutate, treeId]);
+  }, [leaveTree, permissionsRef, scopeWorkspaceId, trashTreeMutate, treeId]);
 
   /* --------------------------------------------------- note actions */
 
@@ -1970,7 +1979,11 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   /* ---------------------------------------------------------- render */
 
-  if (!detail || !rootNodeId || levelPath.length === 0) {
+  // The thread went away while open: deleted, moved to its owner's Trash, or
+  // no longer readable (a public thread turned private, a removed member).
+  // The refetch is refused, and the copy the cache still holds is not shown.
+  const unavailable = detailQuery.isError && trpcErrorCode(detailQuery.error) === "NOT_FOUND";
+  if (unavailable || !detail || !rootNodeId || levelPath.length === 0) {
     // While the detail loads, the header shows what a list already holds, as
     // the desktop's placeholder does.
     const cached = detail ? undefined : cachedTreeSummary(queryClient, treeId);
@@ -2145,7 +2158,9 @@ function ThreadView({ treeId }: { treeId: string }) {
           ? stalledChainNote(
               {
                 authorId: tail.authorId,
-                status: nodeStatus(tail) === "failed" ? "failed" : "cancelled",
+                // An interrupted answer that will not resume ended with an
+                // error.
+                status: nodeStatus(tail) === "cancelled" ? "stopped" : "failed",
               },
               permissions,
               people,

@@ -1222,6 +1222,46 @@ test.serial("the root ask box reads its draft back from the server", async (t) =
   t.pass();
 });
 
+test.serial("an open public thread that turns private leaves the reader's page", async (t) => {
+  const queryClient = testQueryClient();
+  queryClient.setDefaultOptions({
+    ...queryClient.getDefaultOptions(),
+    queries: { ...queryClient.getDefaultOptions().queries, retry: false },
+  });
+  const root = node({ id: "n1", status: "complete" });
+  let readable = true;
+  const detail: ResearchTreeDetail = {
+    tree: tree({ visibility: "public", role: "viewer", ownerId: "u9" }),
+    nodes: [root],
+  };
+  await renderApp("/r/t1", {
+    queryClient,
+    responses: {
+      "research.getTree": () => {
+        if (readable) return detail;
+        throw Object.assign(new Error("research tree t1 was not found"), {
+          data: { code: "NOT_FOUND" },
+        });
+      },
+      "research.getNodeContent": () => contentFor(root, [assistantTurn("t1", "Root answer.")]),
+      "research.markTreeViewed": detail.tree,
+      "system.runtimeConfig": { version: "0.0.0", models: MODELS, limits: {}, features: {} },
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+  readable = false;
+  // What `research.sharing.changed` does: the thread refetches.
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["tree", "t1"] });
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText("This thread was deleted or is no longer shared with you.") !== null,
+    "the unavailable state",
+  );
+  t.is(screen.queryByText("Root answer."), null, "the cached copy is not shown");
+});
+
 test.serial("a thread that is gone says so without its id", async (t) => {
   const queryClient = testQueryClient();
   queryClient.setDefaultOptions({

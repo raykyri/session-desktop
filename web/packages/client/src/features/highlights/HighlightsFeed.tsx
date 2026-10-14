@@ -68,21 +68,13 @@ export function groupHighlightsByThread(
   }));
 }
 
-/** A feed row with the fields the server adds for shared threads (web
- * only): who made the highlight and the reader's role in its thread. Read
- * defensively, since a row from an older server has neither. */
-type FeedHighlightAccess = Pick<ResearchHighlightFeedItem, "treeId"> & {
-  authorId?: string | null;
-  role?: string;
-};
-
 /** Whether the reader may remove a feed highlight (web only), as in a
- * thread: its author, or the thread's owner. A row without the author and
- * role falls back to the thread's role in a cached list (a list that does
- * not hold it: the reader's own thread, which the feed used to be limited
- * to). */
+ * thread: its author (`authorId`), or the thread's owner (`role`). The feed
+ * lists shared threads too. A row without either field (an older server)
+ * falls back to the thread's role in a cached list, or to the reader's own
+ * thread when no list holds it. */
 export function mayRemoveFeedHighlight(
-  item: FeedHighlightAccess,
+  item: Pick<ResearchHighlightFeedItem, "treeId" | "authorId" | "role">,
   summaries: readonly ResearchTreeSummary[],
   meId: string | null = null,
 ): boolean {

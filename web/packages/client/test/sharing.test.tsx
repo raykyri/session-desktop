@@ -216,13 +216,18 @@ test("a stalled chain's note says who can retry it", (t) => {
     "The last answer stopped with an error. Retry it or edit its question to continue.",
   );
   t.is(
-    stalledChainNote({ authorId: OWNER, status: "cancelled" }, owner, people),
+    stalledChainNote({ authorId: OWNER, status: "stopped" }, owner, people),
     "The last answer was stopped. Run it again to continue.",
   );
   // Someone else's answer: who can retry it, and that the owner can delete it.
   t.is(
     stalledChainNote({ authorId: OWNER, status: "failed" }, commenter, people),
-    "The last answer stopped. Only Ada can retry it; the owner can delete it. Branch from the answer before it to continue.",
+    "The last answer stopped. Only Ada can retry or delete it. Branch from the answer before it to continue.",
+    "the payer is the owner",
+  );
+  t.is(
+    stalledChainNote({ authorId: "u3", status: "failed" }, commenter, people),
+    "The last answer stopped. Only the person who asked it can retry it; the owner can delete it. Branch from the answer before it to continue.",
   );
   t.is(
     stalledChainNote({ authorId: "u-gone", status: "failed" }, owner, people),
@@ -236,11 +241,7 @@ test("an owner-archived shared thread can't be unarchived by a member", (t) => {
   t.false(archivedByOwner({ ...archived, archivedBy: "me" }));
   t.false(archivedByOwner(archived), "without the marker the server decides");
   t.false(archivedByOwner({ ...archived, role: "owner", archivedBy: "owner" }));
-  render(
-    <TreeLifecycleItemsHarness
-      tree={{ ...archived, archivedBy: "owner" } as ResearchTreeSummary}
-    />,
-  );
+  render(<TreeLifecycleItemsHarness tree={{ ...archived, archivedBy: "owner" }} />);
   const item = screen.getByRole("menuitem", { name: "Unarchive research" });
   t.is(item.getAttribute("aria-disabled") ?? String(item.hasAttribute("data-disabled")), "true");
   t.is(item.getAttribute("title"), OWNER_ARCHIVED_MESSAGE);
@@ -792,7 +793,13 @@ test("a tree event without the reader's own fields keeps them", (t) => {
 test("another person's tree event keeps the reader's own Archive and Trash", (t) => {
   // The server leaves a member's per-person state out of everyone else's
   // copy of a tree event (`research/access.ts:sharedTree`).
-  const cached = tree({ role: "commenter", archivedAt: 7, trashedAt: 9, trashedBy: ME });
+  const cached = tree({
+    role: "commenter",
+    archivedAt: 7,
+    archivedBy: "owner",
+    trashedAt: 9,
+    trashedBy: ME,
+  });
   const incoming = tree({ title: "Renamed" });
   for (const field of ["archivedAt", "trashedAt", "lastViewedAt"] as const) {
     delete (incoming as Partial<ResearchTree>)[field];
@@ -801,10 +808,12 @@ test("another person's tree event keeps the reader's own Archive and Trash", (t)
   t.is(merged.archivedAt, 7);
   t.is(merged.trashedAt, 9);
   t.is(merged.trashedBy, ME);
+  t.is(merged.archivedBy, "owner");
   // The person who caused it gets their own copy, which speaks for itself.
   const own = mergeTreeEvent(cached, tree({ archivedAt: null, trashedAt: null }));
   t.is(own.archivedAt, null);
   t.is(own.trashedBy, undefined, "out of the Trash, trashedBy is not carried");
+  t.is(own.archivedBy, undefined, "out of the Archive, archivedBy is not carried");
 
   const client = testQueryClient();
   const scope = { workspaceId: "w1", includeArchived: true };

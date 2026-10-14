@@ -27,7 +27,7 @@ import {
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { DeleteDialog } from "../../ui/DeleteDialog.js";
 
-import type { Filing } from "./useFiling.js";
+import { ownTree, type Filing } from "./useFiling.js";
 
 type PendingGroupAction =
   | { kind: "archive"; tree: ResearchTreeSummary; children: ResearchTreeSummary[] }
@@ -134,7 +134,14 @@ export function useGroupActions(
   const trashGroup = useCallback(
     async (treeId: string) => {
       const children = groupChildren(treeId);
-      await trash.mutateAsync(treeId);
+      // A member's Trash entry for a shared thread belongs to the workspace
+      // it was trashed from.
+      const tree = findTree(treeId);
+      const shared = tree !== null && !ownTree(tree);
+      await trash.mutateAsync({
+        treeId,
+        workspaceId: shared ? filing.workspaceId || undefined : undefined,
+      });
       const withChildren =
         children.length > 0 ? ` with its ${researchChildCount(children.length)}` : "";
       pushToast({
@@ -145,7 +152,7 @@ export function useGroupActions(
             .catch((failure: unknown) => pushErrorToast("Couldn’t restore", failure)),
       });
     },
-    [groupChildren, restoreFromTrash, trash],
+    [filing.workspaceId, findTree, groupChildren, restoreFromTrash, trash],
   );
 
   const removeGroup = useCallback(
