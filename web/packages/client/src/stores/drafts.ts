@@ -6,6 +6,7 @@
 // Composers restore the server copy on entering their scope. Local edits made
 // in this tab always win over asynchronous restoration.
 
+import type { ResearchImageAttachment } from "@session/shared";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -16,6 +17,10 @@ export interface ComposerDraft {
   text: string;
   /** Registry model id the composer will launch with. */
   model?: string | undefined;
+  /** The chosen effort; absent for the model's default. */
+  effort?: string | undefined;
+  /** Images uploaded for the question, not yet sent. */
+  images?: ResearchImageAttachment[] | undefined;
   updatedAt: number;
 }
 
@@ -68,7 +73,9 @@ export function restoreServerDraft(key: DraftKey, raw: string | null): ComposerD
     typeof value["updatedAt"] !== "number" ||
     !Number.isFinite(value["updatedAt"]) ||
     value["updatedAt"] < 0 ||
-    (value["model"] !== undefined && typeof value["model"] !== "string")
+    (value["model"] !== undefined && typeof value["model"] !== "string") ||
+    (value["effort"] !== undefined && typeof value["effort"] !== "string") ||
+    (value["images"] !== undefined && !Array.isArray(value["images"]))
   )
     return null;
   const draft = value as unknown as ComposerDraft;
