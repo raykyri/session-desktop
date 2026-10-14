@@ -12,7 +12,9 @@ Available backup sources:
 | `/data/documents` | `web/scripts/backup-documents.sh`, nightly tar of files new since the last run | bucket lifecycle |
 | `/data/tmp` | nothing; it holds the Vertex credential, rewritten at boot | — |
 
-Everything else (the client bundle, migrations, fonts) is in the image.
+Everything else (the client bundle, migrations) is in the image. To replace
+the database with an empty one instead of restoring it, see
+`reset-database.md`.
 
 ## 1. Determine the recovery scenario
 

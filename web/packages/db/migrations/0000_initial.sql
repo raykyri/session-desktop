@@ -1,51 +1,6 @@
-CREATE TABLE `artifact_tokens` (
-	`token` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`document_id` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`expires_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `artifact_tokens_document_idx` ON `artifact_tokens` (`document_id`);--> statement-breakpoint
 CREATE TABLE `backfills` (
 	`id` text PRIMARY KEY NOT NULL,
 	`applied_at` integer NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE `document_text` (
-	`document_id` text NOT NULL,
-	`page` integer NOT NULL,
-	`text` text NOT NULL,
-	PRIMARY KEY(`document_id`, `page`),
-	FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE TABLE `documents` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`workspace_id` text NOT NULL,
-	`name` text NOT NULL,
-	`mime` text NOT NULL,
-	`byte_size` integer NOT NULL,
-	`sha256` text NOT NULL,
-	`storage_path` text NOT NULL,
-	`page_count` integer,
-	`extraction_status` text DEFAULT 'pending' NOT NULL,
-	`created_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `documents_user_sha_uq` ON `documents` (`user_id`,`sha256`);--> statement-breakpoint
-CREATE TABLE `node_documents` (
-	`node_id` text NOT NULL,
-	`document_id` text NOT NULL,
-	`position` integer NOT NULL,
-	PRIMARY KEY(`node_id`, `document_id`),
-	FOREIGN KEY (`node_id`) REFERENCES `nodes`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`document_id`) REFERENCES `documents`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE TABLE `interface_drafts` (
@@ -57,6 +12,17 @@ CREATE TABLE `interface_drafts` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `embed_assets` (
+	`hash` text PRIMARY KEY NOT NULL,
+	`source_url` text NOT NULL,
+	`content_type` text,
+	`bytes` integer NOT NULL,
+	`stored_at` integer,
+	`last_access_at` integer NOT NULL,
+	`created_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `embed_assets_access_idx` ON `embed_assets` (`last_access_at`);--> statement-breakpoint
 CREATE TABLE `encyclopedia_pages` (
 	`user_id` text NOT NULL,
 	`workspace_id` text NOT NULL,
@@ -98,7 +64,6 @@ CREATE TABLE `folders` (
 	`workspace_id` text NOT NULL,
 	`name` text NOT NULL,
 	`collapsed` integer DEFAULT false NOT NULL,
-	`starred` integer DEFAULT 0 NOT NULL,
 	`position` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -113,6 +78,24 @@ CREATE TABLE `tree_folder_membership` (
 	FOREIGN KEY (`folder_id`) REFERENCES `folders`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `feed_items` (
+	`id` text PRIMARY KEY NOT NULL,
+	`author_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`occurred_at` integer NOT NULL,
+	`source_rank` integer NOT NULL,
+	`node_id` text,
+	`tree_id` text,
+	`workspace_id` text,
+	FOREIGN KEY (`author_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`node_id`) REFERENCES `nodes`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `feed_items_order_idx` ON `feed_items` ("occurred_at" desc,"source_rank" desc,"id" desc);--> statement-breakpoint
+CREATE INDEX `feed_items_author_idx` ON `feed_items` (`author_id`,"occurred_at" desc);--> statement-breakpoint
+CREATE UNIQUE INDEX `feed_items_node_uq` ON `feed_items` (`node_id`);--> statement-breakpoint
 CREATE TABLE `highlights` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -126,20 +109,6 @@ CREATE TABLE `highlights` (
 --> statement-breakpoint
 CREATE INDEX `highlights_node_idx` ON `highlights` (`node_id`);--> statement-breakpoint
 CREATE INDEX `highlights_user_idx` ON `highlights` (`user_id`,`created_at`);--> statement-breakpoint
-CREATE TABLE `journal_entries` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`kind` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`url` text,
-	`tweet_id` text,
-	`hydration` text,
-	`text` text,
-	`entry_json` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `journal_entries_user_idx` ON `journal_entries` (`user_id`,`created_at`,`id`);--> statement-breakpoint
 CREATE TABLE `nodes` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -283,9 +252,6 @@ CREATE TABLE `trees` (
 	`updated_at` integer NOT NULL,
 	`archived_at` integer,
 	`last_viewed_at` integer,
-	`followed` integer DEFAULT false NOT NULL,
-	`bookmarked` integer DEFAULT false NOT NULL,
-	`starred` integer DEFAULT 0 NOT NULL,
 	`position` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
@@ -299,6 +265,7 @@ CREATE TABLE `tweet_cache` (
 	`snapshot_json` text,
 	`fetched_at` integer NOT NULL,
 	`status` text NOT NULL,
+	`provider` text,
 	`failure` text
 );
 --> statement-breakpoint

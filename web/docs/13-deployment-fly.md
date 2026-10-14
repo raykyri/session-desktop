@@ -232,12 +232,13 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   machine holding one volume: a Fly scheduled machine would need the volume
   this one has, and relying on manual operator cron jobs risks skipped or inconsistent backups. A failed backup is logged and retried on the next scheduled run. The marker
   advances only after success, so no backup interval is skipped.
-- The volume is reconciled with the `documents` table on the maintenance
-  interval (`main.ts:MAINTENANCE_INTERVAL_MS`, 15 min): files under
-  `/data/documents` that no row points at are unlinked. Deleting a document or user account deletes the underlying files immediately. When workspaces or threads are deleted, SQLite foreign key cascades remove database records without deleting disk files; the periodic sweep detects and removes these orphaned files to prevent the volume from filling up. `session_volume_free_bytes` (§7)
-  is the gauge to alert on — a full volume fails every SQLite write at once.
-- `/data/embeds` is the one directory on the volume that is **not** backed up
-  and not reconciled against a table the way `/data/documents` is. It holds
+- Uploaded documents were removed in phase 2.0 of the desktop parity plan, and
+  with them the maintenance sweep that reconciled `/data/documents` with the
+  `documents` table. `server/src/uploads/storage.ts` keeps the sweep for image
+  attachments (phase 2.9); until then nothing writes to `/data/documents`.
+  `session_volume_free_bytes` (§7) is the gauge to alert on — a full volume
+  fails every SQLite write at once.
+- `/data/embeds` is the one directory on the volume that is **not** backed up. It holds
   the images of embedded posts, keyed by the SHA-256 of the origin URL
   (`GET /embeds/:hash`, `03-api-and-events.md` §5), and every file in it can
   be fetched again from the URL stored in its `embed_assets` row. Losing it

@@ -310,7 +310,11 @@ parity plan.
   bundled journal.
 - Data backfills that cannot be expressed in SQL run as versioned TypeScript
   steps in `src/backfills/` after `migrate()`, recorded in a `backfills`
-  table.
+  table. The list is empty since the reset below.
+- Phase 2.0 of the desktop parity plan squashed the history into one
+  `0000_initial.sql` generated from the schema. A database created by the
+  earlier migrations is not upgraded; it is replaced
+  (`runbooks/reset-database.md`).
 - Test databases: `openDatabase(":memory:")` for unit tests of repos where
   file semantics do not matter; a temp file for tests exercising WAL and
   concurrent readers.

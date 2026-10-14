@@ -33,7 +33,7 @@ For running, testing, and deploying the app, start from the repository's
 | [12-testing-linting-ci.md](12-testing-linting-ci.md) | AVA, Playwright, fixture providers, ESLint, Prettier, CI |
 | [13-deployment-fly.md](13-deployment-fly.md) | Fly app, Dockerfile, volume, secrets, backups, operations |
 | [14-legacy-inventory.md](14-legacy-inventory.md) | What is dropped and every reference to the old `web/` landing site |
-| [runbooks/](runbooks) | Operator procedures; `restore.md` is the backup-restore rehearsal |
+| [runbooks/](runbooks) | Operator procedures; `restore.md` is the backup-restore rehearsal, `reset-database.md` replaces the database with an empty one |
 
 Conventions:
 

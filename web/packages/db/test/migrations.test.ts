@@ -21,27 +21,45 @@ test("applies every migration to an empty database", (t) => {
   try {
     const db = openDatabase(path);
     const tables = db.$client
-      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
+      .prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '__drizzle_migrations'
+         ORDER BY name`,
+      )
       .all() as { name: string }[];
-    const names = tables.map((row) => row.name);
-    for (const expected of [
-      "users",
-      "sessions",
-      "workspaces",
-      "trees",
-      "nodes",
-      "highlights",
-      "response_snapshots",
-      "run_turns",
-      "run_queue",
-      "journal_entries",
-      "encyclopedia_pages",
-      "documents",
-      "usage_events",
-      "backfills",
-    ]) {
-      t.true(names.includes(expected), `missing table ${expected}`);
-    }
+    // The whole set, so a table the schema no longer declares is caught too.
+    t.deepEqual(
+      tables.map((row) => row.name),
+      [
+        "backfills",
+        "embed_assets",
+        "encyclopedia_pages",
+        "encyclopedia_sources",
+        "feed_items",
+        "folders",
+        "highlights",
+        "interface_drafts",
+        "invites",
+        "node_messages",
+        "node_summaries",
+        "nodes",
+        "oauth_states",
+        "response_snapshots",
+        "run_attempts",
+        "run_queue",
+        "run_turns",
+        "sessions",
+        "signup_attempts",
+        "tree_folder_membership",
+        "trees",
+        "tweet_cache",
+        "usage_events",
+        "user_limits",
+        "user_preferences",
+        "users",
+        "workspaces",
+      ],
+    );
     t.is(tableRowCount(db, "users"), 0);
     closeDatabase(db);
   } finally {
