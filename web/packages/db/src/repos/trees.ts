@@ -296,6 +296,9 @@ export function admitRoot(
       })
       .run();
     writeView(tx, userId, treeId, at);
+    // The owner follows their own thread (`sharing.setFollowing` turns it
+    // off; nothing turns it back on but the owner).
+    tx.insert(treeSubscriptions).values({ userId, treeId, createdAt: at }).run();
     upsertResearchRoot(tx, nodeId);
     return detailFromRow(tx, userId, treeRow);
   });

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
-import { auth, closeDatabase, nodes, openDatabase, tweets } from "@session/db";
+import { auth, closeDatabase, nodes, notifications, openDatabase, tweets } from "@session/db";
 
 import { createApp } from "./app.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
@@ -123,7 +123,8 @@ export {
  * Rows and buckets that expire on their own clock: nothing reads them again,
  * so without this they are kept forever — one rate-limit bucket per address
  * seen, one `sessions` row per sign-in, one `tweet_cache` row per post ever
- * linked, one `signup_attempts` row per sign-in attempt.
+ * linked, one `signup_attempts` row per sign-in attempt, one `notifications`
+ * row per notification sent.
  */
 export function sweepExpired(
   deps: ServerDeps,
@@ -139,6 +140,8 @@ export function sweepExpired(
     // (`journal/tweets.ts`); the next request fetches it anew.
     tweets: tweets.prune(deps.db, at - TWEET_CACHE_TTL_MS),
     signupAttempts: auth.deleteSignupAttemptsBefore(deps.db, at - auth.SIGNUP_ATTEMPT_RETENTION_MS),
+    // Read notifications after 30 days, and each inbox beyond its cap.
+    notifications: notifications.prune(deps.db, at),
   };
   logger.debug(swept, "swept expired state");
 }

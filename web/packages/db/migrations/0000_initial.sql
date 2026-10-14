@@ -251,6 +251,24 @@ CREATE INDEX `nodes_status_idx` ON `nodes` (`status`);--> statement-breakpoint
 CREATE INDEX `nodes_parent_idx` ON `nodes` (`parent_node_id`);--> statement-breakpoint
 CREATE INDEX `nodes_author_idx` ON `nodes` (`author_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `nodes_inline_child_uq` ON `nodes` (`parent_node_id`) WHERE "nodes"."inline" = 1;--> statement-breakpoint
+CREATE TABLE `notifications` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`tone` text NOT NULL,
+	`tree_id` text,
+	`title` text NOT NULL,
+	`body` text NOT NULL,
+	`href` text,
+	`created_at` integer NOT NULL,
+	`read_at` integer,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `notifications_user_created_idx` ON `notifications` (`user_id`,`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `notifications_user_unread_idx` ON `notifications` (`user_id`) WHERE "notifications"."read_at" IS NULL;--> statement-breakpoint
+CREATE INDEX `notifications_tree_idx` ON `notifications` (`tree_id`);--> statement-breakpoint
 CREATE TABLE `user_preferences` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`settings_json` text NOT NULL,

@@ -631,6 +631,13 @@ export function acceptInvite(
           createdAt: at,
         })
         .run();
+      // A new member follows the thread. Someone already a member keeps
+      // their choice: accepting another invitation does not follow a thread
+      // they unfollowed.
+      tx.insert(treeSubscriptions)
+        .values({ userId: user.id, treeId: tree.id, createdAt: at })
+        .onConflictDoNothing()
+        .run();
       if (removal) {
         tx.delete(treeMemberRemovals)
           .where(
@@ -659,7 +666,12 @@ export function acceptInvite(
 }
 
 /** Follows or unfollows a thread (notifications for it). Anyone signed in
- * who may read it. Returns whether the caller follows it now. */
+ * who may read it. Returns whether the caller follows it now.
+ *
+ * The owner follows a thread from its creation (`trees.admitRoot`) and a
+ * member from joining it (`acceptInvite`); a reader of a public thread
+ * follows only by choice. Unfollowing deletes the row, and nothing but this
+ * call creates it again, so an unfollow stays in place. */
 export function setFollowing(
   db: SessionDatabase,
   userId: string,

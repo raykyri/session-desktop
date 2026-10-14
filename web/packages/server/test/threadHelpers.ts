@@ -66,7 +66,8 @@ export async function sharedThread(
   });
   harness.db.update(schema.nodes).set({ status: "complete" }).run();
   const link = await ownerCaller.invites.create({ treeId: detail.tree.id, role: "commenter" });
-  t.true(link.url.endsWith(`/invite/${encodeURIComponent(link.token)}`));
+  // The token is the fragment, never part of a path or query a request carries.
+  t.true(link.url.endsWith(`/invite#${encodeURIComponent(link.token)}`));
   await harness.caller(commenter).invites.accept({ token: link.token });
   const byLogin = await ownerCaller.invites.create({
     treeId: detail.tree.id,

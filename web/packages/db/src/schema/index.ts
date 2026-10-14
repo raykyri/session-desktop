@@ -11,6 +11,7 @@ export * from "./followups.js";
 export * from "./highlights.js";
 export * from "./images.js";
 export * from "./nodes.js";
+export * from "./notifications.js";
 export * from "./preferences.js";
 export * from "./runs.js";
 export * from "./sessions.js";

@@ -1,6 +1,7 @@
 // In-app notifications (`03-api-and-events.md` §3, `notification.requested`).
-// There is no inbox: a notification is an event to the person's open
-// connections, shown as a toast, and is lost when they have none open.
+// Each one is stored in the recipient's inbox (`notifications` table,
+// `notifications.list`) and sent to their open connections, which show it as
+// a toast when the Notifications setting is on.
 //
 // Sent for:
 // - a run you asked finishing (complete or failed), to its asker;
@@ -15,7 +16,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { SessionDatabase } from "@session/db";
-import { access, nodes, sharing, trees, users } from "@session/db";
+import { access, nodes, notifications, sharing, trees, users } from "@session/db";
 import type { NotificationPayload, ResearchNode } from "@session/shared";
 import { nodePrompt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
@@ -41,22 +42,44 @@ function threadHref(treeId: string, nodeId?: string): string {
     : `/r/${encodeURIComponent(treeId)}?sel=${encodeURIComponent(nodeId)}`;
 }
 
-/** Sends one notification to each of `userIds`. */
+/** Sends one notification to each of `userIds`: stored in their inbox
+ * (`repos/notifications.ts`), then sent to their open connections, where the
+ * client shows it as a toast unless they turned notifications off. */
 export function notify(
   deps: NotifyDeps,
   userIds: Iterable<string>,
-  content: Omit<NotificationPayload, "id" | "createdAt" | "timeoutMs" | "tone"> &
+  content: Omit<NotificationPayload, "id" | "createdAt" | "timeoutMs" | "tone" | "kind"> &
+    Required<Pick<NotificationPayload, "kind">> &
     Partial<Pick<NotificationPayload, "tone" | "timeoutMs">>,
 ): void {
   const createdAt = Date.now();
-  for (const userId of new Set(userIds)) {
-    const payload: NotificationPayload = {
-      id: randomUUID(),
-      tone: "info",
-      timeoutMs: TIMEOUT_MS,
+  const payloads = [...new Set(userIds)].map(
+    (userId): { userId: string; payload: NotificationPayload } => ({
+      userId,
+      payload: {
+        id: randomUUID(),
+        tone: "info",
+        timeoutMs: TIMEOUT_MS,
+        createdAt,
+        ...content,
+      },
+    }),
+  );
+  notifications.record(
+    deps.db,
+    payloads.map(({ userId, payload }) => ({
+      id: payload.id,
+      userId,
+      kind: content.kind,
+      tone: payload.tone,
+      treeId: payload.treeId ?? null,
+      title: payload.title,
+      body: payload.body,
+      href: payload.href ?? null,
       createdAt,
-      ...content,
-    };
+    })),
+  );
+  for (const { userId, payload } of payloads) {
     deps.eventBus.emit(userId, sessionEvent("notification.requested", { ...payload }));
   }
 }

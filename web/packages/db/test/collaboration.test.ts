@@ -779,11 +779,14 @@ test("Follow subscribes a reader; a follower who loses access is dropped", (t) =
   sharing.setFollowing(db, shared.commenter.userId, shared.treeId, true);
   t.deepEqual(
     sharing.followers(db, shared.treeId).sort(),
-    [shared.commenter.userId, shared.viewer.userId].sort(),
+    [shared.fixture.userId, shared.commenter.userId, shared.viewer.userId].sort(),
   );
   t.true(trees.get(db, shared.viewer.userId, shared.treeId)?.followed ?? false);
   sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.viewer.userId);
-  t.deepEqual(sharing.followers(db, shared.treeId), [shared.commenter.userId]);
+  t.deepEqual(
+    sharing.followers(db, shared.treeId).sort(),
+    [shared.fixture.userId, shared.commenter.userId].sort(),
+  );
   t.throws(() => sharing.setFollowing(db, shared.stranger.userId, shared.treeId, true), {
     message: /was not found$/,
   });

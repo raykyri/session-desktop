@@ -82,7 +82,8 @@ export type ResearchRunEvent =
 
 /** A server notification for this person: a run they asked finished, a new
  * question or note in a thread they follow, a branch from their answer, an
- * invitation. In-app only; there is no inbox. */
+ * invitation. The server also stores it in the person's inbox
+ * (`notifications.list`) under the same id. */
 export interface NotificationRequestedEvent {
   type: "notification.requested";
   notification: NotificationPayload;
@@ -112,9 +113,17 @@ export interface ResearchInvitesChangedEvent {
   timestamp: number;
 }
 
+/** Notifications in the caller's inbox were marked read (in any of their
+ * tabs): the inbox and its unread count refetch. */
+export interface NotificationsReadEvent {
+  type: "notifications.read";
+  timestamp: number;
+}
+
 /** The web's collaboration events (`03-api-and-events.md` §3). */
 export type CollaborationEvent =
   | NotificationRequestedEvent
+  | NotificationsReadEvent
   | ResearchPresenceChangedEvent
   | ResearchSharingChangedEvent
   | ResearchInvitesChangedEvent;
@@ -271,6 +280,7 @@ function parseCollaborationEvent(event: SessionEvent): SessionEventParseResult |
   const { type, payload, timestamp } = event;
   if (
     type !== "notification.requested" &&
+    type !== "notifications.read" &&
     type !== "research.presence.changed" &&
     type !== "research.sharing.changed" &&
     type !== "research.invites.changed"
@@ -287,6 +297,8 @@ function parseCollaborationEvent(event: SessionEvent): SessionEventParseResult |
         ? { kind: "event", event: { type, notification, timestamp } }
         : { kind: "malformed", type };
     }
+    case "notifications.read":
+      return { kind: "event", event: { type, timestamp } };
     case "research.presence.changed":
       return typeof payload.treeId === "string" &&
         Array.isArray(payload.viewers) &&

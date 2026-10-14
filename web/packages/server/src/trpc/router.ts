@@ -9,6 +9,7 @@ import { draftsRouter, interfaceDraftsRouter } from "./routers/drafts.js";
 import { eventsRouter } from "./routers/events.js";
 import { feedRouter } from "./routers/feed.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
+import { notificationsRouter } from "./routers/notifications.js";
 import { followupProcedures, researchRouter } from "./routers/research/index.js";
 import { invitesRouter, sharingRouter, subscriptionsRouter } from "./routers/sharing.js";
 import { systemRouter } from "./routers/system.js";
@@ -32,6 +33,7 @@ export const appRouter = router({
   sharing: sharingRouter,
   invites: invitesRouter,
   subscriptions: subscriptionsRouter,
+  notifications: notificationsRouter,
   artifacts: artifactsRouter,
   events: eventsRouter,
 });

@@ -22,6 +22,7 @@ import * as images from "./images.js";
 import * as mappers from "./mappers.js";
 import * as messages from "./messages.js";
 import * as nodes from "./nodes.js";
+import * as notifications from "./notifications.js";
 import * as posts from "./posts.js";
 import * as preferences from "./preferences.js";
 import * as queue from "./queue.js";
@@ -55,6 +56,7 @@ export {
   mappers,
   messages,
   nodes,
+  notifications,
   posts,
   preferences,
   queue,

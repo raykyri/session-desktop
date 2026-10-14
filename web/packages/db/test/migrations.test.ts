@@ -44,6 +44,7 @@ test("applies every migration to an empty database", (t) => {
         "node_messages",
         "node_summaries",
         "nodes",
+        "notifications",
         "oauth_states",
         "research_drafts",
         "research_images",

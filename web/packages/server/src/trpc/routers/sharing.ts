@@ -137,9 +137,12 @@ export const sharingRouter = router({
     ),
 });
 
-/** The link that accepts an invitation; the client route reads `token`. */
+/** The link that accepts an invitation. The token is the URL fragment, which
+ * browsers do not send in requests or `Referer` headers, so it reaches no
+ * server or proxy log; the client route (`routes/invite.tsx`) reads it,
+ * removes it from the address bar and posts it to `invites.accept`. */
 function inviteUrl(origin: string, token: string): string {
-  return `${origin}/invite/${encodeURIComponent(token)}`;
+  return `${origin}/invite#${encodeURIComponent(token)}`;
 }
 
 export const invitesRouter = router({

@@ -80,3 +80,29 @@ export interface NotificationPayload {
   kind?: "runFinished" | "followUp" | "branch" | "invite";
   treeId?: string;
 }
+
+/** What a notification is about. */
+export type NotificationKind = NonNullable<NotificationPayload["kind"]>;
+
+/** A stored notification in the recipient's inbox (`notifications.list`).
+ * Every `notification.requested` is also stored as one of these, under the
+ * same id. */
+export interface InboxNotification {
+  id: string;
+  kind: NotificationKind;
+  tone: NotificationPayload["tone"];
+  treeId: string | null;
+  title: string;
+  body: string;
+  href: string | null;
+  createdAt: number;
+  /** Null while unread. */
+  readAt: number | null;
+}
+
+/** One page of the inbox, newest first. `nextCursor` reads the next page;
+ * null on the last. */
+export interface InboxNotificationPage {
+  items: InboxNotification[];
+  nextCursor: string | null;
+}
