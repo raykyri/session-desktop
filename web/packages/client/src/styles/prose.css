@@ -537,3 +537,265 @@ html.wrap-code-blocks .research-prose-code-block pre code {
     translate: none;
   }
 }
+
+/* A `session-html` block in an answer: a sandboxed frame under one header bar
+   (features/widgets/SessionWidget.tsx), after the desktop's transcript.css.
+   The bar shows the widget's title and script status on the left and its
+   controls on the right; the controls wrap under the title as one group when
+   the widget is narrow. The bar's text is chrome (data-widget-chrome), which
+   find-in-page and the answer's highlight projection skip. */
+.session-widget {
+  container: session-widget / inline-size;
+  margin: 0 0 0.72em;
+  overflow: hidden;
+  border: 1px solid var(--surface-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-fill-subtle);
+}
+
+.session-widget-bar {
+  display: flex;
+  min-height: 26px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--surface-border-subtle);
+}
+
+.session-widget-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 120px;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+  font-size: var(--fs-sm);
+}
+
+.session-widget-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-body-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-widget-title[data-placeholder] {
+  color: var(--text-faint);
+}
+
+.session-widget-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.session-widget-status::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.session-widget-status[data-status="running"] {
+  color: var(--status-success-fg);
+}
+
+.session-widget-status[data-status="stopped"] {
+  color: var(--status-warning-fg);
+}
+
+.session-widget-controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.session-widget-view {
+  display: inline-flex;
+  height: 20px;
+  margin-right: 2px;
+  overflow: hidden;
+  border: 1px solid var(--surface-border-default);
+  border-radius: var(--radius-sm);
+}
+
+.session-widget-segment {
+  appearance: none;
+  min-height: 0;
+  height: 100%;
+  padding: 0 7px;
+  border: 0;
+  color: var(--text-body-soft);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.session-widget-segment + .session-widget-segment {
+  border-left: 1px solid var(--surface-border-default);
+}
+
+.session-widget-segment[aria-pressed="true"] {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
+}
+
+.session-widget-segment:hover {
+  color: var(--accent-color);
+}
+
+.session-widget-segment:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.session-widget-run {
+  appearance: none;
+  display: inline-flex;
+  min-height: 0;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: 999px;
+  color: var(--text-body-soft);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+/* Below 400px the Run pill shows only its icon; its aria-label and title
+   still name it. */
+@container session-widget (max-width: 399px) {
+  .session-widget-run {
+    padding: 0 5px;
+  }
+
+  .session-widget-run-label {
+    display: none;
+  }
+}
+
+.session-widget-run svg,
+.session-widget-action svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.session-widget-run:hover,
+.session-widget-run:focus-visible {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.session-widget-action {
+  display: inline-flex;
+  width: 20px;
+  min-height: 0;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--text-body-soft) 60%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.session-widget-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.session-widget-action:hover:not(:disabled),
+.session-widget-action:focus-visible,
+.session-widget-action[aria-expanded="true"] {
+  color: var(--text-body-soft);
+  background: var(--surface-fill-hover);
+}
+
+.session-widget-run:focus-visible,
+.session-widget-action:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.session-widget-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.session-widget-placeholder {
+  display: grid;
+  min-height: 56px;
+  place-items: center;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+.session-widget-placeholder::before {
+  content: attr(data-label);
+}
+
+.session-widget [data-widget-chrome] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.session-widget-source:not([data-selectable]) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.research-prose .session-widget-source {
+  max-height: 440px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  font-size: var(--fs-sm);
+  white-space: pre;
+}
+
+.session-widget-feedback {
+  padding: 4px 10px;
+  color: var(--text-body-soft);
+  font-size: var(--fs-sm);
+}
+
+.research-link-button {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  color: var(--accent-color);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.research-link-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

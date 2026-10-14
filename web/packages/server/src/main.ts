@@ -215,6 +215,26 @@ export async function drainWithin(
   }
 }
 
+/**
+ * Says at boot whether widget scripts run. Scripts are off, and widgets show
+ * only their static page, when the artifact origin is the app's site
+ * (`artifacts/site.ts`); that is a configuration to fix, so it is logged at
+ * error level with the variable to change.
+ */
+export function logWidgetScriptPolicy(config: Config, logger: Logger): void {
+  if (config.widgetScripts.allowed) {
+    logger.info(
+      { publicOrigin: config.publicOrigin, artifactOrigin: config.artifactOrigin },
+      "widget scripts are enabled: the artifact origin is a separate site",
+    );
+  } else {
+    logger.error(
+      { publicOrigin: config.publicOrigin, artifactOrigin: config.artifactOrigin },
+      config.widgetScripts.reason ?? "widget scripts are off",
+    );
+  }
+}
+
 export interface RunningServer {
   close(): Promise<void>;
 }
@@ -223,6 +243,7 @@ export function main(): RunningServer {
   loadDotenvForDevelopment();
   const config = loadConfig();
   const logger = defaultLogger(config.env);
+  logWidgetScriptPolicy(config, logger);
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 

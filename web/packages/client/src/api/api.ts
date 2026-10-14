@@ -11,12 +11,16 @@
 // flow, a retry outside React) is not forced through a hook.
 
 import type {
+  ArtifactStateAction,
   NodeAnchor,
   RecentActivityCursor,
   RecentActivityPage,
   RecentActivityScope,
   RecentResearchQuery,
   RecentResearchQueryCursor,
+  ResearchArtifactRef,
+  ResearchArtifactRevision,
+  ResearchArtifactState,
   ResearchBranchRemoval,
   ResearchDraft,
   ResearchFolderState,
@@ -542,13 +546,57 @@ export function setEventInterest(connectionId: string, nodeIds: string[]) {
   return trpc().events.setInterest.mutate({ connectionId, nodeIds });
 }
 
-/** Mints a preview of a widget block of a stored answer. The server resolves
- * the HTML from the answer by its SHA-256; it never serves HTML the client
- * sends. */
-export async function prepareWidgetPreview(nodeId: string, html: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
-  const sha256 = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  return trpc().artifacts.prepareWidget.mutate({ nodeId, sha256 });
+/* -------------------------------------------------------------------------
+ * artifacts: widget pages, revisions and saved inputs
+ * ---------------------------------------------------------------------- */
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** The pages of a widget block of a stored answer. The server resolves the
+ * HTML from the answer by its SHA-256; it never serves HTML the client
+ * sends. `runUrl` is null while widget scripts are off. */
+export async function prepareResearchWidget(nodeId: string, html: string) {
+  return trpc().artifacts.prepareWidget.mutate({ nodeId, sha256: await sha256Hex(html) });
+}
+
+/** The pages of a stored revision (the revision list's preview). */
+export function prepareResearchWidgetRevision(reference: ResearchArtifactRef) {
+  return trpc().artifacts.prepareWidget.mutate(reference);
+}
+
+/** Stores the revision of a displayed widget block
+ * (`research_artifact_register`). */
+export function registerResearchArtifact(input: {
+  nodeId: string;
+  slot: string;
+  html: string;
+  meta: string;
+}): Promise<ResearchArtifactRevision> {
+  return trpc().artifacts.register.mutate(input);
+}
+
+export function researchArtifactHistory(treeId: string, artifactId: string) {
+  return trpc().artifacts.history.query({ treeId, artifactId });
+}
+
+/** `value` is null when nothing is saved (JSON transport drops `undefined`). */
+function artifactState(state: { enabled: boolean; value?: unknown }): ResearchArtifactState {
+  return { enabled: state.enabled, value: state.value ?? null };
+}
+
+export async function getResearchArtifactState(
+  reference: ResearchArtifactRef,
+): Promise<ResearchArtifactState> {
+  return artifactState(await trpc().artifacts.getState.query(reference));
+}
+
+export async function updateResearchArtifactState(
+  reference: ResearchArtifactRef,
+  action: ArtifactStateAction,
+  value: unknown = null,
+): Promise<ResearchArtifactState> {
+  return artifactState(await trpc().artifacts.updateState.mutate({ reference, action, value }));
 }

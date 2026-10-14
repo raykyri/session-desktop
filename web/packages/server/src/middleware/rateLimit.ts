@@ -28,6 +28,10 @@ export const RATE_LIMITS = {
   /** `POST /api/images`, per account. */
   uploads: { limit: 120, windowMs: 60 * 60_000 },
   auth: { limit: 20, windowMs: 60_000 },
+  /** The `artifacts.*` procedures, per account and apart from `mutations`: a
+   * thread prepares and registers each widget it shows, and a widget's saved
+   * inputs are written up to four times a second while the reader types. */
+  widgets: { limit: 600, windowMs: 60_000 },
 } as const satisfies Record<string, BucketSpec>;
 
 export class RateLimiter {

@@ -1,36 +1,12 @@
-// `artifacts` and `events`
-// (`03-api-and-events.md` §2, `11-artifacts-and-browser.md` §2).
+// `events`
+// (`03-api-and-events.md` §2).
 
 import { randomUUID } from "node:crypto";
 
 import type { SessionEvent } from "@session/shared";
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { answerWidgetSource, mintWidgetPreview } from "../../artifacts/widgets.js";
-import { nodeContent } from "../../research/admission.js";
 import { protectedProcedure, router } from "../base.js";
-
-export const artifactsRouter = router({
-  /** A one-hour preview URL for one widget block of a stored answer the
-   * caller can read, named by the SHA-256 of its HTML. The server resolves the
-   * HTML from the answer; a client cannot have arbitrary HTML served on the
-   * artifact origin. */
-  prepareWidget: protectedProcedure
-    .input(
-      z.object({
-        nodeId: z.string().min(1).max(256),
-        sha256: z.string().regex(/^[a-f0-9]{64}$/u),
-      }),
-    )
-    .mutation(({ ctx, input }) => {
-      const html = answerWidgetSource(nodeContent(ctx, input.nodeId), input.sha256);
-      if (html === null)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Widget not found in this answer" });
-      const minted = mintWidgetPreview(ctx.db, ctx.user.id, html);
-      return { url: `${ctx.config.artifactOrigin}/w/${minted.token}`, expiresAt: minted.expiresAt };
-    }),
-});
 
 export const eventsRouter = router({
   /**

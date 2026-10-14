@@ -72,11 +72,10 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   app.use("*", securityHeaders(deps.config));
 
   // The artifact origin is a different host with its own headers and no
-  // session; it is mounted before the CSRF guard and the session loader so a
-  // token URL never carries either.
-  app.route("/", widgetRoutes(deps));
-  // Nothing below belongs to that host.
+  // session: only its widget route answers there, and it is mounted before
+  // the CSRF guard and the session loader so a token URL never carries either.
   app.use("*", artifactHostOnly(deps.config));
+  app.route("/", widgetRoutes(deps));
 
   app.use("*", csrfGuard(deps.config));
   app.use("*", sessionLoader(deps));

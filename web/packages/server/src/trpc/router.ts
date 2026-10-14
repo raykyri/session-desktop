@@ -4,8 +4,9 @@
 
 import { router } from "./base.js";
 import { adminRouter, authRouter, settingsRouter, usageRouter } from "./routers/account.js";
+import { artifactsRouter } from "./routers/artifacts.js";
 import { draftsRouter, interfaceDraftsRouter } from "./routers/drafts.js";
-import { artifactsRouter, eventsRouter } from "./routers/events.js";
+import { eventsRouter } from "./routers/events.js";
 import { feedRouter } from "./routers/feed.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
 import { followupProcedures, researchRouter } from "./routers/research/index.js";

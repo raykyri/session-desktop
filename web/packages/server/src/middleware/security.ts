@@ -52,10 +52,13 @@ export function securityHeaders(config: Config): MiddlewareHandler<AppEnv> {
     if (c.req.header("host") !== config.artifactHost) {
       c.res.headers.set("X-Frame-Options", "DENY");
     }
-    c.res.headers.set(
-      "Permissions-Policy",
-      "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()",
-    );
+    // Widget pages set their own, longer list (`artifacts/widgetPage.ts`).
+    if (!c.res.headers.has("Permissions-Policy")) {
+      c.res.headers.set(
+        "Permissions-Policy",
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()",
+      );
+    }
     if (config.isProduction) {
       c.res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }

@@ -4,9 +4,55 @@
 
 import test from "ava";
 
-import { ARTIFACT_ORIGIN, PUBLIC_ORIGIN, createHarness } from "./helpers.js";
+import { ConfigError } from "../src/config.js";
+import type { Logger } from "../src/logger.js";
+import { logWidgetScriptPolicy } from "../src/main.js";
+
+import { ARTIFACT_ORIGIN, PUBLIC_ORIGIN, createHarness, testConfig } from "./helpers.js";
 
 const ARTIFACT_HOST = new URL(ARTIFACT_ORIGIN).host;
+
+test("the artifact origin must be another host, and a same-site one is logged at boot", (t) => {
+  const error = t.throws(() =>
+    testConfig("unused-data-dir", {
+      SESSION_PUBLIC_ORIGIN: "https://session.dev",
+      SESSION_ARTIFACT_ORIGIN: "https://session.dev",
+    }),
+  );
+  t.true(error instanceof ConfigError);
+  t.regex(
+    (error as ConfigError).issues.join("\n"),
+    /SESSION_ARTIFACT_ORIGIN: must be a different host/u,
+  );
+
+  const lines: { level: string; message: string }[] = [];
+  const logger = {
+    info: (_: unknown, message: string) => lines.push({ level: "info", message }),
+    error: (_: unknown, message: string) => lines.push({ level: "error", message }),
+  } as unknown as Logger;
+  logWidgetScriptPolicy(
+    testConfig("unused-data-dir", {
+      SESSION_PUBLIC_ORIGIN: "https://session.dev",
+      SESSION_ARTIFACT_ORIGIN: "https://artifacts.session.dev",
+    }),
+    logger,
+  );
+  logWidgetScriptPolicy(testConfig("unused-data-dir"), logger);
+  t.is(lines[0]!.level, "error");
+  t.regex(lines[0]!.message, /same site \(session\.dev\).*Widget scripts are off/u);
+  t.is(lines[1]!.level, "info");
+});
+
+test("the artifact host never sets a cookie", async (t) => {
+  const harness = createHarness(t);
+  for (const path of [`/w/${"f".repeat(64)}`, "/auth/test-login", "/"]) {
+    const response = await harness.app.request(path, {
+      method: path === "/auth/test-login" ? "POST" : "GET",
+      headers: { Host: ARTIFACT_HOST, "Sec-Fetch-Dest": "iframe", Cookie: "session=forged" },
+    });
+    t.is(response.headers.get("set-cookie"), null, path);
+  }
+});
 
 test("the artifact host serves artifacts and rejects requests for the rest of the app", async (t) => {
   const harness = createHarness(t);

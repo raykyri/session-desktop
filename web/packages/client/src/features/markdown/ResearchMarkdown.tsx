@@ -22,7 +22,6 @@ import {
   MAX_SESSION_WIDGET_BYTES,
   remarkSessionWidgetFences,
   sessionWidgetByteLength,
-  sessionWidgetMetadata,
   baseRehypePlugins,
   baseRemarkPlugins,
   collapseImageMarkers,
@@ -37,6 +36,7 @@ import {
   isValidElement,
   memo,
   useEffect,
+  useMemo,
   useSyncExternalStore,
 } from "react";
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from "react";
@@ -44,9 +44,10 @@ import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 
 import { cn } from "../../lib/cn.js";
+import { SessionWidget } from "../widgets/SessionWidget.js";
+import { WidgetAnswerContext } from "../widgets/context.js";
 
 import { DiagramBlock, diagramLangFromClassName, nodeText } from "./DiagramBlock.js";
-import { SessionWidget } from "./SessionWidget.js";
 import {
   ensureMathPlugins,
   readMathPlugins,
@@ -162,11 +163,13 @@ function WidgetBlock({
   code,
   state,
   meta,
+  slot,
   children,
 }: {
   code: string;
   state: unknown;
   meta: string;
+  slot: string;
   children: ReactNode;
 }) {
   const nodeId = useContext(WidgetContext);
@@ -182,14 +185,7 @@ function WidgetBlock({
       </div>
     );
   if (complete && withinLimit)
-    return (
-      <SessionWidget
-        key={html}
-        html={html}
-        nodeId={nodeId}
-        title={sessionWidgetMetadata(meta).title ?? "Answer widget"}
-      />
-    );
+    return <SessionWidget key={html} html={html} meta={meta} slot={slot} nodeId={nodeId} />;
   return (
     <div data-research-widget="" className="research-prose-code-block">
       <p className="text-fg-muted text-xs">
@@ -230,6 +226,11 @@ const markdownComponents: Components = {
             typeof props["data-session-widget-meta"] === "string"
               ? props["data-session-widget-meta"]
               : ""
+          }
+          slot={
+            typeof props["data-session-widget-slot"] === "string"
+              ? props["data-session-widget-slot"]
+              : "0"
           }
         >
           {children}
@@ -288,8 +289,8 @@ export type ResearchMarkdownVariant = "prose" | "summary" | "compact";
 
 export interface ResearchMarkdownProps {
   markdown: string;
-  /** The answer node whose `session-html` blocks render as static previews.
-   * Without it they render as code. */
+  /** The answer node whose `session-html` blocks render as widgets
+   * (`features/widgets/SessionWidget.tsx`). Without it they render as code. */
   widgetNodeId?: string | undefined;
   /** `prose` for answers, `summary` for recap text, `compact` for previews. */
   variant?: ResearchMarkdownVariant;
@@ -331,6 +332,22 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
     if (needsMath) void ensureMathPlugins();
   }, [needsMath]);
 
+  // The answer a widget's "Ask for changes" quotes. A thread page may wrap the
+  // answer in its own `WidgetAnswerContext` (tree id, message key, a reason
+  // the reader cannot ask now); this keeps those and supplies the text.
+  const outerAnswer = useContext(WidgetAnswerContext);
+  const widgetAnswer = useMemo(
+    () =>
+      widgetNodeId === undefined
+        ? null
+        : {
+            ...(outerAnswer?.nodeId === widgetNodeId ? outerAnswer : {}),
+            nodeId: widgetNodeId,
+            answer: markdown,
+          },
+    [outerAnswer, widgetNodeId, markdown],
+  );
+
   if (isOversizedMarkdown(source, oversized)) {
     return (
       <pre className={cn(oversized.fallbackClassName ?? "research-plaintext", className)}>
@@ -343,23 +360,25 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
     <WidgetContext.Provider
       value={widgetNodeId !== undefined && !inline && variant === "prose" ? widgetNodeId : null}
     >
-      <div className={cn(VARIANT_CLASS[variant], className)}>
-        <ReactMarkdown
-          components={inline ? inlineComponents : markdownComponents}
-          remarkPlugins={
-            math
-              ? [...baseRemarkPlugins, ...math.remarkPlugins, remarkSessionWidgetFences]
-              : [...baseRemarkPlugins, remarkSessionWidgetFences]
-          }
-          rehypePlugins={
-            math ? [...CLIENT_REHYPE_PLUGINS, ...math.rehypePlugins] : CLIENT_REHYPE_PLUGINS
-          }
-          disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
-          unwrapDisallowed={inline}
-        >
-          {math ? normalizeLatexMathDelimiters(source) : source}
-        </ReactMarkdown>
-      </div>
+      <WidgetAnswerContext.Provider value={widgetAnswer}>
+        <div className={cn(VARIANT_CLASS[variant], className)}>
+          <ReactMarkdown
+            components={inline ? inlineComponents : markdownComponents}
+            remarkPlugins={
+              math
+                ? [...baseRemarkPlugins, ...math.remarkPlugins, remarkSessionWidgetFences]
+                : [...baseRemarkPlugins, remarkSessionWidgetFences]
+            }
+            rehypePlugins={
+              math ? [...CLIENT_REHYPE_PLUGINS, ...math.rehypePlugins] : CLIENT_REHYPE_PLUGINS
+            }
+            disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
+            unwrapDisallowed={inline}
+          >
+            {math ? normalizeLatexMathDelimiters(source) : source}
+          </ReactMarkdown>
+        </div>
+      </WidgetAnswerContext.Provider>
     </WidgetContext.Provider>
   );
 });
