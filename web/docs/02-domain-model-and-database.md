@@ -192,7 +192,9 @@ The parent trees whose nested children a person has hidden. Per person.
   is listed under on Home, one level deep (enforced by the repository)
 - `visibility` text (`private | public`, default `private`)
 - `position` integer — sidebar order within (`workspace_id`,
-  `archived_at IS NULL`), Trash excluded
+  `archived_at IS NULL`). A tree in the Trash keeps its position and moves
+  down with the others when a tree is inserted above it; reordering rewrites
+  only the trees outside the Trash (§5.10)
 - Indexes: (`owner_id`, `workspace_id`, `archived_at`, `trashed_at`,
   `position`), (`owner_id`, `trashed_at`), (`parent_tree_id`),
   (`visibility`, `updated_at`)
@@ -536,13 +538,88 @@ Each item names the desktop source and the enforcing function.
   `completed_at` > the same)
   (`state.rs:3770-3776`) via grouped subqueries.
 
+### 5.10 Trash
+- `trash.trashTree` sets `trees.trashed_at` (`trash_research_tree`). Nothing
+  is deleted: nodes, snapshots, membership, parent, archive state and
+  position stay. It deletes the tree's `feed_items` row. Refused while a node
+  of the tree is `queued`, `running` or `interrupted`, with the desktop's
+  message. Trashing a tree already in the Trash changes nothing.
+- `trash.restoreTree` clears `trashed_at`
+  (`restore_research_tree_from_trash`). The trees in the tree's section
+  (`workspace_id`, archived or not) at or after its position move down one,
+  so it returns to its place; an archived tree returns to the Archive. The
+  feed row is restored for an unarchived tree.
+- `trash.list(workspaceId)` is `trees.summaries` with `trashed: true`: the
+  workspace's trees in the Trash, archived or not, with counts and flags,
+  ordered `trashed_at DESC, id`.
+- `trash.empty(workspaceId)` deletes, in one transaction, the workspace's
+  trees in the Trash (as `trees.remove` does) and its folders in the Trash
+  (their memberships cascade, so their trees become Unfiled; `collapsed_places`
+  rows naming them are deleted). A tree that somehow has an active run is
+  left in the Trash. Returns `{ treeIds, folderIds }`.
+- `trees.remove` is Delete now, in or out of the Trash.
+- Groups: a parent (`trees.parent_tree_id`, §5.11) is archived, unarchived,
+  moved to and out of the Trash, and deleted together with the children
+  listed under it: the trees whose parent it is and that are listed in the
+  same place (the Trash, the Archive, Drafts, the same folder outside the
+  Trash, or Unfiled). This is the desktop's `groupChildren`
+  (`useResearchGroupActions.tsx`), which the desktop applies from the client
+  one call per tree; the web applies it in the repository, in one
+  transaction, so the active-run refusal covers the whole group. A child's
+  own operations do not reach its parent, and a child listed elsewhere stays
+  when its parent is deleted (`ON DELETE SET NULL`).
+- Every list leaves the Trash out: `trees.summaries`, `trees.reorder`,
+  `feeds.recentQueries`, the Home feed (`feedgen` drops and skips the row),
+  `highlights.feed` and `workspaces.treeCounts`.
+- User edits to a tree in the Trash are refused with "restore this research
+  from the Trash before changing it" (`access.rejectTrashed`, the desktop's
+  `reject_trashed_research_tree`): `trees.rename`, `archive`, `restore`,
+  `nodes.rename`, `resetForRetry`, `removeBranch`, `highlights.create`,
+  `remove`, `removeMany` and `recaps.applyCandidate`. `nodes.admitChild` and
+  `researchDocuments.update` keep their own Trash messages. Run bookkeeping
+  is not refused, and `markViewed` is not an edit.
+- The Trash is per person. With a single owner per thread, the owner's Trash
+  is `trees.trashed_at`; phase 5 adds per-member hiding, and only the
+  owner's Trash will set `trashed_at` (comment in `repos/trash.ts`).
+
 ### 5.11 Folders
-- `folders.setState(workspaceId, state)` stores the desktop's
-  `ResearchFolderState` across the tables in §3.2 and applies the desktop's
-  `normalize_research_folder_state`: dedupe folders, drop membership and
-  collapsed entries pointing at absent folders; it does not
-  prune by tree existence (`research.rs:94`, `state.rs:4142-4149`). Tree
-  deletion cascades membership via FK, which is the web equivalent of
+- `folders.replaceState(userId, workspaceId, state)` stores the desktop's
+  `ResearchFolderState` for one workspace across the tables in §3.2 and
+  returns the stored state with `changed`, which `folders.set` uses to decide
+  whether to emit `research.folders.changed`. It applies:
+  - `normalizeFolderState`, the desktop's `normalize_research_folder_state`
+    (`research.rs`): dedupe folder ids (the first wins), drop membership
+    naming a folder not in the state (`system:drafts` excepted), keep only
+    collapsed entries naming a folder in the state or `system:drafts`,
+    `system:archive` or `system:unfiled`, and keep nesting one level deep
+    (drop self links and every link whose parent is itself a child; dedupe
+    `collapsedGroups`). It does not prune by tree existence.
+  - `validateFolders`, the desktop's `validate_research_folders`: names are
+    trimmed; empty names, names over 40 code points, the reserved names
+    (`home`, `unfiled`, `drafts`, `archive`, `trash`, `highlights`, any case),
+    ids starting with `system:` and empty ids are refused; names are unique
+    per workspace ignoring case among folders outside the Trash. A folder
+    whose id and trimmed name are unchanged is not checked again, except that
+    restoring it from the Trash fails while another folder has its name. The
+    messages are the desktop's.
+  - Folders of another workspace and folder ids already used by another
+    person or workspace are dropped. Membership, `parents` and
+    `collapsedGroups` naming a tree outside the person's workspace are
+    dropped, and nesting is normalized again.
+  - A child whose membership the write changes to a place other than its
+    parent's leaves the group (the desktop's `moveTree` does this from the
+    client). Nesting writes the child's membership equal to its parent's
+    (`researchFolderStateWithParent`), and a child whose membership the write
+    leaves unchanged keeps its link, so an archived child can rejoin.
+- `trashedAt` on a folder is taken from the state: a folder enters and leaves
+  the Trash through `folders.set`, as on the desktop. Its trees keep their
+  membership and are listed as Unfiled meanwhile (`researchTreePlace`).
+- Any tree type can be a parent (questions, documents and posts:
+  `researchTreeHoldsChildren`).
+- `collapsed` and `collapsedGroups` are per person (`collapsed_places`,
+  `collapsed_groups`): a write replaces only the caller's rows.
+- Tree deletion cascades membership and collapsed groups via FK and clears
+  children's `parent_tree_id`, the web equivalent of
   `remove_trees_from_research_folders`.
 
 ### 5.12 Journal (removed)

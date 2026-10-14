@@ -77,7 +77,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `workspaces.remove` | M | `{ workspaceId }` → `{ removedTreeIds }` | `research_workspace_remove` (blocked while runs are active; deletes trees) |
 | `workspaces.setDefault` | M | `{ workspaceId }` | — |
 | `workspaces.reorder` | M | `{ workspaceIds }` | `group_reorder` |
-| `folders.get` / `folders.set` | Q/M | `{ workspaceId }` / `ResearchFolderState` → normalized | `list_research_folders`, `set_research_folders` |
+| `folders.get` / `folders.set` | Q/M | `{ workspaceId }` / `{ workspaceId, state: ResearchFolderState }` → the stored state | `list_research_folders`, `set_research_folders`: one state per workspace (the desktop keeps one for all); folders with `trashedAt`, `membership` (folder id or `system:drafts`), `collapsed`, `parents`, `collapsedGroups`. `set` normalizes and validates as the desktop does and answers `BAD_REQUEST` with the desktop's message on an invalid name (`02` §5.11) |
 
 ### `research`
 
@@ -90,6 +90,14 @@ The `research` router is assembled in
 own router. Outputs are the wire types from `@session/shared` (the desktop's
 node envelope); inputs are validated with the zod schemas in
 `shared/src/schemas` where they carry wire values.
+
+A thread in the Trash refuses edits with `PRECONDITION_FAILED` and the
+desktop's message "restore this research from the Trash before changing it"
+(`reject_trashed_research_tree`): renaming the thread or a node, archiving or
+unarchiving, retrying, deleting a branch, creating or removing highlights and
+applying a recap. Follow-ups and document edits keep their own Trash
+refusals. Viewing, reading, Restore and Delete are allowed. Every list, the
+Home feed and the highlight feed leave threads in the Trash out.
 
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
@@ -106,11 +114,11 @@ node envelope); inputs are validated with the zod schemas in
 | `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText?, seq?, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
 | `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
-| `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
-| `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent; the web has no Trash yet) |
-| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | Planned, not implemented. `trash_research_tree`, `restore_research_tree_from_trash` |
-| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | Planned, not implemented. `list_research_trash` |
-| `research.emptyTrash` | M | `{ workspaceId }` → deleted tree ids | Planned, not implemented. `empty_research_trash` |
+| `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same; the children listed under the tree go with it (`02` §5.10). `PRECONDITION_FAILED` for a tree in the Trash |
+| `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees |
+| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree` (`PRECONDITION_FAILED` while the tree or a child going with it has an active run), `restore_research_tree_from_trash`; the children listed under the tree go with it |
+| `research.listTrash` | Q | `{ workspaceId }` → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` (one workspace; folders in the Trash are in `folders.get`) |
+| `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
@@ -200,9 +208,10 @@ unless noted:
 | --- | --- | --- |
 | `research.tree.created` | `{ tree, node }` | createTree, importReport |
 | `research.tree.updated` | `{ tree }` | rename, viewed |
-| `research.tree.archived` / `restored` | `{ tree }` | archive/restore; `restored` also by restoreTreeFromTrash (planned) |
-| `research.tree.removed` | `{ treeId }` | removeTree, trashTree (planned), workspace remove |
-| `research.trash.changed` | `{}` | Planned, not emitted: trashTree, restoreTreeFromTrash, removeTree of a trashed tree |
+| `research.tree.archived` / `restored` | `{ tree }` | archive/restore, once per tree of the group; `restored` also by restoreTreeFromTrash |
+| `research.tree.removed` | `{ treeId }` | removeTree, trashTree, emptyTrash (once per tree), workspace remove |
+| `research.trash.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | trashTree, restoreTreeFromTrash, emptyTrash, removeTree of a tree in the Trash; only when something changed |
+| `research.folders.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | folders.set when the stored state changed, emptyTrash when it deleted folders, workspace remove. Carries no state: clients refetch `folders.get` |
 | `research.node.created` | `{ node }` | forkNode |
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/resume reset, recap saved, snapshot stamped, preview (≤ 2/s) |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch |
@@ -211,7 +220,6 @@ unless noted:
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |
 | `workspace.created` / `updated` / `removed` | `{ workspace }` / `{ workspaceId }` | replaces `group.*` |
-| `folders.updated` | `{ workspaceId, state }` | new (desktop kept folders client-side) |
 | `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, item }` | public feed source create/update/restore |
 | `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId }` | source delete or archive |
 | `settings.updated` | `{ settings }` | another tab changed settings |
