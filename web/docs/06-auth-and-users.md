@@ -62,9 +62,19 @@ client only hides UI.
   user, rejects with `UNAUTHORIZED` otherwise, and puts `userId` and
   `isAdmin` on `ctx`.
 - `adminProcedure` additionally requires `isAdmin`.
-- Every repository call receives `ctx.userId`; ids from the client are looked
-  up with a `user_id` predicate so a foreign id is `NOT_FOUND`, never
-  `FORBIDDEN` (no existence oracle).
+- Every repository call receives the caller's id (null for a guest). Ids of
+  per-person rows (workspaces, folders, drafts, images, settings) are looked
+  up with an owner predicate. Thread content is checked against the
+  caller's role in the thread (`02-domain-model-and-database.md` §5.16,
+  `repos/access.ts`): a thread the caller may not read is `NOT_FOUND`, the
+  same as an id that does not exist (no existence oracle); a thread they may
+  read but a role too low for the action is `FORBIDDEN`. Guests reach the
+  public procedures (`research.listTrees`, `getTree`, `getNodeContent`,
+  `feed.recentActivity` with `scope: all`, `GET /images/:id`) for public
+  threads only.
+- `server/test/tenancy.test.ts` is the role × procedure matrix (owner,
+  commenter, viewer, signed-in reader of a public thread, stranger to a
+  private one, guest).
 
 ## 5. CSRF and origin policy
 

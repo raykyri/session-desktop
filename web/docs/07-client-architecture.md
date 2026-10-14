@@ -178,8 +178,11 @@ Per event type:
 - `workspace.*`, `settings.updated`, `models.updated` → targeted
   `setQueryData` or invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
-- `notification.requested` is planned and not emitted; the client does not
-  handle it yet. Toasts come only from client code (`lib/toast.ts`).
+- `notification.requested` → `notifications` store, unless
+  `showNotifications` is off (`03-api-and-events.md` §3).
+- `research.sharing.changed` → invalidate the tree lists and the thread;
+  `research.presence.changed` and `research.invites.changed` are parsed and
+  not applied to any cache yet (the sharing UI).
 - On (re)connect: `invalidateQueries()` for list queries and a snapshot
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps

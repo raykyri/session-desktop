@@ -128,6 +128,13 @@ messages, as the desktop's retry did.
 Owned by the server: 2 concurrent research runs per user, per-provider caps
 (`04-agent-runtime.md` §10), FIFO by user then time, metadata pool separate.
 `queuePosition` is included in `research.node.updated` while `queued`.
+The user a run is queued, capped and billed under (`run_queue.user_id`,
+usage events, the daily limits) is the question's author, not the thread's
+owner: a commenter in a shared thread pays for their own questions, their
+queued follow-ups when dispatch sends them, and the title and recap jobs
+that follow their runs; a manual recap is billed to whoever requested it
+(`02-domain-model-and-database.md` §5.16). Run events go to the thread's
+audience, not only to the asker (`03-api-and-events.md` §3).
 Provider `429` responses re-queue with exponential backoff (5 s, 20 s, 60 s)
 rather than failing.
 

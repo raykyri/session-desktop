@@ -229,7 +229,8 @@ from Home. Sidebar resize 208–420 px and collapse (Shift-Cmd-G) persist in
 
 `UserNotificationStack` and `useUserNotifications` port unchanged. A toast
 may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
-"Undo" action, stays 8 s, and is shown even when notifications are off. The
-sources today are client-originated toasts. Server `notification.requested`
-events are planned: the server does not emit them and the client does not
-handle them. Max 20 kept, 3 visible, `showNotifications` setting honored.
+"Undo" action, stays 8 s, and is shown even when notifications are off. Sources:
+client-originated toasts, and the server's `notification.requested` events
+(a run you asked finished or failed, a new question or note in a thread you
+follow, a branch from your answer, an invitation; `03-api-and-events.md`
+§3). Max 20 kept, 3 visible, `showNotifications` setting honored.

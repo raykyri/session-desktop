@@ -341,11 +341,24 @@ The parent trees whose nested children a person has hidden. Per person.
 
 ### 3.5 Sharing (phase 5)
 
-`tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
-`invited_by`, `created_at`), `tree_invites` (token hash, role, optional
-GitHub login, expiry, acceptance and revocation) and `tree_subscriptions`
-(`user_id`, `tree_id`, `created_at`). Phase 5 (collaboration) uses them;
-nothing reads or writes them yet.
+Web only; the desktop has one person. Rules in §5.16.
+
+- `tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
+  `invited_by`, `created_at`, and the member's own `archived_at`,
+  `trashed_at` and `folder_id`, one of their own folders, `ON DELETE SET
+  NULL`). The owner is `trees.owner_id` and has no row.
+- `tree_invites` (`token_hash` = SHA-256 of the token, which is never
+  stored; `role`; `github_login` for an invitation to one account, null for
+  a link; `created_by`, `expires_at` (14 days), `accepted_by/at`,
+  `revoked_at`).
+- `tree_subscriptions` (`user_id`, `tree_id`, `created_at`): Follow.
+- `trees.visibility` (`private | public`) and `trees.trashed_by` (who moved
+  the thread to its owner's Trash).
+- `nodes.author_id` and `highlights.author_id` are `ON DELETE SET NULL`;
+  `nodes.edited_by` records who last replaced a note's or document's text.
+
+Migration `0001_collaboration` adds the member columns and `trashed_by`;
+the tables themselves are in `0000_initial`.
 
 ### 3.6 Images and widgets
 
@@ -581,8 +594,8 @@ Each item names the desktop source and the enforcing function.
 ### 5.9 Feeds
 - `feeds.recentActivity(userId, { scope, workspaceId, limit, cursor })` reads
   `feed_items` under one cursor `(occurredAt DESC, sourceRank DESC, id DESC)`
-  with `sourceRank` research = 1. `all` reads public feed rows from every
-  account, `mine` filters `author_id` without a workspace predicate, and
+  with `sourceRank` research = 1. `all` reads the feed rows of public threads
+  (`trees.visibility = 'public'`) from every account, `mine` filters `author_id` without a workspace predicate, and
   `workspace` filters the caller's research roots by `workspace_id`. `limit`
   is clamped to 1..100.
   Source rows are projected after keyset selection; direct research children
@@ -775,6 +788,80 @@ Each item names the desktop source and the enforcing function.
   cascade (a deleted thread, branch or workspace). The server then unlinks
   every file under the documents directory that no remaining row names,
   thumbnails included (`uploads/storage.ts` `sweepImages`).
+
+### 5.16 Access and sharing
+
+Every repository resolves what it is given (a tree, node, highlight, queued
+follow-up, image or widget) to its thread and asks `repos/access.ts` for the
+caller's role there, instead of comparing an owner column. Repository
+functions take the caller's id as `userId` (the actor); `null` is a guest.
+
+- `access.treeAccess(db, userId | null, treeId)` → `{ role, tree, member } |
+  null`. `owner` when `trees.owner_id` is the caller; a member's role from
+  `tree_members`; `viewer` for anyone, guests included, on a public thread;
+  null otherwise. A thread in its owner's Trash (`trees.trashed_at`) is the
+  owner's alone: every other caller gets null.
+- `requireTreeAccess` / `requireNodeAccess(db, userId, id, minimum)`: a
+  thread the caller may not read throws "research tree/node … was not
+  found" (`NOT_FOUND`, no existence oracle); a role below `minimum` throws
+  `TreeAccessError` (`FORBIDDEN`). `nodeTreeId`, `highlightTreeId`,
+  `queueItemTreeId` resolve ids; `treeReadableBy`, `nodeReadableBy`,
+  `highlightReadableBy` and `treeJoinedBy` are the same rules as `WHERE`
+  predicates for lists.
+- Roles: `viewer` reads. `commenter` also asks (forkNode, followups.ask),
+  adds follow-up notes, creates highlights and generates and applies
+  recaps. `owner` does everything else: rename, visibility, members,
+  invitations, chain order, editing the root document, deleting anyone's
+  branch or highlight.
+- Own content (`assertMayChangeNode`): a commenter renames, deletes or
+  titles only nodes they wrote, and only while every node under them is
+  theirs too ("Someone else has replied under this; only the owner of this
+  thread can change it now."). Text edits (`assertMayEditText`: updatePost,
+  an edited question through `replacesNodeId`) are the author's alone, the
+  owner included; the owner edits a node whose author's account is gone.
+  A commenter removes only their own highlights.
+- Asker pays (`payerOf` = `nodes.author_id`, else the owner): the run
+  queue's `user_id`, usage events and the daily run count (`nodePaidBy`)
+  follow the question's author, also when a queued follow-up is sent by
+  dispatch or a run resumes after boot. Retry and Rerun are the payer's
+  alone (`assertMayRelaunch`), so nobody can spend another account's
+  budget; Cancel is the asker's or the owner's. Queued follow-ups are
+  cancelled by their author or the owner and retried by their author.
+- Per person: `tree_views` (unseen flags), Follow, drafts, folders and
+  collapsed state. A member's Archive and Trash are flags on their member
+  row: `trees.archiveGroup`/`restoreGroup`, `trash.trashTree`/`restoreTree`
+  act on the member row for a member, on the thread (with its group) for the
+  owner. The owner's Archive also shows the thread as archived to its members
+  (`ResearchTree.archivedAt` = the member's own or the owner's) and keeps the
+  thread's own write refusals; a member's Archive or Trash locks nothing.
+  `trees.remove` by a member is leaving (`trees.leave`); `trash.empty` by a
+  member leaves every shared thread in their Trash (`leftTreeIds`).
+- Filing: `folders.setState` files a shared thread in one of the caller's
+  own folders (`tree_members.folder_id`); `folders.getState` reports it in
+  `membership`, and `trees.summaries({ workspaceId })` lists such threads with
+  the workspace. The owner's folder, nesting and order are the owner's.
+- Lists: `trees.summaries` (the caller's own, plus shared threads they
+  filed in that workspace), `trees.sharedSummaries(userId, "shared" |
+  "archive" | "trash")` (the Shared place), `trees.publicSummaries(userId |
+  null)` (the guest catalog: public threads outside their owner's Archive and
+  Trash, newest first, at most 200). Summaries and trees carry `ownerId`,
+  `visibility` and the reader's `role`; `trees.detail` adds `participants`
+  (owner, members, then every node and highlight author).
+- Feeds: the All Users feed (`scope: all`) reads public threads only;
+  `recentQueriesForTrees` reads any thread the caller may read.
+- Images: `images.readable(userId | null, id)` is the uploader, or anyone who
+  may read a thread whose node or queued follow-up names the image. Widget
+  revisions follow the thread; saved inputs stay per person.
+- `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole`,
+  `removeMember` and `leave` (both return the member's queued follow-ups,
+  which are deleted, and their active questions, which the server cancels),
+  `createInvite` (token returned once; at most 50 pending per thread),
+  `listInvites`, `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
+  (by token, or by id for a login invitation addressed to the caller; a
+  login invitation is used once, a link until it expires or is revoked;
+  joining never lowers a role; at most 100 members), `setFollowing`,
+  `followers` (those who may still read the thread), `audience` (owner,
+  members, public) and `workspaceMembers`.
 
 ## 6. Data volumes and performance notes
 
