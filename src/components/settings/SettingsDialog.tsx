@@ -67,7 +67,7 @@ export default function SettingsDialog({
                 <span className="settings-label-stack">
                   <span className="settings-label">Require ⌘↵ to send</span>
                   <span className="settings-hint settings-hint-weak">
-                    Thread ask boxes always require ⌘↵. This setting controls all other ask boxes.
+                    A thread's question boxes always require ⌘↵. This setting controls the Home ask box, drafts and note follow-ups.
                   </span>
                 </span>
                 <input
