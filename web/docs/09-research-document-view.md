@@ -84,9 +84,23 @@ uploaded to `POST /api/images`; the question sends their ids).
 - **Edited failed question**: Edit question on a failed or stopped message
   fills the ask box with its text; sending forks with `replacesNodeId`, so the
   new question takes the failed one's place (`researchEditedQuestionFork`).
-- **Note follow-up**: the follow-ups column's field has two modes, Ask and
-  Add a note. A follow-up note (`research.createPostFollowUp`) is not sent to
-  any agent; its placeholder reads "Add a note (not visible to agent)".
+- **Note follow-up**: the follow-ups column's field uses Home's Ask/Note
+  switch (`composer/AskNoteSwitch`); a press on the selected Ask segment
+  ("Ask {model}") opens the model menu (`ModelMenuItems` in an
+  `AnchoredMenu`). A follow-up note (`research.createPostFollowUp`) is not
+  sent to any agent; its placeholder reads "Add a note (not visible to
+  agent)". Send is titled "Ask {model} (⌘↵)" or "Add note (⌘↵)"; this box,
+  unlike the columns' ask boxes, follows the "Require ⌘↵ to send" setting
+  (off: ↵ sends).
+- **Queued follow-ups**: a queued item that cannot send (its send was
+  refused, or the answer before it stopped: "The last answer stopped; retry
+  it, or edit this question.") offers Edit question to its author: the item
+  is cancelled on the server and its text and images go into the chain's ask
+  box, only if that box is empty ("Clear the ask box to edit this
+  question."). Edit question on a failed message also restores its images.
+- **Root draft**: the root ask box's text is a draft saved to
+  `interfaceDrafts` and read back on open, so a draft from another device or
+  tab fills an empty box.
 
 Run controls read `runActive` and `runRetryable` (`runState.ts`): an
 `interrupted` run counts as active while `run.resumePending` is not `false`
@@ -191,7 +205,13 @@ the collapsed answer is the text after the last tool call, the full trace
 shows everything, and at most 100 timeline items are rendered
 (`TIMELINE_ITEM_RENDER_WINDOW`, with "Show N earlier response items"). The
 live tail keeps its timeline key when the snapshot replaces it, so the answer
-does not remount.
+does not remount. A running answer shows its tool calls and reasoning open
+(the desktop's `expandActivities`); an imported report's text has its
+citation handles removed (`stripImportedReportCitations`). A thread that
+answers NOT_FOUND (deleted, in its owner's Trash, or no longer shared) reads
+"This thread was deleted or is no longer shared with you."; a failed action
+on something in the thread that is gone says "It was deleted or is no longer
+shared with you." instead of the server's message with its id.
 
 While a run is active a status line replaces the footer: "Queued · N ahead",
 "Starting…", "Thinking" or "Working", or "Interrupted · resuming", with the
@@ -199,8 +219,9 @@ elapsed time and Stop. A settled answer shows its sources footer and its
 time; a failed or stopped one shows "Error." or the reason, Retry or Run
 again, and Edit question. The recap ("Recap: …") is shown above a complete
 answer only when it was written for the revision on screen; Generate recap in
-the answer menu opens `RecapDialog` (instructions, Generate candidate, Use
-this recap).
+the answer menu, offered as on the desktop only for an answer that already
+has a recap (a new answer gets one automatically), opens `RecapDialog`
+(instructions, Generate candidate, Use this recap).
 
 Answer widgets render through `ResearchMarkdown` and `features/widgets`. The
 page provides `WidgetChangeContext` (Ask for changes opens a whole-answer
@@ -244,7 +265,9 @@ active).
 pointer (right-click). The answer menu holds the message's statistics,
 Branch to right, Copy answer (or Copy conversation), Copy thread, Show full
 transcript, Rerun, Generate recap, Rename…, Edit document and the delete
-item. The note menu holds Edit note, Copy note and Delete note (D). On the
+item. The note menu holds Edit note, Copy note and Delete note (D); the
+root note's menu has no Delete, as on the desktop (the thread is deleted from
+Home). On the
 reader's own thread, the answer menus of the root level and the root note's
 menu end with Move to (Unfiled, Drafts, the workspace's folders, Archive; the
 current place checked) and New folder…, as a feed card's menu
@@ -256,7 +279,9 @@ Home. Dialogs are centred confirm dialogs (`ThreadDialogs.tsx`):
   `research.rerunNode`. Refused while the answer, or the answer it follows,
   is still running.
 - **Delete**: on the root, "Move to Trash" (`research.trashTree`) with a
-  "Delete now" step for permanent deletion; on a branch or follow-up,
+  "Delete now" step for permanent deletion, naming the threads listed under
+  it on Home ("Delete “T” and its 2 children?"), which the server moves or
+  deletes with it; on a branch or follow-up,
   permanent deletion naming what else it removes (both on
   `ui/DeleteDialog`). Refused while runs in the subtree are active.
 - **Rename** and **Generate recap**.

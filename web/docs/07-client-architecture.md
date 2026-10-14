@@ -98,7 +98,7 @@ parameter.
 | `/trash` | `TrashPage` | signed in; `TrashList` |
 | `/highlights` | `HighlightsPage` | |
 | `/r/$treeId` | `ThreadPage` | search `?sel=&node=&highlight=&edit=`: `sel` is each column's selection (`09` §4); `key={treeId}` remount |
-| `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
+| `/settings` | `SettingsPage` | groups: General (the desktop's Require ⌘↵ to send, Widgets in answers), Appearance (Appearance, Color theme, Body font, Text size, Show keyboard shortcut hints, Reduce motion), Notifications, Research defaults, Usage |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
 Search params validated with zod (`validateSearch`). The workspace scope
@@ -159,7 +159,19 @@ Because the originating tab receives broadcast events for its own mutations, cac
 both writers may run; the count reducers on a tree summary are deltas and have
 exactly one writer per change: the mutation applies the delta from the node it
 is replacing (which it must read before overwriting it), and the event skips
-its own delta when the referenced node is already in the caches. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
+its own delta when the referenced node is already in the caches. A mutation
+that creates a node (fork, a follow-up sent at once, a note follow-up) does
+the same in the other order: it counts the node only when no cache held it,
+since its event may arrive before the response. A created highlight is added
+only when its event has not added it already. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
+
+A mutation that answers with a whole detail (create, retry, a new note)
+writes its summary with `writeDetailSummary` (`cache.ts`): a list that holds
+the thread gets the recomputed counts merged over its own row, which keeps
+the list's workspace, `trashedAt` and the reader's role; a list that does not
+hold it gains it only for a created thread, and only in the reader's own
+lists for the thread's workspace (never for someone else's thread). The
+`research.tree.created` event follows the same rule.
 
 ### 4.2 Event bridge (`api/events.ts`)
 
@@ -191,9 +203,13 @@ Per event type:
   shared lists.
 - Tree events from someone else's change (`research.tree.updated`,
   `archived`, `restored`, `research.document.updated`) leave out the reader's
-  own `role`, `lastViewedAt` and `followed`; `mergeTreeEvent` (`cache.ts`)
-  keeps the cached values of the fields an event omits instead of replacing
-  the cached tree.
+  own `role`, `lastViewedAt`, `followed`, `archivedAt`, `trashedAt` and
+  `trashedBy`; `mergeTreeEvent` (`cache.ts`) keeps the cached values of the
+  fields an event omits instead of replacing the cached tree, and
+  `patchSummaryFromTreeEvent` keeps a summary's `archivedAt` the same way.
+  What another person's Archive or restore means for the reader's own copy
+  (the owner's Archive shows to members) is read back: such an event
+  invalidates the thread's detail as well as the lists.
 - On (re)connect: `invalidateQueries()` for list queries and a snapshot
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps

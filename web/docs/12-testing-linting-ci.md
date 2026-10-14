@@ -174,7 +174,20 @@ static middleware — the deployment's arrangement rather than Vite's — and th
 build is part of the web-server command, so `npm run test:e2e` is one step. One
 worker, because the specs share the server and the run queue is per user. Each
 spec signs in as its own login so the accounts, and therefore the feeds, stay
-apart.
+apart, and every login carries the run's id and, on a retry, the attempt
+number (`e2e/helpers.ts:e2eLogin`, the id set once in `playwright.config.ts`):
+a retry or a second run against the same server starts from fresh accounts
+instead of finding an earlier attempt's folders and threads. A spec that needs
+a login itself (an invitation, a member list) reads it from `signIn`'s
+result.
+
+The port is `SESSION_E2E_PORT` (default 8788) and the data directory is per
+port (`$TMPDIR/session-web-e2e-<port>`). Playwright starts its own server and
+refuses a port that is already in use; `SESSION_E2E_REUSE_SERVER=1` runs
+against a server already listening there (one started by hand, for
+iteration). The queue spec does not depend on the root answer's timing past
+its first Queue: the second item queues behind the first, which is itself a
+paced answer, so Cancel always reaches it before it could be sent.
 
 Fixture scenarios are chosen by a `fixture:<scenario>` marker in the prompt
 (`packages/server/src/runs/fixtureProvider.ts`). Unmarked prompts replay
@@ -190,8 +203,8 @@ syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 
 | Spec | What it drives |
 | --- | --- |
-| `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
-| `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload |
+| `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed (Refresh, Remove highlight); a follow-up queued while the answer streams, Cancel, and Edit question on a queued follow-up behind a stopped answer; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
+| `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload; Reduce motion and Require ⌘↵ to send taking effect and persisting |
 | `collaboration.spec.ts` | Accounts and a guest, each in its own browser context. Through the UI: the owner copies a commenter and a viewer invite link from the Share dialog; the commenter opens theirs, lands on the thread and asks (counted in their usage); the owner's open page shows the question live with the commenter's author chip and opens its answer; the viewer's page has no ask box and shows them as Viewer; a thread made Public in the dialog opens read-only for a guest; a stale note edit opens "This note changed", Reload keeps the text and the next save succeeds. Through the tRPC endpoint: invite by link and by login and accept; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and a guest; a member's page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
 | `admin.spec.ts` |
  `claude-fable` visible in the composer's model menu for administrators and hidden for other users |

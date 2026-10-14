@@ -200,8 +200,10 @@ intents:
 - `aria-current="page"` on sidebar rows, `role="listbox"` semantics from Base
   UI, labelled icon buttons.
 - Page layout is restricted to vertical scrolling, while tables and code blocks manage their own horizontal overflow.
-- Narrow layout (< 900 px): sidebar becomes a drawer (Base UI `Dialog` with
-  a side transition); the research document's rail cards stack below the
+- Narrow layout (< 900 px): the sidebar is its icon rail, and Expand opens
+  it as a drawer (Base UI `Dialog` with a side transition); the research document's rail cards stack below the
   answer (the desktop's breakpoint behavior in `research.css`).
-- Both `prefers-reduced-motion` and the explicit setting disable transitions
-  except for progress indicators.
+- Both `prefers-reduced-motion` and the explicit Reduce motion setting
+  (`data-reduce-motion` on `<html>`, written by `ThemeEffects`; the rules in
+  `prose.css` and `feed.css`, and `lib/motion.ts` for scripted scrolling)
+  disable transitions except for progress indicators.

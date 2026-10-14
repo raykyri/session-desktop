@@ -14,9 +14,14 @@ Ports `src/components/research/ResearchActivityFeed.tsx`,
 
 ## 1. Home and the places
 
-A signed-in visit to `/` in workspace mode renders `FeedView` with the
-`home` view (`routes/home.tsx`); the header's "Feed: …" menu switches to the
-public feeds (§2). The column is capped at `--research-feed-max-width` and
+A signed-in visit to `/` renders `FeedView` with the `home` view
+(`routes/home.tsx`); `/?feed=all` (the sidebar's All Users place) renders the
+public feed (§2). Home's header holds Refresh Home (reads the workspace's
+threads, folders, drafts, Trash and every card's root again, as the desktop's
+`refreshResearchNavigation`) and Import .md report (§5). Threads that arrive
+above the list's first row while it is scrolled more than 60 px from the top
+raise an "N new activities" button that returns to the top (the desktop's
+`newActivityCount`); scrolling back to the top clears it. The column is capped at `--research-feed-max-width` and
 scrolls vertically; the scroll offset is kept per workspace under
 `home:<workspaceId>` in the `navigation` store.
 
@@ -78,9 +83,13 @@ card's content is its thread's root entry, read per rendered card through
 ### Card menu (`TreeMenu.tsx`)
 
 Opened by the … button, a right-click (at the pointer) or Shift+F10:
-Make child of… (the `researchNestCandidates`), Move out of group,
+Make child of… (the `researchNestCandidates`; disabled with "No question,
+document or post to nest under" when there are none), Move out of group,
 Collapse/Expand group, "Move to" (Unfiled, each folder, Archive, Trash),
-Generate recap, Rename…, Unarchive research, Delete…. Archiving a parent
+Generate recap, Rename…, Unarchive research, Delete…. As on the desktop, D
+chooses Delete and, on Home, A chooses Archive while the menu is open
+(`MenuItem`'s `shortcut`, handled by `AnchoredMenu`); Delete is disabled with
+"Research with active runs cannot be deleted" while the thread runs. Archiving a parent
 confirms "Archive “T” and its N child?"; nesting a card that holds children
 confirms flattening them. Moves toast "Moved to X." or "Moved under “P”." with
 Undo (`lib/toast.ts`, 8 s).
@@ -113,15 +122,16 @@ each procedure once, for the parent. Moving to the Trash toasts with Undo.
 
 ## 2. Public feeds
 
-The "Feed: …" menu offers Home, My Workspaces and All Users; guests always
-see All Users. The public feeds keep `ActivityFeed` over
+All Users (every account's public threads) is a web-only sidebar place,
+`/?feed=all`; guests always see it at `/`. The earlier My Workspaces feed and
+the header's "Feed" menu are removed (an old `?feed=workspaces` link opens
+Home). The public feed keeps `ActivityFeed` over
 `useInfiniteQuery(["activity", { scope, workspaceId }])` and
 `feed.recentActivity` (page size 50, "Load older", Retry on a failed page),
 rendering `PublicFeedCard` (glyph, title, preview; no menu). Live updates:
 `feed.item.upserted` and `feed.item.removed` patch only the keys whose scope
-matches; items that arrive while the list is scrolled down raise the "new
-activity" counter. The scroll anchor is saved under `all-users` or
-`my-workspaces`.
+matches; items that arrive while the list is scrolled down raise the "N new
+activities" counter. The scroll anchor is saved under `all-users`.
 
 ## 3. Drafts
 
@@ -196,22 +206,31 @@ invitation can’t be used" with the server's reason.
 
 ## 4a. Highlights (`/highlights`)
 
-`highlights.listFeed` → items grouped under day headers (local time), newest
-first, each rendered as the highlighted passage inside its prefix/suffix
-context with the tree title and node label, with a Refresh control in the
-header (`ResearchHighlightsFeed.tsx`). Click → `/r/$treeId?node=<nodeId>&highlight=<id>`;
-`ResearchPage` reads `highlight` and scrolls to it once
+Ported from the desktop's `ResearchHighlightsFeed.tsx`
+(`features/highlights/HighlightsFeed.tsx`): `highlights.listFeed` grouped by
+thread under the thread's title (thread order from the feed, each group
+oldest first); a row is the highlighted message's label and the passage
+inside up to 60 characters of its paragraph, cut at a word and marked "…"
+(`highlightExcerptContext`). The header has Refresh Highlights; the empty
+page reads "No highlights. Select text in an answer and choose Highlight.";
+a failed load shows the error with Retry. Each row has a × "Remove
+highlight" (`highlights.removeMany`), shown on hover and focus; focus then
+moves to the next row, the last one, or Refresh. The feed lists the
+reader's own threads, whose owner may remove any highlight; a row whose
+thread a cached list shows the reader does not own has no × (the feed row
+does not name the highlight's author). Click →
+`/r/$treeId?node=<nodeId>&highlight=<id>`, which scrolls to it once
 (`09-research-document-view.md` §5). Events `research.highlight.*` patch the
 list; `research.tree.archived` removes that tree's items.
 
 ## 5. Report import
 
 `ResearchReportImport.tsx` minus the Tauri drag-drop branch and
-`readResearchReport`. An upload icon in the composer's control row opens
+`readResearchReport`. The Import .md report button in Home's header opens
 `<input type="file" accept=".md">`; HTML5 drop on the Home column (drops on
 the composer, `[data-research-image-drop]`, are left to image attachment);
-one file at a time; `.md` only; non-empty; modal dialog asking for the prompt
-that produced the report; token estimate via `estimateTokenCount`. Submit →
+one file at a time; `.md` only; non-empty; the "Import report" dialog with
+the field "Prompt that generated this report"; token estimate via `estimateTokenCount`. Submit →
 `research.importReport({ markdown, prompt, workspaceId })` (the web always
 uses `gemini-flash` for the recap); the server inserts a `complete` root
 `run` node with `origin: "imported"`, writes a single-turn snapshot,
@@ -256,7 +275,10 @@ Port of `ResearchSidebarNav.tsx`: the workspace switcher (`WorkspaceSwitcher`,
 unchanged), then the places:
 
 - "Research" navigation: Home (a drop target for Unfiled), Highlights and,
-  web only, Shared with me (signed in; no drops).
+  web only, Shared with me and All Users (signed in; no drops). While ⌘
+  (Ctrl off Apple platforms) is held, Home shows its chord, and the
+  workspace switcher ⌘O, unless "Show keyboard shortcut hints" is off
+  (`lib/shortcutHints.ts`).
 - A Folders heading with a New folder button, then the "Folders" navigation:
   Drafts, each folder (a drop target; its … menu offers Rename… and
   Delete…), Archive (a drop target) and Trash.
@@ -264,11 +286,25 @@ unchanged), then the places:
 The tree list, multi-selection, visibility filter and the `filter` search
 parameter of the earlier sidebar are removed; threads are filed and ordered
 from Home. Sidebar resize 208–420 px and collapse (Shift-Cmd-G) persist in
-`navigation`.
+`navigation`. The workspace switcher's menu reads Add workspace…, Rename
+“W”… and Delete workspace… (the web deletes; the desktop's item is Remove
+workspace…).
+
+Collapsed, the sidebar is the desktop's 52 px icon rail
+(`features/sidebar/SidebarRail.tsx`, ported from `ResearchSidebarRail`):
+Expand sidebar, Home, Highlights, Shared with me, All Users, then Drafts,
+each folder as its first letter (`researchFolderMonogram`, named in the
+tooltip), Archive and Trash, New folder, and Settings at the foot. Home and
+every place but Trash take card drops. Below 900 px the rail stays and Expand
+opens the sidebar as a drawer.
 
 ## 8. Notifications
 
-`UserNotificationStack` and `useUserNotifications` port unchanged. A toast
+`UserNotificationStack` and `useUserNotifications` port unchanged. As on the
+desktop, the status of the reader's own action (a client toast, `lib/toast.ts`)
+shows at the bottom centre, one at a time (a new one replaces it), and
+server notifications stack at the top right (`placement` on the store's
+items, `ui/NotificationStack.tsx`). A toast
 may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
 "Undo" action, stays 8 s, and is shown even when notifications are off. Sources:
 client-originated toasts, and the server's `notification.requested` events

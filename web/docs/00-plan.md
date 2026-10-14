@@ -258,14 +258,16 @@ specs under `e2e/`.
       parity plan. X posts in questions are still resolved and embedded
       (`server/src/journal/{tweets,oembed,attachments}.ts`,
       `features/journal/TweetEmbed.tsx`); link posts return in phase 2.3.
-- [ ] **Partial** — Highlights tab with day headers, refresh, and focus
-      scroll. (The Bookmarks tab was removed in phase 2.0.)
+- [ ] **Partial** — Highlights page as the desktop's (grouped by thread,
+      Remove highlight, Refresh Highlights) and focus scroll. (The Bookmarks
+      tab was removed in phase 2.0.)
       `features/highlights/HighlightsFeed.tsx`;
-      `highlights.test.tsx` "day headers are named in local time, not in UTC"
-      and "grouping keeps the server's order and starts a section per day";
+      `highlights.test.tsx` "highlights group by thread in feed order, each
+      group oldest first" and "Remove highlight removes it, and Refresh reads
+      the list again";
       `research.document.test.tsx` "?highlight= scrolls the passage into view
       and clears the param"; `research.spec.ts` and `library.spec.ts` for the
-      two tabs. The Highlights Refresh button is implemented and untested.
+      two tabs.
 - [x] **Verified** — Report import; no agent setup guide (models are always
       configured).
       `features/import/ReportImport.tsx`; `library.spec.ts` "a Markdown report
