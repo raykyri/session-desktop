@@ -2037,6 +2037,48 @@ pub struct ResearchTreeDetail {
     pub tree: ResearchTree,
     #[serde(serialize_with = "serialize_node_views")]
     pub nodes: Vec<ResearchNode>,
+    /// The queued follow-ups, keyed by the head of the inline chain each
+    /// continues, in send order. Chains with nothing queued are absent.
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub queues: HashMap<String, Vec<ResearchFollowupQueueItem>>,
+}
+
+/// A follow-up asked at the end of an inline chain while the chain could
+/// not take one (its last answer was still running), stored per chain head
+/// in `state.json` (`researchFollowups`) and sent in order as the chain
+/// frees up (see `state::research_followups`).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedResearchFollowup {
+    pub id: String,
+    /// The question and its image attachments. The images are referenced
+    /// by the queue, so they stay in the image store until the item is sent
+    /// (the node then references them) or cancelled.
+    pub message: UserMessage,
+    /// The agent, model and effort the follow-up runs on once sent.
+    pub agent: AgentSpec,
+    pub created_at: u128,
+    /// Why the last send was refused. The chain's queue waits on this item
+    /// until it is retried or cancelled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed_reason: Option<String>,
+}
+
+/// A queued follow-up as the frontend receives it: the shared wire's
+/// `ResearchFollowupQueueItem` (web/packages/shared/src/wire/research.ts),
+/// without the web-only `authorId`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResearchFollowupQueueItem {
+    pub id: String,
+    pub tree_id: String,
+    pub head_node_id: String,
+    pub message: UserMessage,
+    pub agent: AgentSpec,
+    /// The item's index in its chain's queue.
+    pub position: usize,
+    pub created_at: u128,
+    pub failed_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

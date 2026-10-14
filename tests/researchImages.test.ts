@@ -166,10 +166,11 @@ test("a composer lists its images with remove buttons and blocks an agent that c
   assert.match(blocked, /type="submit" disabled=""/);
 });
 
-test("a stored queued question keeps its well-formed images", async () => {
+test("queued questions an earlier build stored move to the backend once, with their well-formed images", async () => {
   const stored = {
     tree: {
       scrollByNode: {},
+      selectedNodeId: "root",
       queuedFollowups: {
         root: [
           {
@@ -177,6 +178,7 @@ test("a stored queued question keeps its well-formed images", async () => {
             prompt: "Compare these",
             createdAt: 5,
             images: [image("1", "One.png"), { kind: "image", id: 7 }, { kind: "tweet" }],
+            failed: "Refused before the restart",
           },
           { id: "q-2", prompt: "No images", createdAt: 6 },
         ],
@@ -191,10 +193,41 @@ test("a stored queued question keeps its well-formed images", async () => {
     },
   });
   const { researchNavigationStore } = await import("../src/lib/researchNavigation");
+  const { migrateLegacyResearchQueues } = await import("../src/lib/researchQueue");
   assert.deepEqual(researchNavigationStore().tree?.queuedFollowups?.root, [
     { id: "q-1", prompt: "Compare these", createdAt: 5, images: [image("1", "One.png")] },
     { id: "q-2", prompt: "No images", createdAt: 6 },
   ]);
+
+  // A failed handover keeps the stored queue for the next start.
+  await assert.rejects(
+    migrateLegacyResearchQueues(async () => {
+      throw new Error("backend unavailable");
+    }),
+  );
+  assert.equal(researchNavigationStore().tree?.queuedFollowups?.root?.length, 2);
+
+  const sent: unknown[] = [];
+  await migrateLegacyResearchQueues(async (items) => {
+    sent.push(...items);
+    return items.length;
+  });
+  assert.deepEqual(sent, [
+    { id: "q-1", headNodeId: "root", prompt: "Compare these", createdAt: 5, images: [image("1", "One.png")] },
+    { id: "q-2", headNodeId: "root", prompt: "No images", createdAt: 6, images: [] },
+  ]);
+  // The stored copy is gone; the thread's other state stays.
+  assert.equal(researchNavigationStore().tree?.queuedFollowups, undefined);
+  const saved = JSON.parse(values.get("session.research-navigation.v1") ?? "{}");
+  assert.equal(saved.tree.queuedFollowups, undefined);
+  assert.equal(saved.tree.selectedNodeId, "root");
+
+  // Nothing is left to hand over.
+  let calls = 0;
+  await migrateLegacyResearchQueues(async () => {
+    calls++;
+  });
+  assert.equal(calls, 0);
 });
 
 test("a thread's ask box images are stored with its navigation for a day", async () => {

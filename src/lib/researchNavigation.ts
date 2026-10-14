@@ -8,9 +8,6 @@ import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchV
 import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
 import type { ResearchHighlightAnchor, ResearchImageAttachment } from "../types";
 
-// Queued follow-ups are stored here; the type is shared with the level math.
-export type { QueuedResearchFollowup };
-
 interface SavedResearchScrollPosition {
   top: number;
   updatedAt: number;
@@ -54,7 +51,9 @@ export interface SavedResearchNavigation {
   /** A highlight to scroll into view on the next page visit (set when a
    * Highlights feed unit is opened). Cleared after the thread page selects it. */
   focusHighlight?: { nodeId: string; highlightId: string };
-  /** Queued follow-ups per chain, keyed by the chain's head node. */
+  /** Queued follow-ups per chain, keyed by the chain's head node, as builds
+   * before the backend held the queue stored them. Read once at startup to
+   * hand them to the backend (`migrateLegacyResearchQueues`), then removed. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
   /** Each level's messages column scroll offset, keyed by the head node of
    * the conversation or branch it shows. (`scrollByNode` stores the answer
@@ -255,12 +254,8 @@ function load(): Record<string, SavedResearchNavigation> {
 }
 
 /** The well-formed queued follow-ups of a stored tree, keyed by chain head.
- * A restart drops an item's `failed` reason, so the queue tries it again;
- * `keepFailed` keeps it when another window's queue is read. */
-function storedQueuedFollowups(
-  value: unknown,
-  { keepFailed = false }: { keepFailed?: boolean } = {},
-): Record<string, QueuedResearchFollowup[]> {
+ * An item's `failed` reason is dropped, so the backend tries it again. */
+function storedQueuedFollowups(value: unknown): Record<string, QueuedResearchFollowup[]> {
   if (!value || typeof value !== "object") {
     return {};
   }
@@ -288,7 +283,6 @@ function storedQueuedFollowups(
             prompt: item.prompt,
             createdAt: item.createdAt,
             ...(images.length > 0 ? { images } : {}),
-            ...(keepFailed && typeof item.failed === "string" ? { failed: item.failed } : {}),
           },
         ];
       });
@@ -297,73 +291,32 @@ function storedQueuedFollowups(
   );
 }
 
-/** Takes the queued follow-ups from a value another window stored (the
- * `storage` event's new value) into `store`, leaving this window's other
- * state alone. Returns the trees whose queues changed. */
-export function syncResearchQueuedFollowups(
-  raw: string | null,
-  store: Record<string, SavedResearchNavigation> = researchNavigationStore(),
-): Set<string> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw ?? "{}");
-  } catch {
-    return new Set();
-  }
-  if (!parsed || typeof parsed !== "object") {
-    return new Set();
-  }
-  const stored = parsed as Record<string, unknown>;
-  const changed = new Set<string>();
-  for (const treeId of new Set([...Object.keys(store), ...Object.keys(stored)])) {
-    const entry = stored[treeId];
-    const queues = storedQueuedFollowups(
-      entry && typeof entry === "object" ? (entry as { queuedFollowups?: unknown }).queuedFollowups : undefined,
-      { keepFailed: true },
-    );
-    const current = store[treeId]?.queuedFollowups ?? {};
-    if (JSON.stringify(current) === JSON.stringify(queues)) {
-      continue;
-    }
-    changed.add(treeId);
-    if (Object.keys(queues).length > 0) {
-      (store[treeId] ??= { scrollByNode: {} }).queuedFollowups = queues;
-    } else if (store[treeId]) {
-      delete store[treeId].queuedFollowups;
-    }
-  }
-  return changed;
+/** The queued follow-ups earlier builds stored, with the tree and chain
+ * head of each, for the backend to take over. */
+export function legacyResearchQueuedFollowups(): {
+  treeId: string;
+  headNodeId: string;
+  item: QueuedResearchFollowup;
+}[] {
+  return Object.entries(researchNavigationStore()).flatMap(([treeId, navigation]) =>
+    Object.entries(navigation.queuedFollowups ?? {}).flatMap(([headNodeId, queue]) =>
+      queue.map((item) => ({ treeId, headNodeId, item })),
+    ),
+  );
 }
 
-const queueListeners = new Set<(treeIds: ReadonlySet<string>) => void>();
-function onNavigationStorage(event: StorageEvent): void {
-  if (event.key !== RESEARCH_NAVIGATION_KEY && event.key !== null) {
-    return;
-  }
-  const changed = syncResearchQueuedFollowups(event.newValue);
-  if (changed.size === 0) {
-    return;
-  }
-  for (const listener of queueListeners) {
-    listener(changed);
-  }
-}
-
-/** Calls `listener` with the trees whose queued follow-ups another window
- * changed, after they are in this window's store. */
-export function subscribeResearchQueuedFollowups(
-  listener: (treeIds: ReadonlySet<string>) => void,
-): () => void {
-  if (queueListeners.size === 0) {
-    window.addEventListener("storage", onNavigationStorage);
-  }
-  queueListeners.add(listener);
-  return () => {
-    queueListeners.delete(listener);
-    if (queueListeners.size === 0) {
-      window.removeEventListener("storage", onNavigationStorage);
+/** Removes the stored queued follow-ups once the backend holds them. */
+export function clearLegacyResearchQueuedFollowups(): void {
+  let changed = false;
+  for (const navigation of Object.values(researchNavigationStore())) {
+    if (navigation.queuedFollowups) {
+      delete navigation.queuedFollowups;
+      changed = true;
     }
-  };
+  }
+  if (changed) {
+    saveResearchNavigation();
+  }
 }
 
 /** The well-formed image attachments of a stored queued question or ask

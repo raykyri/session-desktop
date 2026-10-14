@@ -13,9 +13,10 @@ import {
 } from "./researchChains.js";
 import { nodeStatus, passageAnchor } from "./researchNodeTypes.js";
 
-/** A follow-up submitted while its chain's tail was still running. It is
- * sent when that tail completes. The desktop stores the queue per tree in
- * its navigation state (src/lib/researchNavigation.ts). */
+/** A follow-up submitted while its chain's tail was still running, in the
+ * shape the queue rules below read and the desktop's queue rows show. It is
+ * sent when that tail completes. The web server and the desktop backend
+ * store the queue (`ResearchFollowupQueueItem`). */
 export interface QueuedResearchFollowup {
   id: string;
   prompt: string;
@@ -158,7 +159,7 @@ export function researchQueueStep(tail: ResearchNode | null): "send" | "wait" | 
   return canFollowUpFrom(tail) ? "send" : "wait";
 }
 
-/** What a chain's client-side queue does on a pass over the current tree:
+/** What a chain's queue does on a pass over the current tree:
  * drop it (its head is gone), wait, or send its first question as an inline
  * follow-up of `tailId`.
  *

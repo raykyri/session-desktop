@@ -1,4 +1,6 @@
-use crate::research::{ResearchDraft, ResearchFolderState, ResearchNode, ResearchTree};
+use crate::research::{
+    QueuedResearchFollowup, ResearchDraft, ResearchFolderState, ResearchNode, ResearchTree,
+};
 use crate::thread_graph::ThreadRecord;
 use crate::user_notifications::NotificationLog;
 use crate::workspace::{AgentInfo, GroupInfo};
@@ -160,6 +162,13 @@ pub struct PersistedState {
     /// byte-identically.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub research_drafts: Vec<ResearchDraft>,
+    /// Follow-ups waiting to be sent, keyed by the head node of the inline
+    /// chain each continues, in send order. Omitted when nothing is queued.
+    /// Builds before this field kept the queue in the webview's
+    /// localStorage and ignore it; their next save drops the queued
+    /// questions (not the threads), so the version is unchanged.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub research_followups: HashMap<String, Vec<QueuedResearchFollowup>>,
     /// `session send` notification history. Optional and dropped-if-empty so
     /// older state files round-trip byte-identically.
     #[serde(default, skip_serializing_if = "NotificationLog::is_empty")]
@@ -181,6 +190,7 @@ impl Default for PersistedState {
             research_nodes: HashMap::new(),
             research_folders: ResearchFolderState::default(),
             research_drafts: Vec::new(),
+            research_followups: HashMap::new(),
             notification_log: NotificationLog::default(),
         }
     }
@@ -732,6 +742,12 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
         None => ResearchFolderState::default(),
     };
     state.research_drafts = take_vec(&mut map, "researchDrafts", "research draft", &mut dropped);
+    state.research_followups = take_typed_map(
+        &mut map,
+        "researchFollowups",
+        "research follow-up queue",
+        &mut dropped,
+    );
     // Home's former journal (saved links and X posts) was replaced by note
     // trees without migration; a leftover `journal` key is discarded.
     map.remove("journal");

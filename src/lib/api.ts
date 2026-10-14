@@ -18,6 +18,7 @@ import type {
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchDraft,
+  ResearchFollowupQueueItem,
   ResearchImageAttachment,
   ResearchFolderState,
   ResearchHighlight,
@@ -353,6 +354,63 @@ export function forkResearchNode(
     replacesNodeId: replacesNodeId ?? null,
     images: researchImageInputs(images),
     agent,
+  });
+}
+
+/** What asking a follow-up at the end of a chain did: sent it as the
+ * chain's next message, or added it to the chain's queue. */
+type ResearchFollowupAsk =
+  | { kind: "sent"; node: ResearchNode; headNodeId: string }
+  | { kind: "queued"; item: ResearchFollowupQueueItem; headNodeId: string };
+
+/** Asks a follow-up at the end of the inline chain holding `nodeId`. The
+ * backend sends it at once when the chain's last answer can take it and
+ * nothing is queued ahead; otherwise it joins the chain's queue, which the
+ * backend sends in order. */
+export function askResearchFollowup(
+  nodeId: string,
+  prompt: string,
+  images: readonly ResearchImageAttachment[] = [],
+  agent: AgentSpec | null = null,
+) {
+  return invoke<ResearchFollowupAsk>("ask_research_followup", {
+    nodeId,
+    prompt,
+    images: researchImageInputs(images),
+    agent,
+  });
+}
+
+/** Removes a queued follow-up; resolves with its chain's queue. */
+export function cancelResearchFollowup(itemId: string) {
+  return invoke<ResearchFollowupQueueItem[]>("cancel_research_followup", { itemId });
+}
+
+/** Sends a queued follow-up whose send was refused again; resolves with its
+ * chain's queue. */
+export function retryResearchFollowup(itemId: string) {
+  return invoke<ResearchFollowupQueueItem[]>("retry_research_followup", { itemId });
+}
+
+/** A tree's queued follow-ups, keyed by chain head. */
+export function listResearchFollowups(treeId: string) {
+  return invoke<Record<string, ResearchFollowupQueueItem[]>>("list_research_followups", { treeId });
+}
+
+/** Hands the queued follow-ups earlier builds kept in localStorage to the
+ * backend, which skips ids it already holds. Resolves with how many it
+ * added. */
+export function importResearchFollowups(
+  items: readonly {
+    id: string;
+    headNodeId: string;
+    prompt: string;
+    createdAt: number;
+    images: readonly ResearchImageAttachment[];
+  }[],
+) {
+  return invoke<number>("import_research_followups", {
+    items: items.map((item) => ({ ...item, images: researchImageInputs(item.images) })),
   });
 }
 

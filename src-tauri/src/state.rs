@@ -20,6 +20,13 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
+mod research_followups;
+pub use research_followups::{LegacyQueuedResearchFollowup, ResearchFollowupAsk};
+use research_followups::{
+    RESEARCH_FOLLOWUP_CHANGED_ERROR, drop_research_followups_locked, queued_followup_attachments,
+    research_followup_views_for_tree_locked,
+};
+
 /// Upper bound on the parsed transcript turns retained in memory per agent. The
 /// store feeds the UI timeline on (re)connect and crash recovery; without a cap a
 /// long session — or selecting a large transcript, which reparses the whole file —
@@ -152,6 +159,17 @@ struct AppStateInner {
     /// not a full Session restart. Kept outside Model so persistence snapshots
     /// never make them durable.
     interface_drafts: Mutex<HashMap<String, String>>,
+    /// Held while the follow-up queues decide and admit a send, so two
+    /// dispatches (or an ask and a dispatch) cannot both send from one
+    /// chain. Lock order: this lock, then the workspace mutation lock, then
+    /// the image store lock, then the model lock.
+    research_followup_lock: Mutex<()>,
+    /// Starts the run of a follow-up the queue admitted. Set at startup;
+    /// unset in tests, which leaves the admitted node Queued.
+    research_followup_launcher: Mutex<Option<research_followups::FollowupLauncher>>,
+    /// Tests record scheduled dispatches here and run them explicitly.
+    #[cfg(test)]
+    scheduled_followup_dispatches: Mutex<Vec<Option<String>>>,
 }
 
 #[derive(Default)]
@@ -172,6 +190,9 @@ struct Model {
     /// Unsent research questions from the composer, all workspaces in one
     /// vector; each workspace's subsequence is its display order.
     research_drafts: Vec<research::ResearchDraft>,
+    /// Queued follow-ups per inline chain, keyed by the chain's head node,
+    /// each in send order (see `research_followups`).
+    research_followups: HashMap<String, Vec<research::QueuedResearchFollowup>>,
     /// Persistent feed of `session send` notifications. Oldest first; capped by
     /// the notifications module. Distinct from the research feed.
     notification_log: crate::user_notifications::NotificationLog,
@@ -313,6 +334,10 @@ impl AppState {
                 file_server: Mutex::new(None),
                 control_socket_identity: Mutex::new(None),
                 interface_drafts: Mutex::new(HashMap::new()),
+                research_followup_lock: Mutex::new(()),
+                research_followup_launcher: Mutex::new(None),
+                #[cfg(test)]
+                scheduled_followup_dispatches: Mutex::new(Vec::new()),
             }),
         }
     }
@@ -831,6 +856,18 @@ impl AppState {
             }
             research_reconciled = true;
         }
+        // A queue belongs to the head of an inline chain. Drop the queues of
+        // heads the passes above removed (or that a state edit left behind)
+        // and empty ones, before the image reconciliation below counts
+        // their images as referenced.
+        let followup_queue_count = persisted.research_followups.len();
+        let nodes = &persisted.research_nodes;
+        persisted.research_followups.retain(|head_id, items| {
+            !items.is_empty()
+                && nodes.contains_key(head_id)
+                && research_chain_head(nodes, head_id) == *head_id
+        });
+        research_reconciled |= persisted.research_followups.len() != followup_queue_count;
         // Snapshots for nodes the passes above dropped (or that a crash left
         // behind mid tree-removal) have no other reaper. Prune against the
         // surviving node set now that it is final — but never off a degraded
@@ -860,6 +897,7 @@ impl AppState {
             let referenced_images = research_image_ids(
                 persisted.research_nodes.values(),
                 &persisted.research_drafts,
+                &persisted.research_followups,
             );
             crate::research_images::reconcile_store(
                 &self.inner.config.workspace_root,
@@ -951,6 +989,7 @@ impl AppState {
                 })
                 .collect();
             research_reconciled |= model.research_drafts.len() != draft_count;
+            model.research_followups = persisted.research_followups;
             model.notification_log = persisted.notification_log;
             let known_research_tree_ids =
                 model.research_trees.keys().cloned().collect::<HashSet<_>>();
@@ -1125,6 +1164,7 @@ impl AppState {
                 research_nodes: model.research_nodes.clone(),
                 research_folders: model.research_folders.clone(),
                 research_drafts: model.research_drafts.clone(),
+                research_followups: model.research_followups.clone(),
                 notification_log: model.notification_log.clone(),
             }
         };
@@ -1630,7 +1670,12 @@ impl AppState {
             .cloned()
             .collect::<Vec<_>>();
         nodes.sort_by_key(|node| (node.created_at, node.id.clone()));
-        Ok(ResearchTreeDetail { tree, nodes })
+        let queues = research_followup_views_for_tree_locked(&model, tree_id);
+        Ok(ResearchTreeDetail {
+            tree,
+            nodes,
+            queues,
+        })
     }
 
     pub fn research_node(&self, node_id: &str) -> Result<ResearchNode, String> {
@@ -2667,6 +2712,7 @@ impl AppState {
             attachments,
             None,
             agent,
+            None,
         )
     }
 
@@ -2693,10 +2739,16 @@ impl AppState {
             attachments,
             Some(replaces),
             agent,
+            None,
         )
     }
 
-    fn create_research_child_with_options(
+    /// `consumed_followup` names the queued follow-up this child sends: the
+    /// first item of the queue of the chain `parent_node_id` ends. It leaves
+    /// the queue in the same model update that inserts the child, so the
+    /// state file never holds both or neither.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn create_research_child_with_options(
         &self,
         parent_node_id: &str,
         prompt: String,
@@ -2705,6 +2757,7 @@ impl AppState {
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
         replaces: Option<&str>,
         chosen_agent: Option<research::AgentSpec>,
+        consumed_followup: Option<&str>,
     ) -> Result<ResearchNode, String> {
         let chosen_agent = chosen_agent.map(chosen_research_agent).transpose()?;
         if let Some(NodeAnchor::Passage { anchor }) = &anchor {
@@ -2778,6 +2831,21 @@ impl AppState {
             {
                 return Err("this answer already has an inline follow-up".to_string());
             }
+            let consumed_head = match consumed_followup {
+                Some(item_id) => {
+                    let head_id = research_chain_head(&model.research_nodes, parent_node_id);
+                    if !model
+                        .research_followups
+                        .get(&head_id)
+                        .and_then(|queue| queue.first())
+                        .is_some_and(|item| item.id == item_id)
+                    {
+                        return Err(RESEARCH_FOLLOWUP_CHANGED_ERROR.to_string());
+                    }
+                    Some(head_id)
+                }
+                None => None,
+            };
             if parent.node_type() == ResearchNodeType::Post {
                 // A post has no answer text: nothing to continue inline and
                 // no passage to anchor to.
@@ -2881,6 +2949,21 @@ impl AppState {
             node.anchor = anchor;
             node.inline = inline;
             model.research_nodes.insert(node_id.clone(), node.clone());
+            if let Some(head_id) = &consumed_head
+                && let Some(queue) = model.research_followups.get_mut(head_id)
+            {
+                queue.remove(0);
+                if queue.is_empty() {
+                    model.research_followups.remove(head_id);
+                }
+            }
+            // An edited question that replaces a branch's first message
+            // heads the branch from now on, and takes over its queue.
+            let moved_queue_from = replaces.filter(|_| !inline).and_then(|replaced_id| {
+                let queue = model.research_followups.remove(replaced_id)?;
+                model.research_followups.insert(node_id.clone(), queue);
+                Some(replaced_id.to_string())
+            });
             // The edited question takes the failed one's place in its
             // column's stored order.
             let reordered_head = replaces.filter(|_| inline).and_then(|replaced_id| {
@@ -2891,9 +2974,9 @@ impl AppState {
                 Some(head.clone())
             });
             touch_research_tree_locked(&mut model, &node.tree_id, now);
-            (node, reordered_head)
+            (node, reordered_head, moved_queue_from)
         };
-        let (node, reordered_head) = node;
+        let (node, reordered_head, moved_queue_from) = node;
         self.persist();
         crate::research_images::commit(
             &self.inner.config.workspace_root,
@@ -2913,6 +2996,10 @@ impl AppState {
                 None,
                 json!({ "node": head.view() }),
             ));
+        }
+        if let Some(old_head) = moved_queue_from {
+            self.emit_research_queue_changed(&node.tree_id, &old_head);
+            self.emit_research_queue_changed(&node.tree_id, &node.id);
         }
         Ok(node)
     }
@@ -3233,6 +3320,9 @@ impl AppState {
                 json!({ "node": node.view() }),
             ));
         }
+        if let Some(node) = self.research_node(node_id).ok() {
+            self.schedule_research_followup_dispatch(Some(&node.tree_id));
+        }
         if snapshot_error.is_none() {
             crate::research_recap::schedule(self, node_id);
             self.prune_agent(agent_id);
@@ -3375,6 +3465,7 @@ impl AppState {
             node.agent_id().map(str::to_string),
             json!({ "node": node.view() }),
         ));
+        self.schedule_research_followup_dispatch(Some(&node.tree_id));
         Ok(node)
     }
 
@@ -3419,6 +3510,7 @@ impl AppState {
         if runtime == ResearchRuntime::Sdk {
             crate::research_runtime::interrupt_session(&node.id);
         }
+        self.schedule_research_followup_dispatch(Some(&node.tree_id));
         self.research_node(node_id)
     }
 
@@ -3686,6 +3778,7 @@ impl AppState {
                 None,
                 json!({ "node": head.view() }),
             ));
+            self.schedule_research_followup_dispatch(Some(&head.tree_id));
         }
         Ok(head)
     }
@@ -3813,6 +3906,7 @@ impl AppState {
         Ok(research_image_ids(
             model.research_nodes.values(),
             &model.research_drafts,
+            &model.research_followups,
         ))
     }
 
@@ -4178,6 +4272,8 @@ impl AppState {
             None,
             json!({ "tree": tree }),
         ));
+        // Queues wait while the thread is archived.
+        self.schedule_research_followup_dispatch(Some(tree_id));
         Ok(tree)
     }
 
@@ -4186,7 +4282,7 @@ impl AppState {
     /// and archive state stay, so `restore_research_tree_from_trash` puts it
     /// back where it was. Open windows drop it from their lists as they do a
     /// deleted tree (`research.tree.removed`, with `trashed: true` so they
-    /// keep its unsent drafts, queued questions and selection for Restore)
+    /// keep its unsent drafts and selection for Restore)
     /// and refetch the Trash (`research.trash.changed`). Refused while the
     /// tree has active runs, as deleting is.
     pub fn trash_research_tree(&self, tree_id: &str) -> Result<ResearchTree, String> {
@@ -4265,6 +4361,8 @@ impl AppState {
                 json!({ "tree": tree }),
             ));
             self.emit_research_trash_changed();
+            // Queues wait while the thread is in the Trash.
+            self.schedule_research_followup_dispatch(Some(tree_id));
         }
         Ok(tree)
     }
@@ -4405,7 +4503,7 @@ impl AppState {
                         .any(|agent| agent.thread_id.as_deref() == Some(thread_id))
                 })
                 .collect::<Vec<_>>();
-            let removed_images = model
+            let mut removed_images = model
                 .research_nodes
                 .values()
                 .filter(|node| node.tree_id == tree_id)
@@ -4413,6 +4511,11 @@ impl AppState {
                 .collect::<Vec<_>>();
             let removed_tree = model.research_trees.remove(tree_id);
             let removed = removed_tree.is_some();
+            if removed {
+                let queued =
+                    drop_research_followups_locked(&mut model, |head| head.tree_id == tree_id);
+                removed_images.extend(queued_followup_attachments(&queued));
+            }
             let was_trashed = removed_tree.is_some_and(|tree| tree.is_trashed());
             let mut reaped_records = Vec::new();
             if removed {
@@ -4483,8 +4586,12 @@ impl AppState {
         Ok(())
     }
 
+    /// Removes a node and everything below it. A removed failed answer at
+    /// the end of a chain frees the chain for its queue.
     pub fn remove_research_branch(&self, node_id: &str) -> Result<ResearchBranchRemoval, String> {
-        self.remove_research_branch_as(node_id, ImageRelease::Release)
+        let removal = self.remove_research_branch_as(node_id, ImageRelease::Release)?;
+        self.schedule_research_followup_dispatch(Some(&removal.tree_id));
+        Ok(removal)
     }
 
     /// Removes a just-created question whose send is being rolled back. Its
@@ -4502,7 +4609,7 @@ impl AppState {
         node_id: &str,
         images: ImageRelease,
     ) -> Result<ResearchBranchRemoval, String> {
-        let (removal, removed_node_ids, reaped_thread_records, removed_images) = {
+        let (removal, removed_node_ids, reaped_thread_records, removed_images, dropped_followups) = {
             let mut model = self
                 .inner
                 .model
@@ -4581,11 +4688,16 @@ impl AppState {
                     .get(id)
                     .map(|node| (node.created_at, node.id.clone()))
             });
-            let removed_images = removed_node_ids
+            let mut removed_images = removed_node_ids
                 .iter()
                 .filter_map(|id| model.research_nodes.get(id))
                 .flat_map(|node| node.attachments().iter().cloned())
                 .collect::<Vec<_>>();
+            // A chain whose head goes takes its queue with it.
+            let dropped_followups = drop_research_followups_locked(&mut model, |head| {
+                removed_node_ids.contains(&head.id)
+            });
+            removed_images.extend(queued_followup_attachments(&dropped_followups));
             model
                 .research_nodes
                 .retain(|id, _| !removed_node_ids.contains(id));
@@ -4606,10 +4718,14 @@ impl AppState {
                 removed_node_ids,
                 reaped_thread_records,
                 removed_images,
+                dropped_followups,
             )
         };
         self.persist();
         self.release_research_images_as(&removed_images, images);
+        for (head_id, _) in &dropped_followups {
+            self.emit_research_queue_changed(&removal.tree_id, head_id);
+        }
         self.emit(SessionEvent::new(
             "research.node.removed",
             None,
@@ -4785,6 +4901,8 @@ impl AppState {
             research_tree_order,
             research_folders,
             research_drafts,
+            research_followups,
+            detached_followups,
             reaped_thread_records,
             folders_changed,
             drafts_changed,
@@ -4878,6 +4996,10 @@ impl AppState {
                 .research_drafts
                 .retain(|draft| draft.workspace_id != workspace_id);
             let drafts_changed = model.research_drafts.len() != research_drafts.len();
+            // Queued follow-ups are not carried into the archive either.
+            let research_followups = model.research_followups.clone();
+            let detached_followups =
+                drop_research_followups_locked(&mut model, |head| tree_ids.contains(&head.tree_id));
             let node_ids = model
                 .research_nodes
                 .values()
@@ -4927,6 +5049,8 @@ impl AppState {
                 research_tree_order,
                 research_folders,
                 research_drafts,
+                research_followups,
+                detached_followups,
                 reaped_thread_records,
                 folders_changed,
                 drafts_changed,
@@ -4945,6 +5069,7 @@ impl AppState {
                 model.research_tree_order = research_tree_order;
                 model.research_folders = research_folders;
                 model.research_drafts = research_drafts;
+                model.research_followups = research_followups;
                 for (id, tree) in trees {
                     model.research_trees.insert(id, tree);
                 }
@@ -4977,6 +5102,7 @@ impl AppState {
                     .filter(|draft| draft.workspace_id == workspace_id)
                     .flat_map(|draft| draft.attachments.iter().cloned()),
             )
+            .chain(queued_followup_attachments(&detached_followups))
             .collect::<Vec<_>>();
         self.release_research_images(&detached_images);
         self.emit(SessionEvent::new(
@@ -6092,6 +6218,7 @@ enum ImageRelease {
 fn research_image_ids<'a>(
     nodes: impl IntoIterator<Item = &'a ResearchNode>,
     drafts: &[research::ResearchDraft],
+    followups: &HashMap<String, Vec<research::QueuedResearchFollowup>>,
 ) -> HashSet<String> {
     nodes
         .into_iter()
@@ -6100,6 +6227,12 @@ fn research_image_ids<'a>(
             drafts
                 .iter()
                 .flat_map(|draft| crate::research_images::image_ids(&draft.attachments)),
+        )
+        .chain(
+            followups
+                .values()
+                .flatten()
+                .flat_map(|item| crate::research_images::image_ids(&item.message.attachments)),
         )
         .map(str::to_string)
         .collect()
@@ -13294,4 +13427,6 @@ mod tests {
         );
         std::fs::remove_dir_all(workspace).ok();
     }
+
+    mod research_followups;
 }

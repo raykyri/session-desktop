@@ -193,14 +193,14 @@ function isResearchNode(value: unknown): value is ResearchNode {
  * mutate live research state. A malformed or newly-added research event is
  * distinguishable from an unrelated event so the caller can recover with an
  * authoritative refetch instead of silently ignoring it. */
-/** A web follow-up queue item (`research.queue.changed`). */
+/** A follow-up queue item (`research.queue.changed`). */
 function isFollowupQueueItem(value: unknown): value is ResearchFollowupQueueItem {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.treeId === "string" &&
     typeof value.headNodeId === "string" &&
-    typeof value.authorId === "string" &&
+    isOptionalString(value.authorId) &&
     isUserMessage(value.message) &&
     isAgentSpec(value.agent) &&
     isFiniteNumber(value.position) &&
@@ -366,7 +366,6 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
           timestamp: event.timestamp,
         },
       };
-    // Web only; the desktop backend never sends it.
     case "research.queue.changed":
       return typeof payload.treeId === "string" &&
         typeof payload.headNodeId === "string" &&

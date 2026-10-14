@@ -226,17 +226,18 @@ archived for the reader.
 
 ### `followups`
 
-The server's follow-up queue, which replaces the desktop's client-side queue
-(`02-domain-model-and-database.md` §5.13). Items are
+The server's follow-up queue, the counterpart of the desktop backend's
+(`src-tauri/src/state/research_followups.rs`, kept in `state.json`;
+`02-domain-model-and-database.md` §5.13). Items are
 `ResearchFollowupQueueItem` (`{ id, treeId, headNodeId, authorId, message,
-agent, position, createdAt, failedReason }`).
+agent, position, createdAt, failedReason }`; the desktop omits `authorId`).
 
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. With nothing queued behind a tail that stopped (failed, cancelled, or interrupted with no resume pending) it is `PRECONDITION_FAILED` with the ask-box note for the caller (`stalledTailNote` in `shared/src/research/stalledChain.ts`): the person who pays for that answer gets the desktop's ("The last answer stopped with an error. Retry it or edit its question to continue." / "The last answer was stopped. Run it again to continue."); anyone else "The last answer stopped. Only <name> can retry it; the owner can delete it. Branch from the answer before it to continue.", the owner "… Only <name> can retry it. Delete it, or branch from the answer before it to continue.", and when the owner pays "… Only <name> can retry or delete it. …". `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
-| `followups.cancel` | M | `{ itemId }` → the chain's queue after the change | the queue's Remove |
-| `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | the queue's Retry, the author's while they may ask (a viewer is `FORBIDDEN`): clears `failedReason` and dispatches |
-| `followups.list` | Q | `{ treeId }` → `Record<headNodeId, ResearchFollowupQueueItem[]>` | — |
+| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `ask_research_followup`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. With nothing queued behind a tail that stopped (failed, cancelled, or interrupted with no resume pending) it is `PRECONDITION_FAILED` with the ask-box note for the caller (`stalledTailNote` in `shared/src/research/stalledChain.ts`): the person who pays for that answer gets the desktop's ("The last answer stopped with an error. Retry it or edit its question to continue." / "The last answer was stopped. Run it again to continue."); anyone else "The last answer stopped. Only <name> can retry it; the owner can delete it. Branch from the answer before it to continue.", the owner "… Only <name> can retry it. Delete it, or branch from the answer before it to continue.", and when the owner pays "… Only <name> can retry or delete it. …". `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
+| `followups.cancel` | M | `{ itemId }` → the chain's queue after the change | `cancel_research_followup` (the queue's Cancel) |
+| `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | `retry_research_followup` (the queue's Retry); on the web the author's while they may ask (a viewer is `FORBIDDEN`): clears `failedReason` and dispatches |
+| `followups.list` | Q | `{ treeId }` → `Record<headNodeId, ResearchFollowupQueueItem[]>` | `list_research_followups` |
 
 The server sends a chain's first item when the chain frees up: after a run
 settles, `removeBranch`, `setChainOrder`, `restoreTree`,
@@ -376,7 +377,7 @@ unless noted:
 | `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch, createPostFollowUp |
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s), updatePost, hydratePostTweet |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` (web: also `removedBy`) | removeBranch, forkNode with `replacesNodeId` |
-| `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused, dropped with a member who left, was removed or became a viewer, moved to an edited branch question); `items` is the chain's whole queue after the change, empty once drained |
+| `research.queue.changed` | `{ treeId, headNodeId, items }` | web and desktop (desktop items have no `authorId`): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused, dropped with a member who left, was removed or became a viewer, moved to an edited branch question); `items` is the chain's whole queue after the change, empty once drained |
 | `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument; followed by `research.node.updated` for each passage branch whose anchor moved |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |

@@ -1,5 +1,5 @@
 // Moving a thread to the Trash keeps its unsent state (drafts, pending
-// branches, queued questions, images, selection) and its back/forward visits
+// branches, images, selection) and its back/forward visits
 // for Restore and Undo; deleting it, from the Trash or directly, drops them.
 // Renders the research data, navigation and event hooks against a stub
 // backend.
@@ -50,12 +50,6 @@ function unsentState(treeId: string): SavedResearchNavigation {
         text: "Pending branch question",
         updatedAt: Date.now(),
       },
-    },
-    queuedFollowups: {
-      [`${treeId}-root`]: [{
-        id: "queued-1", prompt: "Queued question", createdAt: 1,
-        images: [{ kind: "image", id: "image-1", mimeType: "image/png", byteSize: 10 }],
-      }],
     },
     composerImages: {
       images: { root: [{ kind: "image", id: "image-2", mimeType: "image/png", byteSize: 20 }] },

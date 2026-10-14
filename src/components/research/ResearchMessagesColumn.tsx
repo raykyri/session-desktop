@@ -7,7 +7,7 @@ import {
   type ResearchPendingGroup,
   type ResearchStackGroup,
 } from "@session/shared/lib/researchColumns";
-import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
+import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
 import { nodeMessage, postFollowUpSourceExcerpt } from "@session/shared/lib/researchNodeTypes";
 import { researchChainComposerState, researchNodeLabel, researchQuoteText } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchImageAttachment, ResearchNode } from "../../types";

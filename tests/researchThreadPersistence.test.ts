@@ -98,20 +98,3 @@ test("clearing a draft or dismissing a pending branch prevents restoration after
   t.mock.timers.tick(1_000);
   assert.equal(store.tree.followupDraft, undefined);
 });
-
-test("queued follow-ups save at once and clear when emptied", () => {
-  const store: Record<string, SavedResearchNavigation> = {};
-  let writes = 0;
-  const owner = createResearchThreadPersistence(store, () => {
-    writes++;
-  });
-  const queued = [{ id: "q1", prompt: "Next question", createdAt: 5 }];
-  owner.recordQueue("tree", "root", queued);
-  assert.deepEqual(store.tree.queuedFollowups?.root, queued);
-  assert.equal(writes, 1);
-  owner.recordQueue("tree", "root", []);
-  assert.equal(store.tree.queuedFollowups?.root, undefined);
-  // Clearing state that is already absent writes nothing.
-  owner.recordQueue("tree", "other", []);
-  assert.equal(writes, 2);
-});

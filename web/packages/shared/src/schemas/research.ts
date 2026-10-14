@@ -293,7 +293,7 @@ export const researchFollowupQueueItemSchema = z.object({
   id: z.string(),
   treeId: z.string(),
   headNodeId: z.string(),
-  authorId: z.string(),
+  authorId: z.string().optional(),
   message: userMessageSchema,
   agent: agentSpecSchema,
   position: z.number(),

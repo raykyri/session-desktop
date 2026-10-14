@@ -125,6 +125,26 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
     ["research.folders.changed", { workspaceId: "workspace-1" }],
     ["research.trash.changed", { workspaceId: "workspace-1" }],
     ["research.tree.updated", { tree: { ...researchTree, trashedAt: 50 } }],
+    [
+      "research.queue.changed",
+      {
+        treeId: researchTree.id,
+        headNodeId: root.id,
+        items: [
+          {
+            id: "research-followup-1",
+            treeId: researchTree.id,
+            headNodeId: root.id,
+            message: { text: "Next" },
+            agent: { adapter: "claude" },
+            position: 0,
+            createdAt: 10,
+            failedReason: null,
+          },
+        ],
+      },
+    ],
+    ["research.queue.changed", { treeId: researchTree.id, headNodeId: root.id, items: [] }],
   ];
 
   for (const [type, payload] of cases) {

@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 import { LoaderCircle } from "lucide-react";
 import { IS_MAC } from "../../lib/appHelpers";
 import {
+  askResearchFollowup,
   getResearchNodeContent,
   removeResearchHighlights,
   renameResearchNode,
@@ -67,11 +68,10 @@ import {
   researchLevelPath,
   researchLevelPathShows,
   researchQueueStep,
-  researchQueueWithout,
   researchSurvivingAncestor,
+  type QueuedResearchFollowup,
 } from "@session/shared/lib/researchBranchView";
 import {
-  canContinueChain,
   canFollowUpFrom,
   chainDisplayOrder,
   inlineChainFor,
@@ -95,7 +95,6 @@ import {
   recordResearchComposerImages,
   savedResearchComposerImages,
   savedResearchSelection,
-  type QueuedResearchFollowup,
 } from "../../lib/researchNavigation";
 import type {
   AgentAdapterMetadata,
@@ -697,8 +696,10 @@ function ResearchThreadPage({
     [composerField, requestFocus],
   );
   const focusComposer = useCallback((headId: string) => focusAfterQueued(headId), [focusAfterQueued]);
-  const { queues, queuesRef, restoreQueues, updateQueue, retryQueued, awaitChainChild, chainSendInFlight } =
-    useResearchChainQueue({ treeId, navigationPersistence, detail, archived, nodeById, onFork, focusComposer });
+  const { queues, cancelQueued: cancelQueuedItem, retryQueued, showQueued } = useResearchChainQueue({
+    treeId,
+    focusComposer,
+  });
   // The selected queued message while it is still queued. Once it leaves
   // the queue (sent, cancelled, or moved into the ask box by Edit question),
   // its column shows its own selected message again.
@@ -898,14 +899,13 @@ function ResearchThreadPage({
   );
 
   // Tree switch (the thread page is keyed per tree, so this is its mount):
-  // restore the open levels, queued follow-ups, and reading state.
+  // restore the open levels and reading state.
   useEffect(() => {
     if (!treeId || !rootNodeId || !detail) {
       return;
     }
     const navigation = navigationPersistence.store[treeId];
     const restored = researchRestoredSelection(detail.nodes, rootNodeId, savedResearchSelection(navigation));
-    restoreQueues(navigation?.queuedFollowups ?? {});
     setSelection(restored);
     // The restored selection is this thread's visit on screen: it fills in a
     // visit recorded before the thread loaded, or corrects one whose message
@@ -1656,8 +1656,9 @@ function ResearchThreadPage({
 
   /** Sends a column's ask box. Editing a failed question forks the new
    * question from the same parent in place of the failed node (removed by the
-   * backend after creating the new node). While the tail is running the
-   * question joins the chain's client-side queue. A sent question becomes
+   * backend after creating the new node). Otherwise the backend sends the
+   * question at once or, while the chain's last answer runs or questions
+   * are queued ahead, adds it to the chain's queue. A sent question becomes
    * the level's selected message. */
   const submitComposer = useCallback(
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
@@ -1748,32 +1749,17 @@ function ResearchThreadPage({
       if (!tail) {
         return;
       }
-      const step = researchQueueStep(tail);
-      const queued = queuesRef.current[headId] ?? EMPTY_QUEUE;
-      if (step === "wait" || queued.length > 0 || chainSendInFlight(headId)) {
-        updateQueue(headId, (queue) => [
-          ...queue,
-          {
-            id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-            prompt,
-            createdAt: Date.now(),
-            ...(images.length > 0 ? { images: [...images] } : {}),
-          },
-        ]);
-        clearComposer();
-        return;
-      }
-      if (step === "stalled" || !canContinueChain(currentDetail.nodes, tail)) {
-        return;
-      }
       setSubmittingKey(headId);
       try {
-        const child = await onForkRef.current(tail.id, prompt, null, true, null, images);
-        awaitChainChild(headId, child.id);
+        const result = await askResearchFollowup(tail.id, prompt, images);
         clearComposer();
-        addCreatedNode(child);
-        if (stillShown()) {
-          navigate(selectionWith(child.id, child));
+        if (result.kind === "queued") {
+          showQueued(result.item);
+        } else {
+          addCreatedNode(result.node);
+          if (stillShown()) {
+            navigate(selectionWith(result.node.id, result.node));
+          }
         }
       } catch (err) {
         onErrorRef.current(err instanceof Error ? err.message : String(err));
@@ -1781,7 +1767,7 @@ function ResearchThreadPage({
         setSubmittingKey(null);
       }
     },
-    [addCreatedNode, archived, awaitChainChild, chainSendInFlight, mainComposerKey, navigate, navigationPersistence, queuesRef, requestFocus, selectionWith, updateQueue],
+    [addCreatedNode, archived, mainComposerKey, navigate, navigationPersistence, requestFocus, selectionWith, showQueued],
   );
 
   /** Sends the new branch's first question: the branch is created with it
@@ -2329,22 +2315,31 @@ function ResearchThreadPage({
       // button, and to the ask box once the question has been sent (see
       // useResearchChainQueue).
       onRetry: (item, row) => {
-        retryQueued(headId, item.id);
+        retryQueued(headId, item.id).catch((err: unknown) => {
+          onErrorRef.current(err instanceof Error ? err.message : String(err));
+        });
         window.requestAnimationFrame(() => {
           if (row?.isConnected) {
             row.querySelector<HTMLButtonElement>(".research-queue-remove")?.focus();
           }
         });
       },
-      // Editing moves the question into the ask box only when it is empty.
-      // A branches column shows the ask box only in its selected group, so a
-      // chain in another group is selected first (its last message).
-      onEdit: (item) => {
+      // Editing moves the question into the ask box only when it is empty,
+      // once the backend has taken it out of the queue (it may have been
+      // sent meanwhile; then the ask box stays as it was). A branches column
+      // shows the ask box only in its selected group, so a chain in another
+      // group is selected first (its last message).
+      onEdit: async (item) => {
         if ((composerTextRef.current[headId] ?? "").trim() || (composerImagesRef.current[headId] ?? []).length > 0) {
           onToast("Clear the ask box to edit this question.");
           return;
         }
-        updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+        try {
+          await cancelQueuedItem(headId, item.id);
+        } catch (err) {
+          onErrorRef.current(err instanceof Error ? err.message : String(err));
+          return;
+        }
         if (queuedView?.itemId === item.id) {
           setQueuedView(null);
         }
@@ -2364,14 +2359,20 @@ function ResearchThreadPage({
    * without one, to the queued message now in its place (or the one before
    * it), else the group's last row (see focusAfterQueued). */
   const cancelQueued = (headId: string, itemId: string) => {
-    const queue = queuesRef.current[headId] ?? EMPTY_QUEUE;
+    const queue = queues[headId] ?? EMPTY_QUEUE;
     const at = queue.findIndex((item) => item.id === itemId);
     const next = queue[at + 1] ?? queue[at - 1];
-    updateQueue(headId, (current) => researchQueueWithout(current, itemId));
-    if (queuedView?.itemId === itemId) {
-      setQueuedView(null);
-    }
-    focusAfterQueued(headId, { nextItemId: next?.id });
+    cancelQueuedItem(headId, itemId).then(
+      () => {
+        if (queuedView?.itemId === itemId) {
+          setQueuedView(null);
+        }
+        focusAfterQueued(headId, { nextItemId: next?.id });
+      },
+      (err: unknown) => {
+        onErrorRef.current(err instanceof Error ? err.message : String(err));
+      },
+    );
   };
 
   // The rows of every messages and branches column.

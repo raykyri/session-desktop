@@ -1229,6 +1229,9 @@ async fn fork_research_node(
                         agent,
                     )?;
                     if let Err(err) = state.remove_research_branch(replaced) {
+                        // A replaced branch head handed its queue to the
+                        // new question; give it back before the rollback.
+                        state.move_research_followups(&child.id, replaced);
                         let _ = state.remove_unsent_research_branch(&child.id);
                         return Err(err);
                     }
@@ -1250,6 +1253,126 @@ async fn fork_research_node(
     .await
     .map_err(|err| format!("fork_research_node task failed: {err}"))?
     .map(|node| node.view())
+}
+
+/// Asks a follow-up at the end of the inline chain holding `node_id`: sent at
+/// once when the chain's last answer can take it and nothing is queued
+/// ahead, else added to the chain's queue (see `state::research_followups`).
+#[tauri::command]
+async fn ask_research_followup(
+    state: tauri::State<'_, AppState>,
+    node_id: String,
+    prompt: String,
+    images: Option<Vec<research_images::ImageInput>>,
+    agent: Option<research::AgentSpec>,
+) -> Result<state::ResearchFollowupAsk, String> {
+    let state = state.inner().clone();
+    let mut attachments = tweets::resolve_research_message_attachments(&prompt).await;
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments.extend(research_images::attachments_for_inputs(
+            &state.config().workspace_root,
+            images.as_deref().unwrap_or_default(),
+        )?);
+        state.ask_research_followup(&node_id, prompt, attachments, agent)
+    })
+    .await
+    .map_err(|err| format!("ask_research_followup task failed: {err}"))?
+}
+
+/// Removes a queued follow-up and returns its chain's queue.
+#[tauri::command]
+async fn cancel_research_followup(
+    state: tauri::State<'_, AppState>,
+    item_id: String,
+) -> Result<Vec<research::ResearchFollowupQueueItem>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.cancel_research_followup(&item_id))
+        .await
+        .map_err(|err| format!("cancel_research_followup task failed: {err}"))?
+}
+
+/// Sends a queued follow-up whose send was refused again, and returns its
+/// chain's queue.
+#[tauri::command]
+async fn retry_research_followup(
+    state: tauri::State<'_, AppState>,
+    item_id: String,
+) -> Result<Vec<research::ResearchFollowupQueueItem>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.retry_research_followup(&item_id))
+        .await
+        .map_err(|err| format!("retry_research_followup task failed: {err}"))?
+}
+
+/// A tree's queued follow-ups, keyed by chain head.
+#[tauri::command]
+async fn list_research_followups(
+    state: tauri::State<'_, AppState>,
+    tree_id: String,
+) -> Result<std::collections::HashMap<String, Vec<research::ResearchFollowupQueueItem>>, String> {
+    state.research_followups(&tree_id)
+}
+
+/// Takes over the queued follow-ups earlier builds kept in the webview's
+/// storage. Returns how many were added; ids already queued are skipped.
+#[tauri::command]
+async fn import_research_followups(
+    state: tauri::State<'_, AppState>,
+    items: Vec<state::LegacyQueuedResearchFollowup>,
+) -> Result<usize, String> {
+    let state = state.inner().clone();
+    let mut items = items;
+    for item in &mut items {
+        item.attachments = tweets::resolve_research_message_attachments(&item.prompt).await;
+    }
+    tauri::async_runtime::spawn_blocking(move || state.import_research_followups(items))
+        .await
+        .map_err(|err| format!("import_research_followups task failed: {err}"))?
+}
+
+/// Starts the run of a follow-up asked through the queue (sent at once or
+/// later), then gives it a model title as `fork_research_node`'s caller does
+/// for other follow-ups. Every launch failure settles the node as Failed
+/// (`launch_research_child_run`).
+fn launch_queued_research_followup(state: &AppState, node: &ResearchNode) {
+    let launch = (|| -> Result<(ResearchNode, workspace::GroupInfo), String> {
+        let parent_id = node
+            .parent_node_id
+            .as_deref()
+            .ok_or_else(|| "a queued follow-up has no parent".to_string())?;
+        let parent = state.research_node(parent_id)?;
+        let workspace = state.research_workspace_for_node(&node.id)?;
+        let launched = launch_research_child_run(state, &parent, &workspace, node)?;
+        Ok((launched, workspace))
+    })();
+    let (launched, workspace) = match launch {
+        Ok(launched) => launched,
+        Err(err) => {
+            // Settling an already-failed node only refines its error.
+            let _ = state.fail_research_node(&node.id, err.clone());
+            eprintln!(
+                "session: queued research follow-up {} failed to launch: {err}",
+                node.id
+            );
+            return;
+        }
+    };
+    // Title generation is a separate model request; its failure leaves the
+    // prompt-derived title, and a title the user set meanwhile is kept.
+    let state = state.clone();
+    std::thread::spawn(move || {
+        let Ok(title) =
+            title_generation::generate_research_agent_title(state.config(), &launched, &workspace)
+        else {
+            return;
+        };
+        if state
+            .research_node(&launched.id)
+            .is_ok_and(|node| node.title.is_none())
+        {
+            let _ = state.set_research_node_title(&launched.id, title);
+        }
+    });
 }
 
 /// Launches the run for an admitted (Queued) research child from its parent's
@@ -2351,8 +2474,14 @@ fn main() {
                 }
                 // Restore the persisted session before the command handlers go
                 // live. Panes saved by older builds are dropped during the load.
+                state.set_research_followup_launcher(std::sync::Arc::new(
+                    launch_queued_research_followup,
+                ));
                 state.restore_session();
                 workspace::reconcile_imported_research_archives(&state);
+                // Send queued follow-ups whose chain freed up while the app
+                // was not running to send them.
+                state.schedule_research_followup_dispatch(None);
                 // Recovery fell back to an empty session (state discarded to a .bak)
                 // or dropped entries: say so in a dialog, since a Finder launch never
                 // shows stderr and silent session loss looks like Session ate the tabs.
@@ -2455,6 +2584,11 @@ fn main() {
             read_research_image_thumbnail,
             get_research_node_content,
             fork_research_node,
+            ask_research_followup,
+            cancel_research_followup,
+            retry_research_followup,
+            list_research_followups,
+            import_research_followups,
             retry_research_node,
             rerun_research_node,
             cancel_research_node,

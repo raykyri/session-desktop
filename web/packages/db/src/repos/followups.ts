@@ -1,9 +1,9 @@
 // The follow-up queue (`followup_queue`): questions asked at the end of an
 // inline chain while it could not take one, in the order they are sent. Who
-// asked (`author_id`) is who the run is billed to. It replaces the desktop's
-// client-side queue (`useResearchChainQueue`), and decides what to do with
-// the desktop's own rules: `researchQueueAction` in the shared
-// `researchBranchView`, over the tree's nodes as the client sees them.
+// asked (`author_id`) is who the run is billed to. The desktop backend keeps
+// the same queue in its state file (src-tauri/src/state/research_followups.rs);
+// both decide what to do with the rules in `researchQueueAction` in the
+// shared `researchBranchView`, over the tree's nodes as the client sees them.
 //
 // Asking sends at once when the chain can take a follow-up and nothing is
 // queued ahead; otherwise it appends. Sending the head item later is two
@@ -52,8 +52,9 @@ import { enqueue } from "./queue.js";
 import type { NodeAgentInput } from "./trees.js";
 import { detail } from "./trees.js";
 
-/** One queued follow-up, as the wire sends it. */
-export type FollowupItem = ResearchFollowupQueueItem;
+/** One queued follow-up, as the wire sends it. The server always names
+ * the author (the wire leaves it optional for the desktop). */
+export type FollowupItem = ResearchFollowupQueueItem & { authorId: string };
 
 type FollowupRow = typeof followupQueue.$inferSelect;
 

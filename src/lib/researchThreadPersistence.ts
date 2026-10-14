@@ -4,7 +4,6 @@ import {
   researchNavigationStore,
   saveResearchNavigation,
 } from "./researchNavigation";
-import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchHighlightAnchor } from "../types";
 import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
 
@@ -73,16 +72,6 @@ export function createResearchThreadPersistence(
         updatedAt: Date.now(),
       };
       schedule();
-    },
-    recordQueue(treeId: string, headId: string, queue: QueuedResearchFollowup[]) {
-      const navigation = entry(treeId);
-      if (queue.length === 0) {
-        if (!navigation.queuedFollowups?.[headId]) return;
-        delete navigation.queuedFollowups[headId];
-      } else {
-        (navigation.queuedFollowups ??= {})[headId] = queue;
-      }
-      flush();
     },
     clearPendingBranch(treeId: string, nodeId: string) {
       const branches = store[treeId]?.askByNode;

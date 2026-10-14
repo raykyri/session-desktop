@@ -252,7 +252,7 @@ The parent trees whose nested children a person has hidden. Per person.
 - `created_at`; index (`node_id`), (`author_id`, `created_at`)
 - Highlights belong to the node: everyone who can read a thread sees them.
 
-`followup_queue` (replaces the desktop's client-side queue; §5.13)
+`followup_queue` (the desktop backend keeps the same queue in `state.json`, `researchFollowups`; §5.13)
 
 - `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain's head; the
   items go with it), `author_id` FK (who is billed when the item is sent)

@@ -172,6 +172,15 @@ test("parseSessionEvent recognizes the complete server event taxonomy", (t) => {
       { treeId: researchTree.id, headNodeId: root.id, items: [queuedItem(root.id)] },
     ],
     ["research.queue.changed", { treeId: researchTree.id, headNodeId: root.id, items: [] }],
+    // The desktop backend's items name no author.
+    [
+      "research.queue.changed",
+      {
+        treeId: researchTree.id,
+        headNodeId: root.id,
+        items: [{ ...queuedItem(root.id), authorId: undefined }],
+      },
+    ],
   ];
 
   for (const [type, payload] of cases) {

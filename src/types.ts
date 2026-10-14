@@ -120,6 +120,7 @@ export type {
   ResearchBranchRemoval,
   ResearchDocumentNode,
   ResearchDraft,
+  ResearchFollowupQueueItem,
   ResearchExchangeNode,
   ResearchFolder,
   ResearchFolderState,

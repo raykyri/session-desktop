@@ -407,26 +407,26 @@ export interface ResearchTreeSummary {
 export interface ResearchTreeDetail {
   tree: ResearchTree;
   nodes: ResearchNode[];
-  /** Web only: the follow-ups waiting in the server's queue, keyed by the
-   * head of the inline chain each continues, in send order. Chains with no
-   * queued follow-up are absent. */
+  /** The follow-ups waiting in the queue (the web server's, or the
+   * desktop backend's), keyed by the head of the inline chain each
+   * continues, in send order. Chains with no queued follow-up are absent. */
   queues?: Record<string, ResearchFollowupQueueItem[]>;
   /** Web only: the owner, the members, and everyone who wrote a node or a
    * highlight in the thread, for author attribution. */
   participants?: ResearchParticipant[];
 }
 
-/** Web only: a follow-up asked at the end of an inline chain while the chain
- * could not take it (its last answer was still running), stored by the server
- * and sent in order as the chain frees up. It replaces the desktop's
- * client-side `QueuedResearchFollowup`. */
+/** A follow-up asked at the end of an inline chain while the chain could
+ * not take it (its last answer was still running), stored by the web server
+ * or the desktop backend and sent in order as the chain frees up. */
 export interface ResearchFollowupQueueItem {
   id: string;
   treeId: string;
   /** The first node of the inline chain the follow-up continues. */
   headNodeId: string;
-  /** Who asked; the run is billed to them when the item is sent. */
-  authorId: string;
+  /** Web only: who asked; the run is billed to them when the item is sent.
+   * The desktop omits it. */
+  authorId?: string;
   message: UserMessage;
   /** The agent the follow-up runs on once sent. */
   agent: AgentSpec;

@@ -7,7 +7,7 @@ import { columnAttributes, type ResearchColumn } from "@session/shared/lib/resea
 import { nodeEditedAt, nodePrompt, nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { SegmentView } from "../../lib/researchSegmentView";
 import { researchMarkerLabel } from "@session/shared/lib/researchThreadView";
-import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
+import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
 import type { ResearchNode } from "../../types";
 import { ResearchRelativeTime } from "./ResearchClock";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";

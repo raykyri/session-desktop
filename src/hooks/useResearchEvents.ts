@@ -22,6 +22,7 @@ import {
   type ParsedResearchEvent,
 } from "@session/shared/lib/researchEvents";
 import { pruneResearchNavigationNodes, removeResearchNavigation } from "../lib/researchNavigation";
+import { publishResearchQueueChanged } from "../lib/researchQueue";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
 import {
@@ -275,6 +276,11 @@ export function useResearchEvents(
       }
       if (event.type === "research.trash.changed") {
         void refreshResearchTrash();
+        return;
+      }
+      if (event.type === "research.queue.changed") {
+        // The open thread page shows the chain's new queue.
+        publishResearchQueueChanged(event);
         return;
       }
       const eventTreeId =
@@ -563,8 +569,9 @@ export function useResearchEvents(
           }
           if (event.trashed) {
             // Restore (or Undo) brings the thread back with its unsent
-            // drafts, pending branches, queued questions and selection, so
-            // its navigation state and visits stay.
+            // drafts, pending branches and selection, so its navigation
+            // state and visits stay. (The backend keeps its queued
+            // questions.)
             setResearchTreesTrashed([event.treeId], true);
           } else {
             setResearchTreesTrashed([event.treeId], false);

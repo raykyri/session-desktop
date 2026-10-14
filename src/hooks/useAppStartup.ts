@@ -3,6 +3,7 @@ import {
   getResearchInlineWidgets,
   getResearchLaunchInstruction,
   getRuntimeConfig,
+  importResearchFollowups,
   listAgents,
   listGroups,
   listRecentActivity,
@@ -11,6 +12,7 @@ import {
   markAppWindowReady,
 } from "../lib/api";
 import { startAppStartup } from "../lib/appStartup";
+import { migrateLegacyResearchQueues } from "../lib/researchQueue";
 
 async function loadInitial() {
   const [
@@ -38,11 +40,14 @@ async function loadInitial() {
   };
 }
 
-// Preferences whose durable copy lives in the backend.
+// Preferences whose durable copy lives in the backend. Queued follow-ups
+// that earlier builds kept in localStorage move to the backend here; a
+// failed handover keeps them stored for the next start.
 async function loadSecondary() {
   const [storedResearchLaunchInstruction, storedResearchInlineWidgets] = await Promise.all([
     getResearchLaunchInstruction().catch(() => null),
     getResearchInlineWidgets().catch(() => null),
+    migrateLegacyResearchQueues(importResearchFollowups).catch(() => undefined),
   ]);
   return {
     storedResearchLaunchInstruction,

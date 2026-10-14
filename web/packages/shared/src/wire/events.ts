@@ -117,10 +117,10 @@ export interface ResearchTrashChangedEvent {
   timestamp: number;
 }
 
-/** Web only: the server's follow-up queue of one inline chain changed (an
- * item was queued, sent, cancelled, retried, or refused). `items` is the
- * chain's whole queue after the change, in send order; empty once it drained.
- * The desktop backend never emits it. */
+/** The follow-up queue of one inline chain changed (an item was queued,
+ * sent, cancelled, retried, or refused), on the web server or the desktop
+ * backend. `items` is the chain's whole queue after the change, in send
+ * order; empty once it drained. */
 export interface ResearchQueueChangedEvent {
   type: "research.queue.changed";
   treeId: string;
@@ -129,8 +129,7 @@ export interface ResearchQueueChangedEvent {
   timestamp: number;
 }
 
-/** Every research event the desktop backend emits, and the web's
- * `research.queue.changed`. Keeping this a closed
+/** Every research event the desktop backend emits. Keeping this a closed
  * union makes a new backend event take the explicit recovery path until its
  * frontend state effects are intentionally implemented. */
 export type ParsedResearchEvent =
