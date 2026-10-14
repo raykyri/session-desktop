@@ -206,6 +206,23 @@ export function requeueWithBackoff(db: SessionDatabase, nodeId: string, notBefor
   db.update(runQueue).set({ claimedAt: null, notBefore }).where(eq(runQueue.nodeId, nodeId)).run();
 }
 
+/** Makes the waiting rows of `parentNodeId`'s children claimable now: the
+ * runs the agent loop held back until that parent's run settled. */
+export function wakeChildrenOf(db: SessionDatabase, parentNodeId: string): number {
+  return db
+    .update(runQueue)
+    .set({ notBefore: null })
+    .where(
+      and(
+        isNull(runQueue.claimedAt),
+        sql`${runQueue.notBefore} IS NOT NULL`,
+        sql`${runQueue.nodeId} IN (select ${nodes.id} from ${nodes} where ${nodes.parentNodeId} = ${parentNodeId})`,
+      ),
+    )
+    .returning({ nodeId: runQueue.nodeId })
+    .all().length;
+}
+
 /**
  * 1-based position among the rows still waiting in the same pool, or 0 once
  * the run is claimed — the number `research.node.updated` carries while a node

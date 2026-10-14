@@ -13,6 +13,7 @@ import type {
   RecentActivityPage,
   RecentActivityScope,
   RecentResearchQuery,
+  ResearchFollowupQueueItem,
   ResearchNode,
   ResearchTreeDetail,
   ResearchTreeSummary,
@@ -98,6 +99,23 @@ export function patchDetail(
   if (!current) return;
   const next = patch(current);
   if (next && next !== current) client.setQueryData(key, next);
+}
+
+/** Replaces one chain's follow-up queue in a cached detail; an empty list
+ * removes the chain's entry. */
+export function patchDetailQueue(
+  client: QueryClient,
+  treeId: string,
+  headNodeId: string,
+  items: ResearchFollowupQueueItem[],
+): void {
+  patchDetail(client, treeId, (detail) => {
+    if (!detail) return detail;
+    const queues = { ...detail.queues };
+    if (items.length === 0) delete queues[headNodeId];
+    else queues[headNodeId] = items;
+    return { ...detail, queues };
+  });
 }
 
 /** The node as the caches last saw it: from the tree detail if it is cached, else from the active-nodes list. `undefined` when neither cache holds it. */

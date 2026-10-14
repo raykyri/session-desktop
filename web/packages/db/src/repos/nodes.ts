@@ -21,7 +21,13 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
-import { parseNullableJsonColumn, runOutcomeSchema } from "../json.js";
+import {
+  parseJsonColumn,
+  parseNullableJsonColumn,
+  runOutcomeSchema,
+  stringListSchema,
+} from "../json.js";
+import { followupQueue } from "../schema/followups.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { nodeMessages, runQueue, runTurns } from "../schema/runs.js";
@@ -34,7 +40,7 @@ import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
 import { enqueue } from "./queue.js";
-import { subtreeIdsDepthFirst, deleteNodesInOrder } from "./subtrees.js";
+import { activeRun, deleteNodesInOrder, subtreeIdsDepthFirst } from "./subtrees.js";
 import type { NodeAgentInput } from "./trees.js";
 import { touchTree } from "./trees.js";
 
@@ -81,6 +87,24 @@ export interface AdmitChildInput {
   inline?: boolean | undefined;
   anchor?: NodeAnchor | null | undefined;
   nodeId?: string | undefined;
+  /** Who asked, when it is not `userId`: the author of a queued follow-up
+   * (`followups.ts`). */
+  authorId?: string | undefined;
+  /** A failed or stopped question this one replaces (an edited question,
+   * the desktop's `create_research_child_replacing`). It must be a child of
+   * the same parent with the same `inline`, settled without a pending resume,
+   * and have no children. It is deleted in the same transaction, and the new
+   * node takes its place in the chain's stored order. */
+  replacesNodeId?: string | undefined;
+}
+
+export interface AdmittedChild {
+  node: ResearchNode;
+  /** The replaced question, deleted in the same transaction. */
+  replacedNodeId: string | null;
+  /** The chain head whose stored order now lists the new node in place of the
+   * replaced one; null when nothing was reordered. */
+  reorderedHead: ResearchNode | null;
 }
 
 interface LoadedNode {
@@ -172,6 +196,62 @@ export function admitChild(
   userId: string,
   input: AdmitChildInput,
 ): ResearchNode {
+  return admitChildDetailed(db, userId, input).node;
+}
+
+/** The node at the top of `node`'s inline chain: walk up while the node is
+ * inline (`inlineChainFor` in the shared `researchChains`). */
+function chainHeadRow(db: SessionDatabase, node: NodeRow): NodeRow {
+  let current = node;
+  const seen = new Set([current.id]);
+  while (current.inline && current.parentNodeId !== null) {
+    const parent = db.select().from(nodes).where(eq(nodes.id, current.parentNodeId)).get();
+    if (!parent || seen.has(parent.id)) {
+      break;
+    }
+    seen.add(parent.id);
+    current = parent;
+  }
+  return current;
+}
+
+/** The ids of the inline chain that starts at `headId`, oldest first: the
+ * head, then each node's oldest inline child. */
+export function chainIdsFrom(db: SessionDatabase, headId: string): string[] {
+  const chain = [headId];
+  const seen = new Set(chain);
+  for (let current = headId; ;) {
+    const next = db
+      .select({ id: nodes.id })
+      .from(nodes)
+      .where(and(eq(nodes.parentNodeId, current), eq(nodes.inline, true)))
+      .orderBy(asc(nodes.createdAt), asc(nodes.id))
+      .get();
+    if (!next || seen.has(next.id)) {
+      return chain;
+    }
+    seen.add(next.id);
+    chain.push(next.id);
+    current = next.id;
+  }
+}
+
+/** Whether an exchange's run is settled and no longer the server's: any
+ * terminal status except an `interrupted` run with a resume pending. */
+function runSettled(node: NodeRow): boolean {
+  if (node.status === null || !isTerminalStatus(node.status)) {
+    return false;
+  }
+  return node.status !== "interrupted" || !node.resumePending;
+}
+
+/** As `admitChild`, also reporting what a replacement removed and
+ * reordered. */
+export function admitChildDetailed(
+  db: SessionDatabase,
+  userId: string,
+  input: AdmitChildInput,
+): AdmittedChild {
   const text = input.message.text.trim();
   if (text === "") {
     throw new Error("research prompt cannot be empty");
@@ -180,6 +260,7 @@ export function admitChild(
     validateHighlightAnchor(input.anchor.anchor);
   }
   const type = input.type ?? "exchange";
+  const inline = input.inline === true;
   const message: UserMessage = {
     text,
     ...(input.message.attachments && input.message.attachments.length > 0
@@ -204,6 +285,32 @@ export function admitChild(
     if (parent.type === "exchange" && parent.status !== "complete") {
       throw new Error("Cannot create follow-up: the parent research run has not completed.");
     }
+    let replacedNodeId: string | null = null;
+    if (input.replacesNodeId !== undefined) {
+      const replaced = tx.select().from(nodes).where(eq(nodes.id, input.replacesNodeId)).get();
+      const childless =
+        replaced !== undefined &&
+        tx.select({ id: nodes.id }).from(nodes).where(eq(nodes.parentNodeId, replaced.id)).get() ===
+          undefined;
+      if (
+        !replaced ||
+        replaced.parentNodeId !== parent.id ||
+        replaced.inline !== inline ||
+        replaced.type !== "exchange" ||
+        replaced.status === "complete" ||
+        !runSettled(replaced) ||
+        !childless
+      ) {
+        throw new Error("Only a failed or stopped question with no follow-ups can be edited.");
+      }
+      // An inline question is deleted before the insert: the partial unique
+      // index would refuse the new inline child while it exists. Both happen
+      // in this transaction, so a refused insert keeps the replaced question.
+      if (inline) {
+        deleteNodesInOrder(tx, [replaced.id]);
+      }
+      replacedNodeId = replaced.id;
+    }
     const nodeId = input.nodeId ?? newId();
     const at = now();
     try {
@@ -212,8 +319,8 @@ export function admitChild(
           id: nodeId,
           treeId: parent.treeId,
           parentNodeId: parent.id,
-          authorId: userId,
-          inline: input.inline === true,
+          authorId: input.authorId ?? userId,
+          inline,
           type,
           messageJson: message,
           anchorJson: input.anchor ?? null,
@@ -241,8 +348,84 @@ export function admitChild(
       }
       throw error;
     }
+    if (replacedNodeId !== null && !inline) {
+      // A branch question heads its own chain: follow-ups queued behind it
+      // move to the question that replaces it.
+      tx.update(followupQueue)
+        .set({ headNodeId: nodeId })
+        .where(eq(followupQueue.headNodeId, replacedNodeId))
+        .run();
+      deleteNodesInOrder(tx, [replacedNodeId]);
+    }
+    let reorderedHead: ResearchNode | null = null;
+    if (replacedNodeId !== null && inline) {
+      // The edited question takes the replaced one's place in its column's
+      // stored order (`create_research_child_replacing` in `state.rs`).
+      const head = chainHeadRow(tx, parent);
+      const order = storedChainOrder(head);
+      const slot = order?.indexOf(replacedNodeId) ?? -1;
+      if (order && slot >= 0) {
+        order[slot] = nodeId;
+        tx.update(nodes).set({ chainOrderJson: order }).where(eq(nodes.id, head.id)).run();
+        reorderedHead = reload(tx, userId, head.id);
+      }
+    }
     touchTree(tx, parent.treeId, at);
-    return reload(tx, userId, nodeId);
+    return { node: reload(tx, userId, nodeId), replacedNodeId, reorderedHead };
+  });
+}
+
+function storedChainOrder(node: NodeRow): string[] | null {
+  return node.chainOrderJson === null
+    ? null
+    : [...parseJsonColumn(stringListSchema, node.chainOrderJson, "nodes.chain_order_json")];
+}
+
+/**
+ * Stores the display order of the messages column whose inline chain starts
+ * at `headNodeId` (`set_research_chain_order` in `state.rs`). `nodeIds` must
+ * list exactly the chain's current nodes; a chain that changed since the
+ * caller read it is refused. The inline links are unchanged, so a follow-up
+ * still continues the chain's last node. Returns the head and whether the
+ * stored order changed.
+ */
+export function setChainOrder(
+  db: SessionDatabase,
+  userId: string,
+  headNodeId: string,
+  nodeIds: readonly string[],
+): { node: ResearchNode; changed: boolean } {
+  return transact(db, (tx) => {
+    const { node: head, tree } = loadNode(tx, userId, headNodeId);
+    if (chainHeadRow(tx, head).id !== head.id) {
+      throw new Error(`Research node ${headNodeId} does not start a conversation.`);
+    }
+    rejectTrashed(tree);
+    if (tree.archivedAt !== null) {
+      throw new Error("Restore archived research before reordering it.");
+    }
+    const chain = chainIdsFrom(tx, head.id);
+    const listed = new Set(nodeIds);
+    if (
+      nodeIds.length !== chain.length ||
+      listed.size !== chain.length ||
+      chain.some((id) => !listed.has(id))
+    ) {
+      throw new Error("The conversation changed; refresh before reordering its messages.");
+    }
+    const current = storedChainOrder(head);
+    const changed =
+      current === null ||
+      current.length !== nodeIds.length ||
+      current.some((id, index) => id !== nodeIds[index]);
+    if (changed) {
+      tx.update(nodes)
+        .set({ chainOrderJson: [...nodeIds] })
+        .where(eq(nodes.id, head.id))
+        .run();
+      touchTree(tx, tree.id);
+    }
+    return { node: reload(tx, userId, head.id), changed };
   });
 }
 
@@ -330,6 +513,42 @@ function enqueueForRun(
   });
 }
 
+/** Puts a settled exchange back to `queued` with nothing of its own left:
+ * the snapshot, the recap, the live turns and the stored messages go, the
+ * attempt number moves, and the node is re-queued at the back. Highlights
+ * stay; the client re-anchors them by quote against the new answer. */
+function relaunch(
+  tx: SessionDatabase,
+  userId: string,
+  node: NodeRow,
+  model: string | undefined,
+): ResearchNode {
+  tx.delete(runTurns).where(eq(runTurns.nodeId, node.id)).run();
+  tx.delete(nodeMessages).where(eq(nodeMessages.nodeId, node.id)).run();
+  tx.delete(responseSnapshots).where(eq(responseSnapshots.nodeId, node.id)).run();
+  const at = now();
+  tx.update(nodes)
+    .set({
+      status: "queued",
+      attempt: node.attempt + 1,
+      error: null,
+      startedAt: null,
+      completedAt: null,
+      runSeq: 0,
+      resumePending: false,
+      responseSnapshotAt: null,
+      responsePreview: null,
+      recapJson: null,
+      ...(model === undefined ? {} : { model }),
+    })
+    .where(eq(nodes.id, node.id))
+    .run();
+  enqueueForRun(tx, userId, node.id, model ?? rowModel(node), at);
+  touchTree(tx, node.treeId, at);
+  syncFeedItem(tx, node);
+  return reload(tx, userId, node.id);
+}
+
 /**
  * A fresh attempt after a failure, a cancel, or an interruption: the node goes
  * back to `queued` with nothing of its own left, so the next run starts from
@@ -353,30 +572,50 @@ export function resetForRetry(
         "Cannot retry run: only runs with status 'failed', 'cancelled', or 'interrupted' can be retried.",
       );
     }
-    tx.delete(runTurns).where(eq(runTurns.nodeId, nodeId)).run();
-    tx.delete(nodeMessages).where(eq(nodeMessages.nodeId, nodeId)).run();
-    tx.delete(responseSnapshots).where(eq(responseSnapshots.nodeId, nodeId)).run();
-    const at = now();
-    tx.update(nodes)
-      .set({
-        status: "queued",
-        attempt: node.attempt + 1,
-        error: null,
-        startedAt: null,
-        completedAt: null,
-        runSeq: 0,
-        resumePending: false,
-        responseSnapshotAt: null,
-        responsePreview: null,
-        recapJson: null,
-        ...(model === undefined ? {} : { model }),
-      })
-      .where(eq(nodes.id, nodeId))
-      .run();
-    enqueueForRun(tx, userId, node.id, model ?? rowModel(node), at);
-    touchTree(tx, node.treeId, at);
-    syncFeedItem(tx, node);
-    return reload(tx, userId, nodeId);
+    return relaunch(tx, userId, node, model);
+  });
+}
+
+/** Whether an exchange's run is still the server's responsibility. */
+function runActive(node: NodeRow): boolean {
+  return node.type === "exchange" && node.status !== null && !runSettled(node);
+}
+
+/**
+ * Reruns a settled exchange in place (`rerun_research_node`): as
+ * `resetForRetry`, but a complete answer is accepted too and replaced. The
+ * snapshot and the recap go; highlights stay and re-anchor by quote.
+ *
+ * The answer it follows must be complete. The exception is an inline
+ * follow-up whose parent is still active (itself being rerun): the rerun is
+ * admitted and waits in the run queue until the parent settles
+ * (`runs/service.ts`), as the desktop's client-side retry queue waits.
+ */
+export function resetForRerun(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
+  return transact(db, (tx) => {
+    const { node, tree } = loadNode(tx, userId, nodeId);
+    rejectTrashed(tree);
+    if (tree.archivedAt !== null) {
+      throw new Error("Restore archived research before rerunning a question.");
+    }
+    if (node.type !== "exchange") {
+      throw new Error("Only questions answered by an agent can be rerun.");
+    }
+    if (!runSettled(node)) {
+      throw new Error("A queued or running question cannot be rerun.");
+    }
+    if (node.parentNodeId !== null) {
+      const parent = tx.select().from(nodes).where(eq(nodes.id, node.parentNodeId)).get();
+      if (parent?.type === "exchange" && parent.status !== "complete") {
+        if (!runActive(parent)) {
+          throw new Error("The answer this question follows did not complete.");
+        }
+        if (!node.inline) {
+          throw new Error("Wait for the answer this question follows to finish.");
+        }
+      }
+    }
+    return relaunch(tx, userId, node, undefined);
   });
 }
 
@@ -691,7 +930,7 @@ export function removeBranch(
     const active = tx
       .select({ id: nodes.id })
       .from(nodes)
-      .where(and(inArray(nodes.id, ordered), inArray(nodes.status, ["queued", "running"])))
+      .where(and(inArray(nodes.id, ordered), activeRun()))
       .get();
     if (active) {
       throw new Error("Cannot delete research node with an active run: cancel the run first.");

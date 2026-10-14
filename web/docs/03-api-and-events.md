@@ -86,8 +86,8 @@ The `research` router is assembled in
 `trees.ts` (listing, ordering, creating, archiving, deleting threads),
 `nodes.ts` (follow-ups, retry, cancel, content, document edits, titles),
 `posts.ts` (notes and saved links, step 2.3) and `trash.ts` (step 2.4).
-`followups.ts` holds the `followups.*` procedures (step 2.7), mounted as their
-own router. Outputs are the wire types from `@session/shared` (the desktop's
+`followups.ts` holds the `followups.*` procedures, mounted as their own
+router. Outputs are the wire types from `@session/shared` (the desktop's
 node envelope); inputs are validated with the zod schemas in
 `shared/src/schemas` where they carry wire values.
 
@@ -103,11 +103,12 @@ Home feed and the highlight feed leave threads in the Trash out.
 | --- | --- | --- | --- |
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
-| `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` | `get_research_tree` |
-| `research.createTree` | M | `{ prompt, title?, model, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
-| `research.forkNode` | M | `{ parentNodeId, prompt, model?, anchor?: NodeAnchor, inline? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
+| `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` (with `queues`, the follow-up queues keyed by chain head, when any item is queued) | `get_research_tree` |
+| `research.createTree` | M | `{ prompt, title?, model, effort?, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `BAD_REQUEST` on an effort the model does not accept; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
+| `research.forkNode` | M | `{ parentNodeId, prompt, agent?: { model, effort? }, anchor?: NodeAnchor, inline?, replacesNodeId? }` → `ResearchNode` | `fork_research_node`. `agent` is any registry model the account may use and an effort it accepts; absent, the parent's agent; a different model without an effort runs at its default effort. `replacesNodeId` names a failed or stopped childless question under the same parent with the same `inline`, which is deleted in the same transaction (`research.node.removed`, then `research.node.created`). An occupied inline slot is still refused; continuing a busy chain is `followups.ask`. Resolves its own attachments |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
-| `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | Planned, not implemented. `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
+| `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node`: a settled exchange, a `complete` one included, is reset in place; the snapshot and recap are deleted, highlights stay. The parent's answer must be complete, except for an inline follow-up of an answer that is active again, which waits in the run queue until that answer settles (`PRECONDITION_FAILED` otherwise) |
+| `research.setChainOrder` | M | `{ headNodeId, nodeIds }` → `ResearchNode` (the head, with `chainOrder`) | `set_research_chain_order`: `nodeIds` must be exactly the chain (`CONFLICT` "The conversation changed; refresh before reordering its messages." otherwise); display only |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |
@@ -119,7 +120,7 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree` (`PRECONDITION_FAILED` while the tree or a child going with it has an active run), `restore_research_tree_from_trash`; the children listed under the tree go with it |
 | `research.listTrash` | Q | `{ workspaceId }` → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` (one workspace; folders in the Trash are in `folders.get`) |
 | `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction |
-| `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch` |
+| `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch`. Refused while a run in the branch is active: `queued`, `running`, or `interrupted` with a resume pending (`run.resumePending`); an interrupted node the server stopped resuming is removable like a failed one. The same rule applies to `removeTree` and `workspaces.remove` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
 | `research.importReport` | M | `{ markdown, prompt, workspaceId }` → `ResearchTreeDetail` | `import_research_report` (`read_research_report` dropped; browser supplies bytes; recap on `gemini-flash`) |
@@ -130,6 +131,27 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `recaps.defaultInstructions` | Q | → `string` | `research_recap_default_instructions` |
 | `recaps.generateCandidate` | M | `{ nodeId, expectedResponseRevision, instructions (trimmed, non-empty, ≤ 4,000 chars) }` → `ResearchRecapCandidate` (always `gemini-flash`; the desktop's adapter/model picker is dropped) | `generate_research_recap_candidate` |
 | `recaps.applyCandidate` | M | `{ nodeId, expectedResponseRevision, expectedCurrentRecapId?, candidate }` → `ResearchNode` | `apply_research_recap_candidate` |
+
+### `followups`
+
+The server's follow-up queue, which replaces the desktop's client-side queue
+(`02-domain-model-and-database.md` §5.13). Items are
+`ResearchFollowupQueueItem` (`{ id, treeId, headNodeId, authorId, message,
+agent, position, createdAt, failedReason }`).
+
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
+| `followups.ask` | M | `{ headNodeId, prompt, model?, effort? }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued |
+| `followups.cancel` | M | `{ itemId }` → the chain's queue after the change | the queue's Remove |
+| `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | the queue's Retry: clears `failedReason` and dispatches |
+| `followups.list` | Q | `{ treeId }` → `Record<headNodeId, ResearchFollowupQueueItem[]>` | — |
+
+The server sends a chain's first item when the chain frees up: after a run
+settles, `removeBranch`, `setChainOrder`, `restoreTree`,
+`restoreTreeFromTrash`, `followups.cancel` and `followups.retry`, and on boot. Archived threads and threads in the Trash
+wait. The send is checked against the item's author (model access, daily
+limits, run-queue bound); a refusal sets `failedReason`, and the chain waits
+on that item until it is retried or cancelled.
 
 ### `feed`
 | Procedure | Kind | Input → Output | Desktop |
@@ -212,9 +234,10 @@ unless noted:
 | `research.tree.removed` | `{ treeId }` | removeTree, trashTree, emptyTrash (once per tree), workspace remove |
 | `research.trash.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | trashTree, restoreTreeFromTrash, emptyTrash, removeTree of a tree in the Trash; only when something changed |
 | `research.folders.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | folders.set when the stored state changed, emptyTrash when it deleted folders, workspace remove. Carries no state: clients refetch `folders.get` |
-| `research.node.created` | `{ node }` | forkNode |
-| `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/resume reset, recap saved, snapshot stamped, preview (≤ 2/s) |
-| `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch |
+| `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch |
+| `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s) |
+| `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch, forkNode with `replacesNodeId` |
+| `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused); `items` is the chain's whole queue after the change, empty once drained |
 | `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |

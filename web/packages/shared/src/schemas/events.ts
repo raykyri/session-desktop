@@ -2,7 +2,12 @@
 
 import { z } from "zod";
 
-import { researchHighlightSchema, researchNodeSchema, researchTreeSchema } from "./research.js";
+import {
+  researchFollowupQueueItemSchema,
+  researchHighlightSchema,
+  researchNodeSchema,
+  researchTreeSchema,
+} from "./research.js";
 
 export const sessionEventSchema = z.object({
   type: z.string(),
@@ -82,6 +87,13 @@ export const parsedResearchEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("research.trash.changed"),
     workspaceId: z.string().optional(),
+    timestamp: z.number(),
+  }),
+  z.object({
+    type: z.literal("research.queue.changed"),
+    treeId: z.string(),
+    headNodeId: z.string(),
+    items: z.array(researchFollowupQueueItemSchema),
     timestamp: z.number(),
   }),
 ]);

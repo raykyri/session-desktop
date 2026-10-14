@@ -9,7 +9,7 @@
 
 import type { SessionDatabase } from "@session/db";
 import { nodes as nodesRepo, queue as queueRepo, runs as runsRepo } from "@session/db";
-import type { ResearchRecapCandidate } from "@session/shared";
+import type { ResearchNode, ResearchRecapCandidate } from "@session/shared";
 import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
 import type { Config } from "../config.js";
@@ -18,6 +18,8 @@ import { sessionEvent } from "../events/bus.js";
 import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
 import { createLogger } from "../logger.js";
+import type { FollowupDeps } from "../research/followups.js";
+import { dispatchTree } from "../research/followups.js";
 
 import { backoffFor, MAX_RATE_LIMIT_REQUEUES } from "./errors.js";
 import type { LoopDeps } from "./loop.js";
@@ -127,6 +129,14 @@ export const MAX_AUTO_RESUMES = 2;
 /** How often the claim loop looks for work it was not woken for — a backoff
  * that came due, or a slot another run freed. */
 export const CLAIM_INTERVAL_MS = 250;
+
+/** The longest a node waits in the run queue for its parent's run before it
+ * is looked at again. The parent's settlement wakes it sooner. */
+export const PARENT_WAIT_MS = 60_000;
+
+/** The error of a node whose parent settled without an answer while the
+ * node waited for it. */
+export const PARENT_INCOMPLETE = "The answer this question follows did not complete.";
 
 export interface RunsServiceDeps {
   config: Config;
@@ -246,6 +256,52 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     }
   };
 
+  const followupDeps: FollowupDeps = {
+    config: deps.config,
+    db: deps.db,
+    eventBus: deps.eventBus,
+    logger,
+    runs: { start: (nodeId) => service.start(nodeId) },
+  };
+
+  /** A run left `running`: release the follow-ups that wait on it. Its
+   * reruns and retries held in the run queue (`parentGate`) become claimable
+   * at once, and the thread's follow-up queues send what they can. */
+  const afterSettle = (userId: string, nodeId: string): void => {
+    try {
+      queueRepo.wakeChildrenOf(deps.db, nodeId);
+      const node = nodesRepo.get(deps.db, userId, nodeId);
+      if (node) {
+        dispatchTree(followupDeps, node.treeId);
+      }
+    } catch (error) {
+      logger.error({ nodeId, error }, "could not dispatch follow-ups after a run settled");
+    }
+  };
+
+  /**
+   * Whether a claimed node may start: its parent's answer is its context, so
+   * a parent that is still active (an answer being rerun ahead of a rerun of
+   * its inline follow-up) holds it, and a parent that settled without an
+   * answer fails it. Posts and documents have no run and never hold a child.
+   */
+  const parentGate = (userId: string, node: ResearchNode): "start" | "wait" | "fail" => {
+    if (!node.parentNodeId) {
+      return "start";
+    }
+    const parent = nodesRepo.get(deps.db, userId, node.parentNodeId);
+    if (!parent || parent.type !== "exchange" || parent.run.status === "complete") {
+      return "start";
+    }
+    const status = parent.run.status;
+    const active =
+      status === "queued" ||
+      status === "starting" ||
+      status === "running" ||
+      (status === "interrupted" && parent.run.resumePending === true);
+    return active ? "wait" : "fail";
+  };
+
   const begin = (nodeId: string, userId: string, kind: "fresh" | "resume"): void => {
     if (active.has(nodeId)) {
       return;
@@ -285,6 +341,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       })
       .finally(() => {
         active.delete(nodeId);
+        if (!draining) {
+          afterSettle(userId, nodeId);
+        }
         publishQueuePositions(userId);
         if (!draining) {
           void service.tick();
@@ -437,6 +496,23 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           }
           if (nodesRepo.isTerminalStatus(nodeStatus(node))) {
             queueRepo.release(deps.db, run.nodeId);
+            continue;
+          }
+          const gate = parentGate(run.userId, node);
+          if (gate === "wait") {
+            // Woken by `afterSettle` when the parent's run ends; the delay
+            // only bounds how long a missed wake-up can hold it.
+            queueRepo.requeueWithBackoff(deps.db, run.nodeId, Date.now() + PARENT_WAIT_MS);
+            continue;
+          }
+          if (gate === "fail") {
+            queueRepo.release(deps.db, run.nodeId);
+            const failed = nodesRepo.setStatus(deps.db, run.userId, run.nodeId, "failed", {
+              error: PARENT_INCOMPLETE,
+            });
+            emit(run.userId, "research.node.updated", { node: failed });
+            emitFeedItemUpsertedForNode(deps, failed.id);
+            afterSettle(run.userId, run.nodeId);
             continue;
           }
           begin(run.nodeId, run.userId, "fresh");

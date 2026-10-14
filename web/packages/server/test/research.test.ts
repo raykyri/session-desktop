@@ -130,7 +130,7 @@ test("a research thread runs from launch to archive", async (t) => {
   const child = await caller.research.forkNode({
     parentNodeId: nodeId,
     prompt: "How do false positives scale?",
-    model: "deepseek-flash",
+    agent: { model: "deepseek-flash" },
   });
   t.is(nodeModelId(child), "deepseek-flash");
   t.is(runOf(child).status, "queued");

@@ -139,6 +139,11 @@ export interface RunState {
   attempt?: number;
   /** Web only: the opening of the answer, for compact cards. */
   responsePreview?: string | null;
+  /** Web only, on an `interrupted` run: true while the server still intends
+   * to resume it, false once it gave up. An interrupted run that will not be
+   * resumed is settled for every purpose except its status name: it can be
+   * retried, rerun, or deleted like a failed run. */
+  resumePending?: boolean;
 }
 
 export interface ResearchRecap {
@@ -340,6 +345,32 @@ export interface ResearchTreeSummary {
 export interface ResearchTreeDetail {
   tree: ResearchTree;
   nodes: ResearchNode[];
+  /** Web only: the follow-ups waiting in the server's queue, keyed by the
+   * head of the inline chain each continues, in send order. Chains with no
+   * queued follow-up are absent. */
+  queues?: Record<string, ResearchFollowupQueueItem[]>;
+}
+
+/** Web only: a follow-up asked at the end of an inline chain while the chain
+ * could not take it (its last answer was still running), stored by the server
+ * and sent in order as the chain frees up. It replaces the desktop's
+ * client-side `QueuedResearchFollowup`. */
+export interface ResearchFollowupQueueItem {
+  id: string;
+  treeId: string;
+  /** The first node of the inline chain the follow-up continues. */
+  headNodeId: string;
+  /** Who asked; the run is billed to them when the item is sent. */
+  authorId: string;
+  message: UserMessage;
+  /** The agent the follow-up runs on once sent. */
+  agent: AgentSpec;
+  position: number;
+  createdAt: number;
+  /** Why the server refused the last send (a daily limit, a model that is no
+   * longer available). The chain's queue waits on this item until it is
+   * retried or cancelled. */
+  failedReason: string | null;
 }
 
 export interface ResearchBranchRemoval {

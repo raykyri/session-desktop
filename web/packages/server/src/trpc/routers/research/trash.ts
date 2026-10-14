@@ -15,6 +15,8 @@ import { protectedProcedure } from "../../base.js";
 import { publish } from "../../emit.js";
 import { repo } from "../../errors.js";
 
+import { dispatchFollowups } from "./common.js";
+
 export const trashProcedures = {
   /** Moves a thread, and the children listed under it, to the Trash.
    * Refused while any of them has an active run. Open views drop each moved
@@ -47,6 +49,8 @@ export const trashProcedures = {
       if (changed.size > 0) {
         publish(ctx, "research.trash.changed", { workspaceId: change.tree.workspaceId });
       }
+      // Follow-up queues wait while their thread is in the Trash.
+      for (const treeId of changed) dispatchFollowups(ctx, treeId);
       return change.tree;
     }),
 

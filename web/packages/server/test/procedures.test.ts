@@ -353,6 +353,12 @@ test("enforces shutdown deadline during drain to ensure WAL checkpoint execution
   // the checkpoint never runs, and the next boot opens a database with an
   // unclean log. What the deadline cuts short is recovered by
   // `reconcileOnBoot`; a SIGKILL mid-checkpoint is not.
+  //
+  // The deadline timer is unref'd, as it must be in the server; this keeps
+  // the worker's event loop alive until it fires, which the other tests in
+  // the file do only when they happen to still be running.
+  const keepAlive = setInterval(() => undefined, 10);
+  t.teardown(() => clearInterval(keepAlive));
   t.is(await drainWithin(() => Promise.resolve(), 50), true, "a prompt drain reports success");
 
   const startedAt = Date.now();

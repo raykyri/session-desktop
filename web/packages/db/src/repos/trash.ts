@@ -31,6 +31,7 @@ import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
 import type { FeedItemDescriptor } from "./feedItems.js";
+import { activeRun } from "./subtrees.js";
 import {
   deleteTreeRows,
   feedItemsOf,
@@ -63,7 +64,8 @@ export interface EmptiedTrash {
 }
 
 /** Trees among `treeIds` with a run the server still owns: queued, running,
- * or interrupted and about to resume. */
+ * or interrupted and about to resume (`subtrees.activeRun`). An interrupted
+ * run the server stopped resuming does not hold the tree. */
 function activeTreeIds(db: SessionDatabase, treeIds: readonly string[]): Set<string> {
   if (treeIds.length === 0) {
     return new Set();
@@ -72,12 +74,7 @@ function activeTreeIds(db: SessionDatabase, treeIds: readonly string[]): Set<str
     db
       .selectDistinct({ treeId: nodes.treeId })
       .from(nodes)
-      .where(
-        and(
-          inArray(nodes.treeId, [...treeIds]),
-          inArray(nodes.status, ["queued", "running", "interrupted"]),
-        ),
-      )
+      .where(and(inArray(nodes.treeId, [...treeIds]), activeRun()))
       .all()
       .map((row) => row.treeId),
   );

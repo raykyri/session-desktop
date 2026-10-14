@@ -74,9 +74,12 @@ The web's differences, all within the wire types:
 - `ResearchNodeStatus` adds `interrupted`: a deploy or crash stopped an
   admitted run that the server resumes. The shared helpers treat it as active.
   The web loop never writes `starting`.
-- `RunState` adds `attempt` and `responsePreview`; `ResearchNodeContent` adds
-  `inFlightText`, `seq` and `queuePosition`; `research.node.updated` may carry
-  `queuePosition`. All are optional, so the desktop never sends them.
+- `RunState` adds `attempt`, `responsePreview` and, on an `interrupted` run,
+  `resumePending` (§5.3); `ResearchNodeContent` adds `inFlightText`, `seq`
+  and `queuePosition`; `research.node.updated` may carry `queuePosition`.
+  `ResearchTreeDetail` adds `queues`, the thread's follow-up queues keyed by
+  chain head (`ResearchFollowupQueueItem[]`, §5.13). All are optional, so the
+  desktop never sends them.
 - A tweet attachment's `provider` is `xSyndication | xOembed`; `xOembed` is
   the reduced snapshot the server falls back to (`journal/oembed.ts`).
 - `sessionReady` is true once an exchange is `complete`: a web follow-up
@@ -248,12 +251,13 @@ The parent trees whose nested children a person has hidden. Per person.
 - `created_at`; index (`node_id`), (`author_id`, `created_at`)
 - Highlights belong to the node: everyone who can read a thread sees them.
 
-`followup_queue` (replaces the desktop's client-side queue; step 2.7)
+`followup_queue` (replaces the desktop's client-side queue; §5.13)
 
-- `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain's head),
-  `author_id` FK (who is billed when the item is sent)
+- `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain's head; the
+  items go with it), `author_id` FK (who is billed when the item is sent)
 - `message_json` text (attachments resolved when queued), `model`, `effort`
-  null, `position`, `created_at`, `failed_reason` null
+  null (the agent the follow-up runs on), `position` (send order within the
+  chain), `created_at`, `failed_reason` null (why the last send was refused)
 - Index (`head_node_id`, `position`)
 
 `response_snapshots`
@@ -443,6 +447,21 @@ Each item names the desktop source and the enforcing function.
   `nodes.resumeAttempt` (requires `interrupted`; increments `attempt`; keeps
   committed `run_turns` and their messages as context; drops the in-flight
   checkpoint).
+- `nodes.resetForRerun` (`rerun_research_node`) is `resetForRetry` for any
+  settled exchange, a `complete` one included: the snapshot and the recap
+  are deleted, highlights stay and the client re-anchors them by quote. It
+  refuses posts and documents, archived threads and threads in the Trash, and
+  needs the parent's answer to be `complete`, except for an inline follow-up
+  whose parent is itself active again (rerun or retried): that rerun is
+  admitted and waits in the run queue (§5.7).
+- An exchange's run is *active* while it is `queued` or `running`, or
+  `interrupted` with `resume_pending = 1` (`subtrees.activeRun`). An
+  `interrupted` node whose resume is no longer pending
+  (`nodes.clearResumePending`, after `MAX_AUTO_RESUMES`) is settled: it can
+  be retried, rerun, replaced, or deleted (`removeBranch`, `trees.remove`,
+  `workspaces.remove`) like a failed node. The wire node carries the flag as
+  `run.resumePending`. Deleting a node with a pending resume is refused, as
+  its `run_queue` row is about to be claimed.
 - Cancel flips status first, then aborts the provider stream (`state.rs:5876`).
 - `run_seq` increments in the same transaction as every `run_turns` write
   and every status change, and is returned by `getNodeContent`.
@@ -460,6 +479,24 @@ Each item names the desktop source and the enforcing function.
   the document markdown (`04-agent-runtime.md` §4).
 - The displayed `message.text` is the bare question; the launch messages are
   assembled by the runtime (`04-agent-runtime.md` §5).
+- Effort: a follow-up names a registry model and an effort that model
+  accepts (`ModelEntry.efforts`; the server refuses others). Without one it
+  keeps the parent's agent; a different model without an effort runs at the
+  model's `defaultEffort`.
+- An edited question replaces a failed, cancelled, or no-longer-resuming
+  interrupted question (`replacesNodeId`, the desktop's
+  `create_research_child_replacing`): the replaced node must be a childless
+  exchange under the same parent with the same `inline`. In one transaction
+  the new node is admitted and the replaced one deleted (an inline one
+  first, since the partial unique index holds one inline child); the new
+  node takes the replaced one's place in the head's `chain_order_json`, and a
+  replaced branch head's queued follow-ups move to the new node.
+- `nodes.setChainOrder(headNodeId, nodeIds)` (`set_research_chain_order`)
+  stores a messages column's display order on the chain head. `headNodeId`
+  must start its chain, `nodeIds` must be exactly the chain's current nodes
+  (no duplicates, nothing missing or extra), and the thread must be neither
+  archived nor in the Trash. The order is display only: a follow-up still
+  continues the chain's last node.
 
 ### 5.5 Highlights
 - Anchor validation follows `research.rs:1522-1546`, which groups the checks
@@ -511,6 +548,13 @@ Each item names the desktop source and the enforcing function.
   `resume_pending` node is re-queued at the head of the queue
   (`05-run-lifecycle-and-streaming.md` §7). Nodes whose snapshot row already
   has an `outcome` adopt it (the desktop's rule, `state.rs:2405-2506`).
+- A claimed node whose parent's answer is not `complete` does not start: its
+  parent's conversation is its context. While the parent is active the row
+  goes back to the queue with `not_before` up to `PARENT_WAIT_MS` (60 s)
+  ahead, and the parent's settlement clears it (`queue.wakeChildrenOf`); a
+  parent that settled without an answer fails the node with "The answer this
+  question follows did not complete." This is how a rerun waits behind the
+  answer it follows (§5.3).
 
 ### 5.8 Recaps
 - `recaps.save(nodeId, recap, expectedSnapshotAt)` re-checks that the node
@@ -542,8 +586,8 @@ Each item names the desktop source and the enforcing function.
 - `trash.trashTree` sets `trees.trashed_at` (`trash_research_tree`). Nothing
   is deleted: nodes, snapshots, membership, parent, archive state and
   position stay. It deletes the tree's `feed_items` row. Refused while a node
-  of the tree is `queued`, `running` or `interrupted`, with the desktop's
-  message. Trashing a tree already in the Trash changes nothing.
+  of the tree has an active run (`queued`, `running`, or `interrupted` with
+  a resume pending; §5.3), with the desktop's message. Trashing a tree already in the Trash changes nothing.
 - `trash.restoreTree` clears `trashed_at`
   (`restore_research_tree_from_trash`). The trees in the tree's section
   (`workspace_id`, archived or not) at or after its position move down one,
@@ -574,7 +618,8 @@ Each item names the desktop source and the enforcing function.
 - User edits to a tree in the Trash are refused with "restore this research
   from the Trash before changing it" (`access.rejectTrashed`, the desktop's
   `reject_trashed_research_tree`): `trees.rename`, `archive`, `restore`,
-  `nodes.rename`, `resetForRetry`, `removeBranch`, `highlights.create`,
+  `nodes.rename`, `resetForRetry`, `resetForRerun`, `setChainOrder`,
+  `removeBranch`, `followups.ask`, `followups.retry`, `highlights.create`,
   `remove`, `removeMany` and `recaps.applyCandidate`. `nodes.admitChild` and
   `researchDocuments.update` keep their own Trash messages. Run bookkeeping
   is not refused, and `markViewed` is not an edit.
@@ -624,6 +669,33 @@ Each item names the desktop source and the enforcing function.
 
 ### 5.12 Journal (removed)
 - Journal entries were removed in phase 2.0.
+
+### 5.13 Follow-up queue
+- `followups.ask(headNodeId, message, agent)` runs in one transaction: when
+  the chain has nothing queued and `researchQueueAction` (shared
+  `researchBranchView`, over the tree's wire nodes) would send, the follow-up
+  is admitted as the chain tail's inline child and its run enqueued;
+  otherwise it is appended at the next `position`. `headNodeId` may be any
+  node of the chain; the queue is kept under the chain's head. Archived and
+  trashed threads refuse. Queueing (not sending) is bounded per author by
+  `SESSION_QUEUED_PER_USER`.
+- `followups.nextStep` is `researchQueueAction` over the stored queue: send
+  the first item when the tail is `complete` (and, for an exchange, its
+  session is ready) and has no inline child; wait while the tail is active,
+  while the first item carries `failed_reason`, and while the thread is
+  archived or in the Trash (dispatch skips those threads, and restoring
+  from the Archive or the Trash dispatches them); a tail that settled without an answer stalls the
+  queue until it is retried, rerun, or removed.
+- `followups.send(itemId, tailId)` re-checks `nextStep` inside its
+  transaction, admits the item as the tail's inline child (authored by the
+  item's author), enqueues the run, and deletes the item.
+- The server (`server/src/research/followups.ts`) dispatches every chain of
+  a thread after a run settles, `removeBranch`, `setChainOrder`, a restore
+  from the Archive or the Trash, and a cancel or retry of a queue item; and
+  every chain on boot. Before sending it checks the item's author, not the thread's
+  owner: model access, daily limits, and the run-queue bound. A refusal is
+  stored as `failed_reason`; the chain waits on that item until
+  `followups.retry` clears it or `followups.cancel` removes it.
 
 ## 6. Data volumes and performance notes
 

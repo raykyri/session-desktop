@@ -22,6 +22,7 @@ import { EventBus } from "./events/bus.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
+import { dispatchAll } from "./research/followups.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
 
@@ -63,7 +64,8 @@ export function prepareDataDirectories(config: Config): void {
  * Re-queues what the previous process left behind. `reconcileOnBoot` adopts
  * snapshots that landed before the crash, marks orphaned `running` nodes
  * `interrupted`, and puts every `resume_pending` node at the head of the
- * queue; the returned ids are what the agent loop picks up.
+ * queue; the returned ids are what the agent loop picks up. Then the
+ * follow-up queues send what their chains can take.
  */
 export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
   const reconciliation = nodes.reconcileOnBoot(deps.db);
@@ -78,6 +80,12 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
   );
   for (const nodeId of [...reconciliation.requeuedNodeIds, ...reconciliation.reenqueuedNodeIds]) {
     deps.runs.start(nodeId);
+  }
+  // Follow-ups whose chain freed up while no process was there to send them:
+  // a crash between a run settling and its dispatch.
+  const sent = dispatchAll({ ...deps, logger });
+  if (sent.length > 0) {
+    logger.info({ sent: sent.length }, "sent queued follow-ups on boot");
   }
 }
 

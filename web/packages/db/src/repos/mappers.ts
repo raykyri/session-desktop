@@ -152,6 +152,7 @@ export function toResearchNode(row: NodeRow, relations: NodeRelations): Research
           sessionReady: status === "complete",
           attempt: row.attempt,
           responsePreview: row.responsePreview,
+          ...(status === "interrupted" ? { resumePending: row.resumePending } : {}),
         },
         ...(recap === null ? {} : { recap }),
       };

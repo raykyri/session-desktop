@@ -2,7 +2,7 @@
 // `docs/03-api-and-events.md` §2).
 
 import type { Workspace } from "@session/shared";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -15,12 +15,9 @@ import { now } from "../time.js";
 import { nodeOwnedBy } from "./access.js";
 import { removeResearchTree } from "./feedgen.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
-import { deleteNodesOfTrees } from "./subtrees.js";
+import { activeRun, deleteNodesOfTrees } from "./subtrees.js";
 
 export const DEFAULT_WORKSPACE_NAME = "Default Workspace";
-
-/** Active and pending run statuses that indicate in-flight execution. */
-const ACTIVE_STATUSES = ["queued", "running"] as const;
 
 function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {
   return {
@@ -129,13 +126,7 @@ export function remove(
       .select({ id: nodes.id })
       .from(nodes)
       .innerJoin(trees, eq(trees.id, nodes.treeId))
-      .where(
-        and(
-          nodeOwnedBy(userId),
-          eq(trees.workspaceId, workspaceId),
-          inArray(nodes.status, [...ACTIVE_STATUSES]),
-        ),
-      )
+      .where(and(nodeOwnedBy(userId), eq(trees.workspaceId, workspaceId), activeRun()))
       .get();
     if (active) {
       throw new Error("Cannot delete workspace: all active research runs must be cancelled first.");

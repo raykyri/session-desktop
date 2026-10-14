@@ -18,6 +18,7 @@ import type {
   RecentResearchQueryCursor,
   ResearchBranchRemoval,
   ResearchFolderState,
+  ResearchFollowupQueueItem,
   ResearchHighlight,
   ResearchHighlightAnchor,
   ResearchHighlightFeedItem,
@@ -190,12 +191,52 @@ export function createResearchTree(request: {
 export function forkResearchNode(request: {
   parentNodeId: string;
   prompt: string;
-  model?: string;
+  /** A registry model and an effort it accepts; absent, the parent's. */
+  agent?: { model: string; effort?: string | null };
   /** The passage of the parent the follow-up was asked about. */
   anchor?: NodeAnchor | null;
   inline?: boolean;
+  /** A failed or stopped question this one replaces. */
+  replacesNodeId?: string;
 }): Promise<ResearchNode> {
   return trpc().research.forkNode.mutate(request);
+}
+
+/** Asks a follow-up at the end of the inline chain `headNodeId` belongs to:
+ * sent at once when the chain can take it, queued on the server otherwise.
+ * Replaces the desktop's client-side queue. */
+export function askResearchFollowup(request: {
+  headNodeId: string;
+  prompt: string;
+  model?: string;
+  effort?: string | null;
+}): Promise<
+  { kind: "sent"; node: ResearchNode } | { kind: "queued"; item: ResearchFollowupQueueItem }
+> {
+  return trpc().followups.ask.mutate(request);
+}
+
+/** Removes a queued follow-up; returns its chain's queue after it. */
+export function cancelQueuedResearchFollowup(itemId: string): Promise<ResearchFollowupQueueItem[]> {
+  return trpc().followups.cancel.mutate({ itemId });
+}
+
+/** Clears a refused follow-up's reason so the server sends it again. */
+export function retryQueuedResearchFollowup(itemId: string): Promise<ResearchFollowupQueueItem[]> {
+  return trpc().followups.retry.mutate({ itemId });
+}
+
+/** Reruns a settled question in place, replacing a complete answer. */
+export function rerunResearchNode(nodeId: string): Promise<ResearchTreeDetail> {
+  return trpc().research.rerunNode.mutate({ nodeId });
+}
+
+/** Stores a messages column's display order; `nodeIds` is exactly its chain. */
+export function setResearchChainOrder(
+  headNodeId: string,
+  nodeIds: string[],
+): Promise<ResearchNode> {
+  return trpc().research.setChainOrder.mutate({ headNodeId, nodeIds });
 }
 
 /** Relaunches a failed, cancelled or interrupted run in place: the node keeps

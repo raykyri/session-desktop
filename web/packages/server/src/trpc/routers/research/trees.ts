@@ -11,6 +11,7 @@ import { z } from "zod";
 import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import {
+  assertEffortAccepted,
   assertModelUsable,
   assertQueueHasRoom,
   assertWithinDailyLimits,
@@ -22,7 +23,7 @@ import { catalogUserId } from "../../catalog.js";
 import { publish } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
-import { publishNode } from "./common.js";
+import { detailWithQueues, dispatchFollowups, publishNode } from "./common.js";
 
 export const treeProcedures = {
   listTrees: publicProcedure
@@ -67,7 +68,7 @@ export const treeProcedures = {
         repo(() => trees.get(ctx.db, userId, input.treeId)),
         `research tree ${input.treeId} was not found`,
       );
-      return repo(() => trees.detail(ctx.db, userId, input.treeId));
+      return detailWithQueues(ctx, userId, input.treeId);
     }),
 
   createTree: protectedProcedure
@@ -76,11 +77,14 @@ export const treeProcedures = {
         prompt: z.string().min(1),
         title: z.string().optional(),
         model: z.string(),
+        /** A reasoning effort the model accepts; absent or null, its default. */
+        effort: z.string().nullish(),
         workspaceId: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchTreeDetail> => {
       assertModelUsable(ctx, input.model);
+      assertEffortAccepted(input.model, input.effort);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
       // The posts the question links to are resolved before the node exists,
@@ -99,7 +103,7 @@ export const treeProcedures = {
             text: input.prompt,
             ...(attachments.length === 0 ? {} : { attachments }),
           },
-          agent: { model: input.model },
+          agent: { model: input.model, effort: input.effort ?? null },
           ...(input.title === undefined ? {} : { title: input.title }),
         }),
       );
@@ -175,6 +179,8 @@ export const treeProcedures = {
       for (const tree of [...change.children, change.tree]) {
         publish(ctx, "research.tree.restored", { tree });
         emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
+        // Queues wait while their thread is archived.
+        dispatchFollowups(ctx, tree.id);
       }
       return change.tree;
     }),

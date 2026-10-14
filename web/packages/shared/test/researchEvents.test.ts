@@ -16,6 +16,7 @@ import { parseSessionEvent, patchResearchNodeContent } from "../src/research/eve
 import type { ModelInfo } from "../src/types/account.js";
 import type {
   ResearchExchangeNode,
+  ResearchFollowupQueueItem,
   ResearchHighlight,
   ResearchNodeStatus,
   ResearchTree,
@@ -118,6 +119,20 @@ function sessionEvent(type: string, payload: Record<string, unknown>): SessionEv
   return { type, payload, timestamp: 100 };
 }
 
+function queuedItem(headNodeId: string): ResearchFollowupQueueItem {
+  return {
+    id: "item-1",
+    treeId: "tree-1",
+    headNodeId,
+    authorId: "user-1",
+    message: { text: "And then?" },
+    agent: { adapter: "gemini", model: "gemini-flash", effort: null },
+    position: 0,
+    createdAt: 10,
+    failedReason: null,
+  };
+}
+
 test("parseSessionEvent recognizes the complete server event taxonomy", (t) => {
   const root = node();
   const researchTree = tree();
@@ -152,6 +167,11 @@ test("parseSessionEvent recognizes the complete server event taxonomy", (t) => {
     ["research.turn.committed", { nodeId: root.id, seq: 4, turn: committedTurn }],
     ["research.run.finished", { nodeId: root.id, attempt: 1, seq: 5, status: "complete" }],
     ["models.updated", { models: [model] }],
+    [
+      "research.queue.changed",
+      { treeId: researchTree.id, headNodeId: root.id, items: [queuedItem(root.id)] },
+    ],
+    ["research.queue.changed", { treeId: researchTree.id, headNodeId: root.id, items: [] }],
   ];
 
   for (const [type, payload] of cases) {
@@ -299,6 +319,16 @@ test("parseSessionEvent separates unrelated, unsupported, and malformed events",
     kind: "malformed",
     type: "research.node.updated",
   });
+  t.deepEqual(
+    parseSessionEvent(
+      sessionEvent("research.queue.changed", {
+        treeId: "tree-1",
+        headNodeId: "node-root",
+        items: [{ ...queuedItem("node-root"), message: null }],
+      }),
+    ),
+    { kind: "malformed", type: "research.queue.changed" },
+  );
   t.deepEqual(parseSessionEvent(sessionEvent("research.recap.pending", { nodeId: "node-root" })), {
     kind: "malformed",
     type: "research.recap.pending",

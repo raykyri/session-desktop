@@ -1,8 +1,8 @@
-// `research.*` procedures on single nodes: follow-ups, retry, cancel, rename,
-// content, document edits, branch removal and titles (`03-api-and-events.md`
+// `research.*` procedures on single nodes: follow-ups, retry, rerun, chain
+// order, cancel, rename, content, document edits, branch removal and titles (`03-api-and-events.md`
 // §2).
 
-import { feedItems, nodes, queue, researchDocuments, trees } from "@session/db";
+import { feedItems, nodes, queue, researchDocuments } from "@session/db";
 import type {
   ResearchBranchRemoval,
   ResearchNode,
@@ -10,7 +10,7 @@ import type {
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
 } from "@session/shared";
-import { defaultTitle, nodeAnchorSchema, nodeModelId } from "@session/shared";
+import { defaultTitle, nodeAnchorSchema, nodeEffort, nodeModelId } from "@session/shared";
 import { nodePrompt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import { z } from "zod";
 import { emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import {
+  assertEffortAccepted,
   assertModelUsable,
   assertQueueHasRoom,
   assertWithinDailyLimits,
@@ -30,17 +31,29 @@ import { catalogUserId } from "../../catalog.js";
 import { publish } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
-import { publishNode } from "./common.js";
+import { detailWithQueues, dispatchFollowups, publishNode } from "./common.js";
 
 export const nodeProcedures = {
+  /**
+   * Creates a follow-up of `parentNodeId` (`fork_research_node`). A branch,
+   * or with `inline` the parent's inline follow-up when its slot is free;
+   * continuing a chain whose last answer is still running goes through
+   * `followups.ask`, which queues it.
+   *
+   * `agent` picks any registry model the account may use and an effort that
+   * model accepts; absent, the parent's agent. `replacesNodeId` names a
+   * failed or stopped question this one replaces (an edited question): the
+   * new node is admitted and the old one removed in one transaction.
+   */
   forkNode: protectedProcedure
     .input(
       z.object({
         parentNodeId: z.string(),
         prompt: z.string().min(1),
-        model: z.string().optional(),
+        agent: z.object({ model: z.string(), effort: z.string().nullish() }).optional(),
         anchor: nodeAnchorSchema.nullish(),
         inline: z.boolean().optional(),
+        replacesNodeId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
@@ -48,33 +61,50 @@ export const nodeProcedures = {
         repo(() => nodes.get(ctx.db, ctx.user.id, input.parentNodeId)),
         `research node ${input.parentNodeId} was not found`,
       );
-      const model = input.model ?? nodeModelId(parent);
+      const model = input.agent?.model ?? nodeModelId(parent);
+      // A follow-up on the parent's model keeps the parent's effort unless it
+      // names one; one on another model starts at that model's default.
+      const effort =
+        input.agent?.effort !== undefined
+          ? input.agent.effort
+          : model === nodeModelId(parent)
+            ? nodeEffort(parent)
+            : null;
       assertModelUsable(ctx, model);
+      assertEffortAccepted(model, effort);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
       const attachments = await resolveMessageAttachments(
         { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
         input.prompt,
       );
-      const node = repo(() =>
-        nodes.admitChild(ctx.db, ctx.user.id, {
+      const admitted = repo(() =>
+        nodes.admitChildDetailed(ctx.db, ctx.user.id, {
           parentNodeId: input.parentNodeId,
           message: {
             text: input.prompt,
             ...(attachments.length === 0 ? {} : { attachments }),
           },
-          // A follow-up on another model starts at that model's default
-          // effort; one on the same model keeps the parent's.
-          ...(input.model === undefined || input.model === nodeModelId(parent)
-            ? {}
-            : { agent: { model } }),
+          agent: { model, effort },
           ...(input.inline === undefined ? {} : { inline: input.inline }),
           ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
+          ...(input.replacesNodeId === undefined ? {} : { replacesNodeId: input.replacesNodeId }),
         }),
       );
+      const node = admitted.node;
       enqueueRun(ctx, node.id, model);
+      if (admitted.replacedNodeId !== null) {
+        publish(ctx, "research.node.removed", {
+          treeId: node.treeId,
+          parentNodeId: input.parentNodeId,
+          removedNodeIds: [admitted.replacedNodeId],
+        });
+      }
       publish(ctx, "research.node.created", { node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
+      if (admitted.reorderedHead) {
+        publishNode(ctx, admitted.reorderedHead);
+      }
       const feedItem = feedItems.forTree(ctx.db, node.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
       return node;
@@ -101,7 +131,51 @@ export const nodeProcedures = {
       ctx.runs.start(node.id);
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
       emitFeedItemUpsertedForNode(ctx, node.id);
-      return repo(() => trees.detail(ctx.db, ctx.user.id, node.treeId));
+      return detailWithQueues(ctx, ctx.user.id, node.treeId);
+    }),
+
+  /**
+   * Reruns a settled question in place (`rerun_research_node`): as
+   * `retryNode`, and a complete answer is accepted too and replaced. Its
+   * snapshot and recap are deleted; highlights stay and re-anchor by quote.
+   * The answer it follows must be complete, except for an inline follow-up
+   * of an answer that is itself running again: the rerun then waits in the
+   * run queue until that answer settles.
+   */
+  rerunNode: protectedProcedure
+    .input(z.object({ nodeId: z.string() }))
+    .mutation(({ ctx, input }): ResearchTreeDetail => {
+      const existing = required(
+        repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
+        `research node ${input.nodeId} was not found`,
+      );
+      assertModelUsable(ctx, nodeModelId(existing));
+      assertWithinDailyLimits(ctx);
+      assertQueueHasRoom(ctx);
+      const node = repo(() => nodes.resetForRerun(ctx.db, ctx.user.id, input.nodeId));
+      ctx.runs.start(node.id);
+      publishNode(ctx, node, queuePositionOf(ctx, node.id));
+      emitFeedItemUpsertedForNode(ctx, node.id);
+      return detailWithQueues(ctx, ctx.user.id, node.treeId);
+    }),
+
+  /**
+   * Stores the display order of the messages column whose inline chain
+   * starts at `headNodeId` (`set_research_chain_order`). `nodeIds` must be
+   * exactly the chain's nodes. Display only: a follow-up still continues the
+   * chain's last node.
+   */
+  setChainOrder: protectedProcedure
+    .input(z.object({ headNodeId: z.string(), nodeIds: z.array(z.string()) }))
+    .mutation(({ ctx, input }): ResearchNode => {
+      const result = repo(() =>
+        nodes.setChainOrder(ctx.db, ctx.user.id, input.headNodeId, input.nodeIds),
+      );
+      if (result.changed) {
+        publishNode(ctx, result.node);
+        dispatchFollowups(ctx, result.node.treeId);
+      }
+      return result.node;
     }),
 
   cancelNode: protectedProcedure
@@ -119,6 +193,9 @@ export const nodeProcedures = {
       }
       const node = repo(() => nodes.setStatus(ctx.db, ctx.user.id, input.nodeId, "cancelled"));
       queue.release(ctx.db, node.id);
+      // A rerun of its inline follow-up held behind it fails now rather than
+      // when its wait runs out; a running node's settlement does this too.
+      queue.wakeChildrenOf(ctx.db, node.id);
       ctx.runs.cancel(node.id);
       publishNode(ctx, node);
       emitFeedItemUpsertedForNode(ctx, node.id);
@@ -193,6 +270,8 @@ export const nodeProcedures = {
       });
       const feedItem = feedItems.forTree(ctx.db, removal.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
+      // Removing a chain's failed or stopped tail lets its queue send again.
+      dispatchFollowups(ctx, removal.treeId);
       return removal;
     }),
 

@@ -109,6 +109,7 @@ export const runStateSchema = z.object({
   sessionReady: z.boolean(),
   attempt: z.number().optional(),
   responsePreview: z.string().nullish(),
+  resumePending: z.boolean().optional(),
 });
 
 export const researchRecapSchema = z.object({
@@ -259,9 +260,22 @@ export const researchTreeSummarySchema = z.object({
   hasUnseenFailure: z.boolean(),
 });
 
+export const researchFollowupQueueItemSchema = z.object({
+  id: z.string(),
+  treeId: z.string(),
+  headNodeId: z.string(),
+  authorId: z.string(),
+  message: userMessageSchema,
+  agent: agentSpecSchema,
+  position: z.number(),
+  createdAt: z.number(),
+  failedReason: z.string().nullable(),
+});
+
 export const researchTreeDetailSchema = z.object({
   tree: researchTreeSchema,
   nodes: z.array(researchNodeSchema),
+  queues: z.record(z.string(), z.array(researchFollowupQueueItemSchema)).optional(),
 });
 
 export const researchBranchRemovalSchema = z.object({

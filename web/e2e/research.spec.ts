@@ -63,6 +63,33 @@ test("resumes in-flight answer streaming after reload and synchronizes with conc
   await second.close();
 });
 
+test("a follow-up asked while the answer streams is queued on the server and sent after it", async ({
+  page,
+}) => {
+  await signInAndOpenHome(page, { login: "e2e-queue" });
+  await startResearch(page, "fixture:paced-answer consistent hashing on a ring");
+  await expect(responseRoot(page)).toContainText("Consistent hashing", { timeout: 30_000 });
+
+  // While the answer runs, the composer queues rather than refusing.
+  const followup = page.getByRole("textbox", { name: "Follow-up question" });
+  const queued = page.getByRole("list", { name: "Queued follow-ups" });
+  await followup.fill("A question to cancel");
+  await page.getByRole("button", { name: /^Queue/ }).click();
+  await expect(queued).toContainText("A question to cancel");
+  await queued.getByRole("button", { name: "Cancel" }).click();
+  await expect(queued).toHaveCount(0);
+
+  await followup.fill("And how are virtual nodes placed?");
+  await page.getByRole("button", { name: /^Queue/ }).click();
+  await expect(queued).toContainText("And how are virtual nodes placed?");
+
+  // The answer finishes; the server sends the queued question as the next
+  // turn of the thread.
+  await expect(queued).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.locator("[data-research-response-root]")).toHaveCount(2, { timeout: 60_000 });
+  await expect(page.getByText("And how are virtual nodes placed?")).toBeVisible();
+});
+
 test("attaches highlight anchor to follow-up prompt and executes on selected model", async ({
   page,
 }) => {

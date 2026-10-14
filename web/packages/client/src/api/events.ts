@@ -62,6 +62,7 @@ import {
   patchActivityFeedItem,
   patchActivityFeedNode,
   patchDetail,
+  patchDetailQueue,
   queryKeys,
   removeActivityFeedItem,
   treeIdForNode,
@@ -282,6 +283,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       // This only decides whether the answer shows a spinner in the recap's
       // slot while the job runs (09 §2).
       useRecapPendingStore.getState().set(event.nodeId, event.pending);
+      return;
+
+    case "research.queue.changed":
+      // The event carries the chain's whole queue, so it replaces the cached
+      // one rather than patching it.
+      patchDetailQueue(client, event.treeId, event.headNodeId, event.items);
       return;
 
     case "models.updated": {

@@ -1,13 +1,15 @@
 // Launch-time checks and the queue hand-off shared by `createTree`,
-// `forkNode`, and `retryNode` (`03-api-and-events.md` §2,
+// `forkNode`, `retryNode`, `rerunNode` and the follow-up queue (`03-api-and-events.md` §2,
 // `05-run-lifecycle-and-streaming.md` §8, `06-auth-and-users.md` §8).
 
+import type { SessionDatabase } from "@session/db";
 import { nodes, queue, runs as runsRepo, snapshots, usage } from "@session/db";
-import type { ResearchNodeContent } from "@session/shared";
+import type { ResearchNodeContent, User } from "@session/shared";
 import { canUseModel, findModel } from "@session/shared";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { TRPCError } from "@trpc/server";
 
+import type { Config } from "../config.js";
 import type { AppContext } from "../trpc/base.js";
 import { repo, required } from "../trpc/errors.js";
 
@@ -15,34 +17,72 @@ export interface LaunchContext extends AppContext {
   user: NonNullable<AppContext["user"]>;
 }
 
+/** What the launch checks read: the deployment's configuration, the
+ * database, and the account that pays for the run. A procedure passes its
+ * context; the follow-up queue passes the queued item's author. */
+export interface LaunchCheckContext {
+  config: Config;
+  db: SessionDatabase;
+  user: Pick<User, "id" | "isAdmin">;
+}
+
+/** A refused launch: the tRPC code a procedure throws, and the message the
+ * follow-up queue stores as the item's `failedReason`. */
+export interface LaunchRefusal {
+  code: "PRECONDITION_FAILED" | "TOO_MANY_REQUESTS";
+  message: string;
+}
+
+function raise(refusal: LaunchRefusal | null): void {
+  if (refusal !== null) {
+    throw new TRPCError(refusal);
+  }
+}
+
+/** Why this account may not launch on this model, or null. */
+export function modelRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
+  const model = findModel(modelId);
+  if (!model || !canUseModel(ctx.user, modelId)) {
+    return { code: "PRECONDITION_FAILED", message: `${modelId} is not available on this account` };
+  }
+  if (!ctx.config.credentials[model.provider]) {
+    return {
+      code: "PRECONDITION_FAILED",
+      message: `${model.label} is not configured on this deployment`,
+    };
+  }
+  return null;
+}
+
 /**
  * Whether this account may launch on this model, and whether the deployment
  * can reach it at all. Returns PRECONDITION_FAILED when an unavailable or unconfigured model is requested, indicating client state needs refreshing.
  * (`04-agent-runtime.md` §1).
  */
-export function assertModelUsable(ctx: LaunchContext, modelId: string): string {
-  const model = findModel(modelId);
-  if (!model || !canUseModel(ctx.user, modelId)) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `${modelId} is not available on this account`,
-    });
-  }
-  if (!ctx.config.credentials[model.provider]) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `${model.label} is not configured on this deployment`,
-    });
-  }
-  return model.provider;
+export function assertModelUsable(ctx: LaunchCheckContext, modelId: string): string {
+  raise(modelRefusal(ctx, modelId));
+  return findModel(modelId)?.provider ?? modelId;
 }
 
-/**
- * Daily token and run limits (`06-auth-and-users.md` §8). Usage is tracked unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding the limit are rejected.
- */
-export function assertWithinDailyLimits(ctx: LaunchContext): void {
-  if (!ctx.config.limits.enforceDailyLimits) {
+/** Refuses an effort the model does not accept (`ModelEntry.efforts`). Null
+ * and absent mean the model's default. */
+export function assertEffortAccepted(modelId: string, effort: string | null | undefined): void {
+  if (effort === null || effort === undefined) {
     return;
+  }
+  const model = findModel(modelId);
+  if (model && !model.efforts.some((accepted) => accepted === effort)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `${model.label} does not accept the reasoning effort '${effort}'`,
+    });
+  }
+}
+
+/** Why the account's daily limits refuse another run, or null. */
+export function dailyLimitRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
+  if (!ctx.config.limits.enforceDailyLimits) {
+    return null;
   }
   const decision = usage.admissionCheck(ctx.db, ctx.user.id, {
     isAdmin: ctx.user.isAdmin,
@@ -51,15 +91,38 @@ export function assertWithinDailyLimits(ctx: LaunchContext): void {
       dailyRuns: ctx.config.limits.dailyRuns,
     },
   });
-  if (!decision.allowed) {
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message:
-        decision.reason === "runs"
-          ? "You have reached your daily research limit. The limit resets at midnight UTC."
-          : "You have reached your daily token limit. The limit resets at midnight UTC.",
-    });
+  if (decision.allowed) {
+    return null;
   }
+  return {
+    code: "TOO_MANY_REQUESTS",
+    message:
+      decision.reason === "runs"
+        ? "You have reached your daily research limit. The limit resets at midnight UTC."
+        : "You have reached your daily token limit. The limit resets at midnight UTC.",
+  };
+}
+
+/**
+ * Daily token and run limits (`06-auth-and-users.md` §8). Usage is tracked unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding the limit are rejected.
+ */
+export function assertWithinDailyLimits(ctx: LaunchCheckContext): void {
+  raise(dailyLimitRefusal(ctx));
+}
+
+/** Why the account's run queue is full, or null (`assertQueueHasRoom`). */
+export function queueRoomRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
+  if (ctx.user.isAdmin) {
+    return null;
+  }
+  const cap = ctx.config.limits.queuedPerUser;
+  if (queue.queuedCount(ctx.db, ctx.user.id) < cap) {
+    return null;
+  }
+  return {
+    code: "TOO_MANY_REQUESTS",
+    message: `You already have ${cap} questions queued. Wait for running questions to finish before submitting more.`,
+  };
 }
 
 /**
@@ -75,18 +138,14 @@ export function assertWithinDailyLimits(ctx: LaunchContext): void {
  * daily ceilings are a billing policy an operator opts into, this is a
  * structural bound on the queue itself. Admins are exempt, as they are there.
  */
-export function assertQueueHasRoom(ctx: LaunchContext): void {
-  if (ctx.user.isAdmin) {
-    return;
-  }
-  const cap = ctx.config.limits.queuedPerUser;
-  if (queue.queuedCount(ctx.db, ctx.user.id) < cap) {
-    return;
-  }
-  throw new TRPCError({
-    code: "TOO_MANY_REQUESTS",
-    message: `You already have ${cap} questions queued. Wait for running questions to finish before submitting more.`,
-  });
+export function assertQueueHasRoom(ctx: LaunchCheckContext): void {
+  raise(queueRoomRefusal(ctx));
+}
+
+/** Every check a launch passes, in the order the procedures apply them: the
+ * model, the daily limits, the run queue. */
+export function launchRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
+  return modelRefusal(ctx, modelId) ?? dailyLimitRefusal(ctx) ?? queueRoomRefusal(ctx);
 }
 
 /** Puts an admitted node in the run queue and wakes the agent loop. The

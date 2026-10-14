@@ -122,6 +122,10 @@ async function mount(scenario: Scenario) {
         scenario.contentByNode[(input as { nodeId: string }).nodeId],
       "research.markTreeViewed": detail.tree,
       "research.forkNode": () => node({ id: "n2", parentNodeId: "n1", inline: true }),
+      "followups.ask": () => ({
+        kind: "sent",
+        node: node({ id: "n2", parentNodeId: "n1", inline: true }),
+      }),
       "research.retryNode": () => detail,
       "research.cancelNode": () => scenario.nodes[0],
       "system.runtimeConfig": {
@@ -482,7 +486,7 @@ test.serial("?highlight= scrolls the passage into view and clears the param", as
 /* --------------------------------------------------------------- composer */
 
 test.serial(
-  "the composer is gated on a complete target and carries the parent's model",
+  "the composer queues behind a running answer and carries the parent's model",
   async (t) => {
     const root = node({ id: "n1", status: "running", model: "gpt-luna" });
     await mount({
@@ -500,8 +504,10 @@ test.serial(
       "the composer mounts",
     );
     const field = screen.getByLabelText("Follow-up question");
-    // An unfinished tail cannot take a follow-up (`canFollowUpFrom`).
-    t.true(field.hasAttribute("disabled"));
+    // An unfinished tail cannot take a follow-up yet; one asked now goes to
+    // the server's follow-up queue (`followups.ask`).
+    t.false(field.hasAttribute("disabled"));
+    t.truthy(screen.getByRole("button", { name: /Queue/ }));
     t.truthy(screen.getByRole("button", { name: /Gemini 3.8 Flash|GPT-5.6 Luna/ }));
     // The chip defaults to the model the parent answered on, not the account
     // default.
@@ -550,14 +556,15 @@ test.serial(
     fireEvent.keyDown(field, { key: "Enter", metaKey: true, ctrlKey: true });
     await waitUntil(
       t,
-      () => trpc.calls.some((call) => call.path === "research.forkNode"),
+      () => trpc.calls.some((call) => call.path === "followups.ask"),
       "Cmd-Enter submits",
     );
-    const call = trpc.calls.find((entry) => entry.path === "research.forkNode");
+    // Continuing the thread goes through the server's follow-up queue, which
+    // sends it at once or queues it behind a running answer.
+    const call = trpc.calls.find((entry) => entry.path === "followups.ask");
     t.like(call?.input, {
-      parentNodeId: "n1",
+      headNodeId: "n1",
       prompt: "And then?",
-      inline: true,
     });
   },
 );

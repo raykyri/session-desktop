@@ -33,10 +33,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 
 import {
+  useAskResearchFollowup,
   useCancelResearchNode,
   useForkResearchNode,
   useMarkTreeViewed,
   useMe,
+  useQueuedFollowupAction,
   useRemoveResearchBranch,
   useRemoveResearchTree,
   useRetryResearchNode,
@@ -64,6 +66,7 @@ import type { DocumentEditSession } from "./DocumentEditor.js";
 import { DocumentHeader } from "./DocumentHeader.js";
 import { FollowupComposer } from "./FollowupComposer.js";
 import type { FollowupMode } from "./FollowupComposer.js";
+import { QueuedFollowups } from "./QueuedFollowups.js";
 import { RecapDialog } from "./RecapDialog.js";
 import { SelectionPopover } from "./SelectionPopover.js";
 import { ThreadSegment } from "./ThreadSegment.js";
@@ -187,6 +190,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const runtimeConfig = useRuntimeConfig().data;
 
   const fork = useForkResearchNode();
+  const askFollowup = useAskResearchFollowup();
+  const queuedAction = useQueuedFollowupAction();
   const cancelNode = useCancelResearchNode();
   const retryNode = useRetryResearchNode();
   const removeBranch = useRemoveResearchBranch();
@@ -268,6 +273,11 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   );
   const tailNode = chainNodes[chainNodes.length - 1] ?? null;
   const archived = Boolean(detail?.tree.archivedAt);
+  const chainHeadId = chainNodeIds[0] ?? null;
+  const queuedFollowups = useMemo(
+    () => (chainHeadId ? (detail?.queues?.[chainHeadId] ?? []) : []),
+    [chainHeadId, detail],
+  );
 
   const childrenBySegment = useMemo(() => {
     const chain = new Set(chainNodeIds);
@@ -410,16 +420,21 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     settings?.defaultModel ??
     usableModels[0]?.id ??
     "";
-  const composerDisabled = archived || !composerTarget || nodeStatus(composerTarget) !== "complete";
+  const tailActive = Boolean(tailNode && isActiveResearchStatus(nodeStatus(tailNode)));
+  // Continuing the chain while its last answer runs, or behind follow-ups
+  // already queued, goes to the server's queue (`followups.ask`).
+  const queueing = !ask && mode === "thread" && (tailActive || queuedFollowups.length > 0);
+  const composerDisabled =
+    archived || !composerTarget || (nodeStatus(composerTarget) !== "complete" && !queueing);
   const canSubmit = Boolean(
     composerTarget &&
     !archived &&
     followup.trim() &&
     !submitting &&
-    canFollowUpFrom(composerTarget) &&
-    (ask || mode === "branch" || canContinueChain(nodes, composerTarget)),
+    (queueing ||
+      (canFollowUpFrom(composerTarget) &&
+        (ask || mode === "branch" || canContinueChain(nodes, composerTarget)))),
   );
-  const tailActive = Boolean(tailNode && isActiveResearchStatus(nodeStatus(tailNode)));
   const tailUnusable = Boolean(tailNode && canRetryResearchNode(tailNode));
   const canRetryTail = Boolean(
     tailNode && tailNode.inline && tailNode.parentNodeId && !archived && tailUnusable,
@@ -443,8 +458,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         : null;
   const submitLabel = submitting
     ? "Sending…"
-    : !ask && mode === "thread" && tailActive
-      ? "Waiting…"
+    : queueing
+      ? "Queue"
       : !ask && mode === "branch"
         ? "New branch"
         : "Send";
@@ -631,6 +646,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   // entry points themselves are bound once per observer, so they are what the
   // callbacks below depend on.
   const forkMutate = fork.mutateAsync;
+  const askMutate = askFollowup.mutateAsync;
+  const queuedActionMutate = queuedAction.mutate;
   const cancelMutate = cancelNode.mutateAsync;
   const retryMutate = retryNode.mutateAsync;
   const removeBranchMutate = removeBranch.mutateAsync;
@@ -896,26 +913,38 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         : submissionMode === "branch"
           ? lastCompleteChainNode
           : tailNode;
+      const inline = !ask && submissionMode === "thread";
+      if (inline && chainHeadId) {
+        // Continuing the chain: the server sends it now or queues it behind
+        // the running answer, so the tail's state is not checked here.
+        if (!target || !canSubmit) return;
+        setSubmitting(true);
+        askMutate({ headNodeId: chainHeadId, prompt, model: composerModel })
+          .then((result) => {
+            setFollowup("");
+            // Preserve the current scroll position until refreshed detail
+            // includes the new segment.
+            if (result.kind === "sent") pendingScrollNodeIdRef.current = result.node.id;
+          })
+          .catch((error: unknown) => pushErrorToast("The follow-up could not be sent", error))
+          .finally(() => setSubmitting(false));
+        return;
+      }
       // The same predicates the button's disabled state came from: Cmd-Enter
       // must not reach the server from a state the composer presents as
       // unavailable.
       if (!target || !canFollowUpFrom(target)) return;
-      const inline = !ask && submissionMode === "thread";
-      if (inline && !canContinueChain(nodes, target)) return;
       setSubmitting(true);
       forkMutate({
         parentNodeId: target.id,
         prompt,
-        model: composerModel,
+        agent: { model: composerModel },
         anchor: ask ? { kind: "passage", anchor: ask.anchor } : null,
-        inline,
+        inline: false,
       })
-        .then((child) => {
+        .then(() => {
           setFollowup("");
           setAsk(null);
-          // Preserve the current scroll position until refreshed detail includes
-          // the new segment.
-          if (inline) pendingScrollNodeIdRef.current = child.id;
         })
         .catch((error: unknown) => pushErrorToast("The follow-up could not be sent", error))
         .finally(() => setSubmitting(false));
@@ -923,13 +952,15 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     [
       archived,
       ask,
+      askMutate,
+      canSubmit,
+      chainHeadId,
       composerModel,
       detail,
       followup,
       forkMutate,
       lastCompleteChainNode,
       mode,
-      nodes,
       nodesById,
       setFollowup,
       submitting,
@@ -1356,7 +1387,33 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           })}
           {ask ? null : (
             <div className={cn(RESEARCH_COLUMNS_CLASS, "mt-8")}>
-              <div className="min-w-0">{composer(false)}</div>
+              <div className="min-w-0">
+                {treeId && chainHeadId ? (
+                  <QueuedFollowups
+                    items={queuedFollowups}
+                    busy={queuedAction.isPending}
+                    onCancel={(item) =>
+                      queuedActionMutate(
+                        { action: "cancel", treeId, headNodeId: chainHeadId, itemId: item.id },
+                        {
+                          onError: (error) =>
+                            pushErrorToast("The follow-up could not be cancelled", error),
+                        },
+                      )
+                    }
+                    onRetry={(item) =>
+                      queuedActionMutate(
+                        { action: "retry", treeId, headNodeId: chainHeadId, itemId: item.id },
+                        {
+                          onError: (error) =>
+                            pushErrorToast("The follow-up could not be retried", error),
+                        },
+                      )
+                    }
+                  />
+                ) : null}
+                {composer(false)}
+              </div>
               <div aria-hidden="true" />
             </div>
           )}

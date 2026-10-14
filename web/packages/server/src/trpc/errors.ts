@@ -33,6 +33,9 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /already finished as/, code: "CONFLICT" },
   { pattern: /belongs to a different answer/, code: "CONFLICT" },
   { pattern: /contains a duplicate/, code: "CONFLICT" },
+  { pattern: /^The conversation changed/, code: "CONFLICT" },
+  // The follow-up queue's own bound (`followups.ask`).
+  { pattern: /follow-ups queued\. Wait/, code: "TOO_MANY_REQUESTS" },
   // Preconditions on the run state machine and on archived content.
   { pattern: /^only /, code: "PRECONDITION_FAILED" },
   { pattern: /^restore archived /, code: "PRECONDITION_FAILED" },
@@ -42,6 +45,13 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /require a completed parent/, code: "PRECONDITION_FAILED" },
   { pattern: /cannot be removed$/, code: "PRECONDITION_FAILED" },
   { pattern: /remove the whole thread instead/, code: "PRECONDITION_FAILED" },
+  // Rerun and edited-question refusals (`nodes.resetForRerun`,
+  // `nodes.admitChildDetailed`).
+  { pattern: /^Restore (archived )?research /, code: "PRECONDITION_FAILED" },
+  { pattern: /^Only (questions|a failed)/, code: "PRECONDITION_FAILED" },
+  { pattern: /cannot be rerun\.$/, code: "PRECONDITION_FAILED" },
+  { pattern: /^The answer this question follows did not complete/, code: "PRECONDITION_FAILED" },
+  { pattern: /^Wait for the answer this question follows/, code: "PRECONDITION_FAILED" },
 ];
 
 /**

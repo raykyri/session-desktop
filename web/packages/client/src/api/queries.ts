@@ -48,6 +48,9 @@ import {
   createResearchTree,
   createResearchWorkspace,
   forkResearchNode,
+  askResearchFollowup,
+  cancelQueuedResearchFollowup,
+  retryQueuedResearchFollowup,
   getMe,
   getResearchNodeContent,
   getResearchTree,
@@ -82,6 +85,7 @@ import {
   patchActiveNodes,
   patchActivityFeedNode,
   patchDetail,
+  patchDetailQueue,
   queryKeys,
 } from "./cache.js";
 import { addNodeInterest } from "./events.js";
@@ -471,6 +475,57 @@ export function useForkResearchNode() {
       // paginated: there is no correct place to splice it in by hand.
       invalidateKeys(client, ["activity"]);
     },
+  });
+}
+
+/** Asks a follow-up at the end of a chain (`followups.ask`). A follow-up
+ * sent at once is patched in as `useForkResearchNode` patches one; a queued
+ * one is added to the chain's queue in the cached detail. */
+export function useAskResearchFollowup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: askResearchFollowup,
+    onSuccess: (result) => {
+      if (result.kind === "queued") {
+        const { item } = result;
+        patchDetail(client, item.treeId, (detail) => {
+          if (!detail) return detail;
+          const current = (detail.queues ?? {})[item.headNodeId] ?? [];
+          if (current.some((existing) => existing.id === item.id)) return detail;
+          return { ...detail, queues: { ...detail.queues, [item.headNodeId]: [...current, item] } };
+        });
+        return;
+      }
+      const { node } = result;
+      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+      mapSummaries(client, (summary) =>
+        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
+      );
+      patchActiveNodes(client, node);
+      invalidateKeys(client, ["activity"]);
+    },
+  });
+}
+
+/** Cancels or retries a queued follow-up; both answer with the chain's
+ * queue after the change. */
+export function useQueuedFollowupAction() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      action: "cancel" | "retry";
+      treeId: string;
+      headNodeId: string;
+      itemId: string;
+    }) => ({
+      ...input,
+      items:
+        input.action === "cancel"
+          ? await cancelQueuedResearchFollowup(input.itemId)
+          : await retryQueuedResearchFollowup(input.itemId),
+    }),
+    onSuccess: ({ treeId, headNodeId, items }) =>
+      patchDetailQueue(client, treeId, headNodeId, items),
   });
 }
 

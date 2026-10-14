@@ -9,6 +9,7 @@
 // with nothing left to cascade.
 
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { nodes } from "../schema/nodes.js";
@@ -84,7 +85,19 @@ export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string
   }
 }
 
-/** Checks whether any node within the specified trees is currently active or queued. */
+/**
+ * A node whose run is still the server's responsibility, for a `WHERE` on
+ * `nodes`: `queued`, `running`, or `interrupted` while a resume is pending.
+ * An `interrupted` node the runtime gave up resuming (`resume_pending = 0`,
+ * `nodes.clearResumePending`) is settled: it can be removed like a failed
+ * node. Deleting a node with a pending resume is refused because its
+ * `run_queue` row is about to be claimed.
+ */
+export function activeRun(): SQL {
+  return sql`(${nodes.status} IN ('queued', 'running') OR (${nodes.status} = 'interrupted' AND ${nodes.resumePending} = 1))`;
+}
+
+/** Whether any node of the given trees has an active run (`activeRun`). */
 export function hasActiveNodes(db: SessionDatabase, treeIds: readonly string[]): boolean {
   if (treeIds.length === 0) {
     return false;
@@ -92,7 +105,7 @@ export function hasActiveNodes(db: SessionDatabase, treeIds: readonly string[]):
   const row = db
     .select({ id: nodes.id })
     .from(nodes)
-    .where(and(inArray(nodes.treeId, [...treeIds]), sql`${nodes.status} IN ('queued', 'running')`))
+    .where(and(inArray(nodes.treeId, [...treeIds]), activeRun()))
     .get();
   return row !== undefined;
 }
