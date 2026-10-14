@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a6405eae-3f2c-42e1-a523-876ef60098df",
+  "id": "b224a881-6842-4559-a692-9bee4953fd77",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "backfills": {
@@ -321,6 +321,13 @@
           "name": "tree_members_user_idx",
           "columns": [
             "user_id"
+          ],
+          "isUnique": false
+        },
+        "tree_members_folder_idx": {
+          "name": "tree_members_folder_idx",
+          "columns": [
+            "folder_id"
           ],
           "isUnique": false
         }
@@ -1074,6 +1081,13 @@
             "node_id"
           ],
           "isUnique": true
+        },
+        "feed_items_tree_idx": {
+          "name": "feed_items_tree_idx",
+          "columns": [
+            "tree_id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -1214,6 +1228,20 @@
           "columns": [
             "head_node_id",
             "position"
+          ],
+          "isUnique": false
+        },
+        "followup_queue_tree_idx": {
+          "name": "followup_queue_tree_idx",
+          "columns": [
+            "tree_id"
+          ],
+          "isUnique": false
+        },
+        "followup_queue_author_idx": {
+          "name": "followup_queue_author_idx",
+          "columns": [
+            "author_id"
           ],
           "isUnique": false
         }

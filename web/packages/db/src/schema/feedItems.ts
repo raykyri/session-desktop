@@ -31,5 +31,6 @@ export const feedItems = sqliteTable(
     ),
     index("feed_items_author_idx").on(table.authorId, desc(table.occurredAt)),
     uniqueIndex("feed_items_node_uq").on(table.nodeId),
+    index("feed_items_tree_idx").on(table.treeId),
   ],
 );

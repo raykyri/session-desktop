@@ -109,6 +109,40 @@ test("the sharing columns are in the initial schema", (t) => {
   closeDatabase(db);
 });
 
+test("the hot lookups and foreign keys have indexes", (t) => {
+  const db = openDatabase(":memory:");
+  const indexed = (table: string, column: string) =>
+    (db.$client.prepare(`PRAGMA index_list(${table})`).all() as { name: string }[]).some(
+      (index) => {
+        const columns = db.$client.prepare(`PRAGMA index_info(${index.name})`).all() as {
+          seqno: number;
+          name: string;
+        }[];
+        return columns.some((entry) => entry.seqno === 0 && entry.name === column);
+      },
+    );
+  for (const [table, column] of [
+    ["feed_items", "tree_id"],
+    ["followup_queue", "tree_id"],
+    ["followup_queue", "author_id"],
+    ["tree_members", "folder_id"],
+    ["nodes", "author_id"],
+  ] as const) {
+    t.true(indexed(table, column), `${table}.${column}`);
+  }
+  // The image read checks the uploader's own nodes through that index.
+  const plan = db.$client
+    .prepare(
+      `EXPLAIN QUERY PLAN SELECT 1 FROM nodes WHERE nodes.author_id = ? AND nodes.message_json LIKE ?`,
+    )
+    .all("someone", "%x%") as { detail: string }[];
+  t.true(
+    plan.some((row) => row.detail.includes("nodes_author_idx")),
+    JSON.stringify(plan),
+  );
+  closeDatabase(db);
+});
+
 test("the node checks tie each body column to the node's type", (t) => {
   const db = openDatabase(":memory:");
   const client = db.$client;

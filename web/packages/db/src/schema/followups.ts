@@ -35,5 +35,9 @@ export const followupQueue = sqliteTable(
      * queue waits on this item until it is retried or cancelled. */
     failedReason: text("failed_reason"),
   },
-  (table) => [index("followup_queue_head_idx").on(table.headNodeId, table.position)],
+  (table) => [
+    index("followup_queue_head_idx").on(table.headNodeId, table.position),
+    index("followup_queue_tree_idx").on(table.treeId),
+    index("followup_queue_author_idx").on(table.authorId),
+  ],
 );

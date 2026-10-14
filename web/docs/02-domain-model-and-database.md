@@ -259,7 +259,7 @@ The parent trees whose nested children a person has hidden. Per person.
 - `message_json` text (attachments resolved when queued), `model`, `effort`
   null (the agent the follow-up runs on), `position` (send order within the
   chain), `created_at`, `failed_reason` null (why the last send was refused)
-- Index (`head_node_id`, `position`)
+- Indexes (`head_node_id`, `position`), (`tree_id`), (`author_id`)
 
 `response_snapshots`
 - `node_id` PK FK
@@ -309,7 +309,8 @@ The parent trees whose nested children a person has hidden. Per person.
 - `occurred_at`, `source_rank`; nullable source FKs `node_id`, `tree_id`,
   `workspace_id`
 - Indexes (`occurred_at DESC`, `source_rank DESC`, `id DESC`) and
-  (`author_id`, `occurred_at DESC`); unique source index on `node_id`
+  (`author_id`, `occurred_at DESC`) and (`tree_id`); unique source index on
+  `node_id`
 - Written synchronously in the same transaction as root changes; source
   deletion, archiving or moving the tree to the Trash removes the row.
 - The All Users feed is to read only rows whose tree has
@@ -346,7 +347,8 @@ Web only; the desktop has one person. Rules in §5.16.
 - `tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
   `invited_by`, `created_at`, and the member's own `archived_at`,
   `trashed_at` and `folder_id`, one of their own folders, `ON DELETE SET
-  NULL`). The owner is `trees.owner_id` and has no row.
+  NULL`). The owner is `trees.owner_id` and has no row. Indexes (`user_id`)
+  and (`folder_id`).
 - `tree_invites` (`token_hash` = SHA-256 of the token, which is never
   stored; `role`; `github_login` for an invitation to one account, null for
   a link; `created_by`, `expires_at` (14 days), `accepted_by/at`,
@@ -791,7 +793,14 @@ Each item names the desktop source and the enforcing function.
   pending lifetime and `release`; it also covers references removed by a
   cascade (a deleted thread, branch or workspace). The server then unlinks
   every file under the documents directory that no remaining row names,
-  thumbnails included (`uploads/storage.ts` `sweepImages`).
+  thumbnails included (`uploads/storage.ts` `sweepImages`), except files
+  modified within `ORPHAN_GRACE_MS` (1 h): the upload route writes the file
+  before it inserts the row, and touches a file it finds already stored.
+- `images.readable` and `images.release` read only the uploader's nodes,
+  drafts and queued follow-ups (`nodes_author_idx`,
+  `followup_queue_author_idx`, `research_drafts_order_idx`): a message or
+  draft names only images its author uploaded. The sweep's
+  `referencedIds` reads every row.
 
 ### 5.16 Access and sharing
 

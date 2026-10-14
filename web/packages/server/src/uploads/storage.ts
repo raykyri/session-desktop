@@ -87,6 +87,10 @@ export async function removeUserDocuments(
   return unlinked;
 }
 
+/** How long a file no row names is kept after it was last written: longer
+ * than any upload takes between writing its file and inserting its row. */
+export const ORPHAN_GRACE_MS = 60 * 60 * 1000;
+
 export interface OrphanSweep {
   scanned: number;
   removed: number;
@@ -101,13 +105,18 @@ export interface OrphanSweep {
  *
  * Ordered so a file written between the listing and the read of the table is
  * kept rather than deleted: `keep` is called *after* the directory walk, so a
- * row that landed in between is in the keep set.
+ * row that landed in between is in the keep set. A file modified within
+ * `graceMs` is kept too: the upload route writes the file (and its
+ * thumbnail, and touches a file it found already stored) before it inserts
+ * the row, and a sweep in between must not take the file from under it.
  */
 export async function sweepOrphanedDocuments(
   deps: Pick<ServerDeps, "config">,
   keep: () => ReadonlySet<string>,
   logger: Logger,
+  options: { at?: number; graceMs?: number } = {},
 ): Promise<OrphanSweep> {
+  const youngerThan = (options.at ?? Date.now()) - (options.graceMs ?? ORPHAN_GRACE_MS);
   const root = deps.config.documentsDir;
   const result: OrphanSweep = { scanned: 0, removed: 0, bytes: 0 };
   let entries: string[];
@@ -138,12 +147,19 @@ export async function sweepOrphanedDocuments(
     if (kept.has(path)) {
       continue;
     }
+    let size = 0;
     try {
-      result.bytes += (await stat(path)).size;
+      const stats = await stat(path);
+      if (stats.mtimeMs > youngerThan) {
+        continue;
+      }
+      size = stats.size;
     } catch {
       // Gone already, or unreadable; the unlink below reports what matters.
     }
-    result.removed += await unlinkOrphans(root, [path], logger);
+    const removed = await unlinkOrphans(root, [path], logger);
+    result.removed += removed;
+    if (removed > 0) result.bytes += size;
   }
   if (result.removed > 0) {
     logger.info({ ...result }, "swept orphaned document bytes");
@@ -179,6 +195,7 @@ export async function sweepImages(
       return keep;
     },
     logger,
+    { at },
   );
   if (rows.deleted > 0 || rows.released > 0) {
     logger.info({ ...rows }, "swept image attachments");

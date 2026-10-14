@@ -50,6 +50,7 @@ CREATE TABLE `tree_members` (
 );
 --> statement-breakpoint
 CREATE INDEX `tree_members_user_idx` ON `tree_members` (`user_id`);--> statement-breakpoint
+CREATE INDEX `tree_members_folder_idx` ON `tree_members` (`folder_id`);--> statement-breakpoint
 CREATE TABLE `tree_subscriptions` (
 	`user_id` text NOT NULL,
 	`tree_id` text NOT NULL,
@@ -152,6 +153,7 @@ CREATE TABLE `feed_items` (
 CREATE INDEX `feed_items_order_idx` ON `feed_items` ("occurred_at" desc,"source_rank" desc,"id" desc);--> statement-breakpoint
 CREATE INDEX `feed_items_author_idx` ON `feed_items` (`author_id`,"occurred_at" desc);--> statement-breakpoint
 CREATE UNIQUE INDEX `feed_items_node_uq` ON `feed_items` (`node_id`);--> statement-breakpoint
+CREATE INDEX `feed_items_tree_idx` ON `feed_items` (`tree_id`);--> statement-breakpoint
 CREATE TABLE `followup_queue` (
 	`id` text PRIMARY KEY NOT NULL,
 	`tree_id` text NOT NULL,
@@ -169,6 +171,8 @@ CREATE TABLE `followup_queue` (
 );
 --> statement-breakpoint
 CREATE INDEX `followup_queue_head_idx` ON `followup_queue` (`head_node_id`,`position`);--> statement-breakpoint
+CREATE INDEX `followup_queue_tree_idx` ON `followup_queue` (`tree_id`);--> statement-breakpoint
+CREATE INDEX `followup_queue_author_idx` ON `followup_queue` (`author_id`);--> statement-breakpoint
 CREATE TABLE `highlights` (
 	`id` text PRIMARY KEY NOT NULL,
 	`author_id` text,

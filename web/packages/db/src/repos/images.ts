@@ -78,6 +78,11 @@ export function get(db: SessionDatabase, userId: string, imageId: string): Image
  * The image if `userId` (null: a guest) may see it: they uploaded it, or a
  * node or queued follow-up of a thread they may read names it
  * (`access.treeReadableBy`). An image in a draft is its owner's alone.
+ *
+ * Only the uploader's own nodes and queued follow-ups are read
+ * (`nodes_author_idx`, `followup_queue_author_idx`): a message names only
+ * images its author uploaded (`resolveAttachments`), and a queued item is
+ * admitted as a node by the same author.
  */
 export function readable(
   db: SessionDatabase,
@@ -97,7 +102,8 @@ export function readable(
       from nodes
       inner join trees on trees.id = nodes.tree_id
       , json_each(nodes.message_json, '$.attachments') as attachment
-     where nodes.message_json like ${pattern}
+     where nodes.author_id = ${row.ownerId}
+       and nodes.message_json like ${pattern}
        and json_extract(attachment.value, '$.kind') = 'image'
        and json_extract(attachment.value, '$.id') = ${imageId}
        and ${treeReadableBy(userId)}
@@ -106,7 +112,8 @@ export function readable(
       from followup_queue
       inner join trees on trees.id = followup_queue.tree_id
       , json_each(followup_queue.message_json, '$.attachments') as attachment
-     where followup_queue.message_json like ${pattern}
+     where followup_queue.author_id = ${row.ownerId}
+       and followup_queue.message_json like ${pattern}
        and json_extract(attachment.value, '$.kind') = 'image'
        and json_extract(attachment.value, '$.id') = ${imageId}
        and ${treeReadableBy(userId)}
@@ -223,7 +230,7 @@ export function release(db: SessionDatabase, imageIds: readonly string[]): numbe
     return 0;
   }
   return transact(db, (tx) => {
-    const referenced = referencedIds(tx);
+    const referenced = referencedAmong(tx, imageIds);
     const released = [...new Set(imageIds)].filter((id) => !referenced.has(id));
     if (released.length === 0) {
       return 0;
@@ -236,8 +243,62 @@ export function release(db: SessionDatabase, imageIds: readonly string[]): numbe
   });
 }
 
-/** Every image id a node message, a draft or a queued follow-up names. The
- * `like` filters skip rows without an image before their JSON is parsed. */
+/**
+ * Which of `imageIds` a node message, a draft or a queued follow-up still
+ * names. Only their uploaders' nodes, drafts and queued items are read: a
+ * message or draft names only images its author uploaded
+ * (`resolveAttachments`).
+ */
+function referencedAmong(db: SessionDatabase, imageIds: readonly string[]): Set<string> {
+  const ids = [...new Set(imageIds)];
+  if (ids.length === 0) {
+    return new Set();
+  }
+  const owners = db
+    .selectDistinct({ ownerId: researchImages.ownerId })
+    .from(researchImages)
+    .where(inArray(researchImages.id, ids))
+    .all()
+    .map((row) => row.ownerId);
+  if (owners.length === 0) {
+    return new Set();
+  }
+  const idList = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const ownerList = sql.join(
+    owners.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const rows = db.all<{ id: string | null }>(sql`
+    select json_extract(attachment.value, '$.id') as id
+      from nodes, json_each(nodes.message_json, '$.attachments') as attachment
+     where nodes.author_id in (${ownerList})
+       and nodes.message_json like '%"kind":"image"%'
+       and json_extract(attachment.value, '$.kind') = 'image'
+       and json_extract(attachment.value, '$.id') in (${idList})
+    union
+    select json_extract(attachment.value, '$.id') as id
+      from research_drafts, json_each(research_drafts.attachments_json) as attachment
+     where research_drafts.user_id in (${ownerList})
+       and research_drafts.attachments_json like '%"kind":"image"%'
+       and json_extract(attachment.value, '$.kind') = 'image'
+       and json_extract(attachment.value, '$.id') in (${idList})
+    union
+    select json_extract(attachment.value, '$.id') as id
+      from followup_queue, json_each(followup_queue.message_json, '$.attachments') as attachment
+     where followup_queue.author_id in (${ownerList})
+       and followup_queue.message_json like '%"kind":"image"%'
+       and json_extract(attachment.value, '$.kind') = 'image'
+       and json_extract(attachment.value, '$.id') in (${idList})
+  `);
+  return new Set(rows.flatMap((row) => (row.id === null ? [] : [row.id])));
+}
+
+/** Every image id a node message, a draft or a queued follow-up names, for
+ * the sweep, which reads every row anyway. The `like` filters skip rows
+ * without an image before their JSON is parsed. */
 export function referencedIds(db: SessionDatabase): Set<string> {
   const rows = db.all<{ id: string | null }>(sql`
     select json_extract(attachment.value, '$.id') as id

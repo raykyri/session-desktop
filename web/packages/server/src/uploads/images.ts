@@ -7,7 +7,7 @@
 // them; a GIF or WebP image is its own thumbnail.
 
 import { createHash } from "node:crypto";
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { ResearchImageMimeType } from "@session/shared";
@@ -185,10 +185,14 @@ export function thumbnailPath(storagePath: string): string {
 }
 
 /** Writes `bytes` to `path` unless a file is already there, through a
- * temporary name so a reader never sees a partial file. */
+ * temporary name so a reader never sees a partial file. A file already
+ * there has its modification time set to now, so the orphan sweep's grace
+ * period (`storage.ts`) covers it until the caller's row is written. */
 export async function writeFileOnce(path: string, bytes: Uint8Array): Promise<void> {
   try {
     await stat(path);
+    const at = new Date();
+    await utimes(path, at, at).catch(() => undefined);
     return;
   } catch {
     // Absent: write it below.

@@ -34,6 +34,7 @@ export const treeMembers = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.treeId, table.userId] }),
     index("tree_members_user_idx").on(table.userId),
+    index("tree_members_folder_idx").on(table.folderId),
   ],
 );
 

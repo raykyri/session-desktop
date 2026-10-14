@@ -243,7 +243,7 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   removed in phase 2.0. The maintenance interval runs `sweepImages`
   (`server/src/uploads/storage.ts`): rows no message, draft or queued
   follow-up has named for a day are deleted, then every file no remaining row
-  names is unlinked.
+  names and nothing wrote in the last hour is unlinked.
   `session_volume_free_bytes` (§7) is the gauge to alert on — a full volume
   fails every SQLite write at once.
 - `/data/embeds` is the one directory on the volume that is **not** backed up. It holds
