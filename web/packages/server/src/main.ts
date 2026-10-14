@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
-import { artifacts, auth, closeDatabase, nodes, openDatabase } from "@session/db";
+import { auth, closeDatabase, nodes, openDatabase } from "@session/db";
 
 import { createApp } from "./app.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
@@ -24,7 +24,6 @@ import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
-import { sweepOrphanedDocuments } from "./uploads/storage.js";
 
 /**
  * Writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to a file and points
@@ -86,8 +85,7 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
 /** Interval for removing expired sessions and state records. */
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 
-/** How often the document archive is shipped and the volume is reconciled
- * with the `documents` table (`13-deployment-fly.md` §6). */
+/** How often the document archive is shipped (`13-deployment-fly.md` §6). */
 export const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** `web/scripts/backup-documents.sh`, resolved the way the migrations
@@ -132,36 +130,24 @@ export function backupDocuments(config: Config, logger: Logger): Promise<void> {
 /**
  * Rows and buckets that expire on their own clock: nothing reads them again,
  * so without this they are kept forever — one rate-limit bucket per address
- * seen, one `sessions` row per sign-in, one `artifact_tokens` row per preview.
+ * seen, one `sessions` row per sign-in.
  */
 export function sweepExpired(deps: ServerDeps, limiter: RateLimiter, logger: Logger): void {
   const swept = {
     buckets: limiter.sweep(),
     sessions: auth.deleteExpiredSessions(deps.db),
     oauthStates: auth.deleteExpiredOAuthStates(deps.db),
-    artifactTokens: artifacts.revokeExpired(deps.db),
   };
   logger.debug(swept, "swept expired state");
 }
 
-/**
- * One maintenance tick: the expiries above, plus the volume's reconciliation
- * with the `documents` table. The sweep is what catches the deletes no caller
- * could hand a path to — removing a workspace or a thread cascades the rows
- * away inside SQLite and leaves the bytes — without which the mount fills and
- * every SQLite write fails at once.
- */
+/** One maintenance tick: the expiries above, plus the embed cache sweep. */
 export async function runMaintenance(
   deps: ServerDeps,
   limiter: RateLimiter,
   logger: Logger,
 ): Promise<void> {
   sweepExpired(deps, limiter, logger);
-  try {
-    await sweepOrphanedDocuments(deps, logger);
-  } catch (error) {
-    logger.error({ error }, "the document sweep failed");
-  }
   try {
     const swept = await sweepEmbeds({
       db: deps.db,

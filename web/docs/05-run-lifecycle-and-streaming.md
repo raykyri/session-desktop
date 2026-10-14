@@ -31,7 +31,6 @@ app stores the conversation (`04-agent-runtime.md` §4).
 | Per-node sequence counter `seq` | SQLite `nodes.run_seq` | durable |
 | Final answer | SQLite `response_snapshots` | durable |
 | Open provider stream, `AbortController`, tool budgets | server memory | while the attempt runs |
-| Attached documents | volume `/data/documents` + SQLite | durable |
 | Which node is open, scroll offsets, drafts | client: URL, stores, `interface_drafts` | per user |
 | Live turn buffer for visible nodes and `lastSeq` | client memory | while mounted |
 

@@ -36,7 +36,6 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     treeId: "tree-1",
     workspaceId: "workspace-1",
     prompt: "Question",
-    documentIds: [],
     model: "claude-sonnet",
     status: "complete",
     attempt: 1,

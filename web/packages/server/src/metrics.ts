@@ -26,7 +26,7 @@ export function routeLabel(pathname: string): string {
   if (pathname === "/healthz" || pathname === "/metrics") {
     return pathname;
   }
-  for (const prefix of ["/api/trpc", "/auth", "/uploads", "/a", "/__session/fonts"]) {
+  for (const prefix of ["/api/trpc", "/auth", "/w"]) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       return prefix;
     }
@@ -172,8 +172,7 @@ export function dailyUsageByProvider(deps: ServerDeps, at = Date.now()): Provide
 /**
  * Free bytes on the filesystem holding the data directory. The volume is the
  * one resource whose exhaustion takes the whole server down rather than one
- * request: every SQLite write fails at once when the mount fills, and uploads
- * are what fill it. `bavail` rather than `bfree` — the reserved blocks are not
+ * request: every SQLite write fails at once when the mount fills. `bavail` rather than `bfree` — the reserved blocks are not
  * this process's to use. Unreadable (a path that does not exist yet) is 0,
  * which is a gauge an alert can read rather than a scrape that fails.
  */

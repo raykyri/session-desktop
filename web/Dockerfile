@@ -106,7 +106,6 @@ COPY --from=build /app/packages/server/package.json ./packages/server/package.js
 COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=build /app/packages/client/dist/app ./packages/client/dist/app
 COPY --from=build /app/packages/server/dist/server.mjs ./packages/server/dist/server.mjs
-COPY --from=build /app/packages/server/assets ./packages/server/assets
 # Resolved as `../../db/migrations` from the server bundle (`main.ts`).
 COPY --from=build /app/packages/db/migrations ./packages/db/migrations
 COPY --from=build /app/scripts ./scripts

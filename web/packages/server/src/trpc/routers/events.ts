@@ -3,7 +3,6 @@
 
 import { randomUUID } from "node:crypto";
 
-import { artifacts } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -11,7 +10,6 @@ import { z } from "zod";
 import { answerWidgetSource, mintWidgetPreview } from "../../artifacts/widgets.js";
 import { nodeContent } from "../../research/admission.js";
 import { protectedProcedure, router } from "../base.js";
-import { repo, required } from "../errors.js";
 
 export const artifactsRouter = router({
   /** A one-hour preview URL for one widget block of a stored answer the
@@ -31,20 +29,6 @@ export const artifactsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Widget not found in this answer" });
       const minted = mintWidgetPreview(ctx.db, ctx.user.id, html);
       return { url: `${ctx.config.artifactOrigin}/w/${minted.token}`, expiresAt: minted.expiresAt };
-    }),
-  /** A one-hour, single-document URL on the artifact origin. The client
-   * re-mints on 404 or 410 (`11-artifacts-and-browser.md` §2). */
-  mintToken: protectedProcedure
-    .input(z.object({ documentId: z.string() }))
-    .mutation(({ ctx, input }) => {
-      const minted = required(
-        repo(() => artifacts.mintToken(ctx.db, ctx.user.id, input.documentId)),
-        `document ${input.documentId} was not found`,
-      );
-      return {
-        url: `${ctx.config.artifactOrigin}/a/${minted.token}`,
-        expiresAt: minted.expiresAt,
-      };
     }),
 });
 

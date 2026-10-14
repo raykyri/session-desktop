@@ -49,7 +49,6 @@ function node(
     parentNodeId,
     prompt: id,
     model: "gemini-flash",
-    documentIds: [],
     attempt: 1,
     status,
     createdAt: 1,

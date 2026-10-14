@@ -16,7 +16,6 @@ import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
 import { parseNullableJsonColumn, runOutcomeSchema } from "../json.js";
-import { nodeDocuments } from "../schema/documents.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { nodeMessages, runQueue, runTurns } from "../schema/runs.js";
@@ -24,7 +23,6 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { attachWithin } from "./documents.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
@@ -58,7 +56,6 @@ export interface AdmitChildInput {
   inline?: boolean | undefined;
   queryAnchor?: ResearchHighlightAnchor | null | undefined;
   attachments?: ResearchMessageAttachment[] | undefined;
-  documentIds?: string[] | undefined;
   nodeId?: string | undefined;
 }
 
@@ -93,13 +90,6 @@ function relationsFor(db: SessionDatabase, node: NodeRow, tree: TreeRow) {
       .orderBy(asc(highlights.createdAt), asc(highlights.id))
       .all()
       .map(toResearchHighlight),
-    documentIds: db
-      .select({ documentId: nodeDocuments.documentId })
-      .from(nodeDocuments)
-      .where(eq(nodeDocuments.nodeId, node.id))
-      .orderBy(asc(nodeDocuments.position))
-      .all()
-      .map((row) => row.documentId),
   };
 }
 
@@ -210,11 +200,6 @@ export function admitChild(
       }
       throw error;
     }
-    // Through the checked path: an id the caller supplied is not an id the
-    // caller owns, and an unchecked insert here lets one account attach
-    // another's document — permanently, because `documents.remove` refuses a
-    // document a node references (`06-auth-and-users.md` §4).
-    attachWithin(tx, userId, nodeId, input.documentIds ?? []);
     touchTree(tx, parent.treeId, at);
     return reload(tx, userId, nodeId);
   });

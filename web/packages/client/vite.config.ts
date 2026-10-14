@@ -8,7 +8,7 @@ const serverOrigin = `http://127.0.0.1:${process.env["PORT"] ?? "8787"}`;
 /** Everything the server owns. Vite answers for the SPA and proxies the rest,
  * so the browser sees one origin and the session cookie, the CSRF origin check
  * and the event stream all behave as they do in production. */
-const proxied = ["/api", "/auth", "/uploads", "/a", "/__session", "/healthz", "/metrics"];
+const proxied = ["/api", "/auth", "/healthz", "/metrics"];
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

@@ -167,8 +167,6 @@ export const researchNodeSchema = z.object({
   /** The bare question. The launch messages are assembled by the runtime. */
   prompt: z.string(),
   attachments: z.array(researchMessageAttachmentSchema).optional(),
-  /** Ids of the documents attached as context to this run, in display order. */
-  documentIds: z.array(z.string()),
   /** Short generated title for breadcrumbs and menus. */
   title: z.string().nullish(),
   responsePreview: z.string().nullish(),

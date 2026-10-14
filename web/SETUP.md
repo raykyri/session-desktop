@@ -126,7 +126,7 @@ expire on their own.
 | `npm run db:admin -- <github login>` | Grants admin, which unlocks Claude Fable and the user list |
 | `npm run db:studio`                  | Browse the database                                        |
 
-Runtime state is stored in `web/.data` — the database, uploaded documents, temp files.
+Runtime state is stored in `web/.data` — the database, cached embed images, temp files.
 Delete the directory to start clean.
 
 ### Running with no credentials (for testing, etc.)
@@ -170,7 +170,7 @@ release.
 ### 2. DNS and certificates, for both hostnames
 
 The app is reached by two names: `session.dev` for the app, and
-`artifacts.session.dev` for document previews. They must be **different
+`artifacts.session.dev` for widget previews. They must be **different
 hostnames on the same Fly app**, because the session cookie is scoped to the
 app host and must never reach the origin the preview iframe is same-origin
 with. The server enforces this by comparing the `Host` header against
@@ -270,7 +270,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://artifacts.session.dev/   # 404
 ```
 
 That last one should be 404, not the app's HTML. The artifact host
-only serves document previews.
+only serves widget previews.
 
 ### 7. Remaining setup
 

@@ -1,17 +1,15 @@
 // The owned tools: the address policy in front of `web_fetch`, its caps and
-// extraction, `document_read` chunking, and the shared cache
+// extraction, and the shared cache
 // (`04-agent-runtime.md` §6, `12-testing-linting-ci.md` §3.3).
 
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { documents as documentsRepo } from "@session/db";
 import test from "ava";
 
 import { ToolCache } from "../src/runs/tools/cache.js";
 import type { RunToolContext } from "../src/runs/tools/context.js";
 import { ToolBudget, createToolCaches } from "../src/runs/tools/context.js";
-import { chunkDocumentText, createDocumentReadTool } from "../src/runs/tools/documentRead.js";
 import { BlockedUrlError, assertFetchableUrl, isPrivateAddress } from "../src/runs/tools/ssrf.js";
 import { extractHtml, fetchCacheKey, fetchReadablePage } from "../src/runs/tools/webFetch.js";
 import { createWebSearchTool, searchVendors } from "../src/runs/tools/webSearch.js";
@@ -185,69 +183,6 @@ test("HTML becomes readable text, with a fallback for what Readability cannot pa
 
   const bare = await extractHtml("<div>just a div</div>", "https://example.com/bare");
   t.regex(bare.text, /just a div/);
-});
-
-test("document_read chunks at 30k characters and stays inside the account", async (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("reader");
-  const other = harness.addUser("stranger");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const document = documentsRepo.create(harness.db, user.id, {
-    workspaceId: workspace.id,
-    name: "notes.txt",
-    mime: "text/plain",
-    byteSize: 10,
-    sha256: "abc",
-    storagePath: "/tmp/notes.txt",
-  });
-  const body = `${"paragraph one. ".repeat(3_000)}\n\n${"paragraph two. ".repeat(3_000)}`;
-  documentsRepo.setExtraction(harness.db, user.id, document.id, {
-    status: "ok",
-    pages: [body],
-  });
-
-  const chunks = chunkDocumentText(body);
-  t.true(chunks.length > 1);
-  t.true(chunks.every((chunk) => chunk.length <= 30_000));
-  t.is(chunks.join(""), body, "chunking loses nothing");
-
-  const tool = createDocumentReadTool(toolContext(harness, user.id), [document.id]);
-  const first = (await tool.execute?.({ documentId: document.id }, EXECUTION_OPTIONS)) as {
-    chunk: number;
-    chunkCount: number;
-    hasMore: boolean;
-    text: string;
-  };
-  t.is(first.chunk, 0);
-  t.true(first.hasMore);
-  t.is(first.text, chunks[0] ?? "");
-
-  const last = (await tool.execute?.(
-    { documentId: document.id, chunk: chunks.length - 1 },
-    EXECUTION_OPTIONS,
-  )) as { hasMore: boolean };
-  t.false(last.hasMore);
-
-  const past = (await tool.execute?.(
-    { documentId: document.id, chunk: 99 },
-    EXECUTION_OPTIONS,
-  )) as { error?: string };
-  t.regex(past.error ?? "", /requested chunk 99 is out of bounds/);
-
-  // A document that is not attached, and one belonging to someone else, are
-  // both simply not there.
-  const unattached = createDocumentReadTool(toolContext(harness, user.id), []);
-  const refused = (await unattached.execute?.({ documentId: document.id }, EXECUTION_OPTIONS)) as {
-    error?: string;
-  };
-  t.regex(refused.error ?? "", /No document with ID .* is attached/);
-
-  const foreign = createDocumentReadTool(toolContext(harness, other.id), [document.id]);
-  const notFound = (await foreign.execute?.({ documentId: document.id }, EXECUTION_OPTIONS)) as {
-    error?: string;
-  };
-  t.regex(notFound.error ?? "", /was not found/);
 });
 
 test("search results are cached and the vendor order follows the configuration", async (t) => {

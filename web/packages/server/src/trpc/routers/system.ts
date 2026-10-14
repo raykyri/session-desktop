@@ -4,7 +4,6 @@ import type { ModelInfo } from "@session/shared";
 import { MODEL_REGISTRY, canUseModel, modelInfo, version } from "@session/shared";
 
 import type { Config } from "../../config.js";
-import { MAX_DOCUMENTS_PER_QUESTION, MAX_DOCUMENT_BYTES } from "../../uploads/limits.js";
 import { publicProcedure, router } from "../base.js";
 
 export interface RuntimeLimits {
@@ -14,20 +13,18 @@ export interface RuntimeLimits {
   dailyRuns: number;
   /** False while `SESSION_ENFORCE_LIMITS=0`: usage is recorded either way. */
   enforced: boolean;
-  documentsPerQuestion: number;
-  documentBytes: number;
 }
 
 export interface RuntimeFeatures {
   webSearch: boolean;
   searchVendor?: "parallel" | "tavily";
   /**
-   * The origin the preview panel frames (`11-artifacts-and-browser.md` §3).
-   * The client needs it to validate `event.origin` on the
-   * `session-preview-scroll` bridge, and it is per-deployment rather than
+   * The artifact origin, which serves widget previews
+   * (`11-artifacts-and-browser.md` §2). It is per-deployment rather than
    * per-build, so it travels with the rest of the runtime configuration
    * instead of a build-time constant or a `<meta>` the boot HTML would have
-   * to be templated for.
+   * to be templated for. No client code reads it since the document preview
+   * panel was removed.
    */
   artifactOrigin: string;
 }
@@ -83,8 +80,6 @@ export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | nu
       dailyTokens: config.limits.dailyTokens,
       dailyRuns: config.limits.dailyRuns,
       enforced: config.limits.enforceDailyLimits,
-      documentsPerQuestion: MAX_DOCUMENTS_PER_QUESTION,
-      documentBytes: MAX_DOCUMENT_BYTES,
     },
     features: { ...searchFeatures(config), artifactOrigin: config.artifactOrigin },
   };

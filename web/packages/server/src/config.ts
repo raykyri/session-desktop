@@ -177,7 +177,7 @@ export interface Config {
 
   publicOrigin: string;
   artifactOrigin: string;
-  /** Host (with port) of the artifact origin, for the `Host` check on `/a/:token`. */
+  /** Host (with port) of the artifact origin, for the `Host` check on `/w/:token`. */
   artifactHost: string;
 
   dataDir: string;

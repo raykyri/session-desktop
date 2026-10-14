@@ -19,7 +19,6 @@ import { METADATA_LINE } from "../../ui/surfaces.js";
 import { TweetAttachments, resolvedTweets } from "../journal/TweetAttachments.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
-import { DocumentChips } from "./DocumentChips.js";
 import { formatResearchReplySnippet, quoteDisplayText } from "./selection/dom.js";
 
 export interface SegmentPromptProps {
@@ -29,7 +28,6 @@ export interface SegmentPromptProps {
   /** The previous segment's answer, for the "Reply to" line. */
   replyToAnswer: string | null;
   running: boolean;
-  workspaceId: string;
   onSelectNode: (nodeId: string) => void;
 }
 
@@ -38,7 +36,6 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   index,
   replyToAnswer,
   running,
-  workspaceId,
   onSelectNode,
 }: SegmentPromptProps) {
   if ((node.kind ?? "run") === "document") return null;
@@ -89,9 +86,6 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         attachments={node.attachments}
         className={cn("w-full pb-1", prompt && "mt-2.5", !showFooter && "mb-6")}
       />
-      {node.documentIds.length > 0 ? (
-        <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
-      ) : null}
       {showFooter ? (
         <div
           className={cn(

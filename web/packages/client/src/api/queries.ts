@@ -53,7 +53,6 @@ import {
   getRuntimeConfig,
   getSettings,
   getUsageSummary,
-  listDocuments,
   listRecentActivity,
   listResearchActivity,
   listResearchFolders,
@@ -190,15 +189,6 @@ export function useHighlightsFeed(workspaceId: string) {
     queryKey: queryKeys.highlightsFeed(workspaceId),
     queryFn: () => listResearchHighlights(workspaceId),
     enabled: workspaceId !== "",
-  });
-}
-
-export function useDocuments(workspaceId: string) {
-  const signedIn = useSignedIn();
-  return useQuery({
-    queryKey: queryKeys.documents(workspaceId),
-    queryFn: () => listDocuments(workspaceId),
-    enabled: signedIn && workspaceId !== "",
   });
 }
 

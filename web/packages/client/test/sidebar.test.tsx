@@ -175,7 +175,6 @@ const sidebarResponses = {
   "folders.get": folderState(),
   "feed.recentActivity": activityPage([]),
   "highlights.listFeed": [],
-  "documents.list": [],
 };
 
 test.serial("`?filter=` chooses which sections the sidebar shows", async (t) => {

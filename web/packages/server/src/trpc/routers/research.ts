@@ -1,15 +1,7 @@
 // The `research` router: threads, nodes, and their content
 // (`03-api-and-events.md` §2).
 
-import {
-  documents as documentsRepo,
-  feedItems,
-  nodes,
-  queue,
-  researchDocuments,
-  snapshots,
-  trees,
-} from "@session/db";
+import { feedItems, nodes, queue, researchDocuments, snapshots, trees } from "@session/db";
 import type { ResearchTreeDetail } from "@session/shared";
 import {
   METADATA_MODEL_ID,
@@ -31,14 +23,10 @@ import {
   nodeContent,
   queuePositionOf,
 } from "../../research/admission.js";
-import { MAX_DOCUMENTS_PER_QUESTION } from "../../uploads/limits.js";
-import { unlinkOrphans } from "../../uploads/storage.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
 import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
-
-const documentIds = z.array(z.string()).max(MAX_DOCUMENTS_PER_QUESTION).optional();
 
 /** The node a mutation just changed, with its queue position while it waits. */
 function publishNode(
@@ -103,7 +91,6 @@ export const researchRouter = router({
         title: z.string().optional(),
         model: z.string(),
         workspaceId: z.string(),
-        documentIds,
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchTreeDetail> => {
@@ -125,7 +112,6 @@ export const researchRouter = router({
           model: input.model,
           ...(input.title === undefined ? {} : { title: input.title }),
           ...(attachments.length === 0 ? {} : { attachments }),
-          ...(input.documentIds === undefined ? {} : { documentIds: input.documentIds }),
         }),
       );
       const node = required(detail.nodes[0], "the new thread has no root node");
@@ -144,7 +130,6 @@ export const researchRouter = router({
         model: z.string().optional(),
         queryAnchor: researchHighlightAnchorSchema.nullish(),
         inline: z.boolean().optional(),
-        documentIds,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -168,7 +153,6 @@ export const researchRouter = router({
           ...(input.inline === undefined ? {} : { inline: input.inline }),
           ...(input.queryAnchor === undefined ? {} : { queryAnchor: input.queryAnchor }),
           ...(attachments.length === 0 ? {} : { attachments }),
-          ...(input.documentIds === undefined ? {} : { documentIds: input.documentIds }),
         }),
       );
       enqueueRun(ctx, node.id, model);
@@ -406,29 +390,5 @@ export const researchRouter = router({
       publish(ctx, "research.tree.created", { tree: fresh.tree, node: root });
       emitFeedItemUpsertedForNode(ctx, root.id);
       return fresh;
-    }),
-});
-
-export const documentsRouter = router({
-  list: protectedProcedure
-    .input(z.object({ workspaceId: z.string().optional() }).optional())
-    .query(({ ctx, input }) =>
-      repo(() =>
-        input?.workspaceId === undefined
-          ? documentsRepo.list(ctx.db, ctx.user.id)
-          : documentsRepo.list(ctx.db, ctx.user.id, input.workspaceId),
-      ),
-    ),
-  remove: protectedProcedure
-    .input(z.object({ documentId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      required(
-        repo(() => documentsRepo.get(ctx.db, ctx.user.id, input.documentId)),
-        `document ${input.documentId} was not found`,
-      );
-      // Deleting a document requires removing both the database row and the file on disk to prevent orphaned files from exhausting storage.
-      const removal = repo(() => documentsRepo.remove(ctx.db, ctx.user.id, input.documentId));
-      await unlinkOrphans(ctx.config.documentsDir, removal.orphanedPaths, ctx.logger);
-      return { ok: true };
     }),
 });

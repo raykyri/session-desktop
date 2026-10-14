@@ -3,30 +3,18 @@
 //
 // The app stores the conversation: a node's context is its ancestors' stored
 // `ModelMessage`s along the tree path, plus the new user message this attempt
-// is asking. Three things happen on the way out — provider reasoning metadata
-// is dropped when the thread changed model, attached documents become the
-// parts the target provider actually accepts, and the whole thing is cut down
-// to the context budget — and all three only shape what the model sees. The
-// displayed document is unaffected.
+// is asking. Two things happen on the way out — provider reasoning metadata
+// is dropped when the thread changed model, and the whole thing is cut down to
+// the context budget — and both only shape what the model sees. The displayed
+// document is unaffected.
 
 import type { SessionDatabase } from "@session/db";
-import { documents as documentsRepo, messages as messagesRepo } from "@session/db";
-import type { DocumentInfo, ModelEntry, ResearchNode, Turn } from "@session/shared";
+import { messages as messagesRepo } from "@session/db";
+import type { ResearchNode, Turn } from "@session/shared";
 import { estimateTokenCount } from "@session/shared";
-import type {
-  AssistantContent,
-  FilePart,
-  ImagePart,
-  ModelMessage,
-  TextPart,
-  ToolContent,
-  UserContent,
-} from "ai";
-
-import { extractionKind } from "../uploads/limits.js";
+import type { AssistantContent, ModelMessage, TextPart, ToolContent } from "ai";
 
 import type { RunToolContext } from "./tools/context.js";
-import { chunkDocumentText, documentPlainText } from "./tools/documentRead.js";
 
 /** `04-agent-runtime.md` §4. Below each model's context window to limit
  * the cost of long threads. */
@@ -36,11 +24,6 @@ export const CONTEXT_BUDGET_TOKENS = 200_000;
 const NODES_KEEPING_TOOL_RESULTS = 2;
 
 export const ELIDED_TOOL_RESULT = "[tool result elided]";
-
-/** A document a model without file input receives as text
- * (`04-agent-runtime.md` §8). Beyond it the model is pointed at
- * `document_read`. */
-export const MAX_INLINE_DOCUMENT_CHARS = 60_000;
 
 /** A summarizer for the oldest exchanges, injected so this module has no
  * provider dependency; `metadata.ts` supplies the `gemini-flash` one. */
@@ -337,80 +320,11 @@ export async function compactContext(
   };
 }
 
-/** Which shape of part a provider takes for a document (`04` §8). */
-export type DocumentPartStyle = "file" | "text";
-
-export function documentPartStyle(entry: ModelEntry): DocumentPartStyle {
-  return entry.supportsFiles ? "file" : "text";
-}
-
-function inlineDocumentText(ctx: RunToolContext, document: DocumentInfo): TextPart {
-  const text = documentPlainText(ctx, document.id);
-  if (text === "") {
-    return {
-      type: "text",
-      text: `<document id="${document.id}" name="${document.name}">\n[no text could be extracted]\n</document>`,
-    };
-  }
-  if (text.length <= MAX_INLINE_DOCUMENT_CHARS) {
-    return {
-      type: "text",
-      text: `<document id="${document.id}" name="${document.name}">\n${text}\n</document>`,
-    };
-  }
-  const chunks = chunkDocumentText(text);
-  const head = chunks[0] ?? text.slice(0, MAX_INLINE_DOCUMENT_CHARS);
-  return {
-    type: "text",
-    text:
-      `<document id="${document.id}" name="${document.name}" chunks="${chunks.length}">\n${head}\n</document>\n` +
-      `The document continues; read the remaining chunks with document_read({ documentId: "${document.id}", chunk: 1 }).`,
-  };
-}
-
-/**
- * The parts one attached document contributes to the user message.
- *
- * Text formats are inlined for every provider — they are already text, and a
- * file part would only make them opaque. PDFs and images go as file and image
- * parts to the models that accept them, and as extracted text to the ones that
- * do not.
- */
-export function documentParts(
-  ctx: RunToolContext,
-  entry: ModelEntry,
-  document: DocumentInfo,
-  bytes: Uint8Array | null,
-): (TextPart | FilePart | ImagePart)[] {
-  const kind = extractionKind(document.mime);
-  if (kind === "text" || kind === "docx") {
-    return [inlineDocumentText(ctx, document)];
-  }
-  if (kind === "image") {
-    if (!entry.supportsImages || bytes === null) {
-      return [
-        {
-          type: "text",
-          text: `<document id="${document.id}" name="${document.name}" mime="${document.mime}">\n[this model cannot read images]\n</document>`,
-        },
-      ];
-    }
-    return [{ type: "image", image: bytes, mediaType: document.mime }];
-  }
-  if (!entry.supportsFiles || bytes === null) {
-    return [inlineDocumentText(ctx, document)];
-  }
-  return [{ type: "file", data: bytes, mediaType: document.mime, filename: document.name }];
-}
-
 export interface BuildMessagesInput {
   ctx: RunToolContext;
   node: ResearchNode;
-  entry: ModelEntry;
   /** The assembled text of the new user message (`prompts.ts`). */
   userText: string;
-  /** Documents attached to this node, in display order. */
-  documents: readonly DocumentInfo[];
   /** Committed exchanges of an interrupted attempt, kept as context on resume
    * (`05-run-lifecycle-and-streaming.md` §7). */
   priorMessages?: readonly ModelMessage[] | undefined;
@@ -426,29 +340,10 @@ export interface BuiltMessages {
   summarizedThrough: string | null;
 }
 
-/** Reads a document's bytes, or null when the volume no longer has them: a
- * missing file degrades to extracted text rather than failing the run. */
-async function readDocumentBytes(
-  ctx: RunToolContext,
-  documentId: string,
-): Promise<Uint8Array | null> {
-  const path = documentsRepo.storagePath(ctx.db, ctx.userId, documentId);
-  if (path === null) {
-    return null;
-  }
-  try {
-    const { readFile } = await import("node:fs/promises");
-    return new Uint8Array(await readFile(path));
-  } catch {
-    return null;
-  }
-}
-
 /** The whole request body for one attempt: ancestors, then this node's
- * question with its documents, then whatever an interrupted attempt already
- * produced. */
+ * question, then whatever an interrupted attempt already produced. */
 export async function buildMessages(input: BuildMessagesInput): Promise<BuiltMessages> {
-  const { ctx, node, entry } = input;
+  const { ctx, node } = input;
   const path = ancestorContext(ctx.db, ctx.userId, node);
   const compacted = await compactContext(ctx.db, ctx.userId, path, {
     ...(input.budgetTokens === undefined ? {} : { budgetTokens: input.budgetTokens }),
@@ -456,17 +351,9 @@ export async function buildMessages(input: BuildMessagesInput): Promise<BuiltMes
     signal: input.signal,
   });
 
-  const content: (TextPart | FilePart | ImagePart)[] = [{ type: "text", text: input.userText }];
-  for (const document of input.documents) {
-    const kind = extractionKind(document.mime);
-    const needsBytes = kind === "pdf" || kind === "image";
-    const bytes = needsBytes ? await readDocumentBytes(ctx, document.id) : null;
-    content.push(...documentParts(ctx, entry, document, bytes));
-  }
-
   const messages: ModelMessage[] = [
     ...compacted.messages,
-    { role: "user", content: content as UserContent },
+    { role: "user", content: [{ type: "text", text: input.userText }] },
     ...(input.priorMessages ?? []),
   ];
   return {

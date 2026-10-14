@@ -13,7 +13,6 @@
 
 import type { SessionDatabase } from "@session/db";
 import {
-  documents as documentsRepo,
   messages as messagesRepo,
   nodes as nodesRepo,
   preferences as preferencesRepo,
@@ -22,7 +21,7 @@ import {
   runs as runsRepo,
   snapshots as snapshotsRepo,
 } from "@session/db";
-import type { DocumentInfo, ResearchNode, Turn } from "@session/shared";
+import type { ResearchNode, Turn } from "@session/shared";
 import { responsePreview } from "@session/shared";
 import type { ModelMessage } from "ai";
 import { stepCountIs, streamText } from "ai";
@@ -91,19 +90,6 @@ export interface RunAttemptInput {
   signal: AbortSignal;
   /** Set by drain so the attempt ends as `interrupted` rather than failing. */
   isDraining: () => boolean;
-}
-
-/** The document ids in context for a node: its own and its ancestors'. A
- * follow-up may read a file its parent was given. */
-function documentsInContext(db: SessionDatabase, userId: string, nodeId: string): DocumentInfo[] {
-  const path = messagesRepo.ancestorPath(db, userId, nodeId);
-  const byId = new Map<string, DocumentInfo>();
-  for (const id of path) {
-    for (const document of documentsRepo.attachedTo(db, userId, id)) {
-      byId.set(document.id, document);
-    }
-  }
-  return [...byId.values()];
 }
 
 /** The markdown of a `document` parent, which has no messages and rides in the
@@ -233,7 +219,6 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     ...(deps.toolOverrides?.allowHosts ? { allowHosts: deps.toolOverrides.allowHosts } : {}),
   };
 
-  const documents = documentsInContext(db, userId, nodeId);
   const instruction = preferencesRepo.ensure(db, userId).researchLaunchInstruction;
   const system = researchSystemPrompt(instruction);
   const parentDocument = parentDocumentOf(db, userId, node);
@@ -245,9 +230,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const priorMessages: ModelMessage[] = messagesFromCommittedTurns(priorTurns);
 
   // The question this attempt asks, kept so it can be stored as the node's own
-  // first message. Only the text is stored: the document parts are rebuilt from
-  // `documentsInContext` on every attempt, so persisting them here would put
-  // file bytes into `node_messages` and send each attachment twice.
+  // first message.
   const userText = researchUserText({ node, parentDocument });
 
   let messages: ModelMessage[];
@@ -255,9 +238,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const built = await buildMessages({
       ctx: toolContext,
       node,
-      entry: resolved.entry,
       userText,
-      documents,
       priorMessages,
       summarize: ({ text, signal }) => deps.metadata.summarize({ text, userId, signal }),
       signal: input.signal,
@@ -279,7 +260,6 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   }
 
   const tools = buildTools(toolContext, input.signal, {
-    documentIds: documents.map((document) => document.id),
     nativeSearch: resolved.entry.nativeSearch,
     providerTools: resolved.providerTools,
   });

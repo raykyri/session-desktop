@@ -18,7 +18,6 @@ function node(id: string, overrides: Partial<ResearchNode> = {}): ResearchNode {
     workspaceId: "workspace-1",
     prompt: `Prompt ${id}`,
     model: "gemini-flash",
-    documentIds: [],
     attempt: 1,
     status: "complete",
     createdAt: 1,

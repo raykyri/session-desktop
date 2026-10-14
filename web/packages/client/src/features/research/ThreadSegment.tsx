@@ -55,7 +55,6 @@ export interface ThreadSegmentProps {
   node: ResearchNode;
   index: number;
   treeId: string;
-  workspaceId: string;
   isSelected: boolean;
   replyToAnswer: string | null;
   showAllTurns: boolean;
@@ -98,7 +97,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
   const {
     node,
     index,
-    workspaceId,
     isSelected,
     replyToAnswer,
     showAllTurns,
@@ -214,7 +212,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
           index={index}
           replyToAnswer={replyToAnswer}
           running={segmentActive}
-          workspaceId={workspaceId}
           onSelectNode={onSelectNode}
         />
       </div>

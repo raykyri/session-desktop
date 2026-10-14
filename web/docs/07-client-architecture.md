@@ -117,7 +117,6 @@ Query keys (factory in `api/queries.ts`):
 ["me"]                                   auth.me
 ["settings"]                             settings.get
 ["runtimeConfig"]                        system.runtimeConfig (models)
-["documents", workspaceId]               documents.list
 ["usage"]                                usage.summary
 ["workspaces"]                           workspaces.list
 ["folders", workspaceId]                 folders.get
@@ -237,8 +236,9 @@ require Meta. The shared port adds Shift-Cmd-H for Home (the documented web
 chord; `RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`) and keeps Ctrl-1..9 for tabs;
 Cmd variants are honored where the browser lets them through. Cmd-F and the
 bare H/A/E keys are not app shortcuts: DOM search and the highlight actions
-handle them (`shared/research/highlights.ts`). Shift-Cmd-E is
-`toggleArtifactPanel` (renamed from the desktop's `toggleSourceBrowser`).
+handle them (`shared/research/highlights.ts`). Shift-Cmd-E
+(`toggleArtifactPanel`) was removed with the document preview panel in
+phase 2.0.
 
 Command palette (`features/palette`): Research section (one entry per tree,
 "N running" hint) and Actions section (Home, Toggle sidebar, Settings),
@@ -248,13 +248,13 @@ built only while open (`App.tsx:8098`).
 
 `ResearchQueryComposer` (`src/components/research/ResearchQueryComposer.tsx`)
 ports with: a model chip cycling through the models the user may access on
-Tab (`launcherKeyboard`, reduced to one dimension), an attach button and
-drag-drop for documents (chips with name, size, extraction status, remove),
-draft persistence (prompt, model, attached document ids),
+Tab (`launcherKeyboard`, reduced to one dimension), draft persistence
+(prompt, model),
 `growComposerTextarea`, `isComposerSubmitShortcut` (⌘↵ on Apple platforms,
 Ctrl↵ elsewhere; Enter inserts a newline). Dropped: the "Ask network" toggle, provider
 cycling, custom model input, and per-model effort options (effort is fixed
-at medium). Slash commands are not ported.
+at medium). Slash commands are not ported. Document attachments were removed
+in phase 2.0.
 
 ## 7. Shared package usage from the client
 

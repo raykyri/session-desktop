@@ -4,7 +4,6 @@ import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-
 import { useCallback, useEffect, useState } from "react";
 
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
-import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
 import { useWorkspaceScope } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
@@ -94,7 +93,6 @@ export function AppShell() {
           return;
         case "focusFollowups":
         case "openWorkspaceMenu":
-        case "toggleArtifactPanel":
         case "moveResearchItem":
           // Owned by the mounted view rather than the shell: the shell
           // re-dispatches as a window event and the route consumes it (07 §5).
@@ -194,7 +192,6 @@ export function AppShell() {
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
-      <ArtifactPanel />
       <ImageLightbox />
       <DiagramLightbox />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />

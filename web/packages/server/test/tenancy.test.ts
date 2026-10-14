@@ -8,7 +8,7 @@
 // added here, and the count assertion below is what makes leaving it out
 // visible.
 
-import { documents as documentsRepo, journal as journalRepo, snapshots } from "@session/db";
+import { journal as journalRepo, snapshots } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
@@ -20,7 +20,6 @@ interface Owned {
   treeId: string;
   nodeId: string;
   childNodeId: string;
-  documentId: string;
   highlightId: string;
   responseRevision: string;
   journalEntryId: string;
@@ -56,16 +55,6 @@ async function seedOwner(
   });
   const childNodeId = child.id;
 
-  // A document with no node referencing it, so `documents.remove` is reachable.
-  const document = documentsRepo.create(harness.db, userId, {
-    workspaceId: workspace.id,
-    name: "notes.txt",
-    mime: "text/plain",
-    byteSize: 12,
-    sha256: "a".repeat(64),
-    storagePath: `${harness.config.documentsDir}/${userId}/${"a".repeat(64)}`,
-  });
-
   const entry = await caller.journal.add({ url: "https://example.com/an-article" });
 
   const owned: Owned = {
@@ -73,7 +62,6 @@ async function seedOwner(
     treeId: detail.tree.id,
     nodeId,
     childNodeId,
-    documentId: document.id,
     highlightId: highlight.id,
     responseRevision: committed.revision,
     journalEntryId: entry.id,
@@ -87,7 +75,6 @@ function ownerState(caller: Caller, owned: Owned) {
     caller.research.getTree({ treeId: owned.treeId }),
     caller.research.getNodeContent({ nodeId: owned.nodeId }),
     caller.highlights.listFeed({ workspaceId: owned.workspaceId }),
-    caller.documents.list({ workspaceId: owned.workspaceId }),
     caller.feed.recentActivity({ scope: "workspace", workspaceId: owned.workspaceId }),
   ]);
 }
@@ -120,41 +107,9 @@ const ATTEMPTS: readonly Attempt[] = [
       }),
   },
   {
-    name: "research.createTree attaching another account's document",
-    run: ({ caller, owned, ownWorkspaceId }) =>
-      caller.research.createTree({
-        prompt: "Read this for me",
-        model: "gemini-flash",
-        workspaceId: ownWorkspaceId,
-        documentIds: [owned.documentId],
-      }),
-  },
-  {
     name: "research.forkNode under another account's node",
     run: ({ caller, owned }) =>
       caller.research.forkNode({ parentNodeId: owned.nodeId, prompt: "And then?", inline: true }),
-  },
-  {
-    name: "research.forkNode attaching another account's document",
-    run: async ({ caller, owned, ownWorkspaceId, harness, strangerId }) => {
-      const mine = await caller.research.createTree({
-        prompt: "My own thread",
-        model: "gemini-flash",
-        workspaceId: ownWorkspaceId,
-      });
-      const myNodeId = mine.nodes[0]?.id ?? "";
-      snapshots.commit(harness.db, strangerId, {
-        nodeId: myNodeId,
-        turns: [answerTurn(myNodeId, "My own answer.")],
-        outcome: { status: "complete" },
-      });
-      return caller.research.forkNode({
-        parentNodeId: myNodeId,
-        prompt: "Read this for me",
-        inline: true,
-        documentIds: [owned.documentId],
-      });
-    },
   },
   {
     name: "research.retryNode",
@@ -206,12 +161,20 @@ const ATTEMPTS: readonly Attempt[] = [
   },
   {
     name: "research.reorderTrees",
-    run: ({ caller, owned, ownWorkspaceId }) =>
-      caller.research.reorderTrees({
+    run: async ({ caller, owned, ownWorkspaceId }) => {
+      // A section with a thread of the caller's own, so the foreign id is what
+      // the reorder trips over rather than an empty section.
+      await caller.research.createTree({
+        prompt: "My own thread",
+        model: "gemini-flash",
+        workspaceId: ownWorkspaceId,
+      });
+      return caller.research.reorderTrees({
         workspaceId: ownWorkspaceId,
         archived: false,
         treeIds: [owned.treeId],
-      }),
+      });
+    },
   },
   {
     name: "research.generateTitle",
@@ -298,15 +261,7 @@ const ATTEMPTS: readonly Attempt[] = [
     run: ({ caller, owned }) => caller.journal.hydrateTweet({ entryId: owned.journalEntryId }),
   },
 
-  // ── documents and workspaces ──────────────────────────────────────────────
-  {
-    name: "documents.remove",
-    run: ({ caller, owned }) => caller.documents.remove({ documentId: owned.documentId }),
-  },
-  {
-    name: "artifacts.mintToken",
-    run: ({ caller, owned }) => caller.artifacts.mintToken({ documentId: owned.documentId }),
-  },
+  // ── workspaces ────────────────────────────────────────────────────────────
   {
     name: "workspaces.rename",
     run: ({ caller, owned }) =>
@@ -351,23 +306,12 @@ test("prevents cross-account access and returns NOT_FOUND for unauthorized entit
     );
   }
 
-  // Nothing the owner can see moved, and in particular the document is still
-  // deletable — an unchecked `node_documents` insert would have pinned it in
-  // place for good, because `documents.remove` refuses an attached document.
+  // Nothing the owner can see moved.
   t.deepEqual(await ownerState(ownerCaller, owned), before, "none of the owner's state changed");
   t.true(
     journalRepo.get(harness.db, owner.id, owned.journalEntryId)?.url ===
       "https://example.com/an-article",
     "the owner's journal entry was not taken over",
-  );
-  t.deepEqual(
-    documentsRepo.attachedTo(harness.db, stranger.id, owned.nodeId),
-    [],
-    "no node_documents row was written from a foreign id",
-  );
-  await t.notThrowsAsync(
-    ownerCaller.documents.remove({ documentId: owned.documentId }),
-    "the owner can still delete their own document",
   );
 });
 
@@ -413,7 +357,6 @@ test("global feed reads cross accounts while personal scopes and fields stay bou
   t.is(publicQuery?.kind, "research-query");
   if (publicQuery?.kind === "research-query") {
     t.false("userId" in publicQuery.query);
-    t.false("documentIds" in publicQuery.query);
     t.false("error" in publicQuery.query);
     t.false("highlights" in publicQuery.query);
   }

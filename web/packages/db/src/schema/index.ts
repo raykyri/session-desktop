@@ -1,9 +1,7 @@
 // The schema barrel drizzle-kit reads (`drizzle.config.ts`) and the value
 // `openDatabase()` binds the Drizzle client to.
 
-export * from "./artifacts.js";
 export * from "./backfills.js";
-export * from "./documents.js";
 export * from "./drafts.js";
 export * from "./embeds.js";
 export * from "./encyclopedia.js";

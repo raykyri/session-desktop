@@ -207,7 +207,6 @@ const feedResponses = (page: unknown) => ({
   "folders.get": { folders: [], membership: {}, collapsed: [] },
   "feed.recentActivity": page,
   "highlights.listFeed": [],
-  "documents.list": [],
 });
 
 test.serial("Home switches among global, personal, and workspace feed caches", async (t) => {

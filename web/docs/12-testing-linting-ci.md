@@ -104,7 +104,7 @@ refusal, rate limit, context overflow, mid-stream error, abort): mapper
 output snapshots (`Turn`/`TurnBlock`), `run_turns` and `run_seq`
 persistence order, tool budget enforcement (21st search returns the budget
 error), `web_fetch` SSRF guard and size caps against a local HTTP fixture
-server, `document_read` chunking, context budget elision and summary
+server, context budget elision and summary
 insertion, cross-model fork dropping reasoning metadata, medium-effort
 `providerOptions` per provider, Google grounding metadata mapped to
 synthetic `google_search` tool blocks with Search Suggestions preserved,
@@ -125,8 +125,8 @@ pending/false → highlight → follow-up on another model → cancel → retry)
 handler → `interrupted` + `resume_pending` → boot → re-queued → resumed with
 the committed tool exchanges as context and no duplicate turns), admission
 and per-provider caps with queue positions, 429 re-queue backoff, interest
-filtering, upload limits and extraction, tweet proxy validation and caching,
-artifact token expiry.
+filtering, tweet proxy validation and caching, the artifact host's
+isolation, the volume file sweep (`storage.test.ts`).
 
 ### 3.5 Client
 
@@ -164,7 +164,6 @@ search key is set, and `web_fetch` reads the fixture's page in process
 | --- | --- |
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
 | `library.spec.ts` | A finished thread on Home; archive from the sidebar row menu and the archived filter; Markdown report import; the appearance and theme pickers surviving a reload |
-| `artifacts.spec.ts` | Attach a Markdown document, open its chip into the preview panel, framed from the artifact origin with the expected `sandbox`; Reload, Shift-Cmd-E, Escape |
 | `admin.spec.ts` | `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
 | `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |
 

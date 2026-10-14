@@ -230,8 +230,7 @@ toggle is per visit.
 
 New in the web view: a Sources footer under the answer listing the distinct
 URLs from `web_search` and `web_fetch` results (title, domain, open in new
-tab), document chips under the prompt for attached documents (open in the
-preview panel), a thinking indicator driven by `research.run.thinking`, and
+tab), a thinking indicator driven by `research.run.thinking`, and
 the model label per segment (a thread may mix models).
 
 `buildTimelineItems(turns)` → `timelineItemsAfterLastToolCall` (collapsed

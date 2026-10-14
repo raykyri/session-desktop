@@ -34,10 +34,9 @@ test("returns health status and runtime config for unauthenticated requests", as
   t.deepEqual(await anonymous.system.health(), { ok: true, version: "0.0.0" });
   const config = await anonymous.system.runtimeConfig();
   t.is(config.limits.runsPerUser, 2);
-  t.is(config.limits.documentsPerQuestion, 10);
   t.false(config.limits.enforced);
-  // The artifact origin travels here because the preview panel validates
-  // `postMessage` against it (`11-artifacts-and-browser.md` §3).
+  // The artifact origin travels with the runtime configuration
+  // (`11-artifacts-and-browser.md` §2).
   t.deepEqual(config.features, {
     webSearch: true,
     searchVendor: "parallel",

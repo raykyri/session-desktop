@@ -8,74 +8,34 @@ headless Chromium driven by Codex's browser plugin. Only the first has a web
 equivalent; the other two are dropped (ADR-10 in
 `01-architecture-decisions.md`). This document specifies Phase 7.
 
-## 1. What the panel shows
+## 1. What is shown
 
-- Attached documents (`04-agent-runtime.md` §8): the primary artifact on the
-  web. Document chips under a prompt open the file in the preview panel;
-  PDFs and images render natively in the iframe, Markdown and text are
-  rendered server-side to a styled page.
+- Uploaded documents and the document preview panel were removed in phase
+  2.0 of the desktop parity plan, together with `artifacts.mintToken`, the
+  `artifact_tokens` table, `GET /a/:token`, the rendered Markdown and text
+  pages, and the `/__session/fonts/*` route. The widget preview route
+  (`GET /w/:token`, `artifacts.prepareWidget`) is what the artifact origin
+  serves now.
 - `http(s)` sources from answers and the Sources footer: open in a new tab
   (`window.open(url, "_blank", "noopener,noreferrer")`) via `safeHref`; a
   `LinkContextMenu` offers Open and Copy link. There is no in-app browser.
 - `session-file:` links: agents have no filesystem on the web, so these are
   not produced; the renderer keeps `safeHref`'s rejection of unknown schemes.
 
-## 2. Artifact server (server, separate origin)
-
-Port of the token and CSP semantics of `file_server.rs` onto Hono, reduced
-to documents:
+## 2. Artifact origin (server)
 
 - Served on `https://artifacts.session.dev` (`SESSION_ARTIFACT_ORIGIN`), a
   second hostname on the app. The app CSP lists it in `frame-src`; the
   artifact origin never receives the session cookie (different host, cookie
   `Domain` unset).
-- `artifacts.mintToken({ documentId })` (tRPC, authenticated) inserts an
-  `artifact_tokens` row bound to one document; tokens expire after 1 hour;
-  the client re-mints on 404/410.
-- `GET https://artifacts.session.dev/a/:token`: look up the token, stream
-  the file from `/data/documents/<userId>/<sha256>` with the stored MIME
-  type, `Range` support, `Content-Length`, `Cache-Control: private,
-  no-store`. Markdown and text documents render server-side to a styled HTML
-  page with `MARKDOWN_PAGE_CSS` and the `?session-body-font=` selection
-  ported from the desktop (`file_server.rs:528-549`, `:873-927`), fonts
-  served from `/__session/fonts/*.woff2` on the artifact origin — a literal
-  allowlist of the six faces in `packages/server/assets/fonts`, with the
-  colors taken from the app's tokens rather than the desktop's grays. Text is
-  shown as source in the same shell; `?raw=1` opts out of rendering and is the
-  path that keeps `Range` meaningful. The Markdown is sanitized
-  (`remark` → `rehype-sanitize`) rather than passed through as the desktop
-  did: the preview iframe uses `allow-same-origin` against the artifact
-  host, so sanitization must remove raw HTML from uploaded documents rather
-  than relying only on the CSP.
-- Per-response CSP: `default-src 'none'; img-src 'self' data:; style-src
-  'unsafe-inline'`; for Markdown pages only the inline scroll script hash is
-  allowed (`HTML_PREVIEW_SCROLL_SCRIPT`, `file_server.rs:40`;
-  `markdown_page_csp`, `:680-694`) so the panel can restore scroll via
-  `postMessage("session-preview-scroll")`. HTML documents are served as
-  `text/plain` (no script execution).
-- `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
-  `Content-Disposition: inline` for previewable types, `attachment`
-  otherwise.
+- `middleware/artifactHost.ts` answers 404 for every route except the widget
+  preview on this host.
 
-## 3. Preview panel (client)
+## 3. Preview panel (removed)
 
-`features/artifacts/ArtifactPanel.tsx` keeps the overlay UX that is pure
-DOM (`browserOverlay.ts` semantics, tested): a floating panel over the right
-part of the stage, an address header displaying the document filename, Reload,
-Open in new tab, and Close controls (Shift-Cmd-E toggles), resize handles, a
-full-width toggle, and one active panel at a time (`closeAllBrowserOverlays`,
-`browserOverlayShowsLink`).
-Body: `<iframe sandbox="allow-scripts allow-same-origin"
-referrerpolicy="no-referrer" src=<artifact url>>` — `allow-same-origin`
-refers to the artifact origin, not the app's, which is why the separate
-origin is mandatory (`allow-scripts` exists only for the scroll bridge on
-Markdown pages). Listens for the `session-preview-scroll` message to
-restore scroll on reload. The desktop's `mode` switch, screencast, input
-injection, geometry publishing, occlusion, and lifecycle queue are removed.
-
-Opening: clicking a document chip calls `artifacts.mintToken` then opens the
-panel. Subsequent opens of the same document reuse the URL while its token
-remains valid.
+The client preview panel (`features/artifacts/ArtifactPanel.tsx`, its store,
+and the Shift-Cmd-E toggle) existed only to show uploaded documents and was
+removed with them.
 
 ## 4. Optional reader view (not built; would be feature flag `SESSION_READER_VIEW=1`)
 

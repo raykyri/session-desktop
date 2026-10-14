@@ -13,7 +13,7 @@ import {
 import { artifactsRouter, eventsRouter } from "./routers/events.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
 import { feedRouter, journalRouter } from "./routers/journal.js";
-import { documentsRouter, researchRouter } from "./routers/research.js";
+import { researchRouter } from "./routers/research.js";
 import { systemRouter } from "./routers/system.js";
 import { foldersRouter, workspacesRouter } from "./routers/workspaces.js";
 
@@ -27,7 +27,6 @@ export const appRouter = router({
   workspaces: workspacesRouter,
   folders: foldersRouter,
   research: researchRouter,
-  documents: documentsRouter,
   highlights: highlightsRouter,
   recaps: recapsRouter,
   feed: feedRouter,

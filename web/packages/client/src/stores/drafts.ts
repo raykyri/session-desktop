@@ -16,8 +16,6 @@ export interface ComposerDraft {
   text: string;
   /** Registry model id the composer will launch with. */
   model?: string | undefined;
-  /** Ids of documents attached to this draft. */
-  documentIds?: string[] | undefined;
   updatedAt: number;
 }
 
@@ -50,7 +48,7 @@ const pending = new Map<DraftKey, ComposerDraft | null>();
 const editedKeys = new Set<DraftKey>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Also marks edits such as an in-flight attachment that has no durable id yet. */
+/** Marks a key as edited in this tab, so a later server restore does not replace it. */
 export function markDraftEdited(key: DraftKey): void {
   editedKeys.add(key);
 }
@@ -70,10 +68,7 @@ export function restoreServerDraft(key: DraftKey, raw: string | null): ComposerD
     typeof value["updatedAt"] !== "number" ||
     !Number.isFinite(value["updatedAt"]) ||
     value["updatedAt"] < 0 ||
-    (value["model"] !== undefined && typeof value["model"] !== "string") ||
-    (value["documentIds"] !== undefined &&
-      (!Array.isArray(value["documentIds"]) ||
-        !value["documentIds"].every((id: unknown) => typeof id === "string")))
+    (value["model"] !== undefined && typeof value["model"] !== "string")
   )
     return null;
   const draft = value as unknown as ComposerDraft;

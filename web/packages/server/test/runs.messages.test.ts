@@ -1,14 +1,12 @@
-// The canonical message store: forks, the context budget, and documents as
-// parts (`04-agent-runtime.md` §4, §8).
+// The canonical message store: forks and the context budget
+// (`04-agent-runtime.md` §4).
 
 import {
-  documents as documentsRepo,
   messages as messagesRepo,
   nodes as nodesRepo,
   snapshots as snapshotsRepo,
   trees as treesRepo,
 } from "@session/db";
-import { findModel } from "@session/shared";
 import type { ModelMessage } from "ai";
 import test from "ava";
 
@@ -16,29 +14,12 @@ import {
   ELIDED_TOOL_RESULT,
   ancestorContext,
   compactContext,
-  documentParts,
   estimateTokens,
   messagesFromCommittedTurns,
   stripForeignReasoning,
 } from "../src/runs/messages.js";
-import { ToolBudget, createToolCaches } from "../src/runs/tools/context.js";
-import type { RunToolContext } from "../src/runs/tools/context.js";
 
 import { answerTurn, createHarness } from "./helpers.js";
-
-function toolContext(harness: ReturnType<typeof createHarness>, userId: string): RunToolContext {
-  return {
-    config: harness.config,
-    db: harness.db,
-    userId,
-    nodeId: null,
-    logger: harness.logger,
-    fetch: globalThis.fetch,
-    budget: new ToolBudget(),
-    caches: createToolCaches(),
-    recordUsage: () => undefined,
-  };
-}
 
 const REASONING_MESSAGE: ModelMessage = {
   role: "assistant",
@@ -196,81 +177,6 @@ test("the context budget elides old tool results before it summarizes", async (t
   });
   t.is(calls, 0, "the cached summary is reused");
   t.regex(JSON.stringify(second.messages[0]?.content), /established the basics/);
-});
-
-test("documents become file parts for models that take them and text for those that do not", (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("attacher");
-  const ctx = toolContext(harness, user.id);
-  const pdf = {
-    id: "doc-1",
-    workspaceId: "w",
-    name: "paper.pdf",
-    mime: "application/pdf",
-    byteSize: 3,
-    sha256: "s",
-    pageCount: 1,
-    extractionStatus: "ok" as const,
-    createdAt: 0,
-  };
-  const bytes = new Uint8Array([1, 2, 3]);
-
-  const gemini = findModel("gemini-flash");
-  const deepseek = findModel("deepseek-flash");
-  t.truthy(gemini);
-  t.truthy(deepseek);
-  if (!gemini || !deepseek) {
-    return;
-  }
-
-  const fileParts = documentParts(ctx, gemini, pdf, bytes);
-  t.is(fileParts[0]?.type, "file");
-  t.is(fileParts[0]?.type === "file" ? fileParts[0].mediaType : null, "application/pdf");
-
-  // DeepSeek has no file input: the extracted text is inlined instead.
-  const textParts = documentParts(ctx, deepseek, pdf, bytes);
-  t.is(textParts[0]?.type, "text");
-  t.regex(
-    textParts[0]?.type === "text" ? textParts[0].text : "",
-    /no text could be extracted/,
-    "an unextracted document says so rather than going silently missing",
-  );
-
-  const image = { ...pdf, id: "doc-2", name: "chart.png", mime: "image/png" };
-  t.is(documentParts(ctx, gemini, image, bytes)[0]?.type, "image");
-  t.is(
-    documentParts(ctx, deepseek, image, bytes)[0]?.type,
-    "text",
-    "a model without image input is told what it is missing",
-  );
-});
-
-test("a long attached document is inlined up to the cap and then handed to document_read", async (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("bigdoc");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const document = documentsRepo.create(harness.db, user.id, {
-    workspaceId: workspace.id,
-    name: "long.txt",
-    mime: "text/plain",
-    byteSize: 1,
-    sha256: "long",
-    storagePath: "/tmp/long.txt",
-  });
-  documentsRepo.setExtraction(harness.db, user.id, document.id, {
-    status: "ok",
-    pages: ["word ".repeat(20_000)],
-  });
-  const deepseek = findModel("deepseek-flash");
-  t.truthy(deepseek);
-  if (!deepseek) {
-    return;
-  }
-  const parts = documentParts(toolContext(harness, user.id), deepseek, document, null);
-  const text = parts[0]?.type === "text" ? parts[0].text : "";
-  t.regex(text, /document_read\(\{ documentId: "/);
-  t.true(text.length < 100_000);
 });
 
 test("committed turns convert back into the messages a resume replays", (t) => {

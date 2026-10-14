@@ -121,8 +121,7 @@ export function listUsers(db: SessionDatabase): User[] {
   return db.select().from(users).orderBy(asc(users.createdAt), asc(users.id)).all().map(toUser);
 }
 
-/** Removes the account. Foreign keys cascade everything it owns; the caller
- * still has to delete the user's documents from the volume. */
+/** Removes the account. Foreign keys cascade everything it owns. */
 export function removeUser(db: SessionDatabase, userId: string): boolean {
   const row = db.delete(users).where(eq(users.id, userId)).returning({ id: users.id }).get();
   return row !== undefined;

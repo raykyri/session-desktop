@@ -73,7 +73,6 @@ packages/server/src/runs/
     ssrf.ts           the address policy in front of web_fetch
     webSearch.ts      owned search tool (vendor client, result normalization, caching)
     webFetch.ts       owned fetch tool (SSRF guard, readability extraction, size caps)
-    documentRead.ts   read an attached document's text by id (for models without file input)
   prompts.ts          launch prompt assembly (uses shared/research/prompts)
   snapshots.ts        two-guard snapshot commit, revision
   metadata.ts         title and recap via generateText + Output.object on gemini-flash
@@ -82,22 +81,22 @@ packages/server/src/runs/
 ```
 
 Three modules the earlier sketch listed live elsewhere, because Phase 3 already
-owned them: launch-time admission checks are `src/research/admission.ts`,
-upload storage and text extraction are `src/uploads/`, and tweet hydration is
-`src/journal/tweets.ts` (with `oembed.ts` behind it and `attachments.ts` in
-front). Building a document into provider parts is part of
-`messages.ts`, next to the rest of the request assembly.
+owned them: launch-time admission checks are `src/research/admission.ts`, and
+tweet hydration is `src/journal/tweets.ts` (with `oembed.ts` behind it and
+`attachments.ts` in front). `src/uploads/storage.ts` (content-addressed files
+on the volume) is kept for image attachments after uploaded documents were
+removed in phase 2.0.
 
 ## 3. The agent loop (`loop.ts`)
 
 One attempt of one node:
 
-1. Load the node, its ancestors' canonical messages (§4), attached
-   documents, and the user's research instruction.
+1. Load the node, its ancestors' canonical messages (§4), and the user's
+   research instruction.
 2. Build `messages`: system prompt (§5) + ancestor messages + the new user
-   message (launch prompt text plus document parts).
-3. `streamText({ model, system, messages, tools: { web_search, web_fetch,
-   document_read }, stopWhen: stepCountIs(MAX_STEPS), abortSignal,
+   message (launch prompt text).
+3. `streamText({ model, system, messages, tools: { web_search, web_fetch },
+   stopWhen: stepCountIs(MAX_STEPS), abortSignal,
    providerOptions })`. `MAX_STEPS = 25`; wall-clock cap 15 minutes
    (`SESSION_RUN_TIMEOUT_SECONDS`); per-run tool caps 20 searches and 20
    fetches, enforced inside the tools (a capped tool returns an error result
@@ -183,9 +182,7 @@ renders the same activity and sources.
   to readable text (readability + sanitization), PDF to text, 40k-character
   cap; cached 24 h by URL. Desktop artifact-preview CSP and path rules do not
   apply (nothing is written to disk).
-- `document_read({ documentId, page? })` → extracted text of an attached
-  document, chunked at 30k characters. Used by models without native file
-  input or when a file exceeds the provider's inline limit.
+- `document_read` was removed with uploaded documents in phase 2.0.
 
 Tool activity is rendered from `toolUse`/`toolResult` blocks by the existing
 timeline (`TranscriptActivity`), with a new "Sources" footer listing the
@@ -199,7 +196,7 @@ processor, excerpts) and Tavily (basic search with `include_raw_content:
 "markdown"`). `SESSION_SEARCH_VENDOR` selects the primary when both keys are
 present; the other is the fallback after a vendor error. With neither
 `PARALLEL_API_KEY` nor `TAVILY_API_KEY` set, the tool is unavailable: runs
-proceed with `web_fetch` and `document_read` only, `runtimeConfig.features.webSearch`
+proceed with `web_fetch` only, `runtimeConfig.features.webSearch`
 is false, and the composer shows "Web search unavailable";
 `gemini-flash` keeps Google Search grounding. The comparison that
 informed the choice:
@@ -235,8 +232,8 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
 - Google's terms require displaying the Search Suggestions from
   `searchEntryPoint` when grounded results are shown; the document footer
   renders them for grounded answers.
-- `google_search` is combined with the function tools (`web_fetch`,
-  `document_read`) in one request. `@ai-sdk/google` sends both the
+- `google_search` is combined with the function tool `web_fetch` in one
+  request. `@ai-sdk/google` sends both the
   `googleSearch` tool and the `functionDeclarations` with
   `functionCallingConfig: { mode: "VALIDATED" }` for a Gemini 3 model, and
   warns about the combination only for Gemini 2 and older, so
@@ -257,25 +254,13 @@ history replay of thinking blocks, 30-day retention configured on the
 Anthropic org, streaming with `max_tokens` high enough for long answers, and
 long turns (minutes) without client timeouts.
 
-## 8. Documents as context
+## 8. Documents as context (removed)
 
-Users attach files to a question (`10-home-feed-journal.md`
-§1). Server side (`documents.ts`):
-
-- Accepted: PDF, Markdown, plain text, CSV, JSON, DOCX (converted to text),
-  PNG/JPEG/WebP images. Limits are 20 MiB per file, 10 files per question, and 20 MiB per user. A single 20 MiB file reaches the per-user limit, preventing further uploads until existing files are deleted.
-- Storage: `/data/documents/<userId>/<sha256>` on the volume; metadata in
-  `documents`; extracted text in `document_text` (per page for PDFs).
-  Documents are kept indefinitely; there is no expiry job.
-- Provider parts: Gemini and Claude receive PDFs and images as file parts
-  (Claude via document blocks); Luna via OpenRouter receives PDFs as file
-  input and images as image parts; DeepSeek receives extracted text inline
-  (≤ 60k characters per document) and uses `document_read` beyond that. Text formats are
-  inlined for every provider.
-- Documents attached to a root question are part of that node's messages
-  and therefore in context for every descendant; a follow-up may attach more.
-- Documents are also artifacts: the preview panel opens them through the
-  artifact route (`11-artifacts-and-browser.md`).
+Uploaded documents as run context (`documents`, `document_text`,
+`node_documents`, `POST /uploads`, the `document_read` tool and the provider
+file parts built from them) were removed in phase 2.0 of the desktop parity
+plan. Image attachments return in phase 2.9 on top of
+`src/uploads/storage.ts`.
 
 ## 9. Metadata runs (`metadata.ts`)
 

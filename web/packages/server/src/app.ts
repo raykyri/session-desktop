@@ -10,7 +10,6 @@ import { version } from "@session/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 
-import { artifactRoutes } from "./artifacts/route.js";
 import { widgetRoutes } from "./artifacts/widgets.js";
 import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
@@ -32,7 +31,6 @@ import { clientStatic } from "./middleware/static.js";
 import type { AppContext } from "./trpc/base.js";
 import { createAppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
-import { uploadRoutes } from "./uploads/route.js";
 
 /** Constant-time string comparison for the metrics bearer token. */
 function timingSafeEqualString(offered: string, expected: string): boolean {
@@ -76,7 +74,6 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // session; it is mounted before the CSRF guard and the session loader so a
   // token URL never carries either.
   app.route("/", widgetRoutes(deps));
-  app.route("/", artifactRoutes(deps));
   // Nothing below belongs to that host.
   app.use("*", artifactHostOnly(deps.config));
 
@@ -126,7 +123,6 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
       ...(createOAuthClient ? { createClient: createOAuthClient } : {}),
     }),
   );
-  app.route("/", uploadRoutes({ deps: { ...deps, logger }, limiter }));
   // Public, like the cards whose images it serves: the Home feed renders
   // signed out, and an embed asset says nothing about who stored it.
   app.route("/", embedRoutes({ deps: { ...deps, logger } }));

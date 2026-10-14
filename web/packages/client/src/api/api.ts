@@ -11,7 +11,6 @@
 // flow, a retry outside React) is not forced through a hook.
 
 import type {
-  DocumentInfo,
   JournalEntry,
   RecentActivityCursor,
   RecentActivityPage,
@@ -35,7 +34,7 @@ import type {
   Workspace,
 } from "@session/shared";
 
-import { REQUESTED_WITH_HEADER, REQUESTED_WITH_VALUE, trpc } from "./trpc.js";
+import { trpc } from "./trpc.js";
 
 /* -------------------------------------------------------------------------
  * system, auth, settings
@@ -184,7 +183,6 @@ export function createResearchTree(request: {
   title?: string;
   model: string;
   workspaceId: string;
-  documentIds?: string[];
 }): Promise<ResearchTreeDetail> {
   return trpc().research.createTree.mutate(request);
 }
@@ -195,7 +193,6 @@ export function forkResearchNode(request: {
   model?: string;
   queryAnchor?: ResearchHighlightAnchor | null;
   inline?: boolean;
-  documentIds?: string[];
 }): Promise<ResearchNode> {
   return trpc().research.forkNode.mutate(request);
 }
@@ -373,99 +370,11 @@ export function hydrateJournalTweet(entryId: string): Promise<JournalEntry> {
 }
 
 /* -------------------------------------------------------------------------
- * documents and artifacts
- * ---------------------------------------------------------------------- */
-
-export function listDocuments(workspaceId?: string): Promise<DocumentInfo[]> {
-  return trpc().documents.list.query(workspaceId === undefined ? undefined : { workspaceId });
-}
-
-export function removeDocument(documentId: string) {
-  return trpc().documents.remove.mutate({ documentId });
-}
-
-export function mintArtifactToken(documentId: string) {
-  return trpc().artifacts.mintToken.mutate({ documentId });
-}
-
-/* -------------------------------------------------------------------------
  * events
  * ---------------------------------------------------------------------- */
 
 export function setEventInterest(connectionId: string, nodeIds: string[]) {
   return trpc().events.setInterest.mutate({ connectionId, nodeIds });
-}
-
-/* -------------------------------------------------------------------------
- * uploads
- * ---------------------------------------------------------------------- */
-
-export const UPLOADS_ENDPOINT = "/uploads";
-
-export interface UploadProgress {
-  /** Bytes the browser has handed to the socket so far. */
-  loaded: number;
-  total: number;
-  /** 0..1, or null while the total is unknown. */
-  fraction: number | null;
-}
-
-/**
- * `POST /uploads` (`03-api-and-events.md` §5). Uses multipart rather than tRPC
- * for binary payloads and XMLHttpRequest rather than fetch to report upload
- * progress.
- */
-export function uploadDocuments(
-  workspaceId: string,
-  files: readonly File[],
-  onProgress?: (progress: UploadProgress) => void,
-): Promise<DocumentInfo[]> {
-  const body = new FormData();
-  body.set("workspaceId", workspaceId);
-  for (const file of files) body.append("files", file);
-
-  return new Promise<DocumentInfo[]>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", UPLOADS_ENDPOINT, true);
-    request.withCredentials = true;
-    request.setRequestHeader(REQUESTED_WITH_HEADER, REQUESTED_WITH_VALUE);
-    request.responseType = "text";
-
-    if (onProgress) {
-      request.upload.addEventListener("progress", (event) => {
-        onProgress({
-          loaded: event.loaded,
-          total: event.total,
-          fraction: event.lengthComputable && event.total > 0 ? event.loaded / event.total : null,
-        });
-      });
-    }
-
-    request.addEventListener("error", () => reject(new Error("the upload could not be sent")));
-    request.addEventListener("abort", () => reject(new Error("the upload was cancelled")));
-    request.addEventListener("load", () => {
-      let parsed: unknown = null;
-      try {
-        parsed = JSON.parse(request.responseText) as unknown;
-      } catch {
-        parsed = null;
-      }
-      if (request.status >= 200 && request.status < 300 && Array.isArray(parsed)) {
-        resolve(parsed as DocumentInfo[]);
-        return;
-      }
-      // Server upload errors return an { error } payload containing the filename and failure reason.
-      const message =
-        typeof parsed === "object" &&
-        parsed !== null &&
-        typeof (parsed as Record<string, unknown>)["error"] === "string"
-          ? ((parsed as Record<string, unknown>)["error"] as string)
-          : `the upload failed (${request.status})`;
-      reject(new Error(message));
-    });
-
-    request.send(body);
-  });
 }
 
 /** Mints a preview of a widget block of a stored answer. The server resolves

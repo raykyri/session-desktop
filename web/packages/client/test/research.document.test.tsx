@@ -124,7 +124,6 @@ async function mount(scenario: Scenario) {
       "research.forkNode": () => node({ id: "n2", parentNodeId: "n1", inline: true }),
       "research.retryNode": () => detail,
       "research.cancelNode": () => scenario.nodes[0],
-      "documents.list": [],
       "system.runtimeConfig": {
         version: "0.0.0",
         models: [
@@ -188,7 +187,6 @@ test.serial("the document stays hidden until every segment has loaded", async (t
       "research.getTree": detail,
       "research.getNodeContent": pendingContent,
       "research.markTreeViewed": detail.tree,
-      "documents.list": [],
     },
   });
 
@@ -355,7 +353,6 @@ test.serial("the durable snapshot replaces the live buffer without remounting", 
           : contentFor(settled, [assistantTurn("t1", "Partial answer")]);
       },
       "research.markTreeViewed": detail.tree,
-      "documents.list": [],
     },
   });
 

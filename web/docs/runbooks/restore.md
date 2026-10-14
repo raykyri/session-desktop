@@ -87,7 +87,10 @@ done
 chown -R session:session /data/documents
 ```
 
-The application can tolerate missing document files: if a document record lacks an underlying file, document previews return 404 and the `document_read` tool reports an error. Conversely, document files cannot be recovered without the database, because files on disk are content-addressed hashes that rely on database metadata for context.
+Uploaded documents were removed in phase 2.0, so `/data/documents` holds no
+files the application reads until image attachments (phase 2.9) use it. Files
+there cannot be recovered without the database, because they are
+content-addressed hashes that rely on database metadata for context.
 
 ## 4. Start and verify
 

@@ -41,11 +41,11 @@ each replaces; "—" means new.
 | `system.health` | Q | → `{ ok, version }` | — (`/healthz` also served plainly) |
 | `system.runtimeConfig` | Q | → `RuntimeConfig { version, models: ModelInfo[], limits, features: { webSearch: boolean, searchVendor?: "parallel" \| "tavily", artifactOrigin: string } }` (gated models omitted for non-admins) | `get_runtime_config`, `probe_agent_adapters` |
 
-`features.artifactOrigin` is the origin the preview panel frames
-(`11-artifacts-and-browser.md` §3). The client needs it to validate
-`event.origin` on the `session-preview-scroll` bridge. Because the origin is
-configured per deployment, runtime configuration provides it instead of the
-client bundle.
+`features.artifactOrigin` is the artifact origin that serves widget previews
+(`11-artifacts-and-browser.md` §2). Because the origin is configured per
+deployment, runtime configuration provides it instead of the client bundle.
+No client code reads it since the document preview panel was removed in
+phase 2.0.
 
 ### `auth`
 | Procedure | Kind | Input → Output | Desktop |
@@ -85,8 +85,8 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
 | `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` | `get_research_tree` |
-| `research.createTree` | M | `{ prompt, title?, model, workspaceId, documentIds? }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
-| `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline?, documentIds? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
+| `research.createTree` | M | `{ prompt, title?, model, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
+| `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
 | `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
@@ -104,8 +104,6 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
 | `research.importReport` | M | `{ markdown, prompt, workspaceId }` → `ResearchTreeDetail` | `import_research_report` (`read_research_report` dropped; browser supplies bytes; recap on `gemini-flash`) |
-| `documents.list` | Q | `{ workspaceId }` → `DocumentInfo[]` | — (new) |
-| `documents.remove` | M | `{ documentId }` → void (refused while referenced by a node) | — (new) |
 | `highlights.create` | M | `{ nodeId, anchor }` → `ResearchHighlight` | `create_research_highlight` |
 | `highlights.remove` | M | `{ nodeId, highlightId }` → `ResearchHighlight` | `remove_research_highlight` |
 | `highlights.removeMany` | M | `{ nodeId, highlightIds }` → `ResearchHighlight[]` | `remove_research_highlights` |
@@ -139,10 +137,13 @@ is stored on the row and on the attachment (`xSyndication | xOembed`), so a
 reduced card is recognizable as one. A resolved snapshot is stored with its
 image URLs rewritten to `/embeds/<hash>` (§5).
 
-### `artifacts` (Phase 7)
+### `artifacts`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `artifacts.mintToken` | M | `{ documentId }` → `{ url }` | `browser_open_local_path` |
+| `artifacts.prepareWidget` | M | `{ nodeId, sha256 }` → `{ url, expiresAt }` | `research_widget_prepare` |
+
+`documents.*` and `artifacts.mintToken` were removed with uploaded documents
+in phase 2.0.
 
 ### `events`
 | Procedure | Kind | Input → Output | Desktop |
@@ -243,9 +244,8 @@ snapshot → `run_turns` → `sourceError` for finished nodes without a snapshot
 | --- | --- |
 | `GET /healthz` | `ok\n`, `Cache-Control: no-store` (Fly check) |
 | `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/logout` | OAuth flow |
-| `POST /uploads` | multipart document upload (auth; `workspaceId` field; returns `DocumentInfo[]`); 20 MiB per file, 10 files |
 | `GET /embeds/:hash` | one cached image of an embedded post (public, `immutable`); the hash is SHA-256 of the origin URL and names an `embed_assets` row, whose bytes are fetched on the first request and may be swept back off the volume (`13-deployment-fly.md` §6) |
-| `GET /a/:token` | attached document bytes, on `artifacts.session.dev` only (Phase 7) |
+| `GET /w/:token` | a widget preview page, on `artifacts.session.dev` only |
 | `GET /*` | built client `index.html` (SPA fallback) and hashed assets |
 
 Security headers on every response: `Content-Security-Policy` (see

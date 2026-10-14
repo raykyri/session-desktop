@@ -5,11 +5,9 @@ import type { ModelInfo } from "@session/shared";
 import { act, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
-import { queryKeys } from "../src/api/cache.js";
 import {
   bareUrl,
   composerModels,
-  formatByteSize,
   nextComposerModel,
 } from "../src/features/composer/ResearchQueryComposer.js";
 import {
@@ -110,12 +108,6 @@ test("prompts exceeding word or byte limits return standardized validation error
   t.is(MAX_PROMPT_BYTES, 10 * 1024 * 1024);
 });
 
-test("attachment file sizes are formatted in appropriate binary units", (t) => {
-  t.is(formatByteSize(512), "512 B");
-  t.is(formatByteSize(2048), "2 KB");
-  t.is(formatByteSize(5 * 1024 * 1024), "5.0 MB");
-});
-
 const homeResponses = {
   "workspaces.list": [workspace()],
   "settings.get": serverSettings(),
@@ -123,7 +115,6 @@ const homeResponses = {
   "folders.get": { folders: [], membership: {}, collapsed: [] },
   "feed.recentActivity": activityPage([]),
   "highlights.listFeed": [],
-  "documents.list": [],
 };
 
 const PROMPT_LABEL = "What do you want to investigate?";
@@ -182,7 +173,7 @@ test.serial("Shift-Tab leaves the Home composer instead of cycling models", asyn
   app.unmount();
 });
 
-test.serial("the draft keeps the prompt, the model and the attached document ids", async (t) => {
+test.serial("the draft keeps the prompt and the model", async (t) => {
   useDraftsStore.setState({ byKey: {} });
   const app = await renderApp("/", { responses: homeResponses });
   await waitUntil(
@@ -199,7 +190,6 @@ test.serial("the draft keeps the prompt, the model and the attached document ids
   );
   const draft = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID));
   t.is(draft?.model, "gemini-flash");
-  t.deepEqual(draft?.documentIds, [], "the ids are part of the draft, empty or not");
   app.unmount();
 });
 
@@ -291,135 +281,11 @@ test.serial("a launch that is refused keeps every field for the retry", async (t
   app.unmount();
 });
 
-function pendingUpload() {
-  let finish: () => void = () => {
-    throw new Error("upload did not start");
-  };
-  const original = globalThis.XMLHttpRequest;
-  class FakeXhr {
-    status = 201;
-    responseText = JSON.stringify([
-      { id: "d1", name: "a.txt", byteSize: 5, extractionStatus: "ok" },
-    ]);
-    withCredentials = false;
-    responseType = "";
-    upload = { addEventListener: () => undefined };
-    listeners = new Map<string, () => void>();
-    open() {}
-    setRequestHeader() {}
-    addEventListener(name: string, listener: () => void) {
-      this.listeners.set(name, listener);
-    }
-    send() {
-      finish = () => this.listeners.get("load")?.();
-    }
-  }
-  Object.assign(globalThis, { XMLHttpRequest: FakeXhr });
-  return {
-    finish: () => finish(),
-    restore: () => Object.assign(globalThis, { XMLHttpRequest: original }),
-  };
-}
-
-test.serial(
-  "upload completion preserves edits and model changes made while uploading",
-  async (t) => {
-    useDraftsStore.setState({ byKey: {} });
-    const upload = pendingUpload();
-    t.teardown(upload.restore);
-    const app = await renderApp("/", { responses: homeResponses });
-    t.teardown(() => app.unmount());
-    await waitUntil(
-      t,
-      () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
-      "composer loaded",
-    );
-    const field = screen.getByLabelText(PROMPT_LABEL);
-    fireEvent.change(field, { target: { value: "before upload" } });
-    fireEvent.change(app.container.querySelector('input[type="file"]')!, {
-      target: { files: [new File(["hello"], "a.txt")] },
-    });
-    fireEvent.change(field, { target: { value: "edited during upload" } });
-    fireEvent.keyDown(field, { key: "Tab" });
-    const chosenModel = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID))?.model;
-    await act(async () => {
-      await Promise.resolve();
-      upload.finish();
-    });
-    const draft = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID));
-    t.is(draft?.text, "edited during upload");
-    t.is(draft?.model, chosenModel);
-    t.deepEqual(draft?.documentIds, ["d1"]);
-  },
-);
-
-test.serial(
-  "an upload from the previous workspace cannot change the current composer",
-  async (t) => {
-    useDraftsStore.setState({ byKey: { "home:w2": { text: "other workspace", updatedAt: 1 } } });
-    const upload = pendingUpload();
-    t.teardown(upload.restore);
-    const app = await renderApp("/?feed=all", {
-      responses: { ...homeResponses, "workspaces.list": [workspace(), workspace({ id: "w2" })] },
-    });
-    t.teardown(() => app.unmount());
-    await waitUntil(
-      t,
-      () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
-      "composer loaded",
-    );
-    fireEvent.change(app.container.querySelector('input[type="file"]')!, {
-      target: { files: [new File(["hello"], "a.txt")] },
-    });
-    await act(async () => {
-      await Promise.resolve();
-      app.queryClient.setQueryData(
-        queryKeys.settings(),
-        serverSettings({ defaultWorkspaceId: "w2" }),
-      );
-    });
-    await waitUntil(
-      t,
-      () => screen.getByLabelText<HTMLTextAreaElement>(PROMPT_LABEL).value === "other workspace",
-      "workspace changed",
-    );
-    await act(async () => {
-      await Promise.resolve();
-      upload.finish();
-    });
-    t.is(screen.queryByLabelText("Attachments"), null);
-    t.is(useDraftsStore.getState().get(homeDraftKey("w2"))?.text, "other workspace");
-    t.false(
-      useDraftsStore.getState().get(homeDraftKey("w2"))?.documentIds?.includes("d1") ?? false,
-    );
-  },
-);
-
-test.serial("removing a pending attachment prevents its upload from restoring it", async (t) => {
-  useDraftsStore.setState({ byKey: {} });
-  const upload = pendingUpload();
-  t.teardown(upload.restore);
-  const app = await renderApp("/", { responses: homeResponses });
-  t.teardown(() => app.unmount());
-  await waitUntil(t, () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0, "composer loaded");
-  fireEvent.change(app.container.querySelector('input[type="file"]')!, {
-    target: { files: [new File(["hello"], "a.txt")] },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Remove a.txt" }));
-  await act(async () => {
-    await Promise.resolve();
-    upload.finish();
-  });
-  t.is(screen.queryByLabelText("Attachments"), null);
-  t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)), undefined);
-});
-
 test.serial("Home restores a draft from the server in a fresh scope", async (t) => {
   const workspaceId = "remote-home";
   const draft = {
     text: "saved on another device",
     model: "gemini-flash",
-    documentIds: ["remote-document"],
     updatedAt: Date.now(),
   };
   const app = await renderApp("/", {
@@ -437,7 +303,6 @@ test.serial("Home restores a draft from the server in a fresh scope", async (t) 
     "server draft restored into composer",
   );
   t.deepEqual(useDraftsStore.getState().get(homeDraftKey(workspaceId)), draft);
-  t.truthy(screen.queryByLabelText("Attachments"));
 });
 
 test.serial("a delayed server draft does not replace typing in the composer", async (t) => {

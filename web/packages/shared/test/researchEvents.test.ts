@@ -90,7 +90,6 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     prompt: "Investigate",
     responsePreview: null,
     model: "gemini-flash",
-    documentIds: [],
     attempt: 1,
     kind: "run",
     status: "queued",
@@ -310,14 +309,12 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
 });
 
 test("node validation demands the web node shape", (t) => {
-  const valid = node({ status: "interrupted", attempt: 2, documentIds: ["doc-1"] });
+  const valid = node({ status: "interrupted", attempt: 2 });
   t.is(parseResearchEvent(sessionEvent("research.node.updated", { node: valid })).kind, "event");
   const rejected: Array<[string, Record<string, unknown>]> = [
     ["missing workspaceId", { ...valid, workspaceId: undefined }],
     ["missing model", { ...valid, model: undefined }],
     ["missing attempt", { ...valid, attempt: undefined }],
-    ["missing documentIds", { ...valid, documentIds: undefined }],
-    ["non-string documentIds", { ...valid, documentIds: [1] }],
     ["desktop status", { ...valid, status: "starting" }],
   ];
   for (const [label, candidate] of rejected) {

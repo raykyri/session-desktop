@@ -18,7 +18,6 @@ import {
   useUsage,
   useWorkspaces,
 } from "../api/queries.js";
-import { DocumentLibrary } from "../features/documents/DocumentLibrary.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
 import { errorMessage, pushErrorToast, pushToast } from "../lib/toast.js";
 import { useSettingsStore } from "../stores/settings.js";
@@ -359,9 +358,6 @@ export function SettingsPage() {
 
               <SettingsGroup title="Usage">
                 <UsageSection />
-              </SettingsGroup>
-              <SettingsGroup title="Uploaded documents">
-                <DocumentLibrary />
               </SettingsGroup>
             </>
           ) : (

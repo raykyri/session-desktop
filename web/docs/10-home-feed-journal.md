@@ -15,11 +15,9 @@ Sections top to bottom:
 1. Header title and signed-in feed switcher: `All Users`, `My Workspaces`, or
    the current workspace name. The mode is mirrored between `?feed=` and the
    navigation store; guests always see `All Users`.
-2. `ResearchQueryComposer` (`07-client-architecture.md` §6) with model chip
-   and document attachments. Files go to `POST /uploads` as soon as they are
-   dropped (progress and extraction status on the chips); the draft stores
-   the returned document ids. Submit → `research.createTree` with
-   `documentIds` → navigate to `/r/$treeId`; the returned detail is written
+2. `ResearchQueryComposer` (`07-client-architecture.md` §6) with model chip.
+   (Document attachments were removed in phase 2.0.) Submit →
+   `research.createTree` → navigate to `/r/$treeId`; the returned detail is written
    to the `tree` cache and the summary prepended to `trees` (position 0).
 3. `ReportImport` drop target and composer icon (§5). The desktop's
    `AgentSetupGuide` (`App.tsx:11877`) is not ported: models are configured
@@ -109,8 +107,7 @@ list; `research.tree.archived` removes that tree's items.
 ## 5. Report import
 
 `ResearchReportImport.tsx` minus the Tauri drag-drop branch (`:66-80`) and
-`readResearchReport`. An upload icon in the composer's control row, next to
-the attach button, opens `<input type="file" accept=".md">`; HTML5 drop on
+`readResearchReport`. An upload icon in the composer's control row opens `<input type="file" accept=".md">`; HTML5 drop on
 the Home column; one file at a time; `.md` only; non-empty; modal dialog
 asking for the prompt that produced the report; token estimate via
 `estimateTokenCount`. Submit → `research.importReport({ markdown, prompt,

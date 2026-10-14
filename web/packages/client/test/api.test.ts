@@ -24,7 +24,6 @@ import {
   setEventInterest,
   setResearchFolders,
   updateSettings,
-  uploadDocuments,
 } from "../src/api/api.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 
@@ -133,68 +132,4 @@ test.serial("sign-in carries the return path and the invite code", (t) => {
     gitHubSignInUrl("/r/t1?node=n1", "invite-code"),
     "/auth/github?return_to=%2Fr%2Ft1%3Fnode%3Dn1&invite=invite-code",
   );
-});
-
-test.serial("an upload posts multipart with the CSRF header", async (t) => {
-  const sent: { url: string; headers: Record<string, string>; body: unknown }[] = [];
-  class FakeXhr {
-    status = 201;
-    responseText = "[]";
-    withCredentials = false;
-    responseType = "";
-    readonly upload = { addEventListener: () => undefined };
-    readonly #headers: Record<string, string> = {};
-    readonly #listeners = new Map<string, () => void>();
-    #url = "";
-    open(_method: string, url: string) {
-      this.#url = url;
-    }
-    setRequestHeader(name: string, value: string) {
-      this.#headers[name] = value;
-    }
-    addEventListener(name: string, listener: () => void) {
-      this.#listeners.set(name, listener);
-    }
-    send(body: unknown) {
-      sent.push({ url: this.#url, headers: this.#headers, body });
-      this.#listeners.get("load")?.();
-    }
-  }
-  const original = globalThis.XMLHttpRequest;
-  (globalThis as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeXhr;
-
-  const documents = await uploadDocuments("w1", [new File(["hello"], "a.txt")]);
-
-  (globalThis as { XMLHttpRequest: unknown }).XMLHttpRequest = original;
-  t.deepEqual(documents, []);
-  t.is(sent[0]?.url, "/uploads");
-  t.is(sent[0]?.headers["X-Requested-With"], "session");
-  t.true(sent[0]?.body instanceof FormData);
-  t.is((sent[0]?.body as FormData).get("workspaceId"), "w1");
-});
-
-test.serial("an upload rejects with the server's own message", async (t) => {
-  class FailingXhr {
-    status = 413;
-    responseText = JSON.stringify({ error: "a.txt is larger than 20 MiB" });
-    withCredentials = false;
-    responseType = "";
-    readonly upload = { addEventListener: () => undefined };
-    readonly #listeners = new Map<string, () => void>();
-    open() {}
-    setRequestHeader() {}
-    addEventListener(name: string, listener: () => void) {
-      this.#listeners.set(name, listener);
-    }
-    send() {
-      this.#listeners.get("load")?.();
-    }
-  }
-  const original = globalThis.XMLHttpRequest;
-  (globalThis as { XMLHttpRequest: unknown }).XMLHttpRequest = FailingXhr;
-
-  const error = await t.throwsAsync(uploadDocuments("w1", [new File([""], "a.txt")]));
-
-  (globalThis as { XMLHttpRequest: unknown }).XMLHttpRequest = original;
-  t.is(error?.message, "a.txt is larger than 20 MiB");
 });

@@ -1278,7 +1278,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                   node={node}
                   index={index}
                   treeId={treeId}
-                  workspaceId={detail.tree.workspaceId}
                   isSelected={node.id === selectedNodeId}
                   replyToAnswer={
                     previous

@@ -10,7 +10,6 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, ServerDeps } from "../deps.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS, rateLimitByIp } from "../middleware/rateLimit.js";
-import { removeUserDocuments } from "../uploads/storage.js";
 
 import {
   clearSessionCookie,
@@ -285,10 +284,8 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
     if (created && config.requireInvite) {
       const redeemed = invite !== null && auth.redeemInvite(deps.db, invite, user.id);
       if (!redeemed) {
-        // If invite redemption fails during signup, roll back account creation and remove uploaded files from disk before deleting database records.
-        await removeUserDocuments(deps, user.id, c.get("logger"), () =>
-          users.removeUser(deps.db, user.id),
-        );
+        // If invite redemption fails during signup, roll back account creation.
+        users.removeUser(deps.db, user.id);
         auth.recordSignupAttempt(deps.db, ipHash, "invite_invalid");
         return c.redirect(signInError(config.publicOrigin, "invite_invalid"), 302);
       }

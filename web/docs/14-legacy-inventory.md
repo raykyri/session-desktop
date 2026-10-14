@@ -101,5 +101,6 @@ mentions "web/iframe" in prose and is not a reference to the directory.
 - Unbounded run parallelism (replaced by limits).
 - Local interactive provider logins and user-supplied API keys (the
   deployment holds provider credentials).
-- Agent filesystem access (replaced by attached documents).
+- Agent filesystem access (replaced by attached documents, which were later
+  removed in phase 2.0).
 - Per-model reasoning effort (fixed at medium).

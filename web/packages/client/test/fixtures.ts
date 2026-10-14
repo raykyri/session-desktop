@@ -26,7 +26,6 @@ export function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     workspaceId: "w1",
     parentNodeId: null,
     prompt: "What is collective memory?",
-    documentIds: [],
     title: null,
     responsePreview: null,
     model: "gemini-flash",

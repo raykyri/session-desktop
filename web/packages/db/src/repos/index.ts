@@ -8,9 +8,7 @@
 // namespace import, so this spelling is what keeps a module that nothing uses
 // visible as an error rather than silently retained.
 
-import * as artifacts from "./artifacts.js";
 import * as auth from "./auth.js";
-import * as documents from "./documents.js";
 import * as drafts from "./drafts.js";
 import * as embeds from "./embeds.js";
 import * as feedItems from "./feedItems.js";
@@ -36,9 +34,7 @@ import * as users from "./users.js";
 import * as workspaces from "./workspaces.js";
 
 export {
-  artifacts,
   auth,
-  documents,
   drafts,
   embeds,
   feedgen,

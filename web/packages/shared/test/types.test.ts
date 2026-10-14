@@ -27,7 +27,6 @@ const node = {
   treeId: "t1",
   workspaceId: "w1",
   prompt: "why",
-  documentIds: [],
   model: "gemini-flash",
   status: "running",
   attempt: 1,
@@ -50,8 +49,8 @@ test("a minimal node parses", (t) => {
   t.deepEqual(researchNodeSchema.parse(node), node);
 });
 
-test("a node without workspaceId, model, attempt or documentIds is rejected", (t) => {
-  for (const missing of ["workspaceId", "model", "attempt", "documentIds"]) {
+test("a node without workspaceId, model or attempt is rejected", (t) => {
+  for (const missing of ["workspaceId", "model", "attempt"]) {
     const partial: Record<string, unknown> = { ...node };
     delete partial[missing];
     t.false(researchNodeSchema.safeParse(partial).success, `${missing} is required`);

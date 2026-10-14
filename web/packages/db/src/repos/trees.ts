@@ -14,14 +14,12 @@ import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
-import { nodeDocuments } from "../schema/documents.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
-import { attachWithin } from "./documents.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
@@ -39,7 +37,6 @@ export interface AdmitRootInput {
    * already has its answer. */
   status?: ResearchNodeStatus | undefined;
   attachments?: ResearchMessageAttachment[] | undefined;
-  documentIds?: string[] | undefined;
   /** Supplied only by tests and by an importer that minted ids beforehand. */
   treeId?: string | undefined;
   nodeId?: string | undefined;
@@ -164,11 +161,6 @@ export function admitRoot(
         recapJson: null,
       })
       .run();
-    // Through the checked path: an id the caller supplied is not an id the
-    // caller owns, and an unchecked insert here lets one account attach
-    // another's document — permanently, because `documents.remove` refuses a
-    // document a node references (`06-auth-and-users.md` §4).
-    attachWithin(tx, userId, nodeId, input.documentIds ?? []);
     upsertResearchRoot(tx, nodeId);
     return detailFromRow(tx, treeRow);
   });
@@ -192,7 +184,6 @@ function detailFromRow(
     .all();
   const nodeIds = nodeRows.map((row) => row.id);
   const highlightsByNode = new Map<string, ReturnType<typeof toResearchHighlight>[]>();
-  const documentsByNode = new Map<string, string[]>();
   if (nodeIds.length > 0) {
     for (const row of db
       .select()
@@ -204,16 +195,6 @@ function detailFromRow(
       list.push(toResearchHighlight(row));
       highlightsByNode.set(row.nodeId, list);
     }
-    for (const row of db
-      .select()
-      .from(nodeDocuments)
-      .where(inArray(nodeDocuments.nodeId, nodeIds))
-      .orderBy(asc(nodeDocuments.position))
-      .all()) {
-      const list = documentsByNode.get(row.nodeId) ?? [];
-      list.push(row.documentId);
-      documentsByNode.set(row.nodeId, list);
-    }
   }
   return {
     tree: toResearchTree(treeRow),
@@ -221,7 +202,6 @@ function detailFromRow(
       toResearchNode(row, {
         workspaceId: treeRow.workspaceId,
         highlights: highlightsByNode.get(row.id) ?? [],
-        documentIds: documentsByNode.get(row.id) ?? [],
       }),
     ),
   };

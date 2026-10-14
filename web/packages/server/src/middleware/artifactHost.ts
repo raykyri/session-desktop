@@ -1,7 +1,7 @@
 // The artifact origin serves artifacts and nothing else
 // (`11-artifacts-and-browser.md` §2).
 //
-// Isolates artifact preview endpoints (/a/:token and /__session/fonts/*) from the main application.
+// Isolates the widget preview endpoint (/w/:token) from the main application.
 // All other endpoints return 404 on the artifact host to prevent session cookie exposure.
 
 import type { MiddlewareHandler } from "hono";

@@ -154,7 +154,7 @@ Port of `TranscriptMarkdown.tsx`, `DiagramBlock.tsx`, `TranscriptActivity.tsx`:
 - `BlockedMarkdownImage`; the pasted-image markers a desktop transcript can
   carry are collapsed out of the source by `shared/markdown/imageMarkers`
   before parsing, because the files they name do not exist on the web.
-  In the web application, attached document uploads replace local file paths for including images (`04-agent-runtime.md` §8).
+  Image attachments in the web application are planned for phase 2.9.
 - `rehypeTranscriptArtifacts` keeps inline-code file links producing
   artifact buttons; the Codex inline-visualization directives and content
   references are dropped with their native backend.

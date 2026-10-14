@@ -54,7 +54,6 @@ const node: ResearchNode = {
   workspaceId: "workspace",
   parentNodeId: null,
   prompt: "Question",
-  documentIds: [],
   model: "gpt-luna",
   status: "complete",
   attempt: 1,

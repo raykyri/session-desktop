@@ -9,7 +9,7 @@
 // Ported from the desktop `src/lib/researchEvents.ts`, with the new run events
 // (`05-run-lifecycle-and-streaming.md` §4), `models.updated`, and the node
 // shape from `02-domain-model-and-database.md` §2 (`workspaceId`, `model`,
-// `attempt`, `documentIds`; no `groupId`, `worktreeDir`, `adapter`, `paneId`,
+// `attempt`; no `groupId`, `worktreeDir`, `adapter`, `paneId`,
 // or `agentId`).
 
 import type { ModelInfo, ModelProvider } from "../types/account.js";
@@ -280,7 +280,6 @@ function isResearchNode(value: unknown): value is ResearchNode {
     typeof value.prompt === "string" &&
     typeof value.model === "string" &&
     isFiniteNumber(value.attempt) &&
-    isStringArray(value.documentIds) &&
     typeof value.status === "string" &&
     RESEARCH_STATUSES.has(value.status as ResearchNodeStatus) &&
     isFiniteNumber(value.createdAt) &&

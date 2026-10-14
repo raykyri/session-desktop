@@ -1,23 +1,24 @@
-// The bytes behind a document row (`03-api-and-events.md` §5,
-// `13-deployment-fly.md` §6).
+// Content-addressed files on the volume (`13-deployment-fly.md` §6).
 //
-// `documents` is metadata; the file is stored at
-// `${SESSION_DATA_DIR}/documents/<userId>/<sha256>` and nothing in SQLite can
-// remove it. Deleting a row without unlinking the file leaks the volume: the
-// per-user quota is summed from rows, so an account can delete and re-upload
-// for as long as it likes and the 20 GB mount fills until every write fails
-// with SQLITE_FULL.
+// No server code imports this module since the uploaded-documents feature was
+// removed; phase 2.9 uses it to store image attachments.
 //
-// Two paths reach here. The ones that can name what they orphaned — a document
-// removed by hand, an account deleted — hand over the paths the repository
+// A file is stored at `${SESSION_DATA_DIR}/documents/<userId>/<sha256>` and
+// its metadata row lives in SQLite, which cannot remove the file. Deleting a
+// row without unlinking the file leaks the volume: a per-user quota summed
+// from rows lets an account delete and re-upload until the mount fills and
+// every write fails with SQLITE_FULL.
+//
+// Two paths reach here. The ones that can name what they orphaned (a file
+// removed by hand, an account deleted) hand over the paths the repository
 // reported. The ones that cannot, because a foreign key cascaded the rows away
 // under them (a removed workspace, a removed thread), are caught by the sweep
-// below, which is the volume's reconciliation with the table.
+// below, which reconciles the volume with the table. The caller supplies the
+// paths and the keep set, so this module does not depend on a particular
+// table.
 
 import { readdir, rm, stat, unlink } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-
-import { documents } from "@session/db";
 
 import type { ServerDeps } from "../deps.js";
 import type { Logger } from "../logger.js";
@@ -59,15 +60,16 @@ export async function unlinkOrphans(
   return removed;
 }
 
-/** Everything one account stored. Called before `users.removeUser`, whose
- * cascade takes the rows and with them any way of naming the files. */
+/** Everything one account stored. `paths` must be read before `remove` runs
+ * `users.removeUser`, whose cascade takes the rows and with them any way of
+ * naming the files. */
 export async function removeUserDocuments(
-  deps: Pick<ServerDeps, "config" | "db">,
+  deps: Pick<ServerDeps, "config">,
   userId: string,
+  paths: readonly string[],
   logger: Logger,
   remove: () => void,
 ): Promise<number> {
-  const paths = documents.storagePathsOf(deps.db, userId);
   remove();
   const unlinked = await unlinkOrphans(deps.config.documentsDir, paths, logger);
   // The per-user directory is content-addressed and nothing else writes into
@@ -88,16 +90,17 @@ export interface OrphanSweep {
 
 /**
  * Files on the volume that no row points at. This is what catches the deletes
- * nobody could hand a path to: removing a workspace or a thread cascades
- * `documents` rows away inside SQLite, and the bytes would otherwise stay
- * until the machine was rebuilt.
+ * nobody could hand a path to: removing a workspace or a thread cascades rows
+ * away inside SQLite, and the bytes would otherwise stay until the machine was
+ * rebuilt.
  *
  * Ordered so a file written between the listing and the read of the table is
- * kept rather than deleted: the paths are read from SQLite *after* the
- * directory walk, so a row that landed in between is in the keep set.
+ * kept rather than deleted: `keep` is called *after* the directory walk, so a
+ * row that landed in between is in the keep set.
  */
 export async function sweepOrphanedDocuments(
-  deps: Pick<ServerDeps, "config" | "db">,
+  deps: Pick<ServerDeps, "config">,
+  keep: () => ReadonlySet<string>,
   logger: Logger,
 ): Promise<OrphanSweep> {
   const root = deps.config.documentsDir;
@@ -125,9 +128,9 @@ export async function sweepOrphanedDocuments(
     }
   }
   result.scanned = found.length;
-  const keep = documents.allStoragePaths(deps.db);
+  const kept = keep();
   for (const path of found) {
-    if (keep.has(path)) {
+    if (kept.has(path)) {
       continue;
     }
     try {

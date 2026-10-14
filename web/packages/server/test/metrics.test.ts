@@ -125,9 +125,8 @@ test("active runs, queue depth, and daily usage come out of the database", async
 });
 
 test("the histogram labels stay bounded", (t) => {
-  t.is(routeLabel("/a/9f3c1d"), "/a");
+  t.is(routeLabel("/w/9f3c1d"), "/w");
   t.is(routeLabel("/api/trpc/research.ask"), "/api/trpc");
-  t.is(routeLabel("/__session/fonts/DMSans-Variable-Latin.woff2"), "/__session/fonts");
   t.is(routeLabel("/healthz"), "/healthz");
   t.is(routeLabel("/assets/index-abc123.js"), "static");
   t.is(statusClass(204), "2xx");

@@ -1,6 +1,6 @@
 // Account-scoped wire types introduced by the web app: the signed-in user,
-// workspaces (the desktop's research-scoped `GroupInfo`), user settings,
-// attached documents, the per-day usage summary, and the model registry
+// workspaces (the desktop's research-scoped `GroupInfo`), user settings, the
+// per-day usage summary, and the model registry
 // entries as the client sees them (`04-agent-runtime.md` §1).
 
 import { z } from "zod";
@@ -85,24 +85,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   showNotifications: true,
   defaultModel: DEFAULT_MODEL_ID,
 };
-
-export const documentExtractionStatusSchema = z.enum(["pending", "ok", "failed"]);
-
-export type DocumentExtractionStatus = z.infer<typeof documentExtractionStatusSchema>;
-
-export const documentInfoSchema = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  name: z.string(),
-  mime: z.string(),
-  byteSize: z.number(),
-  sha256: z.string(),
-  pageCount: z.number().nullish(),
-  extractionStatus: documentExtractionStatusSchema,
-  createdAt: z.number(),
-});
-
-export type DocumentInfo = z.infer<typeof documentInfoSchema>;
 
 /** One UTC day of recorded usage for the signed-in account, against the
  * limits in `06-auth-and-users.md` §8. */

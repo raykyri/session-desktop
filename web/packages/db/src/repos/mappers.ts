@@ -54,7 +54,6 @@ export interface NodeRelations {
   /** From the node's tree; `nodes` does not carry it. */
   workspaceId: string;
   highlights: ResearchHighlight[];
-  documentIds: string[];
 }
 
 export function toResearchNode(row: NodeRow, relations: NodeRelations): ResearchNode {
@@ -82,7 +81,6 @@ export function toResearchNode(row: NodeRow, relations: NodeRelations): Research
     inline: row.inline,
     prompt: row.prompt,
     attachments,
-    documentIds: relations.documentIds,
     title: row.title,
     responsePreview: row.responsePreview,
     model: row.model,

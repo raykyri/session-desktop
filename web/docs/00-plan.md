@@ -82,7 +82,7 @@ account), OpenRouter (zero-retention providers only), and Anthropic.
 | Server | Hono on Node 22; tRPC v11; SSE subscription for events |
 | Database | SQLite via `better-sqlite3`, WAL; Drizzle ORM; drizzle-kit migrations |
 | Auth | GitHub OAuth (PKCE) via `arctic`; DB sessions; `users.is_admin` set manually |
-| Agents | Vercel AI SDK `streamText` loop with built-in `web_search`, `web_fetch`, `document_read` tools; direct `@anthropic-ai/sdk` adapter if needed; app stores conversation history |
+| Agents | Vercel AI SDK `streamText` loop with built-in `web_search`, `web_fetch` tools (`document_read` was removed in phase 2.0); direct `@anthropic-ai/sdk` adapter if needed; app stores conversation history |
 | Models | `gemini-flash` (default, Google Search grounding), `deepseek-flash` and `gpt-luna` via OpenRouter ZDR/no-collection routing, all users; `claude-fable` admin only; effort fixed at medium; metadata runs on `gemini-flash` |
 | Streaming | Snapshot + per-node ordered deltas; durable checkpoints; `interrupted` with auto-resume on deploy |
 | Client state | TanStack Query (event-patched) + Zustand; TanStack Router |
@@ -135,7 +135,7 @@ Spec: `02-domain-model-and-database.md`.
 Spec: `03-api-and-events.md`, `06-auth-and-users.md`.
 - Hono app, security headers, CSP; GitHub OAuth, sessions, admin flag; the
   tRPC router; event fan-out with interest sets; tweet proxy; document
-  upload route; settings.
+  upload route (removed in phase 2.0); settings.
 - Exit: integration suite drives create → (fixture) stream → highlight →
   follow-up → recap → archive over tRPC and SSE.
 
@@ -176,6 +176,8 @@ Spec: `11-artifacts-and-browser.md`.
 - Token-scoped routes on `artifacts.session.dev` serving attached documents;
   sandboxed preview panel; link context menu.
 - Exit: documents open in the preview panel, and every route requires a valid token.
+- Removed in phase 2.0 of the desktop parity plan with uploaded documents; the
+  artifact origin now serves widget previews only.
 
 ### Phase 8 — Deployment and operations (medium)
 Spec: `13-deployment-fly.md`.
@@ -228,13 +230,12 @@ specs under `e2e/`.
 ### Home and feeds
 
 - [x] **Verified** — Compose and launch with a model choice (Fable hidden for
-      non-admins; Gemini grounded variant available) and attached documents;
-      draft remains after reload.
+      non-admins; Gemini grounded variant available); draft remains after
+      reload. (Attached documents were removed in phase 2.0.)
       `features/composer/ResearchQueryComposer.tsx`; `composer.test.tsx`
       ("Tab steps to the next launchable model and wraps", "the model list
       hides admin-only models from everyone else", "the draft keeps the
-      prompt, the model and the attached document ids"); `admin.spec.ts` both
-      tests; `artifacts.spec.ts` attaches through this composer;
+      prompt and the model"); `admin.spec.ts` both tests;
       `library.spec.ts` "retains a half-written question after reload".
 - [ ] **Partial** — Mixed activity feed with keyset pagination, load older,
       retry, refresh, new-activity button, restored scroll anchor.
@@ -278,9 +279,9 @@ specs under `e2e/`.
 ### Research document
 
 - [x] **Verified** — Streaming answer with tool activity, thinking indicator,
-      collapsed-answer projection, sources footer, document chips; flash-free
-      swap to the durable snapshot; reload and second tab agree.
-      `features/research/{AnswerPane,ThreadSegment,TimelineItem,SourcesFooter,DocumentChips}.tsx`,
+      collapsed-answer projection, sources footer; flash-free swap to the
+      durable snapshot; reload and second tab agree.
+      `features/research/{AnswerPane,ThreadSegment,TimelineItem,SourcesFooter}.tsx`,
       `timeline.ts`; `research.timeline.test.ts` (collapsed-answer window and
       source extraction), `nodeContent.test.tsx` "a live run keeps its turns
       across the swap to the durable snapshot", `research.document.test.tsx`
@@ -397,7 +398,7 @@ enforcement off (`13-deployment-fly.md` §2).
 
 - `account.delete` (`06-auth-and-users.md` §7) — no `account` namespace and no
   client surface; removing an account is an operator job against the database.
-  The only automated deletion path handled by the server is an abandoned sign-up with an unredeemed invite, which deletes both uploaded files from storage and associated database records (`uploads/storage.ts:removeUserDocuments`).
+  The only automated deletion path handled by the server is an abandoned sign-up with an unredeemed invite, which deletes the account row (`auth/github.ts`).
 - The reader view for `http(s)` sources (`11-artifacts-and-browser.md` §4) —
   behind `SESSION_READER_VIEW`, and never part of this checklist.
 

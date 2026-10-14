@@ -18,12 +18,12 @@ packages/db/
       users.ts  sessions.ts  preferences.ts
       workspaces.ts  folders.ts  trees.ts  nodes.ts  highlights.ts
       snapshots.ts  runs.ts (run_turns, run_attempts, run_queue, node_messages, node_summaries)
-      documents.ts  usage.ts  journal.ts  tweets.ts
-      feedItems.ts  drafts.ts  artifacts.ts  index.ts
+      usage.ts  journal.ts  tweets.ts
+      feedItems.ts  drafts.ts  index.ts
     repos/
       users.ts  auth.ts  workspaces.ts  folders.ts  trees.ts  nodes.ts
-      highlights.ts  snapshots.ts  documents.ts  recaps.ts  feeds.ts
-      feedItems.ts  feedgen.ts  journal.ts  drafts.ts  artifacts.ts
+      highlights.ts  snapshots.ts  recaps.ts  feeds.ts
+      feedItems.ts  feedgen.ts  journal.ts  drafts.ts
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -69,7 +69,7 @@ Fields dropped from `ResearchNode` on the wire: `groupId` (renamed
 `workspaceId`), `worktreeDir`, `agentId`, `paneId`, `runtime`, `threadId`,
 `transcriptPath`, `nativeSessionId`, `promptNativeId`, `effort` (fixed at
 medium). `adapter` is renamed `model` and holds a registry id
-(`04-agent-runtime.md` §1). New fields: `attempt`, `documentIds`.
+(`04-agent-runtime.md` §1). New field: `attempt`.
 `AgentAdapterMetadata` is replaced by `ModelInfo { id, label, provider,
 adminOnly, available, supportsFiles, supportsImages }`.
 
@@ -289,24 +289,11 @@ tree, as in `membership: HashMap<treeId, folderId>`.
   and registered at hydration rather than when the image is first served
   (`13-deployment-fly.md` §6).
 
-### 3.6 Documents and artifacts
+### 3.6 Documents and artifacts (removed)
 
-`documents`
-- `id` PK, `user_id` FK, `workspace_id` FK, `name` text, `mime` text,
-  `byte_size` integer, `sha256` text, `storage_path` text
-  (`/data/documents/<user_id>/<sha256>`), `page_count` integer null,
-  `extraction_status` text (`pending | ok | failed`), `created_at`
-- Unique (`user_id`, `sha256`)
-
-`document_text`
-- `document_id` FK, `page` integer, `text` text; PK (`document_id`, `page`)
-
-`node_documents`: `node_id` FK, `document_id` FK, `position` integer;
-PK (`node_id`, `document_id`)
-
-`artifact_tokens` (Phase 7)
-- `token` text PK (32 random bytes hex), `user_id` FK, `document_id` FK,
-  `created_at`, `expires_at`
+`documents`, `document_text`, `node_documents` and `artifact_tokens` were
+removed with the uploaded-documents feature in phase 2.0 of the desktop
+parity plan.
 
 ### 3.7 Usage
 

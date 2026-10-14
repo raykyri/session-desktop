@@ -2,12 +2,11 @@ import test from "ava";
 
 import { restoreServerDraft, useDraftsStore } from "../src/stores/drafts.js";
 
-test("a server draft restores text, model and attachments without replacing a newer local draft", (t) => {
+test("a server draft restores text and model without replacing a newer local draft", (t) => {
   const key = "home:restore";
   const remote = {
     text: "server question",
     model: "gemini-flash",
-    documentIds: ["d1"],
     updatedAt: 10,
   };
   t.deepEqual(restoreServerDraft(key, JSON.stringify(remote)), remote);
@@ -31,7 +30,7 @@ test("invalid server drafts are ignored", (t) => {
     "broken",
     "null",
     "{}",
-    JSON.stringify({ text: "x", updatedAt: 1, documentIds: [42] }),
+    JSON.stringify({ text: "x", updatedAt: 1, model: 42 }),
   ]) {
     t.is(restoreServerDraft("home:invalid", value), null);
   }

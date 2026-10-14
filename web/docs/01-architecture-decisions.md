@@ -376,7 +376,7 @@ per-model options matrix from the UI and the eval.
 
 Choice: `web_search` (vendor behind one interface, cached), `web_fetch`
 (server-side fetch with SSRF guard and readable-text extraction, cached),
-and `document_read` (attached documents), supplied to every model, plus one
+and `document_read` (attached documents; removed in phase 2.0), supplied to every model, plus one
 native alternative: `gemini-flash` uses Google Search grounding
 inside Gemini instead of the owned search tool, rendered through the same
 activity and Sources UI.
@@ -393,6 +393,8 @@ Choice: users attach files to a question; files are stored on the volume,
 text-extracted server-side, and passed to providers as native file or image
 parts where supported and as text otherwise (`04-agent-runtime.md` §8).
 Documents attached to a node are in context for its descendants and are
-also served through the artifact preview.
+also served through the artifact preview. (Uploaded documents, `document_read`
+and the artifact preview were removed in phase 2.0 of the desktop parity
+plan.)
 
 Why: Local filesystem tools like Read and Grep cannot be used in a hosted web environment; user-uploaded documents provide the web equivalent for referencing local files.

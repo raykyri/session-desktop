@@ -4,7 +4,7 @@
 
 One Fly app, `session-dev`, one region (`sjc` unless the team is elsewhere),
 one machine with a volume. Hostnames `session.dev` (app) and
-`artifacts.session.dev` (document preview origin), both certificates via
+`artifacts.session.dev` (widget preview origin), both certificates via
 `fly certs add`, DNS `A`/`AAAA` to the app's IPs plus the `_acme-challenge`
 CNAMEs.
 
@@ -150,7 +150,7 @@ binary pinned by version and SHA-256, `tini` as PID 1).
 
 The server bundle inlines `@session/db` and `@session/shared`, which publish
 TypeScript sources, and leaves every npm package external, so `better-sqlite3`
-and the extraction libraries (`unpdf`, `mammoth`, `linkedom`) load from
+and the extraction libraries (`unpdf`, `linkedom`) load from
 `node_modules` at runtime. `main.ts` passes the migrations folder explicitly
 (`../../db/migrations` relative to the module) because the bundle sits where
 the database package's own default would not resolve.
@@ -273,8 +273,8 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
 ## 8. Local development
 
 `npm run dev` in `web/`: server on `http://localhost:8787` (tsx watch),
-client on `http://localhost:1480` (Vite, proxying `/api`, `/auth`, `/a`,
-`/uploads`, `/healthz`). `SESSION_DATA_DIR=./.data` (git-ignored).
+client on `http://localhost:1480` (Vite, proxying `/api`, `/auth`,
+`/healthz`, `/metrics`). `SESSION_DATA_DIR=./.data` (git-ignored).
 `SESSION_FIXTURE_PROVIDERS=1` swaps every model for a fixture provider so UI
 work needs no credentials. `web/.env.example` documents every variable with
 comments (copy it to `web/.env`); the repo-root `.env.example` loses the

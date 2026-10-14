@@ -63,15 +63,12 @@ test("uses Ctrl as primary modifier for digit and comma shortcuts on non-macOS p
   t.is(resolveAppShortcut(shortcut({ key: "1", ctrlKey: true, metaKey: true })), null);
 });
 
-test("keeps the research document and panel shortcuts", (t) => {
+test("keeps the research document and sidebar shortcuts", (t) => {
   t.deepEqual(resolveAppShortcut(shortcut({ key: "j", metaKey: true })), {
     type: "focusFollowups",
   });
   t.deepEqual(resolveAppShortcut(shortcut({ key: "o", metaKey: true })), {
     type: "openWorkspaceMenu",
-  });
-  t.deepEqual(resolveAppShortcut(shortcut({ key: "e", metaKey: true, shiftKey: true })), {
-    type: "toggleArtifactPanel",
   });
   t.deepEqual(resolveAppShortcut(shortcut({ key: "g", metaKey: true, shiftKey: true })), {
     type: "toggleLeftSidebar",
@@ -116,9 +113,6 @@ test("suppresses only shortcuts that conflict with standard text editing when in
   });
   t.deepEqual(inField({ key: "h", metaKey: true, shiftKey: true }), {
     type: "focusResearchHome",
-  });
-  t.deepEqual(inField({ key: "e", metaKey: true, shiftKey: true }), {
-    type: "toggleArtifactPanel",
   });
 });
 

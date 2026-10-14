@@ -198,8 +198,8 @@ test.serial("unhandled shell shortcuts are dispatched to the active mounted view
   window.addEventListener("session:shortcut", listener);
 
   press("j", { metaKey: true });
-  press("e", { metaKey: true, shiftKey: true });
+  press("o", { metaKey: true });
 
   window.removeEventListener("session:shortcut", listener);
-  t.deepEqual(seen, [{ type: "focusFollowups" }, { type: "toggleArtifactPanel" }]);
+  t.deepEqual(seen, [{ type: "focusFollowups" }, { type: "openWorkspaceMenu" }]);
 });
