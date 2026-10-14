@@ -692,6 +692,29 @@ test.serial("a recap is shown above the answer it was written for", async (t) =>
   );
 });
 
+test.serial("an imported report shows its recap above it and offers Generate recap", async (t) => {
+  const base = node({ id: "n1", type: "document", prompt: "A report" });
+  const root = {
+    ...base,
+    recap: { id: "r1", text: "The report in brief.", responseRevision: REVISION, generatedAt: 1 },
+  } as ResearchNode;
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "The report's text.")]) },
+    responses: {
+      "recaps.defaultInstructions": "Summarize the report in one sentence.",
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText("Recap: The report in brief.") !== null,
+    "the recap line above the document",
+  );
+  fireEvent.click(screen.getAllByRole("button", { name: "Answer actions" })[0] as HTMLElement);
+  fireEvent.click(await waitFor(() => screen.getByRole("menuitem", { name: "Generate recap" })));
+  t.truthy(await screen.findByRole("dialog", { name: "Generate recap" }));
+});
+
 test.serial("a queued run shows its place in the queue", async (t) => {
   const root = node({ id: "n1", status: "queued", startedAt: null });
   await mount({
