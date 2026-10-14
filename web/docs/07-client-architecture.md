@@ -161,9 +161,10 @@ Per event type:
   `tree`, `activity`, `highlightsFeed`, `activeNodes` caches; `malformed` or
   `unsupported` → `invalidateQueries` for the affected scope.
 - `research.turn.delta|committed|run.*` → `liveTurns` store.
-- `workspace.*`, `folders.updated`,
-  `settings.updated`, `models.updated` → targeted `setQueryData` or
-  invalidate.
+- `research.folders.changed` → invalidate that workspace's `folders` query
+  (the event carries no state).
+- `workspace.*`, `settings.updated`, `models.updated` → targeted
+  `setQueryData` or invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
 - `notification.requested` is planned and not emitted; the client does not
   handle it yet. Toasts come only from client code (`lib/toast.ts`).

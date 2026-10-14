@@ -72,6 +72,7 @@ export const workspacesRouter = router({
       for (const treeId of result.removedTreeIds) {
         publish(ctx, "research.tree.removed", { treeId });
       }
+      publish(ctx, "research.folders.changed", { workspaceId: input.workspaceId });
       publish(ctx, "workspace.removed", { workspaceId: input.workspaceId });
       return result;
     }),
@@ -95,6 +96,9 @@ export const workspacesRouter = router({
     }),
 });
 
+/** The desktop's `list_research_folders` and `set_research_folders` for one
+ * workspace: the folder records (those in the Trash included), membership,
+ * collapsed trays, nesting (`parents`) and collapsed groups. */
 export const foldersRouter = router({
   get: publicProcedure.input(z.object({ workspaceId: z.string() })).query(({ ctx, input }) => {
     const userId = catalogUserId(ctx);
@@ -105,10 +109,13 @@ export const foldersRouter = router({
   set: protectedProcedure
     .input(z.object({ workspaceId: z.string(), state: researchFolderStateSchema }))
     .mutation(({ ctx, input }) => {
-      const state = repo(() =>
-        folders.setState(ctx.db, ctx.user.id, input.workspaceId, input.state),
+      const { state, changed } = repo(() =>
+        folders.replaceState(ctx.db, ctx.user.id, input.workspaceId, input.state),
       );
-      publish(ctx, "folders.updated", { workspaceId: input.workspaceId, state });
+      // As on the desktop, the event carries no state: other tabs refetch.
+      if (changed) {
+        publish(ctx, "research.folders.changed", { workspaceId: input.workspaceId });
+      }
       return state;
     }),
 });

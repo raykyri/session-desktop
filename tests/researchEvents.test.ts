@@ -122,6 +122,8 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
     ["research.drafts.changed", { workspaceId: "workspace-1" }],
     ["research.folders.changed", {}],
     ["research.trash.changed", {}],
+    ["research.folders.changed", { workspaceId: "workspace-1" }],
+    ["research.trash.changed", { workspaceId: "workspace-1" }],
     ["research.tree.updated", { tree: { ...researchTree, trashedAt: 50 } }],
   ];
 
@@ -154,6 +156,10 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
   assert.deepEqual(
     parseResearchEvent(sessionEvent("research.drafts.changed", { workspaceId: 7 })),
     { kind: "malformed", type: "research.drafts.changed" },
+  );
+  assert.deepEqual(
+    parseResearchEvent(sessionEvent("research.folders.changed", { workspaceId: 7 })),
+    { kind: "malformed", type: "research.folders.changed" },
   );
   assert.deepEqual(
     parseResearchEvent(

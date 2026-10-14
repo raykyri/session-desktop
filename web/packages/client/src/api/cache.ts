@@ -52,6 +52,7 @@ export const eventPatchedListKeys = [
   "highlightsFeed",
   "activeNodes",
   "workspaces",
+  "folders",
 ] as const;
 
 export function invalidateKeys(

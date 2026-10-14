@@ -332,7 +332,18 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
         : malformed();
     case "research.folders.changed":
     case "research.trash.changed":
-      return { kind: "event", event: { type: event.type, timestamp: event.timestamp } };
+      // The web server names the workspace; the desktop sends an empty payload.
+      if (payload.workspaceId !== undefined && typeof payload.workspaceId !== "string") {
+        return malformed();
+      }
+      return {
+        kind: "event",
+        event: {
+          type: event.type,
+          ...(typeof payload.workspaceId === "string" ? { workspaceId: payload.workspaceId } : {}),
+          timestamp: event.timestamp,
+        },
+      };
     default:
       return { kind: "unsupported", type: event.type };
   }

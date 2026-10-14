@@ -17,7 +17,6 @@ import type {
   ParsedSessionEvent,
   RecentActivityItem,
   User,
-  ResearchFolderState,
   ResearchHighlightFeedItem,
   ResearchNodeContent,
   ResearchTreeDetail,
@@ -268,6 +267,15 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       return;
     }
 
+    case "research.folders.changed":
+      // The event carries no state, as on the desktop: the workspace's folder
+      // state refetches.
+      invalidate(
+        client,
+        event.workspaceId === undefined ? ["folders"] : queryKeys.folders(event.workspaceId),
+      );
+      return;
+
     case "research.recap.pending":
       // A viewer hint with no cache behind it: the recap itself arrives as a
       // node update, which is what the summary and the document render from.
@@ -433,14 +441,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
       );
       client.removeQueries({ queryKey: queryKeys.folders(workspaceId) });
       invalidate(client, ["trees"], ["highlightsFeed"]);
-      return;
-    }
-
-    case "folders.updated": {
-      const workspaceId = payload["workspaceId"];
-      const state = payload["state"] as ResearchFolderState | undefined;
-      if (typeof workspaceId !== "string" || !state) return;
-      client.setQueryData(queryKeys.folders(workspaceId), state);
       return;
     }
 

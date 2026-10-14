@@ -74,6 +74,14 @@ export const parsedResearchEventSchema = z.discriminatedUnion("type", [
     workspaceId: z.string(),
     timestamp: z.number(),
   }),
-  z.object({ type: z.literal("research.folders.changed"), timestamp: z.number() }),
-  z.object({ type: z.literal("research.trash.changed"), timestamp: z.number() }),
+  z.object({
+    type: z.literal("research.folders.changed"),
+    workspaceId: z.string().optional(),
+    timestamp: z.number(),
+  }),
+  z.object({
+    type: z.literal("research.trash.changed"),
+    workspaceId: z.string().optional(),
+    timestamp: z.number(),
+  }),
 ]);

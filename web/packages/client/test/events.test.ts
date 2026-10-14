@@ -230,17 +230,22 @@ test.serial("a settings event writes the cache and the local mirror", (t) => {
   t.truthy(queryClient.getQueryData(queryKeys.settings()));
 });
 
-test.serial("a folders event replaces the workspace's folder state", (t) => {
+test.serial("a folders event invalidates that workspace's folder state", (t) => {
   const queryClient = client();
   const state = {
     folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
     membership: { t1: "f1" },
     collapsed: [],
+    parents: {},
+    collapsedGroups: [],
   };
+  queryClient.setQueryData(queryKeys.folders("w1"), state);
+  queryClient.setQueryData(queryKeys.folders("w2"), state);
 
-  applyEventBatch([event("folders.updated", { workspaceId: "w1", state })], queryClient);
+  applyEventBatch([event("research.folders.changed", { workspaceId: "w1" })], queryClient);
 
-  t.deepEqual(queryClient.getQueryData(queryKeys.folders("w1")), state);
+  t.true(queryClient.getQueryState(queryKeys.folders("w1"))?.isInvalidated);
+  t.false(queryClient.getQueryState(queryKeys.folders("w2"))?.isInvalidated);
 });
 
 test.serial("the first event carries the connection id, and opens the stream", async (t) => {

@@ -94,12 +94,17 @@ export interface ResearchDraftsChangedEvent {
 /** The stored folder state changed (from any window, or a workspace removal). */
 export interface ResearchFoldersChangedEvent {
   type: "research.folders.changed";
+  /** Web only: the workspace whose folder state changed. The desktop keeps
+   * one state for every workspace and omits it. */
+  workspaceId?: string;
   timestamp: number;
 }
 
 /** A tree entered or left the Trash, or a trashed tree was deleted. */
 export interface ResearchTrashChangedEvent {
   type: "research.trash.changed";
+  /** Web only: the workspace whose Trash changed. The desktop omits it. */
+  workspaceId?: string;
   timestamp: number;
 }
 
