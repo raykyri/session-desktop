@@ -67,6 +67,7 @@ import {
   withoutKeys,
 } from "@session/shared/lib/researchThreadView";
 import { toggleResearchTile } from "@session/shared/lib/researchTileClamp";
+import { researchTreeContents } from "@session/shared/lib/researchTreeContents";
 import { widgetChangePrompt } from "@session/shared/lib/sessionWidgetActions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -126,6 +127,7 @@ import {
   type StaleEditSubject,
 } from "../sharing/StaleEditDialog.js";
 import { ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
+import { useWorkspaceScope, workspaceSearch } from "../sidebar/scope.js";
 import {
   mayCancelQueued,
   mayChangeHighlights,
@@ -178,6 +180,7 @@ import {
 } from "./persistence.js";
 import { runActive } from "./runState.js";
 import { buildSegmentView, type SegmentView } from "./segmentView.js";
+import { useDeleteOfferStore } from "./DeleteOfferHost.js";
 import { columnIdOf, rowSelector, scrollIntoColumn, settleStrip } from "./stripDom.js";
 import { rangeForTextOffsets } from "./textRanges.js";
 import { useColumnScroll } from "./useColumnScroll.js";
@@ -245,6 +248,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   useThreadInterest(treeId, me !== null);
   const viewers = useThreadPresence(treeId);
   const setFollowed = useSetThreadFollowed();
+  const { workspaceId: scopeWorkspaceId } = useWorkspaceScope();
   const [sharing, setSharing] = useState(false);
   // Move to in the root's menus and the Home group panel: the reader's own
   // thread, outside the Trash.
@@ -1714,11 +1718,19 @@ function ThreadView({ treeId }: { treeId: string }) {
   }, [editorRef, fail, queryClient, staleEdit?.subject, treeId]);
 
   const createTreeMutate = createTree.mutateAsync;
+  const showDeleteOffer = useDeleteOfferStore((state) => state.show);
+  // "Ask as a question": a new thread with the edited text in the edited
+  // thread's workspace (from a shared thread, the reader's current
+  // workspace), which opens. For the reader's own thread a dialog then offers
+  // to delete the edited thread, counted from its nodes as they were when the
+  // question was asked (`DeleteOfferHost`).
   const askEditorAsQuestion = useCallback(
     async (choice: ModelChoice) => {
       const session = editorRef.current;
-      const workspaceId = detailRef.current?.tree.workspaceId;
-      if (!session || editorAsking || !workspaceId) return;
+      const origin = detailRef.current;
+      const own = permissionsRef.current.isOwner;
+      const workspaceId = own ? origin?.tree.workspaceId : scopeWorkspaceId;
+      if (!session || editorAsking || !origin || !workspaceId) return;
       setEditorAsking(true);
       setEditorError(null);
       try {
@@ -1730,14 +1742,36 @@ function ThreadView({ treeId }: { treeId: string }) {
           workspaceId,
         });
         setEditor(null);
-        void routerNavigate({ to: "/r/$treeId", params: { treeId: created.tree.id } });
+        const contents = researchTreeContents(origin.nodes, origin.tree.rootNodeId);
+        if (own && contents) {
+          showDeleteOffer({
+            treeId: origin.tree.id,
+            workspaceId: origin.tree.workspaceId,
+            newTreeId: created.tree.id,
+            contents,
+          });
+        }
+        void routerNavigate({
+          to: "/r/$treeId",
+          params: { treeId: created.tree.id },
+          search: workspaceSearch,
+        });
       } catch (error) {
         setEditorError(errorText(error));
       } finally {
         setEditorAsking(false);
       }
     },
-    [detailRef, editorRef, createTreeMutate, editorAsking, routerNavigate],
+    [
+      detailRef,
+      editorRef,
+      createTreeMutate,
+      editorAsking,
+      permissionsRef,
+      routerNavigate,
+      scopeWorkspaceId,
+      showDeleteOffer,
+    ],
   );
 
   /* ------------------------------------------------- rename, delete */

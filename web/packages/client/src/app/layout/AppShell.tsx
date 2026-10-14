@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
 import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
+import { DeleteOfferHost } from "../../features/thread/DeleteOfferHost.js";
 import { useWorkspaceScope, workspaceSearch } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
@@ -187,6 +188,7 @@ export function AppShell() {
         }}
       />
       {signedIn ? <FolderDialogsHost /> : null}
+      {signedIn ? <DeleteOfferHost /> : null}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

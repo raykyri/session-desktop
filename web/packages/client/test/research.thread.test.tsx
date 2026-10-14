@@ -807,6 +807,63 @@ test.serial("Ask as a question sends the chosen model and effort", async (t) => 
   });
 });
 
+test.serial(
+  "Ask as a question offers to delete the original thread, then its delete confirmation",
+  async (t) => {
+    const note = post();
+    const followUp = node({ id: "f1", parentNodeId: "n1", status: "complete" });
+    const created: ResearchTreeDetail = {
+      tree: tree({ id: "t9", rootNodeId: "n9" }),
+      nodes: [node({ id: "n9", treeId: "t9" })],
+    };
+    const { trpc, router } = await mount({
+      nodes: [note, followUp],
+      contentByNode: {},
+      path: "/r/t1?node=n1&edit=n1",
+      responses: {
+        "research.createTree": created,
+        "research.listTrees": [
+          summary({ id: "t1", title: "Collective memory", runningCount: 0 }),
+          summary({ id: "t9", title: "New", runningCount: 0 }),
+        ],
+        "research.listTrash": [],
+        "research.trashTree": { ok: true },
+        "folders.get": {
+          folders: [],
+          membership: {},
+          collapsed: [],
+          parents: {},
+          collapsedGroups: [],
+        },
+      },
+    });
+    await waitFor(() => screen.getByRole("textbox", { name: "Note text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask as a question" }));
+    const offer = await screen.findByRole("dialog", { name: "Delete the original thread?" });
+    await waitUntil(t, () => router.state.location.pathname === "/r/t9", "the new thread opens");
+    t.truthy(
+      within(offer).getByText(
+        "The question was asked in a new thread. The original thread, “Collective memory”, is unchanged.",
+      ),
+    );
+    t.truthy(
+      within(offer).getByText("It has 1 message (a follow-up); deleting the thread also deletes it."),
+    );
+    t.is(document.activeElement, within(offer).getByRole("button", { name: "Keep" }));
+    fireEvent.click(within(offer).getByRole("button", { name: "Delete…" }));
+    const confirm = await screen.findByRole("dialog", { name: "Delete “Collective memory”?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Move to Trash" }));
+    await waitUntil(
+      t,
+      () => trpc.calls.some((call) => call.path === "research.trashTree"),
+      "the original moves to the Trash",
+    );
+    t.deepEqual(trpc.calls.find((call) => call.path === "research.trashTree")?.input, {
+      treeId: "t1",
+    });
+  },
+);
+
 /* --------------------------------------------------------- a passage */
 
 test.serial("a passage branch's source quotes the passage", async (t) => {
