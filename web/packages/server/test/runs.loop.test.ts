@@ -650,6 +650,34 @@ test.serial("a long paced answer emits a sequence with no hole in it", async (t)
   t.is(attempts.length, 1);
 });
 
+test.serial("the widget guidance follows the asker's Widgets in answers setting", async (t) => {
+  const harness = createAgentHarness(t);
+  const systems: string[] = [];
+  setFixtureScenario((options) => {
+    for (const message of options.prompt) {
+      if (message.role === "system") systems.push(message.content);
+    }
+    return "success";
+  });
+  const { caller } = await launch(harness, "widgetsoff");
+  await harness.settle();
+  t.true(systems.some((system) => system.includes(SESSION_WIDGET_AGENT_GUIDANCE)));
+
+  systems.length = 0;
+  await caller.settings.update({ settings: { researchInlineWidgets: false } });
+  const workspace = await caller.workspaces.ensureDefault();
+  await caller.research.createTree({
+    prompt: "And without widgets?",
+    model: "gpt-luna",
+    workspaceId: workspace.id,
+  });
+  await harness.settle();
+  t.true(systems.length > 0);
+  t.false(systems.some((system) => system.includes(SESSION_WIDGET_AGENT_GUIDANCE)));
+  t.true(systems.every((system) => system.startsWith(RESEARCH_SYSTEM_PROMPT)));
+  t.false(researchSystemPrompt(null, { widgets: false }).includes(SESSION_WIDGET_AGENT_GUIDANCE));
+});
+
 test("research prompts omit linking guidance and retain custom instructions", (t) => {
   t.true(researchSystemPrompt().startsWith(RESEARCH_SYSTEM_PROMPT));
   t.true(researchSystemPrompt().includes(SESSION_WIDGET_AGENT_GUIDANCE));

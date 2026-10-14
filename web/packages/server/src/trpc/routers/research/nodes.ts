@@ -230,14 +230,15 @@ export const nodeProcedures = {
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,
       );
-      if (existing.type !== "exchange" || nodes.isTerminalStatus(existing.run.status)) {
+      // Queued, running, or interrupted and waiting to resume
+      // (`nodes.stopRun`); a settled run cannot be stopped.
+      const node = repo(() => nodes.stopRun(ctx.db, input.nodeId));
+      if (node === null) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: `Research node is already in terminal status: ${nodeStatus(existing)}`,
         });
       }
-      const node = repo(() => nodes.setStatus(ctx.db, ctx.user.id, input.nodeId, "cancelled"));
-      queue.release(ctx.db, node.id);
       // A rerun of its inline follow-up held behind it fails now rather than
       // when its wait runs out; a running node's settlement does this too.
       queue.wakeChildrenOf(ctx.db, node.id);

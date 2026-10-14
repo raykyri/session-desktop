@@ -4,6 +4,7 @@ import { followups, nodes, queue, sharing, trees } from "@session/db";
 import type { ResearchNode, ResearchTree, ResearchTreeDetail } from "@session/shared";
 
 import { sessionEvent } from "../../../events/bus.js";
+import { emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { sharedTree } from "../../../research/access.js";
 import type { FollowupDeps } from "../../../research/followups.js";
 import { dispatchTree, publishQueue } from "../../../research/followups.js";
@@ -13,8 +14,7 @@ import { publish, publishToTree } from "../../emit.js";
 import { repo } from "../../errors.js";
 
 /** The error a departed member's stopped question shows. */
-export const DEPARTED_ASKER_STOPPED =
-  "Stopped: the person who asked no longer has access to this thread.";
+export const DEPARTED_ASKER_STOPPED = nodes.ASKER_GONE_ERROR;
 
 /**
  * After a member's queued follow-ups were deleted (`sharing.setRole` to
@@ -44,17 +44,17 @@ export function afterQueuedFollowupsDropped(
  */
 export function afterDeparture(ctx: EmitterContext, departure: sharing.Departure): void {
   const { treeId, memberId } = departure;
-  const ownerId = treeAudienceIds(ctx, treeId)[0];
   for (const nodeId of departure.activeNodeIds) {
-    if (ownerId === undefined) break;
     try {
-      const node = nodes.setStatus(ctx.db, ownerId, nodeId, "cancelled", {
-        error: DEPARTED_ASKER_STOPPED,
-      });
-      queue.release(ctx.db, nodeId);
+      // Queued, running, or interrupted and waiting to resume: stopped in
+      // one write, with its queue row and resume flag gone.
+      const node = nodes.stopRun(ctx.db, nodeId, DEPARTED_ASKER_STOPPED);
       queue.wakeChildrenOf(ctx.db, nodeId);
       ctx.runs.cancel(nodeId);
-      publishToTree(ctx, treeId, "research.node.updated", { node });
+      if (node) {
+        publishToTree(ctx, treeId, "research.node.updated", { node });
+        emitFeedItemUpsertedForNode(ctx, node.id);
+      }
     } catch (error) {
       ctx.logger.warn({ nodeId, error }, "could not stop a departed member's run");
     }

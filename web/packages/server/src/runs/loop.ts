@@ -226,8 +226,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     ...(deps.toolOverrides?.allowHosts ? { allowHosts: deps.toolOverrides.allowHosts } : {}),
   };
 
-  const instruction = preferencesRepo.ensure(db, userId).researchLaunchInstruction;
-  const system = researchSystemPrompt(instruction);
+  // The asker's preferences: their research instruction, and whether their
+  // answers carry widgets.
+  const preferences = preferencesRepo.ensure(db, userId);
+  const system = researchSystemPrompt(preferences.researchLaunchInstruction, {
+    widgets: preferences.settings.researchInlineWidgets,
+  });
   const parentDocument = parentDocumentOf(db, userId, node);
 
   // A resume keeps the interrupted attempt's committed exchanges: they are

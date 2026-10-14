@@ -77,9 +77,20 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
       interrupted: reconciliation.interruptedNodeIds.length,
       requeued: reconciliation.requeuedNodeIds.length,
       reenqueued: reconciliation.reenqueuedNodeIds.length,
+      stopped: reconciliation.stoppedNodeIds.length,
     },
     "reconciled runs from the previous process",
   );
+  if (reconciliation.stoppedNodeIds.length > 0) {
+    logger.warn(
+      { nodeIds: reconciliation.stoppedNodeIds },
+      "stopped runs whose askers can no longer read their threads",
+    );
+  }
+  for (const failure of reconciliation.failures) {
+    // Left as it was; the rest of the boot goes on.
+    logger.error(failure, "could not reconcile a run from the previous process");
+  }
   for (const nodeId of [...reconciliation.requeuedNodeIds, ...reconciliation.reenqueuedNodeIds]) {
     deps.runs.start(nodeId);
   }

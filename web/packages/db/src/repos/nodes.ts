@@ -43,6 +43,7 @@ import {
   payerOf,
   rejectTrashed,
   requireNodeAccess,
+  treeAccess,
   treeJoinedBy,
 } from "./access.js";
 import type { NodeAccess, TreeRole } from "./access.js";
@@ -523,6 +524,64 @@ export function setStatus(
   });
 }
 
+/** A node as its thread shows it, read without an access check: for the
+ * server's own changes (`stopRun`), made for a caller already checked or for
+ * nobody in particular. */
+function viewUnchecked(db: SessionDatabase, nodeId: string): ResearchNode | null {
+  const row = db.select().from(nodes).where(eq(nodes.id, nodeId)).get();
+  const tree = row ? db.select().from(trees).where(eq(trees.id, row.treeId)).get() : undefined;
+  return row && tree ? toResearchNode(row, relationsFor(db, row, tree)) : null;
+}
+
+/**
+ * Stops a question's run for good while the server still owns it: `queued`,
+ * `starting`, `running`, or `interrupted` with a resume pending. In one
+ * transaction the status becomes `cancelled` (with `error`, when given), the
+ * resume flag is cleared and the `run_queue` row is deleted, so neither the
+ * claim loop nor the next boot picks it up again. `setStatus` refuses
+ * `interrupted` → `cancelled`; this is the path that leaves it.
+ *
+ * No access check: the callers decide who may stop a run
+ * (`research.cancelNode`) or stop it for the server (a member who left, whose
+ * questions nobody can pay for any more). Returns null, changing nothing,
+ * for a node that is not an exchange or whose run has already settled.
+ */
+export function stopRun(
+  db: SessionDatabase,
+  nodeId: string,
+  error: string | null = null,
+): ResearchNode | null {
+  return transact(db, (tx) => {
+    const node = tx.select().from(nodes).where(eq(nodes.id, nodeId)).get();
+    if (!node || node.type !== "exchange" || node.status === null) {
+      return null;
+    }
+    const active =
+      node.status === "queued" ||
+      node.status === "starting" ||
+      node.status === "running" ||
+      (node.status === "interrupted" && node.resumePending);
+    if (!active) {
+      return null;
+    }
+    const at = now();
+    tx.update(nodes)
+      .set({
+        status: "cancelled",
+        error: error ?? node.error,
+        resumePending: false,
+        completedAt: node.completedAt ?? at,
+        runSeq: sql`${nodes.runSeq} + 1`,
+      })
+      .where(eq(nodes.id, nodeId))
+      .run();
+    tx.delete(runQueue).where(eq(runQueue.nodeId, nodeId)).run();
+    touchTree(tx, node.treeId, at);
+    syncFeedItem(tx, node);
+    return viewUnchecked(tx, nodeId);
+  });
+}
+
 /** The queue row a node put back to `queued` needs, written in the same
  * transaction as the status change so a node is never `queued` with nothing to
  * admit it (`docs/02` §5.7). `enqueuedAt` 0 is the head of the queue, which is
@@ -801,7 +860,19 @@ export interface BootReconciliation {
   requeuedNodeIds: string[];
   /** `queued` nodes that had no `run_queue` row, given one. */
   reenqueuedNodeIds: string[];
+  /** Nodes whose payer can no longer read their thread (they left it or
+   * were removed while it was interrupted): stopped with
+   * `ASKER_GONE_ERROR` instead of re-queued. */
+  stoppedNodeIds: string[];
+  /** Nodes that could not be reconciled, left as they were. Each is handled
+   * in a savepoint of its own, so one bad row does not stop the boot. */
+  failures: { nodeId: string; message: string }[];
 }
+
+/** The error a question shows when it was stopped because the person who
+ * asked it, who pays for it, can no longer read its thread. */
+export const ASKER_GONE_ERROR =
+  "Stopped: the person who asked no longer has access to this thread.";
 
 /**
  * Reconciles what the last process left behind (`docs/02` §5.7).
@@ -823,6 +894,20 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       interruptedNodeIds: [],
       requeuedNodeIds: [],
       reenqueuedNodeIds: [],
+      stoppedNodeIds: [],
+      failures: [],
+    };
+    /** One node's step in a savepoint: a failure rolls back that node alone
+     * and is reported, and the boot goes on. */
+    const each = (nodeId: string, step: (sp: SessionDatabase) => void): void => {
+      try {
+        transact(tx, step);
+      } catch (error) {
+        result.failures.push({
+          nodeId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     };
     const active = tx
       .select()
@@ -830,40 +915,63 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       .where(inArray(nodes.status, ["queued", "running"]))
       .all();
     for (const node of active) {
-      const snapshot = tx
-        .select()
-        .from(responseSnapshots)
-        .where(eq(responseSnapshots.nodeId, node.id))
-        .get();
-      const outcome = parseNullableJsonColumn(
-        runOutcomeSchema,
-        snapshot?.outcomeJson,
-        "response_snapshots.outcome_json",
-      );
-      if (outcome && isTerminalStatus(outcome.status)) {
-        tx.update(nodes)
-          .set({
-            status: outcome.status,
-            error: outcome.error ?? null,
-            completedAt: outcome.completedAt,
-            responseSnapshotAt: node.responseSnapshotAt ?? outcome.completedAt,
-            resumePending: false,
-            runSeq: sql`${nodes.runSeq} + 1`,
-          })
-          .where(eq(nodes.id, node.id))
-          .run();
-        tx.delete(runQueue).where(eq(runQueue.nodeId, node.id)).run();
-        result.adoptedNodeIds.push(node.id);
-        continue;
-      }
-      if (node.status === "running") {
-        tx.update(nodes)
-          .set({ status: "interrupted", resumePending: true, runSeq: sql`${nodes.runSeq} + 1` })
-          .where(eq(nodes.id, node.id))
-          .run();
-        result.interruptedNodeIds.push(node.id);
-      }
+      each(node.id, (sp) => {
+        const snapshot = sp
+          .select()
+          .from(responseSnapshots)
+          .where(eq(responseSnapshots.nodeId, node.id))
+          .get();
+        const outcome = parseNullableJsonColumn(
+          runOutcomeSchema,
+          snapshot?.outcomeJson,
+          "response_snapshots.outcome_json",
+        );
+        if (outcome && isTerminalStatus(outcome.status)) {
+          sp.update(nodes)
+            .set({
+              status: outcome.status,
+              error: outcome.error ?? null,
+              completedAt: outcome.completedAt,
+              responseSnapshotAt: node.responseSnapshotAt ?? outcome.completedAt,
+              resumePending: false,
+              runSeq: sql`${nodes.runSeq} + 1`,
+            })
+            .where(eq(nodes.id, node.id))
+            .run();
+          sp.delete(runQueue).where(eq(runQueue.nodeId, node.id)).run();
+          upsertResearchRoot(sp, node.id);
+          result.adoptedNodeIds.push(node.id);
+          return;
+        }
+        if (node.status === "running") {
+          sp.update(nodes)
+            .set({ status: "interrupted", resumePending: true, runSeq: sql`${nodes.runSeq} + 1` })
+            .where(eq(nodes.id, node.id))
+            .run();
+          upsertResearchRoot(sp, node.id);
+          result.interruptedNodeIds.push(node.id);
+        }
+      });
     }
+    /** Re-queues a node for its payer, or stops it when the payer can no
+     * longer read the thread: nobody else may be billed for it, and
+     * `queue.enqueue` refuses a payer who cannot read the node. */
+    const requeue = (
+      node: { id: string; treeId: string; userId: string; model: string | null },
+      enqueuedAt: number,
+      into: string[],
+    ): void => {
+      each(node.id, (sp) => {
+        if (treeAccess(sp, node.userId, node.treeId) === null) {
+          if (stopRun(sp, node.id, ASKER_GONE_ERROR) !== null) {
+            result.stoppedNodeIds.push(node.id);
+          }
+          return;
+        }
+        enqueueForRun(sp, node.userId, node.id, rowModel(node), enqueuedAt);
+        into.push(node.id);
+      });
+    };
     // A `queued` node with no `run_queue` row. The node row and its queue row
     // are separate transactions under `synchronous = NORMAL`
     // (`routers/research/trees.ts`, `createTree` then
@@ -872,6 +980,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
     const orphanedQueued = tx
       .select({
         id: nodes.id,
+        treeId: nodes.treeId,
         // The asker pays (`access.payerOf`).
         userId: sql<string>`coalesce(${nodes.authorId}, ${trees.ownerId})`,
         model: nodes.model,
@@ -889,8 +998,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       .orderBy(asc(nodes.createdAt), asc(nodes.id))
       .all();
     for (const node of orphanedQueued) {
-      enqueueForRun(tx, node.userId, node.id, rowModel(node), node.createdAt);
-      result.reenqueuedNodeIds.push(node.id);
+      requeue(node, node.createdAt, result.reenqueuedNodeIds);
     }
 
     // Every pending resume goes back to the head of the queue: `enqueued_at`
@@ -899,6 +1007,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
     const pending = tx
       .select({
         id: nodes.id,
+        treeId: nodes.treeId,
         userId: sql<string>`coalesce(${nodes.authorId}, ${trees.ownerId})`,
         model: nodes.model,
       })
@@ -908,14 +1017,10 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       .orderBy(asc(nodes.id))
       .all();
     for (const node of pending) {
-      enqueueForRun(tx, node.userId, node.id, rowModel(node), 0);
-      result.requeuedNodeIds.push(node.id);
+      requeue(node, 0, result.requeuedNodeIds);
     }
     // Reset claims previously acquired by terminated server instances.
     tx.update(runQueue).set({ claimedAt: null }).run();
-    for (const nodeId of new Set([...result.adoptedNodeIds, ...result.interruptedNodeIds])) {
-      upsertResearchRoot(tx, nodeId);
-    }
     return result;
   });
 }

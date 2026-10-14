@@ -22,10 +22,11 @@ import { nodeAttachments, nodePrompt, passageAnchor } from "@session/shared/lib/
 
 /**
  * How agents write `session-html` widgets: the desktop's `AGENT_GUIDANCE`
- * (`src-tauri/src/research_widgets.rs`), word for word. The web sends it on
- * every launch; widgets are always on. Widget scripts run on the web when the
- * reader chooses Run scripts, in the sandbox `11-artifacts-and-browser.md` §3
- * describes.
+ * (`src-tauri/src/research_widgets.rs`), word for word. Sent on every launch
+ * whose asker has "Widgets in answers" on (`researchInlineWidgets`, the
+ * default), and left out when it is off, as the desktop does. Widget scripts
+ * run on the web when the reader chooses Run scripts, in the sandbox
+ * `11-artifacts-and-browser.md` §3 describes.
  */
 export const SESSION_WIDGET_AGENT_GUIDANCE = `Session renders a fenced code block whose language is session-html as an interactive widget inside the answer.
 
@@ -46,16 +47,29 @@ function taggedBlock(tag: string, body: string): string {
   return `<${tag}>\n${body}\n</${tag}>`;
 }
 
+export interface SystemPromptOptions {
+  /** The asker's "Widgets in answers" setting: off leaves the widget
+   * guidance out. Absent: on. */
+  widgets?: boolean | undefined;
+}
+
 /**
- * The system prompt for one attempt: the fixed research prompt followed by
- * the account's optional research instruction.
+ * The system prompt for one attempt: the fixed research prompt, the widget
+ * guidance when the asker has widgets on, then the account's optional
+ * research instruction.
  *
  * The user's instruction is clamped and neutralized before it is wrapped, so
  * an instruction that spells the closing tag cannot end the block early and
  * have the remainder read as Session's own words.
  */
-export function researchSystemPrompt(instruction?: string | null): string {
-  const blocks = [RESEARCH_SYSTEM_PROMPT, SESSION_WIDGET_AGENT_GUIDANCE];
+export function researchSystemPrompt(
+  instruction?: string | null,
+  options: SystemPromptOptions = {},
+): string {
+  const blocks = [
+    RESEARCH_SYSTEM_PROMPT,
+    ...(options.widgets === false ? [] : [SESSION_WIDGET_AGENT_GUIDANCE]),
+  ];
   const trimmed = (instruction ?? "").trim();
   if (trimmed !== "") {
     blocks.push(

@@ -480,6 +480,19 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           const node = nodesRepo.get(deps.db, run.userId, run.nodeId);
           if (!node) {
             queueRepo.release(deps.db, run.nodeId);
+            // The payer can no longer read the thread (they left it or were
+            // removed): nobody else may be billed, so the run stops for good
+            // rather than waiting to be re-queued at the next boot.
+            const stopped = nodesRepo.stopRun(deps.db, run.nodeId, nodesRepo.ASKER_GONE_ERROR);
+            if (stopped) {
+              deps.eventBus.emitToTree(
+                stopped.treeId,
+                sessionEvent("research.node.updated", { node: stopped }),
+              );
+              emitFeedItemUpsertedForNode(deps, stopped.id);
+              queueRepo.wakeChildrenOf(deps.db, stopped.id);
+              dispatchTree(followupDeps, stopped.treeId);
+            }
             continue;
           }
           // An interrupted node was re-queued by boot reconciliation; opening
