@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { MAX_OPEN_TREES } from "../../events/bus.js";
 import { requireTreeRole, treeRole } from "../../research/access.js";
-import { protectedProcedure, router } from "../base.js";
+import { budgetedProcedure, protectedProcedure, router } from "../base.js";
 
 export const eventsRouter = router({
   /**
@@ -43,9 +43,10 @@ export const eventsRouter = router({
    * through, and what presence (`research.presence.changed`) reports;
    * sending the same `treeIds` again renews presence, which lapses after
    * `PRESENCE_TTL_MS` without a renewal. Ids of threads the caller may not
-   * read are dropped.
+   * read are dropped. Renewals draw on their own budget
+   * (`RATE_LIMITS.interest`), not on the mutation budget.
    */
-  setInterest: protectedProcedure
+  setInterest: budgetedProcedure("interest", "too many interest updates; try again in a moment")
     .input(
       z.object({
         connectionId: z.string(),

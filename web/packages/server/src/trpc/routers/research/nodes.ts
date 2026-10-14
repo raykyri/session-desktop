@@ -20,6 +20,7 @@ import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import { requireNodeRole } from "../../../research/access.js";
 import {
   assertEffortAccepted,
+  assertMetadataAllowed,
   assertModelUsable,
   assertQueueHasRoom,
   assertWithinDailyLimits,
@@ -330,6 +331,7 @@ export const nodeProcedures = {
       // (`access.assertMayChangeNode`); the requester pays for the run.
       const standing = requireNodeRole(ctx, input.nodeId, "commenter");
       repo(() => access.assertMayChangeNode(ctx.db, standing, ctx.user.id));
+      assertMetadataAllowed(ctx);
       const node = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,

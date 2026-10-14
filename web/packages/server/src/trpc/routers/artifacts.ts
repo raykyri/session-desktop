@@ -22,27 +22,15 @@ import {
   normalizeWidgetHtml,
 } from "../../artifacts/answerBlocks.js";
 import { mintWidgetPreview } from "../../artifacts/widgets.js";
-import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { nodeContent } from "../../research/admission.js";
-import { middleware, publicProcedure, router } from "../base.js";
+import { budgetedProcedure, router } from "../base.js";
 import { repo } from "../errors.js";
 
 /** Signed in, with the `widgets` budget instead of the general mutation
  * budget: one thread can show many widgets. */
-const widgetProcedure = publicProcedure.use(
-  middleware(({ ctx, next }) => {
-    if (ctx.user === null) {
-      throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
-    }
-    const budget = ctx.limiter.take(`widgets:${ctx.user.id}`, RATE_LIMITS.widgets);
-    if (!budget.allowed) {
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: "too many widget requests at once; try again in a moment",
-      });
-    }
-    return next({ ctx: { ...ctx, user: ctx.user } });
-  }),
+const widgetProcedure = budgetedProcedure(
+  "widgets",
+  "too many widget requests at once; try again in a moment",
 );
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);

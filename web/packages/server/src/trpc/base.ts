@@ -108,4 +108,35 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
 
 export const protectedProcedure = t.procedure.use(mutationBudget).use(requireUser);
 
+/** Takes one request from the caller's `name` bucket, or refuses with
+ * `TOO_MANY_REQUESTS` and `message`. */
+export function takeBudget(
+  ctx: { limiter: RateLimiter; user: { id: string } },
+  name: keyof typeof RATE_LIMITS,
+  message: string,
+): void {
+  if (!ctx.limiter.take(`${name}:${ctx.user.id}`, RATE_LIMITS[name]).allowed) {
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message });
+  }
+}
+
+/**
+ * Signed in, drawing on its own bucket (`RATE_LIMITS[name]`) instead of the
+ * mutation budget: for calls a client repeats on a timer or in bulk, which
+ * must not use up the budget a person's edits draw on.
+ */
+export function budgetedProcedure(name: keyof typeof RATE_LIMITS, message: string) {
+  return t.procedure.use(
+    t.middleware(({ ctx, next }) => {
+      if (ctx.user === null) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
+      }
+      takeBudget({ limiter: ctx.limiter, user: ctx.user }, name, message);
+      return next({
+        ctx: { ...ctx, user: ctx.user, userId: ctx.user.id, isAdmin: ctx.user.isAdmin },
+      });
+    }),
+  );
+}
+
 export const adminProcedure = t.procedure.use(mutationBudget).use(requireAdmin);

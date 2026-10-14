@@ -29,7 +29,13 @@ import { now } from "../time.js";
 
 import { memberRow, requireTreeAccess } from "./access.js";
 import type { TreeRow } from "./mappers.js";
-import { depart, dropQueuedFollowups, leave as leaveTree } from "./trees.js";
+import {
+  contentAuthorIds,
+  depart,
+  dropQueuedFollowups,
+  leave as leaveTree,
+  seesMembers,
+} from "./trees.js";
 import type { Departure, QueuedFollowupsDropped } from "./trees.js";
 
 export type { Departure, QueuedFollowupsDropped } from "./trees.js";
@@ -100,13 +106,17 @@ export function setVisibility(
   });
 }
 
-/** The owner and the members of a thread, for anyone who may read it. */
+/** The owner and the members of a thread, for its owner and its members. A
+ * reader of a public thread who is not a member sees the owner and the
+ * members who wrote something in it (`trees.seesMembers`). */
 export function listMembers(
   db: SessionDatabase,
   userId: string | null,
   treeId: string,
 ): ThreadMember[] {
-  const tree = requireTreeAccess(db, userId, treeId, "viewer").tree;
+  const access = requireTreeAccess(db, userId, treeId, "viewer");
+  const tree = access.tree;
+  const authors = seesMembers(access) ? null : new Set(contentAuthorIds(db, treeId));
   const owner = db
     .select({ id: users.id, login: users.login, name: users.name, avatarUrl: users.avatarUrl })
     .from(users)
@@ -123,7 +133,8 @@ export function listMembers(
     .innerJoin(users, eq(users.id, treeMembers.userId))
     .where(eq(treeMembers.treeId, treeId))
     .orderBy(asc(treeMembers.createdAt), asc(treeMembers.userId))
-    .all();
+    .all()
+    .filter((row) => authors === null || authors.has(row.member.userId));
   return [
     ...(owner
       ? [

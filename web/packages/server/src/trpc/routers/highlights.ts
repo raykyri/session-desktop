@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { emitFeedItemUpsertedForNode } from "../../events/feed.js";
 import { requireNodeRole, treeIdOfNode } from "../../research/access.js";
+import { assertMetadataAllowed } from "../../research/admission.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
 import type { EmitterContext } from "../emit.js";
 import { publishToTree } from "../emit.js";
@@ -115,6 +116,9 @@ export const recapsRouter = router({
       // or the owner, refused before the run.
       const { tree } = requireNodeRole(ctx, input.nodeId, "commenter");
       const instructions = repo(() => validateRecapInstructions(input.instructions));
+      // A billed run: the requester's metadata budget, model and daily
+      // limits, checked before it is requested.
+      assertMetadataAllowed(ctx);
       publishToTree(ctx, tree.id, "research.recap.pending", {
         nodeId: input.nodeId,
         pending: true,

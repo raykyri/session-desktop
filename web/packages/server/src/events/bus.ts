@@ -203,11 +203,24 @@ export class EventBus {
     return true;
   }
 
-  /** The people with `treeId` open, each once, in user id order. */
+  /** Whether `userId` is in the thread's audience now: its owner, a
+   * member, or anyone while it is public. Without a directory, everyone. */
+  #inAudience(audience: TreeAudience | null | undefined, userId: string): boolean {
+    if (audience === undefined) return true;
+    if (audience === null) return false;
+    return audience.public || audience.ownerId === userId || audience.memberIds.includes(userId);
+  }
+
+  /** The people with `treeId` open, each once, in user id order. Only
+   * people who may still read the thread are listed: a declaration made
+   * before the thread turned private, or before its reader was removed, is
+   * not presence. */
   viewers(treeId: string): ThreadViewer[] {
     const at = this.#now();
+    const audience = this.#directory ? this.#directory.audience(treeId) : undefined;
     const ids = new Set<string>();
     for (const [userId, connections] of this.#byUser) {
+      if (!this.#inAudience(audience, userId)) continue;
       for (const connection of connections.values()) {
         const seen = connection.openTrees.get(treeId);
         if (!connection.closed && seen !== undefined && at - seen <= PRESENCE_TTL_MS) {
@@ -242,6 +255,39 @@ export class EventBus {
       }
     }
     for (const treeId of touched) this.#announcePresence(treeId);
+  }
+
+  /**
+   * Drops the open-thread declarations of people outside the thread's
+   * audience now, and announces the thread's presence if it changed. Called
+   * after a change that takes readers away: the thread turned private, a
+   * member left or was removed, the owner moved it to the Trash or deleted
+   * it. Their connections stop receiving its events through the declaration.
+   */
+  refreshAudience(treeId: string): void {
+    const audience = this.#directory ? this.#directory.audience(treeId) : undefined;
+    for (const [userId, connections] of this.#byUser) {
+      if (this.#inAudience(audience, userId)) continue;
+      for (const connection of connections.values()) connection.openTrees.delete(treeId);
+    }
+    this.#announcePresence(treeId);
+  }
+
+  /**
+   * Delivers an event to the connections that declared `treeId` open and
+   * belong to nobody in `except`, whatever the audience is now: how readers
+   * of a public thread who are not members hear that it turned private or
+   * was deleted, after the change that took it from them. Call it before
+   * `refreshAudience`, which drops those declarations.
+   */
+  emitToOpenReaders(treeId: string, event: SessionEvent, except: readonly string[] = []): void {
+    const skipped = new Set(except);
+    for (const [userId, connections] of [...this.#byUser]) {
+      if (skipped.has(userId)) continue;
+      for (const connection of [...connections.values()]) {
+        if (connection.openTrees.has(treeId)) this.#deliver(connection, event);
+      }
+    }
   }
 
   #announcePresence(treeId: string): void {

@@ -69,6 +69,9 @@ export function afterDeparture(ctx: EmitterContext, departure: sharing.Departure
     sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
   );
   publishSharingChanged(ctx, treeId, [memberId, ...treeAudienceIds(ctx, treeId)]);
+  // Their open-thread declaration no longer delivers the thread's events or
+  // lists them in its presence, unless the thread is public.
+  ctx.eventBus.refreshAudience(treeId);
 }
 
 /** Publishes `research.node.updated` for the node a mutation just changed,

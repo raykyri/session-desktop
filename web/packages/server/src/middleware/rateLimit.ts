@@ -32,6 +32,14 @@ export const RATE_LIMITS = {
    * thread prepares and registers each widget it shows, and a widget's saved
    * inputs are written up to four times a second while the reader types. */
   widgets: { limit: 600, windowMs: 60_000 },
+  /** `events.setInterest`, per account and apart from `mutations`: every open
+   * tab renews its declaration every 30 seconds, and a reader with several
+   * tabs open must not spend the budget their edits draw on. */
+  interest: { limit: 120, windowMs: 60_000 },
+  /** Metadata runs a person asks for and waits on (`research.generateTitle`,
+   * `recaps.generateCandidate`), per account and on top of `mutations`: each
+   * is a billed model call. */
+  metadata: { limit: 30, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, BucketSpec>;
 
 export class RateLimiter {

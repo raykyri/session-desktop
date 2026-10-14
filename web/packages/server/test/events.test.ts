@@ -170,7 +170,7 @@ test("a reused connection id replaces the older stream rather than unseating the
 });
 
 test("emitToTree reaches the owner, the members and declared public readers", async (t) => {
-  let isPublic = false;
+  let isPublic = true;
   let now = 1_000;
   const bus = new EventBus(
     {
@@ -202,13 +202,15 @@ test("emitToTree reaches the owner, the members and declared public readers", as
   const ownerEvents = drain(owner, 4);
   const memberEvents = drain(member, 4);
 
+  isPublic = false;
   bus.emitToTree("tree-1", sessionEvent("research.node.updated", { node: { id: "n" } }));
   isPublic = true;
-  const readerEvents = drain(reader, 1);
+  const readerEvents = drain(reader, 3);
   bus.emitToTree("tree-1", sessionEvent("research.tree.updated", { tree: { id: "tree-1" } }));
 
   // Presence changes (two arrivals, one lapse) reached the audience before
-  // the node update; the reader got nothing while the thread was private.
+  // the node update; the reader got the presence after their own arrival,
+  // and nothing while the thread was private.
   t.deepEqual(
     (await ownerEvents).map((event) => event.type),
     [
@@ -221,7 +223,54 @@ test("emitToTree reaches the owner, the members and declared public readers", as
   t.deepEqual((await memberEvents).map((event) => event.type).at(-1), "research.node.updated");
   t.deepEqual(
     (await readerEvents).map((event) => event.type),
-    ["research.tree.updated"],
+    ["research.presence.changed", "research.presence.changed", "research.tree.updated"],
+  );
+  bus.closeAll();
+});
+
+test("presence lists only readers in the audience, and losing access drops the declaration", async (t) => {
+  let isPublic = true;
+  const bus = new EventBus({
+    audience: () => ({ ownerId: "owner", memberIds: ["member"], public: isPublic }),
+    viewer: (userId) => ({ userId, login: userId, name: null, avatarUrl: null }),
+  });
+  const owner = bus.subscribe("owner", "o");
+  const reader = bus.subscribe("reader", "r");
+  bus.subscribe("member", "m");
+  bus.setInterest("reader", "r", [], ["tree-1"]);
+  bus.setInterest("member", "m", [], ["tree-1"]);
+  t.deepEqual(
+    bus.viewers("tree-1").map((viewer) => viewer.userId),
+    ["member", "reader"],
+  );
+  // The thread turns private: the reader is no longer presence at once,
+  // before any declaration lapses.
+  isPublic = false;
+  t.deepEqual(
+    bus.viewers("tree-1").map((viewer) => viewer.userId),
+    ["member"],
+  );
+  // They are told, and their declaration is dropped.
+  const told = drain(reader, 3);
+  bus.emitToOpenReaders("tree-1", sessionEvent("research.sharing.changed", { treeId: "tree-1" }), [
+    "owner",
+    "member",
+  ]);
+  bus.refreshAudience("tree-1");
+  t.deepEqual(
+    (await told).map((event) => event.type),
+    ["research.presence.changed", "research.presence.changed", "research.sharing.changed"],
+  );
+  isPublic = true;
+  t.deepEqual(
+    bus.viewers("tree-1").map((viewer) => viewer.userId),
+    ["member"],
+    "the dropped declaration does not come back with the thread",
+  );
+  const ownerEvents = drain(owner, 3);
+  t.deepEqual(
+    (await ownerEvents).map((event) => event.type),
+    ["research.presence.changed", "research.presence.changed", "research.presence.changed"],
   );
   bus.closeAll();
 });

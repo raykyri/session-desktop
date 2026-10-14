@@ -310,28 +310,17 @@ export function detail(
   return detailFromRow(db, userId, requireTreeRow(db, userId, treeId, "viewer"));
 }
 
-/**
- * The people a thread names: its owner, its members, and every author of a
- * node or highlight in it, in that order, each once. Accounts that are gone
- * are left out (their content's author is null).
- */
-export function participants(db: SessionDatabase, treeRow: TreeRow): ResearchParticipant[] {
-  const ids: string[] = [treeRow.ownerId];
+/** Everyone who wrote a node or a highlight in the thread, in the order
+ * nodes then highlights name them, each once. */
+export function contentAuthorIds(db: SessionDatabase, treeId: string): string[] {
+  const ids: string[] = [];
   const add = (id: string | null): void => {
     if (id !== null && !ids.includes(id)) ids.push(id);
   };
   for (const row of db
-    .select({ userId: treeMembers.userId })
-    .from(treeMembers)
-    .where(eq(treeMembers.treeId, treeRow.id))
-    .orderBy(asc(treeMembers.createdAt), asc(treeMembers.userId))
-    .all()) {
-    add(row.userId);
-  }
-  for (const row of db
     .selectDistinct({ authorId: nodes.authorId })
     .from(nodes)
-    .where(and(eq(nodes.treeId, treeRow.id), isNotNull(nodes.authorId)))
+    .where(and(eq(nodes.treeId, treeId), isNotNull(nodes.authorId)))
     .all()) {
     add(row.authorId);
   }
@@ -339,10 +328,47 @@ export function participants(db: SessionDatabase, treeRow: TreeRow): ResearchPar
     .selectDistinct({ authorId: highlights.authorId })
     .from(highlights)
     .innerJoin(nodes, eq(nodes.id, highlights.nodeId))
-    .where(and(eq(nodes.treeId, treeRow.id), isNotNull(highlights.authorId)))
+    .where(and(eq(nodes.treeId, treeId), isNotNull(highlights.authorId)))
     .all()) {
     add(row.authorId);
   }
+  return ids;
+}
+
+/** Whether a reader sees who a thread is shared with: its owner and its
+ * members do; a reader of a public thread who is neither sees only the owner
+ * and the people who wrote something in it. */
+export function seesMembers(access: Pick<TreeAccess, "role" | "member">): boolean {
+  return access.role === "owner" || access.member !== null;
+}
+
+/**
+ * The people a thread names: its owner, its members, and every author of a
+ * node or highlight in it, in that order, each once. Accounts that are gone
+ * are left out (their content's author is null). With `members: false` (a
+ * reader of a public thread who is not a member), members who wrote nothing
+ * are left out too.
+ */
+export function participants(
+  db: SessionDatabase,
+  treeRow: TreeRow,
+  options: { members?: boolean } = {},
+): ResearchParticipant[] {
+  const ids: string[] = [treeRow.ownerId];
+  const add = (id: string | null): void => {
+    if (id !== null && !ids.includes(id)) ids.push(id);
+  };
+  if (options.members !== false) {
+    for (const row of db
+      .select({ userId: treeMembers.userId })
+      .from(treeMembers)
+      .where(eq(treeMembers.treeId, treeRow.id))
+      .orderBy(asc(treeMembers.createdAt), asc(treeMembers.userId))
+      .all()) {
+      add(row.userId);
+    }
+  }
+  for (const id of contentAuthorIds(db, treeRow.id)) add(id);
   const people = new Map(
     db
       .select({ id: users.id, login: users.login, name: users.name, avatarUrl: users.avatarUrl })
@@ -390,7 +416,9 @@ function detailFromRow(
         highlights: highlightsByNode.get(row.id) ?? [],
       }),
     ),
-    participants: participants(db, treeRow),
+    participants: participants(db, treeRow, {
+      members: seesMembers(roleFor(db, userId, treeRow) ?? { role: "viewer", member: null }),
+    }),
   };
 }
 

@@ -9,11 +9,13 @@
 // - a branch from your answer or note (a follow-up that is not inline), to
 //   the parent's author, in place of the follow-up notification;
 // - an invitation to a thread, to the invited account.
+//
+// Nobody is told about a thread they can no longer read.
 
 import { randomUUID } from "node:crypto";
 
 import type { SessionDatabase } from "@session/db";
-import { nodes, sharing, trees, users } from "@session/db";
+import { access, nodes, sharing, trees, users } from "@session/db";
 import type { NotificationPayload, ResearchNode } from "@session/shared";
 import { nodePrompt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
@@ -69,6 +71,12 @@ function authorOf(node: ResearchNode): string | null {
   return node.authorId ?? null;
 }
 
+/** Whether `userId` may still read the thread: a person removed from it, or
+ * a former reader of a thread that turned private, hears nothing about it. */
+function canRead(db: SessionDatabase, userId: string, treeId: string): boolean {
+  return access.treeAccess(db, userId, treeId) !== null;
+}
+
 /** A question or note was added to a thread by `actorId`. */
 export function notifyNewNode(deps: NotifyDeps, actorId: string, node: ResearchNode): void {
   const title = treeTitle(deps.db, node.treeId);
@@ -78,7 +86,11 @@ export function notifyNewNode(deps: NotifyDeps, actorId: string, node: ResearchN
   const notified = new Set<string>([actorId]);
   if (node.parentNodeId != null && node.inline !== true) {
     const parentAuthor = parentAuthorOf(deps, node);
-    if (parentAuthor !== null && !notified.has(parentAuthor)) {
+    if (
+      parentAuthor !== null &&
+      !notified.has(parentAuthor) &&
+      canRead(deps.db, parentAuthor, node.treeId)
+    ) {
       notified.add(parentAuthor);
       notify(deps, [parentAuthor], {
         kind: "branch",
@@ -123,7 +135,11 @@ function parentAuthorKind(deps: NotifyDeps, node: ResearchNode): string {
 export function notifyRunFinished(deps: NotifyDeps, node: ResearchNode): void {
   const status = nodeStatus(node);
   const asker = authorOf(node);
-  if (asker === null || (status !== "complete" && status !== "failed")) {
+  if (
+    asker === null ||
+    (status !== "complete" && status !== "failed") ||
+    !canRead(deps.db, asker, node.treeId)
+  ) {
     return;
   }
   notify(deps, [asker], {

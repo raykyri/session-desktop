@@ -5,12 +5,13 @@
 import type { SessionDatabase } from "@session/db";
 import { nodes, queue, runs as runsRepo, snapshots, usage } from "@session/db";
 import type { ResearchNodeContent, User } from "@session/shared";
-import { canUseModel, findModel } from "@session/shared";
+import { METADATA_MODEL_ID, canUseModel, findModel } from "@session/shared";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { TRPCError } from "@trpc/server";
 
 import type { Config } from "../config.js";
 import type { AppContext } from "../trpc/base.js";
+import { takeBudget } from "../trpc/base.js";
 import { repo, required } from "../trpc/errors.js";
 
 export interface LaunchContext extends AppContext {
@@ -146,6 +147,40 @@ export function assertQueueHasRoom(ctx: LaunchCheckContext): void {
  * model, the daily limits, the run queue. */
 export function launchRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
   return modelRefusal(ctx, modelId) ?? dailyLimitRefusal(ctx) ?? queueRoomRefusal(ctx);
+}
+
+/** Why a metadata run (a title, a recap) may not be billed to this account
+ * now, or null: the metadata model must be usable on this deployment and the
+ * account's daily limits must allow another run. */
+export function metadataRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
+  return modelRefusal(ctx, METADATA_MODEL_ID) ?? dailyLimitRefusal(ctx);
+}
+
+/**
+ * The checks before a metadata run someone asked for and waits on
+ * (`research.generateTitle`, `recaps.generateCandidate`): the account's
+ * metadata budget (`RATE_LIMITS.metadata`), then `metadataRefusal`. The
+ * requester pays for the run.
+ */
+export function assertMetadataAllowed(ctx: LaunchContext): void {
+  takeBudget(ctx, "metadata", "Too many titles and recaps requested; try again in a few minutes.");
+  raise(metadataRefusal(ctx));
+}
+
+/**
+ * Schedules the automatic recap of an imported report: after the import and
+ * after an edit of its body, which clears its recap (the desktop's
+ * `research_recap::schedule` in `import_research_report` and
+ * `update_research_document`). Billed to the person who imported or edited
+ * it, and skipped without a word when their metadata model or daily limits
+ * refuse it, as an automatic recap is. The metadata runner checks the node
+ * again (`shouldScheduleRecap`) when the job runs.
+ */
+export function scheduleDocumentRecap(ctx: LaunchContext, nodeId: string): void {
+  if (metadataRefusal(ctx) !== null) {
+    return;
+  }
+  ctx.runs.enqueueMetadata({ kind: "recap", userId: ctx.user.id, nodeId });
 }
 
 /** Puts an admitted node in the run queue and wakes the agent loop. The
