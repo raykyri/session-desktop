@@ -6465,6 +6465,18 @@ mod tests {
         }
     }
 
+    /// `test_config` with Claude configured as a file in its own temporary
+    /// directory, so the default adapter counts as installed whatever is on
+    /// the machine's PATH. For follow-ups on documents, which take the default
+    /// adapter (`adapters::default_fork_adapter`). Nothing runs the file.
+    fn test_config_with_installed_claude(workspace_root: PathBuf) -> SessionConfig {
+        let binary = temp_workspace().join("claude");
+        std::fs::write(&binary, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut config = test_config(workspace_root);
+        config.adapters.claude.binary = Some(binary.display().to_string());
+        config
+    }
+
     fn sample_agent(id: &str) -> AgentInfo {
         AgentInfo {
             id: id.to_string(),
@@ -12286,7 +12298,7 @@ mod tests {
     #[test]
     fn document_edits_move_matching_highlights_and_branch_anchors() {
         let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
+        let state = AppState::new(test_config_with_installed_claude(workspace.clone()));
         state.restore_session();
         let mut group = sample_group();
         group.dir = workspace.display().to_string();
@@ -12394,7 +12406,7 @@ mod tests {
     #[test]
     fn research_document_edits_replace_content_reanchor_highlights_and_preserve_children() {
         let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
+        let state = AppState::new(test_config_with_installed_claude(workspace.clone()));
         state.restore_session();
         let mut group = sample_group();
         group.dir = workspace.display().to_string();
