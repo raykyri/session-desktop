@@ -1,3 +1,7 @@
+// The materialized Home feed: one row per root node of a thread that is not
+// archived (`docs/02-domain-model-and-database.md` §5.9). Written by
+// `repos/feedgen.ts`; the All Users feed joins `trees.visibility = 'public'`.
+
 import { desc } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -13,7 +17,6 @@ export const feedItems = sqliteTable(
     authorId: text("author_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: ["research"] }).notNull(),
     occurredAt: integer("occurred_at").notNull(),
     sourceRank: integer("source_rank").notNull(),
     nodeId: text("node_id").references(() => nodes.id, { onDelete: "cascade" }),
