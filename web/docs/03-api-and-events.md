@@ -262,9 +262,10 @@ is stored on the row and on the attachment (`xSyndication | xOembed`), so a
 reduced card is recognizable as one. A resolved snapshot is stored with its
 image URLs rewritten to `/embeds/<hash>` (§5). The same pipeline resolves the
 X posts of questions (`createTree`, `forkNode`) and notes (`createPost`,
-`createPostFollowUp`). A failure is cached for `TWEET_CACHE_TTL_MS` like a
-success; `research.hydratePostTweet` passes `retryUnavailable` to ask again
-inside that window.
+`createPostFollowUp`). A failure about the post is cached for
+`TWEET_CACHE_TTL_MS` like a success, a timeout or network failure for
+`TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min); `research.hydratePostTweet` passes
+`retryUnavailable` to ask again inside that window.
 
 ### `artifacts`
 | Procedure | Kind | Input → Output | Desktop |

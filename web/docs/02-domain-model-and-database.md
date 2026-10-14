@@ -327,7 +327,10 @@ The parent trees whose nested children a person has hidden. Per person.
 - Shared across accounts: a post's public payload is the same for everyone and
   the row records nothing about who asked. A row this side of
   `TWEET_CACHE_TTL_MS` (6 h) is reused rather than refetched, failures
-  included, so a deleted post is not re-asked on every render.
+  about the post included (not found, withheld, over the size cap), so a
+  deleted post is not re-asked on every render. A timeout or network failure
+  says nothing about the post and is reused for
+  `TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min) only.
 
 `embed_assets`
 - `hash` PK (SHA-256 of `source_url`, hex — the `/embeds/<hash>` a stored

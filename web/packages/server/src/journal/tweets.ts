@@ -42,6 +42,28 @@ export const TWEET_FETCH_TIMEOUT_MS = 10_000;
 /** A cached payload this new is reused rather than refetched. */
 export const TWEET_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
+const OVERSIZED_RESPONSE = "Tweet response exceeds maximum allowed size";
+
+/** How long a failed fetch that said nothing about the post (a timeout, a
+ * network error) is reused: long enough that a card rendered by many
+ * readers at once asks once, short enough that the next reader asks again. */
+export const TWEET_TRANSIENT_FAILURE_TTL_MS = 60 * 1000;
+
+/** How long a cached row is reused. A post X answered about (resolved, not
+ * found, withheld) and a response over the size cap keep for
+ * `TWEET_CACHE_TTL_MS`; a timeout or network failure for
+ * `TWEET_TRANSIENT_FAILURE_TTL_MS`. */
+function cacheLifetime(cached: { status: string; failure: string | null }): number {
+  if (cached.status === "resolved") {
+    return TWEET_CACHE_TTL_MS;
+  }
+  const failure = cached.failure ?? "";
+  const kind = classifyTweetFetchFailure(failure);
+  const transient =
+    kind === "timeout" || (kind === "network" && !failure.includes(OVERSIZED_RESPONSE));
+  return transient ? TWEET_TRANSIENT_FAILURE_TTL_MS : TWEET_CACHE_TTL_MS;
+}
+
 export class TweetFetchError extends Error {
   constructor(message: string) {
     super(message);
@@ -89,14 +111,14 @@ export async function fetchTweetJson(
   });
   const declared = Number(response.headers.get("content-length") ?? "0");
   if (declared > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError("Tweet response exceeds maximum allowed size");
+    throw new TweetFetchError(OVERSIZED_RESPONSE);
   }
   if (!response.ok) {
     throw new TweetFetchError(`Tweet fetch request failed with HTTP ${response.status}.`);
   }
   const body = await response.text();
   if (Buffer.byteLength(body, "utf8") > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError("Tweet response exceeds maximum allowed size");
+    throw new TweetFetchError(OVERSIZED_RESPONSE);
   }
   return body;
 }
@@ -246,7 +268,7 @@ export async function resolveTweet(
   const cached = tweets.get(deps.db, id);
   const reuse =
     cached !== null &&
-    now - cached.fetchedAt < TWEET_CACHE_TTL_MS &&
+    now - cached.fetchedAt < cacheLifetime(cached) &&
     !(options.retryUnavailable === true && cached.status !== "resolved");
   if (cached && reuse) {
     if (cached.status === "resolved" && cached.snapshot) {

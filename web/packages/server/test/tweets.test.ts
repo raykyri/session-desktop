@@ -16,7 +16,11 @@ import {
 } from "../src/embeds/storage.js";
 import { resolveMessageAttachments } from "../src/journal/attachments.js";
 import { oembedRequestUrl, tweetSnapshotFromOembed } from "../src/journal/oembed.js";
-import { resolveTweet, validateTweetFetchArgs } from "../src/journal/tweets.js";
+import {
+  TWEET_TRANSIENT_FAILURE_TTL_MS,
+  resolveTweet,
+  validateTweetFetchArgs,
+} from "../src/journal/tweets.js";
 import { researchUserText } from "../src/runs/prompts.js";
 
 import { createHarness } from "./helpers.js";
@@ -189,6 +193,32 @@ test("a syndication timeout does not spend a second request on the fallback", as
   // one syndication will not serve, so the caller waits once and retries.
   t.is(log.length, 1);
   t.true(log[0]?.startsWith("https://cdn.syndication.twimg.com/"));
+});
+
+test("a timeout is reused for a minute, a post X said is missing for hours", async (t) => {
+  const log: string[] = [];
+  let reachable = false;
+  const harness = createHarness(t, {
+    fetch: (input) => {
+      log.push(requestUrl(input));
+      if (!reachable) return Promise.reject(new Error("The operation was aborted due to timeout"));
+      return routedFetch([], { syndication: 404, oembed: 404 })(input);
+    },
+  });
+  const deps = { db: harness.db, fetch: harness.deps.fetch ?? globalThis.fetch };
+  t.is((await resolveTweet(deps, TWEET_ID)).failureKind, "timeout");
+  // Readers rendering the card at once share the attempt.
+  t.true((await resolveTweet(deps, TWEET_ID)).cached);
+  t.is(log.length, 1);
+  // A minute later the next reader asks again.
+  reachable = true;
+  const later = Date.now() + TWEET_TRANSIENT_FAILURE_TTL_MS + 1000;
+  const retried = await resolveTweet(deps, TWEET_ID, { now: later });
+  t.false(retried.cached);
+  t.is(retried.failureKind, "notFound");
+  // An answer about the post itself keeps for the cache's whole lifetime.
+  const muchLater = Date.now() + 2 * TWEET_TRANSIENT_FAILURE_TTL_MS + 1000;
+  t.true((await resolveTweet(deps, TWEET_ID, { now: muchLater })).cached);
 });
 
 test("a tombstone is an answer, not a transport failure", async (t) => {
