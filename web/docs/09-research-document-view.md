@@ -1,305 +1,255 @@
-# Research document view
+# Research thread page
 
-> **Being replaced.** This document describes the web's current thread page:
-> one document per inline chain with a rail of branch cards. The desktop has
-> since replaced that layout with paired columns (messages | answer per
-> level, a branches column, one ask box per column, note and editor columns),
-> built on `packages/shared/src/lib/researchColumns.ts` and its neighbours.
-> Phase 4 of the desktop-parity work rebuilds the web thread page on those
-> modules and rewrites this document.
-
-Port of `src/components/research/ResearchDocument.tsx` (5,593 lines, 35
-`useState`, ~30 mirror refs) and its satellites (`ResearchMessage.tsx`,
-`ResearchRecap.tsx`, `ResearchRecapDialog.tsx`, `ResearchThreadActions.tsx`,
-`ResearchDocumentChrome.tsx`, `DocumentComposer.tsx`) to
-`packages/client/src/features/research/`. This is the largest and most complex UI subsystem. The port preserves its
-structure and algorithms, migrates state management to TanStack Query and
-Zustand, and
-deletes the WebKit and Tauri workarounds.
+The thread page (`/r/$treeId`) shows a research tree as a horizontal strip of
+paired columns, ported from the desktop `ResearchThreadPage.tsx` and its
+column components. The code is in `packages/client/src/features/thread/`.
+What the strip contains is computed by the shared
+`packages/shared/src/lib/researchColumns.ts` (`researchStrip`), the same
+module the desktop uses; the web supplies the DOM, the data loading and the
+history.
 
 ## 1. Concepts
 
-- **Tree**: one research investigation. **Node**: a question with its
-  answer; the root node is the tree's first question.
-- **Spine (inline chain)**: the sequence of nodes shown as one document. A
-  follow-up with `inline: true` continues its parent's answer in the same
-  page; at most one inline child per node. `inlineChainFor(nodes, nodeId)`
-  (`src/lib/researchThreads.ts:81`) walks up while `inline` and down through
-  the oldest inline children.
-- **Branches**: non-inline children, shown as cards in a rail beside the
-  parent's answer. A branch with a passage `anchor` (a highlighted passage) is
-  *anchored*: its card sits level with the passage and a connector line joins
-  them; other branches *stack* at the top of the rail.
-- **Page**: the spine for `selectedNodeId`. Selecting a node in another
-  chain switches page; within the same chain it scrolls.
+- **Tree**: one research investigation. **Node**: a message. An exchange is a
+  question with its answer; a post is a note or a saved link (no run); a
+  document is an imported or authored report.
+- **Chain**: a node and its inline follow-ups (`inline: true`; at most one
+  inline child per node). `inlineChainFor` and `chainDisplayOrder`
+  (`researchChains.ts`) give the chain and the order its messages column
+  lists it in (`chainOrder`, set by drag reorder).
+- **Level**: one chain shown as a pair. Level 0 is the root's chain. Level
+  n + 1 is the branch selected in the branches column after level n.
+- **Branch**: a non-inline child. A branch asked about a passage carries a
+  passage anchor (`passageAnchor`); one asked about the whole answer does
+  not.
+- **Selection**: one selected message per level, root first. It is the
+  `?sel=` search parameter (§4).
+- **Unsent branch**: a branch being written (after Branch to right or a
+  margin marker), not yet sent. It is a group in the branches column after
+  the deepest level, with its own ask box.
 
-## 2. Component tree (ported one-to-one)
+## 2. Columns
 
-| Component | Source | Responsibility |
+`researchStrip(nodes, selection, pending, editor)` returns the levels and the
+columns in order. `columnAttributes` writes each column's identity into the
+DOM (`data-research-column`, `data-research-pair`); code that needs a column
+element uses `columnSelector`.
+
+| Role | Component | Content |
 | --- | --- | --- |
-| `ResearchPage` (route) | `App.tsx:11929` integration + `ResearchDocument:1760` | Loads `tree` and route params, manages per-tree stores, renders header, search bar, scroller, portals |
-| `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
-| `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
-| `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with the model summary and relative time |
-| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu) after the run stops; while it is active a single status line replaces the footer, showing the queue position, "Working…"/"Thinking…", the elapsed time and a confirmed Cancel link |
-| `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
-| `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
-| `ConnectorOverlay` (memo) | `:1485` | SVG paths and endpoint dots per connector |
-| `FollowupComposer` | `renderComposer :4841` | Tail composer and the docked ask composer (same component, `docked` prop); mode menu thread/branch; hints; Cmd-Enter / Shift-Cmd-Enter |
-| `SelectionPopover` | `:5430` | Highlight (H) / Expand-Merge (E) / Ask (A) |
-| `NodeContextMenu` | `:5245` | Copy thread as Markdown, Rerun, Generate summary, Edit document, Delete |
-| `RecapDialog` | `ResearchRecapDialog.tsx` | instructions → candidate → apply (the desktop's adapter/model picker is dropped; recaps run on `gemini-flash`) |
-| `DeleteBranchDialog` | `:5501` | confirm with active-run refusal |
-| `DocumentEditor` | `DocumentComposer.tsx` | edit modal for `document` roots (creation not exposed, as today) |
+| messages | `MessagesColumn` | The level's chain as rows (`MessageRow`), the server's queued follow-ups for the chain (`QueuedFollowup`: Cancel, and Retry for a failed send), and the level's ask box. Level 0's header holds the title, Back/Forward and the thread menu. |
+| answer | `AnswerColumn` | The selected message's answer (`AnswerPane`): status line, recap, timeline, sources footer, margin markers. `QueuedAnswerColumn` replaces it while a queued item is selected. |
+| branches | `BranchesColumn` | "Branches · N": one group per branch of the previous level's listed messages, in passage order (passages from the top, then whole-answer branches). Each group shows its source quote, its messages and its queue; the selected group also has the ask box. The unsent branch is the group headed "New branch". |
+| note | `NoteColumn` | A post level: the note (`PostColumn`), double-click to edit. |
+| follow-ups | `FollowUpsColumn` | The note's follow-ups (`PostThread`) and the field that asks a question about the note or adds a follow-up note. |
+| editor | `EditorColumn` | Editing the root document (after the root's answer column) or a note (in place of its note column). |
 
-The posts a question links to are resolved once, at launch, and stored on the
-node (`journal/attachments.ts`); `SegmentPrompt` renders the snapshots below
-the question and drops from the displayed text any permalink that trailed it
-and did embed (`visibleResearchPrompt`, ported from
-`ResearchMessage.tsx:63`). The stored prompt is never rewritten: it is what
-the run was launched with, and a post that did not resolve leaves its
-permalink readable. The card itself is `TweetEmbed`, the same component the
-Home feed and a journal entry mount (`10-home-feed-journal.md`
-§2); the desktop's side-by-side treatment for several posts in one message is
-not ported, so they stack.
+`Columns` lays the strip out in one horizontally scrolling row. The
+messages-side columns (messages, branches, follow-ups) share one width and the
+answer-side columns (answer, note, editor) another; both are automatic (18 %
+and 44 % of the strip, clamped) until a `ColumnResizer` sets them, and a set
+width is stored per browser (`columnWidths.ts`). Wheel deltas on the strip
+scroll it horizontally. The headers of all columns share one height
+(`--research-header-height`), so their bottom borders line up. ⌃Tab and
+⌃⇧Tab cycle the rows of the column last interacted with.
 
-`ResearchRecap` renders only for `kind === "run"`, `status === "complete"`,
-and `recap.responseRevision === content.responseRevision`. The desktop's
-`conversation` kind (terminal exports) and its parallel rendering path are
-not ported.
+Message rows clamp at 12 lines with Show more / Show less
+(`researchTileOverflows`, `useTileClamp`). A row's glyph shows its run state
+(`ui/RowGlyph.tsx`, `researchRowGlyph.ts`). A row with branches shows an
+arrow-up-right indicator: it selects the first branch, or clears the next
+column when one of the row's branches is open.
 
-## 3. Layout
+## 3. Asking
 
-CSS Grid per segment, two tracks (`research.css:932`):
-`grid-template-columns: minmax(0, 640px) minmax(220px, 260px)`, gap
-`clamp(28px, 4vw, 52px)`, `align-items: start`, `position: relative`.
-Content column `width: min(100%, 1160px)`, centered. Segments are a flat
-vertical list with 44 px between them. In Tailwind: the grid becomes
-utilities with arbitrary values referencing tokens
-(`grid-cols-[minmax(0,640px)_minmax(220px,260px)]`), and the desktop's
-literal 640 px (a WebKit `var()` workaround explained at `research.css:838-843`,
-applied at `:940`) becomes a token `--research-answer-max-width`. The grid
-class is `RESEARCH_COLUMNS_CLASS` (`layout.ts`), and a segment's prompt row
-lays out on it too, so the prompt and the answer share one wrapping edge.
+Every messages column and the selected branch group have an ask box
+(`ConversationComposer`). ⌘↵ (Ctrl+↵ off Apple platforms) sends; ⇧⌘↵ sends
+the question as a new branch from the selected answer instead. The box has a
+model and effort picker (`ModelPicker`, defaulting to the model of the
+message it continues) and takes pasted or dropped images (`composer/images.tsx`,
+uploaded to `POST /api/images`; the question sends their ids).
 
-Rail: `position: relative` flex column. Stacked cards flow; anchored cards
-and the docked ask composer are `position: absolute; left: 0; right: 2px`
-with computed `top`. Collision pass (`:3582`): sort desired tops, measure card
-heights, cascade downward with a 12 px gap. Ask displacement (`:3635`):
-clearing the inline transforms animates the cards back to their default layout positions.
+- **Follow-up**: `followups.ask` with the chain's head. The server sends it
+  at once when the chain's tail is complete and its inline slot is free, and
+  queues it otherwise (`05-run-lifecycle-and-streaming.md`). The page reads
+  the queue from `detail.queues` and `research.queue.changed`; while the
+  tail runs, the box reads "Queue a follow-up" and its button "Queue".
+- **Branch**: `research.forkNode` with `inline: false` and the passage
+  anchor, if any.
+- **Edited failed question**: Edit question on a failed or stopped message
+  fills the ask box with its text; sending forks with `replacesNodeId`, so the
+  new question takes the failed one's place (`researchEditedQuestionFork`).
+- **Note follow-up**: the follow-ups column's field has two modes, Ask and
+  Add a note. A follow-up note (`research.createPostFollowUp`) is not sent to
+  any agent; its placeholder reads "Add a note (not visible to agent)".
 
-Measurement: a per-segment element registry (`anchor`, `grid`, `root`,
-`aside`) filled by ref callbacks (`:2044-2073`); one `ResizeObserver` on the
-content container (width changes > 0.5 px) plus `resize`, debounced 140 ms
-into a layout nonce; a `MutationObserver` on annotated segments' response
-roots only (rAF-coalesced) into a highlight-DOM nonce. Positions from
-`getBoundingClientRect` of the passage `Range`, grid, and rail.
+Run controls read `runActive` and `runRetryable` (`runState.ts`): an
+`interrupted` run counts as active while `run.resumePending` is not `false`
+(the server resumes it) and shows Retry once the server has given up.
 
-Connectors (`:3477`): endpoints from `researchAnchorConnectorEndpoints`
-(`researchSelection.ts:26`: passage right edge + 8 px, card left edge − 6 px,
-card Y clamped 24 px inside the card), grid-relative; lane assignment by
-greedy interval coloring with 8 px clearance; lane 0 straight, others use
-`connectorElbowPath` with 14 px stagger capped at 25 % of the span; SVG
-`position:absolute; inset:0; overflow:visible; pointer-events:none`,
-`stroke-dasharray: 2 5`.
+## 4. Selection and history
 
-Responsive at `max-width: 900px` (`research.css:2103`): single column, rail
-below the answer with a top border, connectors hidden, anchored cards and the
-docked composer become static, transforms cleared.
+The selection is the `?sel=` search parameter: each level's selected
+message id, root first, comma-separated (`useThreadHistory.ts`). Back and
+Forward are the browser's; the header's Back/Forward buttons call
+`router.history.back()` / `forward()`. The desktop's rules for recording a
+visit carry over:
 
-All of this ports as-is; only the styling moves to utilities and the scoped
-`prose.css`.
+- User navigation pushes an entry: selecting a message, opening a branch,
+  clearing a column. Selecting what is already shown adds nothing.
+- A selection the page makes itself replaces the entry: the one restored on
+  opening (from the URL, else the per-tree store, else the root), a path cut
+  to what the tree contains, and the selection after messages are removed
+  (`researchSelectionAfterRemoval`).
+- `?node=<id>` (from Home or the Highlights view) opens that message's
+  source path (`researchLevelPath`) and is replaced by `?sel=`.
+  `?highlight=<id>` additionally scrolls to that highlight and flashes it,
+  and `?edit=<id>` opens that note in the editor; both parameters are
+  removed once handled.
 
-## 4. Data flow on the web
+Per-tree state that is not in the URL is kept in localStorage under
+`session.thread-navigation.v1` (`persistence.ts`): the last selection, column
+scroll offsets (answer, messages, branches; 15-minute TTL), "Show earlier"
+expansions, the unsent branch's passage and text, and a pending highlight
+focus. Entries for deleted nodes are pruned.
 
-Desktop: `detail` (tree + nodes) arrives as a prop replaced on every
-`research.node.updated`, which the Rust side emits once per text delta that
-changes the 220-char preview (`state.rs:9152`, `:8735`) with only the
-frontend's 16 ms coalescing as a limit, so up to ~60×/s; turns are polled at 1 Hz for each chain node, requiring extensive memoization workarounds (`useStableValue`, `segmentViewCacheRef`, `sameSegmentNode`, and string effect dependencies) to mitigate frequent re-renders.
+Keyboard (`useThreadKeyboard.ts`):
 
-Web:
-- `useQuery(["tree", treeId])` gives `ResearchTreeDetail`; events patch it
-  in place through the shared reducers, and `response_preview` updates are
-  coalesced server-side to ≤ 2/s, so segment props change only when their
-  node changes. Nodes are selected with `useMemo` per id, so `ThreadSegment`
-  memoization works without mirror refs.
-- `useNodeContent(nodeId)` = `useQuery(["nodeContent", nodeId])` for the
-  snapshot (turns, in-flight text, `seq`), combined with the `liveTurns`
-  store while the node is active. The hook returns `{ turns, inFlightText,
-  responseRevision, source: "live" | "snapshot", error }`; the store applies
-  ordered deltas and refetches on gaps; on `research.run.finished` plus the
-  terminal `node.updated` it refetches once and clears the live buffer
-  (`05-run-lifecycle-and-streaming.md` §4, §9). Snapshot polling at 2 s only
-  while SSE is down.
-- `fetchStamp` (`${status}:${responseSnapshotAt}:${recap.id}`) is replaced by
-  query invalidation keyed on those fields in the event bridge.
-- Highlight mutations (`highlights.create/remove/removeMany`) write the
-  returned value into the `tree` cache node's `highlights`
-  (`patchNodeHighlights` logic, `:4073`); the write waits for server confirmation rather than applying optimistically,
-  because highlights render from persisted IDs. A provisional ID would briefly
-  duplicate the persisted highlight in the overlap layer. Create-then-remove ordering for Expand is preserved (`:4134`).
-- Mutations owned by the page (previously props from `App.tsx`):
-  `research.forkNode`, `cancelNode`, `retryNode`, `renameTree`,
-  `renameNode`, `removeBranch`, `removeTree`, `updateDocument`,
-  `markTreeViewed` (on mount and when
-  the tree gains a completion while open), `recaps.*`.
-- Per-tree persistent UI state (`researchNavigation.ts`: `selectedNodeId`,
-  `scrollByNode` with 15-min TTL, `expandedByNode`, `askByNode`,
-  `followupDraft`, `focusHighlight`) moves into the `navigation` and
-  `drafts` stores keyed by tree id; `selectedNodeId` is the `?node=` search
-  param with the store as fallback for reload without params.
-- `responseRevision` remains the anchor coordinate system and concurrency
-  token; a changed revision drops the open selection popover and ask.
+- ↑/↓, Home/End move between rows of a column; Enter or Space selects the
+  focused row and focuses its answer; → goes to the next column (opening the
+  first branch when there is none); ← goes back.
+- ⌥↑/⌥↓ move the focused message within its column (`setChainOrder`).
+- Esc returns focus to the root level's selected row.
+- ⌘J (re-dispatched by the app shell) focuses the ask box of the level
+  that holds focus.
+- ⌃Tab / ⌃⇧Tab cycle rows (above).
 
-## 5. Highlight and selection flow (ported verbatim)
+Messages are reordered by dragging a row (`useMessageDrag.ts`) or with
+⌥↑/⌥↓; the order is stored with `research.setChainOrder` and applied
+optimistically.
 
-Algorithms live in `shared` (`researchSelection.ts`, `researchHighlights.ts`)
-and the DOM glue in `features/research/selection/`:
+## 5. Selection, highlights and branches from a passage
 
-1. `mousedown` on the selection root records the flat offset at the pointer
-   (`flatOffsetAtPoint`, TreeWalker over text nodes; `caretPositionFromPoint`
-   with `caretRangeFromPoint` fallback) and eligibility: Highlight API
-   present, node has a `responseRevision`, target not in a non-text row
-   (`.tool-block, .thinking-block, .activity-group-block`).
-2. Past a 3 px drag threshold, each rAF snaps the native selection with
-   `createResearchSelectionSnapper(root.textContent, lang, boundaries)`
-   (`Intl.Segmenter` words, pictographic graphemes as units, units split at
-   message boundaries, attached punctuation expanded) and re-applies it with
-   `setBaseAndExtent` keeping focus on the pointer side. The
-   `selectionchange` re-snap pass (WebKit) is kept; it is harmless elsewhere.
-3. `mouseup` → `captureHighlightSelection`: exactly one segment root; not
-   touching a non-text row; not whitespace-only unless it intersects a
-   highlight.
-4. Projection `answer-v1` is `root.textContent` of the response content
-   root: every rendered text node in DOM order, no separators. Showing the
-   full trace changes the projection, so highlights are created only against
-   the collapsed answer's revision and hidden ones are reported
-   ("N highlights hidden · Show full transcript").
-5. Anchor: `{version: 1, projection: "answer-v1", responseRevision, start,
-   end, exact, prefix, suffix}` with 128 chars of context on each side,
-   clamped to the enclosing `.research-response-message`; surrogate pairs
-   never split.
-6. Popover placement: `researchSelectionActionPlacement` on the last client
-   rect; beside when width fits (260 px, 340 px with Expand), else below;
-   `offscreen` when scrolled out; repositioned on scroll/resize via rAF;
-   dismissed on outside mousedown or Escape. Bare keys H/A/E when the target
-   is not editable.
-7. Painting: CSS Custom Highlight API only, no wrapped spans. Four registry
-   layers: `session-research-highlights`, `session-research-query-anchors`,
-   `session-research-highlight-overlaps` (priority 1),
-   `session-research-selected-highlights` (priority 2), styled in
-   `prose.css` with the `highlight-pseudo-literal` marker. `Highlight`
-   objects are created once and mutated (WebKit repaint bug; harmless
-   elsewhere). DOM search uses the same registry with distinct names.
-8. Anchor relocation (`resolveResearchHighlightOffset`): same revision + exact
-   + both contexts → stored offsets. Otherwise, use the nearest occurrence of `exact` whose prefix
-   and suffix match, then a single occurrence matching one side. If no match is
-   found, mark the highlight as orphaned rather than guessing; the
-   hidden-highlights notice lists orphaned highlights.
-9. Click on a painted highlight (`selectAnnotationAtPoint`) selects the whole
-   annotation and re-enters capture so removal goes through the same popover.
-   Hover sets `is-highlight-hovered` and raises the paired card + connector.
-10. `?highlight=<id>` (from the Highlights feed): after the page visit
-    restores and the passage has painted, scroll so the range sits
-    `max(72px, height/3)` from the top; then clear the param.
+The algorithms are in `shared` (`researchSelection.ts`,
+`researchHighlights.ts`); the DOM glue is `textRanges.ts`,
+`selectionCapture.ts`, `useTextSelection.ts` and `painting.ts`.
 
-Browser support: the Custom Highlight API is available in Chromium, Safari,
-and Firefox ≥ 140. If the API is unavailable, text selection still works, but only saved highlights are rendered via a DOM fallback overlay, since rendering transient selection layers using DOM elements causes prohibitive repaint costs. The layer is one absolutely positioned
-element appended after everything the renderer produced, holding one box per
-client rect of each resolved range. Wrapping highlighted ranges in `<mark>` tags is not feasible: because React manages these DOM nodes, wrapping them alters the DOM hierarchy and triggers reconciliation errors.
-The layer contributes no text, so the `answer-v1` projection is identical with
-and without it, and it is repainted on the same reflow nonce the geometry
-passes use.
+1. The browser manages the drag. When a primary-button selection that began
+   in an answer ends, it is expanded once to whole words
+   (`createResearchSelectionExpander`: `Intl.Segmenter` words, split at
+   message boundaries).
+2. `captureSelectionAction` measures the selection in the answer's text
+   projection (`answer-v1`: the response root's text nodes in DOM order, no
+   separators) and clips it to its first paragraph
+   (`clipResearchSelectionToParagraph`). A selection that touches a tool or
+   thinking row is refused; whitespace is refused unless it lies inside a
+   saved highlight.
+3. The anchor is `{version: 1, projection: "answer-v1", responseRevision,
+   start, end, exact, prefix, suffix}` with up to 128 characters of context,
+   clamped to the enclosing message; surrogate pairs are never split. A
+   selection in a streaming answer (no revision yet) can be copied but not
+   saved.
+4. `SelectionToolbar` acts on it: Branch to right (A) opens the unsent
+   branch about the passage; Highlight (H) saves it, merging the highlights it
+   overlaps (Expand), or Remove highlight(s) (E) when it lies inside saved
+   ones; Copy.
+5. Painting uses the CSS Custom Highlight API, no wrapped spans. Layers:
+   saved highlights, branch passages, overlaps, highlight hover, branch hover,
+   the open branch's passage, the unsent branch's passage, the jump flash and
+   the selection's highlights (`painting.ts`, styled in `prose.css` with the
+   `highlight-pseudo-literal` marker). Without the API, saved highlights are
+   drawn by a DOM overlay that adds no text.
+6. Anchors are relocated with `resolveResearchHighlightOffset`; a highlight
+   that cannot be placed is reported as hidden rather than guessed.
+7. Margin markers (`useThreadAnnotations.ts`, `MarkerButton`): one per
+   paragraph that has branches, level with it, and one in the answer's foot
+   for whole-answer branches. A marker opens its branch, or a menu when there
+   are several; its label says how many branches it has and whether one is
+   open.
 
-## 6. Navigation within the document
+## 6. Answers
 
-`applySelection` (`:2578`): record outgoing scroll; set `?node=`; same chain
-→ `scrollToSegment` (smooth, `block: "start"`); different chain → begin page
-visit (scroll top, reset per-visit state). `selectNode` also pushes the
-per-tree history stack (`researchHistory.ts`), pruned when nodes are deleted.
-Cmd-[ / Cmd-] and Alt-Left/Right (non-editable target) and mouse buttons 3/4
-navigate the stack and fall through to router history when exhausted. Trackpad
-swipes are left to the browser.
+`AnswerColumn` loads its node's content with `useNodeContent` (snapshot plus
+the live turns while the run is active, `05-run-lifecycle-and-streaming.md`
+§4, §9) and builds the view with `buildSegmentView` (`segmentView.ts`):
+the collapsed answer is the text after the last tool call, the full trace
+shows everything, and at most 100 timeline items are rendered
+(`TIMELINE_ITEM_RENDER_WINDOW`, with "Show N earlier response items"). The
+live tail keeps its timeline key when the snapshot replaces it, so the answer
+does not remount.
 
-Cmd-J focuses the tail composer (window event from the shortcut dispatcher).
-Escape exits ask mode.
+While a run is active a status line replaces the footer: "Queued · N ahead",
+"Starting…", "Thinking" or "Working", or "Interrupted · resuming", with the
+elapsed time and Stop. A settled answer shows its sources footer and its
+time; a failed or stopped one shows "Error." or the reason, Retry or Run
+again, and Edit question. The recap ("Recap: …") is shown above a complete
+answer only when it was written for the revision on screen; Generate recap in
+the answer menu opens `RecapDialog` (instructions, Generate candidate, Use
+this recap).
 
-Scroll restoration: `useLayoutEffect` gated on "every chain node has content
-or a terminal error" and latched once per visit; if nothing was saved and the
-selected node is mid-chain, scroll to that segment; `recordScroll` debounced
-250 ms into the store; final flush on unmount; `pendingScrollNodeId` scrolls
-to a newly submitted inline follow-up when the updated detail includes it.
+Answer widgets render through `ResearchMarkdown` and `features/widgets`. The
+page provides `WidgetChangeContext` (Ask for changes opens a whole-answer
+branch with `widgetChangePrompt` in its ask box), and each timeline item
+provides `WidgetAnswerContext` (node, tree, message key, why a branch cannot
+be asked) and `SessionWidgetStreamingContext` (true while the run is
+active).
 
-"Show earlier": `TIMELINE_ITEM_RENDER_WINDOW = 100`; expansion persisted per
-tree (`expandedByNode`) because saved scroll offsets depend on it; full-trace
-toggle is per visit.
+## 7. Editing
 
-## 7. Timeline rendering
+- **Document**: Edit document (the root's answer menu) opens the editor
+  column after the root's answer. The answer column shows a preview of the
+  change. Save writes `research.updateDocument` with the revision it opened;
+  a stale revision is refused and the editor stays open. ⌘S saves and stays
+  in edit mode with a toast; Cancel asks before discarding changes; Ask as a
+  question starts a new thread with the edited text.
+- **Note**: double-click a note, or Edit note in its menu, to edit it in
+  place. A double-click on a note's card on Home opens the thread with
+  `?edit=` (a single click on that card waits 250 ms for the second click
+  before opening the thread, since Home is its own route on the web). Save writes `research.updatePost` with `expectedText`; when the
+  note changed meanwhile the server refuses and the editor shows the message
+  with the text kept.
 
-New in the web view: a Sources footer under the answer listing the distinct
-URLs from `web_search` and `web_fetch` results (title, domain, open in new
-tab), a thinking indicator driven by `research.run.thinking`, and
-the model label per segment (a thread may mix models).
+## 8. Menus and dialogs
 
-`buildTimelineItems(turns)` → `timelineItemsAfterLastToolCall` (collapsed
-answer) unless the full trace is shown; window 100 items from the tail (the
-answer is at the bottom); `hasTranscriptActivity` gates the header toggle.
-Oversize policy constants: `MARKDOWN_CHAR_LIMIT = 100_000`,
-`PLAINTEXT_DISPLAY_CHAR_LIMIT = 1_000_000`, `ACTIVITY_PAYLOAD_CHAR_LIMIT =
-200_000`. Activity disclosures via `TranscriptActivityItem`; thinking is an
-activity item. Empty-state cascade: failed → cancelled → `sourceError` →
-complete-but-unavailable → active ("Generating response…" or
-"Working…") → "No response was generated." Duration text from a 1 s tick
-that runs only while a chain node is active: bare while the run is active
-("1m 08s", on the status line beside "Working…"), "Ran for …" or a bare
-duration in the settled footer, and nothing at all before the run starts —
-the status line already reports that.
+`ThreadMenu` is one Base UI menu anchored to the clicked button or the
+pointer (right-click). The answer menu holds the message's statistics,
+Branch to right, Copy answer (or Copy conversation), Copy thread, Show full
+transcript, Rerun, Generate recap, Rename…, Edit document and the delete
+item. The note menu holds Edit note, Copy note and Delete note (D). Dialogs
+are centred confirm dialogs (`ThreadDialogs.tsx`):
 
-Streaming: the live turns from `liveTurns` feed the same
-`buildTimelineItems`; the in-flight assistant turn's text grows in place, so
-the markdown for that block re-renders per delta (≤ 20/s). The desktop memoizes each `ResearchTimelineItem` so unaffected items do not
-re-render. When the
-snapshot arrives, the same `Turn[]` shape produces identical timeline keys,
-so the DOM is reconciled without a flash.
+- **Rerun**: "Rerun will replace the current answer. Continue?";
+  `research.rerunNode`. Refused while the answer, or the answer it follows,
+  is still running.
+- **Delete**: on the root, "Move to Trash" (`research.trashTree`) with a
+  "Delete now" step for permanent deletion; on a branch or follow-up,
+  permanent deletion naming what else it removes (both on
+  `ui/DeleteDialog`). Refused while runs in the subtree are active.
+- **Rename** and **Generate recap**.
 
-Retry and cancel surfaces: answer-pane Retry (`failed | cancelled |
-interrupted`, not archived; `interrupted` normally auto-resumes and shows
-"Resuming…" first), "Queued · N ahead" on the status line while `queued`
-behind other runs (a claimed run reads "Working…" instead; there is no
-second "Queued" line), a Cancel link beside "Working…" on
-every active segment (behind a confirm dialog), composer "Retry follow-up" for a settled inline tail, "Retry run" in
-the node menu. `paneId`-based conditions (`cancellationNeedsRetry`,
-`!paneId`) are removed: the web has no pane-backed runs.
+## 9. Not ported
 
-Composer gating (`:4755-4830`): target = ask node, or last complete chain
-node (branch mode), or the tail (thread mode); `canFollowUpFrom` requires
-`complete`; `canContinueThread` also needs a free inline slot; hints for
-failed/cancelled/interrupted tail and branch-from-last-complete. The
-follow-up composer includes a model chip defaulting to the parent's model
-(gated models hidden for non-admins) and an attach button for documents.
-Cmd-Enter submits in the selected mode, Shift-Cmd-Enter always branches.
+The desktop's swipe navigation, its Home group panel in the strip, Move to
+folder in the thread menu, client-side retries of queued items (the server
+retries), effort on Ask as a question (the model is sent), and restoring the
+strip's horizontal position on return.
 
-## 8. Dialogs and menus
+## 10. Tests
 
-Rebuilt on Base UI wrappers: node context menu (right-click on a segment or
-rail card), answer `⋯` menu, mode menu, `RecapDialog`, `DeleteBranchDialog`,
-`RenameTreeDialog` / `DeleteTreeDialog` (`ResearchTreeMenu.tsx`),
-`DocumentEditor`. `turnPaneRectFrom` clamping is dropped.
-
-## 9. Removed
-
-`paneId` handling, the `conversation` kind and `terminalExport` badge,
-`legacyFollowupCount` label, WebKit literal-640px and `scrollLeft` pin, `overflow: hidden auto`
-(replaced by `overflow-x: clip`), mirror refs, `useStableValue`,
-`segmentViewCacheRef`, and custom prop comparators made unnecessary by the
-normalized cache.
-
-## 10. Tests carried over
-
-`researchSelection`, `researchHighlights`, `researchThreads`,
-`researchBranches`, `researchDocuments`, `researchHistory`,
-`researchNavigation`, `turnTimeline`, `researchRecap`, `researchTreeMenu`,
-plus new component tests: streaming swap without remount, sequence gap
-refetch, `interrupted` rendering with Resume, anchored card collision cascade, connector lane
-assignment, selection snapping on a fixture DOM, hidden-highlight notice
-when the full trace is shown, `?highlight=` focus scroll.
+- `test/research.thread.test.tsx`: the strip on the real router: paired
+  columns, selection history, whole-answer branches, queued follow-ups with
+  Cancel, ⌘↵ and ⌘J, Edit question, Rerun, recap, queue position, snapshot
+  swap without remount, note columns, double-click edit with a stale-edit
+  refusal, passage quotes.
+- `test/research.selection.test.ts`: projection, offsets, word expansion,
+  capture, paragraph clipping, live selections.
+- `test/research.segment.test.ts`: timeline windowing, status line, run
+  state, sources.
+- `test/research.threadState.test.ts`: `?sel=` encoding, column widths,
+  persistence, composer chords, note follow-up copy.
+- `test/research.dialogs.test.tsx`: recap, delete, rerun, tree menu.
+- `e2e/research.spec.ts`: streaming and reload, resume after reload in two
+  tabs, paired columns with keyboard navigation and reload restoring the
+  selection, a highlight and Branch to right on another model, a follow-up
+  queued while the answer streams and then cancelled, a note follow-up with
+  a double-click edit refused as stale, a double-click on a note's Home
+  card opening its editor, Rerun, and the recap dialog.

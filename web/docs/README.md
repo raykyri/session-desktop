@@ -27,7 +27,7 @@ For running, testing, and deploying the app, start from the repository's
 | [06-auth-and-users.md](06-auth-and-users.md) | GitHub OAuth, sessions, admin flag, settings storage |
 | [07-client-architecture.md](07-client-architecture.md) | Client layout, routing, state management, API client, event bridge |
 | [08-design-system-and-styling.md](08-design-system-and-styling.md) | Tailwind v4 over the token system, Base UI, reusable components |
-| [09-research-document-view.md](09-research-document-view.md) | Porting `ResearchDocument.tsx`: timeline, highlights, follow-ups, recap, branches |
+| [09-research-document-view.md](09-research-document-view.md) | The thread page: paired columns, asking and the follow-up queue, selection history, highlights, branches, editing |
 | [10-home-feed-journal.md](10-home-feed-journal.md) | Home feed, composer, X posts in questions, sidebar (documents and journal removed in phase 2.0) |
 | [11-artifacts-and-browser.md](11-artifacts-and-browser.md) | Document preview replacing the native browser overlay |
 | [12-testing-linting-ci.md](12-testing-linting-ci.md) | AVA, Playwright, fixture providers, ESLint, Prettier, CI |

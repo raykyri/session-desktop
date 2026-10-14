@@ -227,7 +227,7 @@ node, focused highlight) that become search params. TanStack Router validates
 search params with zod and integrates with TanStack Query loaders.
 
 Routes (`07-client-architecture.md` §3): `/login`, `/` (Home),
-`/highlights`, `/r/$treeId` with `?node=&highlight=`,
+`/highlights`, `/r/$treeId` with `?sel=&node=&highlight=`,
 `/e/$slug`, `/settings`, `/admin`. The workspace scope is `?ws=` on list
 routes and is remembered server-side per user as the default.
 

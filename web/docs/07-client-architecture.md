@@ -33,7 +33,7 @@ packages/client/
       queries.ts             hooks and query options (useTreeSummaries, useNodeContent, …)
     stores/
       settings.ts            Zustand persist; mirrors server UserSettings
-      navigation.ts          per-document node history, feed mode, scroll anchors, sidebar
+      navigation.ts          feed mode, feed scroll anchors, sidebar
       drafts.ts              composer drafts (sessionStorage + server interface_drafts)
       overlays.ts            dialog/menu/lightbox stack
       liveTurns.ts           per-node streaming buffers
@@ -97,16 +97,18 @@ parameter.
 | `/archive` | `ArchivePage` | signed in |
 | `/trash` | `TrashPage` | signed in; `TrashList` |
 | `/highlights` | `HighlightsPage` | |
-| `/r/$treeId` | `ResearchPage` | search `?node=&highlight=`; `key={treeId}` remount as today |
+| `/r/$treeId` | `ThreadPage` | search `?sel=&node=&highlight=&edit=`: `sel` is each column's selection (`09` §4); `key={treeId}` remount |
 | `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
 Search params validated with zod (`validateSearch`). The workspace scope
 `ws` defaults to `settings.defaultWorkspaceId`; changing it calls
 `settings.update`. Cross-page navigation uses router history, so the
-desktop's `ResearchWorkspaceHistory` reducer is retired; `ResearchHistoryNav`
-in headers calls `router.history.back()/forward()` and disables buttons using
-`window.history.length` heuristics plus a router-tracked index.
+desktop's `ResearchWorkspaceHistory` reducer is retired; `HistoryNav` in the
+thread header calls `router.history.back()/forward()` and disables Forward
+using the router's history index and the furthest index this tab reached
+(sessionStorage). Within a thread the selection is the `?sel=` parameter, so
+browser history is also the thread's visit history (`09` §4).
 
 Synthetic tab ids for Cmd-1..9 and cycling (the desktop's `sidebarMode`, now `packages/shared/src/lib/sidebarMode.ts`) stay;
 they resolve to routes.
@@ -203,7 +205,7 @@ session on to that path.
 | Store | Contents | Persistence |
 | --- | --- | --- |
 | `settings` | `UserSettings` mirror | localStorage `session.settings.v2`; server copy authoritative |
-| `navigation` | per-tree node history stacks, `feedMode`, feed scroll anchors, `sidebarCollapsed`, `sidebarWidth`, per-node scroll offsets (15 min TTL), "show earlier" expansions | localStorage `session.navigation.v2` |
+| `navigation` | `feedMode`, feed scroll anchors, `sidebarCollapsed`, `sidebarWidth` (a thread's selection, scroll offsets and expansions are in `features/thread/persistence.ts`, localStorage `session.thread-navigation.v1`) | localStorage `session.navigation.v2` |
 | `drafts` | home composer drafts (text, model, effort, images), per-node follow-up drafts, targeted asks in progress | sessionStorage + `drafts.set` (debounce 120 ms, flush on `pagehide`) |
 | `overlays` | stack of open dismissable layers with `onEscape` | none |
 | `liveTurns` | `Map<nodeId, { turns, inFlightText, inFlightTurnId, lastSeq, status }>` | none |
@@ -236,10 +238,10 @@ Cmd-Alt-Up/Down. It dispatches:
 
 Cmd-1..9 focus tab · Cmd-N/T Home + focus composer · Shift-Cmd-G toggle
 sidebar · Ctrl-Tab / Shift-Cmd-] cycle · Cmd-Alt-Up/Down move item · Cmd-,
-settings · Cmd-K palette · Cmd-J focus follow-ups (window event consumed by
-`ResearchPage`) · Cmd-O folder menu · Shift-Cmd-E toggle artifact panel ·
-Cmd-[ / Cmd-] node history (inside `ResearchPage`) · Cmd-F DOM search · H/A/E
-on selection.
+settings · Cmd-K palette · Cmd-J focus the current level's ask box (window
+event consumed by the thread page) · Cmd-O folder menu · Shift-Cmd-E toggle
+artifact panel · Cmd-F DOM search · H/A/E on selection. Back and Forward
+within a thread are the browser's (Cmd-[ / Cmd-], Alt-Left/Right).
 
 Browser conflicts: Cmd-N/T open new windows/tabs in browsers and cannot be
 intercepted, and Cmd-1..9 switch browser tabs on some platforms.
