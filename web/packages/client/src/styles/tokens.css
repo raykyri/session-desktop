@@ -305,6 +305,17 @@
   --control-border-hover: #474b4e;
   --control-border-hover-accent: #4a5d56;
   --focus-ring: #6cae9d;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it. */
+  --research-feed-bg: #1a1b1f;
+  --research-tray-bg: #1d1e22;
+  --research-card-selected-bg: #2a2b31;
+  --research-feed-field-bg: #25262b;
+  --research-feed-popover-bg: #25262b;
+  --research-feed-switch-raised-bg: #34353c;
+  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
 :root[data-color-theme="orange-blob"] {
@@ -374,6 +385,17 @@
   --control-border-hover: #4a4946;
   --control-border-hover-accent: #57544f;
   --focus-ring: #33adff;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it. */
+  --research-feed-bg: #1a1918;
+  --research-tray-bg: #1d1c1b;
+  --research-card-selected-bg: #2b2927;
+  --research-feed-field-bg: #232220;
+  --research-feed-popover-bg: #23221f;
+  --research-feed-switch-raised-bg: var(--control-bg);
+  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
 /* ------------------------------------------------------------------ */
@@ -582,6 +604,17 @@
   --control-border-hover: #bcc4c0;
   --control-border-hover-accent: #9fc2b6;
   --focus-ring: #1f8a6f;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it. */
+  --research-feed-bg: #f8f8f9;
+  --research-tray-bg: #f4f4f5;
+  --research-card-selected-bg: #ececef;
+  --research-feed-field-bg: #ffffff;
+  --research-feed-popover-bg: #ffffff;
+  --research-feed-switch-raised-bg: var(--research-feed-field-bg);
+  --research-feed-switch-raised-shadow: 0 1px 2px rgba(15, 15, 20, 0.12);
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] {
@@ -651,4 +684,15 @@
   --control-border-hover: #c1bab0;
   --control-border-hover-accent: #a9c6dc;
   --focus-ring: #0b7fd1;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it. */
+  --research-feed-bg: #f8f6f3;
+  --research-tray-bg: #f3f1ed;
+  --research-card-selected-bg: #ebe7e1;
+  --research-feed-field-bg: #ffffff;
+  --research-feed-popover-bg: #ffffff;
+  --research-feed-switch-raised-bg: var(--research-feed-field-bg);
+  --research-feed-switch-raised-shadow: 0 1px 2px rgba(20, 24, 26, 0.12);
 }

@@ -1,7 +1,7 @@
 import type { RecentActivityCursor, RecentActivityItem } from "@session/shared";
 import test from "ava";
 
-import { feedgen, feedItems, feeds, nodes, trees, workspaces } from "../src/index.js";
+import { feedgen, feedItems, feeds, nodes, posts, trash, trees, workspaces } from "../src/index.js";
 
 import { addUser, createFixture } from "./helpers.js";
 
@@ -232,4 +232,49 @@ test("another account's rows never appear", (t) => {
   const fixture = createFixture(t);
   rootAt(fixture, "n1", 1_700_000_000_000);
   t.deepEqual(feeds.recentActivity(fixture.db, "someone-else", { limit: 10 }).items, []);
+});
+
+test("recentQueriesForTrees reads the named roots in order, with their follow-ups", (t) => {
+  const fixture = createFixture(t);
+  const at = 1_700_000_000_000;
+  rootAt(fixture, "n1", at);
+  rootAt(fixture, "n2", at + 1);
+  const note = posts.admitPost(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    text: "A note",
+    agent: { model: "gemini-flash" },
+  });
+  posts.admitFollowUpNote(fixture.db, fixture.userId, note.tree.rootNodeId, "A follow-up", []);
+  const archived = posts.admitPost(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    text: "Archived",
+    agent: { model: "gemini-flash" },
+  });
+  trees.archive(fixture.db, fixture.userId, archived.tree.id);
+  const trashed = posts.admitPost(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    text: "Trashed",
+    agent: { model: "gemini-flash" },
+  });
+  trash.trashTree(fixture.db, fixture.userId, trashed.tree.id);
+  const treeOf = (nodeId: string) => nodes.get(fixture.db, fixture.userId, nodeId)?.treeId ?? "";
+
+  const roots = feeds.recentQueriesForTrees(fixture.db, fixture.userId, [
+    note.tree.id,
+    treeOf("n2"),
+    archived.tree.id,
+    trashed.tree.id,
+    treeOf("n1"),
+    note.tree.id,
+    "missing",
+  ]);
+  t.deepEqual(
+    roots.map((root) => root.prompt),
+    ["A note", "Question n2", "Question n1"],
+  );
+  t.deepEqual(
+    roots[0]?.children?.map((child) => child.prompt),
+    ["A follow-up"],
+  );
+  t.deepEqual(feeds.recentQueriesForTrees(fixture.db, "someone-else", [note.tree.id]), []);
 });

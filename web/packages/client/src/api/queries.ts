@@ -8,13 +8,17 @@
 import type {
   RecentActivityCursor,
   RecentActivityScope,
+  RecentResearchQuery,
+  ResearchDraft,
   ResearchFolderState,
   ResearchNodeContent,
   ResearchTree,
   ResearchTreeDetail,
+  ResearchTreeSummary,
   Turn,
   UserSettings,
 } from "@session/shared";
+import { recentResearchQueryFromNode } from "@session/shared/lib/activity";
 import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import {
   patchResearchDetailNode,
@@ -45,8 +49,21 @@ import {
   archiveResearchTree,
   cancelResearchNode,
   createInvites,
+  createResearchPost,
+  createResearchPostFollowUp,
   createResearchTree,
   createResearchWorkspace,
+  deleteResearchDraft,
+  emptyResearchTrash,
+  hydrateResearchPostTweet,
+  listRecentActivityForTrees,
+  listResearchDrafts,
+  listResearchTrash,
+  reorderResearchDrafts,
+  restoreResearchTreeFromTrash,
+  saveResearchDraft,
+  trashResearchTree,
+  updateResearchPost,
   forkResearchNode,
   askResearchFollowup,
   cancelQueuedResearchFollowup,
@@ -219,6 +236,71 @@ export function useAdminUsers(enabled = true) {
     refetchInterval: USAGE_STALE_MS,
     enabled,
   });
+}
+
+/** The workspace's saved drafts, newest first unless reordered. */
+export function useResearchDrafts(workspaceId: string) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.drafts(workspaceId),
+    queryFn: () => listResearchDrafts(workspaceId),
+    enabled: signedIn && workspaceId !== "",
+  });
+}
+
+/** The workspace's threads in the Trash, most recently trashed first. Its
+ * folders in the Trash are in the folder state. */
+export function useResearchTrash(workspaceId: string) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.trash(workspaceId),
+    queryFn: () => listResearchTrash(workspaceId),
+    enabled: signedIn && workspaceId !== "",
+  });
+}
+
+/** Feed roots requested in the same tick, read with one call. */
+let pendingFeedRoots: {
+  ids: Set<string>;
+  result: Promise<Map<string, RecentResearchQuery>>;
+} | null = null;
+
+/** Reads one thread's root entry, batched with the other cards that ask in
+ * the same tick (the desktop's `onLoadTrees`, which loads the visible cards'
+ * roots together). */
+export function loadFeedRoot(treeId: string): Promise<RecentResearchQuery | null> {
+  if (!pendingFeedRoots) {
+    const ids = new Set<string>();
+    const result = Promise.resolve().then(async () => {
+      pendingFeedRoots = null;
+      const all = [...ids];
+      const chunks: string[][] = [];
+      for (let start = 0; start < all.length; start += FEED_ROOT_BATCH) {
+        chunks.push(all.slice(start, start + FEED_ROOT_BATCH));
+      }
+      const pages = await Promise.all(chunks.map((chunk) => listRecentActivityForTrees(chunk)));
+      return new Map(pages.flat().map((root) => [root.treeId, root]));
+    });
+    pendingFeedRoots = { ids, result };
+  }
+  pendingFeedRoots.ids.add(treeId);
+  return pendingFeedRoots.result.then((roots) => roots.get(treeId) ?? null);
+}
+
+/** At most this many ids per `feed.recentQueriesForTrees` call (the server's
+ * limit is 200). */
+const FEED_ROOT_BATCH = 100;
+
+export const feedRootQueryOptions = (treeId: string) =>
+  queryOptions({
+    queryKey: queryKeys.feedRoot(treeId),
+    queryFn: () => loadFeedRoot(treeId),
+  });
+
+/** A Home card's root entry, unless `enabled` is false (the card already has
+ * one from a feed page). */
+export function useFeedRoot(treeId: string, enabled = true) {
+  return useQuery({ ...feedRootQueryOptions(treeId), enabled: enabled && treeId !== "" });
 }
 
 export function useActivityFeed(scope: {
@@ -446,12 +528,21 @@ function writeDetail(client: QueryClient, detail: ResearchTreeDetail): void {
   for (const node of detail.nodes) patchActiveNodes(client, node);
 }
 
+/** A new thread's Home card entry, from its detail, so the card shows without
+ * a round trip. */
+function writeFeedRoot(client: QueryClient, detail: ResearchTreeDetail): void {
+  const root = detail.nodes.find((node) => node.id === detail.tree.rootNodeId);
+  const entry = root ? recentResearchQueryFromNode(root, true) : null;
+  if (entry) client.setQueryData(queryKeys.feedRoot(detail.tree.id), { ...entry, children: [] });
+}
+
 export function useCreateResearchTree() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: createResearchTree,
     onSuccess: (detail) => {
       writeDetail(client, detail);
+      writeFeedRoot(client, detail);
       // A new root question is a new feed row, and the feed is keyset
       // paginated: there is no correct place to splice it in by hand.
       invalidateKeys(client, ["activity"]);
@@ -605,15 +696,207 @@ export function useArchiveResearchTree() {
   });
 }
 
+/** Drops threads that left every list but the Trash's (moved to the Trash or
+ * deleted) from the caches that hold them. */
+function dropTrees(client: QueryClient, treeIds: readonly string[]): void {
+  const gone = new Set(treeIds);
+  eachTreeList(client, (summaries) => {
+    const next = summaries.filter((summary) => !gone.has(summary.id));
+    return next.length === summaries.length ? summaries : next;
+  });
+  for (const treeId of gone) {
+    client.removeQueries({ queryKey: queryKeys.tree(treeId) });
+    client.removeQueries({ queryKey: queryKeys.feedRoot(treeId) });
+  }
+  dropActiveNodes(client, (node) => gone.has(node.treeId));
+}
+
+/** Deletes a thread now, in or out of the Trash, with the children listed
+ * under it (Delete now). */
 export function useRemoveResearchTree() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: removeResearchTree,
-    onSuccess: (_result, treeId) => {
-      eachTreeList(client, (summaries) => summaries.filter((summary) => summary.id !== treeId));
-      client.removeQueries({ queryKey: queryKeys.tree(treeId) });
-      dropActiveNodes(client, (node) => node.treeId === treeId);
-      invalidateKeys(client, ["activity"], ["highlightsFeed"]);
+    onSuccess: (result, treeId) => {
+      dropTrees(client, [treeId, ...result.treeIds]);
+      invalidateKeys(client, ["activity"], ["highlightsFeed"], ["trash"]);
+    },
+  });
+}
+
+/** Moves a thread, and the children listed under it, to the Trash. The
+ * server refuses while one of them has an active run. */
+export function useTrashResearchTree() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: trashResearchTree,
+    onSuccess: (tree) => {
+      dropTrees(client, [tree.id]);
+      // The children moved with it arrive as `research.tree.removed` events.
+      invalidateKeys(client, queryKeys.trash(tree.workspaceId), ["activity"], ["highlightsFeed"]);
+    },
+  });
+}
+
+/** Takes a thread, and its children in the Trash, out of the Trash. */
+export function useRestoreResearchTreeFromTrash() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: restoreResearchTreeFromTrash,
+    onSuccess: (tree) => {
+      invalidateKeys(
+        client,
+        queryKeys.trash(tree.workspaceId),
+        ["trees"],
+        ["activity"],
+        ["highlightsFeed"],
+        queryKeys.feedRoot(tree.id),
+      );
+    },
+  });
+}
+
+/** Deletes every thread and folder in the workspace's Trash. */
+export function useEmptyResearchTrash() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) => emptyResearchTrash(workspaceId),
+    onSuccess: (result, workspaceId) => {
+      dropTrees(client, result.treeIds);
+      client.setQueryData<ResearchTreeSummary[]>(queryKeys.trash(workspaceId), []);
+      if (result.folderIds.length > 0) invalidateKeys(client, queryKeys.folders(workspaceId));
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------
+ * Posts
+ * ---------------------------------------------------------------------- */
+
+/** Saves a note or a link as a new thread. */
+export function useCreateResearchPost() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createResearchPost,
+    onSuccess: (detail) => {
+      writeDetail(client, detail);
+      writeFeedRoot(client, detail);
+      invalidateKeys(client, ["activity"]);
+    },
+  });
+}
+
+/** Adds a follow-up note under a post. */
+export function useCreateResearchPostFollowUp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createResearchPostFollowUp,
+    onSuccess: (node) => {
+      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+      mapSummaries(client, (summary) =>
+        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
+      );
+      invalidateKeys(client, ["activity"], queryKeys.feedRoot(node.treeId));
+    },
+  });
+}
+
+/** Replaces a note's text; a stale `expectedText` is refused with CONFLICT. */
+export function useUpdateResearchPost() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: updateResearchPost,
+    onSuccess: (result) => {
+      writeTree(client, result.tree);
+      patchDetail(client, result.tree.id, (detail) => patchResearchDetailNode(detail, result.node));
+      invalidateKeys(
+        client,
+        queryKeys.nodeContent(result.node.id),
+        queryKeys.feedRoot(result.tree.id),
+      );
+      if (result.removedHighlightCount > 0) invalidateKeys(client, ["highlightsFeed"]);
+    },
+  });
+}
+
+/** Asks again for a note's unavailable X posts. */
+export function useHydrateResearchPostTweet() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: hydrateResearchPostTweet,
+    onSuccess: (node) => {
+      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+      invalidateKeys(client, queryKeys.nodeContent(node.id), queryKeys.feedRoot(node.treeId));
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------
+ * Saved drafts
+ * ---------------------------------------------------------------------- */
+
+/** Creates (no id) or updates a draft. An update to a draft no longer listed
+ * (sent or deleted meanwhile) does not bring it back. */
+export function useSaveResearchDraft() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: saveResearchDraft,
+    onSuccess: (saved, input) => {
+      client.setQueryData<ResearchDraft[]>(queryKeys.drafts(saved.workspaceId), (drafts) => {
+        if (!drafts) return drafts;
+        if (drafts.some((draft) => draft.id === saved.id)) {
+          return drafts.map((draft) => (draft.id === saved.id ? saved : draft));
+        }
+        return input.id ? drafts : [saved, ...drafts];
+      });
+    },
+  });
+}
+
+/** Deletes a draft; the list drops it at once and gets it back on a failure. */
+export function useDeleteResearchDraft() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (draft: ResearchDraft) => deleteResearchDraft(draft.id),
+    onMutate: async (draft) => {
+      const key = queryKeys.drafts(draft.workspaceId);
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<ResearchDraft[]>(key);
+      client.setQueryData<ResearchDraft[]>(key, (drafts) =>
+        drafts?.filter((candidate) => candidate.id !== draft.id),
+      );
+      return { previous };
+    },
+    onError: (_error, draft, context) => {
+      if (context?.previous)
+        client.setQueryData(queryKeys.drafts(draft.workspaceId), context.previous);
+    },
+  });
+}
+
+/** Moves a draft before `beforeId`, or to the end for null. */
+export function useMoveResearchDraft() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { workspaceId: string; draftIds: string[] }) =>
+      reorderResearchDrafts(input.workspaceId, input.draftIds),
+    onMutate: async (input) => {
+      const key = queryKeys.drafts(input.workspaceId);
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<ResearchDraft[]>(key);
+      if (previous) {
+        const byId = new Map(previous.map((draft) => [draft.id, draft]));
+        client.setQueryData(
+          key,
+          input.draftIds.flatMap((id) => byId.get(id) ?? []),
+        );
+      }
+      return { previous };
+    },
+    onSuccess: (drafts, input) => client.setQueryData(queryKeys.drafts(input.workspaceId), drafts),
+    onError: (_error, input, context) => {
+      if (context?.previous)
+        client.setQueryData(queryKeys.drafts(input.workspaceId), context.previous);
     },
   });
 }

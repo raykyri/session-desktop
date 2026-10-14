@@ -39,9 +39,16 @@ export const queryKeys = {
   tree: (treeId: string) => ["tree", treeId] as const,
   nodeContent: (nodeId: string) => ["nodeContent", nodeId] as const,
   activity: (scope: ActivityQueryScope) => ["activity", scope] as const,
+  /** One Home card's root entry (`feed.recentQueriesForTrees`); null when the
+   * thread has none to show (archived, in the Trash, gone). */
+  feedRoot: (treeId: string) => ["feedRoot", treeId] as const,
   highlightsFeed: (workspaceId: string) => ["highlightsFeed", workspaceId] as const,
   activeNodes: () => ["activeNodes"] as const,
   adminUsers: () => ["adminUsers"] as const,
+  /** The workspace's saved drafts (`drafts.list`). */
+  drafts: (workspaceId: string) => ["drafts", workspaceId] as const,
+  /** The workspace's threads in the Trash (`research.listTrash`). */
+  trash: (workspaceId: string) => ["trash", workspaceId] as const,
 } as const;
 
 /** The lists the bridge invalidates on reconnect: everything the server keeps
@@ -50,10 +57,13 @@ export const eventPatchedListKeys = [
   "trees",
   "tree",
   "activity",
+  "feedRoot",
   "highlightsFeed",
   "activeNodes",
   "workspaces",
   "folders",
+  "drafts",
+  "trash",
 ] as const;
 
 export function invalidateKeys(
@@ -212,44 +222,58 @@ export function patchActivityFeedNode(
   client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey }, (data) => {
     if (!data) return data;
     let changed = false;
-    const patchQuery = (query: RecentResearchQuery): RecentResearchQuery => {
-      const children = query.children?.map(patchQuery);
-      const childrenChanged =
-        children !== undefined &&
-        children.some((child, index) => child !== query.children?.[index]);
-      if (query.nodeId !== node.id) {
-        if (!childrenChanged) return query;
-        changed = true;
-        return { ...query, children };
-      }
-      const title = node.title ?? null;
-      const recap = nodeRecap(node)?.text ?? null;
-      const status = nodeStatus(node);
-      if (
-        query.status === status &&
-        (query.title ?? null) === title &&
-        (query.recap ?? null) === recap &&
-        !childrenChanged
-      ) {
-        return query;
-      }
-      changed = true;
-      return {
-        ...query,
-        ...(children === undefined ? {} : { children }),
-        status,
-        title,
-        recap,
-      };
-    };
     const pages = data.pages.map((page) => {
-      const items = page.items.map((item) =>
-        item.kind === "research-query" ? { ...item, query: patchQuery(item.query) } : item,
-      );
+      const items = page.items.map((item) => {
+        if (item.kind !== "research-query") return item;
+        const query = patchRecentQueryNode(item.query, node);
+        if (query === item.query) return item;
+        changed = true;
+        return { ...item, query };
+      });
       return items.some((item, index) => item !== page.items[index]) ? { ...page, items } : page;
     });
     return changed ? { ...data, pages } : data;
   });
+  // The Home cards whose roots were loaded on their own read the same
+  // projection.
+  if (queryKey[0] === "activity") {
+    client.setQueriesData<RecentResearchQuery | null>({ queryKey: ["feedRoot"] }, (query) =>
+      query ? patchRecentQueryNode(query, node) : query,
+    );
+  }
+}
+
+/** A feed entry, or one of its children, with the fields a node event is
+ * authoritative for (status, title, recap) taken from `node`. Returns the
+ * entry itself when nothing changed. */
+export function patchRecentQueryNode(
+  query: RecentResearchQuery,
+  node: ResearchNode,
+): RecentResearchQuery {
+  const children = query.children?.map((child) => patchRecentQueryNode(child, node));
+  const childrenChanged =
+    children !== undefined && children.some((child, index) => child !== query.children?.[index]);
+  if (query.nodeId !== node.id) {
+    return childrenChanged ? { ...query, children } : query;
+  }
+  const title = node.title ?? null;
+  const recap = nodeRecap(node)?.text ?? null;
+  const status = nodeStatus(node);
+  if (
+    query.status === status &&
+    (query.title ?? null) === title &&
+    (query.recap ?? null) === recap &&
+    !childrenChanged
+  ) {
+    return query;
+  }
+  return {
+    ...query,
+    ...(children === undefined ? {} : { children }),
+    status,
+    title,
+    recap,
+  };
 }
 
 export function patchActivityFeedItem(

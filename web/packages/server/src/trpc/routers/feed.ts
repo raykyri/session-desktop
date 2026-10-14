@@ -5,7 +5,7 @@ import { recentActivityCursorSchema, recentResearchQueryCursorSchema } from "@se
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { publicProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
 import { catalogUserId } from "../catalog.js";
 import { repo } from "../errors.js";
 
@@ -57,4 +57,13 @@ export const feedRouter = router({
         }),
       );
     }),
+
+  /** The root entries of the signed-in account's named threads, for the Home
+   * cards the newest feed page did not include (the desktop's
+   * `list_recent_activity_for_trees`). */
+  recentQueriesForTrees: protectedProcedure
+    .input(z.object({ treeIds: z.array(z.string()).max(feeds.MAX_FEED_TREE_IDS) }))
+    .query(({ ctx, input }) =>
+      repo(() => feeds.recentQueriesForTrees(ctx.db, ctx.user.id, input.treeIds)),
+    ),
 });

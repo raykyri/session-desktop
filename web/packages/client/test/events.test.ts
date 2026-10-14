@@ -248,6 +248,60 @@ test.serial("a folders event invalidates that workspace's folder state", (t) => 
   t.false(queryClient.getQueryState(queryKeys.folders("w2"))?.isInvalidated);
 });
 
+test.serial("Trash and drafts events refetch only the named workspace's list", (t) => {
+  const queryClient = client();
+  for (const workspaceId of ["w1", "w2"]) {
+    queryClient.setQueryData(queryKeys.trash(workspaceId), []);
+    queryClient.setQueryData(queryKeys.drafts(workspaceId), []);
+  }
+
+  applyEventBatch(
+    [
+      event("research.trash.changed", { workspaceId: "w1" }),
+      event("research.drafts.changed", { workspaceId: "w2" }),
+    ],
+    queryClient,
+  );
+
+  t.true(queryClient.getQueryState(queryKeys.trash("w1"))?.isInvalidated);
+  t.false(queryClient.getQueryState(queryKeys.trash("w2"))?.isInvalidated);
+  t.false(queryClient.getQueryState(queryKeys.drafts("w1"))?.isInvalidated);
+  t.true(queryClient.getQueryState(queryKeys.drafts("w2"))?.isInvalidated);
+});
+
+test.serial("a created thread seeds its Home card, and a removed one drops it", (t) => {
+  const queryClient = client();
+  const root = node({ status: "queued" });
+
+  applyEventBatch([event("research.tree.created", { tree: tree(), node: root })], queryClient);
+  const seeded = queryClient.getQueryData<{ nodeId: string; prompt: string } | null>(
+    queryKeys.feedRoot("t1"),
+  );
+  t.is(seeded?.nodeId, "n1");
+  t.is(seeded?.prompt, "What is collective memory?");
+
+  applyEventBatch(
+    [event("research.node.updated", { node: { ...root, title: "Memory" } })],
+    queryClient,
+  );
+  t.is(
+    queryClient.getQueryData<{ title?: string | null }>(queryKeys.feedRoot("t1"))?.title,
+    "Memory",
+  );
+
+  applyEventBatch([event("research.tree.removed", { treeId: "t1" })], queryClient);
+  t.is(queryClient.getQueryData(queryKeys.feedRoot("t1")), undefined);
+});
+
+test.serial("restoring a thread refetches its Home card", (t) => {
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.feedRoot("t1"), null);
+
+  applyEventBatch([event("research.tree.restored", { tree: tree() })], queryClient);
+
+  t.true(queryClient.getQueryState(queryKeys.feedRoot("t1"))?.isInvalidated);
+});
+
 test.serial("the first event carries the connection id, and opens the stream", async (t) => {
   const queryClient = client();
   const stub = createTrpcStub();

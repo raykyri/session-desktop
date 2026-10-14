@@ -223,3 +223,49 @@ export function recentQueries(
     nextCursor: hasMore && last ? { createdAt: last.createdAt, nodeId: last.nodeId } : null,
   };
 }
+
+/** Most thread ids one `recentQueriesForTrees` call reads. */
+export const MAX_FEED_TREE_IDS = 200;
+
+/** The root entries of the named threads, with their direct follow-ups: the
+ * desktop's `list_recent_activity_for_trees`, which loads the Home cards whose
+ * roots the newest feed page did not include. Threads of another account,
+ * archived threads and threads in the Trash are left out; a repeated id is
+ * read once. The result follows the order of `treeIds`. */
+export function recentQueriesForTrees(
+  db: SessionDatabase,
+  userId: string,
+  treeIds: readonly string[],
+): RecentResearchQuery[] {
+  const ids = [...new Set(treeIds)].slice(0, MAX_FEED_TREE_IDS);
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = db
+    .select({ node: nodes })
+    .from(nodes)
+    .innerJoin(trees, eq(trees.rootNodeId, nodes.id))
+    .where(
+      and(
+        inArray(trees.id, ids),
+        eq(trees.ownerId, userId),
+        isNull(nodes.parentNodeId),
+        isNull(trees.archivedAt),
+        isNull(trees.trashedAt),
+      ),
+    )
+    .all();
+  const byTree = new Map(rows.map((row) => [row.node.treeId, row.node]));
+  const roots = ids.flatMap((id) => {
+    const root = byTree.get(id);
+    return root ? [root] : [];
+  });
+  const children = childrenByParent(
+    db,
+    roots.map((root) => root.id),
+  );
+  return roots.map((root) => ({
+    ...toRecentResearchQuery(root),
+    children: children.get(root.id) ?? [],
+  }));
+}

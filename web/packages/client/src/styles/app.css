@@ -94,6 +94,16 @@
   --color-surface-scrim: var(--scrim-bg);
   --color-surface-lightbox-scrim: var(--lightbox-scrim-bg);
   --color-surface-lightbox-caption: var(--lightbox-caption-bg);
+  /* The Home feed column, its folder trays, the open thread's card, and the
+     fields and popovers over the feed (the desktop's B1 feed tokens). */
+  --color-surface-feed: var(--research-feed-bg);
+  --color-surface-tray: var(--research-tray-bg);
+  --color-surface-card-selected: var(--research-card-selected-bg);
+  --color-surface-feed-field: var(--research-feed-field-bg);
+  --color-surface-feed-popover: var(--research-feed-popover-bg);
+  --color-surface-switch-raised: var(--research-feed-switch-raised-bg);
+  --color-surface-drop: var(--split-drop-bg);
+  --color-border-drop: var(--split-drop-border);
 
   /* ---- Borders. ---- */
   --color-border-faint: var(--surface-border-faint);
@@ -171,6 +181,7 @@
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
+  --shadow-switch-raised: var(--research-feed-switch-raised-shadow);
 
   --z-popover: var(--z-popover);
   --z-select-popover: var(--z-select-popover);

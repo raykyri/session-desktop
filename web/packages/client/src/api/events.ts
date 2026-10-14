@@ -29,6 +29,7 @@ import {
   recentActivityItemSchema,
   patchResearchNodeContent,
 } from "@session/shared";
+import { recentResearchQueryFromNode } from "@session/shared/lib/activity";
 import {
   patchResearchDetailHighlightCreated,
   patchResearchDetailHighlightsRemoved,
@@ -126,6 +127,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
           : [summary, ...summaries],
       );
       patchActiveNodes(client, event.node);
+      // The new thread's Home card reads its root from here, so it shows
+      // without a round trip.
+      const root = recentResearchQueryFromNode(event.node, true);
+      if (root && client.getQueryData(queryKeys.feedRoot(event.tree.id)) === undefined) {
+        client.setQueryData(queryKeys.feedRoot(event.tree.id), { ...root, children: [] });
+      }
       return;
     }
 
@@ -140,22 +147,41 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         // and which list it belongs to is the server's answer, not a patch's.
         // The highlights feed reads from unarchived threads only
         // (`db/repos/highlights.ts:feed`), so archiving retires this thread's
-        // rows and restoring brings them back (`10` §4).
-        invalidate(client, ["trees"], ["highlightsFeed"]);
+        // rows and restoring brings them back (`10` §4). A restored thread
+        // (from the Archive or the Trash) has a Home card again, and an
+        // archived one has none.
+        invalidate(client, ["trees"], ["highlightsFeed"], queryKeys.feedRoot(event.tree.id));
       }
       return;
     }
 
     case "research.tree.removed": {
+      // Sent for a thread deleted and for one moved to the Trash: either way
+      // it leaves every list but the Trash's, which `research.trash.changed`
+      // refetches.
       eachTreeList(client, (summaries) => {
         const next = summaries.filter((summary) => summary.id !== event.treeId);
         return next.length === summaries.length ? summaries : next;
       });
       client.removeQueries({ queryKey: queryKeys.tree(event.treeId) });
+      client.removeQueries({ queryKey: queryKeys.feedRoot(event.treeId) });
       dropActiveNodes(client, (node) => node.treeId === event.treeId);
       invalidate(client, ["highlightsFeed"]);
       return;
     }
+
+    case "research.trash.changed":
+      invalidate(
+        client,
+        event.workspaceId === undefined ? ["trash"] : queryKeys.trash(event.workspaceId),
+      );
+      return;
+
+    case "research.drafts.changed":
+      // Drafts are per person; the event names the workspace whose list
+      // changed, and that list refetches.
+      invalidate(client, queryKeys.drafts(event.workspaceId));
+      return;
 
     case "research.node.created": {
       // A summary count is a delta, so it is added once per node: the tab that
@@ -172,6 +198,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         );
       }
       patchActiveNodes(client, event.node);
+      // A Home card lists its root's direct follow-ups.
+      invalidate(client, queryKeys.feedRoot(event.node.treeId));
       return;
     }
 
@@ -214,7 +242,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       for (const nodeId of removed) {
         client.removeQueries({ queryKey: queryKeys.nodeContent(nodeId) });
       }
-      invalidate(client, ["highlightsFeed"]);
+      invalidate(client, ["highlightsFeed"], queryKeys.feedRoot(event.treeId));
       return;
     }
 
@@ -230,8 +258,9 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         const withTree = patchResearchDetailTree(detail, event.tree);
         return patchResearchDetailNode(withTree, event.node);
       });
-      // The markdown itself is not on the event, so the open document refetches.
-      invalidate(client, queryKeys.nodeContent(event.node.id));
+      // The markdown itself is not on the event, so the open document refetches,
+      // and so does its Home card's preview.
+      invalidate(client, queryKeys.nodeContent(event.node.id), queryKeys.feedRoot(event.tree.id));
       if (event.removedHighlightCount > 0) invalidate(client, ["highlightsFeed"]);
       return;
     }
@@ -386,6 +415,13 @@ function applyFeedItemUpserted(client: QueryClient, payload: Record<string, unkn
     }
     if (!patchActivityFeedItem(client, key, item)) invalidate(client, key);
   }
+  // The item is the thread's root entry with its follow-ups: what a Home card
+  // that loaded its root on its own shows (a note's edited text, a new
+  // follow-up).
+  const rootKey = queryKeys.feedRoot(item.query.treeId);
+  if (client.getQueryData(rootKey) !== undefined && item.query.parentNodeId == null) {
+    client.setQueryData(rootKey, item.query);
+  }
 }
 
 function applyFeedItemRemoved(client: QueryClient, payload: Record<string, unknown>): void {
@@ -506,7 +542,16 @@ export function applyEventBatch(events: readonly SessionEvent[], client: QueryCl
 /** The caches an unparseable event of this type could have changed. */
 function scopeFor(type: string): readonly (readonly unknown[])[] {
   if (type.startsWith("models.")) return [queryKeys.runtimeConfig()];
-  return [["trees"], ["tree"], ["activity"], ["highlightsFeed"], ["activeNodes"]];
+  return [
+    ["trees"],
+    ["tree"],
+    ["activity"],
+    ["feedRoot"],
+    ["highlightsFeed"],
+    ["activeNodes"],
+    ["drafts"],
+    ["trash"],
+  ];
 }
 
 /* -------------------------------------------------------------------------

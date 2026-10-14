@@ -15,9 +15,12 @@ import type {
   RecentActivityCursor,
   RecentActivityPage,
   RecentActivityScope,
+  RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchBranchRemoval,
+  ResearchDraft,
   ResearchFolderState,
+  ResearchImageAttachment,
   ResearchFollowupQueueItem,
   ResearchHighlight,
   ResearchHighlightAnchor,
@@ -30,12 +33,14 @@ import type {
   ResearchTreeSummary,
   Turn,
   UpdateResearchDocumentResult,
+  UpdateResearchPostResult,
   User,
   UserSettings,
   Workspace,
 } from "@session/shared";
+import { RESEARCH_IMAGE_UPLOAD_PATH } from "@session/shared";
 
-import { trpc } from "./trpc.js";
+import { REQUESTED_WITH_HEADERS, trpc } from "./trpc.js";
 
 /* -------------------------------------------------------------------------
  * system, auth, settings
@@ -183,9 +188,144 @@ export function createResearchTree(request: {
   prompt: string;
   title?: string;
   model: string;
+  /** An effort the model accepts; absent or null, the model's default. */
+  effort?: string | null;
   workspaceId: string;
+  /** Ids from `uploadResearchImage`. */
+  images?: string[];
 }): Promise<ResearchTreeDetail> {
   return trpc().research.createTree.mutate(request);
+}
+
+/* -------------------------------------------------------------------------
+ * posts: notes and saved links
+ * ---------------------------------------------------------------------- */
+
+/** Saves a note, or a link when the body is a single http(s) URL
+ * (`create_research_post`). `model` and `effort` are the default for the
+ * note's AI follow-ups; nothing runs. */
+export function createResearchPost(request: {
+  body: string;
+  workspaceId: string;
+  model: string;
+  effort?: string | null;
+  images?: string[];
+}): Promise<ResearchTreeDetail> {
+  return trpc().research.createPost.mutate(request);
+}
+
+/** Adds a follow-up note under a post (`create_research_post_follow_up`). */
+export function createResearchPostFollowUp(request: {
+  parentNodeId: string;
+  body: string;
+}): Promise<ResearchNode> {
+  return trpc().research.createPostFollowUp.mutate(request);
+}
+
+/** Replaces a note's text (`update_research_post`); refused with CONFLICT
+ * when `expectedText` is no longer the stored text. */
+export function updateResearchPost(request: {
+  nodeId: string;
+  text: string;
+  expectedText: string;
+}): Promise<UpdateResearchPostResult> {
+  return trpc().research.updatePost.mutate(request);
+}
+
+/** Asks again for the X posts a note carries that could not be read. */
+export function hydrateResearchPostTweet(nodeId: string): Promise<ResearchNode> {
+  return trpc().research.hydratePostTweet.mutate({ nodeId });
+}
+
+/* -------------------------------------------------------------------------
+ * images
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Uploads one image for a later question, draft or follow-up to name by id
+ * (`POST /api/images`, multipart with one `file` field). Rejects with the
+ * server's message: the type, size and rate limits are checked there.
+ */
+export async function uploadResearchImage(
+  file: Blob,
+  fileName?: string,
+): Promise<ResearchImageAttachment> {
+  const body = new FormData();
+  body.append("file", file, fileName ?? (file instanceof File ? file.name : "image"));
+  const response = await fetch(RESEARCH_IMAGE_UPLOAD_PATH, {
+    method: "POST",
+    body,
+    credentials: "same-origin",
+    headers: REQUESTED_WITH_HEADERS,
+  });
+  const payload = (await response.json().catch(() => null)) as
+    ResearchImageAttachment | { error?: unknown } | null;
+  if (!response.ok || payload === null || !("kind" in payload)) {
+    const message =
+      payload !== null && "error" in payload && typeof payload.error === "string"
+        ? payload.error
+        : `The image could not be uploaded (${response.status}).`;
+    throw new Error(message);
+  }
+  return payload;
+}
+
+/* -------------------------------------------------------------------------
+ * saved drafts
+ * ---------------------------------------------------------------------- */
+
+export function listResearchDrafts(workspaceId: string): Promise<ResearchDraft[]> {
+  return trpc().drafts.list.query({ workspaceId });
+}
+
+/** Without an id, creates a draft at the top of the list; with one, replaces
+ * its prompt. `images` (upload ids) replaces the draft's images; omitted, they
+ * are kept. */
+export function saveResearchDraft(request: {
+  id?: string | null;
+  workspaceId: string;
+  prompt: string;
+  images?: string[] | null;
+}): Promise<ResearchDraft> {
+  return trpc().drafts.save.mutate(request);
+}
+
+export function deleteResearchDraft(draftId: string) {
+  return trpc().drafts.remove.mutate({ draftId });
+}
+
+/** `draftIds` must name exactly the workspace's drafts. */
+export function reorderResearchDrafts(
+  workspaceId: string,
+  draftIds: string[],
+): Promise<ResearchDraft[]> {
+  return trpc().drafts.reorder.mutate({ workspaceId, draftIds });
+}
+
+/* -------------------------------------------------------------------------
+ * Trash
+ * ---------------------------------------------------------------------- */
+
+/** Moves a thread, and the children listed under it, to the Trash. */
+export function trashResearchTree(treeId: string): Promise<ResearchTree> {
+  return trpc().research.trashTree.mutate({ treeId });
+}
+
+/** Takes a thread, and its children in the Trash, out of the Trash. */
+export function restoreResearchTreeFromTrash(treeId: string): Promise<ResearchTree> {
+  return trpc().research.restoreTreeFromTrash.mutate({ treeId });
+}
+
+/** The workspace's threads in the Trash, most recently trashed first. */
+export function listResearchTrash(workspaceId: string): Promise<ResearchTreeSummary[]> {
+  return trpc().research.listTrash.query({ workspaceId });
+}
+
+/** Deletes every thread and folder in the workspace's Trash. */
+export function emptyResearchTrash(
+  workspaceId: string,
+): Promise<{ treeIds: string[]; folderIds: string[] }> {
+  return trpc().research.emptyTrash.mutate({ workspaceId });
 }
 
 export function forkResearchNode(request: {
@@ -385,6 +525,13 @@ export function listRecentResearchQueries(input?: {
   before?: RecentResearchQueryCursor | null;
 }) {
   return trpc().feed.recentQueries.query(input);
+}
+
+/** The root entries of the named threads, with their follow-ups, for Home
+ * cards whose roots no feed page has loaded
+ * (`list_recent_activity_for_trees`). */
+export function listRecentActivityForTrees(treeIds: string[]): Promise<RecentResearchQuery[]> {
+  return trpc().feed.recentQueriesForTrees.query({ treeIds });
 }
 
 /* -------------------------------------------------------------------------

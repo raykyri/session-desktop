@@ -227,6 +227,14 @@ test("scopes feed activity to the workspace", async (t) => {
   t.is(activity.items.length, 1);
   const queries = await caller.feed.recentQueries({ limit: 10 });
   t.is(queries.items.length, 1);
+  const roots = await caller.feed.recentQueriesForTrees({ treeIds: [detail.tree.id] });
+  t.deepEqual(
+    roots.map((root) => root.nodeId),
+    [nodeId],
+  );
+  await t.throwsAsync(
+    harness.caller(null).feed.recentQueriesForTrees({ treeIds: [detail.tree.id] }),
+  );
   t.is((await caller.research.listActivity()).length, 0);
 });
 
