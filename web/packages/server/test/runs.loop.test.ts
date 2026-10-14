@@ -14,7 +14,7 @@ import type { SessionEvent, Turn } from "@session/shared";
 import test from "ava";
 
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
-import { researchSystemPrompt } from "../src/runs/prompts.js";
+import { SESSION_WIDGET_AGENT_GUIDANCE, researchSystemPrompt } from "../src/runs/prompts.js";
 
 import { createHarness, recapOf, runOf } from "./helpers.js";
 import { collectEvents, createAgentHarness, nextProcessAgent } from "./runsHelpers.js";
@@ -614,7 +614,8 @@ test.serial("a long paced answer emits a sequence with no hole in it", async (t)
 
 test("research prompts omit linking guidance and retain custom instructions", (t) => {
   t.true(researchSystemPrompt().startsWith(RESEARCH_SYSTEM_PROMPT));
-  t.true(researchSystemPrompt().includes("Web previews do not run scripts"));
+  t.true(researchSystemPrompt().includes(SESSION_WIDGET_AGENT_GUIDANCE));
+  t.false(researchSystemPrompt().includes("Web previews do not run scripts"));
   t.is(researchSystemPrompt("  "), researchSystemPrompt());
   t.is(
     researchSystemPrompt("Be concise."),
