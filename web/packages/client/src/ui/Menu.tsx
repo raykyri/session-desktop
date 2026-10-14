@@ -135,6 +135,18 @@ export function MenuSeparator({ className }: { className?: string }) {
   return <BaseMenu.Separator className={cn(MENU_SEPARATOR, className)} />;
 }
 
+/** A labelled group of items. Base UI requires a group label to be inside its
+ * group. */
+export function MenuGroup({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <BaseMenu.Group>
+      <MenuGroupLabel>{label}</MenuGroupLabel>
+      {children}
+    </BaseMenu.Group>
+  );
+}
+
+/** A group's label; only valid inside `MenuGroup` (or `BaseMenu.Group`). */
 export function MenuGroupLabel({ children }: { children: ReactNode }) {
   return (
     <BaseMenu.GroupLabel className="text-fg-subtle px-2.5 pt-2 pb-1 text-xs">
