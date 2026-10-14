@@ -1,5 +1,5 @@
 import { useNow } from "../../hooks/useNow";
-import { formatElapsedClock, shortWhen } from "../../lib/shortTime";
+import { formatElapsedClock, shortWhen } from "@session/shared/lib/shortTime";
 
 /** An active run's elapsed time ("1:08"), ticking once a second. Only this
  * span re-renders on each tick. */

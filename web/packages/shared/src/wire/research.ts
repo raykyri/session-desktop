@@ -216,21 +216,23 @@ export interface ResearchDocumentNode extends ResearchNodeBase {
 /** A research node as commands and events send it (`ResearchNodeView`). */
 export type ResearchNode = ResearchPostNode | ResearchExchangeNode | ResearchDocumentNode;
 
-/** Compact research-root (run or post) history returned to Home's feed. */
+/** Compact research-root (run or post) history returned to Home's feed. The
+ * desktop also builds entries from nodes in the client (`lib/activity.ts`),
+ * where the fields marked `| undefined` can hold `undefined`. */
 export interface RecentResearchQuery {
   /** Direct child questions, included with Home feed roots. */
-  children?: RecentResearchQuery[];
+  children?: RecentResearchQuery[] | undefined;
   nodeId: string;
   treeId: string;
-  parentNodeId?: string | null;
+  parentNodeId?: string | null | undefined;
   inline: boolean;
   prompt: string;
   /** Selected parent-answer text this follow-up replies to. */
-  queryTarget?: string | null;
+  queryTarget?: string | null | undefined;
   attachments?: ResearchMessageAttachment[];
-  title?: string | null;
+  title?: string | null | undefined;
   adapter: string;
-  model?: string | null;
+  model?: string | null | undefined;
   /** Absent in hand-built fixtures; the backend always sends it. */
   type?: ResearchNodeType;
   /** A document's source. */
@@ -242,7 +244,7 @@ export interface RecentResearchQuery {
   error?: string | null;
   createdAt: number;
   /** Current answer recap, when one has been generated. */
-  recap?: string | null;
+  recap?: string | null | undefined;
 }
 
 export interface RecentResearchQueryCursor {

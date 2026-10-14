@@ -13,7 +13,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_RAIL_WIDTH,
 } from "../lib/sidebarLayout";
-import { RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH } from "../lib/sidebarMode";
+import { RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH } from "@session/shared/lib/sidebarMode";
 
 function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => void {
   const handle = event.currentTarget;

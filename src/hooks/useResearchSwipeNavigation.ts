@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import {
   researchSwipeDirection,
   researchSwipeTailCapturesWheel,
-} from "../lib/researchHistory";
+} from "@session/shared/lib/researchHistory";
 
 const RESEARCH_SWIPE_IDLE_MS = 180;
 // Ignore tiny startup jitter, but reserve a clearly vertical gesture for

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createResearchFolderStore } from "../src/lib/researchFolderStore";
+import { createResearchFolderStore } from "@session/shared/lib/researchFolderStore";
 import {
   emptyResearchFolderState,
   researchFolderStateWithCollapsed,
-} from "../src/lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import type { ResearchFolderState } from "../src/types";
 
 /** A promise the test can resolve or reject to simulate a backend response. */

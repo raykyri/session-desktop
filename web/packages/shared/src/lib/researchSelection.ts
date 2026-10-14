@@ -1,5 +1,6 @@
-import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
-import type { ResearchNodeStatus } from "../types";
+import type { ResearchNodeStatus } from "../wire/index.js";
+
+import { isActiveResearchStatus } from "./researchChains.js";
 
 interface ExpandedResearchSelection {
   start: number;
@@ -45,7 +46,10 @@ export function clipResearchSelectionToParagraph(
 /** A selection in an answer that is still streaming: it has no response
  * revision to anchor a highlight or branch to yet, so it can only be
  * copied. */
-export function isLiveResearchSelection(responseRevision: string, status: ResearchNodeStatus | undefined) {
+export function isLiveResearchSelection(
+  responseRevision: string,
+  status: ResearchNodeStatus | undefined,
+) {
   return !responseRevision && status !== undefined && isActiveResearchStatus(status);
 }
 
@@ -93,10 +97,7 @@ interface SegmenterLike {
 }
 
 interface SegmenterConstructor {
-  new (
-    locale?: string,
-    options?: { granularity: "word" | "grapheme" },
-  ): SegmenterLike;
+  new (locale?: string, options?: { granularity: "word" | "grapheme" }): SegmenterLike;
 }
 
 function segmenterConstructor() {
@@ -123,12 +124,12 @@ function unitsSplitAtBoundaries(units: SelectionUnit[], boundaries: number[]) {
   // `units` is sorted by start, so the cut cursor only ever moves forward.
   let cursor = 0;
   for (const unit of units) {
-    while (cursor < cuts.length && cuts[cursor] <= unit.start) {
+    while (cursor < cuts.length && cuts[cursor]! <= unit.start) {
       cursor += 1;
     }
     let start = unit.start;
     for (let index = cursor; index < cuts.length; index += 1) {
-      const cut = cuts[index];
+      const cut = cuts[index]!;
       if (cut >= unit.end) {
         break;
       }
@@ -197,7 +198,7 @@ function leadingUnit(units: SelectionUnit[], offset: number) {
     return next;
   }
   const previous = units[nextIndex - 1];
-  return previous && previous.end >= offset ? previous : next ?? null;
+  return previous && previous.end >= offset ? previous : (next ?? null);
 }
 
 /** Unit that supplies a selection's trailing edge. At a shared boundary this
@@ -209,7 +210,7 @@ function trailingUnit(units: SelectionUnit[], offset: number) {
     return previous;
   }
   const next = units[nextIndex];
-  return next?.start === offset ? next : previous ?? null;
+  return next?.start === offset ? next : (previous ?? null);
 }
 
 /** Includes punctuation attached to the outside of an expanded passage without
@@ -217,12 +218,7 @@ function trailingUnit(units: SelectionUnit[], offset: number) {
  * projection boundaries define attachment: selecting `“quoted.”` keeps both
  * quotation marks, while selecting `state-of-the` does not pull in the hyphen
  * before `art`. */
-function expandAttachedPunctuation(
-  text: string,
-  start: number,
-  end: number,
-  boundaries: number[],
-) {
+function expandAttachedPunctuation(text: string, start: number, end: number, boundaries: number[]) {
   let lowerBound = 0;
   let upperBound = text.length;
   for (const boundary of boundaries) {
@@ -289,8 +285,7 @@ export function createResearchSelectionExpander(
     // If a short selection ends in whitespace beside its anchor, select the
     // anchor's whole word instead of producing no range.
     if (!first || !last || first.start > last.start) {
-      const anchor =
-        leadingUnit(units, anchorOffset) ?? trailingUnit(units, anchorOffset);
+      const anchor = leadingUnit(units, anchorOffset) ?? trailingUnit(units, anchorOffset);
       if (!anchor) {
         return null;
       }
@@ -314,9 +309,6 @@ export function expandResearchSelectionToWholeWords(
   boundaries: number[] = [],
 ): ExpandedResearchSelection | null {
   return (
-    createResearchSelectionExpander(text, locale, boundaries)?.(
-      anchorOffset,
-      focusOffset,
-    ) ?? null
+    createResearchSelectionExpander(text, locale, boundaries)?.(anchorOffset, focusOffset) ?? null
   );
 }

@@ -9,10 +9,10 @@ import {
   ResearchSidebarRail,
 } from "./research/ResearchSidebarNav";
 import { IS_MAC } from "../lib/appHelpers";
-import { RESEARCH_HOME_SHORTCUT_LABEL } from "../lib/appShortcuts";
+import { RESEARCH_HOME_SHORTCUT_LABEL } from "@session/shared/lib/appShortcuts";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 import { SIDEBAR_MIN_WIDTH } from "../lib/sidebarLayout";
-import type { ResearchFeedPage } from "../lib/sidebarMode";
+import type { ResearchFeedPage } from "@session/shared/lib/sidebarMode";
 import type { AgentAdapterMetadata, GroupInfo, ResearchFolder } from "../types";
 
 export const SIDEBAR_TOGGLE_SHORTCUT_LABEL = "⇧⌘G";

@@ -7,7 +7,7 @@ import {
   reuseUnchangedContent,
   subscribeResearchContentChanged,
   type ContentRefresh,
-} from "../lib/researchContentRefresh";
+} from "@session/shared/lib/researchContentRefresh";
 import { nodeRecap, nodeResponseSnapshotAt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { withoutKeys } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlight, ResearchNode, ResearchNodeContent, ResearchTreeDetail } from "../types";

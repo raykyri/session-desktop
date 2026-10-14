@@ -1,4 +1,4 @@
-import type { ResearchNodeContent } from "../types";
+import type { ResearchNodeContent } from "../wire/index.js";
 
 /** Backend event emitted after every write to a research agent's live turns.
  * Payload: `{ nodeId }`. It is routed to `publishResearchContentChanged`
@@ -73,7 +73,9 @@ export function createContentRefresh(
     try {
       settled = fetch();
     } catch (err) {
-      settled = Promise.reject(err);
+      // The reason is discarded below; a synchronous throw only settles the
+      // request like a rejection does.
+      settled = Promise.reject(err instanceof Error ? err : new Error(String(err)));
     }
     void settled
       .catch(() => undefined)
@@ -114,7 +116,8 @@ export function reuseUnchangedContent(
   if (!previous) {
     return next;
   }
-  const node = JSON.stringify(previous.node) === JSON.stringify(next.node) ? previous.node : next.node;
+  const node =
+    JSON.stringify(previous.node) === JSON.stringify(next.node) ? previous.node : next.node;
   const priorById = new Map(previous.turns.map((turn) => [turn.id, turn]));
   const turns = next.turns.map((turn) => {
     const prior = priorById.get(turn.id);

@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ResearchTileToggle } from "../src/components/research/ResearchTileClamp";
 import { ResearchMessageRow } from "../src/components/research/ResearchTurn";
-import { researchTileOverflows, toggleResearchTile } from "../src/lib/researchTileClamp";
+import { researchTileOverflows, toggleResearchTile } from "@session/shared/lib/researchTileClamp";
 import type { ResearchMessageAttachment } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 

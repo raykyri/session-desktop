@@ -17,11 +17,11 @@ import {
   RESEARCH_UNFILED_FOLDER_ID,
   researchFolderMonogram,
   researchPlaceName,
-} from "../../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import {
   researchFeedPageKey,
   type ResearchFeedPage,
-} from "../../lib/sidebarMode";
+} from "@session/shared/lib/sidebarMode";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 

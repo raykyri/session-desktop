@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { ResearchFolderNameRequest } from "../components/research/ResearchFolderDialogs";
 import type { useResearchFiling } from "./useResearchFiling";
 import type { useResearchToast } from "./useResearchToast";
-import type { ResearchFeedPage } from "../lib/sidebarMode";
+import type { ResearchFeedPage } from "@session/shared/lib/sidebarMode";
 import type { ResearchTreeSummary } from "../types";
 
 interface ResearchFolderDialogContext {

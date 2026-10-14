@@ -1,4 +1,4 @@
-import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "../../lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "@session/shared/lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
 import { nodeType } from "@session/shared/lib/researchNodeTypes";
 import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
@@ -47,7 +47,7 @@ import {
   researchTreePlace,
   stepReorderTarget,
   type ResearchDropPosition,
-} from "../../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import {
   researchChildCount,
@@ -56,13 +56,13 @@ import {
   researchNestCandidates,
   researchTreeGroups,
   researchTreeHoldsChildren,
-} from "../../lib/researchGroups";
+} from "@session/shared/lib/researchGroups";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 import {
   feedCycleStep,
   type ResearchCycleRequest,
 } from "@session/shared/lib/researchSiblingCycle";
-import { researchFeedPageKey, type ResearchFeedView } from "../../lib/sidebarMode";
+import { researchFeedPageKey, type ResearchFeedView } from "@session/shared/lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed";

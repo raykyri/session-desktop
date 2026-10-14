@@ -17,7 +17,7 @@ import {
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
   toolActivityLabel,
-} from "../src/lib/turnTimeline";
+} from "@session/shared/lib/turnTimeline";
 import type { Turn, TurnBlock } from "../src/types";
 
 let nextIndex = 0;

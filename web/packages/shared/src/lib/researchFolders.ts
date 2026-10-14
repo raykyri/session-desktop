@@ -1,4 +1,4 @@
-import type { ResearchFolder, ResearchFolderState, ResearchTreeSummary } from "../types";
+import type { ResearchFolder, ResearchFolderState, ResearchTreeSummary } from "../wire/index.js";
 
 // Places a research tree can be filed in. Unfiled and Archive are derived
 // (no membership, and `archivedAt`); Drafts is a membership value with no
@@ -31,7 +31,9 @@ export function workspaceResearchFolders(
   workspaceId: string | null,
 ): ResearchFolder[] {
   return workspaceId
-    ? state.folders.filter((folder) => folder.workspaceId === workspaceId && folder.trashedAt == null)
+    ? state.folders.filter(
+        (folder) => folder.workspaceId === workspaceId && folder.trashedAt == null,
+      )
     : [];
 }
 
@@ -214,7 +216,7 @@ export function researchTreeOrderAfterMove(
   }
   const others = memberIds.filter((id) => id !== treeId);
   if (others.length === 0) return flatIds;
-  const lastIndex = rest.indexOf(others[others.length - 1]);
+  const lastIndex = rest.indexOf(others[others.length - 1]!);
   return lastIndex < 0
     ? flatIds
     : [...rest.slice(0, lastIndex + 1), treeId, ...rest.slice(lastIndex + 1)];
@@ -253,19 +255,20 @@ export function stepReorderTarget(
 ): { beforeId: string | null } | null {
   const index = ids.indexOf(id);
   if (index < 0 || index + step < 0 || index + step >= ids.length) return null;
-  return { beforeId: step < 0 ? ids[index - 1] : (ids[index + 2] ?? null) };
+  return { beforeId: step < 0 ? ids[index - 1]! : (ids[index + 2] ?? null) };
 }
 
 const normalizedText = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** Show the title above the question unless its normalized prefix matches
  * the start of the question. */
-export function researchCardTitle(title: string | null | undefined, question: string): string | null {
+export function researchCardTitle(
+  title: string | null | undefined,
+  question: string,
+): string | null {
   const trimmed = title?.trim();
   if (!trimmed) return null;
-  return normalizedText(question).startsWith(normalizedText(trimmed).slice(0, 60))
-    ? null
-    : trimmed;
+  return normalizedText(question).startsWith(normalizedText(trimmed).slice(0, 60)) ? null : trimmed;
 }
 
 /** Puts one workspace's trees in `orderedIds` order, in the slots they
@@ -286,7 +289,8 @@ export function treesWithWorkspaceOrder(
   let changed = false;
   const next = trees.map((tree) => {
     if (tree.workspaceId !== workspaceId) return tree;
-    const replacement = queue[index++];
+    // `queue` holds one tree per tree of the workspace.
+    const replacement = queue[index++]!;
     if (replacement !== tree) changed = true;
     return replacement;
   });

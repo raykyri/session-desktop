@@ -1,4 +1,4 @@
-import type { ResearchHighlight } from "../types";
+import type { ResearchHighlight } from "../wire/index.js";
 
 interface ResearchHighlightOffsets {
   start: number;
@@ -17,9 +17,7 @@ export function intersectingResearchHighlightIds(
   highlights: ResolvedResearchHighlightRange[],
 ) {
   return highlights
-    .filter(
-      ({ start, end }) => selection.start < end && selection.end > start,
-    )
+    .filter(({ start, end }) => selection.start < end && selection.end > start)
     .map(({ id }) => id);
 }
 
@@ -78,21 +76,15 @@ function isBareShortcutKey(input: ResearchHighlightShortcutInput, key: string) {
   );
 }
 
-export function isResearchHighlightActionShortcut(
-  input: ResearchHighlightShortcutInput,
-) {
+export function isResearchHighlightActionShortcut(input: ResearchHighlightShortcutInput) {
   return isBareShortcutKey(input, "h");
 }
 
-export function isResearchAskActionShortcut(
-  input: ResearchHighlightShortcutInput,
-) {
+export function isResearchAskActionShortcut(input: ResearchHighlightShortcutInput) {
   return isBareShortcutKey(input, "a");
 }
 
-export function isResearchExpandActionShortcut(
-  input: ResearchHighlightShortcutInput,
-) {
+export function isResearchExpandActionShortcut(input: ResearchHighlightShortcutInput) {
   return isBareShortcutKey(input, "e");
 }
 
@@ -117,11 +109,8 @@ export function expandedResearchHighlightOffsets(
     start = Math.min(start, highlight.start);
     end = Math.max(end, highlight.end);
   }
-  if (
-    intersecting.length === 1 &&
-    intersecting[0].start === start &&
-    intersecting[0].end === end
-  ) {
+  const only = intersecting.length === 1 ? intersecting[0] : undefined;
+  if (only && only.start === start && only.end === end) {
     return null;
   }
   return { start, end };
@@ -168,10 +157,8 @@ function contextSidesAt(
   // match the projection boundary would invalidate these anchors when adjacent
   // messages render.
   const prefixMatches =
-    !prefix ||
-    projection.slice(Math.max(0, start - prefix.length), start) === prefix;
-  const suffixMatches =
-    !suffix || projection.slice(end, end + suffix.length) === suffix;
+    !prefix || projection.slice(Math.max(0, start - prefix.length), start) === prefix;
+  const suffixMatches = !suffix || projection.slice(end, end + suffix.length) === suffix;
   return {
     prefix: prefixMatches,
     suffix: suffixMatches,
@@ -209,13 +196,7 @@ export function resolveResearchHighlightOffset(
     anchor.start >= 0 &&
     anchor.end <= projection.length &&
     projection.slice(anchor.start, anchor.end) === anchor.exact &&
-    contextSidesAt(
-      projection,
-      anchor.start,
-      anchor.exact.length,
-      anchor.prefix,
-      anchor.suffix,
-    ).both
+    contextSidesAt(projection, anchor.start, anchor.exact.length, anchor.prefix, anchor.suffix).both
   ) {
     return { start: anchor.start, end: anchor.end };
   }

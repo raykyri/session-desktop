@@ -1,5 +1,5 @@
 import type { AgentAdapterMetadata } from "../types";
-import { shortWhen } from "./shortTime";
+import { shortWhen } from "@session/shared/lib/shortTime";
 
 interface AgentSetupStep {
   title: string;

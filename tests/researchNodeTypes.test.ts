@@ -11,7 +11,7 @@ import {
 import { canFollowUpFrom } from "@session/shared/lib/researchChains";
 import type { AgentAdapterMetadata, ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
-import { recentResearchQueryFromNode } from "../src/lib/activity";
+import { recentResearchQueryFromNode } from "@session/shared/lib/activity";
 
 function node(overrides: NodeFixture = {}): ResearchNode {
   return researchNode({

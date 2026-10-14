@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "../src/lib/feedLinkText";
+import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "@session/shared/lib/feedLinkText";
 
 test("feed text splits http(s) URLs from the text around them", () => {
   assert.deepEqual(feedTextRuns("See https://example.com/a?b=1 for details"), [

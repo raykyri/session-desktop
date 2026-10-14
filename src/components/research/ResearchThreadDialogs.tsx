@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { researchBranchInfo } from "../../lib/researchBranches";
+import { researchBranchInfo } from "@session/shared/lib/researchBranches";
 import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "@session/shared/lib/researchChains";
 import { nodePrompt, nodeType } from "@session/shared/lib/researchNodeTypes";
 import { researchDeleteLabel } from "@session/shared/lib/researchThreadView";

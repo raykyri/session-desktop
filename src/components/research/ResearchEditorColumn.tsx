@@ -6,7 +6,7 @@ import { useMarkdownDashGuard } from "../../hooks/useMarkdownDashGuard";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchMarkdown } from "./ResearchMessage";
-import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
+import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "@session/shared/lib/researchEditor";
 import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
 import { SAVE_SHORTCUT_LABEL, isSaveShortcut } from "../../lib/editorShortcuts";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "@session/shared/lib/researchColumns";

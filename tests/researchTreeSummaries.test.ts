@@ -6,7 +6,7 @@ import {
   removeResearchTreeSummary,
   replaceResearchActivityForTree,
   upsertResearchTreeSummary,
-} from "../src/lib/researchTreeSummaries";
+} from "@session/shared/lib/researchTreeSummaries";
 import type { ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 

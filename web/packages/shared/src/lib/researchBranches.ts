@@ -1,6 +1,7 @@
-import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
-import type { ResearchNode } from "../types";
-import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
+import type { ResearchNode } from "../wire/index.js";
+
+import { isActiveResearchStatus } from "./researchChains.js";
+import { nodeStatus } from "./researchNodeTypes.js";
 
 interface ResearchBranchInfo {
   nodeIds: string[];
@@ -20,11 +21,7 @@ export function researchBranchInfo(
   while (changed) {
     changed = false;
     for (const node of nodes) {
-      if (
-        !nodeIds.has(node.id) &&
-        node.parentNodeId &&
-        nodeIds.has(node.parentNodeId)
-      ) {
+      if (!nodeIds.has(node.id) && node.parentNodeId && nodeIds.has(node.parentNodeId)) {
         nodeIds.add(node.id);
         changed = true;
       }

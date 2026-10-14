@@ -5,7 +5,7 @@ import {
   RESEARCH_HOME_SHORTCUT_LABEL,
   resolveAppShortcut,
   showHideShortcutConflict,
-} from "../src/lib/appShortcuts";
+} from "@session/shared/lib/appShortcuts";
 
 const shortcut = (
   overrides: Partial<Parameters<typeof resolveAppShortcut>[0]> = {},

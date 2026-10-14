@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
-import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
+import { normalizeResearchFolderName, researchFolderNameError } from "@session/shared/lib/researchFolders";
 import { researchFeedCardControl } from "./ResearchFeedCard";
 import { researchTrashFolderSentence } from "@session/shared/lib/researchTrash";
 import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";

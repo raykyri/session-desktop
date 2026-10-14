@@ -22,7 +22,7 @@ import {
   nextModelPreset,
   selectedModelPreset,
 } from "../../lib/launcherModels";
-import { launcherTabAction } from "../../lib/launcherKeyboard";
+import { launcherTabAction } from "@session/shared/lib/launcherKeyboard";
 import {
   adapterCanLaunchResearch,
   adapterReadinessMessage,

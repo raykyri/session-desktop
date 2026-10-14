@@ -19,8 +19,10 @@ const samePath = (left: readonly string[] | undefined, right: readonly string[] 
   !left || !right || sameIds(left, right);
 
 /** Strict: both visits name the same path, or neither names one. */
-const samePathExactly = (left: readonly string[] | undefined, right: readonly string[] | undefined) =>
-  left && right ? sameIds(left, right) : !left && !right;
+const samePathExactly = (
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+) => (left && right ? sameIds(left, right) : !left && !right);
 
 export interface ResearchVisitHistory {
   /** Visits, oldest first. */
@@ -43,10 +45,7 @@ const RESEARCH_SWIPE_THRESHOLD_PX = 80;
  * navigation. Horizontal intent must be clear before the distance threshold
  * counts, so diagonal/vertical scrolling does not accidentally change nodes.
  */
-export function researchSwipeDirection(
-  deltaX: number,
-  deltaY: number,
-): -1 | 0 | 1 {
+export function researchSwipeDirection(deltaX: number, deltaY: number): -1 | 0 | 1 {
   if (
     Math.abs(deltaX) < RESEARCH_SWIPE_THRESHOLD_PX ||
     Math.abs(deltaX) <= Math.abs(deltaY) * 1.25
@@ -142,7 +141,7 @@ export function replaceResearchVisit(
   if (history.index < 0) {
     return initResearchVisits(visit);
   }
-  const current = history.entries[history.index];
+  const current = history.entries[history.index]!;
   if (
     current.kind === visit.kind &&
     (current.kind === "home" ||
@@ -172,7 +171,7 @@ export function researchVisitBack(history: ResearchVisitHistory): ResearchVisitS
     return null;
   }
   const index = history.index - 1;
-  return { history: { entries: history.entries, index }, visit: history.entries[index] };
+  return { history: { entries: history.entries, index }, visit: history.entries[index]! };
 }
 
 /** Moves the cursor forward one entry, or null if already at the end. */
@@ -181,15 +180,18 @@ export function researchVisitForward(history: ResearchVisitHistory): ResearchVis
     return null;
   }
   const index = history.index + 1;
-  return { history: { entries: history.entries, index }, visit: history.entries[index] };
+  return { history: { entries: history.entries, index }, visit: history.entries[index]! };
 }
 
 /** Merges adjacent matching entries and preserves the cursor position. */
-function collapseResearchVisits(source: readonly ResearchVisit[], sourceIndex: number): ResearchVisitHistory {
+function collapseResearchVisits(
+  source: readonly ResearchVisit[],
+  sourceIndex: number,
+): ResearchVisitHistory {
   const entries: ResearchVisit[] = [];
   let index = -1;
   for (let at = 0; at < source.length; at += 1) {
-    const visit = source[at];
+    const visit = source[at]!;
     const previous = entries[entries.length - 1];
     if (previous && sameResearchVisit(previous, visit)) {
       entries[entries.length - 1] = moreSpecificVisit(previous, visit);
@@ -218,7 +220,7 @@ export function mapResearchVisits(
   const kept: ResearchVisit[] = [];
   let keptIndex = -1;
   for (let at = 0; at < history.entries.length; at += 1) {
-    const visit = history.entries[at];
+    const visit = history.entries[at]!;
     const updated = keepCurrent && at === history.index ? visit : update(visit);
     if (!updated) {
       continue;

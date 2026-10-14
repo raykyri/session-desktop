@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { researchItemCount } from "../../lib/researchGroups";
+import { researchItemCount } from "@session/shared/lib/researchGroups";
 import {
   researchRowGlyph,
   type ResearchRowKind,

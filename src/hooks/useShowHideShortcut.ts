@@ -6,7 +6,7 @@ import {
   setShowHideShortcutCaptureActive,
   type ShowHideShortcutSetting,
 } from "../lib/api";
-import { showHideShortcutConflict } from "../lib/appShortcuts";
+import { showHideShortcutConflict } from "@session/shared/lib/appShortcuts";
 import { shortcutFromKeyboardEvent, showHideShortcutMessage } from "../lib/showHideShortcut";
 
 function errorMessage(err: unknown): string {

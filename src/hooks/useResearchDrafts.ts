@@ -6,7 +6,7 @@ import {
   reorderResearchDrafts,
   saveResearchDraft,
 } from "../lib/api";
-import { reorderedIds } from "../lib/researchFolders";
+import { reorderedIds } from "@session/shared/lib/researchFolders";
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

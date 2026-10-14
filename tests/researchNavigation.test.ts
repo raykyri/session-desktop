@@ -10,12 +10,12 @@ import {
   savedResearchSelection,
   type SavedResearchNavigation,
 } from "../src/lib/researchNavigation";
-import { researchBranchInfo } from "../src/lib/researchBranches";
+import { researchBranchInfo } from "@session/shared/lib/researchBranches";
 import {
   intersectingResearchHighlightIds,
   isResearchHighlightActionShortcut,
   resolveResearchHighlightOffset,
-} from "../src/lib/researchHighlights";
+} from "@session/shared/lib/researchHighlights";
 import {
   clearResearchTreeAttention,
   reconcileResearchActivity,

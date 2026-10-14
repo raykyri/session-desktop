@@ -6,7 +6,7 @@ import {
   overlappingResearchHighlightRegions,
   researchAnchorContextBounds,
   resolveResearchHighlightOffset,
-} from "../src/lib/researchHighlights";
+} from "@session/shared/lib/researchHighlights";
 import type { ResearchHighlight } from "../src/types";
 
 function highlight(

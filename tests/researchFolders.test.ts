@@ -24,7 +24,7 @@ import {
   stepReorderTarget,
   treesWithWorkspaceOrder,
   workspaceResearchFolders,
-} from "../src/lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import { researchMoveTargets } from "../src/components/research/ResearchMoveMenu";
 import type { ResearchFolderState, ResearchTreeSummary } from "../src/types";
 

@@ -5,7 +5,7 @@ import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
   RESEARCH_TRASH_FOLDER_ID,
-} from "../../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import type { ResearchToast } from "../../hooks/useResearchToast";
 
 /** The icon of a place: Drafts, Archive and Trash have their own, user

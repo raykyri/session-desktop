@@ -12,8 +12,8 @@ import {
 } from "@session/shared/lib/researchNodeTypes";
 import { researchImages } from "../../lib/researchImages";
 import { ResearchImageStrip } from "./ResearchImages";
-import { recentResearchQueryFromNode } from "../../lib/activity";
-import { shortWhen } from "../../lib/shortTime";
+import { recentResearchQueryFromNode } from "@session/shared/lib/activity";
+import { shortWhen } from "@session/shared/lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 import { PostFollowUpStatus, type PostActions } from "./ResearchPost";

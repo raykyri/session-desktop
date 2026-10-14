@@ -8,7 +8,7 @@ import {
   restoreResearchTree,
   setResearchFolders,
 } from "../lib/api";
-import { createResearchFolderStore } from "../lib/researchFolderStore";
+import { createResearchFolderStore } from "@session/shared/lib/researchFolderStore";
 import {
   emptyResearchFolderState,
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -27,7 +27,7 @@ import {
   researchTreePlace,
   workspaceResearchFolders,
   type ResearchDropPosition,
-} from "../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import {
   researchChildCount,
   researchChildIds,
@@ -38,7 +38,7 @@ import {
   researchOrderAfterNest,
   researchTreeGroups,
   researchTreeHoldsChildren,
-} from "../lib/researchGroups";
+} from "@session/shared/lib/researchGroups";
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const LOAD_RETRY_MS = [1000, 3000, 10000];

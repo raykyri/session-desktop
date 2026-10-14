@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { EMPTY_RESEARCH_VISITS, type ResearchVisitHistory } from "../lib/researchHistory";
+import { EMPTY_RESEARCH_VISITS, type ResearchVisitHistory } from "@session/shared/lib/researchHistory";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 
 // The stored key keeps the scope's earlier name, "folder scope".

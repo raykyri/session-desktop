@@ -11,7 +11,7 @@ import {
   selectionOffsets,
   selectionTouchesNonTextRow,
 } from "../src/components/research/researchTextRanges";
-import { resolveResearchHighlightOffset } from "../src/lib/researchHighlights";
+import { resolveResearchHighlightOffset } from "@session/shared/lib/researchHighlights";
 import type { ResearchHighlight } from "../src/types";
 import { withWidgetDom } from "./widgetDom";
 

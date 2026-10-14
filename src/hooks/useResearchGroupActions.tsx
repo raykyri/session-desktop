@@ -6,8 +6,8 @@ import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   researchTreePlace,
   type ResearchDropPosition,
-} from "../lib/researchFolders";
-import { researchChildCount } from "../lib/researchGroups";
+} from "@session/shared/lib/researchFolders";
+import { researchChildCount } from "@session/shared/lib/researchGroups";
 import { ResearchDeleteDialog } from "../components/research/ResearchDeleteDialog";
 import { researchFeedCardControl } from "../components/research/ResearchFeedCard";
 import type { useResearchFiling } from "./useResearchFiling";

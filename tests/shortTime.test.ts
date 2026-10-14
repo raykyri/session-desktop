@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatElapsedClock, formatRunDuration, shortWhen } from "../src/lib/shortTime";
+import { formatElapsedClock, formatRunDuration, shortWhen } from "@session/shared/lib/shortTime";
 
 const NOW = new Date(2026, 9, 9, 12, 0, 0).getTime();
 const MINUTE = 60_000;

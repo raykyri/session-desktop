@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { closeDiagramLightbox, getDiagramLightbox } from "../lib/diagramLightbox";
 import { closeImageLightbox, getImageLightbox } from "../lib/imageLightbox";
-import { resolveAppShortcut, type AppShortcutCommand } from "../lib/appShortcuts";
+import { resolveAppShortcut, type AppShortcutCommand } from "@session/shared/lib/appShortcuts";
 import {
   requestResearchFollowupsFocus,
   requestResearchWorkspaceMenuToggle,

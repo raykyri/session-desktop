@@ -67,7 +67,7 @@ import {
 } from "./lib/appHelpers";
 import {
   RESEARCH_HOME_SHORTCUT_LABEL,
-} from "./lib/appShortcuts";
+} from "@session/shared/lib/appShortcuts";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import {
   APP_TEXT_SIZE,
@@ -82,13 +82,13 @@ import {
 import {
   type ResearchFeedView,
   type ResearchFeedPage,
-} from "./lib/sidebarMode";
+} from "@session/shared/lib/sidebarMode";
 import {
   RESEARCH_DRAFTS_FOLDER_ID,
   researchTreePlace,
   treesWithWorkspaceOrder,
   type ResearchDropPosition,
-} from "./lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import { useResearchToast } from "./hooks/useResearchToast";
 import { useResearchData } from "./hooks/useResearchData";
 import { useResearchNavigation } from "./hooks/useResearchNavigation";
@@ -116,7 +116,7 @@ import { useResearchFiling } from "./hooks/useResearchFiling";
 import { useResearchDrafts } from "./hooks/useResearchDrafts";
 import { useResearchCardDrag } from "./hooks/useResearchCardDrag";
 import { useResearchGroupActions } from "./hooks/useResearchGroupActions";
-import { researchTreeGroups } from "./lib/researchGroups";
+import { researchTreeGroups } from "@session/shared/lib/researchGroups";
 import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import type { ResearchThreadGroup } from "./components/research/ResearchGroupPanel";
 import {

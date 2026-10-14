@@ -19,7 +19,7 @@ import {
   removeResearchNodes,
   upsertResearchActivity,
   upsertResearchNode,
-} from "../src/lib/researchEvents";
+} from "@session/shared/lib/researchEvents";
 import type {
   SessionEvent,
   ResearchHighlight,

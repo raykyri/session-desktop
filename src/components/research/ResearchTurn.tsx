@@ -12,10 +12,10 @@ import { ResearchBranchOpenGlyph } from "./ResearchIcons";
 import {
   conversationActivityToolCalls,
   conversationToolCallLabel,
-} from "../../lib/researchConversations";
+} from "@session/shared/lib/researchConversations";
 import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
-import { formatRunDuration } from "../../lib/shortTime";
-import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
+import { formatRunDuration } from "@session/shared/lib/shortTime";
+import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "@session/shared/lib/turnTimeline";
 import type { ResearchNode, ResearchNodeStatus } from "../../types";
 import {
   RawTranscriptDisclosure,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { ResearchData } from "./useResearchData";
 import type { ResearchNavigation } from "./useResearchNavigation";
 import { getResearchTree } from "../lib/api";
-import { upsertRecentActivityResearchNode } from "../lib/activity";
+import { upsertRecentActivityResearchNode } from "@session/shared/lib/activity";
 import {
   addResearchNodeHighlight,
   parseResearchEvent,
@@ -20,7 +20,7 @@ import {
   researchSummaryFromDetail,
   upsertResearchActivity,
   type ParsedResearchEvent,
-} from "../lib/researchEvents";
+} from "@session/shared/lib/researchEvents";
 import { pruneResearchNavigation, pruneResearchNavigationNodes } from "../lib/researchNavigation";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
@@ -29,7 +29,7 @@ import {
   removeResearchTreeSummary,
   replaceResearchActivityForTree,
   upsertResearchTreeSummary,
-} from "../lib/researchTreeSummaries";
+} from "@session/shared/lib/researchTreeSummaries";
 import type { ResearchNode, ResearchTreeSummary, SessionEvent } from "../types";
 
 interface ResearchEventTargets {

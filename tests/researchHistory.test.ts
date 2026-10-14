@@ -21,7 +21,7 @@ import {
   seedResearchVisits,
   type ResearchVisit,
   type ResearchVisitHistory,
-} from "../src/lib/researchHistory";
+} from "@session/shared/lib/researchHistory";
 
 const home: ResearchVisit = { kind: "home" };
 const at = (treeId: string, nodeId: string | null): ResearchVisit => ({ kind: "node", treeId, nodeId });

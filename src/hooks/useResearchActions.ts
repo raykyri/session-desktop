@@ -3,7 +3,7 @@ import type { ResearchData } from "./useResearchData";
 import type { ResearchNavigation } from "./useResearchNavigation";
 import type { PostActions } from "../components/research/ResearchPost";
 import { adapterCanLaunchResearch, adapterReadinessMessage } from "../lib/adapterReadiness";
-import { upsertRecentActivityResearchNode } from "../lib/activity";
+import { upsertRecentActivityResearchNode } from "@session/shared/lib/activity";
 import {
   cancelResearchNode,
   createResearchPost,

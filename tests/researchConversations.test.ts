@@ -5,8 +5,8 @@ import {
   conversationActivityToolCalls,
   conversationToolCallCount,
   conversationToolCallLabel,
-} from "../src/lib/researchConversations";
-import { buildTimelineItems } from "../src/lib/turnTimeline";
+} from "@session/shared/lib/researchConversations";
+import { buildTimelineItems } from "@session/shared/lib/turnTimeline";
 import type { Turn, TurnBlock } from "../src/types";
 
 function turn(id: string, role: string, blocks: TurnBlock[]): Turn {

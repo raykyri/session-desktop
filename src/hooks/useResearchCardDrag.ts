@@ -4,13 +4,13 @@ import {
   RESEARCH_DRAFTS_FOLDER_ID,
   researchPlaceIsReorderable,
   type ResearchDropPosition,
-} from "../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import {
   researchCardDrop,
   researchChildCount,
   type ResearchCardHit,
   type ResearchDraggedTree,
-} from "../lib/researchGroups";
+} from "@session/shared/lib/researchGroups";
 
 /** The draggable item: a tree card, a Drafts card, or a message row. */
 interface ResearchDragItem {

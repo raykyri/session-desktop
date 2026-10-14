@@ -1,5 +1,5 @@
 import type { ResearchNode, ResearchTreeDetail } from "../../types";
-import { shortWhen } from "../../lib/shortTime";
+import { shortWhen } from "@session/shared/lib/shortTime";
 import { ResearchUserMessage } from "./ResearchMessage";
 import { PostContent } from "./ResearchPost";
 import {

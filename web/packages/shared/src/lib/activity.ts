@@ -1,9 +1,19 @@
-import { nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor } from "@session/shared/lib/researchNodeTypes";
 import type {
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchNode,
-} from "../types";
+} from "../wire/index.js";
+
+import {
+  nodeAdapter,
+  nodeAgent,
+  nodeAttachments,
+  nodePrompt,
+  nodeRecap,
+  nodeRun,
+  nodeStatus,
+  passageAnchor,
+} from "./researchNodeTypes.js";
 
 /** One page of Home's feed: research roots (runs and posts), newest first. */
 export interface RecentActivityPage {
@@ -26,10 +36,7 @@ export function activityCursorIsBefore(
 }
 
 /** Newest first; ties broken by descending node id, as the backend pages. */
-function compareRecentActivityItems(
-  left: RecentResearchQuery,
-  right: RecentResearchQuery,
-): number {
+function compareRecentActivityItems(left: RecentResearchQuery, right: RecentResearchQuery): number {
   return (
     right.createdAt - left.createdAt ||
     (right.nodeId < left.nodeId ? -1 : right.nodeId > left.nodeId ? 1 : 0)
@@ -78,8 +85,9 @@ export function upsertRecentActivityResearchNode(
       const children = [
         ...(item.children ?? []).filter((candidate) => candidate.nodeId !== query.nodeId),
         query,
-      ].sort((left, right) =>
-        left.createdAt - right.createdAt || left.nodeId.localeCompare(right.nodeId),
+      ].sort(
+        (left, right) =>
+          left.createdAt - right.createdAt || left.nodeId.localeCompare(right.nodeId),
       );
       return { ...item, children };
     });
@@ -100,7 +108,7 @@ export function upsertRecentActivityItem(
   let high = next.length;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if (compareRecentActivityItems(next[middle], item) <= 0) low = middle + 1;
+    if (compareRecentActivityItems(next[middle]!, item) <= 0) low = middle + 1;
     else high = middle;
   }
   next.splice(low, 0, item);

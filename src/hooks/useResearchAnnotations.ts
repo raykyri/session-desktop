@@ -15,7 +15,7 @@ import type { ResearchLevel } from "@session/shared/lib/researchColumns";
 import {
   overlappingResearchHighlightRegions,
   resolveResearchHighlightOffset,
-} from "../lib/researchHighlights";
+} from "@session/shared/lib/researchHighlights";
 import { passageAnchor } from "@session/shared/lib/researchNodeTypes";
 import type { createResearchThreadPersistence } from "../lib/researchThreadPersistence";
 import { sameNumberRecord } from "@session/shared/lib/researchThreadView";

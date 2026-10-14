@@ -8,11 +8,11 @@ import {
   markEventsListenerReady,
 } from "../lib/api";
 import { isAgentInfo, upsertAgent } from "../lib/appHelpers";
-import { parseAppShortcutCommand, type AppShortcutCommand } from "../lib/appShortcuts";
+import { parseAppShortcutCommand, type AppShortcutCommand } from "@session/shared/lib/appShortcuts";
 import {
   publishResearchContentChanged,
   RESEARCH_CONTENT_CHANGED_EVENT,
-} from "../lib/researchContentRefresh";
+} from "@session/shared/lib/researchContentRefresh";
 import type { ExitPreflightRequest } from "../appTypes";
 import type { AgentInfo, GroupInfo, SessionEvent } from "../types";
 

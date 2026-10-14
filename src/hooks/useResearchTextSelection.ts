@@ -6,13 +6,13 @@ import {
   RESEARCH_HIGHLIGHT_CONTEXT_LENGTH,
   intersectingResearchHighlightIds,
   researchAnchorContextBounds,
-} from "../lib/researchHighlights";
+} from "@session/shared/lib/researchHighlights";
 import { documentSource, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import {
   clipResearchSelectionToParagraph,
   createResearchSelectionExpander,
   isLiveResearchSelection,
-} from "../lib/researchSelection";
+} from "@session/shared/lib/researchSelection";
 import { researchBranchBlocker, surrogateSafeSlice } from "@session/shared/lib/researchThreadView";
 import type {
   ResearchHighlight,

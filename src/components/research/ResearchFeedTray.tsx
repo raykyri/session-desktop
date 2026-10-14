@@ -4,7 +4,7 @@ import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
   RESEARCH_UNFILED_FOLDER_ID,
-} from "../../lib/researchFolders";
+} from "@session/shared/lib/researchFolders";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
 
 /** Message shown when a research location is empty. */

@@ -9,7 +9,7 @@ import {
   type ToolEntry,
   type TurnTimelineContextStatus,
   type TurnTimelineStatus,
-} from "../lib/turnTimeline";
+} from "@session/shared/lib/turnTimeline";
 import { formatEstimatedTokenCount } from "@session/shared/util/tokenEstimate";
 import TranscriptMarkdown, { type OversizedMarkdownPolicy } from "./TranscriptMarkdown";
 

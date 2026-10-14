@@ -11,7 +11,7 @@ import {
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
   type MessageItem,
-} from "./turnTimeline";
+} from "@session/shared/lib/turnTimeline";
 import type { ResearchNode, ResearchNodeContent } from "../types";
 
 /** Content-derived render state for one turn, cached per node so the whole

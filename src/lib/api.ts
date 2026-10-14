@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { RecentActivityPage } from "./activity";
+import type { RecentActivityPage } from "@session/shared/lib/activity";
 import {
   HumanBrowserLifecycleQueue,
   retryHumanBrowserLifecycle,

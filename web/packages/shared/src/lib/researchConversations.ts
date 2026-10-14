@@ -7,7 +7,7 @@
 // buildTimelineItems classifies assistant Raw blocks as thinking activities.
 // The viewer detects these markers and displays an "N tool calls" chip.
 
-import type { ActivityItem } from "./turnTimeline";
+import type { ActivityItem } from "./turnTimeline.js";
 
 /** Mirror of research.rs CONVERSATION_TOOL_ACTIVITY_TYPE. */
 export const CONVERSATION_TOOL_ACTIVITY_TYPE = "sessionToolActivity";

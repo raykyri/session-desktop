@@ -5,7 +5,7 @@ import {
   expandResearchSelectionToWholeWords,
   isLiveResearchSelection,
   researchSelectionActionPlacement,
-} from "../src/lib/researchSelection";
+} from "@session/shared/lib/researchSelection";
 
 function rect(left: number, top: number, width: number, height: number) {
   return {

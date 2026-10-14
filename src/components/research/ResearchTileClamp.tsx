@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { researchTileOverflows } from "../../lib/researchTileClamp";
+import { researchTileOverflows } from "@session/shared/lib/researchTileClamp";
 
 // One observer for every clamped row: a thread shows many rows, and one
 // observer reads all their sizes in a single pass after layout.

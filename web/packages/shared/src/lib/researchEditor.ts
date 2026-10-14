@@ -1,7 +1,11 @@
 // Rules for the editor column (ResearchEditorColumn): which blocks of an
 // edited text changed, and whether the text can be asked as a question.
 
-import { closesFence, markerRunAtLineStart, type MarkdownFence } from "@session/shared/markdown/mathDelimiters";
+import {
+  closesFence,
+  markerRunAtLineStart,
+  type MarkdownFence,
+} from "../markdown/mathDelimiters.js";
 
 /** The longest text, in characters after trimming, that "Ask as a question"
  * sends as a question. */
@@ -11,8 +15,7 @@ export const QUESTION_CHARACTER_LIMIT = 500;
  * can be asked as a question. */
 export function researchQuestionLength(text: string): { count: number; allowed: boolean } {
   const trimmed = text.trim();
-  let count = 0;
-  for (const _ of trimmed) count += 1;
+  const count = [...trimmed].length;
   return { count, allowed: count > 0 && count <= QUESTION_CHARACTER_LIMIT };
 }
 
@@ -72,4 +75,3 @@ export function editedMarkdownBlocks(original: string, next: string): EditedBloc
     return { text, changed: true };
   });
 }
-

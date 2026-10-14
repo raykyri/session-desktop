@@ -3,18 +3,13 @@
 // derivation) is testable without rendering — TurnOverlay's import chain
 // reaches ESM-only markdown packages that the node test runner can't load.
 
-import type {
-  MessageAnchor,
-  ThreadParticipant,
-  Turn,
-  TurnBlock,
-} from "../types";
 import {
   stripTaggedInstructionBlocks,
   stripTaggedUserInstructionBlocks,
   taggedUserInstructionDetails,
-} from "@session/shared/app/taggedInstructions";
-import { stripWikilinks } from "@session/shared/markdown/wikilinks";
+} from "../app/taggedInstructions.js";
+import { stripWikilinks } from "../markdown/wikilinks.js";
+import type { MessageAnchor, ThreadParticipant, Turn, TurnBlock } from "../wire/index.js";
 
 type TextBlock = Extract<TurnBlock, { type: "text" }>;
 type ToolUseBlock = Extract<TurnBlock, { type: "toolUse" }>;
@@ -29,15 +24,15 @@ export interface MessageItem {
   type: "message";
   key: string;
   role: string;
-  participant?: ThreadParticipant | null;
+  participant?: ThreadParticipant | null | undefined;
   blocks: MessageBlock[];
   activities: ActivityItem[];
-  status?: TurnTimelineStatus;
-  contextStatus?: TurnTimelineContextStatus;
+  status?: TurnTimelineStatus | undefined;
+  contextStatus?: TurnTimelineContextStatus | undefined;
   /** Where a fork anchored at this message would branch from. Set from the
    * first turn folded into the card, so forking from a card that merged
    * back-to-back prompts branches before the first of them. */
-  anchor?: MessageAnchor | null;
+  anchor?: MessageAnchor | null | undefined;
   /**
    * Latest native timestamp among the turns folded into this item. Used for
    * the optional end-of-assistant-group timestamp footer.
@@ -59,14 +54,14 @@ export interface ToolEntry {
   input?: unknown;
   result?: unknown;
   isError: boolean;
-  status?: TurnTimelineStatus;
+  status?: TurnTimelineStatus | undefined;
 }
 
 export interface ThinkingItem {
   type: "thinking";
   key: string;
   values: unknown[];
-  status?: TurnTimelineStatus;
+  status?: TurnTimelineStatus | undefined;
 }
 
 // Assistant "raw" blocks become thinking values. A real provider reasoning
@@ -105,7 +100,7 @@ export interface ActivityGroupItem {
   key: string;
   children: ActivityLeafItem[];
   toolCallCount: number;
-  status?: TurnTimelineStatus;
+  status?: TurnTimelineStatus | undefined;
 }
 
 export type ActivityLeafItem = ToolEntry | ThinkingItem;
@@ -122,9 +117,7 @@ interface PlainTextTranscriptMessage {
 export function assistantTextFromTimelineItems(items: MessageItem[]) {
   return items
     .filter((item) => item.role === "assistant")
-    .flatMap((item) =>
-      item.blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])),
-    )
+    .flatMap((item) => item.blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])))
     .join("\n\n")
     .trim();
 }
@@ -139,24 +132,23 @@ function plainTextTranscriptMessages(
   turns: Turn[],
   assistantLabel: string,
 ): PlainTextTranscriptMessage[] {
-  return buildTimelineItems(turns, false)
-    .flatMap((item) => {
-      if (item.role !== "user" && item.role !== "assistant") {
-        return [];
-      }
-      const text = plainTextMessageItemText(item);
-      if (!text) {
-        return [];
-      }
-      return [
-        {
-          id: item.key,
-          role: item.role,
-          label: messageRoleLabel(item, assistantLabel),
-          text,
-        },
-      ];
-    });
+  return buildTimelineItems(turns, false).flatMap((item) => {
+    if (item.role !== "user" && item.role !== "assistant") {
+      return [];
+    }
+    const text = plainTextMessageItemText(item);
+    if (!text) {
+      return [];
+    }
+    return [
+      {
+        id: item.key,
+        role: item.role,
+        label: messageRoleLabel(item, assistantLabel),
+        text,
+      },
+    ];
+  });
 }
 
 function plainTextMessageItemText(item: MessageItem) {
@@ -166,9 +158,7 @@ function plainTextMessageItemText(item: MessageItem) {
   // Assistant prose carries `[[Term]]` markers for the renderer; plain text
   // keeps only the display words.
   const stripped =
-    item.role === "user"
-      ? stripTaggedUserInstructionBlocks(text)
-      : stripWikilinks(text);
+    item.role === "user" ? stripTaggedUserInstructionBlocks(text) : stripWikilinks(text);
   const trimmed = stripped.trim();
   return trimmed ? trimmed : null;
 }
@@ -201,9 +191,7 @@ export function timelineItemsContainTranscriptActivity(items: MessageItem[]) {
 
 function withoutTranscriptActivities(items: MessageItem[]) {
   return items
-    .map((item) =>
-      item.activities.length > 0 ? { ...item, activities: [] } : item,
-    )
+    .map((item) => (item.activities.length > 0 ? { ...item, activities: [] } : item))
     .filter((item) => item.blocks.length > 0);
 }
 
@@ -224,7 +212,7 @@ function urlHost(url: string | null): string | null {
 }
 
 function pathName(path: string | null): string | null {
-  return path ? path.split(/[\\/]/).filter(Boolean).pop() ?? null : null;
+  return path ? (path.split(/[\\/]/).filter(Boolean).pop() ?? null) : null;
 }
 
 /** A short, lower-case description of what a tool call does, for the status
@@ -250,7 +238,9 @@ export function toolActivityLabel(entry: ToolEntry): string {
       return "searching X";
     case "read":
     case "read_file": {
-      const file = pathName(toolActivityInput(entry, "file_path") ?? toolActivityInput(entry, "path"));
+      const file = pathName(
+        toolActivityInput(entry, "file_path") ?? toolActivityInput(entry, "path"),
+      );
       return file ? `reading ${file}` : "reading files";
     }
     case "grep":
@@ -282,12 +272,12 @@ export function toolActivityLabel(entry: ToolEntry): string {
  * made none. */
 export function latestToolActivityLabel(items: MessageItem[]): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const activities = items[index].activities;
+    const activities = items[index]!.activities;
     for (let at = activities.length - 1; at >= 0; at -= 1) {
-      const activity = activities[at];
+      const activity = activities[at]!;
       const leaves = activity.type === "activityGroup" ? activity.children : [activity];
       for (let leaf = leaves.length - 1; leaf >= 0; leaf -= 1) {
-        const entry = leaves[leaf];
+        const entry = leaves[leaf]!;
         if (entry.type === "tool") return toolActivityLabel(entry);
       }
     }
@@ -301,7 +291,7 @@ export function latestToolActivityLabel(items: MessageItem[]): string | null {
  */
 export function timelineItemsAfterLastToolCall(items: MessageItem[]) {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    if (items[index].activities.some(containsToolActivity)) {
+    if (items[index]!.activities.some(containsToolActivity)) {
       const after = items.slice(index + 1);
       // Trailing tool activity with no text after it (a TodoWrite wrap-up, a
       // post-answer verification) attaches to the same item as the final
@@ -309,7 +299,7 @@ export function timelineItemsAfterLastToolCall(items: MessageItem[]) {
       // away would present a completed response as unavailable, so carry the
       // boundary item's message content forward — its activities remain
       // visible in the full trace.
-      const boundary = items[index];
+      const boundary = items[index]!;
       if (
         boundary.role === "assistant" &&
         messageItemText(boundary) !== null &&
@@ -339,11 +329,11 @@ class PendingToolQueue {
 
   /** Removes and returns the oldest live entry satisfying `matches`, or null. */
   take(resolved: Set<ToolEntry>, matches: (entry: ToolEntry) => boolean): ToolEntry | null {
-    while (this.head < this.items.length && resolved.has(this.items[this.head])) {
+    while (this.head < this.items.length && resolved.has(this.items[this.head]!)) {
       this.head += 1;
     }
     for (let index = this.head; index < this.items.length; index += 1) {
-      const entry = this.items[index];
+      const entry = this.items[index]!;
       if (!resolved.has(entry) && matches(entry)) {
         resolved.add(entry);
         return entry;
@@ -483,17 +473,17 @@ export function buildTimelineItems(turns: Turn[], showActivityDetail = true): Me
     // above the user message that triggered them. Tool-result-only user turns
     // never create items, so they don't block the walk.
     for (let index = items.length - 1; index >= 0; index -= 1) {
-      if (items[index].role !== "assistant") {
+      if (items[index]!.role !== "assistant") {
         break;
       }
       if (
-        items[index].status === status &&
-        items[index].contextStatus === contextStatus &&
-        participantKey(items[index].participant) === participantKey(participant)
+        items[index]!.status === status &&
+        items[index]!.contextStatus === contextStatus &&
+        participantKey(items[index]!.participant) === participantKey(participant)
       ) {
-        addSourceTurn(items[index], sourceTurnId);
-        applyTimestamp(items[index], timestamp);
-        return items[index];
+        addSourceTurn(items[index]!, sourceTurnId);
+        applyTimestamp(items[index]!, timestamp);
+        return items[index]!;
       }
     }
     const fallback = createMessageItem(
@@ -608,9 +598,8 @@ export function buildTimelineItems(turns: Turn[], showActivityDetail = true): Me
       }
     } else {
       matched =
-        pendingByStatus
-          .get(activityStateKey(status, contextStatus))
-          ?.take(resolved, () => true) ?? null;
+        pendingByStatus.get(activityStateKey(status, contextStatus))?.take(resolved, () => true) ??
+        null;
     }
 
     if (matched) {
@@ -721,7 +710,7 @@ function groupActivityItems(activities: ActivityItem[]): ActivityItem[] {
   return [
     {
       type: "activityGroup",
-      key: `activity-group-${children[0].key}`,
+      key: `activity-group-${children[0]!.key}`,
       children,
       toolCallCount: countUniqueToolCalls(children),
       status: commonActivityStatus(children),
@@ -779,19 +768,16 @@ function participantKey(participant: ThreadParticipant | null | undefined) {
  * `endIndex` (inclusive). Returns null when none of the items carry a native
  * timestamp, so the footer can stay hidden rather than invent a time.
  */
-export function assistantGroupTimestamp(
-  items: MessageItem[],
-  endIndex: number,
-): number | null {
-  if (endIndex < 0 || endIndex >= items.length || items[endIndex].role !== "assistant") {
+export function assistantGroupTimestamp(items: MessageItem[], endIndex: number): number | null {
+  if (endIndex < 0 || endIndex >= items.length || items[endIndex]!.role !== "assistant") {
     return null;
   }
   let latest: number | null = null;
   for (let index = endIndex; index >= 0; index -= 1) {
-    if (items[index].role !== "assistant") {
+    if (items[index]!.role !== "assistant") {
       break;
     }
-    const timestamp = items[index].timestamp;
+    const timestamp = items[index]!.timestamp;
     if (typeof timestamp === "number" && (latest === null || timestamp > latest)) {
       latest = timestamp;
     }
@@ -807,20 +793,17 @@ export function assistantGroupTimestamp(
  * transcript update so a continued response can grow without dropping out of
  * the reader.
  */
-export function assistantRunForItemKey(
-  items: MessageItem[],
-  itemKey: string,
-): MessageItem[] {
+export function assistantRunForItemKey(items: MessageItem[], itemKey: string): MessageItem[] {
   const itemIndex = items.findIndex((item) => item.key === itemKey);
-  if (itemIndex < 0 || items[itemIndex].role !== "assistant") {
+  if (itemIndex < 0 || items[itemIndex]!.role !== "assistant") {
     return [];
   }
   let startIndex = itemIndex;
-  while (startIndex > 0 && items[startIndex - 1].role === "assistant") {
+  while (startIndex > 0 && items[startIndex - 1]!.role === "assistant") {
     startIndex -= 1;
   }
   let endIndex = itemIndex;
-  while (endIndex + 1 < items.length && items[endIndex + 1].role === "assistant") {
+  while (endIndex + 1 < items.length && items[endIndex + 1]!.role === "assistant") {
     endIndex += 1;
   }
   return items.slice(startIndex, endIndex + 1);
@@ -859,11 +842,7 @@ export function formatAbsoluteMessageTimestamp(
  * End-of-assistant-group footer label: relative when under 24 hours old
  * ("just now", "5 min ago", "6 hours ago"), otherwise absolute wall clock.
  */
-export function formatMessageTimestamp(
-  ms: number,
-  now = Date.now(),
-  locale?: string,
-): string {
+export function formatMessageTimestamp(ms: number, now = Date.now(), locale?: string): string {
   const ageMs = now - ms;
   if (ageMs < 60_000) {
     return "just now";
@@ -970,6 +949,6 @@ function messageItemIsTaggedInstruction(item: MessageItem) {
   if (item.role !== "user" || item.blocks.length !== 1) {
     return false;
   }
-  const [block] = item.blocks;
+  const block = item.blocks[0]!;
   return block.type === "text" && taggedUserInstructionDetails(block.text) !== null;
 }

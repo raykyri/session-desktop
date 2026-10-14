@@ -7,8 +7,8 @@ import {
   isResearchAskActionShortcut,
   isResearchExpandActionShortcut,
   isResearchHighlightActionShortcut,
-} from "../../lib/researchHighlights";
-import { researchSelectionActionPlacement } from "../../lib/researchSelection";
+} from "@session/shared/lib/researchHighlights";
+import { researchSelectionActionPlacement } from "@session/shared/lib/researchSelection";
 
 // The selection actions' size before they have rendered once (three inline
 // items, plus the note line when one shows).

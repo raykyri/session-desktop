@@ -8,7 +8,7 @@ import ResearchActivityFeed, {
 } from "../src/components/research/ResearchActivityFeed";
 import { researchTreeDeleteDialogProps } from "../src/components/research/ResearchTreeMenu";
 import { ResearchDeleteDialogPanel } from "../src/components/research/ResearchDeleteDialog";
-import { emptyResearchFolderState, RESEARCH_DRAFTS_FOLDER_ID } from "../src/lib/researchFolders";
+import { emptyResearchFolderState, RESEARCH_DRAFTS_FOLDER_ID } from "@session/shared/lib/researchFolders";
 import {
   researchCardDrop,
   researchCardDropZone,
@@ -25,7 +25,7 @@ import {
   researchOrderAfterNest,
   researchTreeGroups,
   researchTreeHoldsChildren,
-} from "../src/lib/researchGroups";
+} from "@session/shared/lib/researchGroups";
 import { researchTrashTreeSentence } from "@session/shared/lib/researchTrash";
 import type { RecentResearchQuery, ResearchFolderState, ResearchTreeSummary } from "../src/types";
 

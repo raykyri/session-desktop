@@ -1,4 +1,5 @@
 import type {
+  ParsedResearchEvent,
   SessionEvent,
   ResearchHighlight,
   ResearchNode,
@@ -6,113 +7,12 @@ import type {
   ResearchTree,
   ResearchTreeDetail,
   ResearchTreeSummary,
-} from "../types";
-import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
+} from "../wire/index.js";
 
-type TreeCreatedEvent = {
-  type: "research.tree.created";
-  tree: ResearchTree;
-  node: ResearchNode;
-  timestamp: number;
-};
+import { nodeRun, nodeStatus } from "./researchNodeTypes.js";
 
-type DocumentUpdatedEvent = {
-  type: "research.document.updated";
-  tree: ResearchTree;
-  node: ResearchNode;
-  responseRevision: string;
-  markdownChanged: boolean;
-  removedHighlightCount: number;
-  timestamp: number;
-};
-
-type NodeEvent = {
-  type: "research.node.created" | "research.node.updated";
-  node: ResearchNode;
-  timestamp: number;
-};
-
-type TreeEvent = {
-  type:
-    | "research.tree.updated"
-    | "research.tree.archived"
-    | "research.tree.restored";
-  tree: ResearchTree;
-  timestamp: number;
-};
-
-type HighlightCreatedEvent = {
-  type: "research.highlight.created";
-  nodeId: string;
-  highlight: ResearchHighlight;
-  timestamp: number;
-};
-
-type HighlightsRemovedEvent = {
-  type: "research.highlights.removed";
-  nodeId: string;
-  highlightIds: string[];
-  timestamp: number;
-};
-
-/** Background summary generation started or settled for a run. Purely a
- * viewer hint: the recap itself arrives as a node update. */
-type RecapPendingEvent = {
-  type: "research.recap.pending";
-  nodeId: string;
-  pending: boolean;
-  timestamp: number;
-};
-
-type TreeRemovedEvent = {
-  type: "research.tree.removed";
-  treeId: string;
-  timestamp: number;
-};
-
-type NodeRemovedEvent = {
-  type: "research.node.removed";
-  treeId: string;
-  parentNodeId: string;
-  removedNodeIds: string[];
-  timestamp: number;
-};
-
-/** A workspace's research drafts were created, edited, removed, or reordered. */
-type DraftsChangedEvent = {
-  type: "research.drafts.changed";
-  workspaceId: string;
-  timestamp: number;
-};
-
-/** The stored folder state changed (from any window, or a workspace removal). */
-type FoldersChangedEvent = {
-  type: "research.folders.changed";
-  timestamp: number;
-};
-
-/** A tree entered or left the Trash, or a trashed tree was deleted. */
-type TrashChangedEvent = {
-  type: "research.trash.changed";
-  timestamp: number;
-};
-
-/** Every research event currently emitted by the backend. Keeping this a
- * closed union makes a new backend event take the explicit recovery path
- * until its frontend state effects are intentionally implemented. */
-export type ParsedResearchEvent =
-  | TreeCreatedEvent
-  | DocumentUpdatedEvent
-  | NodeEvent
-  | TreeEvent
-  | HighlightCreatedEvent
-  | HighlightsRemovedEvent
-  | RecapPendingEvent
-  | TreeRemovedEvent
-  | NodeRemovedEvent
-  | DraftsChangedEvent
-  | FoldersChangedEvent
-  | TrashChangedEvent;
+// The event union is part of the wire model (`../wire/events.ts`).
+export type { ParsedResearchEvent };
 
 type ResearchEventParseResult =
   | { kind: "event"; event: ParsedResearchEvent }
@@ -120,6 +20,8 @@ type ResearchEventParseResult =
   | { kind: "unsupported"; type: string }
   | { kind: "malformed"; type: string };
 
+// The statuses the desktop backend sends. The web's `interrupted` is not
+// accepted yet; a node event that carries it is malformed here.
 const RESEARCH_STATUSES = new Set<ResearchNodeStatus>([
   "queued",
   "starting",
@@ -271,7 +173,9 @@ function isResearchNode(value: unknown): value is ResearchNode {
     case "document":
       return (
         (value.message == null || isUserMessage(value.message)) &&
-        (value.source === "imported" || value.source === "authored" || value.source === "transcript") &&
+        (value.source === "imported" ||
+          value.source === "authored" ||
+          value.source === "transcript") &&
         (value.followUpAgent == null || isAgentSpec(value.followUpAgent)) &&
         isOptionalFiniteNumber(value.responseSnapshotAt) &&
         isOptionalRecap(value.recap) &&
@@ -431,9 +335,7 @@ interface ResearchStatusContribution {
   cancelledCount: number;
 }
 
-export function researchStatusContribution(
-  status: ResearchNodeStatus,
-): ResearchStatusContribution {
+export function researchStatusContribution(status: ResearchNodeStatus): ResearchStatusContribution {
   return {
     runningCount: status === "queued" || status === "starting" || status === "running" ? 1 : 0,
     failedCount: status === "failed" ? 1 : 0,
@@ -501,10 +403,7 @@ function compareResearchNodes(left: ResearchNode, right: ResearchNode): number {
 
 /** Upsert one full-node event while preserving collection identity for an
  * identical object and the backend's (createdAt, id) ordering. */
-export function upsertResearchNode(
-  nodes: ResearchNode[],
-  node: ResearchNode,
-): ResearchNode[] {
+export function upsertResearchNode(nodes: ResearchNode[], node: ResearchNode): ResearchNode[] {
   const index = nodes.findIndex((candidate) => candidate.id === node.id);
   if (index >= 0) {
     if (nodes[index] === node) {
@@ -512,7 +411,7 @@ export function upsertResearchNode(
     }
     const next = [...nodes];
     next[index] = node;
-    if (compareResearchNodes(nodes[index], node) !== 0) {
+    if (compareResearchNodes(nodes[index]!, node) !== 0) {
       next.sort(compareResearchNodes);
     }
     return next;
@@ -522,7 +421,10 @@ export function upsertResearchNode(
   return next;
 }
 
-export function removeResearchNodes(nodes: ResearchNode[], removedIds: Iterable<string>): ResearchNode[] {
+export function removeResearchNodes(
+  nodes: ResearchNode[],
+  removedIds: Iterable<string>,
+): ResearchNode[] {
   const removed = removedIds instanceof Set ? removedIds : new Set(removedIds);
   const next = nodes.filter((node) => !removed.has(node.id));
   return next.length === nodes.length ? nodes : next;
@@ -665,11 +567,7 @@ export function patchResearchSummaryForNode(
   node: ResearchNode,
   eventTimestamp: number,
 ): ResearchTreeSummary {
-  if (
-    summary.id !== node.treeId ||
-    previous.id !== node.id ||
-    previous.treeId !== node.treeId
-  ) {
+  if (summary.id !== node.treeId || previous.id !== node.id || previous.treeId !== node.treeId) {
     return summary;
   }
   const before = nodeRunContribution(previous);
@@ -705,8 +603,7 @@ export function patchResearchSummaryForNode(
       run?.completedAt ?? 0,
     ),
     hasUnseenUpdate: summary.hasUnseenUpdate || newlySettled,
-    hasUnseenFailure:
-      summary.hasUnseenFailure || (newlySettled && run?.status === "failed"),
+    hasUnseenFailure: summary.hasUnseenFailure || (newlySettled && run?.status === "failed"),
   };
 }
 

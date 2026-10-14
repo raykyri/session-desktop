@@ -1,9 +1,10 @@
 // Updates to the sidebar's research tree lists and the activity list that
 // keep unchanged entries (and unchanged lists) identical, so memoized
 // consumers skip them.
-import { researchNodeIsActivity } from "./researchEvents";
-import { reconcileResearchActivity } from "@session/shared/research/snapshots";
-import type { ResearchNode, ResearchTreeDetail, ResearchTreeSummary } from "../types";
+import { reconcileResearchActivity } from "../research/snapshots.js";
+import type { ResearchNode, ResearchTreeDetail, ResearchTreeSummary } from "../wire/index.js";
+
+import { researchNodeIsActivity } from "./researchEvents.js";
 
 /** Splits trees into the active and the archived list. */
 export function partitionResearchTrees(trees: ResearchTreeSummary[]) {

@@ -6,7 +6,7 @@ import {
   recentResearchQueryFromNode,
   upsertRecentActivityItem,
   upsertRecentActivityResearchNode,
-} from "../src/lib/activity";
+} from "@session/shared/lib/activity";
 import { formatResearchModelSummary } from "../src/lib/researchModelSummary";
 import {
   researchFeedRows,

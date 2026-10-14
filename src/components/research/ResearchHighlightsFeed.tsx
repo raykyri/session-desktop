@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { RotateCw, X } from "lucide-react";
 import type { ResearchHighlightFeedItem } from "../../types";
-import { RESEARCH_HIGHLIGHT_CONTEXT_LENGTH } from "../../lib/researchHighlights";
+import { RESEARCH_HIGHLIGHT_CONTEXT_LENGTH } from "@session/shared/lib/researchHighlights";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
 
 export interface ResearchHighlightsFeedProps {

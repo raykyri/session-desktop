@@ -1,7 +1,7 @@
 import { Folder } from "lucide-react";
 import type { ResearchTrashEntry } from "@session/shared/lib/researchTrash";
 import { researchThreadKind } from "@session/shared/lib/researchRowGlyph";
-import { shortWhen } from "../../lib/shortTime";
+import { shortWhen } from "@session/shared/lib/shortTime";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 
 function trashedTooltip(trashedAt: number): string {

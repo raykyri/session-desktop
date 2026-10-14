@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { launcherTabAction } from "../src/lib/launcherKeyboard";
+import { launcherTabAction } from "@session/shared/lib/launcherKeyboard";
 
 const key = (overrides: Partial<Parameters<typeof launcherTabAction>[0]> = {}) => ({
   key: "Tab",

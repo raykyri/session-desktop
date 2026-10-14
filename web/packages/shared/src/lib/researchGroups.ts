@@ -1,6 +1,7 @@
-import type { ResearchFolderState, ResearchNodeType } from "../types";
-import type { ResearchRowState } from "@session/shared/lib/researchRowGlyph";
-import { researchTreeOrderAfterMove } from "./researchFolders";
+import type { ResearchFolderState, ResearchNodeType } from "../wire/index.js";
+
+import { researchTreeOrderAfterMove } from "./researchFolders.js";
+import type { ResearchRowState } from "./researchRowGlyph.js";
 
 // Nesting in Home: a question, a document or a post (the parent) lists other
 // items (its children) under its card. One level deep: a parent is never a
@@ -32,7 +33,9 @@ function listedParent(
   parents: Readonly<Record<string, string>>,
 ): string | null {
   const parent = parents[id];
-  return parent && parent !== id && ids.has(parent) && parents[parent] === undefined ? parent : null;
+  return parent && parent !== id && ids.has(parent) && parents[parent] === undefined
+    ? parent
+    : null;
 }
 
 /** A list's trees (in its order) as top-level items, each with the children
@@ -63,7 +66,9 @@ export function researchChildIds(
   trees: readonly { id: string }[],
   parents: Readonly<Record<string, string>>,
 ): string[] {
-  return trees.filter((tree) => tree.id !== parentId && parents[tree.id] === parentId).map((tree) => tree.id);
+  return trees
+    .filter((tree) => tree.id !== parentId && parents[tree.id] === parentId)
+    .map((tree) => tree.id);
 }
 
 /** Lists `childId` under `parentId`, or with null on its own. A child takes
@@ -120,7 +125,9 @@ export function researchCardTakesChild(
   item: ResearchDraggedTree,
   card: { id: string; holdsChildren: boolean; parentId: string | null },
 ): boolean {
-  return card.holdsChildren && card.parentId === null && card.id !== item.id && card.id !== item.parentId;
+  return (
+    card.holdsChildren && card.parentId === null && card.id !== item.id && card.id !== item.parentId
+  );
 }
 
 /** The part of a card the pointer is over during a drag, `offsetY` px below
@@ -189,12 +196,18 @@ type ResearchCardDrop =
  * within its group; below the last child, left of its glyph, is after the
  * group at the top level. The Move out strip takes only the group's own
  * children. */
-export function researchCardDrop(item: ResearchDraggedTree, hit: ResearchCardHit): ResearchCardDrop {
+export function researchCardDrop(
+  item: ResearchDraggedTree,
+  hit: ResearchCardHit,
+): ResearchCardDrop {
   if (hit.card === "group-exit") {
-    return item.parentId === hit.parentId ? { kind: "after-group", id: hit.parentId } : { kind: "none" };
+    return item.parentId === hit.parentId
+      ? { kind: "after-group", id: hit.parentId }
+      : { kind: "none" };
   }
   if (hit.card === "child") {
-    if (hit.parentId === item.id) return { kind: "refuse", reason: "Can’t move a group into itself." };
+    if (hit.parentId === item.id)
+      return { kind: "refuse", reason: "Can’t move a group into itself." };
     if (hit.id === item.id) return { kind: "none" };
     if (!hit.after) return { kind: "nest", parentId: hit.parentId, beforeId: hit.id };
     if (hit.nextId) return { kind: "nest", parentId: hit.parentId, beforeId: hit.nextId };
@@ -203,7 +216,11 @@ export function researchCardDrop(item: ResearchDraggedTree, hit: ResearchCardHit
       : { kind: "nest", parentId: hit.parentId, beforeId: null };
   }
   if (hit.id === item.id) return { kind: "none" };
-  const takesChild = researchCardTakesChild(item, { id: hit.id, holdsChildren: hit.holdsChildren, parentId: null });
+  const takesChild = researchCardTakesChild(item, {
+    id: hit.id,
+    holdsChildren: hit.holdsChildren,
+    parentId: null,
+  });
   const zone = researchCardDropZone(hit.height, hit.offsetY, takesChild);
   if (zone === "nest") return { kind: "nest", parentId: hit.id, beforeId: null, onCard: true };
   if (zone === "before") return { kind: "before", id: hit.id };

@@ -6,7 +6,7 @@ import {
   reuseUnchangedContent,
   subscribeResearchContentChanged,
   type RefreshTimers,
-} from "../src/lib/researchContentRefresh";
+} from "@session/shared/lib/researchContentRefresh";
 import type { ResearchNode, ResearchNodeContent, Turn } from "../src/types";
 
 /** Manual clock: timers fire only from `advance`. */

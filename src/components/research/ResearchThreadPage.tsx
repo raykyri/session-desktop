@@ -34,8 +34,8 @@ import { useResearchColumnScroll, type ResearchThreadPersistence } from "../../h
 import { useResearchRunControls } from "../../hooks/useResearchRunControls";
 import { useResearchTextSelection } from "../../hooks/useResearchTextSelection";
 import { useStableValue } from "../../hooks/useStableValue";
-import { reorderedIds, stepReorderTarget } from "../../lib/researchFolders";
-import { toggleResearchTile } from "../../lib/researchTileClamp";
+import { reorderedIds, stepReorderTarget } from "@session/shared/lib/researchFolders";
+import { toggleResearchTile } from "@session/shared/lib/researchTileClamp";
 import { writeClipboardText } from "../../lib/clipboard";
 import type { ResearchPostThreadHandle } from "./ResearchPostThread";
 import type { PostActions } from "./ResearchPost";

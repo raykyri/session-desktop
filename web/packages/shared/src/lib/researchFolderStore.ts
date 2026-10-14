@@ -1,5 +1,6 @@
-import type { ResearchFolderState } from "../types";
-import { emptyResearchFolderState } from "./researchFolders";
+import type { ResearchFolderState } from "../wire/index.js";
+
+import { emptyResearchFolderState } from "./researchFolders.js";
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

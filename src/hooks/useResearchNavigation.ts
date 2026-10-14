@@ -16,9 +16,9 @@ import {
   recentActivityCursor as recentActivityItemCursor,
   upsertRecentActivityResearchNode,
   type RecentActivityPage,
-} from "../lib/activity";
+} from "@session/shared/lib/activity";
 import { IS_MAC } from "../lib/appHelpers";
-import { patchResearchDetailNode, upsertResearchActivity } from "../lib/researchEvents";
+import { patchResearchDetailNode, upsertResearchActivity } from "@session/shared/lib/researchEvents";
 import {
   canGoResearchBack,
   canGoResearchForward,
@@ -35,7 +35,7 @@ import {
   researchVisitsAfterRemoval,
   seedResearchVisits,
   type ResearchVisit,
-} from "../lib/researchHistory";
+} from "@session/shared/lib/researchHistory";
 import {
   pruneResearchNavigation,
   researchNavigationStore,
@@ -48,7 +48,7 @@ import {
   reconcileResearchTreeDetail,
   reconcileResearchTreeSummaries,
 } from "@session/shared/research/snapshots";
-import { partitionResearchTrees } from "../lib/researchTreeSummaries";
+import { partitionResearchTrees } from "@session/shared/lib/researchTreeSummaries";
 import { groupsForScope } from "../lib/workspaceScope";
 import type {
   GroupInfo,

@@ -4,14 +4,14 @@ import test from "node:test";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentAdapterMetadata } from "../src/types";
-import { resolveAppShortcut } from "../src/lib/appShortcuts";
+import { resolveAppShortcut } from "@session/shared/lib/appShortcuts";
 import { isSaveShortcut } from "../src/lib/editorShortcuts";
 import {
   QUESTION_CHARACTER_LIMIT,
   editedMarkdownBlocks,
   markdownBlocks,
   researchQuestionLength,
-} from "../src/lib/researchEditor";
+} from "@session/shared/lib/researchEditor";
 import { withWidgetDom } from "./widgetDom";
 
 // Registered before the editor is imported: its model menu imports adapter
