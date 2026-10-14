@@ -13,19 +13,19 @@
 // otherwise they close. Web only: the offer is made for the reader's own
 // thread, since a shared thread's Delete leaves it rather than deleting it.
 
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import type { ResearchTreeSummary } from "@session/shared";
 import {
   researchTreeContentsSentence,
   type ResearchTreeContents,
 } from "@session/shared/lib/researchTreeContents";
-import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
 
 import { useResearchTrash, useTreeSummaries } from "../../api/queries.js";
 import { ControlButton } from "../../ui/Button.js";
-import { ConfirmDialogActionButton } from "../../ui/Dialog.js";
 import { DeleteDialog } from "../../ui/DeleteDialog.js";
+import { ConfirmDialogActionButton } from "../../ui/Dialog.js";
 import { DIALOG_BACKDROP, DIALOG_POPUP } from "../../ui/surfaces.js";
 import { treeDeleteDialogProps } from "../home/TreeMenu.js";
 import { useFiling } from "../home/useFiling.js";

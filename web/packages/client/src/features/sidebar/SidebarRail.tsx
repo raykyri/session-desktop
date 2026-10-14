@@ -2,8 +2,9 @@
 // `ResearchSidebarNav.tsx`): a 52px column of icons. Expand sidebar, then
 // Home and Highlights (and the web's Shared with me and All Users), then one
 // icon per place — Drafts, each folder as its first letter (named in the
-// tooltip), Archive, Trash — then New folder, and Settings at the foot. Home
-// and every place but Trash take card drops, as in the full sidebar.
+// tooltip), Archive, Trash — then New folder, and at the foot the Light/Dark
+// toggle and Settings. Home and every place but Trash take card drops, as in
+// the full sidebar.
 
 import type { ResearchFolder } from "@session/shared";
 import {
@@ -15,11 +16,23 @@ import {
   researchPlaceName,
 } from "@session/shared/lib/researchFolders";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Globe, Highlighter, House, PanelLeft, Plus, Settings, Users } from "lucide-react";
+import {
+  Globe,
+  Highlighter,
+  House,
+  Moon,
+  PanelLeft,
+  Plus,
+  Settings,
+  Sun,
+  Users,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
+import { selectAppearance, useSettingsStore } from "../../stores/settings.js";
 import { Tooltip } from "../../ui/Tooltip.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { PlaceIcon } from "../home/FeedTray.js";
@@ -53,6 +66,8 @@ interface RailEntry {
   folderId?: string;
   feed?: "all";
   label: string;
+  /** The tooltip, when it says more than the label (a shortcut). */
+  tooltip?: string;
   icon: ReactNode;
   drop?: string;
 }
@@ -101,12 +116,18 @@ export function SidebarRail({
   folders,
   signedIn,
   onExpand,
+  inert = false,
 }: {
   workspaceId: string;
   folders: readonly ResearchFolder[];
   signedIn: boolean;
   onExpand: () => void;
+  /** Behind the narrow layout's open drawer, which holds the same places. */
+  inert?: boolean | undefined;
 }) {
+  const appearance = useResolvedAppearance(useSettingsStore(selectAppearance));
+  const toggleAppearance = useSettingsStore((state) => state.toggleAppearance);
+  const light = appearance === "light";
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const feed = useRouterState({
     select: (state) => {
@@ -154,7 +175,7 @@ export function SidebarRail({
   ];
 
   const entryLink = (entry: RailEntry) => (
-    <Tooltip key={entry.key} content={entry.label} side="right">
+    <Tooltip key={entry.key} content={entry.tooltip ?? entry.label} side="right">
       <Link
         to={entry.to}
         params={entry.folderId ? { folderId: entry.folderId } : {}}
@@ -176,6 +197,7 @@ export function SidebarRail({
   return (
     <aside
       aria-label="Sidebar"
+      inert={inert}
       className="border-border-divider bg-surface-sidebar flex h-full shrink-0 flex-col items-center gap-0.5 border-r pb-2.5 select-none"
       style={{ width: SIDEBAR_RAIL_WIDTH }}
     >
@@ -217,14 +239,23 @@ export function SidebarRail({
         </>
       ) : null}
       <span className="flex-1" />
-      {signedIn
-        ? entryLink({
-            key: "settings",
-            to: "/settings",
-            label: "Settings",
-            icon: <Settings size={16} aria-hidden="true" />,
-          })
-        : null}
+      <Tooltip content={light ? "Dark mode" : "Light mode"} side="right">
+        <button
+          type="button"
+          aria-label={light ? "Dark mode" : "Light mode"}
+          className={RAIL_ICON}
+          onClick={toggleAppearance}
+        >
+          {light ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+        </button>
+      </Tooltip>
+      {entryLink({
+        key: "settings",
+        to: "/settings",
+        label: "Settings",
+        tooltip: `Settings (${formatChord("mod+,")})`,
+        icon: <Settings size={16} aria-hidden="true" />,
+      })}
     </aside>
   );
 }

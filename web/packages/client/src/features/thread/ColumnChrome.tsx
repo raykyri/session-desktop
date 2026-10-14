@@ -8,6 +8,7 @@ import { Ellipsis, Terminal, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { isApplePlatform } from "../../lib/platform.js";
 import { HistoryNav } from "../../ui/HistoryNav.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
@@ -30,8 +31,20 @@ const HEAD_BUTTON =
 
 /** The bar's left part: Back and Forward. (A collapsed sidebar is its icon
  * rail, whose Expand sidebar button restores it.) */
+/** The browser's history chords, which Back and Forward stand for: ⌘[ and ⌘]
+ * on macOS (as the desktop's titles), Alt+← and Alt+→ elsewhere. */
+export function historyChordTitles(apple: boolean = isApplePlatform()): {
+  back: string;
+  forward: string;
+} {
+  return apple
+    ? { back: "Back (⌘[)", forward: "Forward (⌘])" }
+    : { back: "Back (Alt+←)", forward: "Forward (Alt+→)" };
+}
+
 function HeaderLead({ history }: { history: ThreadHistoryNav | null }) {
   if (!history) return null;
+  const titles = historyChordTitles();
   return (
     <div className="-ml-2 flex shrink-0 items-center" role="group" aria-label="Research history">
       <HistoryNav
@@ -39,6 +52,8 @@ function HeaderLead({ history }: { history: ThreadHistoryNav | null }) {
         canGoForward={history.canGoForward}
         onBack={history.onBack}
         onForward={history.onForward}
+        backTitle={titles.back}
+        forwardTitle={titles.forward}
       />
     </div>
   );

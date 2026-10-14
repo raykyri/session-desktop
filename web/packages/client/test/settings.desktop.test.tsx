@@ -196,10 +196,68 @@ test.serial("the settings page lists the desktop's settings", async (t) => {
   t.truthy(screen.getAllByText("Color theme").length > 0);
   t.is(screen.queryByText("Show tool calls"), null);
   t.is(screen.queryByText("Show timestamps"), null);
+  const chord = navigator.platform.includes("Mac") ? "⌘↵" : "Ctrl+↵";
+  t.truthy(
+    screen.getByText(
+      `A thread's question boxes always require ${chord}. This setting controls the Home ask box, drafts and note follow-ups.`,
+    ),
+  );
+  // The desktop's rows only, plus the web's Default model and Notifications.
+  t.truthy(screen.getByText("Sent with every research launch"));
+  t.truthy(screen.getByRole("checkbox", { name: /^Notifications/ }));
+  t.truthy(screen.getByRole("combobox", { name: "Default model" }));
+  for (const gone of ["Text size", "Default workspace", "Usage", "Save instructions"]) {
+    t.is(screen.queryByText(gone), null, gone);
+  }
   fireEvent.click(screen.getByRole("checkbox", { name: "Reduce motion" }));
   t.true(useSettingsStore.getState().settings.reduceMotion);
   app.unmount();
 });
+
+test.serial(
+  "research instructions save as they are typed, with the desktop placeholder",
+  async (t) => {
+    const app = await renderApp("/settings", {
+      queryClient: testQueryClient(),
+      responses: {
+        "workspaces.list": [workspace()],
+        "settings.get": serverSettings(),
+        "settings.update": (input: { researchLaunchInstruction?: string | null }) =>
+          serverSettings({ researchLaunchInstruction: input.researchLaunchInstruction ?? null }),
+      },
+    });
+    const field = await screen.findByRole<HTMLTextAreaElement>("textbox", {
+      name: "Research instructions",
+    });
+    t.is(field.placeholder, "Answer concisely, in a few short paragraphs.");
+    fireEvent.change(field, { target: { value: "Cite primary sources." } });
+    await waitUntil(
+      t,
+      () =>
+        app.trpc.calls.some(
+          (call) =>
+            call.path === "settings.update" &&
+            (call.input as { researchLaunchInstruction?: string }).researchLaunchInstruction ===
+              "Cite primary sources.",
+        ),
+      "saved after the pause",
+    );
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.blur(field);
+    await waitUntil(
+      t,
+      () =>
+        app.trpc.calls.some(
+          (call) =>
+            call.path === "settings.update" &&
+            (call.input as { researchLaunchInstruction?: string | null })
+              .researchLaunchInstruction === null,
+        ),
+      "an empty field clears the instruction at once on blur",
+    );
+    app.unmount();
+  },
+);
 
 test.serial("shortcut hints show while ⌘ is held, unless the setting is off", async (t) => {
   const app = await renderApp("/", {

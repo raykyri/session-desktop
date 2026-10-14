@@ -3,23 +3,14 @@
 // interprets modifier chords, so the whole set is readable in one place and
 // testable without a DOM (`07-client-architecture.md` §5).
 //
-// Every chord here is a research-surface command. The desktop's terminal,
-// pane, split, and remote chords are gone with the surfaces they drove.
-//
-// `editableTarget` is decided per chord, not for the table as a whole. Most of
-// this app's time is spent in a composer, and a palette or a settings chord
-// that stops working the moment the caret is in a text field is a chord the
-// user cannot rely on — Cmd-J ("focus the follow-ups") exists precisely to be
-// pressed from one. Only the chords that compete with text editing or with
-// the caret's own navigation stand down: the digit and cycle chords move
-// between documents, and the reorder chord shares Cmd-Alt-Arrow with word-wise
-// selection.
+// The chords are the desktop's (`lib/appShortcuts.ts`) that have a surface on
+// the web, plus Shift-Cmd-H for Home. The desktop's source browser chord
+// (Shift-Cmd-E) is gone with the browser. Every chord here also works from a
+// text field: Cmd-J ("focus the follow-ups") exists precisely to be pressed
+// from one.
 
 export type AppShortcutCommand =
-  | { type: "focusResearchTab"; tabIndex: number }
   | { type: "focusResearchHome" }
-  | { type: "cycleResearchTab"; direction: -1 | 1 }
-  | { type: "moveResearchItem"; direction: -1 | 1 }
   | { type: "openSettings" }
   | { type: "openCommandPalette" }
   | { type: "toggleLeftSidebar" }
@@ -32,44 +23,19 @@ export interface AppShortcutInput {
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
-  editableTarget?: boolean | undefined;
 }
 
 /** Display shortcut label for Home. Uses Shift-Cmd-H by default since standard browser shortcuts (Cmd-N/Cmd-T) are intercepted by web browsers. */
 export const RESEARCH_HOME_SHORTCUT_LABEL = "⇧⌘H";
 
-function normalizedKey(key: string): string {
-  switch (key.toLowerCase()) {
-    case "{":
-      return "[";
-    case "}":
-      return "]";
-    default:
-      return key.toLowerCase();
-  }
-}
-
 export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand | null {
-  const key = normalizedKey(input.key);
+  const key = input.key.toLowerCase();
   const command = input.metaKey;
   const control = input.ctrlKey;
   const option = input.altKey;
   const shift = input.shiftKey;
   const onePrimaryModifier = command !== control;
 
-  if (
-    command &&
-    !control &&
-    option &&
-    !shift &&
-    !input.editableTarget &&
-    (key === "arrowup" || key === "arrowdown")
-  ) {
-    return { type: "moveResearchItem", direction: key === "arrowup" ? -1 : 1 };
-  }
-  if (onePrimaryModifier && !option && !shift && !input.editableTarget && /^[1-9]$/.test(key)) {
-    return { type: "focusResearchTab", tabIndex: Number(key) - 1 };
-  }
   if (command && !control && !option && !shift && (key === "n" || key === "t")) {
     return { type: "focusResearchHome" };
   }
@@ -80,14 +46,6 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
   }
   if (command && !control && !option && shift && key === "g") {
     return { type: "toggleLeftSidebar" };
-  }
-  if (
-    !input.editableTarget &&
-    ((!command && control && !option && key === "tab") ||
-      (command && !control && !option && shift && (key === "[" || key === "]")))
-  ) {
-    const previous = key === "[" || (key === "tab" && shift);
-    return { type: "cycleResearchTab", direction: previous ? -1 : 1 };
   }
   if (onePrimaryModifier && !option && !shift && key === ",") {
     return { type: "openSettings" };
@@ -102,10 +60,4 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
     return { type: "openWorkspaceMenu" };
   }
   return null;
-}
-
-/** Only the reorder command repeats while its chord is held; every other
- * command would fire a burst of navigations on key repeat. */
-export function appShortcutAllowsRepeat(command: AppShortcutCommand): boolean {
-  return command.type === "moveResearchItem";
 }

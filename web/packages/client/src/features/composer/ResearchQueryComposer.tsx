@@ -16,7 +16,7 @@ import { launcherTabAction } from "@session/shared/lib/launcherKeyboard";
 import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, FilePen, LoaderCircle, MoreHorizontal } from "lucide-react";
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   useCreateResearchPost,
@@ -29,6 +29,7 @@ import { cn } from "../../lib/cn.js";
 import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages.js";
 import { errorMessage, pushToast } from "../../lib/toast.js";
 import { homeDraftKey, markDraftEdited, useDraftsStore } from "../../stores/drafts.js";
+import { useHomeFocusStore } from "../../stores/homeFocus.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
 import {
@@ -91,9 +92,13 @@ export function ResearchQueryComposer({
   workspaceId,
   placeholder = "Ask a question",
   onCreated,
+  homeFocus = false,
 }: {
   workspaceId: string;
   placeholder?: string;
+  /** Home's box: it takes the focus Shift-Cmd-H requests
+   * (`stores/homeFocus`). */
+  homeFocus?: boolean;
   /** A new thread was created from the box (a question, or a note), before
    * a question opens; a folder view files it there. */
   onCreated?: (detail: ResearchTreeDetail) => void;
@@ -134,6 +139,13 @@ export function ResearchQueryComposer({
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const focusRequest = useHomeFocusStore((state) => (homeFocus ? state.request : 0));
+  const clearFocusRequest = useHomeFocusStore((state) => state.clear);
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    promptRef.current?.focus();
+    clearFocusRequest();
+  }, [clearFocusRequest, focusRequest]);
   const askSegmentRef = useRef<HTMLButtonElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   const imageProblemId = useId();

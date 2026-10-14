@@ -320,6 +320,22 @@ export function cachedNode(
     ?.find((node) => node.id === nodeId);
 }
 
+/** The thread's summary in a cached list (Home's lists or Shared with me),
+ * or `undefined`: what the thread page shows while its detail loads. */
+export function cachedTreeSummary(
+  client: QueryClient,
+  treeId: string,
+): ResearchTreeSummary | undefined {
+  for (const prefix of ["trees", "shared"]) {
+    for (const query of client.getQueryCache().findAll({ queryKey: [prefix] })) {
+      const summaries = query.state.data as ResearchTreeSummary[] | undefined;
+      const found = summaries?.find((summary) => summary.id === treeId);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 /** The thread's title as the caches last saw it, or `undefined` when no cache
  * holds the thread. The detail is preferred: it is the copy a rename writes
  * first. */

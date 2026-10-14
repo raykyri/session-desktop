@@ -1,13 +1,14 @@
-import { appShortcutAllowsRepeat, isEditableTarget, resolveAppShortcut } from "@session/shared";
+import { resolveAppShortcut } from "@session/shared";
 import type { AppShortcutCommand } from "@session/shared";
-import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
 import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
-import { DeleteOfferHost } from "../../features/thread/DeleteOfferHost.js";
 import { useWorkspaceScope, workspaceSearch } from "../../features/sidebar/scope.js";
+import { DeleteOfferHost } from "../../features/thread/DeleteOfferHost.js";
+import { requestHomeComposerFocus } from "../../stores/homeFocus.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
@@ -17,9 +18,6 @@ import { useUserNotifications } from "../../ui/useUserNotifications.js";
 import { SessionBoot } from "../SessionBoot.js";
 
 import { Sidebar } from "./Sidebar.js";
-
-/** The routes Cmd-1..9 and Ctrl-Tab cycle through, in sidebar order. */
-const TAB_ROUTES = ["/", "/highlights"] as const;
 
 /** An open Base UI dialog, popover, menu or select popup, if there is one.
  * Every Base UI layer has `data-open` while it is mounted and open; the
@@ -43,19 +41,16 @@ const BASE_UI_LAYER_SELECTOR =
  *    dismisses its own dialogs, menus and popovers with correct nesting, so
  *    only non-library layers register (07 §4.4).
  * 2. Every other key goes through `resolveAppShortcut`, the one chord table
- *    (07 §5). Keystrokes aimed at a text field are not chords, so an editable
- *    target ends the dispatch.
+ *    (07 §5). Every chord in it also works from a text field.
  *
  * This replaces `App.tsx:9094-9220`, where the dismissal order was a hand-
  * maintained sequence of `if` branches.
  */
 export function AppShell() {
-  const router = useRouter();
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
   const signedIn = useSignedIn();
-  const tabRoutes: readonly string[] = signedIn ? TAB_ROUTES : ["/"];
   const { notifications, dismiss } = useUserNotifications();
   const { workspaceId } = useWorkspaceScope();
   const trees = useTreeSummaries({ workspaceId });
@@ -63,21 +58,11 @@ export function AppShell() {
   const runCommand = useCallback(
     (command: AppShortcutCommand) => {
       switch (command.type) {
-        case "focusResearchTab": {
-          const path = tabRoutes[command.tabIndex];
-          if (path) void navigate({ to: path, search: workspaceSearch });
-          return;
-        }
         case "focusResearchHome":
+          // Home, with the caret in its ask box.
+          requestHomeComposerFocus();
           void navigate({ to: "/", search: workspaceSearch });
           return;
-        case "cycleResearchTab": {
-          const current = tabRoutes.indexOf(router.state.location.pathname);
-          const from = current === -1 ? 0 : current;
-          const next = tabRoutes[(from + command.direction + tabRoutes.length) % tabRoutes.length];
-          if (next) void navigate({ to: next, search: workspaceSearch });
-          return;
-        }
         case "openSettings":
           void navigate({ to: "/settings", search: workspaceSearch });
           return;
@@ -89,14 +74,13 @@ export function AppShell() {
           return;
         case "focusFollowups":
         case "openWorkspaceMenu":
-        case "moveResearchItem":
           // Owned by the mounted view rather than the shell: the shell
           // re-dispatches as a window event and the route consumes it (07 §5).
           window.dispatchEvent(new CustomEvent("session:shortcut", { detail: command }));
           return;
       }
     },
-    [navigate, router, tabRoutes, toggleSidebar],
+    [navigate, toggleSidebar],
   );
 
   useEffect(() => {
@@ -118,31 +102,16 @@ export function AppShell() {
         return;
       }
 
-      const target = event.target;
-      const editableTarget =
-        target instanceof HTMLElement
-          ? isEditableTarget({
-              tagName: target.tagName,
-              isContentEditable: target.isContentEditable,
-            })
-          : false;
-
-      // `editableTarget` is passed in, not acted on here: which chords a text
-      // field consumes is a property of the chord, and the shared table defines
-      // it (`shared/app/shortcuts.ts`). A blanket return would kill Cmd-K and
-      // Cmd-J exactly where they are most used.
       const command = resolveAppShortcut({
         key: event.key,
         metaKey: event.metaKey,
         ctrlKey: event.ctrlKey,
         altKey: event.altKey,
         shiftKey: event.shiftKey,
-        editableTarget,
       });
       if (!command) return;
-      // Only the reorder command repeats while held; every other chord would
-      // fire a burst of navigations on key repeat.
-      if (event.repeat && !appShortcutAllowsRepeat(command)) return;
+      // A held chord would fire a burst of navigations on key repeat.
+      if (event.repeat) return;
 
       event.preventDefault();
       event.stopPropagation();

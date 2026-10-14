@@ -7,6 +7,7 @@ import { OVERLAY_PRIORITY, useOverlaysStore } from "../src/stores/overlays.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 
 import { renderApp, resetDocumentRoot, waitUntil } from "./helpers.js";
+import { serverSettings, workspace } from "./phase6Fixtures.js";
 
 // A band above the search bar, standing in for a Phase 6 non-library layer.
 const ABOVE_SEARCH_BAR = OVERLAY_PRIORITY.searchBar + 100;
@@ -52,19 +53,11 @@ test.serial("Shift-Cmd-G toggles the sidebar", async (t) => {
   t.false(useNavigationStore.getState().sidebarCollapsed);
 });
 
-// The shared shortcut table marks which chords a text field should keep for
-// typing; the shell reads that flag before dispatching.
-test.serial("text fields suppress only shortcuts that conflict with text input", async (t) => {
+// Every chord in the table also works from a text field.
+test.serial("app chords reach the app from a text field", async (t) => {
   await renderApp("/");
   const input = document.createElement("input");
   document.body.appendChild(input);
-
-  press("2", { ctrlKey: true }, input);
-  t.is(
-    screen.queryByRole("heading", { name: "Highlights" }),
-    null,
-    "a digit chord must not navigate away mid-sentence",
-  );
 
   press("g", { metaKey: true, shiftKey: true }, input);
   t.true(useNavigationStore.getState().sidebarCollapsed, "the sidebar chord still reaches the app");
@@ -78,34 +71,52 @@ test.serial("text fields suppress only shortcuts that conflict with text input",
   input.remove();
 });
 
-test.serial("a contenteditable target counts as a text field", async (t) => {
+// The desktop has no tab digits or tab cycling; those keys stay the browser's.
+test.serial("web-only tab chords are gone", async (t) => {
   await renderApp("/");
-  const editable = document.createElement("div");
-  editable.contentEditable = "true";
-  // jsdom parses the attribute but leaves `isContentEditable` unimplemented,
-  // and that getter is what the dispatcher reads.
-  Object.defineProperty(editable, "isContentEditable", { value: true });
-  document.body.appendChild(editable);
-
-  press("2", { ctrlKey: true }, editable);
-
+  for (const [key, modifiers] of [
+    ["2", { ctrlKey: true }],
+    ["2", { metaKey: true }],
+    ["Tab", { ctrlKey: true }],
+    ["]", { metaKey: true, shiftKey: true }],
+  ] as const) {
+    const event = new window.KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+    t.false(event.defaultPrevented, `${key} is left to the browser`);
+  }
   t.is(screen.queryByRole("heading", { name: "Highlights" }), null);
-  editable.remove();
 });
 
-test.serial(
-  "Ctrl-1..9 navigates to tab routes without browser Cmd shortcut conflicts",
-  async (t) => {
-    const { container } = await renderApp("/");
-    t.truthy(container);
-
-    press("2", { ctrlKey: true });
-    t.truthy(await screen.findByRole("heading", { name: "Highlights" }));
-
-    press("1", { ctrlKey: true });
-    t.truthy(await screen.findByRole("heading", { name: "Home" }));
-  },
-);
+test.serial("Shift-Cmd-H opens Home with the caret in its ask box", async (t) => {
+  await renderApp("/settings", {
+    responses: {
+      "workspaces.list": [workspace()],
+      "settings.get": serverSettings(),
+      "research.listTrees": [],
+      "folders.get": {
+        folders: [],
+        membership: {},
+        collapsed: [],
+        parents: {},
+        collapsedGroups: [],
+      },
+      "drafts.list": [],
+      "research.listTrash": [],
+      "feed.recentQueriesForTrees": [],
+    },
+  });
+  await screen.findByRole("heading", { name: "Settings" });
+  press("h", { metaKey: true, shiftKey: true });
+  const field = await screen.findByRole("textbox", { name: "New question" });
+  await waitUntil(t, () => document.activeElement === field, "the ask box has focus");
+});
 
 test.serial("Cmd-, opens Settings", async (t) => {
   await renderApp("/");

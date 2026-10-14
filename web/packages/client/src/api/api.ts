@@ -157,10 +157,6 @@ export function setDefaultResearchWorkspace(workspaceId: string): Promise<Worksp
   return trpc().workspaces.setDefault.mutate({ workspaceId });
 }
 
-export function reorderResearchWorkspaces(workspaceIds: string[]): Promise<Workspace[]> {
-  return trpc().workspaces.reorder.mutate({ workspaceIds });
-}
-
 export function listResearchFolders(workspaceId: string): Promise<ResearchFolderState> {
   return trpc().folders.get.query({ workspaceId });
 }

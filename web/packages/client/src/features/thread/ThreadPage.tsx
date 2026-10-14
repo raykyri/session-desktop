@@ -85,6 +85,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { getResearchNodeContent, getResearchTree, renameResearchNode } from "../../api/api.js";
+import { cachedTreeSummary } from "../../api/cache.js";
 import {
   queryKeys,
   useSetThreadFollowed,
@@ -127,7 +128,6 @@ import {
   type StaleEditSubject,
 } from "../sharing/StaleEditDialog.js";
 import { ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
-import { useWorkspaceScope, workspaceSearch } from "../sidebar/scope.js";
 import {
   mayCancelQueued,
   mayChangeHighlights,
@@ -135,6 +135,7 @@ import {
   mayRetryQueued,
   threadPermissions,
 } from "../sharing/permissions.js";
+import { useWorkspaceScope, workspaceSearch } from "../sidebar/scope.js";
 import { WidgetChangeContext, type WidgetChangeHandler } from "../widgets/context.js";
 
 import {
@@ -148,6 +149,7 @@ import { BranchesColumn } from "./BranchesColumn.js";
 import { ThreadPlaceholder, type ThreadHistoryNav } from "./ColumnChrome.js";
 import { Columns, ColumnsLayoutContext } from "./Columns.js";
 import { ConversationComposer, type ComposerHandle } from "./ConversationComposer.js";
+import { useDeleteOfferStore } from "./DeleteOfferHost.js";
 import { EditorColumn, type EditorSession } from "./EditorColumn.js";
 import { GroupPanel } from "./GroupPanel.js";
 import {
@@ -180,7 +182,6 @@ import {
 } from "./persistence.js";
 import { runActive } from "./runState.js";
 import { buildSegmentView, type SegmentView } from "./segmentView.js";
-import { useDeleteOfferStore } from "./DeleteOfferHost.js";
 import { columnIdOf, rowSelector, scrollIntoColumn, settleStrip } from "./stripDom.js";
 import { rangeForTextOffsets } from "./textRanges.js";
 import { useColumnScroll } from "./useColumnScroll.js";
@@ -1951,8 +1952,14 @@ function ThreadView({ treeId }: { treeId: string }) {
   /* ---------------------------------------------------------- render */
 
   if (!detail || !rootNodeId || levelPath.length === 0) {
-    const rootType = detail?.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type;
-    const title = rootType === "post" ? "Note" : detail?.tree.title || "Loading research…";
+    // While the detail loads, the header shows what a list already holds, as
+    // the desktop's placeholder does.
+    const cached = detail ? undefined : cachedTreeSummary(queryClient, treeId);
+    const rootType = detail
+      ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
+      : cached?.type;
+    const title =
+      rootType === "post" ? "Note" : (detail?.tree.title ?? cached?.title ?? "Loading research…");
     return (
       <ThreadPlaceholder title={title} history={historyNav}>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">

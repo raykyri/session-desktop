@@ -4,29 +4,20 @@
 // The desktop's workspaces were directories, so creating one opened a native
 // folder picker and the menu offered "Open in Finder" and "Move folder". On the
 // web a workspace is a row, so creating one asks for a name and those two items
-// are gone. What stays: the list with tree counts, rename, remove (refused
-// while a run is active), reorder, and set as default.
+// are gone. What stays: the list with tree counts, rename and remove (refused
+// while a run is active). Web only: Make default workspace, since the web
+// opens the default workspace where the desktop reopens the last one used.
+// It sits under the places, above the account row, as on the desktop.
 
 import type { AppShortcutCommand, Workspace } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  Box,
-  Plus,
-  Pencil,
-  Star,
-  Trash2,
-} from "lucide-react";
+import { Check, ChevronDown, Box, Plus, Pencil, Star, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
   createResearchWorkspace,
   removeResearchWorkspace,
   renameResearchWorkspace,
-  reorderResearchWorkspaces,
   setDefaultResearchWorkspace,
 } from "../../api/api.js";
 import {
@@ -96,34 +87,21 @@ export function WorkspaceSwitcher({
   const refreshWorkspaces = () =>
     void client.invalidateQueries({ queryKey: queryKeys.workspaces() });
 
-  const move = (direction: -1 | 1) => {
-    if (!current) return;
-    const ids = list.map((workspace) => workspace.id);
-    const from = ids.indexOf(current.id);
-    const to = from + direction;
-    if (from < 0 || to < 0 || to >= ids.length) return;
-    const next = [...ids];
-    // Both indices are inside the array, checked above.
-    next[from] = ids[to] as string;
-    next[to] = ids[from] as string;
-    void reorderResearchWorkspaces(next)
-      .then(refreshWorkspaces)
-      .catch((error: unknown) => pushErrorToast("Failed to reorder workspaces", error));
-  };
-
   return (
-    <div className="relative flex items-center gap-1 px-2 pt-px">
+    <div className="border-border-faint relative flex items-center gap-1 border-t px-2 pt-1.5 pb-0.5">
       <Menu
         open={open}
         onOpenChange={setOpen}
-        side="bottom"
+        side="top"
         align="start"
-        label="Workspaces"
+        label="Research workspaces"
         className="min-w-64"
         trigger={
           <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
             <Box size={14} aria-hidden="true" className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{current ? current.name : "Workspaces"}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {current ? current.name : "Choose a workspace"}
+            </span>
             <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
           </button>
         }
@@ -170,18 +148,7 @@ export function WorkspaceSwitcher({
                   );
               }}
             />
-            <IconMenuItem
-              icon={<ArrowUp size={13} aria-hidden="true" />}
-              label="Move up"
-              disabled={list[0]?.id === current.id}
-              onClick={() => move(-1)}
-            />
-            <IconMenuItem
-              icon={<ArrowDown size={13} aria-hidden="true" />}
-              label="Move down"
-              disabled={list.at(-1)?.id === current.id}
-              onClick={() => move(1)}
-            />
+
             <IconMenuItem
               icon={<Pencil size={13} aria-hidden="true" />}
               label={`Rename “${current.name}”…`}

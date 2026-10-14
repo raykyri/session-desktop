@@ -57,7 +57,7 @@ export function HomePage() {
           key={workspaceId}
           view={{ kind: "home" }}
           workspaceId={workspaceId}
-          composer={<ResearchQueryComposer workspaceId={workspaceId} />}
+          composer={<ResearchQueryComposer workspaceId={workspaceId} homeFocus />}
           headerActions={
             <>
               <RefreshHomeButton workspaceId={workspaceId} />

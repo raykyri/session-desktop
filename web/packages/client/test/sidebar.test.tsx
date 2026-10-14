@@ -12,6 +12,7 @@ import { useFolderDialogStore } from "../src/features/home/FolderDialogsHost.js"
 import { commitFolderState } from "../src/features/home/useFiling.js";
 import { workspaceRemovalRefusal } from "../src/features/sidebar/WorkspaceSwitcher.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
+import { useSettingsStore } from "../src/stores/settings.js";
 
 import { summary } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
@@ -358,6 +359,10 @@ test.serial("a collapsed sidebar is the desktop's icon rail", async (t) => {
     );
     t.is(within(rail).getByRole("link", { name: "Home" }).getAttribute("aria-current"), "page");
     t.truthy(within(rail).getByRole("button", { name: "New folder" }));
+    // The desktop's foot: the Light/Dark toggle, then Settings.
+    const appearance = useSettingsStore.getState().settings.appearance;
+    fireEvent.click(within(rail).getByRole("button", { name: /^(Dark|Light) mode$/ }));
+    t.not(useSettingsStore.getState().settings.appearance, appearance);
 
     fireEvent.click(within(rail).getByRole("button", { name: "Expand sidebar" }));
     await waitUntil(
@@ -370,4 +375,50 @@ test.serial("a collapsed sidebar is the desktop's icon rail", async (t) => {
   } finally {
     useNavigationStore.setState({ sidebarCollapsed: false });
   }
+});
+
+test.serial(
+  "the sidebar header has Settings and the Light/Dark toggle, as the desktop's",
+  async (t) => {
+    useSettingsStore.getState().patch({ appearance: "dark" });
+    const app = await renderApp("/", {
+      queryClient: testQueryClient(),
+      responses: sidebarResponses(),
+    });
+    const sidebar = await screen.findByRole("complementary", { name: "Sidebar" });
+    const toggle = within(sidebar).getByRole("button", { name: "Switch to light mode" });
+    t.is(toggle.getAttribute("aria-pressed"), "false");
+    fireEvent.click(toggle);
+    t.is(useSettingsStore.getState().settings.appearance, "light");
+    t.truthy(within(sidebar).getByRole("button", { name: "Switch to dark mode" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Settings" }));
+    await waitUntil(t, () => app.router.state.location.pathname === "/settings", "Settings opens");
+    // The splitter is a focusable separator with the width as its value.
+    const splitter = within(sidebar).getByRole("separator", { name: "Resize sidebar" });
+    t.is(splitter.getAttribute("aria-orientation"), "vertical");
+    t.truthy(splitter.getAttribute("aria-valuenow"));
+    app.unmount();
+  },
+);
+
+test.serial("the workspace menu has the desktop's items, without Move up or down", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: sidebarResponses(),
+  });
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("Collective memory").length > 0,
+    "the switcher shows the scoped workspace",
+  );
+  fireEvent.click(screen.getAllByText("Collective memory")[0] as HTMLElement);
+  const menu = await screen.findByRole("menu");
+  t.is(menu.getAttribute("aria-label"), "Research workspaces");
+  const items = within(menu)
+    .getAllByRole("menuitem")
+    .map((item) => item.textContent?.trim() ?? "");
+  t.true(items.includes("Add workspace…"));
+  t.true(items.includes("Make default workspace"));
+  t.false(items.some((item) => /^Move (up|down)$/.test(item)));
+  app.unmount();
 });

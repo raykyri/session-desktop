@@ -500,7 +500,10 @@ function AnswerMenu({
     view.isConversation || active || !run || run.status === "cancelled" || !run.startedAt
       ? null
       : `${run.status === "complete" ? "" : "Ran for "}${formatRunDuration(
-          (run.completedAt ?? run.startedAt) - run.startedAt,
+          // A settled run without a completion time is measured up to this
+          // render, as on the desktop.
+          // eslint-disable-next-line react-hooks/purity -- the menu has no clock of its own
+          (run.completedAt ?? Date.now()) - run.startedAt,
         )}`;
   const stats = [
     nodeStatus(node) === "complete" && content

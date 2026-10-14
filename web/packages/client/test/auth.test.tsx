@@ -2,7 +2,7 @@
 // `/admin` still redirect to `/login`. Account-scoped boot
 // queries (`settings.get`, live events) stay behind a session.
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import test from "ava";
 
 import { renderApp, resetDocumentRoot, testUser } from "./helpers.js";
@@ -18,8 +18,7 @@ test.serial("a signed-out visit to a shell route renders the public shell", asyn
   await renderApp("/r/t1", { user: null });
 
   t.truthy(screen.getByRole("navigation", { name: "Research" }));
-  t.truthy(screen.getByRole("button", { name: "Sign in" }));
-  t.is(screen.queryByRole("button", { name: /Continue with GitHub/ }), null);
+  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
 });
 
 test.serial("the sign-in page displays server authentication error messages", async (t) => {
@@ -44,10 +43,13 @@ test.serial("a signed-in visit renders the shell and the account row", async (t)
   t.truthy(screen.getByRole("button", { name: "raymond" }));
 });
 
-test.serial("a guest account menu offers GitHub sign-in", async (t) => {
+test.serial("a guest's account row is Sign in with GitHub, as on the sign-in page", async (t) => {
   await renderApp("/", { user: null });
-  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-  t.truthy(await screen.findByRole("menuitem", { name: /Log in with GitHub/ }));
+  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
+  t.is(screen.queryByText(/Log in with GitHub|Continue with GitHub/), null);
+  cleanup();
+  await renderApp("/login", { user: null });
+  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
 });
 
 test.serial("a guest visit does not fetch account-scoped boot queries", async (t) => {
@@ -105,7 +107,7 @@ test.serial("authenticated visits to /login redirect to the requested target URL
   await renderApp("/login?redirect=%2Fsettings", { user: testUser() });
 
   t.truthy(screen.getByRole("heading", { name: "Settings" }));
-  t.is(screen.queryByRole("button", { name: /Continue with GitHub/ }), null);
+  t.is(screen.queryByRole("button", { name: /Sign in with GitHub/ }), null);
 });
 
 test.serial("a redirect that leaves this origin is not followed", async (t) => {

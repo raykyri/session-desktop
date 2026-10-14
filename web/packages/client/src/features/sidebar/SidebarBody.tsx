@@ -27,7 +27,7 @@ function useSidebarFolders() {
 }
 
 /** The collapsed sidebar (`SidebarRail`). */
-export function SidebarRailBody({ onExpand }: { onExpand: () => void }) {
+export function SidebarRailBody({ onExpand, inert }: { onExpand: () => void; inert?: boolean }) {
   const { signedIn, workspaceId, folders } = useSidebarFolders();
   return (
     <SidebarRail
@@ -35,6 +35,7 @@ export function SidebarRailBody({ onExpand }: { onExpand: () => void }) {
       folders={folders}
       signedIn={signedIn}
       onExpand={onExpand}
+      inert={inert}
     />
   );
 }
@@ -42,16 +43,20 @@ export function SidebarRailBody({ onExpand }: { onExpand: () => void }) {
 export function SidebarBody() {
   const { signedIn, workspaceId, setScope, folderQuery, folders } = useSidebarFolders();
 
+  // The places scroll; the workspace switcher sits under them, above the
+  // account row, as on the desktop.
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-2">
+    <>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-2">
+        <SidebarNav
+          workspaceId={workspaceId}
+          folders={folders}
+          signedIn={signedIn}
+          foldersLoadError={folderQuery.isError ? errorMessage(folderQuery.error) : null}
+          onRetryFoldersLoad={() => void folderQuery.refetch()}
+        />
+      </div>
       <WorkspaceSwitcher workspaceId={workspaceId} onSelect={setScope} />
-      <SidebarNav
-        workspaceId={workspaceId}
-        folders={folders}
-        signedIn={signedIn}
-        foldersLoadError={folderQuery.isError ? errorMessage(folderQuery.error) : null}
-        onRetryFoldersLoad={() => void folderQuery.refetch()}
-      />
-    </div>
+    </>
   );
 }

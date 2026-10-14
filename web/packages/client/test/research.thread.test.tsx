@@ -19,6 +19,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import test from "ava";
 
 import { queryClientDefaults } from "../src/api/queries.js";
+import { historyChordTitles } from "../src/features/thread/ColumnChrome.js";
 import { resetThreadNavigationForTests } from "../src/features/thread/persistence.js";
 import { resetEditedDraftKeysForTests, useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
@@ -382,6 +383,53 @@ test.serial("Edit question sends a fork that replaces the failed node", async (t
     inline: true,
     replacesNodeId: "n2",
   });
+});
+
+test.serial("a settled run without a completion time is measured up to now", async (t) => {
+  const root = node({ id: "n1", status: "failed", startedAt: Date.now() - 65_000 });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Partial answer.")]) },
+  });
+  await waitUntil(t, () => screen.queryByText("Partial answer.") !== null, "the answer shows");
+  fireEvent.click(screen.getAllByRole("button", { name: "Answer actions" })[0] as HTMLElement);
+  const menu = await waitFor(() => screen.getByRole("menu", { name: "Answer actions" }));
+  t.regex(menu.textContent ?? "", /Ran for 1m 0[5-9]s/);
+  t.false((menu.textContent ?? "").includes("Ran for 0s"));
+});
+
+test.serial("Back and Forward name the browser's chords", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+  const titles = historyChordTitles();
+  t.deepEqual(historyChordTitles(true), { back: "Back (⌘[)", forward: "Forward (⌘])" });
+  t.is(screen.getByRole("button", { name: "Back" }).getAttribute("title"), titles.back);
+  t.is(screen.getByRole("button", { name: "Forward" }).getAttribute("title"), titles.forward);
+});
+
+test.serial("while a thread loads, its header shows the title a list already has", async (t) => {
+  const queryClient = testQueryClient();
+  queryClient.setQueryData(
+    ["trees", { workspaceId: "w1", includeArchived: true }],
+    [summary({ id: "t1", title: "Collective memory" })],
+  );
+  await renderApp("/r/t1", {
+    queryClient,
+    responses: {
+      // Never answers, so the placeholder stays.
+      "research.getTree": () => new Promise(() => {}),
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText("Loading research…") !== null,
+    "the loading placeholder",
+  );
+  t.truthy(screen.getByRole("heading", { name: "Collective memory" }));
 });
 
 test.serial("Rerun asks before replacing a complete answer", async (t) => {
@@ -847,7 +895,9 @@ test.serial(
       ),
     );
     t.truthy(
-      within(offer).getByText("It has 1 message (a follow-up); deleting the thread also deletes it."),
+      within(offer).getByText(
+        "It has 1 message (a follow-up); deleting the thread also deletes it.",
+      ),
     );
     t.is(document.activeElement, within(offer).getByRole("button", { name: "Keep" }));
     fireEvent.click(within(offer).getByRole("button", { name: "Delete…" }));

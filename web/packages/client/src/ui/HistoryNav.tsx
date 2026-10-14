@@ -12,6 +12,9 @@ export interface HistoryNavProps {
   className?: string;
   backLabel?: string;
   forwardLabel?: string;
+  /** Tooltips naming the chord, e.g. "Back (⌘[)"; the labels otherwise. */
+  backTitle?: string;
+  forwardTitle?: string;
 }
 
 /**
@@ -28,13 +31,20 @@ export function HistoryNav({
   className,
   backLabel = "Back",
   forwardLabel = "Forward",
+  backTitle,
+  forwardTitle,
 }: HistoryNavProps) {
   return (
     <div className={cn("flex items-center gap-0.5", className)}>
-      <IconButton label={backLabel} disabled={!canGoBack} onClick={onBack}>
+      <IconButton label={backLabel} title={backTitle} disabled={!canGoBack} onClick={onBack}>
         <ChevronLeft size={16} aria-hidden="true" />
       </IconButton>
-      <IconButton label={forwardLabel} disabled={!canGoForward} onClick={onForward}>
+      <IconButton
+        label={forwardLabel}
+        title={forwardTitle}
+        disabled={!canGoForward}
+        onClick={onForward}
+      >
         <ChevronRight size={16} aria-hidden="true" />
       </IconButton>
     </div>

@@ -54,7 +54,7 @@ export function LoginPage() {
           onClick={() => startGitHubSignIn(search.redirect, search.invite)}
         >
           <GitHubMark />
-          Continue with GitHub
+          Sign in with GitHub
         </ControlButton>
       </div>
     </div>
