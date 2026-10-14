@@ -63,6 +63,7 @@ export * from "./research/snapshots.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";
+export * from "./types/sharing.js";
 
 export * from "./util/sha256.js";
 export * from "./util/tokenEstimate.js";

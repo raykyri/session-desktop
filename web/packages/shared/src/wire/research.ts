@@ -49,6 +49,27 @@ export interface ResearchHighlight {
   id: string;
   anchor: ResearchHighlightAnchor;
   createdAt: number;
+  /** Web only: who saved the highlight; null once their account is gone.
+   * The desktop has one person and omits it. */
+  authorId?: string | null;
+}
+
+/** Web only: a person's role in a shared thread. `owner` is the thread's
+ * creator; a signed-in reader of a public thread who is not a member is a
+ * `viewer`. */
+export type ResearchTreeRole = "owner" | "commenter" | "viewer";
+
+/** Web only: `public` threads are readable by anyone, guests included, and
+ * listed in the All Users feed; `private` threads by their owner and the
+ * people they are shared with. */
+export type ResearchTreeVisibility = "private" | "public";
+
+/** Web only: someone who wrote in, or is a member of, a shared thread. */
+export interface ResearchParticipant {
+  id: string;
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
 }
 
 /** What a follow-up was asked about in its parent: a passage of the parent's
@@ -99,6 +120,19 @@ export interface ResearchTree {
    * every list but the Trash's own. */
   trashedAt?: number | null;
   lastViewedAt?: number | null;
+  /** Web only: the thread's owner. */
+  ownerId?: string;
+  /** Web only. */
+  visibility?: ResearchTreeVisibility;
+  /** Web only: the reader's role. `archivedAt`, `trashedAt` and
+   * `lastViewedAt` are the reader's own: a member's Archive and Trash are
+   * per person, and the owner's Trash hides the thread from everyone else. */
+  role?: ResearchTreeRole;
+  /** Web only: who moved the thread to the Trash, while it is there. */
+  trashedBy?: string | null;
+  /** Web only: whether the reader follows the thread (gets notifications
+   * for it). */
+  followed?: boolean;
 }
 
 /** What a person wrote: a post's text, an exchange's question, or the
@@ -191,6 +225,9 @@ export interface ResearchNodeBase {
    * lists the chain in, set by reordering the column. Display only; see
    * `chainDisplayOrder`. Absent: oldest first. */
   chainOrder?: string[];
+  /** Web only: who wrote the node (asked the question, wrote the note or
+   * document); null once their account is gone. The desktop omits it. */
+  authorId?: string | null;
 }
 
 /** A post node is shown as a note: text or a saved link the user wrote. Its
@@ -204,6 +241,8 @@ export interface ResearchPostNode extends ResearchNodeBase {
   followUpAgent: AgentSpec;
   /** When the text was last replaced by an edit. */
   editedAt?: number | null;
+  /** Web only: who made that edit. */
+  editedBy?: string | null;
 }
 
 export interface ResearchExchangeNode extends ResearchNodeBase {
@@ -228,6 +267,8 @@ export interface ResearchDocumentNode extends ResearchNodeBase {
   recap?: ResearchRecap | null;
   /** When the body was last replaced by an edit. */
   editedAt?: number | null;
+  /** Web only: who made that edit. */
+  editedBy?: string | null;
 }
 
 /** A research node as commands and events send it (`ResearchNodeView`). */
@@ -340,6 +381,12 @@ export interface ResearchTreeSummary {
   /** A failure settled after the tree was last viewed. Attention flag —
    * viewing the tree acknowledges it — unlike failedCount, a lifetime total. */
   hasUnseenFailure: boolean;
+  /** Web only: the thread's owner. */
+  ownerId?: string;
+  /** Web only. */
+  visibility?: ResearchTreeVisibility;
+  /** Web only: the reader's role (`ResearchTree.role`). */
+  role?: ResearchTreeRole;
 }
 
 export interface ResearchTreeDetail {
@@ -349,6 +396,9 @@ export interface ResearchTreeDetail {
    * head of the inline chain each continues, in send order. Chains with no
    * queued follow-up are absent. */
   queues?: Record<string, ResearchFollowupQueueItem[]>;
+  /** Web only: the owner, the members, and everyone who wrote a node or a
+   * highlight in the thread, for author attribution. */
+  participants?: ResearchParticipant[];
 }
 
 /** Web only: a follow-up asked at the end of an inline chain while the chain
@@ -377,6 +427,8 @@ export interface ResearchBranchRemoval {
   treeId: string;
   parentNodeId: string;
   removedNodeIds: string[];
+  /** Web only: who removed the branch. */
+  removedBy?: string;
 }
 
 export interface ResearchNodeContent {

@@ -40,6 +40,18 @@ export const researchHighlightSchema = z.object({
   id: z.string(),
   anchor: researchHighlightAnchorSchema,
   createdAt: z.number(),
+  authorId: z.string().nullish(),
+});
+
+export const researchTreeRoleSchema = z.enum(["owner", "commenter", "viewer"]);
+
+export const researchTreeVisibilitySchema = z.enum(["private", "public"]);
+
+export const researchParticipantSchema = z.object({
+  id: z.string(),
+  login: z.string(),
+  name: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
 });
 
 export const nodeAnchorSchema = z.object({
@@ -86,6 +98,11 @@ export const researchTreeSchema = z.object({
   archivedAt: z.number().nullish(),
   trashedAt: z.number().nullish(),
   lastViewedAt: z.number().nullish(),
+  ownerId: z.string().optional(),
+  visibility: researchTreeVisibilitySchema.optional(),
+  role: researchTreeRoleSchema.optional(),
+  trashedBy: z.string().nullish(),
+  followed: z.boolean().optional(),
 });
 
 export const userMessageSchema = z.object({
@@ -143,6 +160,7 @@ const researchNodeBaseSchema = z.object({
   createdAt: z.number(),
   highlights: z.array(researchHighlightSchema),
   chainOrder: z.array(z.string()).optional(),
+  authorId: z.string().nullish(),
 });
 
 export const researchPostNodeSchema = researchNodeBaseSchema.extend({
@@ -151,6 +169,7 @@ export const researchPostNodeSchema = researchNodeBaseSchema.extend({
   format: postFormatSchema,
   followUpAgent: agentSpecSchema,
   editedAt: z.number().nullish(),
+  editedBy: z.string().nullish(),
 });
 
 export const researchExchangeNodeSchema = researchNodeBaseSchema.extend({
@@ -169,6 +188,7 @@ export const researchDocumentNodeSchema = researchNodeBaseSchema.extend({
   responseSnapshotAt: z.number().nullish(),
   recap: researchRecapSchema.nullish(),
   editedAt: z.number().nullish(),
+  editedBy: z.string().nullish(),
 });
 
 export const researchNodeSchema = z.discriminatedUnion("type", [
@@ -258,6 +278,9 @@ export const researchTreeSummarySchema = z.object({
   trashedAt: z.number().nullish(),
   hasUnseenUpdate: z.boolean(),
   hasUnseenFailure: z.boolean(),
+  ownerId: z.string().optional(),
+  visibility: researchTreeVisibilitySchema.optional(),
+  role: researchTreeRoleSchema.optional(),
 });
 
 export const researchFollowupQueueItemSchema = z.object({
@@ -276,12 +299,14 @@ export const researchTreeDetailSchema = z.object({
   tree: researchTreeSchema,
   nodes: z.array(researchNodeSchema),
   queues: z.record(z.string(), z.array(researchFollowupQueueItemSchema)).optional(),
+  participants: z.array(researchParticipantSchema).optional(),
 });
 
 export const researchBranchRemovalSchema = z.object({
   treeId: z.string(),
   parentNodeId: z.string(),
   removedNodeIds: z.array(z.string()),
+  removedBy: z.string().optional(),
 });
 
 export const researchNodeContentSchema = z.object({
