@@ -201,9 +201,9 @@ Per event type:
   deletion) the state is forgotten. A reconnect clears the recap spinners
   (`stores/recapPending`), whose `pending: false` may have been lost.
 - A reader outside a thread's event audience between visits (a signed-in
-  viewer of a public thread) re-reads a cached thread and its presence when
-  the page opens it (`useRefetchThreadOnOpen`); a guest's open thread is
-  re-read on focus and every 15 s while a run is active
+  viewer of a public thread, or a guest) re-reads a cached thread and its
+  presence when the page opens it (`useRefetchThreadOnOpen`); a guest's open
+  thread is also re-read on focus and every 15 s while a run is active
   (`useTreeDetail(…, { eventless })`). A refused refetch (NOT_FOUND) shows
   the unavailable state even while the cache holds the thread.
 - `research.sharing.changed` → invalidate the tree lists, the shared lists
@@ -211,7 +211,10 @@ Per event type:
   `research.invites.changed` invalidates `receivedInvites`;
   `research.presence.changed` replaces `["presence", treeId]` (the viewer
   list it carries). `research.tree.removed` also drops the thread from the
-  shared lists.
+  shared lists, and re-reads the thread's detail when a page has it open (a
+  member removed or a thread moved to its owner's Trash: the refusal shows
+  the unavailable state) instead of dropping it, which would leave the page
+  on its copy.
 - Tree events from someone else's change (`research.tree.updated`,
   `archived`, `restored`, `research.document.updated`) leave out the reader's
   own `role`, `lastViewedAt`, `followed`, `archivedAt`, `trashedAt` and

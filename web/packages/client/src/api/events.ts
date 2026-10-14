@@ -198,7 +198,11 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       // owner's Trash leaves the shared lists too; a member's own Trash lists
       // it again through `research.trash.changed`.
       dropFromSharedLists(client, new Set([event.treeId]));
-      client.removeQueries({ queryKey: queryKeys.tree(event.treeId) });
+      // A thread page that has it open re-reads it, so a reader who lost it
+      // gets the unavailable state (a removed query would leave the page
+      // showing the copy it holds); a cached copy nobody shows is dropped.
+      client.removeQueries({ queryKey: queryKeys.tree(event.treeId), type: "inactive" });
+      void client.invalidateQueries({ queryKey: queryKeys.tree(event.treeId) });
       client.removeQueries({ queryKey: queryKeys.feedRoot(event.treeId) });
       client.removeQueries({ queryKey: queryKeys.members(event.treeId) });
       client.removeQueries({ queryKey: queryKeys.invites(event.treeId) });

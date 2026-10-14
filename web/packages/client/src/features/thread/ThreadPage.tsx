@@ -255,10 +255,12 @@ function ThreadView({ treeId }: { treeId: string }) {
   const permissionsRef = useLatest(permissions);
   const readOnly = !permissions.canContribute;
   // A public thread read by someone who may not be a member (a viewer) gets
-  // its events only while open, so a cached copy is re-read on opening.
+  // its events only while open, and a guest gets none, so a cached copy is
+  // re-read on opening.
   useRefetchThreadOnOpen(
     treeId,
-    me !== null && detailTree?.visibility === "public" && permissions.role === "viewer",
+    detailTree !== undefined &&
+      (me === null || (detailTree.visibility === "public" && permissions.role === "viewer")),
   );
   useThreadInterest(treeId, me !== null);
   const viewers = useThreadPresence(treeId);

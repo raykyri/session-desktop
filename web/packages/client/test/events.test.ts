@@ -7,7 +7,7 @@ import type {
 } from "@session/shared";
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
 import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
-import { QueryClient, type InfiniteData } from "@tanstack/react-query";
+import { QueryClient, QueryObserver, type InfiniteData } from "@tanstack/react-query";
 import test from "ava";
 
 import { queryKeys, writeRelaunch } from "../src/api/cache.js";
@@ -245,6 +245,27 @@ test.serial("a removed thread leaves the lists and takes its detail with it", (t
   t.deepEqual(queryClient.getQueryData(queryKeys.trees(TREES_SCOPE)), []);
   t.is(queryClient.getQueryData(queryKeys.tree("t1")), undefined);
   t.deepEqual(queryClient.getQueryData(queryKeys.activeNodes()), []);
+});
+
+test.serial("a removed thread that a page has open is re-read rather than dropped", async (t) => {
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
+  let reads = 0;
+  const observer = new QueryObserver(queryClient, {
+    queryKey: queryKeys.tree("t1"),
+    queryFn: () => {
+      reads += 1;
+      return Promise.reject(new Error("research tree t1 was not found"));
+    },
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  applyEventBatch([event("research.tree.removed", { treeId: "t1" })], queryClient);
+  await sleep(0);
+
+  t.is(reads, 1, "the open page's query refetches, so a refusal reaches it");
+  t.truthy(queryClient.getQueryState(queryKeys.tree("t1")));
+  unsubscribe();
 });
 
 test.serial("a settings event writes the cache and the local mirror", (t) => {
