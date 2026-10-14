@@ -207,6 +207,18 @@ active).
   before opening the thread, since Home is its own route on the web). Save writes `research.updatePost` with `expectedText`; when the
   note changed meanwhile the server refuses and the editor shows the message
   with the text kept.
+- **Stale edits (web only)**: a `CONFLICT` from `updatePost` or
+  `updateDocument` opens "This note changed" / "This document changed"
+  (`features/sharing/StaleEditDialog.tsx`) with the reader's text, read-only
+  with Copy my text. Reload latest version refetches the thread (and, for a
+  document, its content) and makes the latest saved version the editor's
+  base (`expectedText`, title, revision, highlights; what the preview
+  compares with); the field keeps the reader's text, so the next save
+  replaces the latest version with it. The same prompt follows a refused
+  messages reorder (`setChainOrder` with `expectedOrder`, the order the
+  column showed; reload refetches the thread) and a refused recap
+  (`recaps.applyCandidate`; reload re-reads the answer and its recap and
+  drops the candidate, keeping the instructions).
 
 ## 8. Menus and dialogs
 
@@ -225,6 +237,50 @@ are centred confirm dialogs (`ThreadDialogs.tsx`):
   permanent deletion naming what else it removes (both on
   `ui/DeleteDialog`). Refused while runs in the subtree are active.
 - **Rename** and **Generate recap**.
+
+## 8a. Shared threads (web only)
+
+`ThreadPage` provides `ThreadCollaborationContext`
+(`features/sharing/context.ts`): the reader's permissions
+(`features/sharing/permissions.ts`, the server's rules from
+`02-domain-model-and-database.md` §5.16) and the thread's participants.
+
+| | Owner | Commenter | Viewer, guest |
+| --- | --- | --- | --- |
+| Ask boxes, Branch to right, follow-up notes, highlights, Generate recap | yes | yes | no (the selection bar offers Copy alone) |
+| Rename, Delete, Edit note / question | any message | their own, while nobody else replied under it | no |
+| Retry, Rerun | questions they asked | questions they asked | no |
+| Stop | any run | their own | no |
+| Cancel / Retry a queued follow-up | Cancel any; Retry their own | their own | no |
+| Rename the thread, reorder messages, Edit document, delete the thread | yes | no | no |
+| Remove a highlight | any | their own | no |
+
+An archived thread is read-only for everyone, as on the desktop. A guest
+(signed out, on a public thread) has no event stream, so the page does not
+update live.
+
+- **Thread menu** (the root's answer or note menu): Share… opens
+  `ShareDialog` (anyone signed in); Notify me / Stop notifying me toggles
+  `subscriptions.set` (`ResearchTree.followed`).
+- **Share dialog** (`features/sharing/ShareDialog.tsx`): "Who can read it"
+  (Private: the owner and the people it is shared with; Public: anyone with
+  the link, listed in All Users), People (owner first; the owner changes a
+  member's role, Commenter or Viewer, or removes them), Invite (by GitHub
+  username, or Copy invite link, each with a role; the created link is shown
+  so it can be copied by hand), and Pending invitations with Revoke. Anyone
+  else sees "Who can read it" and People read-only; a member has Leave…,
+  which confirms, leaves (`sharing.leave`) and opens Home.
+- **Author chips** (`features/sharing/AuthorChip.tsx`), when the thread has
+  more than one participant: avatar and name on each question row
+  (`MessageRow`), queued follow-up, note (`PostColumnBody`) and follow-up row
+  ("You" for the reader), and "Highlighted by …" in a highlight's passage
+  menu. "Edited" names the editor when it is not the author ("Edited by …",
+  on notes and documents, from `editedBy`).
+- **Presence**: the thread is declared open while the page is mounted
+  (`useThreadInterest`, renewed by the event bridge, `07` §4.2); the root
+  header shows the other people who have it open (`PresenceAvatars`, up to
+  four, "Also viewing: …"), from `events.presence` and
+  `research.presence.changed`.
 
 ## 9. Not ported
 
@@ -247,6 +303,11 @@ strip's horizontal position on return.
 - `test/research.threadState.test.ts`: `?sel=` encoding, column widths,
   persistence, composer chords, note follow-up copy.
 - `test/research.dialogs.test.tsx`: recap, delete, rerun, tree menu.
+- `test/sharing.test.tsx` (web only): the permission rules, what a viewer,
+  a commenter and the owner are offered, author chips and Edited by, the
+  Share dialog for the owner and for a member, Notify me, presence and its
+  renewal, partial tree events, the stale-edit prompt, Shared with me and
+  the invitation route.
 - `e2e/research.spec.ts`: streaming and reload, resume after reload in two
   tabs, paired columns with keyboard navigation and reload restoring the
   selection, a highlight and Branch to right on another model, a follow-up

@@ -156,7 +156,14 @@ sidebar reorder and folder state, feed pagination and undo, composer keyboard
 behavior, shortcuts dispatcher, escape stack, settings theming attributes on
 `<html>`, and the style contract tests (`08-design-system-and-styling.md`
 §6). The SSE bridge is tested with a fake subscription emitting event
-batches and asserting cache and store state.
+batches and asserting cache and store state. `sharing.test.tsx` covers the
+web-only collaboration UI: the permission rules, what a viewer, a commenter
+and the owner are offered on the thread page, author chips and "Edited by",
+the Share dialog for the owner and for a member, Notify me, presence and the
+renewal of the open-thread declaration, partial tree events merged over the
+cache, the stale-edit prompt, Shared with me and the `/invite/$token` route.
+`test/helpers.tsx` answers the collaboration reads (`sharing.listShared`,
+`invites.received`, `events.presence`, …) with empty lists by default.
 
 ### 3.6 E2E (Playwright)
 
@@ -185,7 +192,7 @@ syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 | --- | --- |
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
 | `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload |
-| `collaboration.spec.ts` | Two accounts and a guest, each in its own browser context, through the tRPC endpoint (the sharing UI comes later): invite by link and by login and accept; a commenter's follow-up is theirs and counts in their usage; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and, on the thread page, for a guest; a member's open thread page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
+| `collaboration.spec.ts` | Accounts and a guest, each in its own browser context. Through the UI: the owner copies a commenter and a viewer invite link from the Share dialog; the commenter opens theirs, lands on the thread and asks (counted in their usage); the owner's open page shows the question live with the commenter's author chip and opens its answer; the viewer's page has no ask box and shows them as Viewer; a thread made Public in the dialog opens read-only for a guest; a stale note edit opens "This note changed", Reload keeps the text and the next save succeeds. Through the tRPC endpoint: invite by link and by login and accept; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and a guest; a member's page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
 | `admin.spec.ts` |
  `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
 | `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |

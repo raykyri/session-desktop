@@ -44,6 +44,8 @@ Places (all behind `requireSignedIn`; `routes/places.tsx`):
 | `/archive` | Archived threads. |
 | `/trash` | `TrashList` (§4). |
 | `/highlights` | §4a. |
+| `/shared` | Web only: Shared with me (§4b). |
+| `/invite/$token` | Web only: an invitation link (§4b). Not behind the guard: signed out, it sends the reader to `/login` and back. |
 
 Each place view has a Back to Home button and the place name as its `h1`.
 
@@ -153,6 +155,44 @@ Trash." with Undo); deleting it permanently files its threads in Unfiled
 optimistic and serialized per workspace (`commitFolderState` in
 `useFiling.ts`).
 
+## 4b. Shared with me (`/shared`, web only)
+
+The threads other people share with the reader (`sharing.listShared`,
+`["shared", "shared"]`), most recently updated first, as cards in the
+`shared` view of `FeedView`; above them, the invitations addressed to the
+reader's GitHub login (`invites.received`, `features/sharing/ReceivedInvites.tsx`),
+each with Accept (`invites.accept({ inviteId })`, then the thread opens).
+`research.invites.changed` refetches them; an invitation also arrives as a
+`notification.requested` toast that opens the Shared place.
+
+A shared thread is the owner's in order and nesting, and the reader's in
+placement:
+
+- Move to (card menu) and a drag onto a sidebar folder file it in one of the
+  reader's own folders (`folders.set` membership; the thread is then also
+  listed with that workspace's threads); "Shared with me" takes it out of
+  them; Archive moves it to the reader's own Archive. Drafts and New folder…
+  are not offered. Shared cards are neither nest targets nor nestable (⌥→
+  and a drop on a card announce "Shared threads can’t be nested."), and
+  `research.reorderTrees` is sent with the reader's own threads only
+  (`ownTree` in `useFiling.ts`).
+- Rename is not offered; Generate recap only to a commenter.
+- The reader's Archive lists their archived shared threads
+  (`sharing.listShared({ place: "archive" })`) with their own; Unarchive
+  restores the reader's copy.
+- The reader's Trash lists the shared threads they moved there, from every
+  workspace (`sharing.listShared({ place: "trash" })`), marked "Shared with
+  you"; Restore brings it back, and Delete now leaves the thread ("Leave
+  “…”?", the owner and the other people keep it). Empty Trash leaves every
+  shared thread in it, which its confirmation says.
+
+`/invite/$token` (`routes/invite.tsx`) accepts the token
+(`invites.accept({ token })`) and opens the thread, replacing the history
+entry. Signed out, it navigates to `/login?redirect=/invite/<token>`, so the
+reader returns after GitHub sign-in. An unknown, used, expired or revoked
+invitation, or one addressed to another GitHub account, shows "This
+invitation can’t be used" with the server's reason.
+
 ## 4a. Highlights (`/highlights`)
 
 `highlights.listFeed` → items grouped under day headers (local time), newest
@@ -214,8 +254,8 @@ root menu as a sibling.
 Port of `ResearchSidebarNav.tsx`: the workspace switcher (`WorkspaceSwitcher`,
 unchanged), then the places:
 
-- "Research" navigation: Home (a drop target for Unfiled) and Highlights
-  (signed in).
+- "Research" navigation: Home (a drop target for Unfiled), Highlights and,
+  web only, Shared with me (signed in; no drops).
 - A Folders heading with a New folder button, then the "Folders" navigation:
   Drafts, each folder (a drop target; its … menu offers Rename… and
   Delete…), Archive (a drop target) and Trash.
@@ -233,4 +273,6 @@ may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
 client-originated toasts, and the server's `notification.requested` events
 (a run you asked finished or failed, a new question or note in a thread you
 follow, a branch from your answer, an invitation; `03-api-and-events.md`
-§3). Max 20 kept, 3 visible, `showNotifications` setting honored.
+§3). A server notification with an `href` opens that path when clicked
+(`AppShell` passes `onOpen` to the stack). Max 20 kept, 3 visible,
+`showNotifications` setting honored.

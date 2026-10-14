@@ -180,15 +180,30 @@ Per event type:
 - `research.run.thinking` → `liveTurns` thinking indicator.
 - `notification.requested` → `notifications` store, unless
   `showNotifications` is off (`03-api-and-events.md` §3).
-- `research.sharing.changed` → invalidate the tree lists and the thread;
-  `research.presence.changed` and `research.invites.changed` are parsed and
-  not applied to any cache yet (the sharing UI).
+- `research.sharing.changed` → invalidate the tree lists, the shared lists
+  (`["shared", place]`), the thread, its members and invitations;
+  `research.invites.changed` invalidates `receivedInvites`;
+  `research.presence.changed` replaces `["presence", treeId]` (the viewer
+  list it carries). `research.tree.removed` also drops the thread from the
+  shared lists.
+- Tree events from someone else's change (`research.tree.updated`,
+  `archived`, `restored`, `research.document.updated`) leave out the reader's
+  own `role`, `lastViewedAt` and `followed`; `mergeTreeEvent` (`cache.ts`)
+  keeps the cached values of the fields an event omits instead of replacing
+  the cached tree.
 - On (re)connect: `invalidateQueries()` for list queries and a snapshot
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps
   (`05-run-lifecycle-and-streaming.md` §4, §9). The bridge also publishes the
   interest set (`events.setInterest`, debounced 200 ms) from a reference-counted
-  registry the mounted document views join through `useNodeInterest`.
+  registry the mounted document views join through `useNodeInterest`. The
+  open thread joins a second registry through `useThreadInterest` (the
+  `treeIds` of the call: presence, and a public thread's events for a
+  reader who is not a member); while one is open the bridge declares the set
+  again every 30 s (`TREE_INTEREST_RENEW_MS`, inside the server's 90 s
+  lapse) and when the tab becomes visible, and refetches the thread when the
+  last declaration is older than 90 s. Guests have no stream, so no live
+  updates and no presence.
 - The first event of every connection is `connection.ready`, with the
   `connectionId` that `events.setInterest` addresses; a second one means the
   link reconnected, which is what triggers the invalidation and the snapshot
