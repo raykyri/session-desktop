@@ -132,7 +132,7 @@ const RESEARCH_SYSTEM_FOLDER_IDS: [&str; 3] = [
 ];
 const RESEARCH_SYSTEM_FOLDER_ID_PREFIX: &str = "system:";
 /// Names of the sidebar's built-in sections, lowercase. Mirrors
-/// `RESERVED_FOLDER_NAMES` in src/lib/researchFolders.ts.
+/// `RESERVED_FOLDER_NAMES` in web/packages/shared/src/lib/researchFolders.ts.
 const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 6] = [
     "home",
     "unfiled",
@@ -141,7 +141,7 @@ const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 6] = [
     "trash",
     "highlights",
 ];
-/// Mirrors `RESEARCH_FOLDER_NAME_MAX_LENGTH` in src/lib/researchFolders.ts.
+/// Mirrors `RESEARCH_FOLDER_NAME_MAX_LENGTH` in web/packages/shared/src/lib/researchFolders.ts.
 const RESEARCH_FOLDER_NAME_MAX_CHARS: usize = 40;
 
 fn is_research_system_folder_id(id: &str) -> bool {

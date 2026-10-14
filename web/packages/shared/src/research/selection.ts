@@ -1,6 +1,7 @@
 // Selection geometry and word snapping for the research document.
 //
-// Ported from the desktop `src/lib/researchSelection.ts`. Every function here
+// Ported from an earlier desktop `src/lib/researchSelection.ts` (its current
+// version is `lib/researchSelection.ts` in this package). Every function here
 // takes plain rect objects and flat offsets, so it holds no reference to the
 // DOM: the client measures, this module decides.
 

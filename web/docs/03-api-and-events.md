@@ -88,7 +88,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.createTree` | M | `{ prompt, title?, model, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
 | `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
-| `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
+| `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | Planned, not implemented. `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |
@@ -96,10 +96,10 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
-| `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent, in or out of the Trash) |
-| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree`, `restore_research_tree_from_trash` |
-| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` |
-| `research.emptyTrash` | M | `{ workspaceId }` → deleted tree ids | `empty_research_trash` |
+| `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent; the web has no Trash yet) |
+| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | Planned, not implemented. `trash_research_tree`, `restore_research_tree_from_trash` |
+| `research.listTrash` | Q | → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | Planned, not implemented. `list_research_trash` |
+| `research.emptyTrash` | M | `{ workspaceId }` → deleted tree ids | Planned, not implemented. `empty_research_trash` |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
@@ -181,16 +181,17 @@ events are delivered only to connections interested in that node, while
 `feed.item.*` events fan out to every signed-in connection because an `all`
 cache includes other authors; guests have no event subscription.
 
-Event types, payloads identical to the desktop (`src/lib/researchEvents.ts:90`)
+Event types, payloads identical to the desktop (`ParsedResearchEvent` in
+`packages/shared/src/wire/events.ts`)
 unless noted:
 
 | Type | Payload | Emitted by |
 | --- | --- | --- |
 | `research.tree.created` | `{ tree, node }` | createTree, importReport |
 | `research.tree.updated` | `{ tree }` | rename, viewed |
-| `research.tree.archived` / `restored` | `{ tree }` | archive/restore; `restored` also by restoreTreeFromTrash |
-| `research.tree.removed` | `{ treeId }` | removeTree, trashTree, workspace remove |
-| `research.trash.changed` | `{}` | trashTree, restoreTreeFromTrash, removeTree of a trashed tree |
+| `research.tree.archived` / `restored` | `{ tree }` | archive/restore; `restored` also by restoreTreeFromTrash (planned) |
+| `research.tree.removed` | `{ treeId }` | removeTree, trashTree (planned), workspace remove |
+| `research.trash.changed` | `{}` | Planned, not emitted: trashTree, restoreTreeFromTrash, removeTree of a trashed tree |
 | `research.node.created` | `{ node }` | forkNode |
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/resume reset, recap saved, snapshot stamped, preview (≤ 2/s) |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch |

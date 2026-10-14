@@ -38,7 +38,7 @@ impl AppShortcutCommand {
     }
 }
 
-/// Mirrors src/lib/appShortcuts.ts. Only claim commands the frontend executes;
+/// Mirrors web/packages/shared/src/lib/appShortcuts.ts. Only claim commands the frontend executes;
 /// unrecognized chords continue through WebKit/AppKit's responder chain.
 fn classify_web_app_shortcut(
     key: &str,

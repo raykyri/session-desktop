@@ -104,7 +104,7 @@ desktop's `ResearchWorkspaceHistory` reducer is retired; `ResearchHistoryNav`
 in headers calls `router.history.back()/forward()` and disables buttons using
 `window.history.length` heuristics plus a router-tracked index.
 
-Synthetic tab ids for Cmd-1..9 and cycling (`src/lib/sidebarMode.ts`) stay;
+Synthetic tab ids for Cmd-1..9 and cycling (the desktop's `sidebarMode`, now `packages/shared/src/lib/sidebarMode.ts`) stay;
 they resolve to routes.
 
 ## 4. State management (ADR-6)
@@ -215,7 +215,8 @@ This replaces `App.tsx:9094-9220`.
 ## 5. Keyboard shortcuts and command palette
 
 `shared/app/shortcuts.ts` is the ported `resolveAppShortcut`
-(`src/lib/appShortcuts.ts`). `AppShell` registers a single capture-phase keydown listener that is bypassed when a Base UI overlay is active (allowing the library to manage nested dialog and menu dismissals natively), delegating all other key events to the shared shortcut table. Whether
+(the desktop's `appShortcuts`, now
+`packages/shared/src/lib/appShortcuts.ts`). `AppShell` registers a single capture-phase keydown listener that is bypassed when a Base UI overlay is active (allowing the library to manage nested dialog and menu dismissals natively), delegating all other key events to the shared shortcut table. Whether
 whether a text field consumes a chord is decided per chord there, not for the listener
 as a whole: users spend most of their time in composer inputs, and shortcuts like Cmd-J ("focus follow-ups") are explicitly intended to be triggered while editing text. Only the chords that
 compete with text editing or with the caret's own navigation require a
@@ -232,7 +233,7 @@ on selection.
 Browser conflicts: Cmd-N/T open new windows/tabs in browsers and cannot be
 intercepted, and Cmd-1..9 switch browser tabs on some platforms.
 `resolveAppShortcut` accepts Ctrl as the primary modifier for the digit and
-comma chords only (`src/lib/appShortcuts.ts:40`, `:53`, `:72`); `n`/`t`
+comma chords only (`packages/shared/src/lib/appShortcuts.ts`); `n`/`t`
 require Meta. The shared port adds Shift-Cmd-H for Home (the documented web
 chord; `RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`) and keeps Ctrl-1..9 for tabs;
 Cmd variants are honored where the browser lets them through. Cmd-F and the

@@ -109,7 +109,7 @@ pub(crate) fn string_field(value: &Value, key: &str) -> Option<String> {
 
 /// Strips session-injected tagged instruction blocks from the front of a user
 /// message, mirroring `stripLeadingTaggedInstructionBlocks` in
-/// src/lib/taggedInstructions.ts: repeated `# `-labelled prefix lines and
+/// web/packages/shared/src/app/taggedInstructions.ts: repeated `# `-labelled prefix lines and
 /// line-structured `<tag>…</tag>` blocks (depth-matched) are removed until
 /// real content is reached. Returns `None` when nothing but instruction
 /// blocks remain. Narrower than the frontend on purpose — only whole-line

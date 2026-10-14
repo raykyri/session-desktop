@@ -83,8 +83,9 @@ restart/deployment requirements.
 workspaces root with `packages/shared` (domain types and pure logic),
 `packages/db` (Drizzle over SQLite), `packages/server` (Hono, tRPC, SSE, the
 agent loop), and `packages/client` (React, Vite, Tailwind). It is developed,
-tested, and deployed independently of the desktop app, and shares no build with
-it.
+tested, and deployed independently of the desktop app. The desktop imports the
+research wire model and pure research logic from `packages/shared` through an
+`@session/shared/*` alias (`web/docs/01-architecture-decisions.md`, ADR-1).
 
 Run it locally:
 

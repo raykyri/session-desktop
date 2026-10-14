@@ -1,5 +1,13 @@
 # Research document view
 
+> **Being replaced.** This document describes the web's current thread page:
+> one document per inline chain with a rail of branch cards. The desktop has
+> since replaced that layout with paired columns (messages | answer per
+> level, a branches column, one ask box per column, note and editor columns),
+> built on `packages/shared/src/lib/researchColumns.ts` and its neighbours.
+> Phase 4 of the desktop-parity work rebuilds the web thread page on those
+> modules and rewrites this document.
+
 Port of `src/components/research/ResearchDocument.tsx` (5,593 lines, 35
 `useState`, ~30 mirror refs) and its satellites (`ResearchMessage.tsx`,
 `ResearchRecap.tsx`, `ResearchRecapDialog.tsx`, `ResearchThreadActions.tsx`,

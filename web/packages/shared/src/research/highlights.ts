@@ -2,7 +2,8 @@
 // annotations a selection touches, where overlapping paints stack, and where a
 // stored anchor maps to the current rendered-text projection.
 //
-// Ported from the desktop `src/lib/researchHighlights.ts`. The projection is
+// Ported from an earlier desktop `src/lib/researchHighlights.ts` (its current
+// version is `lib/researchHighlights.ts` in this package). The projection is
 // the same `answer-v1` flat text on the web, so the anchoring rules are
 // unchanged; only the conversation kind (a terminal-export artefact) is gone.
 

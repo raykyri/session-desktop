@@ -1,7 +1,8 @@
 // The Home feed's activity grammar and the reducers that keep a loaded feed
 // in order as live events arrive.
 //
-// Ported from the desktop `src/lib/activity.ts`. Surfaces render the semantic
+// Ported from an earlier desktop `src/lib/activity.ts` (its current
+// version is `lib/activity.ts` in this package). Surfaces render the semantic
 // slots below rather than hand-building a slightly different metadata sentence
 // per source, so "You asked a follow-up in Collective memory" comes out of one
 // vocabulary.

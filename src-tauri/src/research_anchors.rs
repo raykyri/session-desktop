@@ -25,7 +25,7 @@
 //!     distance between the two matches;
 //!   - a match in the old text only: the quote no longer matches.
 //!
-//! src/lib/researchAnchors.ts implements the same rules for the editor's
+//! web/packages/shared/src/lib/researchAnchors.ts implements the same rules for the editor's
 //! notice; tests/researchAnchors.test.ts and the tests below pin shared cases.
 
 use crate::research::{ResearchHighlight, ResearchHighlightAnchor};

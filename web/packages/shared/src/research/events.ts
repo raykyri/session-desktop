@@ -6,7 +6,8 @@
 // parsed event to a cached collection, preserving object identity wherever
 // nothing changed so the client's renderers can keep memoized subtrees.
 //
-// Ported from the desktop `src/lib/researchEvents.ts`, with the new run events
+// Ported from an earlier desktop `src/lib/researchEvents.ts` (its current
+// version is `lib/researchEvents.ts` in this package), with the new run events
 // (`05-run-lifecycle-and-streaming.md` §4), `models.updated`, and the node
 // shape from `02-domain-model-and-database.md` §2 (`workspaceId`, `model`,
 // `attempt`; no `groupId`, `worktreeDir`, `adapter`, `paneId`,

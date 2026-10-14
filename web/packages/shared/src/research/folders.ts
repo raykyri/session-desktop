@@ -5,7 +5,8 @@
 // this module is the value layer both sides use — pure reducers that take a
 // state and return the next one, plus the sidebar display model built from it.
 //
-// Ported from the desktop `src/lib/researchFolders.ts` without its localStorage
+// Ported from an earlier desktop `src/lib/researchFolders.ts` (its current
+// version is `lib/researchFolders.ts` in this package) without its localStorage
 // load/save and storage key, which have no equivalent here: `ResearchFolder`
 // and `ResearchFolderState` are wire types in `types/research.ts`.
 

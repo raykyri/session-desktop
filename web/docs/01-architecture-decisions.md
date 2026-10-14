@@ -30,7 +30,8 @@ is retired.
 
 Consequences: `web/` is self-contained. The repo root keeps the desktop's
 `package.json`; `cd web && npm install` is the web entry point. The root
-`scripts/check-unused-modules.mjs` stops scanning `web/`.
+`scripts/check-unused-modules.mjs` scans only `packages/shared/src/lib` in
+`web/` (see below).
 
 Package dependency graph (arrows mean "may import"):
 
@@ -40,6 +41,36 @@ server ──► shared, db
 db     ──► shared
 shared ──► (nothing internal)
 ```
+
+### Code shared with the desktop
+
+`packages/shared` is also the single source for the research wire model and
+the pure research logic of the desktop app. The desktop imports it through an
+`@session/shared/*` alias (`paths` in the repository root's `tsconfig.json`,
+`resolve.alias` in its `vite.config.ts`), which maps to `packages/shared/src/*`.
+The web imports the same modules through the package's subpath exports.
+
+| Path | Contents | Imported by |
+| --- | --- | --- |
+| `src/wire/` | The research wire model as plain types: `ResearchNode` (an envelope with a `post`, `exchange` or `document` body), `NodeAnchor`, `UserMessage`, `AgentSpec`, `RunState`, trees, folder state, drafts, `Turn`, `SessionEvent`, `ParsedResearchEvent`. No runtime code. | desktop (`src/types.ts` re-exports it); web from phase 2 |
+| `src/schemas/` | Zod schemas for the wire types. `test/wireSchemas.test.ts` fails to compile when a schema and its type differ. | server |
+| `src/lib/` | Pure modules moved from the desktop's `src/lib`, under their desktop names, written against the wire model. Their tests are the desktop's `tests/*.test.ts`. | desktop; web from phase 2 |
+| `markdown/mathDelimiters`, `markdown/wikilinks`, `markdown/sessionWidgets`, `app/taggedInstructions`, `research/snapshots`, `util/tokenEstimate` | Modules the two apps share unchanged. | desktop and web |
+| the rest of `src/` | The web's current types (`types/`, flat nodes) and its forks of older desktop modules. Phase 2 replaces the forks with `lib/`. | web |
+
+Rules for any module the desktop imports (the first, third and fourth rows):
+
+- No DOM access and no runtime package imports, except packages the desktop
+  also depends on. `wire/` and `lib/` import nothing at runtime outside
+  `src/`; the desktop does not have the web's `node_modules`.
+- Relative imports end in `.js`, as everywhere in `shared`.
+- They compile under both packages' compiler settings, so they satisfy the
+  shared package's `noUncheckedIndexedAccess` and
+  `exactOptionalPropertyTypes`, and its ESLint and Prettier configuration.
+- The root `scripts/check-unused-modules.mjs` treats `src/lib/` as desktop
+  source: each module must be reachable from the desktop app and each export
+  used by it or its tests. That changes when the web starts importing
+  `lib/` modules.
 
 ## ADR-2 Server framework: Hono on Node 22
 
