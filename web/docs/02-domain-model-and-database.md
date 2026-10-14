@@ -357,8 +357,8 @@ Web only; the desktop has one person. Rules in §5.16.
 - `nodes.author_id` and `highlights.author_id` are `ON DELETE SET NULL`;
   `nodes.edited_by` records who last replaced a note's or document's text.
 
-Migration `0001_collaboration` adds the member columns and `trashed_by`;
-the tables themselves are in `0000_initial`.
+All of these are in `0000_initial`; the collaboration schema has never been
+deployed with an earlier history.
 
 ### 3.6 Images and widgets
 
@@ -423,7 +423,8 @@ removed with the uploaded-documents feature in phase 2.0.
   steps in `src/backfills/` after `migrate()`, recorded in a `backfills`
   table. The list is empty since the reset below.
 - Phase 2.0 of the desktop parity plan squashed the history into one
-  `0000_initial.sql` generated from the schema. A database created by the
+  `0000_initial.sql` generated from the schema, and phase 5 folded the
+  collaboration migration into it again before the first deploy. A database created by the
   earlier migrations is not upgraded; it is replaced
   (`runbooks/reset-database.md`).
 - Test databases: `openDatabase(":memory:")` for unit tests of repos where

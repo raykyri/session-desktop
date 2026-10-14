@@ -1,6 +1,4 @@
-// Thread sharing (`docs/02-domain-model-and-database.md` §3.5). The tables
-// are in the initial migration; `0001_collaboration` adds the per-member
-// Archive, Trash and folder columns and `trees.trashed_by`.
+// Thread sharing (`docs/02-domain-model-and-database.md` §3.5).
 
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 

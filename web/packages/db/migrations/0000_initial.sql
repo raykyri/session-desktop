@@ -28,10 +28,14 @@ CREATE TABLE `tree_members` (
 	`role` text NOT NULL,
 	`invited_by` text,
 	`created_at` integer NOT NULL,
+	`archived_at` integer,
+	`trashed_at` integer,
+	`folder_id` text,
 	PRIMARY KEY(`tree_id`, `user_id`),
 	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`invited_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`invited_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`folder_id`) REFERENCES `folders`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `tree_members_user_idx` ON `tree_members` (`user_id`);--> statement-breakpoint
@@ -348,11 +352,13 @@ CREATE TABLE `trees` (
 	`updated_at` integer NOT NULL,
 	`archived_at` integer,
 	`trashed_at` integer,
+	`trashed_by` text,
 	`parent_tree_id` text,
 	`visibility` text DEFAULT 'private' NOT NULL,
 	`position` integer NOT NULL,
 	FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`trashed_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`parent_tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint

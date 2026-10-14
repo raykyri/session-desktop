@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -74,6 +74,38 @@ test("applies every migration to an empty database", (t) => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the history is a single initial migration", (t) => {
+  // The database has never been deployed with this schema; the history stays
+  // flat until it is (runbooks/reset-database.md).
+  const journal = JSON.parse(
+    readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { tag: string }[] };
+  t.deepEqual(
+    journal.entries.map((entry) => entry.tag),
+    ["0000_initial"],
+  );
+  t.deepEqual(
+    readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
+    ["0000_initial.sql"],
+  );
+});
+
+test("the sharing columns are in the initial schema", (t) => {
+  const db = openDatabase(":memory:");
+  const columns = (table: string) =>
+    (db.$client.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (row) => row.name,
+    );
+  for (const name of ["role", "invited_by", "archived_at", "trashed_at", "folder_id"]) {
+    t.true(columns("tree_members").includes(name), name);
+  }
+  for (const name of ["visibility", "trashed_by", "parent_tree_id"]) {
+    t.true(columns("trees").includes(name), name);
+  }
+  t.true(columns("nodes").includes("edited_by"));
+  closeDatabase(db);
 });
 
 test("the node checks tie each body column to the node's type", (t) => {
