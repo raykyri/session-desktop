@@ -68,12 +68,12 @@ export const workspacesRouter = router({
         repo(() => workspaces.get(ctx.db, ctx.user.id, input.workspaceId)),
         `research workspace ${input.workspaceId} was not found`,
       );
-      const removedFeedItems = feedItems.forWorkspace(ctx.db, input.workspaceId);
+      const removedFeedItems = feedItems.removalsForWorkspace(ctx.db, input.workspaceId);
       // The members of the threads going with the workspace, read while
       // their rows exist.
       const members = sharing.workspaceMembers(ctx.db, ctx.user.id, input.workspaceId);
       const result = repo(() => workspaces.remove(ctx.db, ctx.user.id, input.workspaceId));
-      for (const item of removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      for (const item of removedFeedItems) emitFeedItemRemoved(ctx, item);
       for (const treeId of result.removedTreeIds) {
         ctx.eventBus.emitToUsers(
           [ctx.user.id, ...(members.get(treeId) ?? [])],

@@ -190,7 +190,7 @@ export const treeProcedures = {
         if (tree.role === "owner") publishTree(ctx, "research.tree.archived", tree);
         else publish(ctx, "research.tree.archived", { tree });
       }
-      for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx, item);
       return change.tree;
     }),
 
@@ -236,7 +236,7 @@ export const treeProcedures = {
           );
         }
       }
-      for (const item of removed.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      for (const item of removed.removedFeedItems) emitFeedItemRemoved(ctx, item);
 
       if (removed.trashed) {
         publish(ctx, "research.trash.changed", { workspaceId: removed.workspaceId });

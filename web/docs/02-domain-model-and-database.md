@@ -598,7 +598,11 @@ Each item names the desktop source and the enforcing function.
   `recap.responseRevision`; otherwise no-op (`state.rs:8942`).
 - `recaps.applyCandidate` additionally requires
   `expectedCurrentRecapId === node.recap?.id` and a non-archived tree
-  (`state.rs:8992`). Instructions trimmed, non-empty, ≤ 4000 chars.
+  (`state.rs:8992`). Instructions trimmed, non-empty, ≤ 4000 chars. The
+  server stores only a candidate it generated for the caller and still holds
+  (`recallRecapCandidate`); otherwise it answers `CONFLICT` "This recap is no
+  longer available; generate it again." and never stores text the client
+  sent.
 
 ### 5.9 Feeds
 - `feeds.recentActivity(userId, { scope, workspaceId, limit, cursor })` reads
@@ -871,15 +875,16 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
 - `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole`,
   `removeMember` and `leave` (both return the member's queued follow-ups,
   which are deleted, and their active questions, which the server cancels;
-  `removeMember` also records the removal in `tree_member_removals`),
+  `removeMember` also records the removal in `tree_member_removals` and
+  revokes the pending login invitations addressed to the member),
   `createInvite` (token returned once; at most 50 pending per thread),
   `listInvites` (usable ones: a used link stays listed so it can be revoked), `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
   (by token, or by id for a login invitation addressed to the caller; a
   login invitation is used once, a link until it expires or is revoked;
   a person the owner removed is refused, "You were removed from this
   thread." (`FORBIDDEN`), a link created at or before the removal, while a
-  later link or a login invitation to them admits them and deletes the
-  removal; leaving records nothing; joining never lowers a role; at most
+  later link or a later login invitation to them admits them and deletes
+  the removal; leaving records nothing; joining never lowers a role; at most
   100 members), `setFollowing`,
   `followers` (those who may still read the thread), `audience` (owner,
   members, public) and `workspaceMembers`.

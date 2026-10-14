@@ -34,10 +34,23 @@ export function publishTree(
   type: string,
   tree: ResearchTree,
 ): void {
-  publish(ctx, type, { tree });
+  publishTreeEvent(ctx, type, { tree });
+}
+
+/**
+ * A thread event whose payload carries the tree as the caller read it (the
+ * tree events, `research.document.updated`): the payload as it is to the
+ * caller, and with `sharedTree(tree)` to the rest of the audience.
+ */
+export function publishTreeEvent(
+  ctx: Parameters<typeof publish>[0],
+  type: string,
+  payload: Record<string, unknown> & { tree: ResearchTree },
+): void {
+  publish(ctx, type, payload);
   ctx.eventBus.emitToTree(
-    tree.id,
-    sessionEvent(type, { tree: sharedTree(tree) }),
+    payload.tree.id,
+    sessionEvent(type, { ...payload, tree: sharedTree(payload.tree) }),
     [],
     [ctx.user.id],
   );

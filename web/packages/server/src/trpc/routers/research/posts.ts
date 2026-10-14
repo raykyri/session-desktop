@@ -130,6 +130,9 @@ export const postProcedures = {
   hydratePostTweet: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
+      // The write below is a commenter's; a viewer is refused before the
+      // server fetches anything from X for them.
+      requireNodeRole(ctx, input.nodeId, "commenter");
       const message = repo(() => posts.message(ctx.db, ctx.user.id, input.nodeId));
       const unavailable = (message.attachments ?? []).flatMap((attachment) =>
         attachment.kind === "tweet" && attachment.status === "unavailable" ? [attachment] : [],

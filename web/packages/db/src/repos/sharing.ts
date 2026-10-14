@@ -283,7 +283,8 @@ function depart(db: SessionDatabase, treeId: string, memberId: string): Departur
 /**
  * Removes a member. The owner's. Their nodes and highlights stay. The
  * removal is recorded, so a link invitation created before it does not let
- * them join again (`acceptInvite`).
+ * them join again (`acceptInvite`), and the pending login invitations
+ * addressed to them are revoked.
  */
 export function removeMember(
   db: SessionDatabase,
@@ -298,6 +299,24 @@ export function removeMember(
     }
     const departure = depart(tx, treeId, memberId);
     const removedAt = now();
+    const login = tx
+      .select({ login: users.login })
+      .from(users)
+      .where(eq(users.id, memberId))
+      .get()?.login;
+    if (login !== undefined) {
+      tx.update(treeInvites)
+        .set({ revokedAt: removedAt })
+        .where(
+          and(
+            eq(treeInvites.treeId, treeId),
+            sql`lower(${treeInvites.githubLogin}) = lower(${login})`,
+            isNull(treeInvites.acceptedAt),
+            isNull(treeInvites.revokedAt),
+          ),
+        )
+        .run();
+    }
     tx.insert(treeMemberRemovals)
       .values({ treeId, userId: memberId, removedBy: userId, removedAt })
       .onConflictDoUpdate({
@@ -480,9 +499,10 @@ export interface AcceptedInvite {
  * or by id for a login invitation addressed to the caller. Joining keeps a
  * higher role the caller already has. Expired, revoked and used login
  * invitations are "not found", as is an unknown token. A person the owner
- * removed is refused a link invitation created at or before the removal; a
- * later invitation, or a login invitation addressed to them, admits them
- * and clears the removal.
+ * removed is refused a link invitation created at or before the removal;
+ * the login invitations addressed to them were revoked by the removal
+ * (`removeMember`). A later invitation, link or login, admits them and
+ * clears the removal.
  */
 export function acceptInvite(
   db: SessionDatabase,

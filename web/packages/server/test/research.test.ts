@@ -291,7 +291,7 @@ test("an imported report becomes a complete document thread", async (t) => {
   t.deepEqual(harness.runs.started, []);
 });
 
-test("recap generation needs the agent loop; applying a candidate does not", async (t) => {
+test("recap generation needs the agent loop; applying needs a candidate it generated", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("summarizer");
   const caller = harness.caller(user);
@@ -319,20 +319,27 @@ test("recap generation needs the agent loop; applying a candidate does not", asy
   );
   t.is(harness.runs.metadata.at(-1)?.kind, "recap");
 
-  const node = await caller.recaps.applyCandidate({
-    nodeId,
-    expectedResponseRevision: commit.revision,
-    candidate: {
-      id: "candidate-1",
-      text: "A summary.",
-      responseRevision: commit.revision,
-      generatedAt: Date.now(),
-      adapter: "gemini",
-      model: "gemini-flash",
-      instructions: "Summarize in one sentence.",
-    },
-  });
-  t.is(recapOf(node)?.text, "A summary.");
+  // A candidate the server did not generate for the caller is refused rather
+  // than stored as the client sent it.
+  const refused = await t.throwsAsync<TRPCError>(
+    caller.recaps.applyCandidate({
+      nodeId,
+      expectedResponseRevision: commit.revision,
+      candidate: {
+        id: "candidate-1",
+        text: "A summary.",
+        responseRevision: commit.revision,
+        generatedAt: Date.now(),
+        adapter: "gemini",
+        model: "gemini-flash",
+        instructions: "Summarize in one sentence.",
+      },
+    }),
+  );
+  t.is(refused?.code, "CONFLICT");
+  t.is(refused?.message, "This recap is no longer available; generate it again.");
+  const stored = await caller.research.getTree({ treeId: detail.tree.id });
+  t.falsy(recapOf(stored.nodes[0]));
 
   // Without a metadata runner the title falls back to the one the node has.
   const title = await caller.research.generateTitle({ nodeId });

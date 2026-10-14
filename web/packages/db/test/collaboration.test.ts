@@ -611,6 +611,34 @@ test("a login invitation lets a removed member back in", (t) => {
   t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
 });
 
+test("removing a member revokes the login invitations still addressed to them", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const login = `commenter${loginCounter}`;
+  const pending = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "commenter",
+    githubLogin: login,
+  });
+  sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.commenter.userId);
+  t.throws(
+    () =>
+      sharing.acceptInvite(
+        db,
+        { id: shared.commenter.userId, login },
+        { inviteId: pending.invite.id },
+      ),
+    { message: sharing.INVITE_MESSAGES.notFound },
+  );
+  t.throws(
+    () =>
+      sharing.acceptInvite(db, { id: shared.commenter.userId, login }, { token: pending.token }),
+    { message: sharing.INVITE_MESSAGES.notFound },
+  );
+  t.deepEqual(sharing.receivedInvites(db, login), []);
+  t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
+});
+
 test("leaving is not a removal: a link still lets the person back in", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;

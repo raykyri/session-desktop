@@ -55,6 +55,8 @@ test("a tree in the Trash leaves every list and Restore puts it back where it wa
   t.not(change.tree.trashedAt, null);
   t.deepEqual(change.changedTreeIds, [second.tree.id]);
   t.is(change.removedFeedItems.length, 1);
+  // A private thread's feed row was its owner's alone to see.
+  t.like(change.removedFeedItems[0], { public: false, ownerId: fixture.userId });
   t.deepEqual(sidebarIds(fixture, true), [third.tree.id, first.tree.id]);
   t.is(feedItems.forTree(fixture.db, second.tree.id), null);
   t.deepEqual(

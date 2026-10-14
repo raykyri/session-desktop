@@ -80,6 +80,30 @@ export function forTree(db: SessionDatabase, treeId: string): FeedItemDescriptor
   return descriptors(db, sql`fi.tree_id = ${treeId}`)[0] ?? null;
 }
 
-export function forWorkspace(db: SessionDatabase, workspaceId: string): FeedItemDescriptor[] {
-  return descriptors(db, sql`fi.workspace_id = ${workspaceId}`);
+/**
+ * A feed row an operation is about to delete, with who could see it, read
+ * while the thread still exists: everyone signed in when its thread was
+ * public (the All Users feed), else only its owner, whose own feeds list it.
+ */
+export interface FeedItemRemoval {
+  item: FeedItemDescriptor;
+  public: boolean;
+  ownerId: string;
+}
+
+/** The workspace's feed rows as removals, read before the workspace is
+ * deleted. */
+export function removalsForWorkspace(db: SessionDatabase, workspaceId: string): FeedItemRemoval[] {
+  return db
+    .all<FeedItemDescriptor & { isPublic: number; ownerId: string }>(
+      sql`
+        SELECT fi.id, 'research' AS kind, fi.author_id AS authorId, fi.occurred_at AS occurredAt,
+          fi.source_rank AS sourceRank, fi.workspace_id AS workspaceId,
+          t.visibility = 'public' AS isPublic, t.owner_id AS ownerId
+        FROM feed_items fi
+        INNER JOIN trees t ON t.id = fi.tree_id
+        WHERE fi.workspace_id = ${workspaceId}
+      `,
+    )
+    .map(({ isPublic, ownerId, ...item }) => ({ item, public: isPublic === 1, ownerId }));
 }

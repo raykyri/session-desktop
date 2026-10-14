@@ -32,7 +32,7 @@ import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import type { FeedItemDescriptor } from "./feedItems.js";
+import type { FeedItemRemoval } from "./feedItems.js";
 import { activeRun } from "./subtrees.js";
 import {
   deleteTreeRows,
@@ -60,7 +60,7 @@ export interface TrashChange {
   children: ResearchTree[];
   changedTreeIds: string[];
   /** The Home feed rows the operation deleted, for `feed.item.removed`. */
-  removedFeedItems: FeedItemDescriptor[];
+  removedFeedItems: FeedItemRemoval[];
 }
 
 /** What `empty` deleted. */

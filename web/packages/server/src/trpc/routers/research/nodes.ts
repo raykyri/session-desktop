@@ -37,7 +37,7 @@ import { protectedProcedure, publicProcedure } from "../../base.js";
 import { publishToTree } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
-import { detailWithQueues, dispatchFollowups, publishNode } from "./common.js";
+import { detailWithQueues, dispatchFollowups, publishNode, publishTreeEvent } from "./common.js";
 
 export const nodeProcedures = {
   /**
@@ -279,7 +279,9 @@ export const nodeProcedures = {
             : { expectedHighlightIds: input.expectedHighlightIds }),
         }),
       );
-      publishToTree(ctx, result.tree.id, "research.document.updated", {
+      // The tree is the caller's view; the rest of the audience gets it
+      // without the per-person fields.
+      publishTreeEvent(ctx, "research.document.updated", {
         tree: result.tree,
         node: result.node,
         responseRevision: result.responseRevision,

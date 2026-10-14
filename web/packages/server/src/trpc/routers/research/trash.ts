@@ -35,7 +35,7 @@ export const trashProcedures = {
           sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
         );
       }
-      for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
+      for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx, item);
       if (change.changedTreeIds.length > 0) {
         publish(ctx, "research.trash.changed", { workspaceId: change.tree.workspaceId });
       }

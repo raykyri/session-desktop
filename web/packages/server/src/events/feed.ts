@@ -9,6 +9,8 @@ import type { feedItems, SessionDatabase } from "@session/db";
 import type { EventBus } from "./bus.js";
 import { sessionEvent } from "./bus.js";
 
+type FeedItemDescriptor = NonNullable<ReturnType<typeof feedItems.forNode>>;
+
 interface FeedEventDeps {
   db: SessionDatabase;
   eventBus: EventBus;
@@ -40,23 +42,18 @@ export function emitFeedItemUpsertedForNode(deps: FeedEventDeps, nodeId: string)
   if (target !== null) deliver(deps, target, "feed.item.upserted", event);
 }
 
-type FeedItemDescriptor = NonNullable<ReturnType<typeof feedItems.forNode>>;
-
 /**
- * `feed.item.removed` for a row an operation deleted. The removal names ids
- * only; a thread already deleted is announced to everyone, since any cache
- * may hold it.
+ * `feed.item.removed` for a row an operation deleted, to whoever could see
+ * it (`feedItems.FeedItemRemoval`, read before the operation): everyone
+ * signed in for a public thread, else its owner.
  */
 export function emitFeedItemRemoved(
-  deps: EventBus | FeedEventDeps,
-  item: FeedItemDescriptor | null,
+  deps: Pick<FeedEventDeps, "eventBus">,
+  removal: feedItems.FeedItemRemoval,
 ): void {
-  if (!item) return;
-  if ("emitAll" in deps) {
-    deps.emitAll(sessionEvent("feed.item.removed", { ...item }));
-    return;
-  }
-  deliver(deps, feedAudience(deps.db, item.id) ?? { kind: "all" }, "feed.item.removed", item);
+  const event = sessionEvent("feed.item.removed", { ...removal.item });
+  if (removal.public) deps.eventBus.emitAll(event);
+  else deps.eventBus.emit(removal.ownerId, event);
 }
 
 /** A thread became public or private: the All Users feed gains or loses its

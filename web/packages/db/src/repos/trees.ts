@@ -46,7 +46,7 @@ import {
 } from "./access.js";
 import type { MemberRow, TreeAccess, TreeRole } from "./access.js";
 import { forTree as feedItemForTree } from "./feedItems.js";
-import type { FeedItemDescriptor } from "./feedItems.js";
+import type { FeedItemRemoval } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import type { TreeRow } from "./mappers.js";
@@ -852,12 +852,16 @@ export interface TreeGroupChange {
   tree: ResearchTree;
   children: ResearchTree[];
   /** The Home feed rows the operation deleted, for `feed.item.removed`. */
-  removedFeedItems: FeedItemDescriptor[];
+  removedFeedItems: FeedItemRemoval[];
 }
 
-/** The feed rows of `rows`, read before an operation deletes them. */
-export function feedItemsOf(db: SessionDatabase, rows: readonly TreeRow[]): FeedItemDescriptor[] {
-  return rows.flatMap((row) => feedItemForTree(db, row.id) ?? []);
+/** The feed rows of `rows`, with who could see them, read before an
+ * operation deletes them. */
+export function feedItemsOf(db: SessionDatabase, rows: readonly TreeRow[]): FeedItemRemoval[] {
+  return rows.flatMap((row) => {
+    const item = feedItemForTree(db, row.id);
+    return item ? [{ item, public: row.visibility === "public", ownerId: row.ownerId }] : [];
+  });
 }
 
 function archiveRow(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
@@ -993,7 +997,7 @@ export interface RemovedTrees {
   /** Whether any of them was in the Trash. */
   trashed: boolean;
   /** Their Home feed rows, for `feed.item.removed`. */
-  removedFeedItems: FeedItemDescriptor[];
+  removedFeedItems: FeedItemRemoval[];
   /** True when the caller was a member and left the thread instead: nothing
    * was deleted, and only the caller no longer has it. */
   left?: boolean;

@@ -215,6 +215,26 @@ test("hydratePostTweet asks again for an unavailable post", async (t) => {
   t.is(again?.code, "PRECONDITION_FAILED");
 });
 
+test("a viewer's hydratePostTweet is refused before anything is fetched", async (t) => {
+  const { harness, caller, upstream } = setup(t, { syndication: 404, oembed: 404 });
+  const workspace = await caller.workspaces.ensureDefault();
+  const detail = await caller.research.createPost({
+    body: TWEET_URL,
+    workspaceId: workspace.id,
+    model: "gemini-flash",
+  });
+  const viewer = harness.addUser("post-viewer");
+  const link = await caller.invites.create({ treeId: detail.tree.id, role: "viewer" });
+  await harness.caller(viewer).invites.accept({ token: link.token });
+  upstream.syndication = 200;
+  const calls = upstream.calls.length;
+  const refused = await t.throwsAsync<TRPCError>(
+    harness.caller(viewer).research.hydratePostTweet({ nodeId: detail.tree.rootNodeId }),
+  );
+  t.is(refused?.code, "FORBIDDEN");
+  t.is(upstream.calls.length, calls, "no request went to X");
+});
+
 test("a follow-up note goes under a note and is announced as created", async (t) => {
   const { caller, events } = setup(t);
   const workspace = await caller.workspaces.ensureDefault();

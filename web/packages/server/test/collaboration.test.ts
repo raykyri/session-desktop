@@ -514,3 +514,76 @@ test("a thread's images are readable by whoever may read the thread", async (t) 
   t.is((await read(harness.signIn(stranger))).status, 200);
   t.is((await read()).status, 200);
 });
+
+test("tree events carry no per-person fields to the rest of the audience", async (t) => {
+  const harness = createHarness(t);
+  const owner = harness.addUser("document-owner");
+  const member = harness.addUser("document-member");
+  const ownerCaller = harness.caller(owner);
+  const workspace = await ownerCaller.workspaces.ensureDefault();
+  const detail = await ownerCaller.research.importReport({
+    markdown: "# Report\n\nBody text.",
+    prompt: "A report",
+    workspaceId: workspace.id,
+  });
+  const revision = snapshots.revision(harness.db, owner.id, detail.tree.rootNodeId) ?? "";
+  const link = await ownerCaller.invites.create({ treeId: detail.tree.id, role: "commenter" });
+  await harness.caller(member).invites.accept({ token: link.token });
+  // The member's own Archive is theirs.
+  await harness.caller(member).research.archiveTree({ treeId: detail.tree.id });
+  const ownerEvents = listen(harness, owner);
+  const memberEvents = listen(harness, member);
+  await ownerCaller.research.updateDocument({
+    nodeId: detail.tree.rootNodeId,
+    markdown: "# Report\n\nThe new Body text.",
+    expectedTitle: detail.tree.title,
+    expectedResponseRevision: revision,
+    expectedHighlightIds: [],
+  });
+  await ownerCaller.research.renameTree({ treeId: detail.tree.id, title: "Renamed" });
+  await settle();
+  const PER_PERSON = ["role", "lastViewedAt", "followed", "archivedAt", "trashedAt", "trashedBy"];
+  for (const type of ["research.document.updated", "research.tree.updated"]) {
+    const ownerTree = ownerEvents.of(type)[0]?.payload["tree"] as Record<string, unknown>;
+    const memberTree = memberEvents.of(type)[0]?.payload["tree"] as Record<string, unknown>;
+    t.is(ownerTree["role"], "owner", `${type}: the actor's own view`);
+    t.truthy(memberTree, type);
+    for (const field of PER_PERSON) t.false(field in memberTree, `${type}: ${field}`);
+  }
+  t.is(
+    memberEvents.of("research.document.updated")[0]?.payload["markdownChanged"],
+    true,
+    "the rest of the payload is the same",
+  );
+  ownerEvents.close();
+  memberEvents.close();
+});
+
+test("a private thread's feed removal reaches its owner only", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const owner = listen(harness, thread.owner);
+  const stranger = listen(harness, thread.stranger);
+  await harness.caller(thread.owner).research.archiveTree({ treeId: thread.treeId });
+  await harness.caller(thread.owner).research.restoreTree({ treeId: thread.treeId });
+  await harness.caller(thread.owner).research.removeTree({ treeId: thread.treeId });
+  await settle();
+  t.true(owner.types().includes("feed.item.removed"));
+  t.false(stranger.types().includes("feed.item.removed"));
+  owner.close();
+  stranger.close();
+});
+
+test("a public thread's feed removal reaches every signed-in reader", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  await harness.caller(thread.owner).sharing.setVisibility({
+    treeId: thread.treeId,
+    visibility: "public",
+  });
+  const stranger = listen(harness, thread.stranger);
+  await harness.caller(thread.owner).research.trashTree({ treeId: thread.treeId });
+  await settle();
+  t.true(stranger.types().includes("feed.item.removed"));
+  stranger.close();
+});

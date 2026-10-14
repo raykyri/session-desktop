@@ -75,12 +75,18 @@ export function emitToTree(
 }
 
 /** A tree without the reader's own fields, for everyone but the person it
- * was read for: the role, the last view and Follow are per person. */
+ * was read for: the role, the last view, Follow, and Archive and Trash
+ * (`archivedAt`, `trashedAt`, `trashedBy`; a member's are their own) are per
+ * person. A client keeps its own values of the fields left out, and
+ * refetches on `research.tree.archived` and `research.tree.restored`. */
 export function sharedTree(tree: ResearchTree): ResearchTree {
   const shared = { ...tree };
   delete shared.role;
   delete shared.lastViewedAt;
   delete shared.followed;
+  delete shared.archivedAt;
+  delete shared.trashedAt;
+  delete shared.trashedBy;
   return shared;
 }
 

@@ -17,6 +17,10 @@ import type { EmitterContext } from "../emit.js";
 import { publishToTree } from "../emit.js";
 import { repo, required } from "../errors.js";
 
+/** `recaps.applyCandidate` for a candidate the server no longer holds (it
+ * expired, the server restarted) or never generated for the caller. */
+export const RECAP_CANDIDATE_UNAVAILABLE = "This recap is no longer available; generate it again.";
+
 /** A node event to the audience of the node's thread. */
 function publishForNode(
   ctx: EmitterContext,
@@ -155,9 +159,14 @@ export const recapsRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => {
-      // Use the cached server candidate when available so clients cannot alter
-      // generated recap content before it is stored.
+      // Only a candidate this server generated for the caller is stored, as
+      // the server keeps it, so a client cannot store recap text of its own.
+      // Checked after the role, so a viewer is told that instead.
+      requireNodeRole(ctx, input.nodeId, "commenter");
       const issued = ctx.runs.recallRecapCandidate(ctx.user.id, input.candidate.id);
+      if (issued === null) {
+        throw new TRPCError({ code: "CONFLICT", message: RECAP_CANDIDATE_UNAVAILABLE });
+      }
       const node = repo(() =>
         recaps.applyCandidate(ctx.db, ctx.user.id, {
           nodeId: input.nodeId,
@@ -165,7 +174,7 @@ export const recapsRouter = router({
           ...(input.expectedCurrentRecapId === undefined
             ? {}
             : { expectedCurrentRecapId: input.expectedCurrentRecapId }),
-          candidate: issued ?? input.candidate,
+          candidate: issued,
         }),
       );
       publishToTree(ctx, node.treeId, "research.node.updated", { node });

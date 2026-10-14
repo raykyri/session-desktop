@@ -367,7 +367,7 @@ Where the built runtime departs from the sketch above, and why.
   sequence the client had already passed.
 - **Auto-resume.** Boot reconciliation only re-queues `resume_pending` nodes; the queue processor opens the new attempt (`nodes.resumeAttempt`), resuming the interrupted node using its committed message exchanges as context. The cap of two auto-resumes is counted from `run_attempts` rows of
   kind `resume`, which makes it survive a restart.
-- **Recap candidates.** A generated candidate is held in memory for 30 minutes keyed by its ID; `recaps.applyCandidate` uses the server-cached candidate if still present in memory, guaranteeing that the saved recap matches the generated candidate text.
+- **Recap candidates.** A generated candidate is held in memory for 30 minutes keyed by its ID; `recaps.applyCandidate` stores the server-cached candidate, so the saved recap is the generated text, and refuses with `CONFLICT` ("This recap is no longer available; generate it again.") when the server no longer holds it.
 - **Search vendors.** Parallel is called with the `base` processor and the
   query as its objective; the API has no recency parameter, so `recency` is
   folded into the objective there and passed as `time_range` to Tavily.
