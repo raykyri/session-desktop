@@ -329,8 +329,6 @@ impl AdapterRegistry {
                     install_command: adapter_install_command(adapter.id()).map(str::to_string),
                     install_url: adapter_install_url(adapter.id()).map(str::to_string),
                     update_command,
-                    instance_id: format!("local:{}", adapter.id()),
-                    target: AdapterTargetMetadata::local(),
                 }
             })
             .collect()
@@ -387,29 +385,6 @@ pub struct AdapterMetadata {
     pub install_command: Option<String>,
     pub install_url: Option<String>,
     pub update_command: Option<String>,
-    /// Stable provider-instance identity. The first implementation has one
-    /// configured instance per adapter and target; the contract does not need
-    /// to change when account/home profiles are added later.
-    pub instance_id: String,
-    pub target: AdapterTargetMetadata,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AdapterTargetMetadata {
-    pub kind: String,
-    pub id: Option<String>,
-    pub label: String,
-}
-
-impl AdapterTargetMetadata {
-    fn local() -> Self {
-        Self {
-            kind: "local".to_string(),
-            id: None,
-            label: "This Mac".to_string(),
-        }
-    }
 }
 
 struct ProbeOutput {
@@ -873,11 +848,6 @@ mod tests {
         assert!(!metadata[1].default);
         assert_eq!(metadata[2].id, "grok");
         assert!(!metadata[2].default);
-        assert!(
-            metadata
-                .iter()
-                .all(|adapter| adapter.target.kind == "local")
-        );
         let config = test_config();
         assert!(adapter_supports_research(&config, "claude"));
         assert!(adapter_supports_research(&config, "codex"));

@@ -58,7 +58,7 @@ interface AppSidebarProps {
   adapters: readonly AgentAdapterMetadata[] | null;
   adaptersLoading: boolean;
   adaptersError: string | null;
-  onOpenAgentSetup: (instanceId: string | null) => void;
+  onOpenAgentSetup: (adapterId: string | null) => void;
   onRefreshAdapters: () => void;
 }
 

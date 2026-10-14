@@ -28,7 +28,7 @@ interface ResearchAgentsSwitcherProps {
   variant?: "sidebar" | "rail";
   /** Opens the Agent Setup dialog on an agent instance, or on the first agent
    * whose setup is incomplete when null. */
-  onOpenSetup: (instanceId: string | null) => void;
+  onOpenSetup: (adapterId: string | null) => void;
   onRefresh: () => void;
 }
 
@@ -92,7 +92,7 @@ export default function ResearchAgentsSwitcher({
         const ready = adapterSetupIsComplete(adapter);
         return (
           <ResearchMenuItem
-            key={adapter.instanceId}
+            key={adapter.id}
             icon={
               iconUrl ? (
                 <img
@@ -115,7 +115,7 @@ export default function ResearchAgentsSwitcher({
             }
             onSelect={() => {
               close(false);
-              onOpenSetup(adapter.instanceId);
+              onOpenSetup(adapter.id);
             }}
           />
         );

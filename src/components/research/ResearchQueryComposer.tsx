@@ -131,7 +131,7 @@ interface ResearchQueryComposerProps {
   workspaceId: string | null;
   /** Opens Agent Setup on an agent instance (the selected agent's), or on
    * the first incomplete one when null. */
-  onOpenAgentSettings: (instanceId: string | null) => void;
+  onOpenAgentSettings: (adapterId: string | null) => void;
   /** A request to select an agent (when `adapterId` names a research-ready
    * one) and focus the question field, sent when Agent Setup returns here.
    * The text and other choices are kept, and nothing is submitted. */
@@ -804,7 +804,7 @@ export default function ResearchQueryComposer({
               <button
                 type="button"
                 className="control-button new-research-setup-button"
-                onClick={() => onOpenAgentSettings(selectedAdapter?.instanceId ?? null)}
+                onClick={() => onOpenAgentSettings(selectedAdapter?.id ?? null)}
               >
                 Review agents
               </button>

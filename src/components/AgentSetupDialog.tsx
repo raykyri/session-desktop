@@ -7,7 +7,7 @@ interface AgentSetupDialogProps {
   adapters: AgentAdapterMetadata[];
   /** The agent instance the guide opens on; null selects the first agent
    * whose setup is incomplete. */
-  initialInstanceId: string | null;
+  initialAdapterId: string | null;
   loading: boolean;
   error: string | null;
   /** Probes agent readiness; called when the dialog opens. */
@@ -24,7 +24,7 @@ interface AgentSetupDialogProps {
 /** The Agent Setup dialog. Mounted while open; opening it re-probes readiness. */
 export default function AgentSetupDialog({
   adapters,
-  initialInstanceId,
+  initialAdapterId,
   loading,
   error,
   onProbe,
@@ -68,7 +68,7 @@ export default function AgentSetupDialog({
         <div className="settings-content">
           <AgentSetupGuide
             adapters={adapters}
-            initialInstanceId={initialInstanceId}
+            initialAdapterId={initialAdapterId}
             loading={loading}
             error={error}
             onRefresh={onRefresh}

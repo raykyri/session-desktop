@@ -40,8 +40,6 @@ function agent(
     installCommand: null,
     installUrl: null,
     updateCommand: null,
-    instanceId: `local:${id}`,
-    target: { kind: "local", id: null, label: "This Mac" },
     ...over,
   };
 }
@@ -54,7 +52,7 @@ test("repair targets the failed run's own agent, not another selection", () => {
     agent("claude"),
     agent("codex"),
   ];
-  assert.equal(repairAgentFor(adapters, "codex")?.instanceId, "local:codex");
+  assert.equal(repairAgentFor(adapters, "codex")?.id, "codex");
   assert.equal(repairAgentFor(adapters, "grok"), null);
 });
 

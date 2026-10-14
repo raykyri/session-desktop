@@ -44,8 +44,6 @@ function adapter(id: string): AgentAdapterMetadata {
     installCommand: null,
     installUrl: null,
     updateCommand: null,
-    instanceId: `local:${id}`,
-    target: { kind: "local", id: null, label: "This Mac" },
   };
 }
 

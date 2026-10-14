@@ -260,7 +260,6 @@ export function agentSetupSummary(
 /** Returns available probe details for setup and repair panels. */
 export function agentDiagnosticRows(adapter: AgentAdapterMetadata, now = Date.now()) {
   const rows: { label: string; value: string }[] = [
-    { label: "Runs on", value: adapter.target.label },
     {
       label: "Executable",
       value: adapter.resolvedBinary ?? `${adapter.configuredBinary} (not found)`,

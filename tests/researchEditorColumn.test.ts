@@ -43,8 +43,6 @@ function adapter(id: string, researchReadiness: AgentAdapterMetadata["researchRe
     installCommand: null,
     installUrl: null,
     updateCommand: null,
-    instanceId: `local:${id}`,
-    target: { kind: "local", id: null, label: "This Mac" },
   };
 }
 

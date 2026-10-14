@@ -210,7 +210,7 @@ function MainApp() {
   const [agentsOpen, setAgentsOpen] = useState(false);
   // The agent instance the Agent Setup dialog opens on; null selects the first
   // agent whose setup is incomplete.
-  const [agentSetupInstanceId, setAgentSetupInstanceId] = useState<string | null>(null);
+  const [agentSetupAdapterId, setAgentSetupAdapterId] = useState<string | null>(null);
   // Where Agent Setup was opened: from the research composer (whose question
   // stays in place under the dialog) or from elsewhere (sidebar, palette).
   const agentSetupOriginRef = useRef<"composer" | "other">("other");
@@ -227,16 +227,16 @@ function MainApp() {
     setComposerFocusRequest((current) => (current?.seq === seq ? null : current));
   }, []);
   const openAgentSetup = useCallback(
-    (instanceId: string | null = null, origin: "composer" | "other" = "other") => {
+    (adapterId: string | null = null, origin: "composer" | "other" = "other") => {
       setSettingsOpen(false);
       agentSetupOriginRef.current = origin;
-      setAgentSetupInstanceId(instanceId);
+      setAgentSetupAdapterId(adapterId);
       setAgentsOpen(true);
     },
     [],
   );
   const openAgentSetupFromComposer = useCallback(
-    (instanceId: string | null) => openAgentSetup(instanceId, "composer"),
+    (adapterId: string | null) => openAgentSetup(adapterId, "composer"),
     [openAgentSetup],
   );
   // Closing setup opened from the composer returns focus to its question.
@@ -1144,7 +1144,7 @@ function MainApp() {
       {agentsOpen ? (
         <AgentSetupDialog
           adapters={config?.adapters ?? []}
-          initialInstanceId={agentSetupInstanceId}
+          initialAdapterId={agentSetupAdapterId}
           loading={adapterProbeLoading}
           error={adapterProbeError}
           onProbe={refreshAdapterReadiness}

@@ -15,11 +15,11 @@ import { openExternalUrl } from "../lib/api";
 
 interface AgentSetupGuideProps {
   adapters: readonly AgentAdapterMetadata[];
-  /** The agent instance selected when the guide mounts. Null, or an id no
+  /** The agent (adapter id) selected when the guide mounts. Null, or an id no
    * longer in `adapters`, selects the first agent whose setup is incomplete.
    * The selection then stays put while statuses change, so an agent that
    * becomes ready keeps its completion state on screen. */
-  initialInstanceId?: string | null;
+  initialAdapterId?: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
@@ -31,15 +31,15 @@ interface AgentSetupGuideProps {
   onStartResearch?: (adapter: AgentAdapterMetadata) => void;
 }
 
-function firstIncompleteInstanceId(adapters: readonly AgentAdapterMetadata[]) {
+function firstIncompleteAdapterId(adapters: readonly AgentAdapterMetadata[]) {
   return (
     adapters.find((adapter) => !adapterSetupIsComplete(adapter)) ?? adapters[0] ?? null
-  )?.instanceId ?? null;
+  )?.id ?? null;
 }
 
 export default function AgentSetupGuide({
   adapters,
-  initialInstanceId = null,
+  initialAdapterId = null,
   loading,
   error,
   onRefresh,
@@ -48,37 +48,37 @@ export default function AgentSetupGuide({
   onStartResearch,
 }: AgentSetupGuideProps) {
   const tabsId = useId();
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(() =>
-    initialInstanceId && adapters.some((adapter) => adapter.instanceId === initialInstanceId)
-      ? initialInstanceId
-      : firstIncompleteInstanceId(adapters),
+  const [selectedAdapterId, setSelectedAdapterId] = useState<string | null>(() =>
+    initialAdapterId && adapters.some((adapter) => adapter.id === initialAdapterId)
+      ? initialAdapterId
+      : firstIncompleteAdapterId(adapters),
   );
   const intro = agentSetupIntro(adapters);
   const selected =
-    adapters.find((adapter) => adapter.instanceId === selectedInstanceId) ??
-    adapters.find((adapter) => adapter.instanceId === firstIncompleteInstanceId(adapters)) ??
+    adapters.find((adapter) => adapter.id === selectedAdapterId) ??
+    adapters.find((adapter) => adapter.id === firstIncompleteAdapterId(adapters)) ??
     null;
   // Keep the selected agent visible after it becomes ready instead of
   // automatically selecting the next incomplete agent.
   useEffect(() => {
-    if (selected && selected.instanceId !== selectedInstanceId) {
-      setSelectedInstanceId(selected.instanceId);
+    if (selected && selected.id !== selectedAdapterId) {
+      setSelectedAdapterId(selected.id);
     }
-  }, [selected, selectedInstanceId]);
+  }, [selected, selectedAdapterId]);
 
   function selectNextAgent() {
     if (!selected || adapters.length < 2) {
       return;
     }
-    const index = adapters.findIndex((adapter) => adapter.instanceId === selected.instanceId);
-    setSelectedInstanceId(adapters[(index + 1) % adapters.length].instanceId);
+    const index = adapters.findIndex((adapter) => adapter.id === selected.id);
+    setSelectedAdapterId(adapters[(index + 1) % adapters.length].id);
   }
 
   const state = selected ? agentResearchState(selected) : null;
   const steps = selected ? agentSetupSteps(selected) : [];
   const activeIndex = steps.findIndex((step) => !step.done);
   const selectedIndex = selected
-    ? adapters.findIndex((adapter) => adapter.instanceId === selected.instanceId)
+    ? adapters.findIndex((adapter) => adapter.id === selected.id)
     : -1;
   const panelId = `${tabsId}-panel`;
   const startAction =
@@ -127,14 +127,14 @@ export default function AgentSetupGuide({
             <div className="agent-setup-tabs" role="tablist" aria-label="Agents">
               {adapters.map((adapter, index) => (
                 <button
-                  key={adapter.instanceId}
+                  key={adapter.id}
                   id={`${tabsId}-tab-${index}`}
                   type="button"
                   role="tab"
                   className="agent-setup-tab"
-                  aria-selected={adapter.instanceId === selected.instanceId}
+                  aria-selected={adapter.id === selected.id}
                   aria-controls={panelId}
-                  onClick={() => setSelectedInstanceId(adapter.instanceId)}
+                  onClick={() => setSelectedAdapterId(adapter.id)}
                 >
                   <span
                     className={`agent-setup-dot${adapterSetupIsComplete(adapter) ? " is-ready" : ""}`}

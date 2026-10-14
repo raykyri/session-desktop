@@ -22,16 +22,13 @@ export interface ResearchAgentRepair {
 
 export const ResearchAgentRepairContext = createContext<ResearchAgentRepair | null>(null);
 
-/** Research runs on this Mac, so a failed run's agent is the local instance
- * of the adapter the run used, whichever agent Home has selected. */
+/** A failed run's agent is the adapter the run used, whichever agent Home
+ * has selected. */
 export function repairAgentFor(
   adapters: readonly AgentAdapterMetadata[],
   adapterId: string,
 ): AgentAdapterMetadata | null {
-  return (
-    adapters.find((adapter) => adapter.id === adapterId && adapter.target.kind === "local") ??
-    null
-  );
+  return adapters.find((adapter) => adapter.id === adapterId) ?? null;
 }
 
 const ADAPTER_LABELS: Record<string, string> = {

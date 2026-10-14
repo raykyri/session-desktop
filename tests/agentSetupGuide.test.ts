@@ -41,8 +41,6 @@ function adapter(
     installCommand: `install ${id}`,
     installUrl: `https://example.com/${id}`,
     updateCommand: `${id} update`,
-    instanceId: `local:${id}`,
-    target: { kind: "local", id: null, label: "This Mac" },
   };
 }
 
@@ -147,17 +145,17 @@ test("the sidebar summary counts agents the way the setup dialog does", () => {
     text: "1 of 3 · 1 needs update",
     tone: "attention",
   });
-  assert.deepEqual(agentSetupSummary([ready, { ...ready, instanceId: "local:b" }, missing], null), {
+  assert.deepEqual(agentSetupSummary([ready, { ...ready, id: "b" }, missing], null), {
     text: "2 of 3",
     tone: "ready",
   });
   const outdatedPair = [
-    { ...outdated, instanceId: "a" },
-    { ...outdated, instanceId: "b" },
+    { ...outdated, id: "a" },
+    { ...outdated, id: "b" },
   ];
   assert.equal(agentSetupSummary([ready, ...outdatedPair], null).text, "1 of 3 · 2 need update");
   assert.deepEqual(
-    agentSetupSummary([ready, { ...ready, instanceId: "b" }, { ...ready, instanceId: "c" }], null),
+    agentSetupSummary([ready, { ...ready, id: "b" }, { ...ready, id: "c" }], null),
     { text: "All 3 ready", tone: "ready" },
   );
   assert.deepEqual(agentSetupSummary([ready], null), { text: "Ready", tone: "ready" });
@@ -286,12 +284,12 @@ test("a failed sign-in probe reports uncertainty, not success", () => {
 
 function renderGuide(
   adapters: AgentAdapterMetadata[],
-  options: { initialInstanceId?: string | null; onStartResearch?: (adapter: AgentAdapterMetadata) => void } = {},
+  options: { initialAdapterId?: string | null; onStartResearch?: (adapter: AgentAdapterMetadata) => void } = {},
 ) {
   return renderToStaticMarkup(
     createElement(AgentSetupGuide, {
       adapters,
-      initialInstanceId: options.initialInstanceId ?? null,
+      initialAdapterId: options.initialAdapterId ?? null,
       loading: false,
       error: null,
       onRefresh: () => {},
@@ -308,7 +306,7 @@ function threeAgents(codex: AgentAdapterMetadata) {
 
 test("a ready agent shows its completed state and a start action", () => {
   const html = renderGuide(threeAgents(checked("codex", "ready")), {
-    initialInstanceId: "local:codex",
+    initialAdapterId: "codex",
     onStartResearch: () => {},
   });
   // The completion is rendered by the guide itself, not left to a step hint
@@ -325,7 +323,7 @@ test("a ready agent shows its completed state and a start action", () => {
 });
 
 test("the start action is offered only where the guide can return to research", () => {
-  const html = renderGuide(threeAgents(checked("codex", "ready")), { initialInstanceId: "local:codex" });
+  const html = renderGuide(threeAgents(checked("codex", "ready")), { initialAdapterId: "codex" });
   assert.match(html, /Codex is ready for research\./);
   assert.doesNotMatch(html, /Start research with/);
 });
@@ -337,7 +335,7 @@ test("an unverified agent shows a start action and remains incomplete", () => {
     authDetail: "`codex login status` returned a result Session does not recognize.",
   };
   const html = renderGuide(threeAgents(unverified), {
-    initialInstanceId: "local:codex",
+    initialAdapterId: "codex",
     onStartResearch: () => {},
   });
   assert.match(html, /Sign-in unverified/);
@@ -396,14 +394,12 @@ test("diagnostic details list only what the last check reported", () => {
     message: "`codex --version` timed out",
   };
   assert.deepEqual(agentDiagnosticRows(failed, now), [
-    { label: "Runs on", value: "This Mac" },
     { label: "Executable", value: "/bin/codex" },
     { label: "Last checked", value: "1 min ago" },
     { label: "Reported", value: "`codex --version` timed out" },
   ]);
   const missing = { ...checked("grok", "missing"), checkedAt: null };
   assert.deepEqual(agentDiagnosticRows(missing, now), [
-    { label: "Runs on", value: "This Mac" },
     { label: "Executable", value: "grok (not found)" },
   ]);
   const unverified: AgentAdapterMetadata = {
@@ -414,7 +410,7 @@ test("diagnostic details list only what the last check reported", () => {
   };
   assert.deepEqual(
     agentDiagnosticRows(unverified, now).map((row) => row.label),
-    ["Runs on", "Executable", "Version", "Last checked", "Sign-in check"],
+    ["Executable", "Version", "Last checked", "Sign-in check"],
   );
   // A definitive sign-in result needs no sign-in explanation.
   assert.equal(

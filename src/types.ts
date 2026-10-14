@@ -55,12 +55,6 @@ export interface AgentAdapterMetadata {
   installCommand: string | null;
   installUrl: string | null;
   updateCommand: string | null;
-  instanceId: string;
-  target: {
-    kind: "local";
-    id: string | null;
-    label: string;
-  };
 }
 
 export type AgentReadiness =
