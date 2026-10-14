@@ -115,12 +115,25 @@ export const sharingRouter = router({
    * The threads shared with the caller (they are a member, not the owner):
    * `shared` (the default) outside their Archive and Trash, most recently
    * updated first; `archive` in their Archive or archived by the owner;
-   * `trash` in their own Trash. The web's Shared place.
+   * `trash` in their own Trash. The web's Shared place. With `workspaceId`,
+   * `trash` lists only the threads moved to the Trash from that workspace
+   * (`research.trashTree`); `shared` and `archive` ignore it.
    */
   listShared: protectedProcedure
-    .input(z.object({ place: z.enum(["shared", "archive", "trash"]).optional() }).optional())
+    .input(
+      z
+        .object({
+          place: z.enum(["shared", "archive", "trash"]).optional(),
+          workspaceId: z.string().optional(),
+        })
+        .optional(),
+    )
     .query(({ ctx, input }): ResearchTreeSummary[] =>
-      repo(() => trees.sharedSummaries(ctx.db, ctx.user.id, input?.place ?? "shared")),
+      repo(() =>
+        trees.sharedSummaries(ctx.db, ctx.user.id, input?.place ?? "shared", {
+          workspaceId: input?.workspaceId ?? null,
+        }),
+      ),
     ),
 });
 

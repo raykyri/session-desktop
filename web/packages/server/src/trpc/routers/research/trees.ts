@@ -33,7 +33,6 @@ import {
   dispatchFollowups,
   publishNode,
   publishTree,
-  treeAudienceIds,
 } from "./common.js";
 
 export const treeProcedures = {
@@ -218,19 +217,24 @@ export const treeProcedures = {
   removeTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
-      // Read before the delete, which takes the members' access with it.
-      const audience = treeAudienceIds(ctx, input.treeId);
       const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
       if (removed.departure) {
         // A member left: their queued follow-ups are gone and their running
         // questions stop, as for `sharing.leave`.
         afterDeparture(ctx, removed.departure);
       } else {
+        // The members of every deleted tree, the children that went with
+        // it included, were read before the delete took their access; the
+        // other readers who had a deleted public thread open are told too.
         for (const treeId of removed.treeIds) {
-          ctx.eventBus.emitToUsers(
-            [ctx.user.id, ...(treeId === input.treeId ? audience : [])],
-            sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
-          );
+          const event = sessionEvent("research.tree.removed", {
+            treeId,
+            removedBy: ctx.user.id,
+          });
+          const told = [ctx.user.id, ...(removed.memberIds[treeId] ?? [])];
+          ctx.eventBus.emitToUsers(told, event);
+          ctx.eventBus.emitToOpenReaders(treeId, event, told);
+          ctx.eventBus.refreshAudience(treeId);
         }
       }
       for (const item of removed.removedFeedItems) emitFeedItemRemoved(ctx, item);

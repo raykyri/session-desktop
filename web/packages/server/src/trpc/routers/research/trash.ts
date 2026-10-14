@@ -28,21 +28,37 @@ export const trashProcedures = {
    * Refused while any of them has an active run. Open views drop each moved
    * thread as they do a deleted one (`research.tree.removed`). The owner's
    * Trash hides the thread from its members too; a member's Trash is theirs
-   * alone. */
+   * alone, and per workspace: `workspaceId` names the workspace a member
+   * trashes a shared thread from (absent: their default workspace), whose
+   * Trash then lists it. */
   trashTree: protectedProcedure
-    .input(z.object({ treeId: z.string() }))
+    .input(z.object({ treeId: z.string(), workspaceId: z.string().optional() }))
     .mutation(({ ctx, input }): ResearchTree => {
-      const change = repo(() => trash.trashTree(ctx.db, ctx.user.id, input.treeId));
+      const change = repo(() =>
+        trash.trashTree(ctx.db, ctx.user.id, input.treeId, { workspaceId: input.workspaceId }),
+      );
       const owner = change.tree.role === "owner";
       for (const treeId of change.changedTreeIds) {
-        ctx.eventBus.emitToUsers(
-          [ctx.user.id, ...(owner ? memberIdsOf(ctx, treeId) : [])],
-          sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
-        );
+        // `trashed: true`: a client keeps the thread's unsent state, since
+        // Restore can bring it back; Delete now, Empty Trash and leaving
+        // send the event without it.
+        const event = sessionEvent("research.tree.removed", {
+          treeId,
+          removedBy: ctx.user.id,
+          trashed: true,
+        });
+        const told = [ctx.user.id, ...(owner ? memberIdsOf(ctx, treeId) : [])];
+        ctx.eventBus.emitToUsers(told, event);
+        if (owner) {
+          // The owner's Trash hides the thread from everyone else, readers
+          // of a public thread who had it open included.
+          ctx.eventBus.emitToOpenReaders(treeId, event, told);
+          ctx.eventBus.refreshAudience(treeId);
+        }
       }
       for (const item of change.removedFeedItems) emitFeedItemRemoved(ctx, item);
       if (change.changedTreeIds.length > 0) {
-        publish(ctx, "research.trash.changed", { workspaceId: change.tree.workspaceId });
+        publish(ctx, "research.trash.changed", { workspaceId: change.trashWorkspaceId });
       }
       return change.tree;
     }),
@@ -66,7 +82,7 @@ export const trashProcedures = {
         );
       }
       if (changed.size > 0) {
-        publish(ctx, "research.trash.changed", { workspaceId: change.tree.workspaceId });
+        publish(ctx, "research.trash.changed", { workspaceId: change.trashWorkspaceId });
       }
       // Follow-up queues wait while their thread is in the Trash.
       for (const treeId of changed) dispatchFollowups(ctx, treeId);

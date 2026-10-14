@@ -31,6 +31,7 @@ import { collapsedGroups, folders, treeFolderMembership } from "../schema/folder
 import { followupQueue } from "../schema/followups.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
+import { userPreferences } from "../schema/preferences.js";
 import { treeViews, trees } from "../schema/trees.js";
 import { users } from "../schema/users.js";
 import { workspaces } from "../schema/workspaces.js";
@@ -530,19 +531,56 @@ function memberRows(
  * Trash, most recently updated first; `archive` those in their Archive or
  * archived by the owner; `trash` those in their own Trash, most recently
  * trashed first. A thread in its owner's Trash is in none of them.
+ *
+ * A member's Trash is per workspace: with `workspaceId`, `trash` lists only
+ * the threads moved to the Trash from that workspace (`trash_workspace_id`;
+ * null counts as the member's default workspace). `shared` and `archive` do
+ * not depend on the workspace.
  */
 export function sharedSummaries(
   db: SessionDatabase,
   userId: string,
   place: SharedPlace = "shared",
+  options: { workspaceId?: string | null | undefined } = {},
 ): ResearchTreeSummary[] {
+  const rows = memberRows(
+    db,
+    userId,
+    place === "trash" ? { trashed: true } : { archivedOnly: place === "archive" },
+  );
+  const workspaceId = options.workspaceId ?? null;
+  if (place !== "trash" || workspaceId === null) {
+    return summarize(db, rows);
+  }
+  const fallback = defaultWorkspaceIdOf(db, userId);
   return summarize(
     db,
-    memberRows(
-      db,
-      userId,
-      place === "trash" ? { trashed: true } : { archivedOnly: place === "archive" },
-    ),
+    rows.filter((row) => (row.member?.trashWorkspaceId ?? fallback) === workspaceId),
+  );
+}
+
+/**
+ * The workspace a member's Trash entry with no workspace of its own belongs
+ * to: the account's default workspace (`user_preferences`), else its first
+ * one. Null for an account without workspaces.
+ */
+export function defaultWorkspaceIdOf(db: SessionDatabase, userId: string): string | null {
+  const preferred = db
+    .select({ id: workspaces.id })
+    .from(userPreferences)
+    .innerJoin(workspaces, eq(workspaces.id, userPreferences.defaultWorkspaceId))
+    .where(and(eq(userPreferences.userId, userId), eq(workspaces.userId, userId)))
+    .get();
+  if (preferred) {
+    return preferred.id;
+  }
+  return (
+    db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.userId, userId))
+      .orderBy(asc(workspaces.position), asc(workspaces.id))
+      .get()?.id ?? null
   );
 }
 
@@ -805,12 +843,13 @@ export function requireMember(db: SessionDatabase, userId: string, treeId: strin
   return access;
 }
 
-/** Sets or clears a member's own Archive or Trash flag. */
+/** Sets or clears a member's own Archive or Trash flag (and the workspace
+ * whose Trash lists the thread). */
 export function setMemberFlag(
   db: SessionDatabase,
   userId: string,
   treeId: string,
-  patch: Partial<Pick<MemberRow, "archivedAt" | "trashedAt">>,
+  patch: Partial<Pick<MemberRow, "archivedAt" | "trashedAt" | "trashWorkspaceId">>,
 ): ResearchTree {
   if (Object.keys(patch).length > 0) {
     db.update(treeMembers)
@@ -1037,6 +1076,9 @@ export interface RemovedTrees {
   trashed: boolean;
   /** Their Home feed rows, for `feed.item.removed`. */
   removedFeedItems: FeedItemRemoval[];
+  /** The members of each deleted tree, read before the delete took their
+   * access, so each can be told it is gone. Empty when the caller left. */
+  memberIds: Record<string, string[]>;
   /** True when the caller was a member and left the thread instead: nothing
    * was deleted, and only the caller no longer has it. */
   left?: boolean;
@@ -1117,19 +1159,30 @@ export interface LeftTree {
 export function leave(db: SessionDatabase, userId: string, treeId: string): LeftTree {
   return transact(db, (tx) => {
     const access = requireMember(tx, userId, treeId);
-    const departure = depart(tx, treeId, userId);
-    tx.delete(treeMembers)
-      .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
-      .run();
-    tx.delete(treeSubscriptions)
-      .where(and(eq(treeSubscriptions.treeId, treeId), eq(treeSubscriptions.userId, userId)))
-      .run();
-    tx.delete(collapsedGroups)
-      .where(and(eq(collapsedGroups.treeId, treeId), eq(collapsedGroups.userId, userId)))
-      .run();
     // `requireMember` refuses a caller without a row.
-    return { member: access.member as MemberRow, departure };
+    return removeMembership(tx, access.member as MemberRow);
   });
+}
+
+/**
+ * Deletes a member row with what goes with it (`leave`), inside the caller's
+ * transaction and without an access check: for a caller that already holds
+ * the row, such as Empty Trash for a thread its owner has since moved to
+ * their own Trash, which no member can read any more.
+ */
+export function removeMembership(db: SessionDatabase, member: MemberRow): LeftTree {
+  const { treeId, userId } = member;
+  const departure = depart(db, treeId, userId);
+  db.delete(treeMembers)
+    .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
+    .run();
+  db.delete(treeSubscriptions)
+    .where(and(eq(treeSubscriptions.treeId, treeId), eq(treeSubscriptions.userId, userId)))
+    .run();
+  db.delete(collapsedGroups)
+    .where(and(eq(collapsedGroups.treeId, treeId), eq(collapsedGroups.userId, userId)))
+    .run();
+  return { member, departure };
 }
 
 /**
@@ -1150,6 +1203,7 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): Rem
         treeIds: [treeId],
         trashed: member.trashedAt !== null,
         removedFeedItems: [],
+        memberIds: {},
         left: true,
         departure,
       };
@@ -1161,12 +1215,25 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): Rem
       throw new Error("Cannot delete research thread with an active run: cancel the run first.");
     }
     const removedFeedItems = feedItemsOf(tx, group);
+    const memberIds = Object.fromEntries(
+      ids.map((id) => [
+        id,
+        tx
+          .select({ userId: treeMembers.userId })
+          .from(treeMembers)
+          .where(eq(treeMembers.treeId, id))
+          .orderBy(asc(treeMembers.userId))
+          .all()
+          .map((member) => member.userId),
+      ]),
+    );
     deleteTreeRows(tx, ids);
     return {
       workspaceId: row.workspaceId,
       treeIds: ids,
       trashed: group.some((member) => member.trashedAt !== null),
       removedFeedItems,
+      memberIds,
     };
   });
 }

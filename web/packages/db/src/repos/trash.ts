@@ -19,7 +19,9 @@
 // until the owner restores it. A member's Trash is `trashed_at` on their
 // member row: the thread is listed only in their Trash and nothing changes
 // for anyone else. Emptying the Trash deletes the owner's threads and makes
-// the member leave the shared ones.
+// the member leave the shared ones. A member's Trash is per workspace: a
+// shared thread is in the Trash of the workspace the member moved it there
+// from (`tree_members.trash_workspace_id`).
 
 import type { ResearchTree, ResearchTreeSummary } from "@session/shared";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
@@ -30,15 +32,17 @@ import { treeMembers } from "../schema/collaboration.js";
 import { collapsedPlaces, folders } from "../schema/folders.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
+import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
 import type { FeedItemRemoval } from "./feedItems.js";
 import { activeRun } from "./subtrees.js";
 import {
+  defaultWorkspaceIdOf,
   deleteTreeRows,
   feedItemsOf,
   groupChildren,
-  leave,
+  removeMembership,
   requireMember,
   requireTreeRow,
   roleOf,
@@ -62,6 +66,9 @@ export interface TrashChange {
   changedTreeIds: string[];
   /** The Home feed rows the operation deleted, for `feed.item.removed`. */
   removedFeedItems: FeedItemRemoval[];
+  /** The caller's workspace whose Trash the operation changed: the thread's
+   * own for the owner, the one a member's Trash entry is filed under. */
+  trashWorkspaceId: string;
 }
 
 /** What `empty` deleted. */
@@ -102,21 +109,44 @@ export function list(
   return summaries(db, userId, { workspaceId, trashed: true });
 }
 
+export interface TrashTreeOptions {
+  /** For a member: the workspace they move the shared thread to the Trash
+   * from, whose Trash then lists it. Absent: their default workspace. The
+   * owner's threads are in the Trash of their own workspace. */
+  workspaceId?: string | null | undefined;
+}
+
 /**
  * Moves a tree and the children listed under it to the Trash. Refused while
  * any of them has an active run, as on the desktop; nothing moves then.
  */
-export function trashTree(db: SessionDatabase, userId: string, treeId: string): TrashChange {
+export function trashTree(
+  db: SessionDatabase,
+  userId: string,
+  treeId: string,
+  options: TrashTreeOptions = {},
+): TrashChange {
   return transact(db, (tx) => {
     if (roleOf(tx, userId, treeId) !== "owner") {
-      // A member's Trash is theirs alone and does not wait for runs.
+      // A member's Trash is theirs alone and does not wait for runs. It is
+      // the Trash of the workspace they trashed the thread from.
       const access = requireMember(tx, userId, treeId);
       const changed = access.member?.trashedAt === null;
+      const workspaceId = changed ? memberTrashWorkspace(tx, userId, options.workspaceId) : null;
       return {
-        tree: setMemberFlag(tx, userId, treeId, changed ? { trashedAt: now() } : {}),
+        tree: setMemberFlag(
+          tx,
+          userId,
+          treeId,
+          changed ? { trashedAt: now(), trashWorkspaceId: workspaceId } : {},
+        ),
         children: [],
         changedTreeIds: changed ? [treeId] : [],
         removedFeedItems: [],
+        trashWorkspaceId:
+          (changed ? workspaceId : access.member?.trashWorkspaceId) ??
+          defaultWorkspaceIdOf(tx, userId) ??
+          access.tree.workspaceId,
       };
     }
     const row = requireTreeRow(tx, userId, treeId);
@@ -138,6 +168,7 @@ export function trashTree(db: SessionDatabase, userId: string, treeId: string): 
       children: children.map((child) => trashRow(tx, userId, child, at)),
       changedTreeIds: changed.map((member) => member.id),
       removedFeedItems,
+      trashWorkspaceId: row.workspaceId,
     };
   });
 }
@@ -149,11 +180,16 @@ export function restoreTree(db: SessionDatabase, userId: string, treeId: string)
     if (roleOf(tx, userId, treeId) !== "owner") {
       const access = requireMember(tx, userId, treeId);
       const changed = access.member?.trashedAt !== null;
+      const trashWorkspaceId =
+        access.member?.trashWorkspaceId ??
+        defaultWorkspaceIdOf(tx, userId) ??
+        access.tree.workspaceId;
       return {
-        tree: setMemberFlag(tx, userId, treeId, { trashedAt: null }),
+        tree: setMemberFlag(tx, userId, treeId, { trashedAt: null, trashWorkspaceId: null }),
         children: [],
         changedTreeIds: changed ? [treeId] : [],
         removedFeedItems: [],
+        trashWorkspaceId,
       };
     }
     const row = requireTreeRow(tx, userId, treeId);
@@ -166,8 +202,30 @@ export function restoreTree(db: SessionDatabase, userId: string, treeId: string)
       children: children.map((child) => untrashRow(tx, userId, child)),
       changedTreeIds,
       removedFeedItems: [],
+      trashWorkspaceId: row.workspaceId,
     };
   });
+}
+
+/** The workspace a member's Trash entry is filed under: the one named,
+ * which must be theirs, else their default workspace. */
+function memberTrashWorkspace(
+  db: SessionDatabase,
+  userId: string,
+  workspaceId: string | null | undefined,
+): string | null {
+  if (workspaceId === null || workspaceId === undefined) {
+    return defaultWorkspaceIdOf(db, userId);
+  }
+  const owned = db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)))
+    .get();
+  if (!owned) {
+    throw new Error(`research workspace ${workspaceId} was not found`);
+  }
+  return owned.id;
 }
 
 /**
@@ -176,6 +234,12 @@ export function restoreTree(db: SessionDatabase, userId: string, treeId: string)
  * one anyway is left there and not reported. Deleting a folder deletes the
  * memberships that file trees in it (those trees become Unfiled) and the
  * collapsed flags that name it.
+ *
+ * The shared threads in the caller's own Trash for this workspace
+ * (`trash_workspace_id`, null counting as their default workspace) are left:
+ * the membership goes, the thread stays for everyone else. That includes a
+ * thread its owner has since moved to their own Trash, which the member can
+ * no longer read: its member row is deleted directly.
  */
 export function empty(db: SessionDatabase, userId: string, workspaceId: string): EmptiedTrash {
   return transact(db, (tx) => {
@@ -194,15 +258,20 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
     const active = activeTreeIds(tx, trashedTreeIds);
     const treeIds = trashedTreeIds.filter((id) => !active.has(id)).sort();
     deleteTreeRows(tx, treeIds);
-    // Shared threads in the caller's own Trash: they leave them.
-    const leftTreeIds = tx
-      .select({ treeId: treeMembers.treeId })
+    // Shared threads in the caller's own Trash for this workspace: they
+    // leave them.
+    const fallback = defaultWorkspaceIdOf(tx, userId);
+    const leftRows = tx
+      .select()
       .from(treeMembers)
       .where(and(eq(treeMembers.userId, userId), isNotNull(treeMembers.trashedAt)))
       .all()
-      .map((row) => row.treeId)
-      .sort();
-    const departures = leftTreeIds.map((treeId) => leave(tx, userId, treeId).departure);
+      .filter((row) => (row.trashWorkspaceId ?? fallback) === workspaceId)
+      .sort((left, right) =>
+        left.treeId < right.treeId ? -1 : left.treeId > right.treeId ? 1 : 0,
+      );
+    const leftTreeIds = leftRows.map((row) => row.treeId);
+    const departures = leftRows.map((row) => removeMembership(tx, row).departure);
     const folderIds = tx
       .select({ id: folders.id })
       .from(folders)

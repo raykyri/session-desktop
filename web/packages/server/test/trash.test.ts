@@ -55,7 +55,7 @@ test("trashing, restoring and emptying publish the desktop's events", async (t) 
   const trashed = await caller.research.trashTree({ treeId: tree.id });
   t.not(trashed.trashedAt, null);
   t.deepEqual(summary(events), [
-    ["research.tree.removed", { treeId: tree.id, removedBy: user.id }],
+    ["research.tree.removed", { treeId: tree.id, removedBy: user.id, trashed: true }],
     ["research.trash.changed", { workspaceId: workspace.id }],
   ]);
   t.true(events.some((event) => event.type === "feed.item.removed"));
