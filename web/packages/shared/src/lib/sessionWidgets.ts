@@ -2,14 +2,26 @@
 // code block whose language is `session-html`. The Markdown renderer marks each
 // such block complete or still streaming (`remarkSessionWidgetFences`), and
 // `SessionWidget` displays a complete one in a sandboxed frame served by the
-// backend (see src-tauri/src/research_widgets.rs).
+// backend (the desktop's src-tauri/src/research_widgets.rs, the web's
+// web/packages/server/src/artifacts/widgets.ts). Moved from the desktop's
+// src/lib/sessionWidgets.ts; the frame lifecycle below is shared by both.
 
-import type { ResearchWidgetUrls } from "./api";
 import { fromMarkdown } from "mdast-util-from-markdown";
 
-export { MAX_SESSION_WIDGET_BYTES, SESSION_WIDGET_STATE_ATTRIBUTE, isSessionWidgetInfo, isSessionWidgetClassName, sessionWidgetByteLength, sessionWidgetHasScripts, fencedBlockIsClosed, remarkSessionWidgetFences, sessionWidgetMetadata } from "@session/shared/markdown/sessionWidgets";
-import { isSessionWidgetInfo } from "@session/shared/markdown/sessionWidgets";
-import type { WidgetMarkdownNode } from "@session/shared/markdown/sessionWidgets";
+import { isSessionWidgetInfo, type WidgetMarkdownNode } from "../markdown/sessionWidgets.js";
+import type { ResearchWidgetUrls } from "../wire/artifacts.js";
+
+export {
+  MAX_SESSION_WIDGET_BYTES,
+  SESSION_WIDGET_STATE_ATTRIBUTE,
+  isSessionWidgetInfo,
+  isSessionWidgetClassName,
+  sessionWidgetByteLength,
+  sessionWidgetHasScripts,
+  fencedBlockIsClosed,
+  remarkSessionWidgetFences,
+  sessionWidgetMetadata,
+} from "../markdown/sessionWidgets.js";
 
 /** Remove only parsed widget blocks, including fences immediately after list
  * markers. Using CommonMark also preserves indented code and samples inside
@@ -22,9 +34,9 @@ export function stripSessionWidgetBlocks(markdown: string): string {
   let cursor = 0;
   interface SourceNode {
     type: string;
-    lang?: string | null;
+    lang?: string | null | undefined;
     position?: WidgetMarkdownNode["position"];
-    children?: SourceNode[];
+    children?: SourceNode[] | undefined;
   }
   const visit = (node: SourceNode) => {
     if (node.type === "code" && isSessionWidgetInfo(node.lang)) {
@@ -59,7 +71,10 @@ export function sessionWidgetFrameHeight(message: unknown): number | null {
   if (type !== "session-widget-height" || typeof height !== "number" || !Number.isFinite(height)) {
     return null;
   }
-  return Math.min(SESSION_WIDGET_MAX_HEIGHT, Math.max(SESSION_WIDGET_MIN_HEIGHT, Math.ceil(height)));
+  return Math.min(
+    SESSION_WIDGET_MAX_HEIGHT,
+    Math.max(SESSION_WIDGET_MIN_HEIGHT, Math.ceil(height)),
+  );
 }
 
 /** The frame's lifecycle. `loads` counts load events of the current frame
@@ -228,7 +243,10 @@ export function sessionWidgetTookFocus(input: {
 }
 
 /** Records a focus take at `now` and says whether the widget should stop. */
-export function sessionWidgetRecordFocusTake(takes: number[], now: number): { takes: number[]; stop: boolean } {
+export function sessionWidgetRecordFocusTake(
+  takes: number[],
+  now: number,
+): { takes: number[]; stop: boolean } {
   const recent = [...takes.filter((at) => now - at < SESSION_WIDGET_FOCUS_TAKE_WINDOW_MS), now];
   return { takes: recent, stop: recent.length >= SESSION_WIDGET_FOCUS_TAKES_TO_STOP };
 }

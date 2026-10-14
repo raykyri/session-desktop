@@ -16,7 +16,7 @@ import {
   sessionWidgetFrameUrl,
   sessionWidgetHasScripts,
   sessionWidgetOpenUrl,
-} from "../lib/sessionWidgets";
+} from "@session/shared/lib/sessionWidgets";
 
 // Displays a complete `session-html` block in a sandboxed frame. The backend
 // stores the HTML by content hash and returns static and executable URLs

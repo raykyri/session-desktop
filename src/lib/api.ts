@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { RecentActivityPage } from "@session/shared/lib/activity";
+import type { ArtifactStateAction, ResearchArtifactRef, ResearchArtifactRevision, ResearchArtifactState, ResearchWidgetUrls } from "@session/shared/wire";
 import {
   HumanBrowserLifecycleQueue,
   retryHumanBrowserLifecycle,
@@ -474,10 +475,6 @@ export function setResearchInlineWidgets(enabled: boolean) {
  * markup with the widget's scripts blocked; the run page allows them. The run
  * page is absent while the backend does not allow widget scripts (WebRTC could
  * not be turned off in the app web view, or not macOS). */
-export interface ResearchWidgetUrls {
-  staticUrl: string;
-  runUrl: string | null;
-}
 
 /** Stores a `session-html` block's HTML under its content hash (idempotent)
  * and returns its widget page URLs. */
@@ -850,22 +847,9 @@ export function downloadResearchWidget(html: string) {
   return invoke<boolean>("research_widget_download", { html });
 }
 
-export interface ResearchArtifactRevision {
-  artifactId: string;
-  title: string;
-  treeId: string;
-  nodeId: string;
-  slot: string;
-  revision: string;
-  contentHash: string;
-  parentRevision: string | null;
-  html: string;
-  /** Milliseconds since the Unix epoch when the revision was first stored. */
-  createdAt: number;
-  /** The declared parent is malformed or not stored for this artifact; the
-   * revision is shown and handled as a root. */
-  unresolvedParent: boolean;
-}
+// The artifact and widget wire types are shared with the web app
+// (web/packages/shared/src/wire/artifacts.ts).
+export type { ArtifactStateAction, ResearchArtifactRef, ResearchArtifactRevision, ResearchArtifactState, ResearchWidgetUrls };
 interface ResearchArtifactInput {
   treeId: string;
   nodeId: string;
@@ -882,9 +866,6 @@ export function researchArtifactHistory(treeId: string, artifactId: string) {
   return invoke<{ revisions: ResearchArtifactRevision[]; unresolved: number }>("research_artifact_history", { treeId, artifactId });
 }
 
-export type ResearchArtifactRef = Pick<ResearchArtifactRevision, "treeId" | "artifactId" | "revision">;
-export interface ResearchArtifactState { enabled: boolean; value: unknown; }
-export type ArtifactStateAction = "enable" | "disable" | "save" | "reset" | "migrate";
 export function getResearchArtifactState(reference: ResearchArtifactRef) {
   return invoke<ResearchArtifactState>("research_artifact_state_get", { reference });
 }

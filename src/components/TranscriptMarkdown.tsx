@@ -36,7 +36,7 @@ import {
   remarkSessionWidgetFences,
   SESSION_WIDGET_STATE_ATTRIBUTE,
   sessionWidgetByteLength,
-} from "../lib/sessionWidgets";
+} from "@session/shared/lib/sessionWidgets";
 import { escapeWikilinkTablePipes, remarkWikilinks } from "@session/shared/markdown/wikilinks";
 import DiagramBlock, { diagramLangFromClassName, nodeText } from "./DiagramBlock";
 import SessionWidget, { SessionWidgetPending, SessionWidgetStreamingContext } from "./SessionWidget";

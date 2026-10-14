@@ -3,6 +3,7 @@
 // desktop can import it without zod or any other package dependency. Zod
 // schemas for these types are in `../schemas/`.
 
+export type * from "./artifacts.js";
 export type * from "./events.js";
 export type * from "./research.js";
 export type * from "./turn.js";

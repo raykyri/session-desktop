@@ -6,7 +6,7 @@ import {
   sessionWidgetPingTick,
   sessionWidgetRecordFocusTake,
   sessionWidgetTookFocus,
-} from "../lib/sessionWidgets";
+} from "@session/shared/lib/sessionWidgets";
 
 /** The same containment runs in answer frames and expanded widget previews. */
 export function useSessionWidgetGuards({

@@ -29,7 +29,7 @@ import {
   sessionWidgetFrameHeight,
   sessionWidgetHasScripts,
   stripSessionWidgetBlocks,
-} from "../src/lib/sessionWidgets";
+} from "@session/shared/lib/sessionWidgets";
 import { loadSettings } from "../src/lib/settings";
 import type { Turn } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
@@ -475,7 +475,7 @@ test("frames share one native shortcut-fallback claim", async () => {
 });
 
 test("artifact metadata is optional, bounded, and carried through the fence", async () => {
-  const { sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const { sessionWidgetMetadata } = await import('@session/shared/lib/sessionWidgets');
   assert.deepEqual(sessionWidgetMetadata('id="chart" title="Growth chart" parent="' + 'a'.repeat(64) + '"'), { artifactId: 'chart', title: 'Growth chart', parentRevision: 'a'.repeat(64) });
   assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').artifactId, undefined);
   // A malformed parent is passed on as declared; the store records it as an
@@ -490,14 +490,14 @@ test("artifact metadata is optional, bounded, and carried through the fence", as
 });
 
 test("quoted artifact titles round-trip in revision prompts", async () => {
-  const { sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const { sessionWidgetMetadata } = await import('@session/shared/lib/sessionWidgets');
   const title = 'A "quoted" chart \\ legend';
   assert.equal(sessionWidgetMetadata(`title=${JSON.stringify(title)}`).title, title);
 });
 
 test("fence metadata remains after CommonMark escape processing", async () => {
   const { fromMarkdown } = await import('mdast-util-from-markdown');
-  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('@session/shared/lib/sessionWidgets');
   const title = 'A "quoted" chart \\ legend';
   const markdown = '```session-html id=chart title=' + JSON.stringify(title) + '\n<p>hello</p>\n```';
   const tree = fromMarkdown(markdown);
@@ -509,7 +509,7 @@ test("fence metadata remains after CommonMark escape processing", async () => {
 test("desktop executes the shared web fence contract", async () => {
   const { sessionWidgetFixtures } = await import('@session/shared-test/sessionWidgetFixtures');
   const { fromMarkdown } = await import('mdast-util-from-markdown');
-  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('@session/shared/lib/sessionWidgets');
   type Node = Parameters<ReturnType<typeof remarkSessionWidgetFences>>[0];
   for (const fixture of sessionWidgetFixtures) {
     const tree = fromMarkdown(fixture.markdown);

@@ -62,6 +62,13 @@ interface URL {
   toString(): string;
 }
 
+/** A timer handle: a number in browsers, an object in Node. */
+interface SessionTimerHandle {
+  readonly __sessionTimerHandle?: never;
+}
+declare function setTimeout(handler: () => void, timeout?: number): SessionTimerHandle;
+declare function clearTimeout(handle: SessionTimerHandle | undefined): void;
+
 declare const URL: {
   new (url: string, base?: string | URL): URL;
   parse(url: string, base?: string | URL): URL | null;

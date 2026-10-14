@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { registerResearchArtifact, type ResearchArtifactRevision } from "../lib/api";
-import { sessionWidgetMetadata } from "../lib/sessionWidgets";
-import type { WidgetAnswer } from "../lib/sessionWidgetActions";
+import { sessionWidgetMetadata } from "@session/shared/lib/sessionWidgets";
+import type { WidgetAnswer } from "@session/shared/lib/sessionWidgetActions";
 
 /** Streaming fences stay ephemeral. Settled answers pin immutable source. */
 export function useResearchArtifact(answer: WidgetAnswer | null, html: string, meta: string, slot: string, streaming: boolean) {

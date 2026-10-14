@@ -1,6 +1,7 @@
 import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
 import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
-import { WidgetChangeContext, widgetChangePrompt } from "../../lib/sessionWidgetActions";
+import { WidgetChangeContext } from "../../lib/sessionWidgetActions";
+import { widgetChangePrompt } from "@session/shared/lib/sessionWidgetActions";
 import {
   useResearchComposerDrafts,
   useResearchThreadNavigation,

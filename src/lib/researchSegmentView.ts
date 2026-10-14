@@ -2,7 +2,7 @@
 // shows, its copy text, word count and editable Markdown.
 
 import { countResearchDocumentWords } from "@session/shared/lib/researchDocuments";
-import { stripSessionWidgetBlocks } from "./sessionWidgets";
+import { stripSessionWidgetBlocks } from "@session/shared/lib/sessionWidgets";
 import { documentHoldsMarkdown, documentSource } from "@session/shared/lib/researchNodeTypes";
 import {
   assistantTextFromTimelineItems,
