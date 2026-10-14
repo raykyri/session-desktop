@@ -35,6 +35,7 @@ import * as trees from "./trees.js";
 import * as tweets from "./tweets.js";
 import * as usage from "./usage.js";
 import * as users from "./users.js";
+import * as widgets from "./widgets.js";
 import * as workspaces from "./workspaces.js";
 
 export {
@@ -65,5 +66,6 @@ export {
   tweets,
   usage,
   users,
+  widgets,
   workspaces,
 };
