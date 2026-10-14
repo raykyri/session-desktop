@@ -286,7 +286,8 @@ export function FeedView({
     setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
-  // Home's Trash tray starts collapsed; opening it is not saved.
+  // Home's Trash tray starts collapsed; opening it is not saved, as on the
+  // desktop (`ResearchActivityFeed`'s `trashTrayOpen`).
   const [trashTrayOpen, setTrashTrayOpen] = useState(false);
   const [deletingTrashEntry, setDeletingTrashEntry] = useState<ResearchTrashEntry | null>(null);
   const [emptyingTrash, setEmptyingTrash] = useState(false);

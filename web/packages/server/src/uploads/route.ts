@@ -5,8 +5,9 @@
 // Multipart rather than tRPC because the payload is bytes. An upload is
 // pending until a question, note or draft names its id; `images.sweep` and
 // the file sweep in `main.ts` remove what nothing names
-// (`docs/02-domain-model-and-database.md` §3.6). Both routes answer only the
-// image's owner.
+// (`docs/02-domain-model-and-database.md` §3.6). Uploads are the signed-in
+// caller's own; a read is answered for the image's owner and for anyone who
+// may read a thread that names the image (`images.readable`, §5.16).
 
 import { readFile } from "node:fs/promises";
 

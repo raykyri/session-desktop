@@ -29,7 +29,8 @@ Home, top to bottom:
 3. One tray per place, each collapsible with its state stored through
    `folders.set` (`collapsed`): **Drafts**, one tray per folder in folder
    order, **Archive**, then **Trash**. The Trash tray starts collapsed and its
-   open state is local to the view. An empty tray shows the desktop's empty
+   open state is local to the view and not saved, as on the desktop
+   (`ResearchActivityFeed`'s `trashTrayOpen`). An empty tray shows the desktop's empty
    text ("No drafts. Use Save draft in the composer to keep a question for
    later.", "Empty folder. Drag or file questions here.", …).
 4. A "+ New folder" link below the Trash tray.

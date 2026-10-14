@@ -126,8 +126,10 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // Public, like the cards whose images it serves: the Home feed renders
   // signed out, and an embed asset says nothing about who stored it.
   app.route("/", embedRoutes({ deps: { ...deps, logger } }));
-  // Image attachments: uploaded and read by their owner only, behind the
-  // session loader and, for the upload, the CSRF guard.
+  // Image attachments, behind the session loader and, for the upload, the
+  // CSRF guard. An upload is its owner's; an image is read by its owner and
+  // by anyone who may read a thread whose node or queued follow-up names
+  // it, guests included for a public thread (`images.readable`).
   app.route("/", imageRoutes({ deps: { ...deps, logger }, limiter }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
