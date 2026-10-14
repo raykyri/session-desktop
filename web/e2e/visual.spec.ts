@@ -49,6 +49,20 @@ test.describe("@visual", () => {
     await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
     const treeId = await startResearch(page, "What is a bloom filter?");
     await waitForAnswer(page);
+    // The finished run's notification would put an unread badge on the
+    // sidebar's Notifications row, depending on when it lands; it is read
+    // first, so no screenshot has the badge.
+    await expect
+      .poll(async () => {
+        const unread = await page.request.get(`${APP_ORIGIN}/api/trpc/notifications.unreadCount`);
+        return ((await unread.json()) as { result: { data: { count: number } } }).result.data.count;
+      })
+      .toBe(1);
+    const read = await page.request.post(`${APP_ORIGIN}/api/trpc/notifications.markAllRead`, {
+      headers: { "x-requested-with": "session", "content-type": "application/json" },
+      data: {},
+    });
+    expect(read.ok()).toBe(true);
 
     for (const { appearance, colorTheme } of COMBINATIONS) {
       const response = await page.request.post(`${APP_ORIGIN}/api/trpc/settings.update`, {
@@ -63,14 +77,15 @@ test.describe("@visual", () => {
       await expect(page.locator("html")).toHaveAttribute("data-appearance", appearance);
       await expect(page.locator("html")).toHaveAttribute("data-color-theme", colorTheme);
       await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
-      await expect(page).toHaveScreenshot(`home-${name}.png`, {
+      // Soft, so one run reports (and renders) every screenshot that differs.
+      await expect.soft(page).toHaveScreenshot(`home-${name}.png`, {
         mask,
         animations: "disabled",
       });
 
       await page.goto(`/r/${treeId}`);
       await expect(page.getByRole("region", { name: "Sources" })).toBeVisible();
-      await expect(page).toHaveScreenshot(`document-${name}.png`, {
+      await expect.soft(page).toHaveScreenshot(`document-${name}.png`, {
         mask,
         animations: "disabled",
       });
