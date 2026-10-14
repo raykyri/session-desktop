@@ -39,7 +39,6 @@ function recapContent(): ResearchNodeContent {
       recap: { id: "r1", text: "The old summary.", responseRevision: REVISION },
     }),
     turns: [],
-    children: [],
     responseRevision: REVISION,
   };
 }

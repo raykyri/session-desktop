@@ -15,8 +15,8 @@ import type {
   Turn,
   UserSettings,
 } from "@session/shared";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import {
-  isActiveResearchStatus,
   patchResearchDetailNode,
   patchResearchDetailTree,
   patchResearchSummaryForCreatedNode,
@@ -25,7 +25,8 @@ import {
   patchResearchSummaryTree,
   removeResearchDetailNodes,
   researchSummaryFromDetail,
-} from "@session/shared";
+} from "@session/shared/lib/researchEvents";
+import { nodeResponseSnapshotAt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import {
   queryOptions,
   useInfiniteQuery,
@@ -312,7 +313,7 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
   // `refetch` is stable across renders; the query object is not, and effects
   // keyed on it would re-subscribe on every render.
   const { data: content, dataUpdatedAt, refetch } = query;
-  const active = content ? isActiveResearchStatus(content.node.status) : false;
+  const active = content ? isActiveResearchStatus(nodeStatus(content.node)) : false;
   // What the buffer is waiting for: the durable snapshot the terminal
   // `research.node.updated` stamps (`05-run-lifecycle-and-streaming.md` §4).
   // A run that ends `failed`, `cancelled` or `interrupted` never writes one,
@@ -321,7 +322,7 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
   const durableReady =
     content !== undefined &&
     !active &&
-    (content.node.responseSnapshotAt != null || content.node.status !== "complete");
+    (nodeResponseSnapshotAt(content.node) !== null || nodeStatus(content.node) !== "complete");
 
   // Only while the stream is down, and only for a node that is still working:
   // polling a finished node would re-read a snapshot that cannot change.

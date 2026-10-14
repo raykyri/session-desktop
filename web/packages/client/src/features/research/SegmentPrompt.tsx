@@ -8,7 +8,13 @@
 // about.
 
 import type { ResearchNode } from "@session/shared";
-import { visibleResearchPrompt } from "@session/shared";
+import { nodeModelId, visibleResearchPrompt } from "@session/shared";
+import {
+  documentSource,
+  nodeAttachments,
+  nodePrompt,
+  passageAnchor,
+} from "@session/shared/lib/researchNodeTypes";
 import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
@@ -38,14 +44,16 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   running,
   onSelectNode,
 }: SegmentPromptProps) {
-  if ((node.kind ?? "run") === "document") return null;
+  if (node.type === "document") return null;
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   // The posts the question links to are embedded below it, and a permalink
   // that trailed the question is dropped from the text the card replaces
   // (`ResearchMessage.tsx:visibleResearchPrompt`). The stored prompt is
   // untouched: it is what the run was launched with.
-  const prompt = visibleResearchPrompt(node.prompt, node.attachments);
-  const embedded = resolvedTweets(node.attachments).length > 0;
+  const attachments = nodeAttachments(node);
+  const anchor = passageAnchor(node);
+  const prompt = visibleResearchPrompt(nodePrompt(node), attachments);
+  const embedded = resolvedTweets(attachments).length > 0;
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
   // Metadata items (model badge, elapsed time) are displayed only after the run completes.
   const showFooter = index === 0 && !running;
@@ -67,9 +75,9 @@ export const SegmentPrompt = memo(function SegmentPrompt({
           <span className="min-w-0 truncate">{`Reply to: ${replySnippet}`}</span>
         </div>
       ) : null}
-      {node.queryAnchor ? (
+      {anchor ? (
         <blockquote className="research-prompt-quote border-accent my-1.5 w-fit max-w-full border-l-2 pl-2.5">
-          {quoteDisplayText(node.queryAnchor.exact)}
+          {quoteDisplayText(anchor.exact)}
         </blockquote>
       ) : null}
       {prompt ? (
@@ -83,7 +91,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         </div>
       ) : null}
       <TweetAttachments
-        attachments={node.attachments}
+        attachments={attachments}
         className={cn("w-full pb-1", prompt && "mt-2.5", !showFooter && "mb-6")}
       />
       {showFooter ? (
@@ -93,7 +101,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
             METADATA_LINE,
           )}
         >
-          <ModelMeta modelId={node.model} origin={node.origin} at={askedAt} />
+          <ModelMeta modelId={nodeModelId(node)} source={documentSource(node)} at={askedAt} />
         </div>
       ) : null}
     </div>

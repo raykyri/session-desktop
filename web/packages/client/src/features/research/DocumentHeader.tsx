@@ -10,8 +10,10 @@
 // with the omitted middle nodes represented by a count rather than shown in
 // full.
 
-import { defaultTitle, isActiveResearchStatus } from "@session/shared";
+import { defaultTitle } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { nodePrompt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { ScrollText } from "lucide-react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
@@ -62,8 +64,8 @@ export function collapseBreadcrumb(path: ResearchNode[]): BreadcrumbEntry[] {
  * generated title, so its question stays. */
 export function displayedTreeTitle(detail: ResearchTreeDetail, root: ResearchNode): string {
   const generated = root.title !== null && root.title !== undefined;
-  const settling = isActiveResearchStatus(root.status) || root.status === "complete";
-  if (!generated && settling && detail.tree.title === defaultTitle(root.prompt)) {
+  const settling = isActiveResearchStatus(nodeStatus(root)) || nodeStatus(root) === "complete";
+  if (!generated && settling && detail.tree.title === defaultTitle(nodePrompt(root))) {
     return "New thread";
   }
   return detail.tree.title;
@@ -135,7 +137,7 @@ export function DocumentHeader({
               >
                 {entry.index === 0
                   ? displayedTreeTitle(detail, entry.node)
-                  : (entry.node.title ?? entry.node.prompt)}
+                  : (entry.node.title ?? nodePrompt(entry.node))}
               </button>
             </span>
           ),

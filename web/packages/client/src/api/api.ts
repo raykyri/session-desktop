@@ -11,6 +11,7 @@
 // flow, a retry outside React) is not forced through a hook.
 
 import type {
+  NodeAnchor,
   RecentActivityCursor,
   RecentActivityPage,
   RecentActivityScope,
@@ -190,7 +191,8 @@ export function forkResearchNode(request: {
   parentNodeId: string;
   prompt: string;
   model?: string;
-  queryAnchor?: ResearchHighlightAnchor | null;
+  /** The passage of the parent the follow-up was asked about. */
+  anchor?: NodeAnchor | null;
   inline?: boolean;
 }): Promise<ResearchNode> {
   return trpc().research.forkNode.mutate(request);

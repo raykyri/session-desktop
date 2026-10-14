@@ -1,4 +1,4 @@
-import { findModel } from "@session/shared";
+import { findModel, type DocumentSource } from "@session/shared";
 
 import { cn } from "../lib/cn.js";
 import { formatRelativeTime } from "../lib/relativeTime.js";
@@ -26,15 +26,16 @@ export function GeminiMark({ size = 12 }: { size?: number }) {
 /** Model name as a Gemini mark with a hover tip. Imported threads stay text. */
 export function ModelMeta({
   modelId,
-  origin,
+  source,
   at,
 }: {
   modelId: string;
-  origin?: string | null;
+  /** A document's source; an imported report shows "Imported". */
+  source?: DocumentSource | null;
   at?: number | null;
 }) {
-  const imported = origin === "imported";
-  const label = formatResearchModelSummary(modelId, origin) || findModel(modelId)?.label || modelId;
+  const imported = source === "imported";
+  const label = formatResearchModelSummary(modelId, source) || findModel(modelId)?.label || modelId;
   const finite = at != null && Number.isFinite(at);
 
   return (

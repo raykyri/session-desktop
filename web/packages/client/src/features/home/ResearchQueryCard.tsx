@@ -7,11 +7,11 @@
 
 import type { RecentResearchQuery, ResearchTreeSummary } from "@session/shared";
 import {
-  isActiveResearchStatus,
   stripTaggedInstructionBlocksForPreview,
   stripWikilinks,
   visibleResearchPrompt,
 } from "@session/shared";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -189,7 +189,11 @@ export function ResearchQueryCard({
       <div
         className={cn("text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1", METADATA_LINE)}
       >
-        <ModelMeta modelId={query.model} origin={query.origin} at={query.createdAt} />
+        <ModelMeta
+          modelId={query.model ?? query.adapter}
+          source={query.source}
+          at={query.createdAt}
+        />
         {status ? (
           <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
         ) : null}

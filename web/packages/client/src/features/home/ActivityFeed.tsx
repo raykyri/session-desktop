@@ -58,7 +58,8 @@ import {
  * scrollbar wrong (`ResearchActivityFeed.tsx:494`). */
 export function estimateRowHeight(item: RecentActivityItem): number {
   const hasTweet = item.query.attachments?.some(
-    (attachment) => attachment.status === "resolved" && attachment.tweet,
+    (attachment) =>
+      attachment.kind === "tweet" && attachment.status === "resolved" && attachment.tweet,
   );
   if (hasTweet) return item.query.recap?.trim() ? 430 : 384;
   return item.query.recap?.trim() ? 136 : 90;
@@ -68,6 +69,8 @@ const EMPTY_FOLDER_STATE: ResearchFolderState = {
   folders: [],
   membership: {},
   collapsed: [],
+  parents: {},
+  collapsedGroups: [],
 };
 
 export interface ActivityFeedProps {
@@ -171,6 +174,12 @@ export function ActivityFeed({
   const events = useMemo(() => buildRecentActivityFromItems(items, trees), [items, trees]);
   const itemBySourceId = useMemo(
     () => new Map(items.map((item) => [recentActivityItemId(item), item])),
+    [items],
+  );
+  // The workspace each loaded thread is in, from its feed item; a follow-up
+  // shares its root's thread and therefore its workspace.
+  const workspaceByTree = useMemo(
+    () => new Map(items.map((item) => [item.query.treeId, item.workspaceId ?? null])),
     [items],
   );
 
@@ -308,13 +317,11 @@ export function ActivityFeed({
       anchor.record(captureFeedAnchor(scroller, virtualizer.getVirtualItems()));
       anchor.flush();
     }
+    const ws = workspaceByTree.get(query.treeId) ?? workspaceId;
     void navigate({
       to: "/r/$treeId",
       params: { treeId: query.treeId },
-      search: {
-        node: query.nodeId,
-        ...((query.workspaceId ?? workspaceId) ? { ws: query.workspaceId ?? workspaceId } : {}),
-      },
+      search: { node: query.nodeId, ...(ws ? { ws } : {}) },
     });
   };
 

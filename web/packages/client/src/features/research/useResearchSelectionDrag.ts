@@ -14,13 +14,16 @@
 // removing a highlight goes through the popover the same way saving one did.
 
 import { createResearchSelectionSnapper } from "@session/shared";
-import type { ResearchSelectionSnapper, ResolvedResearchHighlightRange } from "@session/shared";
+import type { ResearchSelectionSnapper } from "@session/shared";
 import { useCallback, useEffect, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { RESEARCH_SELECTION_DRAG_THRESHOLD } from "./layout.js";
 import { captureResearchSelection } from "./selection/capture.js";
-import type { CapturedResearchSelection } from "./selection/capture.js";
+import type {
+  CapturedResearchSelection,
+  ResolvedResearchHighlightRange,
+} from "./selection/capture.js";
 import {
   researchTextProjection,
   NON_TEXT_ROW_SELECTOR,

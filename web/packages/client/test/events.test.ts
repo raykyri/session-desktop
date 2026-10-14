@@ -6,6 +6,7 @@ import type {
   SessionEvent,
 } from "@session/shared";
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { QueryClient, type InfiniteData } from "@tanstack/react-query";
 import test from "ava";
 
@@ -132,7 +133,10 @@ test.serial("a node update patches the summary counts from the cached previous n
     "a settled node leaves the activity list",
   );
   t.is(
-    queryClient.getQueryData<ResearchTreeDetail>(queryKeys.tree("t1"))?.nodes[0]?.status,
+    (() => {
+      const cached = queryClient.getQueryData<ResearchTreeDetail>(queryKeys.tree("t1"))?.nodes[0];
+      return cached ? nodeStatus(cached) : undefined;
+    })(),
     "complete",
   );
 });
@@ -480,7 +484,7 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
   const mineKey = queryKeys.activity({ scope: "mine", workspaceId: null });
   const workspaceKey = queryKeys.activity({ scope: "workspace", workspaceId: "w1" });
   const otherWorkspaceKey = queryKeys.activity({ scope: "workspace", workspaceId: "w2" });
-  const initial = queryItem(researchQuery({ workspaceId: "w1" }));
+  const initial = queryItem(researchQuery(), "w1");
   const data = (items: RecentActivityPage["items"]): InfiniteData<RecentActivityPage> => ({
     pages: [activityPage(items)],
     pageParams: [null],
@@ -490,9 +494,7 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
   }
   queryClient.setQueryData(otherWorkspaceKey, data([]));
 
-  const updated = queryItem(
-    researchQuery({ workspaceId: "w1", title: "Updated", recap: "Updated recap" }),
-  );
+  const updated = queryItem(researchQuery({ title: "Updated", recap: "Updated recap" }), "w1");
   applyEventBatch(
     [
       event("feed.item.upserted", {
@@ -528,7 +530,7 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
         occurredAt: 1_700_000_200_000,
         sourceRank: 1,
         workspaceId: "w2",
-        item: queryItem(researchQuery({ nodeId: "n2", treeId: "t2", workspaceId: "w2" })),
+        item: queryItem(researchQuery({ nodeId: "n2", treeId: "t2" }), "w2"),
       }),
     ],
     queryClient,

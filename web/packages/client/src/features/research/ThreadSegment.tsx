@@ -10,8 +10,9 @@
 // number of hooks this component calls; what the page needs is bubbled back up
 // through callbacks.
 
-import { isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { memo, useCallback, useEffect, useMemo } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
@@ -199,7 +200,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
   );
   const handleCopyAnswer = useCallback(() => onCopyAnswer(nodeId), [onCopyAnswer, nodeId]);
 
-  const segmentActive = isActiveResearchStatus(node.status);
+  const segmentActive = isActiveResearchStatus(nodeStatus(node));
   return (
     <div
       ref={registerAnchor}

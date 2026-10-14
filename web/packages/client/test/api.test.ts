@@ -29,7 +29,13 @@ import { setTrpcClient } from "../src/api/trpc.js";
 
 import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
 
-const EMPTY_FOLDERS = { folders: [], membership: {}, collapsed: [] };
+const EMPTY_FOLDERS = {
+  folders: [],
+  membership: {},
+  collapsed: [],
+  parents: {},
+  collapsedGroups: [],
+};
 
 let stub: TrpcStub;
 
@@ -93,6 +99,7 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
       text: "a recap",
       responseRevision: "r1",
       generatedAt: 1_700_000_000_000,
+      adapter: "gemini",
       model: "gemini-flash",
       instructions: "short",
     },

@@ -6,10 +6,10 @@
 // transcript machinery is refused.
 
 import { createResearchSelectionSnapper } from "@session/shared";
-import type { ResolvedResearchHighlightRange } from "@session/shared";
 import test from "ava";
 
 import { captureResearchSelection } from "../src/features/research/selection/capture.js";
+import type { ResolvedResearchHighlightRange } from "../src/features/research/selection/capture.js";
 import {
   RESPONSE_ROOT_ATTRIBUTE,
   RESPONSE_ROOT_SELECTOR,

@@ -2,7 +2,7 @@
 // which turns become the answer, what the empty-state cascade says, and what
 // the Sources footer reads out of the recorded tool results.
 
-import type { ResearchNode, Turn } from "@session/shared";
+import type { Turn } from "@session/shared";
 import test from "ava";
 
 import { TIMELINE_ITEM_RENDER_WINDOW } from "../src/features/research/layout.js";
@@ -16,7 +16,7 @@ import {
   timelineTurns,
 } from "../src/features/research/timeline.js";
 
-import { node } from "./fixtures.js";
+import { node, type NodeOverrides } from "./fixtures.js";
 
 function assistantTurn(id: string, text: string): Turn {
   return {
@@ -141,7 +141,7 @@ test("expanding the window shows every item", (t) => {
 
 test("a document root exposes its markdown for the editor", (t) => {
   const built = view([assistantTurn("t1", "# Report\n\nbody")], {
-    node: node({ kind: "document", status: "complete" }),
+    node: node({ type: "document", status: "complete" }),
   });
   t.true(built.isDocument);
   t.is(built.editableDocumentMarkdown, "# Report\n\nbody");
@@ -158,7 +158,7 @@ test("the word count counts the answer, not the trace", (t) => {
 
 /* ----------------------------------------------------------- empty states */
 
-function emptyFor(overrides: Partial<ResearchNode>, hasAnyTimelineItem = false): string | null {
+function emptyFor(overrides: NodeOverrides, hasAnyTimelineItem = false): string | null {
   return answerEmptyStateText({
     node: node(overrides),
     sourceError: undefined,

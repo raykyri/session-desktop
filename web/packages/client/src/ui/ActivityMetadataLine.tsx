@@ -1,4 +1,4 @@
-import { findModel, type RecentActivityEvent } from "@session/shared";
+import { findModel, type DocumentSource, type RecentActivityEvent } from "@session/shared";
 
 import { cn } from "../lib/cn.js";
 import { formatRelativeTime } from "../lib/relativeTime.js";
@@ -10,8 +10,11 @@ import { METADATA_LINE_COMPACT } from "./surfaces.js";
  * from an adapter label plus a preset name; the web has one registry, so the
  * entry's own label is the whole answer.
  */
-export function formatResearchModelSummary(modelId: string, origin?: string | null): string {
-  if (origin === "imported") return "Imported";
+export function formatResearchModelSummary(
+  modelId: string,
+  source?: DocumentSource | null,
+): string {
+  if (source === "imported") return "Imported";
   return findModel(modelId)?.label ?? "";
 }
 

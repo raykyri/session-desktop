@@ -24,7 +24,14 @@ import { activityPage, serverSettings, workspace, WORKSPACE_ID } from "./phase6F
 import { createTrpcStub } from "./trpcStub.js";
 
 function folderState(overrides: Partial<ResearchFolderState> = {}): ResearchFolderState {
-  return { folders: [], membership: {}, collapsed: [], ...overrides };
+  return {
+    folders: [],
+    membership: {},
+    collapsed: [],
+    parents: {},
+    collapsedGroups: [],
+    ...overrides,
+  };
 }
 
 function testClient(): QueryClient {

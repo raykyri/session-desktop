@@ -14,7 +14,7 @@
 // leaving the cache stale.
 
 import type {
-  ParsedResearchEvent,
+  ParsedSessionEvent,
   RecentActivityItem,
   User,
   ResearchFolderState,
@@ -25,21 +25,23 @@ import type {
   Workspace,
 } from "@session/shared";
 import {
-  parseResearchEvent,
-  patchResearchDetailHighlightCreated,
+  parseSessionEvent,
   recentActivityItemId,
   recentActivityItemSchema,
+  patchResearchNodeContent,
+} from "@session/shared";
+import {
+  patchResearchDetailHighlightCreated,
   patchResearchDetailHighlightsRemoved,
   patchResearchDetailNode,
   patchResearchDetailTree,
-  patchResearchNodeContent,
   patchResearchSummaryForCreatedNode,
   patchResearchSummaryForNode,
   patchResearchSummaryForRemovedNodes,
   patchResearchSummaryTree,
   removeResearchDetailNodes,
   researchSummaryFromDetail,
-} from "@session/shared";
+} from "@session/shared/lib/researchEvents";
 import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 import { useConnectionStore } from "../stores/connection.js";
@@ -85,7 +87,7 @@ export const CONNECTION_READY = "connection.ready";
 /** Narrows the parsed union into the subset `liveTurns` accepts. The parser
  * has already validated the turn and the sequence number, so nothing is cast
  * here. */
-export function runEventFromParsed(event: ParsedResearchEvent): RunEvent | null {
+export function runEventFromParsed(event: ParsedSessionEvent): RunEvent | null {
   switch (event.type) {
     case "research.run.started":
       return { type: "run.started", nodeId: event.nodeId, seq: event.seq };
@@ -112,7 +114,7 @@ export function runEventFromParsed(event: ParsedResearchEvent): RunEvent | null 
  * Applying one parsed research event
  * ---------------------------------------------------------------------- */
 
-function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): void {
+function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): void {
   switch (event.type) {
     case "research.tree.created": {
       const detail: ResearchTreeDetail = { tree: event.tree, nodes: [event.node] };
@@ -246,10 +248,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
       return;
     }
 
-    case "research.highlight.removed":
     case "research.highlights.removed": {
-      const ids =
-        event.type === "research.highlight.removed" ? [event.highlightId] : event.highlightIds;
+      const ids = event.highlightIds;
       const treeId = treeIdForNode(client, event.nodeId);
       if (treeId) {
         patchDetail(client, treeId, (detail) =>
@@ -472,7 +472,7 @@ const RECONNECT_KEYS: readonly (readonly unknown[])[] = eventPatchedListKeys.map
 export function applyEventBatch(events: readonly SessionEvent[], client: QueryClient): void {
   const liveTurns = useLiveTurnsStore.getState();
   for (const event of events) {
-    const parsed = parseResearchEvent(event);
+    const parsed = parseSessionEvent(event);
     switch (parsed.kind) {
       case "event": {
         const runEvent = runEventFromParsed(parsed.event);

@@ -5,12 +5,12 @@
 // only whitespace cannot be reliably anchored, and is rejected rather than
 // captured.
 
+import type { ResearchHighlightAnchor } from "@session/shared";
 import {
   expandedResearchHighlightOffsets,
   intersectingResearchHighlightIds,
   researchAnchorContextBounds,
-} from "@session/shared";
-import type { ResearchHighlightAnchor, ResolvedResearchHighlightRange } from "@session/shared";
+} from "@session/shared/lib/researchHighlights";
 
 import { RESEARCH_HIGHLIGHT_CONTEXT_LENGTH } from "../layout.js";
 
@@ -21,6 +21,13 @@ import {
   selectionTouchesNonTextRow,
   textContextSlice,
 } from "./dom.js";
+
+/** A stored highlight located in the current projection. */
+export interface ResolvedResearchHighlightRange {
+  id: string;
+  start: number;
+  end: number;
+}
 
 export interface CapturedResearchSelection {
   /** The segment (node) the selection landed in. */
@@ -86,6 +93,8 @@ export function captureResearchSelection(input: {
   if (!exact.trim() && highlightIds.length === 0) return null;
 
   const contextBounds = researchAnchorContextBounds({
+    // The web shows runs only, never a conversation transcript.
+    isConversation: false,
     messageBounds: enclosingMessageFlatBounds(root, range),
     projectionLength: projection.length,
   });

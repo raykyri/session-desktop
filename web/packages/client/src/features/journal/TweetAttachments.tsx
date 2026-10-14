@@ -27,7 +27,9 @@ export function resolvedTweets(
   attachments: readonly ResearchMessageAttachment[] | undefined,
 ): TweetSnapshot[] {
   return (attachments ?? []).flatMap((attachment) =>
-    attachment.status === "resolved" && attachment.tweet ? [attachment.tweet] : [],
+    attachment.kind === "tweet" && attachment.status === "resolved" && attachment.tweet
+      ? [attachment.tweet]
+      : [],
   );
 }
 

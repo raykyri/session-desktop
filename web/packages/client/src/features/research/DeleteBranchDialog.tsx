@@ -6,8 +6,8 @@
 // Deletion requires the user to cancel any active run in the branch first,
 // so the operation cannot leave a partially deleted thread.
 
-import { researchBranchInfo } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";
+import { researchBranchInfo } from "@session/shared/lib/researchBranches";
 
 import { ConfirmDialog } from "../../ui/Dialog.js";
 

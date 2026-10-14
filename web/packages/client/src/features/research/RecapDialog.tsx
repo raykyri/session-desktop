@@ -12,6 +12,7 @@
 
 import { MAX_RECAP_INSTRUCTIONS_CHARS } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, ResearchRecapCandidate } from "@session/shared";
+import { nodeRecap } from "@session/shared/lib/researchNodeTypes";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -36,7 +37,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
   // invalidate the optimistic concurrency check used when applying changes.
   const [baseline] = useState(() => ({
     responseRevision: content.responseRevision ?? "",
-    recap: content.node.recap ?? null,
+    recap: nodeRecap(content.node) ?? null,
   }));
 
   const [instructions, setInstructions] = useState(baseline.recap?.instructions?.trim() ?? "");

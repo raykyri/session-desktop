@@ -11,16 +11,12 @@
 // Everything runs in layout effects, so a measurement never paints one frame at
 // the wrong offset.
 
+import { researchAnchorConnectorEndpoints } from "@session/shared";
+import type { ResearchHighlight, ResearchHighlightAnchor } from "@session/shared";
 import {
   overlappingResearchHighlightRegions,
-  researchAnchorConnectorEndpoints,
   resolveResearchHighlightOffset,
-} from "@session/shared";
-import type {
-  ResearchHighlight,
-  ResearchHighlightAnchor,
-  ResolvedResearchHighlightRange,
-} from "@session/shared";
+} from "@session/shared/lib/researchHighlights";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 
@@ -34,6 +30,7 @@ import {
   sameCardTops,
 } from "./layout.js";
 import type { ConnectorGeometry, SegmentConnector } from "./layout.js";
+import type { ResolvedResearchHighlightRange } from "./selection/capture.js";
 import {
   researchTextProjection,
   flatOffsetAtPoint,

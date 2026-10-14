@@ -12,15 +12,21 @@
 // `response_preview` updates are coalesced server-side to two a second, so a
 // segment's props change only when its own node does (09 §4, §9).
 
+import { nodeModelId, researchSelectionActionPlacement } from "@session/shared";
+import type { ResearchHighlightAnchor, ResearchNode, ResearchNodeStatus } from "@session/shared";
 import {
-  canContinueThread,
+  canContinueChain,
   canFollowUpFrom,
   canRetryResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
-  researchSelectionActionPlacement,
-} from "@session/shared";
-import type { ResearchHighlightAnchor, ResearchNode } from "@session/shared";
+} from "@session/shared/lib/researchChains";
+import {
+  nodePrompt,
+  nodeRun,
+  nodeStatus,
+  passageAnchor,
+} from "@session/shared/lib/researchNodeTypes";
 import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -112,6 +118,11 @@ interface NodeMenuRowSpec {
 }
 
 const MENU_ROW_SEPARATOR = "\u0001";
+
+/** A node's status, or undefined when the node is not loaded. */
+function nodeStatusOf(node: ResearchNode | null | undefined): ResearchNodeStatus | undefined {
+  return node ? nodeStatus(node) : undefined;
+}
 
 function encodeNodeMenuRow(nodeId: string, flags: readonly boolean[]): string {
   return `${nodeId}${MENU_ROW_SEPARATOR}${flags.map((flag) => (flag ? "1" : "0")).join("")}`;
@@ -334,7 +345,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     const map = new Map<string, ReadonlySet<string>>();
     for (const segmentId of chainNodeIds) {
       const unread = (childrenBySegment.get(segmentId) ?? [])
-        .filter((child) => child.status === "complete" && !openedFollowupIds.has(child.id))
+        .filter((child) => nodeStatus(child) === "complete" && !openedFollowupIds.has(child.id))
         .map((child) => child.id);
       map.set(segmentId, unread.length === 0 ? NO_UNREAD : new Set(unread));
     }
@@ -345,8 +356,9 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     const entries: AnchoredEntry[] = [];
     for (const segmentId of chainNodeIds) {
       for (const child of childrenBySegment.get(segmentId) ?? []) {
-        if (child.queryAnchor) {
-          entries.push({ segmentId, id: child.id, anchor: child.queryAnchor });
+        const anchor = passageAnchor(child);
+        if (anchor) {
+          entries.push({ segmentId, id: child.id, anchor });
         }
       }
       if (ask?.nodeId === segmentId) {
@@ -386,24 +398,28 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   );
 
   const lastCompleteChainNode =
-    [...chainNodes].reverse().find((node) => node.status === "complete") ?? null;
+    [...chainNodes].reverse().find((node) => nodeStatus(node) === "complete") ?? null;
   const composerTarget = ask
     ? (nodesById.get(ask.nodeId) ?? null)
     : mode === "branch"
       ? lastCompleteChainNode
       : tailNode;
   const composerModel =
-    selectedModel ?? composerTarget?.model ?? settings?.defaultModel ?? usableModels[0]?.id ?? "";
-  const composerDisabled = archived || !composerTarget || composerTarget.status !== "complete";
+    selectedModel ??
+    (composerTarget ? nodeModelId(composerTarget) : undefined) ??
+    settings?.defaultModel ??
+    usableModels[0]?.id ??
+    "";
+  const composerDisabled = archived || !composerTarget || nodeStatus(composerTarget) !== "complete";
   const canSubmit = Boolean(
     composerTarget &&
     !archived &&
     followup.trim() &&
     !submitting &&
     canFollowUpFrom(composerTarget) &&
-    (ask || mode === "branch" || canContinueThread(nodes, composerTarget)),
+    (ask || mode === "branch" || canContinueChain(nodes, composerTarget)),
   );
-  const tailActive = Boolean(tailNode && isActiveResearchStatus(tailNode.status));
+  const tailActive = Boolean(tailNode && isActiveResearchStatus(nodeStatus(tailNode)));
   const tailUnusable = Boolean(tailNode && canRetryResearchNode(tailNode));
   const canRetryTail = Boolean(
     tailNode && tailNode.inline && tailNode.parentNodeId && !archived && tailUnusable,
@@ -412,9 +428,9 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     ? "This thread is archived."
     : !ask && mode === "thread" && tailUnusable
       ? `The last follow-up ${
-          tailNode?.status === "failed"
+          nodeStatusOf(tailNode) === "failed"
             ? "failed"
-            : tailNode?.status === "interrupted"
+            : nodeStatusOf(tailNode) === "interrupted"
               ? "was interrupted"
               : "was cancelled"
         } — ${
@@ -436,7 +452,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     ? "Ask about the highlighted text…"
     : mode === "branch"
       ? "Start a new branch from the answer above…"
-      : (composerTarget?.kind ?? "run") === "document"
+      : composerTarget?.type === "document"
         ? "Ask about this document…"
         : chainNodes.length > 1
           ? "Continue this thread…"
@@ -569,7 +585,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   const enterAskMode = useCallback(() => {
     if (!action?.anchor.exact.trim() || archived) return;
-    if (nodesById.get(action.nodeId)?.status !== "complete") return;
+    if (nodeStatusOf(nodesById.get(action.nodeId)) !== "complete") return;
     setAsk({ nodeId: action.nodeId, anchor: action.anchor });
     setFollowup("");
     setAction(null);
@@ -583,7 +599,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const canAsk = Boolean(
     action?.anchor.exact.trim() &&
     !archived &&
-    nodesById.get(action?.nodeId ?? "")?.status === "complete",
+    nodeStatusOf(nodesById.get(action?.nodeId ?? "")) === "complete",
   );
 
   /* -------------------------------------------------------------- navigation */
@@ -885,13 +901,13 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       // unavailable.
       if (!target || !canFollowUpFrom(target)) return;
       const inline = !ask && submissionMode === "thread";
-      if (inline && !canContinueThread(nodes, target)) return;
+      if (inline && !canContinueChain(nodes, target)) return;
       setSubmitting(true);
       forkMutate({
         parentNodeId: target.id,
         prompt,
         model: composerModel,
-        queryAnchor: ask?.anchor ?? null,
+        anchor: ask ? { kind: "passage", anchor: ask.anchor } : null,
         inline,
       })
         .then((child) => {
@@ -948,7 +964,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   );
   const requestRetry = useCallback(
     (nodeId: string) => {
-      if (nodesById.get(nodeId)?.status === "complete") setConfirmingRetry(nodeId);
+      if (nodeStatusOf(nodesById.get(nodeId)) === "complete") setConfirmingRetry(nodeId);
       else handleRetry(nodeId);
     },
     [handleRetry, nodesById],
@@ -970,7 +986,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     const parts: string[] = [];
     for (const node of chainNodes) {
       const body = (segments[node.id]?.rawAnswer ?? "").trim();
-      const prompt = (node.kind ?? "run") === "document" ? null : node.prompt.trim() || null;
+      const prompt = node.type === "document" ? null : nodePrompt(node).trim() || null;
       if (!prompt && !body) continue;
       parts.push(
         [prompt ? `**Question:** ${prompt}` : null, body || "_No response available._"]
@@ -1010,7 +1026,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   // Clear unread status on arrival and whenever a run completes while the
   // thread is open.
-  const completedCount = nodes.filter((node) => node.status === "complete").length;
+  const completedCount = nodes.filter((node) => nodeStatus(node) === "complete").length;
   const detailLoaded = detail !== undefined;
   const viewedMutate = markViewed.mutate;
   useEffect(() => {
@@ -1018,7 +1034,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     viewedMutate(treeId);
   }, [detailLoaded, completedCount, me, treeId, viewedMutate]);
 
-  const anyActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
+  const anyActive = chainNodes.some((node) => isActiveResearchStatus(nodeStatus(node)));
   useEffect(() => {
     // Update elapsed run durations periodically; entering a segment restarts its
     // timer from the current time.
@@ -1113,7 +1129,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         Boolean(me) && !archived && canRetryResearchNode(node),
         retryingNodeId !== null,
         Boolean(me) && !archived && hasRevision,
-        Boolean(me) && isRoot && (node.kind ?? "run") === "document",
+        Boolean(me) && isRoot && node.type === "document",
         archived || !hasRevision || segment?.editableDocumentMarkdown == null,
         isRoot,
       ]);
@@ -1282,7 +1298,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                   replyToAnswer={
                     previous
                       ? (segments[previous.id]?.rawAnswer.trim() ??
-                        previous.responsePreview?.trim() ??
+                        nodeRun(previous)?.responsePreview?.trim() ??
                         null)
                       : null
                   }

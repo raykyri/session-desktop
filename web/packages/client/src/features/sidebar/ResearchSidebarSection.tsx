@@ -168,6 +168,8 @@ const EMPTY_FOLDER_STATE: ResearchFolderState = {
   folders: [],
   membership: {},
   collapsed: [],
+  parents: {},
+  collapsedGroups: [],
 };
 
 export function ResearchSidebarSection({ workspaceId }: { workspaceId: string }) {
@@ -720,7 +722,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         }
       >
         <StatusDot tree={tree} archived={archived} />
-        {tree.kind === "document" ? (
+        {tree.type === "document" ? (
           <FileText size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
         ) : null}
         <span className="min-w-0 flex-1 truncate">{tree.title}</span>

@@ -17,7 +17,7 @@ import {
   ResearchDocumentWordLimitExceeded,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
-} from "@session/shared";
+} from "@session/shared/lib/researchDocuments";
 import { useMemo, useState } from "react";
 
 import { ControlButton } from "../../ui/Button.js";

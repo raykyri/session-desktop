@@ -12,6 +12,7 @@
 // its Markdown renderers.
 
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";
+import { nodeRecap, nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { Copy, LoaderCircle, MoreHorizontal, RefreshCw } from "lucide-react";
 import { memo, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
@@ -40,9 +41,8 @@ export function Recap({
   pending: boolean;
 }) {
   const node = content?.node;
-  if (!content || !node || (node.kind ?? "run") !== "run" || node.status !== "complete")
-    return null;
-  const recap = node.recap;
+  if (!content || !node || node.type !== "exchange" || nodeStatus(node) !== "complete") return null;
+  const recap = nodeRecap(node);
   if (
     !recap?.text.trim() ||
     !content.responseRevision ||
@@ -174,9 +174,11 @@ export const AnswerPane = memo(function AnswerPane({
               onRetry={onRetryContentLoad}
             />
           ) : null}
-          {node.status === "failed" && view.timelineItems.length > 0 ? (
+          {nodeStatus(node) === "failed" && view.timelineItems.length > 0 ? (
             <div className="mb-3 flex flex-col items-start gap-2" role="alert">
-              <p className="text-status-failed m-0 text-sm">{node.error ?? "The run failed."}</p>
+              <p className="text-status-failed m-0 text-sm">
+                {nodeRun(node)?.error ?? "The run failed."}
+              </p>
               {retryButton}
             </div>
           ) : null}
@@ -186,9 +188,9 @@ export const AnswerPane = memo(function AnswerPane({
               {emptyStateText === null ? null : (
                 <p className="text-fg-muted m-0 text-sm">{emptyStateText}</p>
               )}
-              {node.status === "failed" ||
-              node.status === "cancelled" ||
-              node.status === "interrupted"
+              {nodeStatus(node) === "failed" ||
+              nodeStatus(node) === "cancelled" ||
+              nodeStatus(node) === "interrupted"
                 ? retryButton
                 : null}
             </div>
@@ -268,7 +270,7 @@ export const AnswerPane = memo(function AnswerPane({
               onCancelNode(node.id);
             }}
           />
-          {node.status === "complete" ? <SourcesFooter turns={turns} /> : null}
+          {nodeStatus(node) === "complete" ? <SourcesFooter turns={turns} /> : null}
           {/* An in-flight run has nothing to meter: the word count is 0 or
               mid-stream, and copy/retry apply to a settled answer. The status
               line above already reports the run, so the footer waits for it to
@@ -300,7 +302,7 @@ export const AnswerPane = memo(function AnswerPane({
                 </span>
               ) : null}
               <span className="flex items-center gap-0.5">
-                {node.status === "complete" && view.rawAnswer ? (
+                {nodeStatus(node) === "complete" && view.rawAnswer ? (
                   <IconButton label="Copy answer as Markdown" onClick={onCopyAnswer}>
                     <Copy size={14} aria-hidden="true" />
                   </IconButton>

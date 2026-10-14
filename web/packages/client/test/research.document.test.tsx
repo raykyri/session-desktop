@@ -13,6 +13,7 @@ import type {
   ResearchTreeDetail,
   Turn,
 } from "@session/shared";
+import { nodePrompt } from "@session/shared/lib/researchNodeTypes";
 import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import test from "ava";
@@ -84,7 +85,6 @@ function contentFor(
   return {
     node: target,
     turns,
-    children: [],
     responseRevision: REVISION,
     ...overrides,
   };
@@ -195,7 +195,7 @@ test.serial("the document stays hidden until every segment has loaded", async (t
     () => screen.queryByRole("status", { name: "Loading research" }) !== null,
     "the document loading gate is shown",
   );
-  const frame = screen.getByText(root.prompt).closest(".research-document-frame");
+  const frame = screen.getByText(nodePrompt(root)).closest(".research-document-frame");
   t.true(frame?.classList.contains("invisible"));
   t.is(frame?.getAttribute("aria-hidden"), "true");
   t.is(frame?.closest("article")?.getAttribute("aria-busy"), "true");
@@ -254,7 +254,7 @@ test.serial("a question's embedded posts stand in for the permalink it trailed",
   t.truthy(screen.getByRole("list", { name: "Attached posts" }));
   // The card replaces the URL; the stored prompt still carries it.
   t.truthy(screen.getByText("What about this?"));
-  t.is(screen.queryByText(root.prompt), null);
+  t.is(screen.queryByText(nodePrompt(root)), null);
 });
 
 test.serial("a completed answer renders its prose, word count and sources", async (t) => {
@@ -688,7 +688,7 @@ test.serial("the answer menu acts on the thread as it is when it is opened", asy
   // click time rather than the one the rows were built with.
   const root = node({
     id: "n1",
-    kind: "document",
+    type: "document",
     status: "complete",
     completedAt: 1_700_000_050_000,
   });

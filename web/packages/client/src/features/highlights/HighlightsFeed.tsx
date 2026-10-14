@@ -112,7 +112,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
               empty="No highlights yet. Highlight text in an answer to see it here."
             />
           ) : (
-            <div aria-label="Highlights" aria-busy={highlights.isFetching}>
+            <div role="feed" aria-label="Highlights" aria-busy={highlights.isFetching}>
               {groups.map((group) => (
                 <Fragment key={group.label}>
                   <h2 className="text-fg-subtle mt-6 mb-2 text-xs font-normal">{group.label}</h2>

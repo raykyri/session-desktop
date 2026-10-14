@@ -10,12 +10,19 @@ import {
   stripSessionWidgetBlocks,
   assistantTextFromTimelineItems,
   buildTimelineItems,
-  countResearchDocumentWords,
-  isActiveResearchStatus,
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
 } from "@session/shared";
-import type { MessageItem, ResearchNode, ResearchNodeContent, Turn } from "@session/shared";
+import type {
+  MessageItem,
+  ResearchNode,
+  ResearchNodeContent,
+  ResearchNodeStatus,
+  Turn,
+} from "@session/shared";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { countResearchDocumentWords } from "@session/shared/lib/researchDocuments";
+import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
 import { TIMELINE_ITEM_RENDER_WINDOW } from "./layout.js";
 
@@ -80,7 +87,7 @@ export function buildSegmentView(input: {
   showFullTrace: boolean;
 }): SegmentView {
   const { node, content, turns, showAllTurns, showFullTrace } = input;
-  const isDocument = (node.kind ?? "run") === "document";
+  const isDocument = node.type === "document";
   // Normalize the whole response before windowing it: the item boundaries keep
   // a call with its result and preserve text → tools → continued-text ordering.
   const timelineItems = buildTimelineItems(turns as Turn[]);
@@ -137,14 +144,14 @@ export function answerEmptyStateText(input: {
   hasAnyTimelineItem: boolean;
 }): string | null {
   const { node, sourceError, hasAnyTimelineItem } = input;
-  if (node.status === "failed") return node.error ?? "The run failed.";
-  if (node.status === "cancelled") return "The run was cancelled.";
-  if (node.status === "interrupted") return "The run was interrupted. Resuming…";
+  if (nodeStatus(node) === "failed") return nodeRun(node)?.error ?? "The run failed.";
+  if (nodeStatus(node) === "cancelled") return "The run was cancelled.";
+  if (nodeStatus(node) === "interrupted") return "The run was interrupted. Resuming…";
   if (sourceError) return `The response is no longer available: ${sourceError}`;
-  if (node.status === "complete") {
+  if (nodeStatus(node) === "complete") {
     return "The run finished, but the answer could not be loaded.";
   }
-  if (isActiveResearchStatus(node.status)) {
+  if (isActiveResearchStatus(nodeStatus(node))) {
     // Nothing at all yet: the status line under the answer already reads
     // "Working…", so a second line here would repeat it.
     return hasAnyTimelineItem ? "Generating response…" : null;
@@ -168,16 +175,18 @@ export function formatRunDuration(durationMs: number): string {
  * Computed by the page so the once-per-second tick only re-renders the
  * segments whose text actually changes. */
 export function durationLabel(node: ResearchNode, now: number): string | null {
-  if (!node.startedAt) return null;
-  const elapsed = formatRunDuration((node.completedAt ?? now) - node.startedAt);
-  if (isActiveResearchStatus(node.status)) return elapsed;
-  return node.status === "complete" ? elapsed : `Ran for ${elapsed}`;
+  const run = nodeRun(node);
+  if (!run?.startedAt) return null;
+  const elapsed = formatRunDuration((run.completedAt ?? now) - run.startedAt);
+  if (isActiveResearchStatus(nodeStatus(node))) return elapsed;
+  return nodeStatus(node) === "complete" ? elapsed : `Ran for ${elapsed}`;
 }
 
-export function statusLabel(status: ResearchNode["status"]): string {
+export function statusLabel(status: ResearchNodeStatus): string {
   switch (status) {
     case "queued":
       return "Queued";
+    case "starting":
     case "running":
       return "Working…";
     case "complete":

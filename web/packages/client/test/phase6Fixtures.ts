@@ -60,6 +60,7 @@ export function researchQuery(overrides: Partial<RecentResearchQuery> = {}): Rec
     parentNodeId: null,
     inline: false,
     prompt: "What is collective memory?",
+    adapter: "gemini",
     model: "gemini-flash",
     status: "complete",
     createdAt: 1_700_000_000_000,
@@ -74,8 +75,16 @@ export function activityPage(
   return { items, nextCursor };
 }
 
-export function queryItem(query: RecentResearchQuery): RecentActivityItem {
-  return { kind: "research-query", occurredAt: query.createdAt, query };
+export function queryItem(
+  query: RecentResearchQuery,
+  workspaceId?: string | null,
+): RecentActivityItem {
+  return {
+    kind: "research-query",
+    occurredAt: query.createdAt,
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    query,
+  };
 }
 
 export function highlightItem(

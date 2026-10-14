@@ -129,9 +129,8 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
   // Response length exceeds `MIN_RECAP_CHARS`, triggering automated summary generation.
   await startResearch(page, "fixture:long-answer explain skip lists");
   await waitForAnswer(page);
-  // "Generate summary" appears only once there is a summary to regenerate: the
-  // first one is written by the metadata model when the run finishes
-  // (`04-agent-runtime.md` §9).
+  // The first summary is written by the metadata model when the run finishes
+  // (`04-agent-runtime.md` §9), so the dialog opens to rewrite it.
   await expect(page.locator(".research-summary-text").first()).toContainText("Summary:", {
     timeout: 60_000,
   });
@@ -139,9 +138,9 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
   await page.getByRole("button", { name: "Answer actions" }).first().click();
   await page.getByRole("menuitem", { name: "Generate summary" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Generate summary" });
+  const dialog = page.getByRole("dialog", { name: "Rewrite summary" });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Generate summary" }).click();
+  await dialog.getByRole("button", { name: "Rewrite summary" }).click();
 
   const apply = dialog.getByRole("button", { name: "Use this summary" });
   await expect(apply).toBeVisible({ timeout: 60_000 });

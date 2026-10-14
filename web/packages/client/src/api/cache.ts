@@ -17,7 +17,9 @@ import type {
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "@session/shared";
-import { recentActivityItemId, upsertResearchActivity } from "@session/shared";
+import { recentActivityItemId } from "@session/shared";
+import { upsertResearchActivity } from "@session/shared/lib/researchEvents";
+import { nodeRecap, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 
 export interface ActivityQueryScope {
@@ -202,9 +204,10 @@ export function patchActivityFeedNode(
         return { ...query, children };
       }
       const title = node.title ?? null;
-      const recap = node.recap?.text ?? null;
+      const recap = nodeRecap(node)?.text ?? null;
+      const status = nodeStatus(node);
       if (
-        query.status === node.status &&
+        query.status === status &&
         (query.title ?? null) === title &&
         (query.recap ?? null) === recap &&
         !childrenChanged
@@ -215,7 +218,7 @@ export function patchActivityFeedNode(
       return {
         ...query,
         ...(children === undefined ? {} : { children }),
-        status: node.status,
+        status,
         title,
         recap,
       };

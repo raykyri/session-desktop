@@ -1,6 +1,6 @@
 // The margin rail beside an answer (`09-research-document-view.md` §2, §3).
 //
-// Branch follow-ups appear here as cards. A branch with a `queryAnchor` whose
+// Branch follow-ups appear here as cards. A branch with a passage anchor whose
 // passage still resolves is *anchored*: it is positioned absolutely at the
 // passage's own vertical offset and joined to it by a dotted leader. Everything
 // else stacks in normal flow at the top of the rail. The docked ask composer,
@@ -8,6 +8,12 @@
 // here.
 
 import type { ResearchNode } from "@session/shared";
+import {
+  nodePrompt,
+  nodeRun,
+  nodeStatus,
+  passageAnchor,
+} from "@session/shared/lib/researchNodeTypes";
 import { LoaderCircle } from "lucide-react";
 import { memo } from "react";
 import type { ReactNode } from "react";
@@ -122,11 +128,14 @@ export const FollowupRail = memo(function FollowupRail({
     }))
     .sort((left, right) => left.top - right.top);
 
-  // A card keeps its `queryAnchor` for placement and hover-linking, but the
+  // A card keeps its passage anchor for placement and hover-linking, but the
   // quoted passage itself appears only once the follow-up is opened, above its
   // question in the answer column.
   const renderCard = (child: ResearchNode, anchoredTop?: number) => {
     const unread = unreadIds.has(child.id);
+    const anchored = passageAnchor(child) !== null;
+    const preview = nodeRun(child)?.responsePreview;
+    const status = nodeStatus(child);
     return (
       <button
         key={child.id}
@@ -140,8 +149,8 @@ export const FollowupRail = memo(function FollowupRail({
         data-node-id={child.id}
         data-research-card-node-id={child.id}
         onClick={() => onSelectNode(child.id)}
-        onMouseEnter={child.queryAnchor ? () => onCardHover(child.id, true) : undefined}
-        onMouseLeave={child.queryAnchor ? () => onCardHover(child.id, false) : undefined}
+        onMouseEnter={anchored ? () => onCardHover(child.id, true) : undefined}
+        onMouseLeave={anchored ? () => onCardHover(child.id, false) : undefined}
       >
         {unread ? (
           <span
@@ -149,26 +158,23 @@ export const FollowupRail = memo(function FollowupRail({
             aria-label="Unread response"
           />
         ) : null}
-        <strong className="text-fg-interactive min-w-0 text-sm leading-snug">{child.prompt}</strong>
-        {child.responsePreview ? (
-          <ResearchMarkdown
-            markdown={child.responsePreview}
-            variant="compact"
-            inline
-            className="line-clamp-4"
-          />
+        <strong className="text-fg-interactive min-w-0 text-sm leading-snug">
+          {nodePrompt(child)}
+        </strong>
+        {preview ? (
+          <ResearchMarkdown markdown={preview} variant="compact" inline className="line-clamp-4" />
         ) : null}
-        {child.status !== "complete" ? (
+        {status !== "complete" ? (
           <small
             className={cn(
               "text-fg-faint flex items-center gap-1 text-xs",
-              child.status === "failed" && "text-status-failed",
+              status === "failed" && "text-status-failed",
             )}
           >
-            {child.status === "running" ? (
+            {status === "running" ? (
               <LoaderCircle className="session-spin" size={11} aria-hidden="true" />
             ) : null}
-            {statusLabel(child.status)}
+            {statusLabel(status)}
           </small>
         ) : null}
       </button>

@@ -1,9 +1,18 @@
 // Wire-shaped research objects for the cache and event tests. They are built
 // by hand rather than by a factory in `shared` because what these tests check
 // is that the client accepts what the server actually sends: a fixture that
-// drifted from the schema should fail `parseResearchEvent`, not be repaired.
+// drifted from the schema should fail `parseSessionEvent`, not be repaired.
 
-import type { ResearchNode, ResearchTree, ResearchTreeSummary } from "@session/shared";
+import type {
+  ResearchExchangeNode,
+  ResearchHighlightAnchor,
+  ResearchMessageAttachment,
+  ResearchNode,
+  ResearchTree,
+  ResearchTreeSummary,
+  RunState,
+} from "@session/shared";
+import { findModel } from "@session/shared";
 
 export function tree(overrides: Partial<ResearchTree> = {}): ResearchTree {
   return {
@@ -19,24 +28,76 @@ export function tree(overrides: Partial<ResearchTree> = {}): ResearchTree {
   };
 }
 
-export function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+/** Overrides for `node`: the envelope's own fields, plus the run's fields and
+ * the message text and model at the top level so a test can name them
+ * directly. `type: "document"` builds an imported report. */
+export type NodeOverrides = Partial<
+  Omit<ResearchExchangeNode, "type" | "run" | "message" | "agent"> & RunState
+> & {
+  type?: "exchange" | "document";
+  prompt?: string;
+  model?: string;
+  attachments?: ResearchMessageAttachment[];
+  queryAnchor?: ResearchHighlightAnchor | null;
+};
+
+export function node(overrides: NodeOverrides = {}): ResearchNode {
+  const {
+    type = "exchange",
+    prompt = "What is collective memory?",
+    model = "gemini-flash",
+    attachments,
+    queryAnchor,
+    status = "running",
+    error = null,
+    startedAt = 1_700_000_000_000,
+    completedAt = null,
+    responseSnapshotAt = null,
+    responsePreview = null,
+    attempt = 1,
+    sessionReady,
+    errorKind,
+    ...base
+  } = overrides;
+  const shared = {
     id: "n1",
     treeId: "t1",
-    workspaceId: "w1",
+    groupId: "w1",
     parentNodeId: null,
-    prompt: "What is collective memory?",
     title: null,
-    responsePreview: null,
-    model: "gemini-flash",
-    status: "running",
-    attempt: 1,
-    responseSnapshotAt: null,
     createdAt: 1_700_000_000_000,
-    startedAt: 1_700_000_000_000,
-    completedAt: null,
     highlights: [],
-    ...overrides,
+    ...(queryAnchor ? { anchor: { kind: "passage" as const, anchor: queryAnchor } } : {}),
+    ...base,
+  };
+  const message = { text: prompt, ...(attachments ? { attachments } : {}) };
+  const agent = { adapter: findModel(model)?.adapter ?? model, model, effort: null };
+  if (type === "document") {
+    return {
+      ...shared,
+      type: "document",
+      message,
+      source: "imported",
+      followUpAgent: agent,
+      responseSnapshotAt,
+    };
+  }
+  return {
+    ...shared,
+    type: "exchange",
+    message,
+    agent,
+    run: {
+      status,
+      error,
+      startedAt,
+      completedAt,
+      responseSnapshotAt,
+      responsePreview,
+      attempt,
+      sessionReady: sessionReady ?? status === "complete",
+      ...(errorKind === undefined ? {} : { errorKind }),
+    },
   };
 }
 
@@ -45,7 +106,7 @@ export function summary(overrides: Partial<ResearchTreeSummary> = {}): ResearchT
     id: "t1",
     title: "Collective memory",
     rootNodeId: "n1",
-    kind: "run",
+    type: "exchange",
     workspaceId: "w1",
     runningCount: 1,
     failedCount: 0,
