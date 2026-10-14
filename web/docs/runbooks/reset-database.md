@@ -6,7 +6,7 @@ current migrations. Use it when the migration history has been squashed
 `0000_initial.sql`): a database created by the old migrations records hashes
 the new image does not know, and `openDatabase()` refuses to start with
 `UnknownMigrationError`. No data is migrated. Every account, thread, highlight,
-session and invite is lost.
+session and sign-up code is lost.
 
 ## Why deleting the file is not enough
 
@@ -105,7 +105,7 @@ and that Litestream reports replicating to the new prefix in the same log.
 
 - Sign in through the browser so the first account exists, then grant admin
   as in `SETUP.md` §5.
-- With `SESSION_REQUIRE_INVITE=1`, every invite code is gone; issue new ones
+- With `SESSION_REQUIRE_INVITE=1`, every sign-up code is gone; issue new ones
   (`06-auth-and-users.md` §3).
 - Every browser session is invalid; users sign in again.
 

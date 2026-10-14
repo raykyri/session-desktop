@@ -342,7 +342,8 @@ update live.
   People… (anyone else signed in; the dialog is then "People in “…”" and a
   private thread reads "Only its owner and the people it is shared with.")
   opens `ShareDialog`; Notify me / Stop notifying me toggles
-  `subscriptions.set` (`ResearchTree.followed`). A commenter's root answer
+  `subscriptions.set` (`ResearchTree.followed`; the owner and members who
+  joined through an invitation start with it on). A commenter's root answer
   menu has Delete research with Home's member steps: their Trash, or Leave.
 - **Unavailable**: when a refetch of the open thread is refused with
   NOT_FOUND (deleted, moved to the owner's Trash, turned private for a
@@ -354,8 +355,11 @@ update live.
   member's role, Commenter or Viewer, or removes them; after a removal
   while link invitations are pending it notes "Links you’ve shared still let
   new people join; revoke them to stop that."), Invite (by GitHub
-  username, or Copy invite link, each with a role; the created link is shown
-  so it can be copied by hand), and Pending invitations with Revoke. Anyone
+  username, or Copy invitation link, each with a role; the created link,
+  `/invite#<token>`, is shown so it can be copied by hand), and Pending
+  invitations with Revoke. Making a public thread private is confirmed in
+  the footer (`10-home-feed-journal.md` §4b). The owner's root Delete adds
+  the member sentences (`10` §1, Delete, Archive, Trash). Anyone
   else sees "Who can read it" and People read-only; a member has Leave…,
   which confirms, leaves (`sharing.leave`) and opens Home.
 - **Author chips** (`features/sharing/AuthorChip.tsx`), when the thread has

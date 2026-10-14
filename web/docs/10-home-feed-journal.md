@@ -51,7 +51,8 @@ Places (all behind `requireSignedIn`; `routes/places.tsx`):
 | `/trash` | `TrashList` (§4). |
 | `/highlights` | §4a. |
 | `/shared` | Web only: Shared with me (§4b). |
-| `/invite/$token` | Web only: an invitation link (§4b). Not behind the guard: signed out, it sends the reader to `/login` and back. |
+| `/notifications` | Web only: the notification inbox (§4c). |
+| `/invite` | Web only: an invitation link, `/invite#<token>` (§4b). Not behind the guard: signed out, it sends the reader to `/login` and back. `/invite/$token` (links of the earlier form) stores the token and replaces the address with `/invite`. |
 
 Each place view has a Back to Home button and the place name as its `h1`.
 
@@ -119,6 +120,15 @@ action and a "Delete now" link opens a second confirmation ("Delete
 permanently?", "This can’t be undone."). The server cascades archive, trash,
 restore and delete from a parent to its group's children, so the client calls
 each procedure once, for the parent. Moving to the Trash toasts with Undo.
+
+Web only: when the reader's own thread is shared, both steps add a sentence
+about its members (`features/sharing/ownerWarnings.tsx`, member count from
+`sharing.listMembers`): Move to Trash "The 2 people it is shared with lose
+access while it is in the Trash. The questions and notes they added go with
+it."; Delete "The 2 people it is shared with lose access, and the questions
+and notes they added are deleted with it." ("The person it is shared with
+loses …" for one). Home's card menu, the thread page's root Delete and the
+Delete offer after Ask as a question use them.
 
 ## 2. Public feeds
 
@@ -204,12 +214,55 @@ placement:
 - ⌥↑/⌥↓ on a shared thread's card moves nothing and announces "Shared
   threads keep their owner’s order."
 
-`/invite/$token` (`routes/invite.tsx`) accepts the token
-(`invites.accept({ token })`) and opens the thread, replacing the history
-entry. Signed out, it navigates to `/login?redirect=/invite/<token>`, so the
-reader returns after GitHub sign-in. An unknown, used, expired or revoked
-invitation, or one addressed to another GitHub account, shows "This
-invitation can’t be used" with the server's reason.
+An invitation link is `/invite#<token>` (`invites.create`'s `url`). The
+token is the URL fragment, so no request carries it. On a page load,
+`app/captureInvite.ts` (imported first by `main.tsx`, before the router
+module and any request) reads it, replaces the address with `/invite`
+(`history.replaceState`, keeping the entry's state) and keeps the token in
+this tab's `sessionStorage` (`lib/pendingInvite.ts`,
+`session.pending-invite.v1`, dropped after an hour; in memory when storage is
+blocked). `/invite` (`routes/invite.tsx`) then accepts it
+(`invites.accept({ token })`), forgets it, and opens the thread, replacing
+the history entry. Signed out, it navigates to `/login?redirect=/invite`: the
+redirect, the GitHub round trip and the history hold only `/invite`, and the
+token waits in `sessionStorage` until the reader is back. Another invitation
+link opened on the same page changes only the fragment; `hashchange` starts
+over with it. `/invite/$token`, the form of earlier links, stores its token
+the same way in the route's `beforeLoad` and redirects to `/invite`. With no
+token, the page reads "This invitation link is incomplete. Open the whole
+link you were sent again." An unknown, used, expired or revoked invitation,
+or one addressed to another GitHub account, shows "This invitation can’t be
+used" with the server's reason.
+
+Accepting an invitation follows the thread ("Notify me" in the thread menu
+turns it off), as the owner follows their own threads; an unfollow stays
+(`03-api-and-events.md` §2 `subscriptions.set`).
+
+The owner's Share dialog confirms making a public thread private in its
+footer: "Make it private? People who aren’t in it lose access, and it leaves
+All Users." and, when it has members, "The 2 people it is shared with keep
+access.", with Cancel and Make private. Making it public needs no
+confirmation. The dialog's link controls read "Copy invitation link" and
+"Invitation link".
+
+## 4c. Notifications (`/notifications`, web only)
+
+The server's notifications to the reader (`notifications.list`, an infinite
+query under `["notifications", "list"]`), newest first, from
+`features/notifications/NotificationInbox.tsx`: a row is an unread dot, the
+title (medium weight while unread), the time (`formatRelativeTime`) and the
+body (two lines). A row's name is its title, prefixed "Unread: " while
+unread. Opening one marks it read (`notifications.markRead`, patched in the
+cache first) and navigates to its `href`; a toast opened from the stack
+marks its inbox entry read too (same id). The header has "Mark all as read"
+(`notifications.markAllRead`; disabled with nothing unread) and Refresh
+Notifications; older pages load with "Show older notifications". The empty
+inbox reads "No notifications."; a failed load shows the error with Retry.
+`notification.requested` and `notifications.read` refetch the list and the
+unread count (`["notifications", "unread"]`), whatever the Notifications
+setting (which governs toasts only); `notifications` is a reconnect key.
+Retention is the server's: read notifications are deleted after 30 days and
+each account keeps its newest 500 (`02-domain-model-and-database.md` §5.17).
 
 ## 4a. Highlights (`/highlights`)
 
@@ -287,9 +340,11 @@ The sidebar is the `Sidebar` landmark; its splitter is a focusable
 "Sign in with GitHub" (the sign-in page's wording too). The places:
 
 - "Research" navigation: Home (a drop target for Unfiled), Highlights and,
-  web only, Shared with me and All Users (signed in; no drops). Shared with
-  me carries a badge with the number of invitations waiting
-  (`invites.received`; its name reads "Shared with me, 2 invitations"). While ⌘
+  web only, Shared with me, Notifications and All Users (signed in; no
+  drops). Shared with me carries a badge with the number of invitations
+  waiting (`invites.received`; its name reads "Shared with me, 2
+  invitations"), Notifications one with the unread count
+  (`notifications.unreadCount`; "Notifications, 3 unread"; 99+ above 99). While ⌘
   (Ctrl off Apple platforms) is held, Home shows its chord, and the
   workspace switcher ⌘O, unless "Show keyboard shortcut hints" is off
   (`lib/shortcutHints.ts`).
@@ -309,10 +364,11 @@ reordering, as on the desktop.
 
 Collapsed, the sidebar is the desktop's 52 px icon rail
 (`features/sidebar/SidebarRail.tsx`, ported from `ResearchSidebarRail`):
-Expand sidebar, Home, Highlights, Shared with me, All Users, then Drafts,
-each folder as its first letter (`researchFolderMonogram`, named in the
-tooltip), Archive and Trash, New folder, and at the foot the Light/Dark
-toggle and Settings (⌘,). Shared with me shows the invitation badge too. Home
+Expand sidebar, Home, Highlights, Shared with me, Notifications, All Users,
+then Drafts, each folder as its first letter (`researchFolderMonogram`,
+named in the tooltip), Archive and Trash, New folder, and at the foot the
+Light/Dark toggle and Settings (⌘,). Shared with me and Notifications show
+their badges too. Home
 and every place but Trash take card drops. Below 900 px the rail stays and
 Expand opens the sidebar as a drawer; the rail is inert while the drawer is
 open.
@@ -333,4 +389,6 @@ client-originated toasts, and the server's `notification.requested` events
 (a run you asked finished or failed, a new question or note in a thread you
 follow, a branch from your answer, an invitation; `03-api-and-events.md`
 §3). A server notification with an `href` opens that path when clicked
-(`AppShell` passes `onOpen` to the stack). Max 20 kept, 3 visible.
+(`AppShell` passes `onOpen` to the stack, which also marks the inbox entry
+read). Max 20 kept, 3 visible. Every server notification is also stored in
+the reader's inbox (§4c), with or without the toast.

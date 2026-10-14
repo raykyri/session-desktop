@@ -115,8 +115,9 @@ threads must survive an account deletion.
 
 `invites`
 - `code` text PK, `created_by` FK, `created_at`, `used_by` text null FK,
-  `used_at` null. Sign-up requires a valid unused code when
-  `SESSION_REQUIRE_INVITE=1`; codes are distributed manually at first.
+  `used_at` null. These are sign-up codes (the UI's name; thread
+  invitations are `tree_invites`, §3.5). Sign-up requires a valid unused code
+  when `SESSION_REQUIRE_INVITE=1`; codes are distributed manually at first.
 
 `signup_attempts`
 - `ip_hash` text, `attempted_at` integer, `outcome` text; index
@@ -362,7 +363,17 @@ Web only; the desktop has one person. Rules in §5.16.
   (`tree_id`, `lower(github_login)`) where the invitation is a login one,
   not accepted and not revoked: one pending login invitation per account
   and thread (§5.16).
-- `tree_subscriptions` (`user_id`, `tree_id`, `created_at`): Follow.
+- `tree_subscriptions` (`user_id`, `tree_id`, `created_at`): Follow. A row
+  is created for the owner with the thread (`trees.admitRoot`) and for a new
+  member when they accept an invitation (`sharing.acceptInvite`); unfollowing
+  deletes it, and only `setFollowing` creates it again (§5.16).
+- `notifications` (`id` = the `notification.requested` event's id,
+  `user_id` FK cascade, `kind` `runFinished | followUp | branch | invite`,
+  `tone`, `tree_id` null FK cascade, `title`, `body`, `href` null,
+  `created_at`, `read_at` null): the inbox, one row per recipient (§5.17).
+  Indexes (`user_id`, `created_at`, `id`) for paging, a partial
+  (`user_id`) where `read_at IS NULL` for the unread count, and (`tree_id`)
+  for the cascade.
 - `tree_member_removals` (`tree_id`, `user_id`, `removed_by`, `removed_at`):
   people the owner removed. A link invitation created at or before
   `removed_at` does not admit them again (§5.16).
@@ -963,9 +974,24 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   later link or a later login invitation to them admits them and deletes
   the removal; leaving records nothing; joining never lowers a role; at most
   100 members; a member who accepts again gets the thread back from their
-  own Archive and Trash, `restored`), `setFollowing`,
+  own Archive and Trash, `restored`; a new member follows the thread, while
+  a member who accepts again keeps their Follow choice), `setFollowing`,
   `followers` (those who may still read the thread), `audience` (owner,
   members, public) and `workspaceMembers`.
+
+### 5.17 Notification inbox
+
+`repos/notifications.ts` (web only): `record(rows)` stores what the server's
+`notify` sends, one row per recipient, before the event goes out; a
+notification about a thread that no longer exists is stored without
+`tree_id`. `list(userId, { cursor, limit })` pages newest first by
+(`created_at`, `id`) with an opaque cursor; `unreadCount`, `markRead(id)`
+(only the recipient's own, only when unread) and `markAllRead`. Retention:
+`record` keeps each recipient within `MAX_NOTIFICATIONS_PER_USER` (500,
+oldest first, read or not), and `prune(at)`, run by the server's
+maintenance tick (`sweepExpired`), deletes read notifications 30 days after
+they were read (`READ_NOTIFICATION_RETENTION_MS`) and trims any account
+above the cap. Deleting a thread deletes its notifications.
 
 ## 6. Data volumes and performance notes
 

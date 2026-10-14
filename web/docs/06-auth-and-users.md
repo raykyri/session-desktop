@@ -45,7 +45,7 @@ callback URL registered in the GitHub OAuth app is
 Sign-up is open at launch: any GitHub account can create an account. The
 schema for later throttling exists from day one (`02` §3.1): per-IP
 `signup_attempts`, `users.github_created_at` for an account-age minimum,
-and `invites` with `users.invites_remaining` defaulting to 0 so codes are
+and `invites` (sign-up codes) with `users.invites_remaining` defaulting to 0 so codes are
 distributed manually when `SESSION_REQUIRE_INVITE=1` is switched on. The
 optional `SESSION_ALLOWED_GITHUB_LOGINS` allowlist remains available.
 
@@ -142,4 +142,4 @@ Checked at admission (`research.createTree`, `forkNode`, `retryNode`), which
 answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies; because displaying an explicit error in the query composer provides clearer feedback than creating a node that appears queued but cannot execute.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
-age (`github_created_at`), and invite codes as described in §3.
+age (`github_created_at`), and sign-up codes as described in §3.

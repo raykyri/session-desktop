@@ -81,7 +81,12 @@ flash prevention is unnecessary in the browser.
 The sign-in page extracts the error parameter returned in the redirect URL
 (`/login?error=not_allowed|invite_required|invite_invalid|expired_state|
 missing_code|exchange_failed|profile_failed`, `server/src/auth/github.ts`) and
-sends `return_to` back through `/auth/github`. If a deployment has no GitHub credentials, the server returns a 503 page for
+sends `return_to` back through `/auth/github`, with a sign-up code from
+`/login?signup=<code>` (or the earlier `?invite=<code>`) as `invite`. The two
+`invite_*` refusals are about sign-up codes and say so ("A sign-up code is
+required to create an account. Open the sign-up link you received.", "This
+sign-up code is invalid or has already been used."); thread invitations are
+a separate thing (`10-home-feed-journal.md` §4b). If a deployment has no GitHub credentials, the server returns a 503 page for
 that route instead of redirecting, so the sign-in page receives no error
 parameter.
 
@@ -209,6 +214,9 @@ Per event type:
 - `research.sharing.changed` → invalidate the tree lists, the shared lists
   (`["shared", place]`), the thread, its members and invitations;
   `research.invites.changed` invalidates `receivedInvites`;
+  `notification.requested` (whatever the Notifications setting, which only
+  decides the toast) and `notifications.read` invalidate `["notifications"]`
+  (the inbox and its unread count, also a reconnect key);
   `research.presence.changed` replaces `["presence", treeId]` (the viewer
   list it carries). `research.tree.removed` also drops the thread from the
   shared lists, and re-reads the thread's detail when a page has it open (a
