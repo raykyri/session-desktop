@@ -7,7 +7,8 @@ import test from "ava";
 // `researchStyleContracts.test.ts`, re-expressed for the web
 // (`08-design-system-and-styling.md` §6). The intents are unchanged; what moved
 // is the set of files, because the twelve feature stylesheets became Tailwind
-// utilities on components and only `prose.css` and `tweet.css` remain as CSS.
+// utilities on components and only `prose.css`, `tweet.css` and `feed.css`
+// (the marks Home's card drag sets on the DOM) remain as CSS.
 
 const stylesDirectory = join(import.meta.dirname, "..", "src", "styles");
 const sourceDirectory = join(import.meta.dirname, "..", "src");
@@ -16,6 +17,7 @@ const tokensCss = readFileSync(join(stylesDirectory, "tokens.css"), "utf8");
 const proseCss = readFileSync(join(stylesDirectory, "prose.css"), "utf8");
 const tweetCss = readFileSync(join(stylesDirectory, "tweet.css"), "utf8");
 const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
+const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
 
 const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
 
@@ -100,6 +102,7 @@ test("no color literals outside tokens.css", (t) => {
     ["prose.css", proseCss],
     ["tweet.css", tweetCss],
     ["app.css", appCss],
+    ["feed.css", feedCss],
   ] as const) {
     css.split("\n").forEach((line, index) => {
       // Two escape hatches, both spelled on the line that uses them: colors

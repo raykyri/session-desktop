@@ -8,7 +8,7 @@ import {
   type NotificationTone,
 } from "../stores/notifications.js";
 
-import { IconButton } from "./Button.js";
+import { ControlButton, IconButton } from "./Button.js";
 
 const EXIT_MS = 180;
 
@@ -133,6 +133,18 @@ function NotificationCard({
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-2">{content}</div>
       )}
+      {notification.action ? (
+        <ControlButton
+          size="sm"
+          className="ml-1 shrink-0"
+          onClick={() => {
+            notification.action?.run();
+            beginDismiss();
+          }}
+        >
+          {notification.action.label}
+        </ControlButton>
+      ) : null}
       <IconButton label="Dismiss notification" onClick={beginDismiss}>
         <X size={15} aria-hidden="true" />
       </IconButton>

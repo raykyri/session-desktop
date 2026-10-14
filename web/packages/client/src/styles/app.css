@@ -3,6 +3,7 @@
 @import "./tokens.css" layer(base);
 @import "./prose.css" layer(components);
 @import "./tweet.css" layer(components);
+@import "./feed.css" layer(components);
 
 /* Tailwind v4 reads the design system out of `@theme` (08 §2, ADR-8). Every
    value below is `var(--token)` under `@theme inline`, so a utility compiles to

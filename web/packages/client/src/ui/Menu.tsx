@@ -17,6 +17,10 @@ export type MenuSize = "sm" | "md";
 
 const MenuSizeContext = createContext<MenuSize>("md");
 
+/** Sets the item size for a menu built on Base UI parts directly
+ * (`AnchoredMenu`). */
+export const MenuSizeProvider = MenuSizeContext.Provider;
+
 export interface MenuProps {
   /** The element that opens the menu. Base UI merges the trigger props onto it
    * through `render`, rather than wrapping it — a wrapper would nest a second

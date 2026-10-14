@@ -18,18 +18,27 @@ export interface ClientToast {
   /** Re-pushing the same id replaces the visible toast rather than stacking a
    * second copy of it (`stores/notifications.ts`). */
   id?: string;
+  /** Undo after a move or a move to the Trash. A toast with an action is
+   * shown even with notifications turned off, since it is the only way to
+   * take the action back, and it stays longer. */
+  undo?: () => void;
 }
 
+/** How long a toast with Undo stays (the desktop's toast keeps its Undo for
+ * about as long). */
+export const UNDO_TOAST_TIMEOUT_MS = 8_000;
+
 export function pushToast(toast: ClientToast): void {
-  if (!useSettingsStore.getState().settings.showNotifications) return;
+  if (!toast.undo && !useSettingsStore.getState().settings.showNotifications) return;
   counter += 1;
   useNotificationsStore.getState().push({
     id: toast.id ?? `client:${counter}`,
     title: toast.title,
     body: toast.body ?? "",
     tone: toast.tone ?? "info",
-    timeoutMs: CLIENT_TOAST_TIMEOUT_MS,
+    timeoutMs: toast.undo ? UNDO_TOAST_TIMEOUT_MS : CLIENT_TOAST_TIMEOUT_MS,
     createdAt: Date.now(),
+    ...(toast.undo ? { action: { label: "Undo", run: toast.undo } } : {}),
   });
 }
 

@@ -17,6 +17,8 @@ export interface NotificationItem {
   createdAt: number;
   /** Route to open when the toast is activated, if the server named one. */
   href?: string | undefined;
+  /** A button beside the text, such as Undo after a move. */
+  action?: { label: string; run: () => void } | undefined;
 }
 
 export const MAX_NOTIFICATIONS = 20;

@@ -1,0 +1,176 @@
+/* The marks Home's card drag sets on the DOM while a drag is in progress
+   (`features/home/useCardDrag.ts`, the desktop's feed.css "Drag" section).
+   The drag adds and removes these classes directly so it re-renders nothing
+   until the drop; everything else about the cards is utilities on the
+   components. */
+
+/* The dragged card and the group that moves with it. */
+[data-research-card].is-dragging,
+[data-research-group].is-dragging {
+  opacity: 0.4;
+}
+
+/* The insertion line, in the gap between rows. */
+[data-research-card].is-insert-before::before,
+[data-research-card].is-insert-after::after {
+  position: absolute;
+  right: -4px;
+  left: -4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-color);
+  content: "";
+  pointer-events: none;
+}
+
+[data-research-card].is-insert-before::before {
+  top: -2px;
+}
+
+[data-research-card].is-insert-after::after {
+  bottom: -2px;
+}
+
+/* The insertion line after a group, at the top level. */
+[data-research-unit] {
+  position: relative;
+}
+
+[data-research-unit].is-insert-after::after {
+  position: absolute;
+  right: 4px;
+  bottom: -2px;
+  left: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-color);
+  content: "";
+  pointer-events: none;
+}
+
+/* The middle band of a question's, document's or post's card: the drop makes
+   the item a child. */
+[data-research-card].is-drop-nest {
+  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-color);
+}
+
+/* A refused drop (into its own group) is outlined in the failure color. */
+[data-research-card].is-drop-invalid {
+  outline: 1.5px dashed var(--status-failed-fg);
+  outline-offset: -1.5px;
+  background: color-mix(in srgb, var(--status-failed-fg) 7%, transparent);
+}
+
+/* A place that takes the drop as a whole: Home's list, a tray, a sidebar
+   place. */
+[data-research-drop].is-drop-target {
+  border-color: var(--split-drop-border);
+  background: var(--split-drop-bg);
+}
+
+[data-research-drop][data-research-list].is-drop-target {
+  box-shadow: inset 0 0 0 1.5px var(--split-drop-border);
+}
+
+/* While a child is dragged, a dotted strip below its group moves it out: the
+   drop lists it after the group, at the top level. */
+[data-research-group].has-dragged-child + [data-research-group-exit] {
+  display: flex;
+}
+
+[data-research-group-exit].is-drop-hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+
+/* What a drop does, or why it is refused, above the target. */
+.research-drop-label {
+  position: fixed;
+  z-index: var(--z-context-menu);
+  max-width: 260px;
+  padding: 1px 7px;
+  overflow: hidden;
+  transform: translateY(-100%);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--research-feed-popover-bg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-heading) 8%, transparent);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.research-drop-label.is-invalid {
+  border-color: var(--status-failed-fg);
+  color: var(--status-failed-fg);
+  white-space: normal;
+}
+
+/* A two-line label below and right of the pointer, translucent so the drop
+   target's highlight shows through it. */
+.research-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-context-menu);
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  background: var(--research-feed-popover-bg);
+  box-shadow: var(--popover-shadow);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.research-drag-ghost-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.research-drag-ghost-children {
+  display: block;
+  color: var(--text-muted);
+}
+
+.is-research-dragging,
+.is-research-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.is-research-drop-none,
+.is-research-drop-none * {
+  cursor: no-drop !important;
+}
+
+/* A running row glyph: the pie of a running question, or a whole note or
+   document whose follow-up runs, pulses to 30% over 1.4 seconds. */
+.session-row-pulse {
+  animation: session-row-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes session-row-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-row-pulse {
+    animation: none;
+  }
+}
