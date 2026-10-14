@@ -50,7 +50,7 @@ COPY . .
 #
 # The server bundle inlines `@session/db` and `@session/shared` (they publish
 # TypeScript sources) and leaves every npm package external, so
-# `better-sqlite3`, `unpdf`, `mammoth`, and `linkedom` are resolved from
+# `better-sqlite3`, `unpdf`, and `linkedom` are resolved from
 # `node_modules` at runtime rather than bundled.
 RUN npm run build --workspace @session/client --workspace @session/server
 RUN node -e "const s=require('node:fs').statSync('packages/server/dist/server.mjs'); if (s.size < 1000) throw new Error('empty server bundle')"
