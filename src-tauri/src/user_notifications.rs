@@ -15,7 +15,6 @@ const MAX_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
 const RATE_WINDOW: Duration = Duration::from_secs(10);
 const RATE_LIMIT: usize = 10;
-const MAX_LOG_ENTRIES: usize = 200;
 
 static RECENT_REQUESTS: LazyLock<Mutex<VecDeque<Instant>>> =
     LazyLock::new(|| Mutex::new(VecDeque::new()));
@@ -56,47 +55,11 @@ pub struct SendNotificationRequest {
     pub timeout_ms: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationLogEntry {
-    pub id: String,
-    pub title: String,
-    pub body: String,
-    pub tone: NotificationTone,
-    pub created_at: i64,
-    #[serde(default)]
-    pub read: bool,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationLog {
-    #[serde(default)]
-    pub entries: Vec<NotificationLogEntry>,
-}
-
-impl NotificationLog {
-    /// serde skip guard: an untouched log serializes to nothing, so state
-    /// files from builds that predate it round-trip byte-identically.
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-}
-
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or(0)
-}
-
-pub(crate) fn record_log_entry(log: &mut NotificationLog, entry: NotificationLogEntry) {
-    log.entries.retain(|existing| existing.id != entry.id);
-    log.entries.push(entry);
-    let extra = log.entries.len().saturating_sub(MAX_LOG_ENTRIES);
-    if extra > 0 {
-        log.entries.drain(..extra);
-    }
 }
 
 fn default_mode() -> NotificationMode {
@@ -200,15 +163,6 @@ fn overlay_event(
     ));
 }
 
-fn emit_log_changed(state: &AppState, log: &NotificationLog) {
-    state.emit(SessionEvent::new(
-        "app.notification_log_changed",
-        None,
-        None,
-        json!({ "entries": log.entries }),
-    ));
-}
-
 pub fn dispatch(
     state: &AppState,
     request: SendNotificationRequest,
@@ -223,17 +177,6 @@ pub fn dispatch(
 
     let id = state.next_id("notification");
     let created_at = now_ms();
-    let entry = NotificationLogEntry {
-        id: id.clone(),
-        title: title.clone(),
-        body: request.body.clone(),
-        tone: request.tone,
-        created_at,
-        read: false,
-    };
-    let log = state.append_notification_log(entry)?;
-    emit_log_changed(state, &log);
-
     overlay_event(state, &id, &title, created_at, &request);
     Ok(json!({ "accepted": true, "delivery": "overlay" }))
 }
@@ -303,44 +246,6 @@ mod tests {
             validate_request(&body_control)
                 .unwrap_err()
                 .contains("control characters")
-        );
-    }
-
-    fn sample_entry(id: &str, created_at: i64) -> NotificationLogEntry {
-        NotificationLogEntry {
-            id: id.into(),
-            title: "agent".into(),
-            body: "done".into(),
-            tone: NotificationTone::Info,
-            created_at,
-            read: false,
-        }
-    }
-
-    #[test]
-    fn append_log_entry_replaces_by_id_and_drops_oldest_past_the_cap() {
-        let mut log = NotificationLog::default();
-        record_log_entry(&mut log, sample_entry("n1", 1));
-        record_log_entry(&mut log, sample_entry("n2", 2));
-        let mut replacement = sample_entry("n1", 3);
-        replacement.body = "updated".into();
-        record_log_entry(&mut log, replacement);
-        assert_eq!(log.entries.len(), 2);
-        assert_eq!(log.entries[0].id, "n2");
-        assert_eq!(log.entries[1].id, "n1");
-        assert_eq!(log.entries[1].body, "updated");
-
-        for index in 0..(MAX_LOG_ENTRIES + 5) {
-            record_log_entry(
-                &mut log,
-                sample_entry(&format!("cap-{index}"), index as i64),
-            );
-        }
-        assert_eq!(log.entries.len(), MAX_LOG_ENTRIES);
-        assert_eq!(log.entries[0].id, "cap-5");
-        assert_eq!(
-            log.entries.last().map(|entry| entry.id.as_str()),
-            Some("cap-204")
         );
     }
 }

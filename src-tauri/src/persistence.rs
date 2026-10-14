@@ -2,7 +2,6 @@ use crate::research::{
     QueuedResearchFollowup, ResearchDraft, ResearchFolderState, ResearchNode, ResearchTree,
 };
 use crate::thread_graph::ThreadRecord;
-use crate::user_notifications::NotificationLog;
 use crate::workspace::{AgentInfo, GroupInfo};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -113,13 +112,15 @@ const MIGRATION_BACKUP_FILES: [&str; 7] = [
 pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs: groups, agents, thread
-/// routing, research state and the notification log.
+/// routing and research state.
 ///
 /// Builds that hosted terminal panes also wrote `panes`, `paneSplits`,
 /// `activeTabId`, `queues`, `inflight`, `agentComposerText` (`drafts` before
-/// version 10), `globalDrafts` and `artifacts`. Those keys are not read, and
-/// the next save omits them. Every one was optional in the builds that wrote
-/// it, so they still load a file without them at the same version.
+/// version 10), `globalDrafts` and `artifacts`; earlier builds also wrote
+/// `notificationLog`, a history of `session send` notifications that nothing
+/// read. Those keys are not read, and the next save omits them. Every one was
+/// optional in the builds that wrote it, so they still load a file without
+/// them at the same version.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedState {
@@ -169,10 +170,6 @@ pub struct PersistedState {
     /// questions (not the threads), so the version is unchanged.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub research_followups: HashMap<String, Vec<QueuedResearchFollowup>>,
-    /// `session send` notification history. Optional and dropped-if-empty so
-    /// older state files round-trip byte-identically.
-    #[serde(default, skip_serializing_if = "NotificationLog::is_empty")]
-    pub notification_log: NotificationLog,
 }
 
 impl Default for PersistedState {
@@ -191,7 +188,6 @@ impl Default for PersistedState {
             research_folders: ResearchFolderState::default(),
             research_drafts: Vec::new(),
             research_followups: HashMap::new(),
-            notification_log: NotificationLog::default(),
         }
     }
 }
@@ -751,16 +747,6 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
     // Home's former journal (saved links and X posts) was replaced by note
     // trees without migration; a leftover `journal` key is discarded.
     map.remove("journal");
-    state.notification_log = match map.remove("notificationLog") {
-        Some(value) => match serde_json::from_value(value) {
-            Ok(log) => log,
-            Err(err) => {
-                dropped.push(format!("notification log: {err}"));
-                NotificationLog::default()
-            }
-        },
-        None => NotificationLog::default(),
-    };
     (state, dropped)
 }
 
@@ -1216,6 +1202,45 @@ mod tests {
         let outcome = load_with_diagnostics(&root);
         assert!(outcome.warning.is_none());
         assert_eq!(outcome.state.research_drafts, drafts);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Earlier builds stored a `session send` notification history that
+    /// nothing read. A file with one, well-formed or not, loads in full, and
+    /// the next save leaves the key out.
+    #[test]
+    fn a_stored_notification_log_is_ignored_and_dropped_on_save() {
+        let root = temp_root();
+        fs::create_dir_all(state_path(&root).parent().unwrap()).unwrap();
+        for log in [
+            serde_json::json!({
+                "entries": [{
+                    "id": "notification-1",
+                    "title": "agent",
+                    "body": "done",
+                    "tone": "info",
+                    "createdAt": 1,
+                    "read": false
+                }]
+            }),
+            serde_json::json!("not a log"),
+        ] {
+            let legacy = serde_json::json!({
+                "version": STATE_VERSION,
+                "nextId": 7,
+                "groupOrder": ["g1"],
+                "notificationLog": log,
+            });
+            fs::write(state_path(&root), serde_json::to_vec(&legacy).unwrap()).unwrap();
+            let outcome = load_with_diagnostics(&root);
+            assert!(outcome.warning.is_none(), "{:?}", outcome.warning);
+            assert_eq!(outcome.state.next_id, 7);
+            assert_eq!(outcome.state.group_order, vec!["g1".to_string()]);
+            save(&root, &outcome.state).unwrap();
+            let raw: Value = serde_json::from_slice(&fs::read(state_path(&root)).unwrap()).unwrap();
+            assert!(raw.get("notificationLog").is_none());
+            assert_eq!(raw["nextId"], serde_json::json!(7));
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

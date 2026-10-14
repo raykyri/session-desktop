@@ -193,9 +193,6 @@ struct Model {
     /// Queued follow-ups per inline chain, keyed by the chain's head node,
     /// each in send order (see `research_followups`).
     research_followups: HashMap<String, Vec<research::QueuedResearchFollowup>>,
-    /// Persistent feed of `session send` notifications. Oldest first; capped by
-    /// the notifications module. Distinct from the research feed.
-    notification_log: crate::user_notifications::NotificationLog,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -990,7 +987,6 @@ impl AppState {
                 .collect();
             research_reconciled |= model.research_drafts.len() != draft_count;
             model.research_followups = persisted.research_followups;
-            model.notification_log = persisted.notification_log;
             let known_research_tree_ids =
                 model.research_trees.keys().cloned().collect::<HashSet<_>>();
             research::reconcile_research_folder_state(
@@ -1165,7 +1161,6 @@ impl AppState {
                 research_folders: model.research_folders.clone(),
                 research_drafts: model.research_drafts.clone(),
                 research_followups: model.research_followups.clone(),
-                notification_log: model.notification_log.clone(),
             }
         };
         persistence::save(&self.inner.config.workspace_root, &snapshot)
@@ -1521,23 +1516,6 @@ impl AppState {
             .filter(|root| root.parent_node_id.is_none())
             .collect::<Vec<_>>();
         Ok(recent_activity_entries(&model, roots))
-    }
-
-    pub fn append_notification_log(
-        &self,
-        entry: crate::user_notifications::NotificationLogEntry,
-    ) -> Result<crate::user_notifications::NotificationLog, String> {
-        let log = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            crate::user_notifications::record_log_entry(&mut model.notification_log, entry);
-            model.notification_log.clone()
-        };
-        self.persist();
-        Ok(log)
     }
 
     /// Replaces the stored grouping with a client-supplied one. Structural
