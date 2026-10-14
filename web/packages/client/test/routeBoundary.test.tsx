@@ -26,7 +26,7 @@ test.serial(
 test.serial("a route that throws is contained by the error boundary", async (t) => {
   // Use an invalid query parameter to trigger the router's native error
   // boundary without mocks.
-  const app = await renderApp("/highlights?filter=not-a-filter");
+  const app = await renderApp("/r/t1?filter=not-a-filter");
   await waitUntil(
     t,
     () =>

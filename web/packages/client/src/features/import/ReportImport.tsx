@@ -94,12 +94,17 @@ export function ReportImport({
   useEffect(() => {
     const target = dropTarget.current;
     if (!target) return;
+    // A drop on an ask box attaches images there instead.
+    const onComposer = (event: DragEvent) =>
+      event.target instanceof Element &&
+      event.target.closest("[data-research-image-drop]") !== null;
     const onDragOver = (event: DragEvent) => {
-      if (!event.dataTransfer?.types.includes("Files")) return;
+      if (!event.dataTransfer?.types.includes("Files") || onComposer(event)) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
     };
     const onDrop = (event: DragEvent) => {
+      if (onComposer(event)) return;
       const files = event.dataTransfer?.files;
       if (!files || files.length === 0) return;
       event.preventDefault();

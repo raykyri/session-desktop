@@ -1,7 +1,7 @@
-// The document's dialogs and the menu rows other surfaces reuse
-// (`09-research-document-view.md` §8).
+// The document's dialogs (`09-research-document-view.md` §8). The thread
+// menu Home's cards share moved to `features/home/TreeMenu.tsx`
+// (`feed.test.tsx`, `trash.test.tsx`).
 
-import { emptyResearchFolderState } from "@session/shared";
 import type { ResearchNodeContent } from "@session/shared";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import test from "ava";
@@ -9,14 +9,8 @@ import test from "ava";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { DeleteBranchDialog } from "../src/features/research/DeleteBranchDialog.js";
 import { RecapDialog } from "../src/features/research/RecapDialog.js";
-import {
-  DeleteTreeDialog,
-  RenameTreeDialog,
-  ResearchTreeMenuItems,
-} from "../src/features/research/treeMenu.js";
-import { Menu } from "../src/ui/Menu.js";
 
-import { node, summary, tree } from "./fixtures.js";
+import { node, tree } from "./fixtures.js";
 import { waitUntil } from "./helpers.js";
 import { createTrpcStub } from "./trpcStub.js";
 
@@ -220,124 +214,3 @@ test.serial("deleting the root is named as deleting the research", (t) => {
 });
 
 /* -------------------------------------------------------------- tree menu */
-
-function menuFor(overrides: Partial<Parameters<typeof ResearchTreeMenuItems>[0]> = {}) {
-  const calls: string[] = [];
-  const items = (
-    <ResearchTreeMenuItems
-      tree={summary(overrides.tree ? {} : { runningCount: 0 })}
-      archived={false}
-      folderState={emptyResearchFolderState()}
-      onRename={() => calls.push("rename")}
-      onArchive={() => calls.push("archive")}
-      onRestore={() => calls.push("restore")}
-      onDelete={() => calls.push("delete")}
-      onRemoveFromFolder={() => calls.push("removeFromFolder")}
-      onRequestCreateFolder={() => calls.push("createFolder")}
-      {...overrides}
-    />
-  );
-  render(
-    <Menu open trigger={<button type="button">open</button>} label="Research actions">
-      {items}
-    </Menu>,
-  );
-  return calls;
-}
-
-test.serial("the tree menu offers the active-thread actions", (t) => {
-  const calls = menuFor();
-  for (const label of ["Rename", "Move to new folder", "Archive", "Delete"]) {
-    t.truthy(screen.getByRole("menuitem", { name: new RegExp(label) }), label);
-  }
-  fireEvent.click(screen.getByRole("menuitem", { name: /Rename/ }));
-  t.deepEqual(calls, ["rename"]);
-});
-
-test.serial("an archived thread offers only Unarchive and Delete", (t) => {
-  menuFor({ archived: true });
-  t.truthy(screen.getByRole("menuitem", { name: /Unarchive/ }));
-  t.is(screen.queryByRole("menuitem", { name: /^Archive/ }), null);
-  t.is(screen.queryByRole("menuitem", { name: /Rename/ }), null);
-  t.truthy(screen.getByRole("menuitem", { name: /Delete/ }));
-});
-
-test.serial("a thread with a run in flight can be neither archived nor deleted", (t) => {
-  menuFor({ tree: summary({ runningCount: 1 }) });
-  t.is(screen.getByRole("menuitem", { name: /Archive/ }).getAttribute("data-disabled"), "");
-  t.is(screen.getByRole("menuitem", { name: /Delete/ }).getAttribute("data-disabled"), "");
-});
-
-test.serial("the summary row appears only where it is offered", (t) => {
-  const calls = menuFor({ onRegenerateSummary: () => undefined });
-  t.truthy(screen.getByRole("menuitem", { name: /Regenerate summary…/ }));
-  cleanup();
-  menuFor();
-  t.is(screen.queryByRole("menuitem", { name: /Regenerate summary…/ }), null);
-  t.deepEqual(calls, []);
-});
-
-test.serial("renaming commits the trimmed title", (t) => {
-  const renamed: [string, string][] = [];
-  render(
-    <RenameTreeDialog
-      tree={{ id: "t1", title: "Collective memory" }}
-      open
-      onClose={() => undefined}
-      onRename={(treeId, title) => {
-        renamed.push([treeId, title]);
-      }}
-    />,
-  );
-  const input = screen.getByLabelText("Thread title");
-  fireEvent.change(input, { target: { value: "  Shared recall  " } });
-  fireEvent.click(screen.getByRole("button", { name: "Rename" }));
-  t.deepEqual(renamed, [["t1", "Shared recall"]]);
-});
-
-test.serial("renaming to the same title is a no-op", (t) => {
-  const renamed: string[] = [];
-  render(
-    <RenameTreeDialog
-      tree={{ id: "t1", title: "Collective memory" }}
-      open
-      onClose={() => undefined}
-      onRename={(treeId) => {
-        renamed.push(treeId);
-      }}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Rename" }));
-  t.deepEqual(renamed, []);
-});
-
-test.serial("the delete dialog names the thread and stays busy while it works", (t) => {
-  const removed: string[] = [];
-  render(
-    <DeleteTreeDialog
-      tree={{ id: "t1", title: "Collective memory" }}
-      open
-      busy={false}
-      error={null}
-      onClose={() => undefined}
-      onRemove={(treeId) => removed.push(treeId)}
-    />,
-  );
-  t.truthy(screen.getByRole("heading", { name: "Delete “Collective memory”?" }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
-  t.deepEqual(removed, ["t1"]);
-
-  cleanup();
-  render(
-    <DeleteTreeDialog
-      tree={{ id: "t1", title: "Collective memory" }}
-      open
-      busy
-      error="it is still running"
-      onClose={() => undefined}
-      onRemove={() => undefined}
-    />,
-  );
-  t.truthy(screen.getByText("Deleting…"));
-  t.truthy(screen.getByRole("alert"));
-});

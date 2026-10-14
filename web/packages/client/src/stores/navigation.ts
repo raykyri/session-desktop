@@ -23,7 +23,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export const NAVIGATION_STORAGE_KEY = "session.navigation.v2";
 
-export type ResearchVisibilityFilter = "active" | "archived" | "all";
 export type FeedMode = "all" | "workspaces" | "workspace";
 
 export const SIDEBAR_MIN_WIDTH = 208;
@@ -57,7 +56,6 @@ export interface NavigationState {
   expandedByNode: Record<string, boolean>;
   feedAnchorByView: Record<string, FeedScrollAnchor>;
   feedMode: FeedMode;
-  visibilityFilter: ResearchVisibilityFilter;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
 
@@ -77,7 +75,6 @@ export interface NavigationState {
   feedAnchorFor: (view: string) => FeedScrollAnchor | null;
   setFeedMode: (mode: FeedMode) => void;
 
-  setVisibilityFilter: (filter: ResearchVisibilityFilter) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
@@ -94,8 +91,8 @@ export const useNavigationStore = create<NavigationState>()(
       scrollByNode: {},
       expandedByNode: {},
       feedAnchorByView: {},
-      feedMode: "all",
-      visibilityFilter: "active",
+      // A signed-in account opens on its workspace's Home, as on the desktop.
+      feedMode: "workspace",
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
 
@@ -169,7 +166,6 @@ export const useNavigationStore = create<NavigationState>()(
       feedAnchorFor: (view) => get().feedAnchorByView[view] ?? null,
       setFeedMode: (feedMode) => set({ feedMode }),
 
-      setVisibilityFilter: (visibilityFilter) => set({ visibilityFilter }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampWidth(width) }),
@@ -183,7 +179,6 @@ export const useNavigationStore = create<NavigationState>()(
         expandedByNode: state.expandedByNode,
         feedAnchorByView: state.feedAnchorByView,
         feedMode: state.feedMode,
-        visibilityFilter: state.visibilityFilter,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
       }),

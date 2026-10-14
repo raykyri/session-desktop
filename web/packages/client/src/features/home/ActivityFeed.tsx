@@ -1,5 +1,8 @@
-// The Home feed (`10-home-feed-journal.md` §2,
-// ported from `ResearchActivityFeed.tsx`).
+// The web's two feeds beside the workspace's Home (`10-home-feed-journal.md`
+// §2): All Users (every public thread, also the guest catalog) and My
+// Workspaces (the account's threads across its workspaces), newest first.
+// Cards are Home's cards without the controls: the threads are other
+// people's, or filed in other workspaces.
 //
 // The desktop hand-rolled its virtual canvas — cumulative offsets, a binary
 // search over them, a `ResizeObserver` per row. TanStack Virtual does the same
@@ -8,31 +11,14 @@
 // arrivals the reader has scrolled past, and keyset pagination with a Retry.
 
 import { buildRecentActivityFromItems, recentActivityItemId } from "@session/shared";
-import type {
-  RecentActivityItem,
-  RecentActivityScope,
-  RecentResearchQuery,
-  ResearchFolderState,
-  ResearchNodeContent,
-  ResearchTreeSummary,
-} from "@session/shared";
+import type { RecentActivityItem, RecentActivityScope, RecentResearchQuery } from "@session/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { getResearchNodeContent } from "../../api/api.js";
-import {
-  useActivityFeed,
-  useSignedIn,
-  useArchiveResearchTree,
-  useRemoveResearchTree,
-  useRenameResearchTree,
-  useTreeSummaries,
-  useFolders,
-} from "../../api/queries.js";
+import { useActivityFeed, useTreeSummaries } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { errorMessage, pushErrorToast } from "../../lib/toast.js";
 import {
   useNavigationStore,
   type FeedMode,
@@ -42,10 +28,8 @@ import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton } from "../../ui/Button.js";
 import { Menu, MenuItem } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
-import { RecapDialog } from "../research/RecapDialog.js";
-import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../research/treeMenu.js";
 
-import { ResearchQueryCard } from "./ResearchQueryCard.js";
+import { PublicFeedCard } from "./PublicFeedCard.js";
 import {
   countNewAbove,
   feedScrollBehavior,
@@ -53,25 +37,11 @@ import {
   useFeedScrollAnchor,
 } from "./useActivityFeedState.js";
 
-/** First guess at a row's height, refined by measurement on mount. The two
- * shapes differ by an order of magnitude, so one average would make every
- * scrollbar wrong (`ResearchActivityFeed.tsx:494`). */
+/** First guess at a row's height, refined by measurement on mount: the event
+ * line and a card, taller when the card has a title above its text. */
 export function estimateRowHeight(item: RecentActivityItem): number {
-  const hasTweet = item.query.attachments?.some(
-    (attachment) =>
-      attachment.kind === "tweet" && attachment.status === "resolved" && attachment.tweet,
-  );
-  if (hasTweet) return item.query.recap?.trim() ? 430 : 384;
-  return item.query.recap?.trim() ? 136 : 90;
+  return item.query.title?.trim() ? 118 : 96;
 }
-
-const EMPTY_FOLDER_STATE: ResearchFolderState = {
-  folders: [],
-  membership: {},
-  collapsed: [],
-  parents: {},
-  collapsedGroups: [],
-};
 
 export interface ActivityFeedProps {
   workspaceId: string;
@@ -130,13 +100,7 @@ export function ActivityFeed({
   const navigate = useNavigate();
   const feed = useActivityFeed({ scope, workspaceId });
   const summaries = useTreeSummaries({ workspaceId });
-  const folders = useFolders(workspaceId);
-  const rename = useRenameResearchTree();
-  const archive = useArchiveResearchTree();
-  const remove = useRemoveResearchTree();
 
-  const signedIn = useSignedIn();
-  const canManage = signedIn && scope !== "all";
   const view =
     scope === "all"
       ? "all-users"
@@ -160,17 +124,10 @@ export function ActivityFeed({
   }
 
   const [newCount, setNewCount] = useState(0);
-  const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
-  const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
-  // The recap dialog needs the node's content, which the feed row does not
-  // carry; it is fetched when the menu item is chosen rather than for every
-  // card on screen.
-  const [recapContent, setRecapContent] = useState<ResearchNodeContent | null>(null);
 
   const items = useMemo(() => (feed.data?.pages ?? []).flatMap((page) => page.items), [feed.data]);
 
   const trees = useMemo(() => summaries.data ?? [], [summaries.data]);
-  const treeById = useMemo(() => new Map(trees.map((tree) => [tree.id, tree])), [trees]);
   const events = useMemo(() => buildRecentActivityFromItems(items, trees), [items, trees]);
   const itemBySourceId = useMemo(
     () => new Map(items.map((item) => [recentActivityItemId(item), item])),
@@ -325,36 +282,6 @@ export function ActivityFeed({
     });
   };
 
-  const openRecapDialog = (nodeId: string) => {
-    void getResearchNodeContent(nodeId)
-      .then(setRecapContent)
-      .catch((error: unknown) => pushErrorToast("Could not read answer", error));
-  };
-
-  const folderState = folders.data ?? EMPTY_FOLDER_STATE;
-
-  const treeMenu = (tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | null) =>
-    tree ? (
-      <ResearchTreeMenuItems
-        tree={tree}
-        archived={tree.archivedAt != null}
-        folderState={folderState}
-        // Folder actions are omitted because this surface has no folder dialog
-        // to support them (`10` §2).
-        onRename={setRenamingTree}
-        onArchive={(treeId) => archive.mutate({ treeId, archived: true })}
-        onRestore={(treeId) => archive.mutate({ treeId, archived: false })}
-        onDelete={setDeletingTree}
-        // Any settled answer can be summarized; the dialog says whether it is
-        // writing a first summary or replacing one.
-        onRegenerateSummary={
-          query && tree.archivedAt == null && query.status === "complete"
-            ? () => openRecapDialog(query.nodeId)
-            : undefined
-        }
-      />
-    ) : null;
-
   const nothingYet = feed.isSuccess && events.length === 0;
 
   return (
@@ -447,17 +374,7 @@ export function ActivityFeed({
                       aria-setsize={feed.hasNextPage ? -1 : events.length}
                     >
                       <ActivityMetadataLine event={event} showTime={false} />
-                      <ResearchQueryCard
-                        query={source.query}
-                        tree={treeById.get(source.query.treeId)}
-                        menuItems={
-                          canManage
-                            ? treeMenu(treeById.get(source.query.treeId), source.query)
-                            : null
-                        }
-                        onOpen={() => openQuery(source.query)}
-                        onOpenChild={openQuery}
-                      />
+                      <PublicFeedCard query={source.query} onOpen={() => openQuery(source.query)} />
                     </div>
                   </div>
                 );
@@ -498,37 +415,6 @@ export function ActivityFeed({
           </div>
         </div>
       </div>
-
-      {recapContent ? (
-        <RecapDialog
-          content={recapContent}
-          open
-          onClose={() => setRecapContent(null)}
-          onApplied={(updated) =>
-            setRecapContent((current: ResearchNodeContent | null) =>
-              current && current.node.id === updated.id ? { ...current, node: updated } : current,
-            )
-          }
-        />
-      ) : null}
-      {renamingTree ? (
-        <RenameTreeDialog
-          tree={renamingTree}
-          open
-          onClose={() => setRenamingTree(null)}
-          onRename={(treeId, title) => rename.mutateAsync({ treeId, title })}
-        />
-      ) : null}
-      {deletingTree ? (
-        <DeleteTreeDialog
-          tree={deletingTree}
-          open
-          busy={remove.isPending}
-          error={remove.error ? errorMessage(remove.error) : null}
-          onClose={() => setDeletingTree(null)}
-          onRemove={(treeId) => remove.mutate(treeId, { onSuccess: () => setDeletingTree(null) })}
-        />
-      ) : null}
     </div>
   );
 }

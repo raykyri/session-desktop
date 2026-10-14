@@ -4,6 +4,7 @@ import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-
 import { useCallback, useEffect, useState } from "react";
 
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
+import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
 import { useWorkspaceScope } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
@@ -195,6 +196,7 @@ export function AppShell() {
       <ImageLightbox />
       <DiagramLightbox />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />
+      {signedIn ? <FolderDialogsHost /> : null}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

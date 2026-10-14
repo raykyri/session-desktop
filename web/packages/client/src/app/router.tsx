@@ -23,6 +23,7 @@ import { AdminPage } from "../routes/admin.js";
 import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
 import { LoginPage } from "../routes/login.js";
+import { ArchivePage, DraftPage, DraftsPage, FolderPage, TrashPage } from "../routes/places.js";
 import { ResearchPage } from "../routes/research.$treeId.js";
 import { SettingsPage } from "../routes/settings.js";
 
@@ -36,9 +37,8 @@ import { appQueryClient } from "./queryClient.js";
 const workspaceScopeSearchSchema = z.object({
   /** Workspace scope. Absent means the account's default workspace. */
   ws: z.string().optional(),
-  /** The sidebar's visibility filter, which is chrome rather than page state
-   * but belongs in the URL for the same reason `ws` does (ADR-7, `10` §7). */
-  filter: z.enum(["active", "archived", "all"]).optional(),
+  /** Home's feed: All Users (`all`), My Workspaces (`workspaces`), or the
+   * workspace's own Home (its id). */
   feed: z.string().optional(),
 });
 
@@ -121,7 +121,7 @@ async function warmBootQueries(client: QueryClient): Promise<void> {
   const workspaceId = settings?.defaultWorkspaceId ?? workspaces?.[0]?.id ?? null;
   if (workspaceId === null) return;
   await Promise.all([
-    client.prefetchQuery(treesQueryOptions({ workspaceId })),
+    client.prefetchQuery(treesQueryOptions({ workspaceId, includeArchived: true })),
     client.prefetchQuery(foldersQueryOptions(workspaceId)),
   ]);
 }
@@ -179,6 +179,47 @@ const highlightsRoute = createRoute({
   component: HighlightsPage,
 });
 
+/** The place views (`10-home-feed-journal.md` §1), private to the account. */
+const folderRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/f/$folderId",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: FolderPage,
+});
+
+const draftsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/drafts",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: DraftsPage,
+});
+
+const draftRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/drafts/$draftId",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: DraftPage,
+});
+
+const archiveRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/archive",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: ArchivePage,
+});
+
+const trashRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/trash",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: TrashPage,
+});
+
 const researchRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/r/$treeId",
@@ -223,6 +264,11 @@ export const routeTree = rootRoute.addChildren([
   shellRoute.addChildren([
     homeRoute,
     highlightsRoute,
+    folderRoute,
+    draftsRoute,
+    draftRoute,
+    archiveRoute,
+    trashRoute,
     researchRoute,
     settingsRoute,
     adminRoute,

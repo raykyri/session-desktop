@@ -103,7 +103,7 @@ test.serial(
     t.truthy(await screen.findByRole("heading", { name: "Highlights" }));
 
     press("1", { ctrlKey: true });
-    t.truthy(await screen.findByRole("heading", { name: "All Users" }));
+    t.truthy(await screen.findByRole("heading", { name: "Home" }));
   },
 );
 

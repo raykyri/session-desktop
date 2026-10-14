@@ -14,6 +14,3 @@ export const SIDEBAR_SECTION_HEADING =
 
 /** The selected thread, page or route. */
 export const SIDEBAR_ROW_SELECTED = "bg-surface-sidebar-hover text-fg-strong";
-
-/** A row inside the current multi-selection. */
-export const SIDEBAR_ROW_MULTI = "bg-accent-subtle text-fg-strong";

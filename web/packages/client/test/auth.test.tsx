@@ -17,7 +17,7 @@ test.afterEach.always(() => {
 test.serial("a signed-out visit to a shell route renders the public shell", async (t) => {
   await renderApp("/r/t1", { user: null });
 
-  t.truthy(screen.getByRole("navigation", { name: "Sections" }));
+  t.truthy(screen.getByRole("navigation", { name: "Research" }));
   t.truthy(screen.getByRole("button", { name: "Sign in" }));
   t.is(screen.queryByRole("button", { name: /Continue with GitHub/ }), null);
 });
@@ -40,7 +40,7 @@ test.serial("unrecognized authentication errors display a default error message"
 test.serial("a signed-in visit renders the shell and the account row", async (t) => {
   await renderApp("/", { user: testUser({ login: "raymond" }) });
 
-  t.truthy(screen.getByRole("navigation", { name: "Sections" }));
+  t.truthy(screen.getByRole("navigation", { name: "Research" }));
   t.truthy(screen.getByRole("button", { name: "raymond" }));
 });
 
@@ -109,8 +109,8 @@ test.serial("authenticated visits to /login redirect to the requested target URL
 test.serial("a redirect that leaves this origin is not followed", async (t) => {
   await renderApp("/login?redirect=%2F%2Fevil.example%2Fsteal", { user: testUser() });
 
-  t.truthy(screen.getByRole("navigation", { name: "Sections" }), "the shell rendered");
-  t.truthy(screen.getByRole("heading", { name: "All Users" }), "at the root, not at the target");
+  t.truthy(screen.getByRole("navigation", { name: "Research" }), "the shell rendered");
+  t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
 });
 
 test.serial("development kitchen sink routes are absent from production builds", async (t) => {
@@ -118,6 +118,6 @@ test.serial("development kitchen sink routes are absent from production builds",
   // tree exactly as a production bundle carries it: no `/dev/*` route.
   await renderApp("/dev/ui", { user: null });
 
-  t.truthy(screen.getByRole("navigation", { name: "Sections" }), "the public shell still renders");
+  t.truthy(screen.getByRole("navigation", { name: "Research" }), "the public shell still renders");
   t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
 });

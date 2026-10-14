@@ -1,26 +1,20 @@
-// The sidebar's writes and its two stateful controls
-// (`10-home-feed-journal.md` §7).
+// The sidebar (`10-home-feed-journal.md` §7): the places, ported from the
+// desktop's `ResearchSidebarNav.tsx`, the folder dialogs behind them, the
+// folder state's writes, and the workspace switcher.
 
 import type { ResearchFolderState } from "@session/shared";
-import { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
-import { queryKeys, queryClientDefaults } from "../src/api/queries.js";
+import { queryKeys } from "../src/api/queries.js";
 import { setTrpcClient } from "../src/api/trpc.js";
+import { useFolderDialogStore } from "../src/features/home/FolderDialogsHost.js";
+import { commitFolderState } from "../src/features/home/useFiling.js";
 import { workspaceRemovalRefusal } from "../src/features/sidebar/WorkspaceSwitcher.js";
-import { parseVisibilityFilter } from "../src/features/sidebar/filter.js";
-import {
-  applyFolderState,
-  applyOrderToSection,
-  applyTreeOrder,
-} from "../src/features/sidebar/mutations.js";
-import { useNavigationStore } from "../src/stores/navigation.js";
-import { useSelectionStore } from "../src/stores/selection.js";
 
-import { summary, tree } from "./fixtures.js";
+import { summary } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
-import { activityPage, serverSettings, workspace, WORKSPACE_ID } from "./phase6Fixtures.js";
+import { serverSettings, testQueryClient, workspace, WORKSPACE_ID } from "./phase6Fixtures.js";
 import { createTrpcStub } from "./trpcStub.js";
 
 function folderState(overrides: Partial<ResearchFolderState> = {}): ResearchFolderState {
@@ -34,112 +28,30 @@ function folderState(overrides: Partial<ResearchFolderState> = {}): ResearchFold
   };
 }
 
-function testClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { ...queryClientDefaults.queries, gcTime: Number.POSITIVE_INFINITY },
-    },
-  });
+const PAPERS = { id: "f1", name: "Papers", workspaceId: WORKSPACE_ID };
+
+function sidebarResponses(folders = folderState({ folders: [PAPERS] })): Record<string, unknown> {
+  return {
+    "workspaces.list": [workspace()],
+    "settings.get": serverSettings(),
+    "research.listTrees": [summary({ id: "t1", title: "First", workspaceId: WORKSPACE_ID })],
+    "folders.get": folders,
+    "folders.set": (input: { state: ResearchFolderState }) => input.state,
+    "drafts.list": [],
+    "research.listTrash": [],
+    "feed.recentQueriesForTrees": [],
+    "highlights.listFeed": [],
+  };
 }
 
-test("a section reorder moves only its own rows", (t) => {
-  const trees = [
-    summary({ id: "a", workspaceId: "w1" }),
-    summary({ id: "x", workspaceId: "w1", archivedAt: 1 }),
-    summary({ id: "b", workspaceId: "w1" }),
-    summary({ id: "other", workspaceId: "w2" }),
-  ];
-  const next = applyOrderToSection(trees, "w1", false, ["b", "a"]);
-  t.deepEqual(
-    next.map((tree) => tree.id),
-    ["b", "x", "a", "other"],
-  );
+// The folder dialogs' state is a store that outlives one rendered app.
+test.beforeEach(() => {
+  useFolderDialogStore.setState({ nameRequest: null, pendingDelete: null, returnFocus: null });
 });
 
-test("reorder requests omitting section items are rejected without modifying order", (t) => {
-  const trees = [summary({ id: "a" }), summary({ id: "b" })];
-  t.is(applyOrderToSection(trees, "t1-workspace", false, ["a"]), trees);
-  t.is(applyOrderToSection(trees, "w1", false, ["a", "a"]), trees);
-});
-
-test("folder updates apply optimistically and reconcile with server responses", async (t) => {
-  const stored = folderState({
-    folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
-    membership: { t1: "f1" },
-  });
-  const stub = createTrpcStub({ "folders.set": stored });
-  setTrpcClient(stub.client);
-  const client = testClient();
-  client.setQueryData(queryKeys.folders("w1"), folderState());
-
-  const guess = { ...stored, collapsed: ["f1"] };
-  const applied = await applyFolderState(client, "w1", guess);
-
-  t.true(applied);
-  t.deepEqual(client.getQueryData(queryKeys.folders("w1")), stored);
-  t.deepEqual(stub.calls.at(-1), {
-    path: "folders.set",
-    kind: "mutate",
-    input: { workspaceId: "w1", state: guess },
-  });
-});
-
-test("a failed folder update rolls back the cache to its previous state", async (t) => {
-  const before = folderState({
-    folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
-    membership: { t1: "f1" },
-  });
-  const stub = createTrpcStub({
-    "folders.set": () => {
-      throw new Error("nope");
-    },
-  });
-  setTrpcClient(stub.client);
-  const client = testClient();
-  client.setQueryData(queryKeys.folders("w1"), before);
-
-  const applied = await applyFolderState(client, "w1", { ...before, collapsed: ["f1"] });
-
-  t.false(applied);
-  t.deepEqual(client.getQueryData(queryKeys.folders("w1")), before);
-});
-
-test("tree reordering updates all cached lists and reverts upon server error", async (t) => {
-  const stub = createTrpcStub({
-    "research.reorderTrees": () => {
-      throw new Error("nope");
-    },
-  });
-  setTrpcClient(stub.client);
-  const client = testClient();
-  const trees = [summary({ id: "a", workspaceId: "w1" }), summary({ id: "b", workspaceId: "w1" })];
-  const activeKey = queryKeys.trees({ workspaceId: "w1", includeArchived: false });
-  const archivedKey = queryKeys.trees({ workspaceId: "w1", includeArchived: true });
-  client.setQueryData(activeKey, trees);
-  client.setQueryData(archivedKey, trees);
-
-  let seenDuringFlight: string[] = [];
-  const pending = applyTreeOrder(client, "w1", false, ["b", "a"]);
-  seenDuringFlight = (client.getQueryData<typeof trees>(activeKey) ?? []).map((tree) => tree.id);
-  const applied = await pending;
-
-  t.deepEqual(seenDuringFlight, ["b", "a"], "the move is applied before the round trip");
-  t.false(applied);
-  for (const key of [activeKey, archivedKey]) {
-    t.deepEqual(
-      (client.getQueryData<typeof trees>(key) ?? []).map((tree) => tree.id),
-      ["a", "b"],
-      "and is undone when the server rejects it",
-    );
-  }
-});
-
-test("visibility filter validation accepts only recognized filter values", (t) => {
-  t.is(parseVisibilityFilter("archived"), "archived");
-  t.is(parseVisibilityFilter("all"), "all");
-  t.is(parseVisibilityFilter("everything"), null);
-  t.is(parseVisibilityFilter(undefined), null);
-});
+function rows(name: "Research" | "Folders"): HTMLElement[] {
+  return within(screen.getByRole("navigation", { name })).getAllByRole("link");
+}
 
 test("workspace removal is blocked while threads are active and permitted when idle", (t) => {
   t.is(workspaceRemovalRefusal(0), null);
@@ -147,106 +59,212 @@ test("workspace removal is blocked while threads are active and permitted when i
   t.regex(String(workspaceRemovalRefusal(3)), /^3 threads/);
 });
 
-/**
- * Records which elements take pointer capture while `run` executes, and puts
- * the prototype back afterwards. `setPointerCapture` is a jsdom stub
- * (`test/setup.ts`), so swapping it is the only way to see the call the row's
- * drag handler would make.
- */
-function capturedPointersDuring(run: () => void): Element[] {
-  const captured: Element[] = [];
-  const original = Object.getOwnPropertyDescriptor(Element.prototype, "setPointerCapture");
-  Object.defineProperty(Element.prototype, "setPointerCapture", {
-    configurable: true,
-    writable: true,
-    value: function record(this: Element) {
-      captured.push(this);
+test.serial("a folder change shows at once and takes the server's copy", async (t) => {
+  const client = testQueryClient();
+  const stub = createTrpcStub({
+    "folders.set": (input: { state: ResearchFolderState }) => ({
+      ...input.state,
+      collapsed: ["normalized"],
+    }),
+  });
+  setTrpcClient(stub.client);
+  client.setQueryData(queryKeys.folders(WORKSPACE_ID), folderState());
+  const writing = commitFolderState(client, WORKSPACE_ID, (state) => ({
+    ...state,
+    membership: { t1: "f1" },
+  }));
+  t.deepEqual(
+    client.getQueryData<ResearchFolderState>(queryKeys.folders(WORKSPACE_ID))?.membership,
+    { t1: "f1" },
+    "written before the server answers",
+  );
+  await writing;
+  t.deepEqual(
+    client.getQueryData<ResearchFolderState>(queryKeys.folders(WORKSPACE_ID))?.collapsed,
+    ["normalized"],
+  );
+  setTrpcClient(null);
+});
+
+test.serial("a refused folder change restores the state it replaced and rejects", async (t) => {
+  const client = testQueryClient();
+  const stub = createTrpcStub({
+    "folders.set": () => {
+      throw new Error("A folder named “Papers” already exists.");
     },
   });
-  try {
-    run();
-  } finally {
-    if (original) Object.defineProperty(Element.prototype, "setPointerCapture", original);
-  }
-  return captured;
-}
-
-const sidebarResponses = {
-  "workspaces.list": [workspace()],
-  "settings.get": serverSettings(),
-  "research.listTrees": [
-    summary({ id: "t1", title: "First", workspaceId: WORKSPACE_ID }),
-    summary({ id: "t2", title: "Second", workspaceId: WORKSPACE_ID }),
-    summary({ id: "t3", title: "Retired", workspaceId: WORKSPACE_ID, archivedAt: 1 }),
-  ],
-  "folders.get": folderState(),
-  "feed.recentActivity": activityPage([]),
-  "highlights.listFeed": [],
-};
-
-test.serial("`?filter=` chooses which sections the sidebar shows", async (t) => {
-  useSelectionStore.getState().clear();
-  useNavigationStore.getState().setVisibilityFilter("active");
-  const app = await renderApp("/?filter=archived", { responses: sidebarResponses });
-
-  await waitUntil(
-    t,
-    () => screen.queryAllByTitle("Retired").length > 0,
-    "the archived thread is listed under an archived filter",
+  setTrpcClient(stub.client);
+  const before = folderState({ folders: [PAPERS] });
+  client.setQueryData(queryKeys.folders(WORKSPACE_ID), before);
+  await t.throwsAsync(
+    commitFolderState(client, WORKSPACE_ID, (state) => ({
+      ...state,
+      folders: [...state.folders, { id: "f2", name: "Papers", workspaceId: WORKSPACE_ID }],
+    })),
+    { message: "A folder named “Papers” already exists." },
   );
-  t.is(useNavigationStore.getState().visibilityFilter, "archived");
-  t.is(screen.queryAllByTitle("First").length, 0, "and the active list is hidden");
-  app.unmount();
+  t.deepEqual(client.getQueryData(queryKeys.folders(WORKSPACE_ID)), before);
+  setTrpcClient(null);
 });
 
 test.serial(
-  "Cmd-click selects multiple items and applies menu actions to the selection",
+  "the sidebar lists Home, Highlights, then Drafts, the folders, Archive and Trash",
   async (t) => {
-    useSelectionStore.getState().clear();
-    useNavigationStore.getState().setVisibilityFilter("active");
-    const app = await renderApp("/", { responses: sidebarResponses });
-
+    const app = await renderApp("/", {
+      queryClient: testQueryClient(),
+      responses: sidebarResponses(),
+    });
     await waitUntil(
       t,
-      () => screen.queryAllByTitle("First").length > 0,
-      "the sidebar lists threads",
+      () => screen.queryByRole("navigation", { name: "Folders" }) !== null,
+      "places",
     );
-    const first = screen.getAllByTitle("First")[0] as HTMLElement;
-    const second = screen.getAllByTitle("Second")[0] as HTMLElement;
-    fireEvent.click(first, { metaKey: true });
-    fireEvent.click(second, { metaKey: true });
+    await waitUntil(t, () => rows("Folders").length === 4, "the folder rows");
 
-    await waitUntil(
-      t,
-      () => useSelectionStore.getState().ids.length === 2,
-      "a modified click extends the selection rather than navigating",
+    t.deepEqual(
+      rows("Research").map((row) => row.textContent),
+      ["Home", "Highlights"],
     );
-    t.truthy(screen.getByText("2 selected"));
-
-    fireEvent.contextMenu(second);
-    await waitUntil(
-      t,
-      () => screen.queryAllByRole("menu").length > 0,
-      "right-clicking inside the selection opens a menu",
+    t.deepEqual(
+      rows("Folders").map((row) => row.textContent),
+      ["Drafts", "Papers", "Archive", "Trash"],
     );
-    const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
-    t.truthy(within(menu).getByText("New folder with 2 items"));
-    // Archive and Delete carried "A" and "D" keycaps that nothing bound.
-    t.is(
-      menu.querySelectorAll("kbd").length,
-      0,
-      "omits keyboard shortcuts from menu items without handlers",
+    // Every place but Highlights and Trash takes card drops; Home is Unfiled.
+    const drops = [...rows("Research"), ...rows("Folders")].map(
+      (row) => row.parentElement?.dataset["researchDrop"] ?? null,
     );
-    useSelectionStore.getState().clear();
+    t.deepEqual(drops, ["system:unfiled", null, "system:drafts", "f1", "system:archive", null]);
+    t.is(rows("Research")[0]?.getAttribute("aria-current"), "page");
     app.unmount();
   },
 );
 
-test.serial("creating a workspace names it and sends the name", async (t) => {
-  useSelectionStore.getState().clear();
+test.serial("New folder asks for a name, refuses a taken one, and saves the folder", async (t) => {
   const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: sidebarResponses(),
+  });
+  await waitUntil(t, () => screen.queryByRole("button", { name: "New folder" }) !== null, "button");
+
+  fireEvent.click(screen.getByRole("button", { name: "New folder" }));
+  const dialog = await screen.findByRole("dialog", { name: "New folder" });
+  const field = within(dialog).getByRole("textbox", { name: "Folder name" });
+  t.is((field as HTMLInputElement).value, "", "a new folder has no default name");
+
+  fireEvent.change(field, { target: { value: "papers" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+  t.is(
+    (await within(dialog).findByRole("alert")).textContent,
+    "A folder named “papers” already exists.",
+  );
+
+  fireEvent.change(field, { target: { value: "Reading  list " } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "folders.set"),
+    "the folder is saved",
+  );
+  const saved = app.trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    state: ResearchFolderState;
+  };
+  t.deepEqual(
+    saved.state.folders.map((folder) => folder.name),
+    ["Papers", "Reading list"],
+  );
+  await waitUntil(t, () => screen.queryByRole("dialog") === null, "the dialog closes");
+  app.unmount();
+});
+
+test.serial("the server's refusal shows in the name dialog with the name kept", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
     responses: {
-      ...sidebarResponses,
+      ...sidebarResponses(),
+      "folders.set": () => {
+        throw new Error("Use 40 characters or fewer.");
+      },
+    },
+  });
+  await waitUntil(t, () => screen.queryByRole("button", { name: "New folder" }) !== null, "button");
+  fireEvent.click(screen.getByRole("button", { name: "New folder" }));
+  const dialog = await screen.findByRole("dialog", { name: "New folder" });
+  const field = within(dialog).getByRole("textbox", { name: "Folder name" });
+  fireEvent.change(field, { target: { value: "Reading" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+  t.is((await within(dialog).findByRole("alert")).textContent, "Use 40 characters or fewer.");
+  t.is((field as HTMLInputElement).value, "Reading");
+  app.unmount();
+});
+
+test.serial("a folder's Delete… opens its view with the two-step confirmation", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: sidebarResponses(),
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("button", { name: "Actions for Papers" }) !== null,
+    "the folder menu",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Actions for Papers" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Delete “Papers”?" });
+  t.truthy(await screen.findByRole("heading", { name: "Papers", level: 1 }), "the folder's view");
+  t.regex(dialog.textContent ?? "", /The folder is empty\. It moves to the Trash\./);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Move to Trash" }));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "folders.set"),
+    "the folder moves to the Trash",
+  );
+  const saved = app.trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    state: ResearchFolderState;
+  };
+  t.is(typeof saved.state.folders[0]?.trashedAt, "number");
+  await waitUntil(
+    t,
+    () => screen.queryByRole("heading", { name: "Home", level: 1 }) !== null,
+    "back on Home",
+  );
+  app.unmount();
+});
+
+test.serial("Rename… renames the folder", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: sidebarResponses(),
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("button", { name: "Actions for Papers" }) !== null,
+    "the folder menu",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Actions for Papers" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Rename folder" });
+  const field = within(dialog).getByRole("textbox", { name: "Folder name" });
+  t.is((field as HTMLInputElement).value, "Papers");
+  fireEvent.change(field, { target: { value: "Articles" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Rename" }));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "folders.set"),
+    "the name is saved",
+  );
+  const saved = app.trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    state: ResearchFolderState;
+  };
+  t.is(saved.state.folders[0]?.name, "Articles");
+  app.unmount();
+});
+
+test.serial("creating a workspace names it and sends the name", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: {
+      ...sidebarResponses(),
       "workspaces.create": workspace({ id: "w2", name: "Reading" }),
     },
   });
@@ -257,21 +275,12 @@ test.serial("creating a workspace names it and sends the name", async (t) => {
     "the switcher shows the scoped workspace",
   );
   fireEvent.click(screen.getAllByText("Collective memory")[0] as HTMLElement);
-  await waitUntil(
-    t,
-    () => screen.queryAllByText("New workspace…").length > 0,
-    "the switcher menu offers a new workspace",
-  );
-  fireEvent.click(screen.getByText("New workspace…"));
-
-  await waitUntil(
-    t,
-    () => screen.queryAllByLabelText("Workspace name").length > 0,
-    "the name prompt replaces the desktop's native folder picker",
-  );
-  const field = screen.getByLabelText("Workspace name");
+  fireEvent.click(await screen.findByText("New workspace…"));
+  const field = await screen.findByLabelText("Workspace name");
   fireEvent.change(field, { target: { value: "Reading" } });
-  fireEvent.click(screen.getByText("Create"));
+  const dialog = field.closest<HTMLElement>("[role='dialog']");
+  if (!dialog) throw new Error("the name prompt is not a dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
 
   await waitUntil(
     t,
@@ -284,137 +293,21 @@ test.serial("creating a workspace names it and sends the name", async (t) => {
   app.unmount();
 });
 
-test.serial("a mouse press on a row menu item stays with the menu", async (t) => {
-  useSelectionStore.getState().clear();
-  useNavigationStore.getState().setVisibilityFilter("active");
+test.serial("guests see Home alone", async (t) => {
   const app = await renderApp("/", {
-    responses: {
-      ...sidebarResponses,
-      "research.listTrees": [
-        summary({ id: "t1", title: "First", workspaceId: WORKSPACE_ID, runningCount: 0 }),
-      ],
-      "research.archiveTree": tree({ id: "t1", workspaceId: WORKSPACE_ID, archivedAt: 2 }),
-    },
+    user: null,
+    queryClient: testQueryClient(),
+    responses: { "feed.recentActivity": { items: [], nextCursor: null } },
   });
-
   await waitUntil(
     t,
-    () => screen.queryAllByTitle("First").length > 0,
-    "the sidebar lists a thread",
+    () => screen.queryByRole("navigation", { name: "Research" }) !== null,
+    "the places",
   );
-  const row = screen.getAllByTitle("First")[0] as HTMLElement;
-
-  fireEvent.click(screen.getByLabelText("Actions for First"));
-  await waitUntil(
-    t,
-    () => screen.queryAllByRole("menuitem", { name: /^Archive/ }).length > 0,
-    "the row's ⋯ menu opens",
+  t.deepEqual(
+    rows("Research").map((row) => row.textContent),
+    ["Home"],
   );
-  const archive = screen.getByRole("menuitem", { name: /^Archive/ });
-  // The premise of the guard: Base UI portals the popup, so the item is a React
-  // descendant of the row but not a DOM one.
-  t.false(row.contains(archive), "the item is outside the row in the DOM");
-
-  // The row's drag handler must ignore the press React replays onto it. Taking
-  // pointer capture here is what used to retarget the release to the row and
-  // leave the browser dispatching `click` on `<body>` instead of on the item.
-  const captured = capturedPointersDuring(() => {
-    fireEvent.pointerDown(archive, { button: 0, pointerId: 1 });
-  });
-  t.deepEqual(captured, [], "no row captures the pointer");
-
-  fireEvent.click(archive);
-  await waitUntil(
-    t,
-    () => app.trpc.calls.some((call) => call.path === "research.archiveTree"),
-    "the item's own action runs",
-  );
-  t.false(
-    document.body.textContent?.includes("could not be loaded") ?? false,
-    "and the thread behind the menu is not opened by the same click",
-  );
-  app.unmount();
-});
-
-test.serial("a press on the row itself still arms the drag", async (t) => {
-  useSelectionStore.getState().clear();
-  useNavigationStore.getState().setVisibilityFilter("active");
-  const app = await renderApp("/", { responses: sidebarResponses });
-
-  await waitUntil(t, () => screen.queryAllByTitle("First").length > 0, "the sidebar lists threads");
-  const row = screen.getAllByTitle("First")[0] as HTMLElement;
-
-  const captured = capturedPointersDuring(() => {
-    fireEvent.pointerDown(row, { button: 0, pointerId: 1 });
-  });
-  t.deepEqual(captured, [row], "the row takes the pointer for its own press");
-  app.unmount();
-});
-
-test.serial("displays status badges for unread updates, failures, and active runs", async (t) => {
-  useSelectionStore.getState().clear();
-  useNavigationStore.getState().setVisibilityFilter("active");
-  const app = await renderApp("/", {
-    responses: {
-      ...sidebarResponses,
-      "research.listTrees": [
-        summary({ id: "t1", title: "Quiet", workspaceId: WORKSPACE_ID, runningCount: 0 }),
-        summary({
-          id: "t2",
-          title: "Updated",
-          workspaceId: WORKSPACE_ID,
-          runningCount: 0,
-          hasUnseenUpdate: true,
-        }),
-        summary({
-          id: "t3",
-          title: "Broken",
-          workspaceId: WORKSPACE_ID,
-          runningCount: 0,
-          // An unseen failure takes display precedence over an unread update.
-          hasUnseenUpdate: true,
-          hasUnseenFailure: true,
-        }),
-        summary({ id: "t4", title: "Busy", workspaceId: WORKSPACE_ID, runningCount: 2 }),
-      ],
-    },
-  });
-
-  await waitUntil(t, () => screen.queryAllByTitle("Quiet").length > 0, "the sidebar lists threads");
-  // The visible badge only: each carries a visually hidden sentence for
-  // screen readers as well.
-  const badge = (title: string) => {
-    const span = (screen.getAllByTitle(title)[0] as HTMLElement).querySelector("span[title]");
-    if (!span) return "";
-    return [...span.childNodes]
-      .filter((node) => !(node instanceof HTMLElement && node.classList.contains("sr-only")))
-      .map((node) => node.textContent ?? "")
-      .join("")
-      .trim();
-  };
-
-  t.is(badge("Quiet"), "", "a seen, idle thread carries no badge");
-  t.is(badge("Updated"), "New");
-  t.is(badge("Broken"), "!");
-  t.is(badge("Busy"), "2", "a run in flight shows its count instead");
-
-  const statusDot = (title: string) =>
-    (screen.getAllByTitle(title)[0] as HTMLElement).querySelector(":scope > span[aria-hidden]");
-  t.true(
-    statusDot("Quiet")?.className.includes("bg-fg-subtle/50"),
-    "a completed thread uses a fainter gray status mark",
-  );
-  t.true(
-    statusDot("Busy")?.className.includes("bg-status-active"),
-    "a running thread keeps the active mark",
-  );
-  t.true(
-    statusDot("Broken")?.className.includes("bg-status-failed"),
-    "a failed thread keeps the failed mark",
-  );
-
-  const menu = screen.getByLabelText("Actions for Quiet");
-  t.true(menu.className.includes("opacity-0"), "the ⋯ trigger is hidden until hover");
-  t.true(menu.className.includes("absolute"), "and overlays the title rather than taking a column");
+  t.is(screen.queryByRole("navigation", { name: "Folders" }), null);
   app.unmount();
 });
