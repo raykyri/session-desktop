@@ -22,6 +22,8 @@ CREATE TABLE `tree_invites` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `tree_invites_token_hash_unique` ON `tree_invites` (`token_hash`);--> statement-breakpoint
 CREATE INDEX `tree_invites_tree_idx` ON `tree_invites` (`tree_id`);--> statement-breakpoint
+CREATE INDEX `tree_invites_created_by_idx` ON `tree_invites` (`created_by`,`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `tree_invites_login_pending_uq` ON `tree_invites` (`tree_id`,lower("github_login")) WHERE "tree_invites"."github_login" IS NOT NULL AND "tree_invites"."accepted_at" IS NULL AND "tree_invites"."revoked_at" IS NULL;--> statement-breakpoint
 CREATE TABLE `tree_member_removals` (
 	`tree_id` text NOT NULL,
 	`user_id` text NOT NULL,
@@ -41,11 +43,13 @@ CREATE TABLE `tree_members` (
 	`created_at` integer NOT NULL,
 	`archived_at` integer,
 	`trashed_at` integer,
+	`trash_workspace_id` text,
 	`folder_id` text,
 	PRIMARY KEY(`tree_id`, `user_id`),
 	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`invited_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`trash_workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`folder_id`) REFERENCES `folders`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
@@ -468,6 +472,7 @@ CREATE TABLE `widget_revisions` (
 	FOREIGN KEY (`node_id`) REFERENCES `nodes`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `widget_revisions_node_idx` ON `widget_revisions` (`node_id`);--> statement-breakpoint
 CREATE TABLE `widget_state` (
 	`tree_id` text NOT NULL,
 	`artifact_id` text NOT NULL,

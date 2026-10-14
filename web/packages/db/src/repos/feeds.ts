@@ -18,7 +18,7 @@ import type {
   RecentResearchQueryPage,
 } from "@session/shared";
 import { recentResearchQueryFromNode } from "@session/shared/lib/activity";
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { nodes } from "../schema/nodes.js";
@@ -181,9 +181,16 @@ export interface RecentQueriesOptions {
   workspaceId?: string | null | undefined;
 }
 
-/** Root questions and notes alone, newest first — the research-only half of
+/**
+ * Root questions and notes alone, newest first — the research-only half of
  * the feed. Documents, archived threads and threads in the Trash are left
- * out. */
+ * out.
+ *
+ * Driven from the owner's `trees` rows (`trees_sidebar_idx` on `owner_id`),
+ * each joined to its root by primary key, rather than from `nodes`, whose
+ * `created_at` order would otherwise lead the planner through every
+ * account's roots. `CROSS JOIN` keeps that join order.
+ */
 export function recentQueries(
   db: SessionDatabase,
   userId: string,
@@ -191,29 +198,34 @@ export function recentQueries(
 ): RecentResearchQueryPage {
   const limit = clampLimit(options.limit);
   const cursor = options.before ?? null;
-  const rows = db
-    .select({ node: nodes })
-    .from(nodes)
-    .innerJoin(trees, eq(trees.id, nodes.treeId))
-    .where(
-      and(
-        eq(trees.ownerId, userId),
-        isNull(nodes.parentNodeId),
-        ne(nodes.type, "document"),
-        isNull(trees.archivedAt),
-        isNull(trees.trashedAt),
-        options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
-        cursor
-          ? or(
-              lt(nodes.createdAt, cursor.createdAt),
-              and(eq(nodes.createdAt, cursor.createdAt), lt(nodes.id, cursor.nodeId)),
-            )
-          : undefined,
-      ),
-    )
-    .orderBy(desc(nodes.createdAt), desc(nodes.id))
-    .limit(limit + 1)
-    .all();
+  const conditions = [
+    sql`${trees.ownerId} = ${userId}`,
+    sql`${trees.archivedAt} IS NULL`,
+    sql`${trees.trashedAt} IS NULL`,
+    sql`${nodes.id} = ${trees.rootNodeId}`,
+    sql`${nodes.parentNodeId} IS NULL`,
+    sql`${nodes.type} <> 'document'`,
+    ...(options.workspaceId ? [sql`${trees.workspaceId} = ${options.workspaceId}`] : []),
+    ...(cursor
+      ? [
+          sql`(${nodes.createdAt} < ${cursor.createdAt} OR (${nodes.createdAt} = ${cursor.createdAt} AND ${nodes.id} < ${cursor.nodeId}))`,
+        ]
+      : []),
+  ];
+  const ids = db.all<{ id: string }>(
+    sql`SELECT ${nodes.id} AS id FROM ${trees} CROSS JOIN ${nodes} WHERE ${sql.join(
+      conditions,
+      sql` AND `,
+    )} ORDER BY ${nodes.createdAt} DESC, ${nodes.id} DESC LIMIT ${limit + 1}`,
+  );
+  const byId = nodeRows(
+    db,
+    ids.map((row) => row.id),
+  );
+  const rows = ids.flatMap((row) => {
+    const node = byId.get(row.id);
+    return node ? [{ node }] : [];
+  });
   const hasMore = rows.length > limit;
   const page = (hasMore ? rows.slice(0, limit) : rows).map((row) =>
     toRecentResearchQuery(row.node),

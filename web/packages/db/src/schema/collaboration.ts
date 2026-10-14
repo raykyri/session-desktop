@@ -1,10 +1,19 @@
 // Thread sharing (`docs/02-domain-model-and-database.md` §3.5).
 
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 import { folders } from "./folders.js";
 import { trees } from "./trees.js";
 import { users } from "./users.js";
+import { workspaces } from "./workspaces.js";
 
 export const MEMBER_ROLES = ["commenter", "viewer"] as const;
 
@@ -28,6 +37,12 @@ export const treeMembers = sqliteTable(
     /** Set while the thread is in this member's Trash: it is listed only
      * there for them, and nothing changes for anyone else. */
     trashedAt: integer("trashed_at"),
+    /** The member's workspace whose Trash lists the thread while
+     * `trashed_at` is set: the one they moved it to the Trash from. Null
+     * (and a workspace since deleted) is their default workspace. */
+    trashWorkspaceId: text("trash_workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
     /** The member's own folder the thread is filed in; null is unfiled. */
     folderId: text("folder_id").references(() => folders.id, { onDelete: "set null" }),
   },
@@ -57,7 +72,17 @@ export const treeInvites = sqliteTable(
     acceptedAt: integer("accepted_at"),
     revokedAt: integer("revoked_at"),
   },
-  (table) => [index("tree_invites_tree_idx").on(table.treeId)],
+  (table) => [
+    index("tree_invites_tree_idx").on(table.treeId),
+    index("tree_invites_created_by_idx").on(table.createdBy, table.createdAt),
+    // One pending login invitation per account and thread: inviting the same
+    // login again renews it (`sharing.createInvite`).
+    uniqueIndex("tree_invites_login_pending_uq")
+      .on(table.treeId, sql`lower(${table.githubLogin})`)
+      .where(
+        sql`${table.githubLogin} IS NOT NULL AND ${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`,
+      ),
+  ],
 );
 
 /** Follow: the threads a person gets notifications for. */

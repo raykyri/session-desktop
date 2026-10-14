@@ -2,7 +2,7 @@
 // produced, and each reader's saved inputs for a revision (the desktop's
 // research artifact store, `src-tauri/src/research_artifacts.rs`).
 
-import { foreignKey, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { foreignKey, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { nodes } from "./nodes.js";
 import { trees } from "./trees.js";
@@ -35,7 +35,11 @@ export const widgetRevisions = sqliteTable(
     html: text("html").notNull(),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.treeId, table.artifactId, table.revision] })],
+  (table) => [
+    primaryKey({ columns: [table.treeId, table.artifactId, table.revision] }),
+    // The cascade from `nodes`: without it every node delete scans the table.
+    index("widget_revisions_node_idx").on(table.nodeId),
+  ],
 );
 
 /** Saved widget inputs, per person and per revision. */

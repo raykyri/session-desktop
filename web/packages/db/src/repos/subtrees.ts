@@ -8,7 +8,7 @@
 // constraint, so its nodes are removed here first and the tree row is deleted
 // with nothing left to cascade.
 
-import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
@@ -49,40 +49,56 @@ export function deleteNodesInOrder(db: SessionDatabase, nodeIds: readonly string
   return removed;
 }
 
-/** Deletes every node of the given trees, repeatedly removing the current
- * leaves. Terminates because each pass removes at least the deepest level. */
+/** Most ids one `DELETE ... WHERE id IN (...)` names, well under SQLite's
+ * bound-parameter limit. */
+const DELETE_CHUNK = 500;
+
+/**
+ * Deletes every node of the given trees. The `(id, parent)` pairs are read
+ * once and each node's depth computed in memory; the nodes are then deleted
+ * a depth at a time, deepest first, in chunks. A row's `RESTRICT` check runs
+ * as it is deleted, so one statement must not hold a parent and its child:
+ * a depth never does. Linear in the number of nodes, however deep a chain
+ * is; the earlier leaf-peeling loop read the whole set once per level.
+ */
 export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string[]): number {
   if (treeIds.length === 0) {
     return 0;
   }
-  const ids = [...treeIds];
-  let removed = 0;
-  for (;;) {
-    const parentIds = db
-      .select({ id: nodes.parentNodeId })
-      .from(nodes)
-      .where(and(inArray(nodes.treeId, ids), isNotNull(nodes.parentNodeId)))
-      .all()
-      .flatMap((row) => (row.id === null ? [] : [row.id]));
-    const leaves = db
-      .select({ id: nodes.id })
-      .from(nodes)
-      .where(
-        parentIds.length === 0
-          ? inArray(nodes.treeId, ids)
-          : and(inArray(nodes.treeId, ids), notInArray(nodes.id, parentIds)),
-      )
-      .all()
-      .map((row) => row.id);
-    if (leaves.length === 0) {
-      return removed;
+  const rows = db
+    .select({ id: nodes.id, parentId: nodes.parentNodeId })
+    .from(nodes)
+    .where(inArray(nodes.treeId, [...treeIds]))
+    .all();
+  const children = new Map<string, string[]>();
+  const known = new Set(rows.map((row) => row.id));
+  const roots: string[] = [];
+  for (const row of rows) {
+    if (row.parentId === null || !known.has(row.parentId)) {
+      roots.push(row.id);
+      continue;
     }
-    removed += db
-      .delete(nodes)
-      .where(inArray(nodes.id, leaves))
-      .returning({ id: nodes.id })
-      .all().length;
+    const list = children.get(row.parentId) ?? [];
+    list.push(row.id);
+    children.set(row.parentId, list);
   }
+  const levels: string[][] = [];
+  for (let frontier = roots; frontier.length > 0;) {
+    levels.push(frontier);
+    frontier = frontier.flatMap((id) => children.get(id) ?? []);
+  }
+  let removed = 0;
+  for (let depth = levels.length - 1; depth >= 0; depth -= 1) {
+    const level = levels[depth] ?? [];
+    for (let start = 0; start < level.length; start += DELETE_CHUNK) {
+      removed += db
+        .delete(nodes)
+        .where(inArray(nodes.id, level.slice(start, start + DELETE_CHUNK)))
+        .returning({ id: nodes.id })
+        .all().length;
+    }
+  }
+  return removed;
 }
 
 /**

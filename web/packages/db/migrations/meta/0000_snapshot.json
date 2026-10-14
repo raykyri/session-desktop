@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b224a881-6842-4559-a692-9bee4953fd77",
+  "id": "3cb4b6ad-93c3-47d9-a873-054501f6f458",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "backfills": {
@@ -123,6 +123,23 @@
             "tree_id"
           ],
           "isUnique": false
+        },
+        "tree_invites_created_by_idx": {
+          "name": "tree_invites_created_by_idx",
+          "columns": [
+            "created_by",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "tree_invites_login_pending_uq": {
+          "name": "tree_invites_login_pending_uq",
+          "columns": [
+            "tree_id",
+            "lower(\"github_login\")"
+          ],
+          "isUnique": true,
+          "where": "\"tree_invites\".\"github_login\" IS NOT NULL AND \"tree_invites\".\"accepted_at\" IS NULL AND \"tree_invites\".\"revoked_at\" IS NULL"
         }
       },
       "foreignKeys": {
@@ -308,6 +325,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "trash_workspace_id": {
+          "name": "trash_workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "folder_id": {
           "name": "folder_id",
           "type": "text",
@@ -365,6 +389,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "invited_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tree_members_trash_workspace_id_workspaces_id_fk": {
+          "name": "tree_members_trash_workspace_id_workspaces_id_fk",
+          "tableFrom": "tree_members",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "trash_workspace_id"
           ],
           "columnsTo": [
             "id"
@@ -3313,7 +3350,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "widget_revisions_node_idx": {
+          "name": "widget_revisions_node_idx",
+          "columns": [
+            "node_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "widget_revisions_tree_id_trees_id_fk": {
           "name": "widget_revisions_tree_id_trees_id_fk",
@@ -3533,6 +3578,13 @@
   },
   "internal": {
     "indexes": {
+      "tree_invites_login_pending_uq": {
+        "columns": {
+          "lower(\"github_login\")": {
+            "isExpression": true
+          }
+        }
+      },
       "feed_items_order_idx": {
         "columns": {
           "\"occurred_at\" desc": {
