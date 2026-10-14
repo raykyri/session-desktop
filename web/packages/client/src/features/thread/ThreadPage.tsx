@@ -110,7 +110,7 @@ import {
 } from "../../api/queries.js";
 import { writeClipboardText } from "../../lib/clipboard.js";
 import { formatChord } from "../../lib/platform.js";
-import { researchImages } from "../../lib/researchImages.js";
+import { researchImageBlockReason, researchImages } from "../../lib/researchImages.js";
 import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
 import { ITEM_UNAVAILABLE_MESSAGE, pushToast, threadErrorMessage } from "../../lib/toast.js";
 import { markDraftEdited, nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
@@ -2078,6 +2078,15 @@ function ThreadView({ treeId }: { treeId: string }) {
         }
       : null;
   };
+  /** Why the images of the ask box keyed `key` cannot be sent with its
+   * model, or null (`researchImageBlockReason`). */
+  const imageBlockFor = (key: string, node: ResearchNode | undefined) => {
+    const choice = choiceFor(key, node);
+    const model = choice
+      ? (models.find((candidate) => candidate.id === choice.model) ?? null)
+      : null;
+    return researchImageBlockReason(model, composerImages[key]);
+  };
   const imagesUpdate =
     (key: string) => (update: (current: ResearchImageAttachment[]) => ResearchImageAttachment[]) =>
       setComposerImages((current) => {
@@ -2156,6 +2165,7 @@ function ThreadView({ treeId }: { treeId: string }) {
         note={note}
         images={composerImages[headId]}
         onImagesChange={imagesUpdate(headId)}
+        imageBlockReason={imageBlockFor(headId, tail)}
         model={modelControl(headId, tail)}
         sendLabel={waiting && !editing ? "Queue" : "Send"}
         shortcutHint={hintsShown && currentLevel === level ? formatChord("mod+j") : null}
@@ -2180,6 +2190,7 @@ function ThreadView({ treeId }: { treeId: string }) {
         submitting={submittingKey === key}
         images={composerImages[key]}
         onImagesChange={imagesUpdate(key)}
+        imageBlockReason={imageBlockFor(key, nodeById.get(group.parentNodeId))}
         model={modelControl(key, nodeById.get(group.parentNodeId))}
         onChange={(value) => setComposerValue(key, value)}
         onSubmit={() => void submitPendingBranch()}

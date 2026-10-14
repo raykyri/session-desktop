@@ -3,7 +3,7 @@
 // the model and effort menu, Save draft, images, and the draft it keeps.
 
 import type { ModelInfo, ResearchImageAttachment } from "@session/shared";
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
 
 import { askSwitchKeyTarget } from "../src/features/composer/AskNoteSwitch.js";
@@ -22,6 +22,8 @@ import {
   MAX_PROMPT_WORDS,
   oversizeRefusal,
 } from "../src/features/composer/limits.js";
+import { ConversationComposer } from "../src/features/thread/ConversationComposer.js";
+import { postFollowUpImageBlock } from "../src/features/thread/PostFollowUpField.js";
 import {
   acceptResearchImageFiles,
   pasteAttachesImages,
@@ -197,6 +199,73 @@ test("a model that can't read images, or too many bytes, blocks the send", (t) =
   t.is(researchImageLabel(1), "[Image]");
   t.is(researchImageLabel(3), "[3 images]");
   t.is(researchImageLabel(0), null);
+});
+
+test("a note follow-up's images are checked against the Ask model, and refused as a note", (t) => {
+  const image: ResearchImageAttachment = {
+    kind: "image",
+    id: "i",
+    mimeType: "image/png",
+    byteSize: 1,
+  };
+  const models = [model(), model({ id: "deepseek", label: "DeepSeek", supportsImages: false })];
+  t.is(
+    postFollowUpImageBlock(false, models, { model: "gemini-flash", effort: null }, [image]),
+    null,
+  );
+  t.is(
+    postFollowUpImageBlock(false, models, { model: "deepseek", effort: null }, [image]),
+    "DeepSeek can't read images.",
+  );
+  t.is(
+    postFollowUpImageBlock(true, models, { model: "gemini-flash", effort: null }, [image]),
+    "Notes can't include images. Switch to Ask to send them with a question.",
+  );
+  t.is(postFollowUpImageBlock(false, models, { model: "deepseek", effort: null }, []), null);
+});
+
+test.serial("a thread ask box keeps Send disabled and says why its images can't go", (t) => {
+  const image: ResearchImageAttachment = {
+    kind: "image",
+    id: "i",
+    mimeType: "image/png",
+    byteSize: 1,
+  };
+  let sent = 0;
+  const props = {
+    value: "What is in this picture?",
+    placeholder: "Ask a follow-up",
+    disabled: false,
+    canSubmit: true,
+    submitting: false,
+    onChange: () => {},
+    onSubmit: () => {
+      sent += 1;
+    },
+  };
+  const view = render(
+    <ConversationComposer
+      {...props}
+      images={[image]}
+      imageBlockReason="DeepSeek can't read images."
+    />,
+  );
+  const send = screen.getByRole<HTMLButtonElement>("button", { name: "Send" });
+  t.true(send.disabled);
+  t.truthy(screen.getByRole("alert"));
+  t.is(screen.getByRole("alert").textContent, "DeepSeek can't read images.");
+  fireEvent.keyDown(screen.getByRole("textbox"), {
+    key: "Enter",
+    metaKey: true,
+    ctrlKey: true,
+  });
+  t.is(sent, 0, "⌘↵ does not send either");
+  view.rerender(
+    <ConversationComposer {...props} images={[]} imageBlockReason="DeepSeek can't read images." />,
+  );
+  t.false(screen.getByRole<HTMLButtonElement>("button", { name: "Send" }).disabled);
+  t.is(screen.queryByRole("alert"), null, "without images there is nothing to refuse");
+  cleanup();
 });
 
 /* -------------------------------------------------------------------------

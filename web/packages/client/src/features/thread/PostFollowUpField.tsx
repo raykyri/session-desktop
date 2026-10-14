@@ -15,7 +15,7 @@ import { useId, useImperativeHandle, useLayoutEffect, useRef, useState } from "r
 import type { FocusEvent, KeyboardEvent, Ref } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { RESEARCH_NOTE_IMAGE_ERROR } from "../../lib/researchImages.js";
+import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
 import {
   ComposerSubmitShortcutGlyph,
@@ -60,6 +60,21 @@ export function postFollowUpAskLabel(
     findModel(choice.model)?.label ??
     choice.model;
   return `Ask ${label}`;
+}
+
+/** Why the box's images cannot be sent, or null: notes can't include images,
+ * and an AI follow-up's are checked against the model it runs on (the
+ * desktop's `postFollowUpImageBlock`). */
+export function postFollowUpImageBlock(
+  asNote: boolean,
+  models: readonly ModelInfo[],
+  choice: ModelChoice | null,
+  images: readonly ResearchImageAttachment[],
+): string | null {
+  if (images.length === 0) return null;
+  if (asNote) return RESEARCH_NOTE_IMAGE_ERROR;
+  const model = choice ? (models.find((candidate) => candidate.id === choice.model) ?? null) : null;
+  return researchImageBlockReason(model, images);
 }
 
 export function PostFollowUpField({
@@ -119,7 +134,7 @@ export function PostFollowUpField({
   // switching to Note closes it, so it never reopens by itself.
   const menuOpen = menuAnchor !== null && expanded && !asNote;
   const setMenuOpen = (open: boolean) => setMenuAnchor(open ? askSegmentRef.current : null);
-  const imageBlock = asNote && images.length > 0 ? RESEARCH_NOTE_IMAGE_ERROR : null;
+  const imageBlock = postFollowUpImageBlock(asNote, models, choice, images);
   const problem = imageInput.error ?? imageBlock ?? error;
   const ready = Boolean(draft.trim()) && !submitting && imageInput.saving === 0 && !imageBlock;
   const askLabel = postFollowUpAskLabel(models, choice);

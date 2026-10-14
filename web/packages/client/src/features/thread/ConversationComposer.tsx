@@ -58,6 +58,10 @@ export const ConversationComposer = forwardRef<
     /** The attached images; with `onImagesChange`, the box accepts more. */
     images?: readonly ResearchImageAttachment[];
     onImagesChange?: ImagesUpdate;
+    /** Why the attached images cannot be sent with the chosen model (it
+     * can't read images, or they total more than a message carries); Send
+     * stays disabled while there are images. */
+    imageBlockReason?: string | null;
     /** The model and effort the question runs on, and the models to pick
      * from; without them the box has no picker. */
     model?: {
@@ -86,6 +90,7 @@ export const ConversationComposer = forwardRef<
     ariaLabel = "Ask a follow-up",
     images = NO_IMAGES,
     onImagesChange,
+    imageBlockReason = null,
     model = null,
     sendLabel = "Send",
     shortcutHint = null,
@@ -112,10 +117,15 @@ export const ConversationComposer = forwardRef<
     textarea.style.height = "auto";
     textarea.style.height = `${composerTextareaHeight(textarea.scrollHeight)}px`;
   }, [value]);
-  const ready = canSubmit && value.trim().length > 0 && imageInput.saving === 0;
+  const imageBlock = images.length > 0 ? imageBlockReason : null;
+  const imageProblem = imageInput.error ?? imageBlock;
+  // Send stays disabled while images are still saving or cannot be sent with
+  // the chosen model.
+  const imagesReady = imageInput.saving === 0 && !imageBlock;
+  const ready = canSubmit && value.trim().length > 0 && imagesReady;
   const noteId = useId();
   const errorId = useId();
-  const describedBy = [note ? noteId : null, imageInput.error ? errorId : null]
+  const describedBy = [note ? noteId : null, imageProblem ? errorId : null]
     .filter(Boolean)
     .join(" ");
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -129,7 +139,7 @@ export const ConversationComposer = forwardRef<
     if (action === null) return;
     event.preventDefault();
     if (action === "branch") {
-      if (value.trim() && onSubmitBranch && imageInput.saving === 0) onSubmitBranch();
+      if (value.trim() && onSubmitBranch && imagesReady) onSubmitBranch();
     } else if (ready && !submitting) {
       onSubmit();
     }
@@ -248,9 +258,9 @@ export const ConversationComposer = forwardRef<
           </button>
         </div>
       </form>
-      {imageInput.error ? (
+      {imageProblem ? (
         <p id={errorId} className="text-status-failed m-0 px-1 text-sm" role="alert">
-          {imageInput.error}
+          {imageProblem}
         </p>
       ) : null}
     </div>
