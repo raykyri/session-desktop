@@ -238,7 +238,7 @@ require Meta. The shared port adds Shift-Cmd-H for Home (the documented web
 chord; `RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`) and keeps Ctrl-1..9 for tabs;
 Cmd variants are honored where the browser lets them through. Cmd-F and the
 bare H/A/E keys are not app shortcuts: DOM search and the highlight actions
-handle them (`shared/research/highlights.ts`). Shift-Cmd-E
+handle them (`shared/lib/researchHighlights.ts`). Shift-Cmd-E
 (`toggleArtifactPanel`) was removed with the document preview panel in
 phase 2.0.
 

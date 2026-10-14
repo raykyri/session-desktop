@@ -18,12 +18,15 @@ packages/db/
       users.ts  sessions.ts  preferences.ts
       workspaces.ts  folders.ts  trees.ts  nodes.ts  highlights.ts
       snapshots.ts  runs.ts (run_turns, run_attempts, run_queue, node_messages, node_summaries)
-      usage.ts  tweets.ts
-      feedItems.ts  drafts.ts  index.ts
+      usage.ts  tweets.ts  embeds.ts  feedItems.ts  drafts.ts
+      followups.ts  images.ts  widgets.ts  collaboration.ts  index.ts
     repos/
       users.ts  auth.ts  workspaces.ts  folders.ts  trees.ts  nodes.ts
-      highlights.ts  snapshots.ts  recaps.ts  feeds.ts
-      feedItems.ts  feedgen.ts  drafts.ts
+      highlights.ts  snapshots.ts  recaps.ts  feeds.ts  feedItems.ts
+      feedgen.ts  drafts.ts  posts.ts  trash.ts  followups.ts
+      researchDrafts.ts  images.ts  researchDocuments.ts
+      mappers.ts             # rows to the wire ResearchNode envelope
+      access.ts              # who may read a thread (its owner, for now)
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -43,69 +46,58 @@ Rules
   trusted raw.
 - All timestamps are `integer` milliseconds.
 
-## 2. Domain types carried over (from `src/types.ts`)
+## 2. Domain types: the desktop's wire model
 
-Kept verbatim in `packages/shared/src/types/research.ts` and friends, with
-zod schemas alongside:
+The web sends the desktop's wire types, from `packages/shared/src/wire/`
+(plain types, also imported by the desktop) with zod schemas in
+`packages/shared/src/schemas/` that `test/wireSchemas.test.ts` keeps in
+sync. There is no separate web node type.
 
-`ResearchTree`, `ResearchNode`, `ResearchNodeStatus` (with the new
-`interrupted` value), `ResearchNodeKind` (`run | document`; the desktop's
-`conversation` kind existed only for terminal exports and is dropped),
-`ResearchNodeOrigin` (`imported` only), `ResearchRecap`,
-`ResearchRecapCandidate`, `ResearchHighlight`, `ResearchHighlightAnchor`,
-`ResearchHighlightFeedItem`, `ResearchTreeSummary`, `ResearchTreeDetail`,
-`ResearchNodeCard`, `ResearchNodeContent` (gains `inFlightText`, `seq`, `queuePosition`),
-`ResearchBranchRemoval`,
-`UpdateResearchDocumentResult`, `RecentResearchQuery`,
-`RecentResearchQueryCursor`, `RecentActivityCursor`, `RecentActivityItem`,
-`RecentActivityPage`, `ResearchMessageAttachment` / `ResearchTweetAttachment`,
-`TweetSnapshot` and its parts (from `src/lib/journalTweets.ts`), `Turn`,
-`TurnBlock`,
-`ResearchFolder`,
-`ResearchFolderState`, `SessionEvent`.
+A `ResearchNode` is an envelope (`id`, `treeId`, `parentNodeId`, `inline`,
+`anchor`, `title`, `groupId`, `createdAt`, `highlights`, `chainOrder`) plus a
+body tagged by `type`:
 
-Fields dropped from `ResearchNode` on the wire: `groupId` (renamed
-`workspaceId`), `worktreeDir`, `agentId`, `paneId`, `runtime`, `threadId`,
-`transcriptPath`, `nativeSessionId`, `promptNativeId`, `effort` (fixed at
-medium). `adapter` is renamed `model` and holds a registry id
-(`04-agent-runtime.md` §1). New field: `attempt`.
-`AgentAdapterMetadata` is replaced by `ModelInfo { id, label, provider,
-adminOnly, available, supportsFiles, supportsImages }`.
+- `post`: `message`, `format` (`text | link`), `followUpAgent`, `editedAt`.
+- `exchange`: `message`, `agent`, `run` (`status`, `error`, `startedAt`,
+  `completedAt`, `responseSnapshotAt`, `sessionReady`), `recap`.
+- `document`: optional `message`, `source` (`imported | authored |
+transcript`), optional `followUpAgent`, `responseSnapshotAt`, `recap`,
+  `editedAt`.
 
-The desktop has since changed its node model (state version 8): a node is an
-envelope (`id`, `treeId`, `parentNodeId`, `inline`, `anchor`, `title`,
-`groupId`, `createdAt`, `promotedAt`, `highlights`) plus a body tagged by
-`type`: `post` (a note with `format: text | link`, `delivery`, `editedAt`),
-`exchange` (a question with a run), or `document` (`source:
-imported | authored | transcript`). `queryAnchor` and `replyAnchor` became one
-`anchor` (`{ kind: "passage", anchor } | { kind: "reply", replyId }`), and the
-frontend receives `ResearchNodeView`, which replaces the run's process
-bindings with `sessionReady` and `holdsProcess`. The web model is not aligned
-with it and keeps the flat `run | document` node described here, because:
+The web's differences, all within the wire types:
 
-- The web app has no posts. Saved links and tweets were `journal_entries`
-  rows until journal entries were removed in phase 2.0; link posts return as
-  research nodes in phase 2.3. There is no network delivery or replies.
-- It has no terminal transcripts, so `source: transcript` has nothing to hold.
-- It has no local process bindings; the fields the desktop moved into the
-  exchange binding were already dropped from the web wire type.
-- Nodes are SQLite rows with per-column constraints and indexes (§3), not one
-  JSON document. Adopting the tagged body would be a schema migration of its
-  own, which this change does not make.
+- `groupId` carries the web workspace id; the field keeps the desktop's name.
+- `AgentSpec` names a registry entry: `adapter` is the entry's model family
+  (`ModelEntry.adapter`: `gemini`, `deepseek`, `openai`, `claude`), `model`
+  the registry id, `effort` the requested reasoning effort (null: the model's
+  `defaultEffort`). `models/agents.ts` builds and reads it.
+- `ResearchNodeStatus` adds `interrupted`: a deploy or crash stopped an
+  admitted run that the server resumes. The shared helpers treat it as active.
+  The web loop never writes `starting`.
+- `RunState` adds `attempt` and `responsePreview`; `ResearchNodeContent` adds
+  `inFlightText`, `seq` and `queuePosition`; `research.node.updated` may carry
+  `queuePosition`. All are optional, so the desktop never sends them.
+- A tweet attachment's `provider` is `xSyndication | xOembed`; `xOembed` is
+  the reduced snapshot the server falls back to (`journal/oembed.ts`).
+- `sessionReady` is true once an exchange is `complete`: a web follow-up
+  starts a new run with the parent's stored conversation as context.
 
-Code shared between the two (anchors, highlights, recaps, turns, tweets) does
-not depend on the node's shape, so the difference is confined to
-`ResearchNode` and the queries that select on `kind`.
-
-New wire types: `User` (with `isAdmin`), `Workspace` (replaces `GroupInfo`),
-`UserSettings`, `DocumentInfo`, `UsageSummary`.
+Web-only types: `User`, `Workspace`, `UserSettings`, `ModelInfo`,
+`UsageSummary`, and the feed page and cursor shapes in `types/activity.ts`
+(`RecentActivityItem` wraps the wire `RecentResearchQuery` with
+`occurredAt` and `workspaceId`).
 
 ## 3. Tables
 
 Column types are SQLite affinities via Drizzle (`text`, `integer`, `real`).
 `PK` = primary key, `FK` = foreign key with `ON DELETE CASCADE` unless noted.
-Every user-owned table includes `user_id` even where derivable, so scoping is
-one predicate and indexes are simple.
+Rows a person owns name them in `owner_id` (`trees`, `folders`,
+`research_images`) or `user_id` (per-person state). Rows inside a thread
+(`nodes`, `highlights`, `followup_queue`) name who wrote them in `author_id`;
+access goes through the thread's owner (`repos/access.ts`), not through the
+author column, so phase 5 can add members without touching those rows.
+Author foreign keys are `ON DELETE SET NULL` where content in other people's
+threads must survive an account deletion.
 
 ### 3.1 Accounts
 
@@ -148,8 +140,16 @@ one predicate and indexes are simple.
 - `updated_at`
 
 `interface_drafts`
+
 - `user_id` FK, `key` text (≤128 B), `value` text (≤ 1 MiB on the web; the
   desktop allowed 12 MiB in memory), `updated_at`; PK (`user_id`, `key`)
+
+`research_drafts` (the desktop's `ResearchDraft`; private to the person)
+
+- `id` PK, `user_id` FK, `workspace_id` FK, `prompt` text,
+  `attachments_json` text (image attachments, default `[]`), `position`,
+  `created_at`, `updated_at`
+- Index (`user_id`, `workspace_id`, `position`)
 
 ### 3.2 Organization
 
@@ -157,52 +157,102 @@ one predicate and indexes are simple.
 - `id` PK, `user_id` FK, `name` text, `position` integer
 - `created_at`, `updated_at`
 
-`folders` (desktop `ResearchFolder` + parts of `ResearchFolderState`)
-- `id` PK, `user_id` FK, `workspace_id` FK, `name` text
-- `collapsed` integer bool, `position` integer
-- `created_at`
+The desktop's `ResearchFolderState` is spread over four tables: `folders`,
+`tree_folder_membership` (`membership`), `collapsed_places` (`collapsed`),
+`collapsed_groups` (`collapsedGroups`), plus `trees.parent_tree_id`
+(`parents`).
 
-`tree_folder_membership`: `tree_id` PK FK, `folder_id` FK. One folder per
-tree, as in `membership: HashMap<treeId, folderId>`.
+`folders`
+
+- `id` PK, `owner_id` FK, `workspace_id` FK, `name` text, `position`
+  integer, `created_at`, `trashed_at` null
+- Index (`owner_id`, `workspace_id`, `position`)
+
+`tree_folder_membership`
+
+- `tree_id` PK FK, `folder_id` null FK, `system_place` null (`drafts`, the
+  desktop's `system:drafts`)
+- Check: exactly one of `folder_id` and `system_place` is set. A tree with no
+  row is Unfiled.
+
+`collapsed_places`: `user_id` FK, `workspace_id` FK, `place_id` text (a
+folder id or a `system:*` tray id); PK over all three. Per person.
+
+`collapsed_groups`: `user_id` FK, `tree_id` FK; PK (`user_id`, `tree_id`).
+The parent trees whose nested children a person has hidden. Per person.
 
 ### 3.3 Research
 
 `trees`
-- `id` PK, `user_id` FK, `workspace_id` FK
-- `title` text, `root_node_id` text (FK to nodes, deferred; see §5.1)
-- `created_at`, `updated_at`, `archived_at` null, `last_viewed_at` null
-- `position` integer — master sidebar order within (`workspace_id`,
-  `archived_at IS NULL`)
-- Indexes: (`user_id`, `workspace_id`, `archived_at`, `position`),
-  (`user_id`, `updated_at`)
 
-`nodes`
-- `id` PK, `user_id` FK, `tree_id` FK, `parent_node_id` text null FK (self,
+- `id` PK, `owner_id` FK, `workspace_id` FK
+- `title` text, `root_node_id` text (no FK; see §5.1)
+- `created_at`, `updated_at`, `archived_at` null, `trashed_at` null
+- `parent_tree_id` null FK (`trees`, `ON DELETE SET NULL`): the tree this one
+  is listed under on Home, one level deep (enforced by the repository)
+- `visibility` text (`private | public`, default `private`)
+- `position` integer — sidebar order within (`workspace_id`,
+  `archived_at IS NULL`), Trash excluded
+- Indexes: (`owner_id`, `workspace_id`, `archived_at`, `trashed_at`,
+  `position`), (`owner_id`, `trashed_at`), (`parent_tree_id`),
+  (`visibility`, `updated_at`)
+
+`tree_views`
+
+- `user_id` FK, `tree_id` FK, `last_viewed_at`; PK (`user_id`, `tree_id`)
+- When each person last opened each thread; the summary's unseen flags
+  compare against it, so they are per person.
+
+`nodes` (the wire envelope; `repos/mappers.ts` builds `ResearchNode`)
+
+- `id` PK, `tree_id` FK, `parent_node_id` text null FK (self,
   `ON DELETE RESTRICT`; subtree removal deletes children first)
+- `author_id` null FK (`ON DELETE SET NULL`)
 - `inline` integer bool
-- `prompt` text, `query_anchor_json` text null, `attachments_json` text
-  (array, default `[]`)
+- `type` text (`post | exchange | document`)
+- `message_json` text null — `UserMessage` `{ text, attachments? }`; null
+  only for a document without a message
+- `anchor_json` text null — `NodeAnchor` (`{ kind: "passage", anchor }`)
+- `format` text null (`text | link`; posts only), `source` text null
+  (`imported | authored | transcript`; documents only)
+- `model` text null, `effort` text null — the AgentSpec: an exchange's agent,
+  or the follow-up default of a post or document; required on exchanges
 - `title` text null, `response_preview` text null
-- `model` text (registry id)
-- `kind` text (`run | document`), `origin` text null (`imported`)
-- `status` text (`05-run-lifecycle-and-streaming.md` §3), `error` text null
+- `status` text null (`ResearchNodeStatus`), `error` text null — exchanges
+  only
 - `attempt` integer (1; incremented by Retry and auto-resume), `run_seq`
   integer (last persisted sequence number of the current attempt),
   `resume_pending` integer bool
 - `response_snapshot_at` integer null
-- `created_at`, `started_at` null, `completed_at` null
+- `created_at`, `started_at` null, `completed_at` null, `edited_at` null
+- `edited_by` null FK — unused until phase 5
+- `chain_order_json` text null — `string[]`, on the head of an inline chain
 - `recap_json` text null — `ResearchRecap`
-- Indexes: (`tree_id`, `created_at`, `id`); (`user_id`, `status`);
-  (`parent_node_id`); partial unique index on (`parent_node_id`) WHERE
+- Checks: `status` is set exactly on exchanges, `format` exactly on posts,
+  `source` exactly on documents; `message_json` is set except on documents;
+  `model` is set on exchanges
+- Indexes: (`tree_id`, `created_at`, `id`); (`status`); (`parent_node_id`);
+  (`author_id`); partial unique index on (`parent_node_id`) WHERE
   `inline = 1` (one inline child per parent, §5.4)
 
 `highlights`
-- `id` PK, `user_id` FK, `node_id` FK
+
+- `id` PK, `author_id` null FK (`ON DELETE SET NULL`; charged against the
+  author's storage quota), `node_id` FK
 - `anchor_json` text — `ResearchHighlightAnchor` (version 1, projection
   `answer-v1`, UTF-16 `start`/`end`, `exact`, `prefix`, `suffix`,
   `responseRevision`)
 - `response_revision` text (denormalized from anchor for the feed query)
-- `created_at`; index (`node_id`), (`user_id`, `created_at`)
+- `created_at`; index (`node_id`), (`author_id`, `created_at`)
+- Highlights belong to the node: everyone who can read a thread sees them.
+
+`followup_queue` (replaces the desktop's client-side queue; step 2.7)
+
+- `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain's head),
+  `author_id` FK (who is billed when the item is sent)
+- `message_json` text (attachments resolved when queued), `model`, `effort`
+  null, `position`, `created_at`, `failed_reason` null
+- Index (`head_node_id`, `position`)
 
 `response_snapshots`
 - `node_id` PK FK
@@ -248,13 +298,16 @@ tree, as in `membership: HashMap<treeId, folderId>`.
 `journal_entries` was removed with journal entries in phase 2.0.
 
 `feed_items`
-- `id` text PK, `author_id` FK, `kind` text (`research`)
+- `id` text PK, `author_id` FK
 - `occurred_at`, `source_rank`; nullable source FKs `node_id`, `tree_id`,
   `workspace_id`
 - Indexes (`occurred_at DESC`, `source_rank DESC`, `id DESC`) and
   (`author_id`, `occurred_at DESC`); unique source index on `node_id`
 - Written synchronously in the same transaction as root changes; source
-  deletion or tree archiving removes the row.
+  deletion, archiving or moving the tree to the Trash removes the row.
+- The All Users feed is to read only rows whose tree has
+  `visibility = 'public'`. Nothing sets `visibility` yet, so the query does not
+  filter on it until phase 5 adds the setting.
 
 `tweet_cache`
 - `tweet_id` PK, `payload_json` text (raw provider body, ≤ 1 MiB),
@@ -279,11 +332,36 @@ tree, as in `membership: HashMap<treeId, folderId>`.
   and registered at hydration rather than when the image is first served
   (`13-deployment-fly.md` §6).
 
-### 3.6 Documents and artifacts (removed)
+### 3.5 Sharing (phase 5)
+
+`tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
+`invited_by`, `created_at`), `tree_invites` (token hash, role, optional
+GitHub login, expiry, acceptance and revocation) and `tree_subscriptions`
+(`user_id`, `tree_id`, `created_at`). Phase 5 (collaboration) uses them;
+nothing reads or writes them yet.
+
+### 3.6 Images and widgets
+
+`research_images` (step 2.9)
+
+- `id` PK, `owner_id` FK, `sha256`, `mime`, `byte_size`, `width` null,
+  `height` null, `file_name` null, `storage_path`, `created_at`,
+  `attached_at` null (set when a node, queued follow-up or draft uses the
+  image; unattached images are swept)
+- Indexes (`owner_id`, `sha256`), (`attached_at`, `created_at`)
+
+`widget_revisions` (the desktop's research artifact store)
+
+- `tree_id` FK, `artifact_id`, `revision` (content hash), `node_id` FK,
+  `slot`, `title`, `content_hash`, `parent_revision` null, `html`,
+  `created_at`; PK (`tree_id`, `artifact_id`, `revision`)
+
+`widget_state`: saved widget inputs per person and revision; `state_json`
+(`{ enabled, value? }`), `updated_at`; PK (`tree_id`, `artifact_id`,
+`revision`, `user_id`), FK to `widget_revisions`.
 
 `documents`, `document_text`, `node_documents` and `artifact_tokens` were
-removed with the uploaded-documents feature in phase 2.0 of the desktop
-parity plan.
+removed with the uploaded-documents feature in phase 2.0.
 
 ### 3.7 Usage
 
@@ -368,7 +446,9 @@ Each item names the desktop source and the enforcing function.
   and every status change, and is returned by `getNodeContent`.
 
 ### 5.4 Follow-ups
-- Parent must be `complete`; tree not archived (`state.rs:5244`).
+- An exchange parent must be `complete`; posts and documents take
+  follow-ups at once. The tree must be neither archived nor in the Trash
+  (`state.rs:5244`). Only a post takes a follow-up note (a `post` child).
 - At most one inline child per parent regardless of the child's status; the
   partial unique index makes the check atomic, and the repo maps the
   constraint error to the desktop's message.
@@ -376,7 +456,7 @@ Each item names the desktop source and the enforcing function.
   the user may access; the server enforces `adminOnly` gating. `document`
   parents (imported reports) have no messages, so the child's prompt embeds
   the document markdown (`04-agent-runtime.md` §4).
-- The displayed `prompt` is the bare question; the launch messages are
+- The displayed `message.text` is the bare question; the launch messages are
   assembled by the runtime (`04-agent-runtime.md` §5).
 
 ### 5.5 Highlights
@@ -411,8 +491,8 @@ Each item names the desktop source and the enforcing function.
 - Highlight IDs must be unique per user; while ULID generation makes collisions virtually impossible, the database constraint remains enforced.
 
 ### 5.6 Documents
-- `documents.update` performs the 4-way optimistic check: node is the tree's
-  root and `kind = document`; tree not archived; `expectedTitle === tree.title`;
+- `researchDocuments.update` performs the 4-way optimistic check: node is the
+  tree's root and `type = document`; tree not archived; `expectedTitle === tree.title`;
   `expectedResponseRevision === snapshot.revision`; and if markdown changed,
   `expectedHighlightIds` equals the current set (`state.rs:4961`). A markdown
   change deletes all highlights, rewrites `response_preview`, writes a new
@@ -431,8 +511,8 @@ Each item names the desktop source and the enforcing function.
   has an `outcome` adopt it (the desktop's rule, `state.rs:2405-2506`).
 
 ### 5.8 Recaps
-- `recaps.save(nodeId, recap, expectedSnapshotAt)` re-checks `status =
-  complete`, `response_snapshot_at` unchanged, and the snapshot revision equals
+- `recaps.save(nodeId, recap, expectedSnapshotAt)` re-checks that the node
+  is an exchange with `status = complete`, `response_snapshot_at` unchanged, and the snapshot revision equals
   `recap.responseRevision`; otherwise no-op (`state.rs:8942`).
 - `recaps.applyCandidate` additionally requires
   `expectedCurrentRecapId === node.recap?.id` and a non-archived tree
@@ -447,16 +527,18 @@ Each item names the desktop source and the enforcing function.
   is clamped to 1..100.
   Source rows are projected after keyset selection; direct research children
   are attached per root in `(created_at, id)` ascending order.
-- `feeds.highlights(userId)` returns newest-first items from non-archived
-  trees with `nodeLabel` = node title or prompt, or the tree title for
+- `highlights.feed(userId)` returns newest-first items from trees that are
+  neither archived nor in the Trash with `nodeLabel` = node title or prompt, or the tree title for
   documents (`research.rs:485`).
 - `trees.summaries` computes `runningCount` (`queued | running`),
-  `failedCount`, `completedCount`, `cancelledCount` (`interrupted` is not included in summary count totals and does not trigger attention indicators; it is displayed directly in the activity rail), `hasUnseenUpdate` (latest `completed_at` > `last_viewed_at`),
-  `hasUnseenFailure` (latest failed `completed_at` > `last_viewed_at`)
+  `failedCount`, `completedCount`, `cancelledCount` (`interrupted` is not included in summary count totals and does not trigger attention indicators; it is displayed directly in the activity rail), `hasUnseenUpdate` (latest `completed_at` > the caller's
+  `tree_views.last_viewed_at`), `hasUnseenFailure` (latest failed
+  `completed_at` > the same)
   (`state.rs:3770-3776`) via grouped subqueries.
 
 ### 5.11 Folders
-- `folders.setState(workspaceId, state)` applies the desktop's
+- `folders.setState(workspaceId, state)` stores the desktop's
+  `ResearchFolderState` across the tables in §3.2 and applies the desktop's
   `normalize_research_folder_state`: dedupe folders, drop membership and
   collapsed entries pointing at absent folders; it does not
   prune by tree existence (`research.rs:94`, `state.rs:4142-4149`). Tree
@@ -478,7 +560,6 @@ Each item names the desktop source and the enforcing function.
 
 ## Retired tables
 
-The encyclopedia feature has been removed. The `encyclopedia_pages` and
-`encyclopedia_sources` declarations and historical migrations remain solely
-to preserve existing data and prevent an implicit destructive migration. No
-application repositories, API procedures, or generation jobs use them.
+The encyclopedia tables (`encyclopedia_pages`, `encyclopedia_sources`) were
+dropped when the migration history was regenerated for the node-model
+rewrite; the database is reset (`runbooks/reset-database.md`).

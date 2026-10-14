@@ -27,7 +27,7 @@ deletes the WebKit and Tauri workarounds.
   (`src/lib/researchThreads.ts:81`) walks up while `inline` and down through
   the oldest inline children.
 - **Branches**: non-inline children, shown as cards in a rail beside the
-  parent's answer. A branch with a `queryAnchor` (a highlighted passage) is
+  parent's answer. A branch with a passage `anchor` (a highlighted passage) is
   *anchored*: its card sits level with the passage and a connector line joins
   them; other branches *stack* at the top of the rail.
 - **Page**: the spine for `selectedNodeId`. Selecting a node in another

@@ -80,19 +80,30 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `folders.get` / `folders.set` | Q/M | `{ workspaceId }` / `ResearchFolderState` → normalized | `list_research_folders`, `set_research_folders` |
 
 ### `research`
+
+The `research` router is assembled in
+`server/src/trpc/routers/research/index.ts` from one file per group:
+`trees.ts` (listing, ordering, creating, archiving, deleting threads),
+`nodes.ts` (follow-ups, retry, cancel, content, document edits, titles),
+`posts.ts` (notes and saved links, step 2.3) and `trash.ts` (step 2.4).
+`followups.ts` holds the `followups.*` procedures (step 2.7), mounted as their
+own router. Outputs are the wire types from `@session/shared` (the desktop's
+node envelope); inputs are validated with the zod schemas in
+`shared/src/schemas` where they carry wire values.
+
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
 | `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` | `get_research_tree` |
 | `research.createTree` | M | `{ prompt, title?, model, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
-| `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
+| `research.forkNode` | M | `{ parentNodeId, prompt, model?, anchor?: NodeAnchor, inline? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
 | `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | Planned, not implemented. `rerun_research_node` (also accepts a `complete` node, whose answer it replaces) |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |
-| `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText, seq, children, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
+| `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText?, seq?, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
 | `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
@@ -197,7 +208,6 @@ unless noted:
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch |
 | `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
-| `research.highlight.removed` | `{ nodeId, highlightId }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |
 | `workspace.created` / `updated` / `removed` | `{ workspace }` / `{ workspaceId }` | replaces `group.*` |
