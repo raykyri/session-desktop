@@ -282,6 +282,10 @@ test("a note takes follow-up notes, and a double-click edits it; a stale edit is
   });
   await editor.fill("An edit made here");
   await page.getByRole("button", { name: /^Save/ }).click();
+  // The refusal offers the latest version and keeps the text.
+  const prompt = page.getByRole("dialog", { name: "This note changed" });
+  await expect(prompt.getByRole("textbox", { name: "Your text" })).toHaveValue("An edit made here");
+  await prompt.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByText(/the note changed while you were editing/)).toBeVisible();
   await expect(editor).toHaveValue("An edit made here");
 });
