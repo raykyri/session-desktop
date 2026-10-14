@@ -368,5 +368,30 @@ export const fixturePageFetch: typeof globalThis.fetch = (input) => {
   if (url.startsWith(FIXTURE_PAGE_URL)) {
     return Promise.resolve(fixturePageResponse());
   }
+  if (
+    url.startsWith(FIXTURE_SYNDICATION_URL) &&
+    new URL(url).searchParams.get("id") === FIXTURE_TWEET_ID
+  ) {
+    return Promise.resolve(
+      new Response(JSON.stringify(FIXTURE_TWEET_PAYLOAD), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  }
   return Promise.resolve(new Response("not found", { status: 404 }));
+};
+
+/** The X post a saved link resolves to under fixture providers: the
+ * syndication CDN's answer for one post id, so saving
+ * `FIXTURE_TWEET_URL` as a link embeds a post without a request leaving the
+ * machine. Any other post reads as unavailable. */
+export const FIXTURE_TWEET_ID = "1599367266448994304";
+export const FIXTURE_TWEET_URL = `https://x.com/session/status/${FIXTURE_TWEET_ID}`;
+const FIXTURE_SYNDICATION_URL = "https://cdn.syndication.twimg.com/tweet-result";
+const FIXTURE_TWEET_PAYLOAD = {
+  __typename: "Tweet",
+  id_str: FIXTURE_TWEET_ID,
+  text: "A post about bloom filters",
+  created_at: "2022-12-04T00:00:00.000Z",
+  user: { screen_name: "session", name: "Session" },
 };

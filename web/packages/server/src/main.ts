@@ -264,7 +264,16 @@ export function main(): RunningServer {
       ? { fetch: fixturePageFetch, toolOverrides: { lookup: fixtureLookup } }
       : {}),
   });
-  const deps: ServerDeps = { config, db, eventBus, runs, logger };
+  // Fixture providers answer the procedures' own requests (an X post a saved
+  // link names) in process too.
+  const deps: ServerDeps = {
+    config,
+    db,
+    eventBus,
+    runs,
+    logger,
+    ...(config.fixtureProviders ? { fetch: fixturePageFetch } : {}),
+  };
   reconcileRuns(deps, logger);
 
   const limiter = new RateLimiter();
