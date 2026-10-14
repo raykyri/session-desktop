@@ -208,36 +208,7 @@ function load(): Record<string, SavedResearchNavigation> {
                 highlightId: candidate.focusHighlight.highlightId,
               }
             : undefined;
-        const queuedFollowups = Object.fromEntries(
-          Object.entries(candidate.queuedFollowups ?? {}).flatMap(([headId, value]) => {
-            if (!Array.isArray(value)) {
-              return [];
-            }
-            const queue = value.flatMap((entry: unknown) => {
-              const item = entry as Partial<QueuedResearchFollowup> | null;
-              if (
-                !item ||
-                typeof item.id !== "string" ||
-                typeof item.prompt !== "string" ||
-                !item.prompt.trim() ||
-                typeof item.createdAt !== "number" ||
-                !Number.isFinite(item.createdAt)
-              ) {
-                return [];
-              }
-              const images = storedImages(item.images);
-              return [
-                {
-                  id: item.id,
-                  prompt: item.prompt,
-                  createdAt: item.createdAt,
-                  ...(images.length > 0 ? { images } : {}),
-                },
-              ];
-            });
-            return queue.length > 0 ? [[headId, queue]] : [];
-          }),
-        );
+        const queuedFollowups = storedQueuedFollowups(candidate.queuedFollowups);
         const savedComposerImages = candidate.composerImages;
         const composerImageEntries =
           savedComposerImages &&
@@ -281,6 +252,118 @@ function load(): Record<string, SavedResearchNavigation> {
   } catch {
     return {};
   }
+}
+
+/** The well-formed queued follow-ups of a stored tree, keyed by chain head.
+ * A restart drops an item's `failed` reason, so the queue tries it again;
+ * `keepFailed` keeps it when another window's queue is read. */
+function storedQueuedFollowups(
+  value: unknown,
+  { keepFailed = false }: { keepFailed?: boolean } = {},
+): Record<string, QueuedResearchFollowup[]> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([headId, entries]) => {
+      if (!Array.isArray(entries)) {
+        return [];
+      }
+      const queue = entries.flatMap((entry: unknown) => {
+        const item = entry as Partial<QueuedResearchFollowup> | null;
+        if (
+          !item ||
+          typeof item.id !== "string" ||
+          typeof item.prompt !== "string" ||
+          !item.prompt.trim() ||
+          typeof item.createdAt !== "number" ||
+          !Number.isFinite(item.createdAt)
+        ) {
+          return [];
+        }
+        const images = storedImages(item.images);
+        return [
+          {
+            id: item.id,
+            prompt: item.prompt,
+            createdAt: item.createdAt,
+            ...(images.length > 0 ? { images } : {}),
+            ...(keepFailed && typeof item.failed === "string" ? { failed: item.failed } : {}),
+          },
+        ];
+      });
+      return queue.length > 0 ? [[headId, queue]] : [];
+    }),
+  );
+}
+
+/** Takes the queued follow-ups from a value another window stored (the
+ * `storage` event's new value) into `store`, leaving this window's other
+ * state alone. Returns the trees whose queues changed. */
+export function syncResearchQueuedFollowups(
+  raw: string | null,
+  store: Record<string, SavedResearchNavigation> = researchNavigationStore(),
+): Set<string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw ?? "{}");
+  } catch {
+    return new Set();
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return new Set();
+  }
+  const stored = parsed as Record<string, unknown>;
+  const changed = new Set<string>();
+  for (const treeId of new Set([...Object.keys(store), ...Object.keys(stored)])) {
+    const entry = stored[treeId];
+    const queues = storedQueuedFollowups(
+      entry && typeof entry === "object" ? (entry as { queuedFollowups?: unknown }).queuedFollowups : undefined,
+      { keepFailed: true },
+    );
+    const current = store[treeId]?.queuedFollowups ?? {};
+    if (JSON.stringify(current) === JSON.stringify(queues)) {
+      continue;
+    }
+    changed.add(treeId);
+    if (Object.keys(queues).length > 0) {
+      (store[treeId] ??= { scrollByNode: {} }).queuedFollowups = queues;
+    } else if (store[treeId]) {
+      delete store[treeId].queuedFollowups;
+    }
+  }
+  return changed;
+}
+
+const queueListeners = new Set<(treeIds: ReadonlySet<string>) => void>();
+function onNavigationStorage(event: StorageEvent): void {
+  if (event.key !== RESEARCH_NAVIGATION_KEY && event.key !== null) {
+    return;
+  }
+  const changed = syncResearchQueuedFollowups(event.newValue);
+  if (changed.size === 0) {
+    return;
+  }
+  for (const listener of queueListeners) {
+    listener(changed);
+  }
+}
+
+/** Calls `listener` with the trees whose queued follow-ups another window
+ * changed, after they are in this window's store. */
+export function subscribeResearchQueuedFollowups(
+  listener: (treeIds: ReadonlySet<string>) => void,
+): () => void {
+  if (queueListeners.size === 0) {
+    window.addEventListener("storage", onNavigationStorage);
+  }
+  queueListeners.add(listener);
+  return () => {
+    queueListeners.delete(listener);
+    if (queueListeners.size === 0) {
+      window.removeEventListener("storage", onNavigationStorage);
+    }
+  };
 }
 
 /** The well-formed image attachments of a stored queued question or ask
