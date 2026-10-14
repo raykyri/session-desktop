@@ -67,6 +67,10 @@ export interface FeedCardProps {
   /** The … button's name: "Thread actions" by default. */
   menuLabel?: string;
   onOpen: () => void;
+  /** Called when the pointer enters or focus reaches the open button: a
+   * thread card starts loading the thread page's chunk
+   * (`routes/chunks.ts`). */
+  onIntent?: (() => void) | undefined;
   /** Edits the card's note on a double-click; absent when the card is not an
    * editable note. */
   onEdit?: (() => void) | undefined;
@@ -180,6 +184,7 @@ export function FeedCard({
   menuOpen = false,
   menuLabel = "Thread actions",
   onOpen,
+  onIntent,
   onEdit,
   onMenu,
   onContextMenu,
@@ -282,6 +287,8 @@ export function FeedCard({
           aria-describedby={glyphNamed ? glyphId : undefined}
           aria-current={selected ? "true" : undefined}
           title={tooltip}
+          onPointerEnter={onIntent}
+          onFocus={onIntent}
           onClick={(event) => {
             // A pointer click on an editable note waits to see whether it is
             // the first of a double-click (NOTE_OPEN_DELAY_MS); a key press

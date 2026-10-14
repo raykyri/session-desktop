@@ -11,6 +11,7 @@
 import { Link, useRouter } from "@tanstack/react-router";
 
 import { ControlButton } from "../ui/Button.js";
+import { QueryState } from "../ui/QueryState.js";
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -49,6 +50,17 @@ export function RouteErrorPanel({ error }: { error: unknown }) {
         </ControlButton>
       </div>
     </Panel>
+  );
+}
+
+/** What a lazily loaded route shows while its chunk loads: on a first load
+ * at once, on a navigation only after the router's `pendingMs` (the previous
+ * page stays up until then). */
+export function RoutePendingPanel() {
+  return (
+    <div className="flex h-full items-center justify-center px-6">
+      <QueryState loading />
+    </div>
   );
 }
 

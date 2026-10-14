@@ -71,7 +71,6 @@ import { researchTreeContents } from "@session/shared/lib/researchTreeContents";
 import { widgetChangePrompt } from "@session/shared/lib/sessionWidgetActions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { LoaderCircle } from "lucide-react";
 import {
   useCallback,
   useContext,
@@ -85,7 +84,6 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { getResearchNodeContent, getResearchTree, renameResearchNode } from "../../api/api.js";
-import { cachedTreeSummary } from "../../api/cache.js";
 import {
   queryKeys,
   useSetThreadFollowed,
@@ -170,6 +168,7 @@ import type { PostActions, PostThreadHandle } from "./PostThread.js";
 import { SelectionToolbar } from "./SelectionToolbar.js";
 import { DeleteDialog, RenameDialog, RerunDialog } from "./ThreadDialogs.js";
 import { ThreadMenu, type ThreadMenuState } from "./ThreadMenu.js";
+import { ThreadLoadingBody, threadPlaceholderTitle } from "./ThreadPending.js";
 import type { AnswerPaneHandlers, MessageRowActions } from "./Turn.js";
 import {
   useHighlightMutations,
@@ -1995,36 +1994,26 @@ function ThreadView({ treeId }: { treeId: string }) {
   if (unavailable || !detail || !rootNodeId || levelPath.length === 0) {
     // While the detail loads, the header shows what a list already holds, as
     // the desktop's placeholder does.
-    const cached = detail ? undefined : cachedTreeSummary(queryClient, treeId);
-    const rootType = detail
-      ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
-      : cached?.type;
-    const title =
-      rootType === "post" ? "Note" : (detail?.tree.title ?? cached?.title ?? "Loading research…");
+    const title = threadPlaceholderTitle(queryClient, treeId, detail);
     return (
       <ThreadPlaceholder title={title} history={historyNav}>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          {detailQuery.isError ? (
-            <>
-              <h1 className="text-fg-heading m-0 text-base font-semibold">Research unavailable</h1>
-              <p className="text-fg-muted m-0 text-sm" role="alert">
-                {threadErrorMessage(detailQuery.error)}
-              </p>
-              <button
-                type="button"
-                className="border-border-control bg-control text-fg-control hover:bg-control-hover min-h-control-md rounded-md border px-3"
-                onClick={() => void detailQuery.refetch()}
-              >
-                Retry
-              </button>
-            </>
-          ) : (
-            <>
-              <LoaderCircle className="session-spin text-fg-muted" size={24} aria-hidden="true" />
-              <h1 className="text-fg-muted m-0 text-base font-normal">Loading research…</h1>
-            </>
-          )}
-        </div>
+        {detailQuery.isError ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <h1 className="text-fg-heading m-0 text-base font-semibold">Research unavailable</h1>
+            <p className="text-fg-muted m-0 text-sm" role="alert">
+              {threadErrorMessage(detailQuery.error)}
+            </p>
+            <button
+              type="button"
+              className="border-border-control bg-control text-fg-control hover:bg-control-hover min-h-control-md rounded-md border px-3"
+              onClick={() => void detailQuery.refetch()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ThreadLoadingBody />
+        )}
       </ThreadPlaceholder>
     );
   }

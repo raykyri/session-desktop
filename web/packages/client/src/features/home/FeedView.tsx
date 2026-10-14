@@ -90,6 +90,7 @@ import {
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
+import { preloadThreadRoute } from "../../routes/chunks.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { AnchoredMenu, type MenuAnchor } from "../../ui/AnchoredMenu.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -856,6 +857,7 @@ export function FeedView({
         unread={tree.hasUnseenUpdate}
         menuOpen={menuTreeId === tree.id}
         onOpen={() => openTree(tree.id)}
+        onIntent={preloadThreadRoute}
         onMenu={(button) => openTreeMenu(tree.id, button)}
         onContextMenu={(anchor, button) =>
           setMenu({ kind: "tree", treeId: tree.id, anchor, button })
@@ -1570,6 +1572,7 @@ function TreeCard({
       unread={tree.hasUnseenUpdate}
       menuOpen={menuOpen}
       onOpen={onOpen}
+      onIntent={preloadThreadRoute}
       // A double-click on a note's card edits the note, unless the thread is
       // archived (researchNoteEditable).
       onEdit={

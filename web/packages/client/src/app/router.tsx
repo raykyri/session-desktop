@@ -19,13 +19,18 @@ import {
   treesQueryOptions,
   workspacesQueryOptions,
 } from "../api/queries.js";
+import { ThreadPending } from "../features/thread/ThreadPending.js";
 import { savePendingInvite } from "../lib/pendingInvite.js";
-import { AdminPage } from "../routes/admin.js";
-import { HighlightsPage } from "../routes/highlights.js";
+import {
+  loadAdminRoute,
+  loadHighlightsRoute,
+  loadNotificationsRoute,
+  loadSettingsRoute,
+  loadThreadRoute,
+} from "../routes/chunks.js";
 import { HomePage } from "../routes/home.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
-import { NotificationsPage } from "../routes/notifications.js";
 import {
   ArchivePage,
   DraftPage,
@@ -34,10 +39,8 @@ import {
   SharedPage,
   TrashPage,
 } from "../routes/places.js";
-import { ThreadPage } from "../routes/research.$treeId.js";
-import { SettingsPage } from "../routes/settings.js";
 
-import { RouteErrorPanel, RouteNotFoundPanel } from "./RouteBoundary.js";
+import { RouteErrorPanel, RouteNotFoundPanel, RoutePendingPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
 import { appQueryClient } from "./queryClient.js";
 
@@ -194,7 +197,8 @@ const highlightsRoute = createRoute({
   path: "/highlights",
   validateSearch: workspaceScopeSearchSchema,
   beforeLoad: requireSignedIn,
-  component: HighlightsPage,
+  component: lazyRouteComponent(loadHighlightsRoute, "HighlightsPage"),
+  pendingComponent: RoutePendingPanel,
 });
 
 /** The place views (`10-home-feed-journal.md` §1), private to the account. */
@@ -253,7 +257,8 @@ const notificationsRoute = createRoute({
   path: "/notifications",
   validateSearch: workspaceScopeSearchSchema,
   beforeLoad: requireSignedIn,
-  component: NotificationsPage,
+  component: lazyRouteComponent(loadNotificationsRoute, "NotificationsPage"),
+  pendingComponent: RoutePendingPanel,
 });
 
 /** Web only: an invitation link (`invites.create`'s `url`, `/invite#<token>`).
@@ -281,14 +286,18 @@ const researchRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/r/$treeId",
   validateSearch: researchSearchSchema,
-  component: ThreadPage,
+  component: lazyRouteComponent(loadThreadRoute, "ThreadPage"),
+  // The page's own loading placeholder, from the main chunk, so a first load
+  // of a thread URL shows the thread's header while the chunk arrives.
+  pendingComponent: ThreadPending,
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/settings",
   validateSearch: workspaceScopeSearchSchema,
-  component: SettingsPage,
+  component: lazyRouteComponent(loadSettingsRoute, "SettingsPage"),
+  pendingComponent: RoutePendingPanel,
 });
 
 const adminRoute = createRoute({
@@ -296,7 +305,8 @@ const adminRoute = createRoute({
   path: "/admin",
   validateSearch: workspaceScopeSearchSchema,
   beforeLoad: requireSignedIn,
-  component: AdminPage,
+  component: lazyRouteComponent(loadAdminRoute, "AdminPage"),
+  pendingComponent: RoutePendingPanel,
 });
 
 /** Catch-all route that renders the 404 panel within the shell so users retain access to navigation when requesting an invalid path. */

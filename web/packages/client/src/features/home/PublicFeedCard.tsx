@@ -6,6 +6,8 @@ import { researchCardTitle } from "@session/shared/lib/researchFolders";
 import { nodeType } from "@session/shared/lib/researchNodeTypes";
 import { researchRowKind, researchRowState } from "@session/shared/lib/researchRowGlyph";
 
+import { preloadThreadRoute } from "../../routes/chunks.js";
+
 import { CardBody } from "./CardBody.js";
 import { FeedCard } from "./FeedCard.js";
 
@@ -37,6 +39,7 @@ export function PublicFeedCard({
       kind={researchRowKind(query)}
       state={researchRowState(query.status)}
       onOpen={onOpen}
+      onIntent={preloadThreadRoute}
     />
   );
 }

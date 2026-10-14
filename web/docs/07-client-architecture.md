@@ -101,10 +101,10 @@ parameter.
 | `/drafts/$draftId` | `DraftPage` | signed in; `DraftView` |
 | `/archive` | `ArchivePage` | signed in |
 | `/trash` | `TrashPage` | signed in; `TrashList` |
-| `/highlights` | `HighlightsPage` | |
-| `/r/$treeId` | `ThreadPage` | search `?sel=&node=&highlight=&edit=`: `sel` is each column's selection (`09` §4); `key={treeId}` remount |
-| `/settings` | `SettingsPage` | the desktop's rows in its order: Require ⌘↵ to send ("A thread's question boxes always require ⌘↵. This setting controls the Home ask box, drafts and note follow-ups."), Research instructions (signed in; saved 500 ms after typing stops and on blur, placeholder `DEFAULT_RESEARCH_LAUNCH_INSTRUCTION`, hint "Sent with every research launch"), Widgets in answers, then the web's Default model (signed in; replaces the desktop's agent choice) and Notifications (server notifications only); a separator; Appearance (Dark, Light; a stored `system` shows as what it resolves to), Color theme, Body font, Show keyboard shortcut hints, Reduce motion. Usage is a dialog in the account menu (`features/account/UsageDialog.tsx`); Text size and Default workspace have no row (the workspace switcher's Make default workspace sets the default) |
-| `/admin` | `AdminPage` | admin only: user list with usage and model access |
+| `/highlights` | `HighlightsPage` (lazy) | |
+| `/r/$treeId` | `ThreadPage` (lazy, §10) | search `?sel=&node=&highlight=&edit=`: `sel` is each column's selection (`09` §4); `key={treeId}` remount |
+| `/settings` | `SettingsPage` (lazy) | the desktop's rows in its order: Require ⌘↵ to send ("A thread's question boxes always require ⌘↵. This setting controls the Home ask box, drafts and note follow-ups."), Research instructions (signed in; saved 500 ms after typing stops and on blur, placeholder `DEFAULT_RESEARCH_LAUNCH_INSTRUCTION`, hint "Sent with every research launch"), Widgets in answers, then the web's Default model (signed in; replaces the desktop's agent choice) and Notifications (server notifications only); a separator; Appearance (Dark, Light; a stored `system` shows as what it resolves to), Color theme, Body font, Show keyboard shortcut hints, Reduce motion. Usage is a dialog in the account menu (`features/account/UsageDialog.tsx`); Text size and Default workspace have no row (the workspace switcher's Make default workspace sets the default) |
+| `/admin` | `AdminPage` (lazy) | admin only: user list with usage and model access |
 
 Search params validated with zod (`validateSearch`). The workspace scope
 `ws` defaults to `settings.defaultWorkspaceId`; changing it calls
@@ -374,7 +374,24 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
 
 ## 10. Performance
 
-- Route-level code splitting; MathJax, mermaid, viz lazy as today.
+- Route-level code splitting (`routes/chunks.ts`): the thread page
+  (`/r/$treeId`, with the Markdown pipeline only it uses), Highlights, the
+  notification inbox, Settings and Admin are `lazyRouteComponent` chunks. Home, the place views
+  (Home's feed on another place), the login page and the invitation page
+  stay in the main chunk, since a first load shows them. While a chunk
+  loads, the thread route shows the page's own placeholder
+  (`features/thread/ThreadPending.tsx`: the thread's header with the title a
+  cache holds and "Loading research…", the same component the page shows
+  while the detail loads), the others `RoutePendingPanel` ("Loading…"). On
+  a first load it shows at once; on a navigation the previous page stays
+  until the router's `pendingMs`. A feed card starts loading the thread
+  chunk on pointer enter and focus (`FeedCard` `onIntent`), and links
+  preload on intent (`defaultPreload: "intent"`). Measured with
+  `vite build` (2026-10): the entry chunk went from 1,378.5 kB (432.7 kB
+  gzip) to 626.5 kB (201.1 kB gzip); everything a first load fetches
+  (entry and its static imports) from 1,379.6 kB (428.8 kB gzip) to 961.2 kB
+  (302.8 kB gzip); the thread chunk is 410.3 kB (129.6 kB gzip).
+- MathJax, mermaid and viz are lazy chunks within the thread page's.
 - Feed virtualization with TanStack Virtual (replaces the hand-rolled canvas
   in `ResearchActivityFeed.tsx`).
 - `OversizedMarkdownPolicy` retained; react-markdown re-parses on each render,

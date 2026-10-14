@@ -76,8 +76,11 @@ function writeMaxIndex(index: number): void {
   }
 }
 
-/** Whether browser history has an entry behind and ahead of this one. */
-function useHistoryButtons() {
+/** Whether browser history has an entry behind and ahead of this one, and
+ * the moves themselves. Also used by the route's loading placeholder
+ * (`ThreadPending.tsx`), so the header's Back and Forward do not change when
+ * the page replaces it. */
+export function useHistoryButtons() {
   const router = useRouter();
   const read = useCallback(() => {
     const index = router.history.location.state.__TSR_index ?? 0;
