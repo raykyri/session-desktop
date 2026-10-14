@@ -24,7 +24,7 @@ import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
 import { LoginPage } from "../routes/login.js";
 import { ArchivePage, DraftPage, DraftsPage, FolderPage, TrashPage } from "../routes/places.js";
-import { ResearchPage } from "../routes/research.$treeId.js";
+import { ThreadPage } from "../routes/research.$treeId.js";
 import { SettingsPage } from "../routes/settings.js";
 
 import { RouteErrorPanel, RouteNotFoundPanel } from "./RouteBoundary.js";
@@ -46,10 +46,15 @@ const researchSearchSchema = z.object({
   /** Workspace scope, carried across every route so the sidebar keeps showing
    * the workspace the thread was opened from. */
   ws: z.string().optional(),
-  /** The node the document view is showing. */
+  /** Each column's selected message, root column first, comma-separated
+   * (`features/thread/useThreadHistory.ts`). */
+  sel: z.string().optional(),
+  /** A message to open: its source path replaces it with `sel`. */
   node: z.string().optional(),
   /** A highlight to scroll to and focus once the document loads. */
   highlight: z.string().optional(),
+  /** A note to open in the editor (a double-click on its card on Home). */
+  edit: z.string().optional(),
   filter: z.enum(["active", "archived", "all"]).optional(),
   feed: z.string().optional(),
 });
@@ -224,7 +229,7 @@ const researchRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/r/$treeId",
   validateSearch: researchSearchSchema,
-  component: ResearchPage,
+  component: ThreadPage,
 });
 
 const settingsRoute = createRoute({

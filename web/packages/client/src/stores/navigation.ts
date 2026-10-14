@@ -1,23 +1,12 @@
-// Intra-page view coordinates that do not belong in the URL (07 §4.3, §8):
-// the per-tree node history stack, the sidebar's width and collapsed state,
-// and the per-node scroll offsets and "show earlier" expansions that make
-// returning to a document land where the reader left it.
+// Page chrome state that does not belong in the URL (07 §4.3, §8): the
+// sidebar's width and collapsed state, and the feed's mode and scroll
+// anchors.
 //
-// Cross-page history is browser history now, so the desktop's
-// `ResearchWorkspaceHistory` reducer is retired (ADR-7). What stays is the
-// per-document history, because it moves between nodes inside one route.
+// History is browser history (ADR-7): a thread's selection is its `?sel=`
+// search parameter, and what a thread keeps per tree across visits (scroll
+// offsets, expansions, the unsent branch) is in
+// `features/thread/persistence.ts`.
 
-import {
-  EMPTY_RESEARCH_HISTORY,
-  RESEARCH_SCROLL_POSITION_TTL_MS,
-  canGoBack,
-  canGoForward,
-  initResearchHistory,
-  pushResearchHistory,
-  researchHistoryBack,
-  researchHistoryForward,
-  type ResearchHistory,
-} from "@session/shared";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -32,11 +21,6 @@ export const SIDEBAR_DEFAULT_WIDTH = 268;
 /** Below this the sidebar stops being a column and becomes a drawer (08 §7). */
 export const NARROW_LAYOUT_WIDTH = 900;
 
-export interface SavedScrollOffset {
-  top: number;
-  updatedAt: number;
-}
-
 /** Where a feed was left: the id of the row under the viewport's top edge and
  * its pixel offset from it (`10` §2), plus the scroller's `scrollTop`. Keyed
  * by feed — each feed scope scrolls independently. `top` is the restore
@@ -50,26 +34,10 @@ export interface FeedScrollAnchor {
 }
 
 export interface NavigationState {
-  /** Per-tree node history, the intra-document analogue of browser history. */
-  historyByTree: Record<string, ResearchHistory>;
-  scrollByNode: Record<string, SavedScrollOffset>;
-  expandedByNode: Record<string, boolean>;
   feedAnchorByView: Record<string, FeedScrollAnchor>;
   feedMode: FeedMode;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
-
-  historyFor: (treeId: string) => ResearchHistory;
-  visitNode: (treeId: string, nodeId: string) => void;
-  goBack: (treeId: string) => string | null;
-  goForward: (treeId: string) => string | null;
-  canGoBack: (treeId: string) => boolean;
-  canGoForward: (treeId: string) => boolean;
-  clearHistory: (treeId: string) => void;
-
-  recordScroll: (nodeId: string, top: number, now?: number) => void;
-  restoreScroll: (nodeId: string, now?: number) => number | null;
-  setExpanded: (nodeId: string, expanded: boolean) => void;
 
   recordFeedAnchor: (view: string, anchor: FeedScrollAnchor | null) => void;
   feedAnchorFor: (view: string) => FeedScrollAnchor | null;
@@ -87,60 +55,11 @@ function clampWidth(width: number): number {
 export const useNavigationStore = create<NavigationState>()(
   persist(
     (set, get) => ({
-      historyByTree: {},
-      scrollByNode: {},
-      expandedByNode: {},
       feedAnchorByView: {},
       // A signed-in account opens on its workspace's Home, as on the desktop.
       feedMode: "workspace",
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-
-      historyFor: (treeId) => get().historyByTree[treeId] ?? EMPTY_RESEARCH_HISTORY,
-      visitNode: (treeId, nodeId) =>
-        set((state) => {
-          const current = state.historyByTree[treeId];
-          const next = current ? pushResearchHistory(current, nodeId) : initResearchHistory(nodeId);
-          if (next === current) return state;
-          return { historyByTree: { ...state.historyByTree, [treeId]: next } };
-        }),
-      goBack: (treeId) => {
-        const step = researchHistoryBack(get().historyFor(treeId));
-        if (!step) return null;
-        set((state) => ({ historyByTree: { ...state.historyByTree, [treeId]: step.history } }));
-        return step.nodeId;
-      },
-      goForward: (treeId) => {
-        const step = researchHistoryForward(get().historyFor(treeId));
-        if (!step) return null;
-        set((state) => ({ historyByTree: { ...state.historyByTree, [treeId]: step.history } }));
-        return step.nodeId;
-      },
-      canGoBack: (treeId) => canGoBack(get().historyFor(treeId)),
-      canGoForward: (treeId) => canGoForward(get().historyFor(treeId)),
-      clearHistory: (treeId) =>
-        set((state) => {
-          if (!(treeId in state.historyByTree)) return state;
-          const next = { ...state.historyByTree };
-          delete next[treeId];
-          return { historyByTree: next };
-        }),
-
-      recordScroll: (nodeId, top, now = Date.now()) =>
-        set((state) => ({
-          scrollByNode: { ...state.scrollByNode, [nodeId]: { top, updatedAt: now } },
-        })),
-      // Offsets expire: a position captured against content that has since
-      // streamed further is added in the wrong place, and after a quarter hour the
-      // reader is starting over anyway.
-      restoreScroll: (nodeId, now = Date.now()) => {
-        const saved = get().scrollByNode[nodeId];
-        if (!saved) return null;
-        if (now - saved.updatedAt > RESEARCH_SCROLL_POSITION_TTL_MS) return null;
-        return saved.top;
-      },
-      setExpanded: (nodeId, expanded) =>
-        set((state) => ({ expandedByNode: { ...state.expandedByNode, [nodeId]: expanded } })),
 
       // A feed anchor is written on a debounce from the scroll handler, so the
       // store is reached at most every 200 ms rather than every frame.
@@ -175,8 +94,6 @@ export const useNavigationStore = create<NavigationState>()(
       version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        scrollByNode: state.scrollByNode,
-        expandedByNode: state.expandedByNode,
         feedAnchorByView: state.feedAnchorByView,
         feedMode: state.feedMode,
         sidebarCollapsed: state.sidebarCollapsed,

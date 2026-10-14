@@ -1,4 +1,4 @@
-// Regenerating an answer's summary (`09-research-document-view.md` §2, §8).
+// Generating an answer's recap (`09-research-document-view.md` §2, §8).
 //
 // Instructions in, candidate out, apply on approval. The desktop's adapter and
 // model pickers are gone: every metadata run is `gemini-flash`
@@ -6,7 +6,7 @@
 // for.
 //
 // Both calls carry the response revision the dialog opened against, and apply
-// also carries the recap id it is replacing, so a summary generated against an
+// also carries the recap id it is replacing, so a recap generated against an
 // answer that has since been re-run is refused by the server rather than
 // silently attached to different text.
 
@@ -111,7 +111,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
       onOpenChange={(next) => {
         if (!next && !applying) onClose();
       }}
-      title={baseline.recap ? "Rewrite summary" : "Generate summary"}
+      title="Generate recap"
       className="w-[min(560px,calc(100vw-32px))]"
       footer={
         <>
@@ -122,13 +122,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
             disabled={loadingDefaults || generating || applying || !instructions.trim()}
             onClick={generate}
           >
-            {generating
-              ? "Generating…"
-              : candidate
-                ? "Generate again"
-                : baseline.recap
-                  ? "Rewrite summary"
-                  : "Generate summary"}
+            {generating ? "Generating…" : candidate ? "Generate again" : "Generate candidate"}
           </ControlButton>
           {candidate ? (
             <ConfirmDialogActionButton
@@ -137,7 +131,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
               disabled={generating}
               onClick={apply}
             >
-              Use this summary
+              Use this recap
             </ConfirmDialogActionButton>
           ) : null}
         </>
@@ -160,7 +154,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
       </label>
       <section className="mt-4">
         <h3 className="text-fg-subtle m-0 text-xs font-semibold tracking-wide uppercase">
-          Generated summary
+          Candidate
         </h3>
         {generating ? (
           <p className="text-fg-muted mt-1 flex items-center gap-2 text-sm">
@@ -169,10 +163,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
           </p>
         ) : (
           <p className="text-fg-primary mt-1 text-sm">
-            {candidate?.text ??
-              (baseline.recap
-                ? "Generate a candidate to replace the current summary."
-                : "No summary yet. Select Generate summary to write one.")}
+            {candidate?.text ?? "Generate a new recap first."}
           </p>
         )}
       </section>
@@ -180,7 +171,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
         <h3 className="text-fg-subtle m-0 text-xs font-semibold tracking-wide uppercase">
           Current
         </h3>
-        <p className="text-fg-muted mt-1 text-sm">{baseline.recap?.text ?? "No summary yet."}</p>
+        <p className="text-fg-muted mt-1 text-sm">{baseline.recap?.text ?? "No recap yet."}</p>
       </section>
       {error ? (
         <p className="text-status-failed mt-3 text-sm" role="alert">

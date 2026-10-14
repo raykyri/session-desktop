@@ -57,6 +57,7 @@ export function node(overrides: NodeOverrides = {}): ResearchNode {
     attempt = 1,
     sessionReady,
     errorKind,
+    resumePending,
     ...base
   } = overrides;
   const shared = {
@@ -97,6 +98,7 @@ export function node(overrides: NodeOverrides = {}): ResearchNode {
       attempt,
       sessionReady: sessionReady ?? status === "complete",
       ...(errorKind === undefined ? {} : { errorKind }),
+      ...(resumePending === undefined ? {} : { resumePending }),
     },
   };
 }

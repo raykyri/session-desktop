@@ -67,6 +67,7 @@ export interface RenderAppOptions {
 export interface RenderAppResult extends RenderResult {
   queryClient: QueryClient;
   trpc: TrpcStub;
+  router: ReturnType<typeof createAppRouter>;
 }
 
 /**
@@ -109,7 +110,7 @@ export async function renderApp(
     </AppProviders>,
   );
   await router.load();
-  return Object.assign(result, { queryClient, trpc: stub });
+  return Object.assign(result, { queryClient, trpc: stub, router });
 }
 
 /**

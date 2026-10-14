@@ -8,10 +8,7 @@ import test from "ava";
 
 import { setTrpcClient } from "../src/api/trpc.js";
 import { ResearchMarkdown } from "../src/features/markdown/ResearchMarkdown.js";
-import {
-  researchTextProjection,
-  rangeForTextOffsets,
-} from "../src/features/research/selection/dom.js";
+import { researchTextProjection, rangeForTextOffsets } from "../src/features/thread/textRanges.js";
 import { lineageLabel } from "../src/features/widgets/SessionWidgetMenu.js";
 import { WidgetChangeContext, type WidgetAnswer } from "../src/features/widgets/context.js";
 import { takeWidgetMessage, widgetFrameMessage } from "../src/features/widgets/widgetBridge.js";

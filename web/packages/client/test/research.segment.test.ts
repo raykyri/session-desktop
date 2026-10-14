@@ -1,22 +1,21 @@
-// The content-derived half of a segment (`09-research-document-view.md` §7):
-// which turns become the answer, what the empty-state cascade says, and what
-// the Sources footer reads out of the recorded tool results.
+// The content-derived half of an answer column (`09-research-document-view.md`
+// §7): which turns become the answer, what an active run's status line says,
+// which controls a run's state offers, and what the Sources footer reads out
+// of the recorded tool results.
 
 import type { Turn } from "@session/shared";
 import test from "ava";
 
-import { TIMELINE_ITEM_RENDER_WINDOW } from "../src/features/research/layout.js";
-import { researchSources } from "../src/features/research/sources.js";
+import { runStatusText } from "../src/features/thread/Turn.js";
+import { runActive, runRetryable } from "../src/features/thread/runState.js";
 import {
-  answerEmptyStateText,
+  TIMELINE_ITEM_RENDER_WINDOW,
   buildSegmentView,
-  durationLabel,
-  formatRunDuration,
-  statusLabel,
   timelineTurns,
-} from "../src/features/research/timeline.js";
+} from "../src/features/thread/segmentView.js";
+import { researchSources } from "../src/features/thread/sources.js";
 
-import { node, type NodeOverrides } from "./fixtures.js";
+import { node } from "./fixtures.js";
 
 function assistantTurn(id: string, text: string): Turn {
   return {
@@ -143,7 +142,6 @@ test("a document root exposes its markdown for the editor", (t) => {
   const built = view([assistantTurn("t1", "# Report\n\nbody")], {
     node: node({ type: "document", status: "complete" }),
   });
-  t.true(built.isDocument);
   t.is(built.editableDocumentMarkdown, "# Report\n\nbody");
 });
 
@@ -156,64 +154,33 @@ test("the word count counts the answer, not the trace", (t) => {
   t.is(built.answerWordCount, 2);
 });
 
-/* ----------------------------------------------------------- empty states */
+/* ------------------------------------------------------------- run state */
 
-function emptyFor(overrides: NodeOverrides, hasAnyTimelineItem = false): string | null {
-  return answerEmptyStateText({
-    node: node(overrides),
-    sourceError: undefined,
-    hasAnyTimelineItem,
-  });
-}
-
-test("empty state renders the specific error or completion message", (t) => {
-  t.is(emptyFor({ status: "failed", error: "provider refused" }), "provider refused");
-  t.is(emptyFor({ status: "cancelled" }), "The run was cancelled.");
-  t.is(emptyFor({ status: "interrupted" }), "The run was interrupted. Resuming…");
-  // The status line already reads "Working…"; the empty state stays silent.
-  t.is(emptyFor({ status: "running" }), null);
-  t.is(emptyFor({ status: "queued" }), null);
-  t.is(emptyFor({ status: "running" }, true), "Generating response…");
-  t.is(emptyFor({ status: "complete" }), "The run finished, but the answer could not be loaded.");
+test("the status line says where a run is", (t) => {
+  t.is(runStatusText(node({ status: "queued" }), false, undefined), "Queued");
+  t.is(runStatusText(node({ status: "queued" }), false, 2), "Queued · 2 ahead");
+  t.is(runStatusText(node({ status: "queued" }), false, 0), "Queued");
+  t.is(runStatusText(node({ status: "interrupted" }), false, undefined), "Interrupted · resuming");
+  t.is(runStatusText(node({ status: "running" }), false, undefined), "Working");
+  t.is(runStatusText(node({ status: "running" }), true, undefined), "Thinking");
 });
 
-test("source error state takes display precedence over normal completion status", (t) => {
-  t.is(
-    answerEmptyStateText({
-      node: node({ status: "complete" }),
-      sourceError: "the snapshot was pruned",
-      hasAnyTimelineItem: false,
-    }),
-    "The response is no longer available: the snapshot was pruned",
-  );
+test("an interrupted run is active while its resume is pending", (t) => {
+  t.true(runActive(node({ status: "running" })));
+  t.true(runActive(node({ status: "queued" })));
+  t.true(runActive(node({ status: "interrupted" })));
+  t.false(runRetryable(node({ status: "interrupted" })));
+  // The server stopped resuming: the run offers Retry instead of Stop.
+  const abandoned = node({ status: "interrupted", resumePending: false });
+  t.false(runActive(abandoned));
+  t.true(runRetryable(abandoned));
 });
 
-/* ----------------------------------------------------------------- timing */
-
-test("durations read as minutes and seconds once past a minute", (t) => {
-  t.is(formatRunDuration(45_000), "45s");
-  t.is(formatRunDuration(68_000), "1m 08s");
-  t.is(formatRunDuration(3_700_000), "1h 1m");
-});
-
-test("the duration line says what the run is doing", (t) => {
-  // An active run's elapsed time rides the "Working…" status line, so it is
-  // bare; a settled one is read on its own in the footer and says what it is.
-  const started = node({ status: "running", startedAt: 1_000, completedAt: null });
-  t.is(durationLabel(started, 6_000), "5s");
-  const done = node({ status: "complete", startedAt: 1_000, completedAt: 4_000 });
-  t.is(durationLabel(done, 9_999), "3s");
-  const failed = node({ status: "failed", startedAt: 1_000, completedAt: 3_000 });
-  t.is(durationLabel(failed, 9_999), "Ran for 2s");
-  // Nothing to meter before the run starts: the status line covers it.
-  t.is(durationLabel(node({ status: "queued", startedAt: null }), 0), null);
-  t.is(durationLabel(node({ status: "cancelled", startedAt: null }), 0), null);
-});
-
-test("every status has a label", (t) => {
-  t.is(statusLabel("queued"), "Queued");
-  t.is(statusLabel("running"), "Working…");
-  t.is(statusLabel("interrupted"), "Interrupted");
+test("a failed or cancelled run can be retried, a complete one cannot", (t) => {
+  t.true(runRetryable(node({ status: "failed" })));
+  t.true(runRetryable(node({ status: "cancelled" })));
+  t.false(runRetryable(node({ status: "complete" })));
+  t.false(runActive(node({ status: "complete" })));
 });
 
 /* ---------------------------------------------------------------- sources */

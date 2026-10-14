@@ -1,28 +1,26 @@
-// Selection capture and word snapping (`09-research-document-view.md` §5).
+// Selection capture and word expansion (`09-research-document-view.md` §5).
 //
 // The fixture is the shape a rendered answer actually has: message wrappers
 // with a tool disclosure between them, which is what makes the two rules worth
 // testing — context is clamped to one message, and a selection that touches
 // transcript machinery is refused.
 
-import { createResearchSelectionSnapper } from "@session/shared";
+import { createResearchSelectionExpander } from "@session/shared/lib/researchSelection";
 import test from "ava";
 
-import { captureResearchSelection } from "../src/features/research/selection/capture.js";
-import type { ResolvedResearchHighlightRange } from "../src/features/research/selection/capture.js";
+import { captureSelectionAction } from "../src/features/thread/selectionCapture.js";
 import {
   RESPONSE_ROOT_ATTRIBUTE,
   RESPONSE_ROOT_SELECTOR,
   enclosingMessageFlatBounds,
   flatTextOffsetAt,
-  formatResearchReplySnippet,
   messageFlatBoundaries,
   quoteDisplayText,
   rangeForTextOffsets,
   selectionOffsets,
   selectionTouchesNonTextRow,
   textContextSlice,
-} from "../src/features/research/selection/dom.js";
+} from "../src/features/thread/textRanges.js";
 
 const REVISION = "a".repeat(64);
 
@@ -38,6 +36,23 @@ function fixture(): HTMLElement {
   ].join("");
   document.body.appendChild(root);
   return root;
+}
+
+/** The capture of `range` in a complete answer. */
+function capture(
+  root: HTMLElement,
+  range: Range,
+  resolved: { id: string; start: number; end: number }[] = [],
+) {
+  return captureSelectionAction({
+    root,
+    range,
+    nodeId: "n1",
+    revision: REVISION,
+    status: "complete",
+    isConversation: false,
+    resolved,
+  });
 }
 
 test.afterEach(() => {
@@ -67,34 +82,28 @@ test("message boundaries are reported where the enclosing message changes", (t) 
 test("prevents word expansion across message boundaries", (t) => {
   const root = fixture();
   const projection = root.textContent ?? "";
-  const snapper = createResearchSelectionSnapper(projection, "en", messageFlatBoundaries(root));
-  t.truthy(snapper);
+  const expander = createResearchSelectionExpander(projection, "en", messageFlatBoundaries(root));
+  t.truthy(expander);
   // A caret inside "gamma" dragged one character past the boundary: without the
   // boundaries, "gamma.web_search" segments as one unit.
-  const snapped = snapper?.(13, 18);
+  const snapped = expander?.(13, 18);
   t.truthy(snapped);
   t.true((snapped?.end ?? 0) <= 27);
   t.is(projection.slice(snapped!.start, snapped!.end).includes("Delta"), false);
 });
 
-test("snapping expands a partial word to the whole word", (t) => {
+test("expansion widens a partial word to the whole word", (t) => {
   const root = fixture();
   const projection = root.textContent ?? "";
-  const snapper = createResearchSelectionSnapper(projection, "en", messageFlatBoundaries(root));
-  const snapped = snapper?.(7, 9);
+  const expander = createResearchSelectionExpander(projection, "en", messageFlatBoundaries(root));
+  const snapped = expander?.(7, 9);
   t.is(projection.slice(snapped!.start, snapped!.end), "beta");
 });
 
 test("a capture anchors the passage and clamps context to its message", (t) => {
   const root = fixture();
   const range = rangeForTextOffsets(root, 6, 10) as Range;
-  const captured = captureResearchSelection({
-    root,
-    range,
-    nodeId: "n1",
-    responseRevision: REVISION,
-    resolved: [],
-  });
+  const captured = capture(root, range);
   t.truthy(captured);
   t.is(captured?.anchor.exact, "beta");
   t.is(captured?.anchor.projection, "answer-v1");
@@ -110,54 +119,65 @@ test("rejects selections that intersect tool rows", (t) => {
   const root = fixture();
   const range = rangeForTextOffsets(root, 12, 30) as Range;
   t.true(selectionTouchesNonTextRow(root, range));
-  t.is(
-    captureResearchSelection({
-      root,
-      range,
-      nodeId: "n1",
-      responseRevision: REVISION,
-      resolved: [],
-    }),
-    null,
-  );
+  t.is(capture(root, range), null);
 });
 
 test("a whitespace-only selection is refused unless it covers a highlight", (t) => {
   const root = fixture();
   const range = rangeForTextOffsets(root, 5, 6) as Range;
-  t.is(
-    captureResearchSelection({
-      root,
-      range,
-      nodeId: "n1",
-      responseRevision: REVISION,
-      resolved: [],
-    }),
-    null,
-  );
-  const resolved: ResolvedResearchHighlightRange[] = [{ id: "h1", start: 0, end: 10 }];
-  const captured = captureResearchSelection({
-    root,
-    range,
-    nodeId: "n1",
-    responseRevision: REVISION,
-    resolved,
-  });
+  t.is(capture(root, range), null);
+  const captured = capture(root, range, [{ id: "h1", start: 0, end: 10 }]);
   t.deepEqual(captured?.highlightIds, ["h1"]);
 });
 
 test("a selection overlapping saved highlights offers the merged annotation", (t) => {
   const root = fixture();
   const range = rangeForTextOffsets(root, 6, 17) as Range;
-  const captured = captureResearchSelection({
+  const captured = capture(root, range, [{ id: "h1", start: 0, end: 10 }]);
+  t.deepEqual(captured?.highlightIds, ["h1"]);
+  t.is(captured?.expandAnchor?.exact, "Alpha beta gamma.");
+});
+
+test("a selection that crosses a paragraph is anchored to the first one", (t) => {
+  const root = document.createElement("div");
+  root.setAttribute(RESPONSE_ROOT_ATTRIBUTE, "n1");
+  root.innerHTML = '<div class="research-response-message"><p>One two.</p><p>Three four.</p></div>';
+  document.body.appendChild(root);
+  const captured = capture(root, rangeForTextOffsets(root, 4, 13) as Range);
+  t.is(captured?.copyText, "two.Three");
+  t.is(captured?.anchor.exact, "two.");
+  t.true(captured?.crossed);
+});
+
+test("a selection in a streaming answer can be copied but not saved", (t) => {
+  const root = fixture();
+  const range = rangeForTextOffsets(root, 6, 10) as Range;
+  const live = captureSelectionAction({
     root,
     range,
     nodeId: "n1",
-    responseRevision: REVISION,
+    revision: "",
+    status: "running",
+    isConversation: false,
     resolved: [{ id: "h1", start: 0, end: 10 }],
   });
-  t.deepEqual(captured?.highlightIds, ["h1"]);
-  t.is(captured?.expandAnchor?.exact, "Alpha beta gamma.");
+  t.true(live?.live);
+  t.is(live?.copyText, "beta");
+  t.deepEqual(live?.highlightIds, []);
+  t.is(live?.expandAnchor, null);
+  // A settled answer with no revision offers nothing.
+  t.is(
+    captureSelectionAction({
+      root,
+      range,
+      nodeId: "n1",
+      revision: "",
+      status: "complete",
+      isConversation: false,
+      resolved: [],
+    }),
+    null,
+  );
 });
 
 test("a selection inside one message reports that message's bounds", (t) => {
@@ -183,21 +203,12 @@ test("a quoted passage collapses to one line", (t) => {
   t.is(quoteDisplayText("  many\n  spaced   words \n"), "many spaced words");
 });
 
-test("the reply snippet keeps eight words and marks the cut", (t) => {
-  t.is(
-    formatResearchReplySnippet("## One two three four five six seven eight nine ten"),
-    "One two three four five six seven eight…",
-  );
-  t.is(formatResearchReplySnippet("short answer"), "short answer");
-  t.is(formatResearchReplySnippet(""), "");
-});
-
 test("matches the response-root selector only on response content elements", (t) => {
-  // `data-node-id` is on the segment grid, on the rail and on every branch
-  // card, so a `closest()` walk from a selection that strayed out of the answer
-  // used to find one of those and measure an anchor against text no anchor can
-  // be resolved in. The projection root is marked with an attribute nothing
-  // else carries.
+  // `data-node-id` is on the answer column and on every message row, so a
+  // `closest()` walk from a selection that strayed out of the answer would
+  // find one of those and measure an anchor against text no anchor can be
+  // resolved in. The projection root is marked with an attribute nothing else
+  // carries.
   const grid = document.createElement("div");
   grid.dataset["nodeId"] = "n1";
   grid.innerHTML = [
@@ -210,10 +221,10 @@ test("matches the response-root selector only on response content elements", (t)
   t.is(
     grid.querySelector("#card")?.closest(RESPONSE_ROOT_SELECTOR) ?? null,
     null,
-    "a selection in the rail resolves to no projection root at all",
+    "a selection in a message row resolves to no projection root at all",
   );
   t.truthy(
     grid.querySelector("#card")?.closest("[data-node-id]"),
-    "which is exactly what the old lookup would have found instead",
+    "which a lookup by node id would have found instead",
   );
 });

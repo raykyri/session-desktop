@@ -1,16 +1,16 @@
-// The document's dialogs (`09-research-document-view.md` §8). The thread
-// menu Home's cards share moved to `features/home/TreeMenu.tsx`
-// (`feed.test.tsx`, `trash.test.tsx`).
+// The thread page's dialogs (`09-research-document-view.md` §8). The thread
+// menu Home's cards use is `features/home/TreeMenu.tsx` (`feed.test.tsx`,
+// `trash.test.tsx`).
 
 import type { ResearchNodeContent } from "@session/shared";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import test from "ava";
 
 import { setTrpcClient } from "../src/api/trpc.js";
-import { DeleteBranchDialog } from "../src/features/research/DeleteBranchDialog.js";
 import { RecapDialog } from "../src/features/research/RecapDialog.js";
+import { DeleteDialog, RerunDialog } from "../src/features/thread/ThreadDialogs.js";
 
-import { node, tree } from "./fixtures.js";
+import { node } from "./fixtures.js";
 import { waitUntil } from "./helpers.js";
 import { createTrpcStub } from "./trpcStub.js";
 
@@ -71,7 +71,7 @@ test.serial("the recap dialog generates a candidate and applies it", async (t) =
     "the default instructions load",
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -86,7 +86,7 @@ test.serial("the recap dialog generates a candidate and applies it", async (t) =
     instructions: "Write a compact recap.",
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Use this summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use this recap" }));
   await waitUntil(t, () => applied.length >= 2, "the candidate is applied and the dialog closes");
   const apply = stub.calls.find((call) => call.path === "recaps.applyCandidate");
   t.like(apply?.input, {
@@ -120,10 +120,10 @@ test.serial("editing recap instructions clears the generated candidate", async (
 
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Rewrite summary" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Generate candidate" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -131,8 +131,8 @@ test.serial("editing recap instructions clears the generated candidate", async (
   );
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "Be terse." } });
   // A candidate produced from different instructions cannot be applied.
-  t.is(screen.queryByRole("button", { name: "Use this summary" }), null);
-  t.truthy(screen.getByText("Generate a candidate to replace the current summary."));
+  t.is(screen.queryByRole("button", { name: "Use this recap" }), null);
+  t.truthy(screen.getByText("Generate a new recap first."));
 });
 
 test.serial("the recap dialog surfaces a refusal", async (t) => {
@@ -153,64 +153,98 @@ test.serial("the recap dialog surfaces a refusal", async (t) => {
   );
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Rewrite summary" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Generate candidate" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
   await waitUntil(t, () => screen.queryByRole("alert") !== null, "the server's message is shown");
   t.truthy(screen.getByText("The research response has been updated; please reselect the text."));
 });
 
-/* ---------------------------------------------------------- branch deletion */
+/* ---------------------------------------------------------------- deletion */
 
-test.serial("branch deletion confirmation lists descendants that will be removed", (t) => {
+function deleteDialog(
+  nodes: Parameters<typeof DeleteDialog>[0]["nodes"],
+  nodeId: string,
+  calls: string[] = [],
+) {
+  render(
+    <DeleteDialog
+      nodes={nodes}
+      nodeId={nodeId}
+      rootNodeId="n1"
+      treeTitle="Collective memory"
+      onTrashRoot={() => {
+        calls.push("trash");
+        return Promise.resolve();
+      }}
+      onRemove={(removed) => {
+        calls.push(`remove:${removed.id}`);
+        return Promise.resolve();
+      }}
+      onClose={() => calls.push("close")}
+    />,
+  );
+  return calls;
+}
+
+test.serial("deleting a branch names what else it removes", (t) => {
   const root = node({ id: "n1", status: "complete" });
   const branch = node({ id: "n2", parentNodeId: "n1", status: "complete", inline: false });
   const child = node({ id: "n3", parentNodeId: "n2", status: "complete", inline: false });
-  render(
-    <DeleteBranchDialog
-      detail={{ tree: tree(), nodes: [root, branch, child] }}
-      nodeId="n2"
-      busy={false}
-      error={null}
-      onCancel={() => undefined}
-      onConfirm={() => undefined}
-    />,
-  );
-  t.truthy(screen.getByText("Delete this branch?"));
-  t.truthy(screen.getByText(/This also permanently deletes 1 descendant follow-up\./));
+  deleteDialog([root, branch, child], "n2");
+  t.truthy(screen.getByText("Delete this research branch?"));
+  t.truthy(screen.getByText(/This also deletes 1 follow-up under it\. This can’t be undone\./));
   t.truthy(screen.getByRole("button", { name: "Delete branch" }));
 });
 
 test.serial("a branch with a run in flight cannot be deleted", (t) => {
   const root = node({ id: "n1", status: "complete" });
   const branch = node({ id: "n2", parentNodeId: "n1", status: "running", inline: false });
-  render(
-    <DeleteBranchDialog
-      detail={{ tree: tree(), nodes: [root, branch] }}
-      nodeId="n2"
-      busy={false}
-      error={null}
-      onCancel={() => undefined}
-      onConfirm={() => undefined}
-    />,
-  );
+  deleteDialog([root, branch], "n2");
   t.true(screen.getByRole("button", { name: "Delete follow-up" }).hasAttribute("disabled"));
 });
 
-test.serial("deleting the root is named as deleting the research", (t) => {
-  const root = node({ id: "n1", status: "complete" });
+test.serial("deleting the research moves it to the Trash", async (t) => {
+  const root = node({ id: "n1", status: "complete", title: "Collective memory" });
+  const calls = deleteDialog([root], "n1");
+  t.truthy(screen.getByRole("heading", { name: "Delete “Collective memory”?" }));
+  t.truthy(screen.getByText("It moves to the Trash, where you can restore it."));
+  fireEvent.click(screen.getByRole("button", { name: "Move to Trash" }));
+  await waitUntil(t, () => calls.includes("close"), "the dialog closes");
+  t.deepEqual(calls, ["trash", "close"]);
+});
+
+test.serial(
+  "Delete now deletes the research permanently after a second confirmation",
+  async (t) => {
+    const root = node({ id: "n1", status: "complete", title: "Collective memory" });
+    const calls = deleteDialog([root], "n1");
+    fireEvent.click(screen.getByRole("button", { name: "Delete now" }));
+    t.truthy(screen.getByRole("heading", { name: "Delete permanently?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitUntil(t, () => calls.includes("close"), "the dialog closes");
+    t.deepEqual(calls, ["remove:n1", "close"]);
+  },
+);
+
+/* ------------------------------------------------------------------- rerun */
+
+test.serial("Rerun waits for the answer it follows to finish", (t) => {
+  const parent = node({ id: "n1", status: "running" });
+  const child = node({ id: "n2", parentNodeId: "n1", status: "complete", inline: false });
   render(
-    <DeleteBranchDialog
-      detail={{ tree: tree(), nodes: [root] }}
-      nodeId="n1"
-      busy={false}
-      error={null}
-      onCancel={() => undefined}
+    <RerunDialog
+      node={child}
+      parent={parent}
+      pending={false}
       onConfirm={() => undefined}
+      onClose={() => undefined}
     />,
   );
-  t.truthy(screen.getByRole("heading", { name: "Delete thread" }));
+  t.truthy(screen.getByText(/Rerun will replace the current answer\. Continue\?/));
+  t.truthy(screen.getByText("Wait for the answer this follows to finish"));
+  t.true(screen.getByRole("button", { name: "Continue" }).hasAttribute("disabled"));
 });
 
 /* -------------------------------------------------------------- tree menu */
