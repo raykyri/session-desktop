@@ -425,3 +425,44 @@ test("the home feed is public and personal routes still require a session", asyn
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
 });
+
+test("a card loads the thread page's chunk on hover; a thread URL shows its loading header until the chunk arrives", async ({
+  page,
+}) => {
+  await signIn(page, { login: "e2e-route-chunks" });
+  const detail = await openNote(page, "A note opened by its URL");
+  await expect(page.getByText("A note opened by its URL")).toBeVisible();
+
+  // A fresh page has none of the app's chunks; hovering a card on Home asks
+  // for the thread page's.
+  const home = await page.context().newPage();
+  await home.goto("/");
+  const card = home
+    .getByRole("feed", { name: "Recent activity" })
+    .locator("[data-research-card-hit]")
+    .and(home.getByRole("button", { name: /A note opened by its URL/ }))
+    .first();
+  const chunk = home.waitForRequest(/\/assets\/research\._treeId-[^/]+\.js$/);
+  await card.hover();
+  await chunk;
+  await home.close();
+
+  // Held back, the chunk leaves the route's placeholder up: the thread's
+  // header and the loading line, not a blank stage.
+  const fresh = await page.context().newPage();
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await fresh.route(/\/assets\/research\._treeId-[^/]+\.js$/, async (route) => {
+    await released;
+    await route.continue();
+  });
+  await fresh.goto(`/r/${detail.tree.id}`);
+  await expect(fresh.getByRole("heading", { name: "Loading research…", level: 1 })).toBeVisible();
+  await expect(fresh.getByRole("button", { name: /^Back/ })).toBeVisible();
+  release();
+  await expect(fresh.getByText("A note opened by its URL")).toBeVisible();
+  await expect(fresh.getByRole("heading", { name: "Loading research…", level: 1 })).toHaveCount(0);
+  await fresh.close();
+});
