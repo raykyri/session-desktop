@@ -538,6 +538,13 @@ export function FeedView({
       return;
     }
     const kind = card.dataset["researchCardKind"] === "draft" ? "draft" : "tree";
+    // A shared thread's position is its owner's; the order sent is the
+    // reader's own threads only (`useFiling`).
+    const cardTree = kind === "tree" ? treeById.get(cardId) : undefined;
+    if (cardTree && !ownTree(cardTree)) {
+      announce("Shared threads keep their owner’s order.");
+      return;
+    }
     const parentId = card.dataset["researchParent"];
     const ids =
       kind === "draft"

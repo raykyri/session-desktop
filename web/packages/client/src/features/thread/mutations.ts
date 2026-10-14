@@ -26,7 +26,7 @@ import {
   setResearchChainOrder,
   updateResearchDocument,
 } from "../../api/api.js";
-import { invalidateKeys, patchDetail } from "../../api/cache.js";
+import { invalidateKeys, patchDetail, writeRelaunch } from "../../api/cache.js";
 import { queryKeys } from "../../api/queries.js";
 
 import type { HighlightActions } from "./useTextSelection.js";
@@ -129,7 +129,9 @@ export function useRerunResearchNode() {
   return useMutation({
     mutationFn: rerunResearchNode,
     onSuccess: (detail, nodeId) => {
-      client.setQueryData(queryKeys.tree(detail.tree.id), detail);
+      // The counts move with the detail (`writeRelaunch`): the rerun node is
+      // running again, no longer complete.
+      writeRelaunch(client, { detail });
       // The rerun starts a fresh attempt from sequence zero.
       invalidateKeys(client, queryKeys.nodeContent(nodeId));
     },

@@ -30,7 +30,6 @@ import {
   patchResearchDetailNode,
   patchResearchDetailTree,
   patchResearchSummaryForCreatedNode,
-  patchResearchSummaryForNode,
   patchResearchSummaryForRemovedNodes,
   patchResearchSummaryTree,
   removeResearchDetailNodes,
@@ -119,13 +118,13 @@ import {
   invalidateKeys,
   mapSummaries,
   patchActiveNodes,
-  patchActivityFeedNode,
   patchDetail,
   patchDetailQueue,
   queryKeys,
   writeDetailSummary,
+  writeRelaunch,
 } from "./cache.js";
-import { addNodeInterest, addTreeInterest } from "./events.js";
+import { addNodeInterest, addTreeInterest, interestedTreeIds } from "./events.js";
 
 export { queryKeys, eventPatchedListKeys } from "./cache.js";
 
@@ -214,12 +213,47 @@ export function useTreeSummaries(scope: { workspaceId: string; includeArchived?:
   return useQuery(treesQueryOptions(scope));
 }
 
-export function useTreeDetail(treeId: string | undefined) {
+/** How often a guest's open thread is re-read while a run in it is active:
+ * guests get no events. */
+export const GUEST_THREAD_POLL_MS = 15_000;
+
+/** A thread's detail. Events keep it fresh for the owner, the members and a
+ * signed-in reader who has it open; a guest (`eventless`) gets none, so the
+ * detail is re-read when the tab regains focus and, while a run is active,
+ * every `GUEST_THREAD_POLL_MS`. */
+export function useTreeDetail(treeId: string | undefined, options: { eventless?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.tree(treeId ?? ""),
     queryFn: () => getResearchTree(treeId ?? ""),
     enabled: Boolean(treeId),
+    ...(options.eventless
+      ? {
+          refetchOnWindowFocus: "always" as const,
+          refetchInterval: (query: { state: { data: ResearchTreeDetail | undefined } }) =>
+            query.state.data?.nodes.some((node) => isActiveResearchStatus(nodeStatus(node)))
+              ? GUEST_THREAD_POLL_MS
+              : false,
+        }
+      : {}),
   });
+}
+
+/**
+ * Re-reads a cached thread and its presence when the page opens it, for a
+ * reader outside its event audience between visits (a public thread's
+ * reader who is not a member: the server sends its events only while it is
+ * declared open, `useThreadInterest`). Not when another view of this tab
+ * kept it open meanwhile. Call before `useThreadInterest`, whose declaration
+ * this checks for.
+ */
+export function useRefetchThreadOnOpen(treeId: string, outsideAudience: boolean): void {
+  const client = useQueryClient();
+  const outsideRef = useRef(outsideAudience);
+  useEffect(() => {
+    if (!outsideRef.current || interestedTreeIds().includes(treeId)) return;
+    void client.invalidateQueries({ queryKey: queryKeys.tree(treeId) });
+    void client.invalidateQueries({ queryKey: queryKeys.presence(treeId) });
+  }, [client, treeId]);
 }
 
 export function useActiveNodes() {
@@ -828,7 +862,7 @@ export function useRetryResearchNode() {
     mutationFn: (input: { nodeId: string; model?: string }) =>
       retryResearchNode(input.nodeId, input.model),
     onSuccess: (detail, input) => {
-      writeDetail(client, detail, { insert: false });
+      writeRelaunch(client, { detail });
       // The retried node starts a fresh attempt from sequence zero.
       invalidateKeys(client, queryKeys.nodeContent(input.nodeId));
     },
@@ -839,24 +873,7 @@ export function useCancelResearchNode() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: cancelResearchNode,
-    onSuccess: (node) => {
-      // The summary counts are a delta between the node the caches held and
-      // the one that came back, so they have to be applied here, from the
-      // predecessor, before it is overwritten: the `research.node.updated`
-      // this call publishes would otherwise read the already-cancelled node as
-      // its own predecessor and move nothing.
-      const previous = cachedNode(client, node.treeId, node.id);
-      patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
-      patchActiveNodes(client, node);
-      patchActivityFeedNode(client, node);
-      if (previous) {
-        mapSummaries(client, (summary) =>
-          patchResearchSummaryForNode(summary, previous, node, Date.now()),
-        );
-      } else {
-        invalidateKeys(client, ["trees"]);
-      }
-    },
+    onSuccess: (node) => writeRelaunch(client, { node }),
   });
 }
 

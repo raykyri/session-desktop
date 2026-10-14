@@ -8,11 +8,15 @@
 //
 // One module-level store per page, so every thread page mount and the pruning
 // on removal mutate the same object; writes share one debounce and a flush on
-// `pagehide`.
+// `pagehide`. Several tabs share the storage key, so a write merges with what
+// is stored tree by tree (the entry written last wins, `lib/tabMerge`), and
+// another tab's write is merged in when its `storage` event arrives.
 
 import type { ResearchHighlightAnchor } from "@session/shared";
 import { isSavedResearchAnchor, RESEARCH_SCROLL_POSITION_TTL_MS } from "@session/shared";
 import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
+
+import { mergeByUpdatedAt, onOtherTabWrite } from "../../lib/tabMerge.js";
 
 export const THREAD_NAVIGATION_KEY = "session.thread-navigation.v1";
 const SAVE_DEBOUNCE_MS = 250;
@@ -45,12 +49,23 @@ export interface ThreadNavigation {
 
 let store: Record<string, ThreadNavigation> | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** Trees this tab forgot, with when, until the next write: a stored copy
+ * older than that is not merged back. */
+const forgotten = new Map<string, number>();
 
 const emptyScroll = (): ThreadNavigation["scroll"] => ({ answer: {}, messages: {}, branches: {} });
 
 function load(): Record<string, ThreadNavigation> {
   try {
-    const parsed = JSON.parse(localStorage.getItem(THREAD_NAVIGATION_KEY) ?? "{}") as unknown;
+    return parse(localStorage.getItem(THREAD_NAVIGATION_KEY));
+  } catch {
+    return {};
+  }
+}
+
+function parse(text: string | null): Record<string, ThreadNavigation> {
+  try {
+    const parsed = JSON.parse(text ?? "{}") as unknown;
     if (!parsed || typeof parsed !== "object") return {};
     const now = Date.now();
     const result: Record<string, ThreadNavigation> = {};
@@ -111,11 +126,13 @@ export function threadNavigationStore(): Record<string, ThreadNavigation> {
   return store;
 }
 
-/** Writes the store now. */
+/** Writes the store now, merged with what other tabs stored meanwhile. */
 export function flushThreadNavigation(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
   if (!store) return;
+  store = mergeByUpdatedAt(store, load(), forgotten);
+  forgotten.clear();
   const entries = Object.entries(store)
     .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
     .slice(0, MAX_TREES);
@@ -135,6 +152,11 @@ export function flushPendingThreadNavigation(): void {
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPendingThreadNavigation);
 }
+
+// Another tab wrote: its newer entries replace this tab's.
+onOtherTabWrite(THREAD_NAVIGATION_KEY, (value) => {
+  if (store) store = mergeByUpdatedAt(store, parse(value), forgotten);
+});
 
 function scheduleSave(): void {
   if (timer !== null) clearTimeout(timer);
@@ -267,6 +289,7 @@ export function forgetThread(treeId: string): void {
   const all = threadNavigationStore();
   if (!all[treeId]) return;
   delete all[treeId];
+  forgotten.set(treeId, Date.now());
   flushThreadNavigation();
 }
 
@@ -275,4 +298,5 @@ export function resetThreadNavigationForTests(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
   store = null;
+  forgotten.clear();
 }

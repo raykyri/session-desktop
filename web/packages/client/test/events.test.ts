@@ -10,7 +10,7 @@ import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { QueryClient, type InfiniteData } from "@tanstack/react-query";
 import test from "ava";
 
-import { queryKeys } from "../src/api/cache.js";
+import { queryKeys, writeRelaunch } from "../src/api/cache.js";
 import {
   addNodeInterest,
   applyEventBatch,
@@ -18,8 +18,14 @@ import {
   INTEREST_DEBOUNCE_MS,
   resetNodeInterest,
 } from "../src/api/events.js";
+import {
+  recordSelection,
+  resetThreadNavigationForTests,
+  savedSelection,
+} from "../src/features/thread/persistence.js";
 import { useConnectionStore } from "../src/stores/connection.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
+import { useRecapPendingStore } from "../src/stores/recapPending.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 
 import { node, summary, tree } from "./fixtures.js";
@@ -200,6 +206,34 @@ test.serial("a created thread is added to every tree list and the detail cache",
   t.is(queryClient.getQueryData<ResearchNode[]>(queryKeys.activeNodes())?.length, 1);
 });
 
+test.serial("a rerun moves the counts once, before and after its node event", (t) => {
+  const queryClient = client();
+  const complete = node({ status: "complete", completedAt: 1_700_000_050_000 });
+  queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [
+    summary({ runningCount: 0, completedCount: 1 }),
+  ]);
+  queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [complete] });
+  const running = node({ status: "running" });
+  writeRelaunch(queryClient, { detail: { tree: tree(), nodes: [running] } });
+  const counts = () => {
+    const row = queryClient.getQueryData<ResearchTreeSummary[]>(queryKeys.trees(TREES_SCOPE))?.[0];
+    return { running: row?.runningCount, completed: row?.completedCount };
+  };
+  t.deepEqual(counts(), { running: 1, completed: 0 });
+  applyEventBatch([event("research.node.updated", { node: running })], queryClient);
+  t.deepEqual(counts(), { running: 1, completed: 0 }, "the event does not count it again");
+});
+
+test.serial("a trashed thread keeps its saved page state; a deleted one loses it", (t) => {
+  resetThreadNavigationForTests();
+  const queryClient = client();
+  recordSelection("t1", ["n1", "n2"]);
+  applyEventBatch([event("research.tree.removed", { treeId: "t1", trashed: true })], queryClient);
+  t.deepEqual(savedSelection("t1"), ["n1", "n2"], "kept for Restore");
+  applyEventBatch([event("research.tree.removed", { treeId: "t1" })], queryClient);
+  t.is(savedSelection("t1"), null, "forgotten on deletion");
+});
+
 test.serial("a removed thread leaves the lists and takes its detail with it", (t) => {
   const queryClient = client();
   queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
@@ -341,9 +375,12 @@ test.serial("a reconnect invalidates the lists and re-reads displayed nodes", (t
     "the initial SSE connection does not invalidate cached tree lists",
   );
 
+  // A recap spinner whose "done" was sent while disconnected.
+  useRecapPendingStore.getState().set("n1", true);
   stub.emit(event("connection.ready", { connectionId: "c2" }));
   t.true(queryClient.getQueryState(queryKeys.trees(TREES_SCOPE))?.isInvalidated);
   t.true(queryClient.getQueryState(queryKeys.nodeContent("n1"))?.isInvalidated);
+  t.false(useRecapPendingStore.getState().isPending("n1"), "the spinner goes");
 
   bridge.close();
 });

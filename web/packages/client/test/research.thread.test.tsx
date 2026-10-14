@@ -14,7 +14,7 @@ import type {
   ResearchTreeDetail,
   Turn,
 } from "@session/shared";
-import { QueryClient } from "@tanstack/react-query";
+import { focusManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import test from "ava";
 
@@ -430,6 +430,65 @@ test.serial("while a thread loads, its header shows the title a list already has
     "the loading placeholder",
   );
   t.truthy(screen.getByRole("heading", { name: "Collective memory" }));
+});
+
+test.serial(
+  "a public thread's cached copy is re-read on opening, unless it is the reader's",
+  async (t) => {
+    for (const [role, expected] of [
+      ["viewer", 1],
+      ["owner", 0],
+    ] as const) {
+      const root = node({ id: "n1", status: "complete" });
+      const detail: ResearchTreeDetail = {
+        tree: tree({ visibility: "public", role, ownerId: role === "owner" ? "u1" : "u9" }),
+        nodes: [root],
+      };
+      const queryClient = testQueryClient();
+      queryClient.setQueryData(["tree", "t1"], detail);
+      const app = await renderApp("/r/t1", {
+        queryClient,
+        responses: {
+          "research.getTree": () => detail,
+          "research.getNodeContent": () => contentFor(root, [assistantTurn("t1", "Root answer.")]),
+          "research.markTreeViewed": detail.tree,
+          "system.runtimeConfig": { version: "0.0.0", models: MODELS, limits: {}, features: {} },
+        },
+      });
+      await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      t.is(
+        app.trpc.calls.filter((call) => call.path === "research.getTree").length,
+        expected,
+        role,
+      );
+      app.unmount();
+      cleanup();
+    }
+  },
+);
+
+test.serial("a guest's open thread is re-read when the tab regains focus", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const detail: ResearchTreeDetail = { tree: tree({ visibility: "public" }), nodes: [root] };
+  const app = await renderApp("/r/t1", {
+    user: null,
+    queryClient: testQueryClient(),
+    responses: {
+      "research.getTree": () => detail,
+      "research.getNodeContent": () => contentFor(root, [assistantTurn("t1", "Root answer.")]),
+      "system.runtimeConfig": { version: "0.0.0", models: MODELS, limits: {}, features: {} },
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+  const reads = () => app.trpc.calls.filter((call) => call.path === "research.getTree").length;
+  const before = reads();
+  act(() => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  await waitUntil(t, () => reads() > before, "re-read on focus");
+  focusManager.setFocused(undefined);
 });
 
 test.serial("Rerun asks before replacing a complete answer", async (t) => {
@@ -1000,6 +1059,34 @@ test.serial("Edit question on a stalled queued item moves it into the ask box", 
     "its text is in the ask box",
   );
   t.truthy(document.querySelector('img[src*="img1"]'), "with its image");
+});
+
+test.serial("a refused cancel leaves the ask box as it was and says why", async (t) => {
+  const root = node({ id: "n1", status: "failed", error: "Stopped." });
+  await mount({
+    nodes: [root],
+    queues: { n1: [queuedItem({ message: { text: "A queued question" } })] },
+    contentByNode: { n1: contentFor(root, [], { responseRevision: undefined }) },
+    responses: {
+      "followups.cancel": () => {
+        throw new Error("This follow-up already started.");
+      },
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("A queued question") !== null, "the item shows");
+  const row = screen.getByText("A queued question").closest("li") as HTMLElement;
+  fireEvent.click(within(row).getByRole("button", { name: "Edit question" }));
+  await waitUntil(
+    t,
+    () => screen.queryByText("The follow-up could not be cancelled") !== null,
+    "the refusal",
+  );
+  t.is(
+    screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Follow-up in this conversation" })
+      .value,
+    "",
+    "the text stays queued, not in the ask box",
+  );
 });
 
 test.serial("Edit question on a failed answer brings its images back", async (t) => {

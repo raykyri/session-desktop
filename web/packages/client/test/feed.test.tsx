@@ -354,6 +354,27 @@ test.serial("⌥↓ moves a card down Unfiled and saves the order", async (t) =>
   app.unmount();
 });
 
+test.serial("⌥↓ on a shared thread's card moves nothing and says why", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: homeResponses({
+      trees: [
+        tree("t1", { title: "First", role: "commenter", ownerId: "someone-else" }),
+        tree("t2", { title: "Second" }),
+      ],
+      roots: [root("t1", { prompt: "First" }), root("t2", { prompt: "Second" })],
+    }),
+  });
+  await waitUntil(t, () => within(unfiled()).queryAllByRole("button").length >= 2, "two cards");
+  const first = card(unfiled(), "^First");
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: "ArrowDown", altKey: true });
+  t.truthy(await screen.findByText("Shared threads keep their owner’s order."));
+  t.false(app.trpc.calls.some((call) => call.path === "research.reorderTrees"));
+  t.is(screen.queryByText(/^Moved to position/), null);
+  app.unmount();
+});
+
 test.serial("a refused reorder says the list changed, not which id", async (t) => {
   useNotificationsStore.getState().clear();
   const app = await renderApp("/", {

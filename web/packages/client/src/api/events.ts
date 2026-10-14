@@ -42,6 +42,7 @@ import {
 } from "@session/shared/lib/researchEvents";
 import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
+import { forgetThread } from "../features/thread/persistence.js";
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
 import { useNotificationsStore } from "../stores/notifications.js";
@@ -183,9 +184,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "research.tree.removed": {
-      // Sent for a thread deleted and for one moved to the Trash: either way
-      // it leaves every list but the Trash's, which `research.trash.changed`
-      // refetches.
+      // Sent for a thread deleted and for one moved to the Trash (`trashed`):
+      // either way it leaves every list but the Trash's, which
+      // `research.trash.changed` refetches. The thread's saved page state
+      // (selection, unsent branches, scroll) is kept for Restore and goes
+      // only with a deletion, as on the desktop.
+      if (!event.trashed) forgetThread(event.treeId);
       eachTreeList(client, (summaries) => {
         const next = summaries.filter((summary) => summary.id !== event.treeId);
         return next.length === summaries.length ? summaries : next;
@@ -863,6 +867,11 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   };
 
   const resynchronize = (): void => {
+    // A `research.recap.pending: false` sent while disconnected is lost, and
+    // nothing refetched carries the flag, so the spinners go: a recap that
+    // finished meanwhile arrives with the refetched nodes, and one still
+    // running shows when its node update arrives.
+    useRecapPendingStore.getState().clear();
     for (const key of RECONNECT_KEYS) void queryClient.invalidateQueries({ queryKey: key });
     for (const nodeId of interest.keys()) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.nodeContent(nodeId) });

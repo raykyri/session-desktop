@@ -100,6 +100,7 @@ import {
   useMe,
   useQueuedFollowupAction,
   useRemoveResearchBranch,
+  useRefetchThreadOnOpen,
   useRemoveResearchTree,
   useRenameResearchTree,
   useRetryResearchNode,
@@ -226,9 +227,11 @@ function ThreadView({ treeId }: { treeId: string }) {
   const layout = useContext(ColumnsLayoutContext);
   const routerNavigate = useNavigate();
   const search = useSearch({ strict: false });
-  const detailQuery = useTreeDetail(treeId);
-  const detail = detailQuery.data;
   const me = useMe().data ?? null;
+  // A guest gets no events; the detail is re-read on focus and while a run
+  // is active.
+  const detailQuery = useTreeDetail(treeId, { eventless: me === null });
+  const detail = detailQuery.data;
   const settings = useSettings().data;
   const models = useUsableModels();
   const nodes = detail?.nodes ?? NO_NODES;
@@ -246,6 +249,12 @@ function ThreadView({ treeId }: { treeId: string }) {
   const collaboration = useMemo(() => ({ permissions, people }), [people, permissions]);
   const permissionsRef = useLatest(permissions);
   const readOnly = !permissions.canContribute;
+  // A public thread read by someone who may not be a member (a viewer) gets
+  // its events only while open, so a cached copy is re-read on opening.
+  useRefetchThreadOnOpen(
+    treeId,
+    me !== null && detailTree?.visibility === "public" && permissions.role === "viewer",
+  );
   useThreadInterest(treeId, me !== null);
   const viewers = useThreadPresence(treeId);
   const setFollowed = useSetThreadFollowed();
@@ -1309,18 +1318,23 @@ function ThreadView({ treeId }: { treeId: string }) {
   /** Edit question on a queued follow-up that cannot send (it failed, or the
    * answer before it stopped), as on the desktop: the item leaves the queue
    * and its text and images go into the chain's ask box. Only into an empty
-   * one; the ask box is shown first when the chain's group is not. */
+   * one; the ask box is shown first when the chain's group is not. The text
+   * moves once the server has cancelled the item: a refused cancel leaves the
+   * ask box as it was and shows why. */
+  const queuedMutateAsync = queuedAction.mutateAsync;
   const editQueued = useCallback(
-    (headId: string, item: ResearchFollowupQueueItem, tailId: string | null) => {
+    async (headId: string, item: ResearchFollowupQueueItem, tailId: string | null) => {
       const text = composerTextRef.current[headId] ?? "";
       if (text.trim() || (composerImagesRef.current[headId] ?? NO_IMAGES).length > 0) {
         toast("Clear the ask box to edit this question.");
         return;
       }
-      queuedMutate(
-        { action: "cancel", treeId, headNodeId: headId, itemId: item.id },
-        { onError: (error) => fail("The follow-up could not be cancelled", error) },
-      );
+      try {
+        await queuedMutateAsync({ action: "cancel", treeId, headNodeId: headId, itemId: item.id });
+      } catch (error) {
+        fail("The follow-up could not be cancelled", error);
+        return;
+      }
       setQueuedView((current) => (current?.itemId === item.id ? null : current));
       setComposerValue(headId, item.message.text);
       replaceComposerImages(headId, researchImages(item.message.attachments));
@@ -1333,7 +1347,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       composerTextRef,
       fail,
       navigate,
-      queuedMutate,
+      queuedMutateAsync,
       replaceComposerImages,
       requestFocus,
       selectionWith,
@@ -1794,10 +1808,15 @@ function ThreadView({ treeId }: { treeId: string }) {
   const removeBranchMutate = removeBranch.mutateAsync;
   const removeTreeMutate = removeTree.mutateAsync;
   const trashTreeMutate = trashTree.mutateAsync;
-  const leaveTree = useCallback(() => {
-    forgetThread(treeId);
-    void routerNavigate({ to: "/" });
-  }, [routerNavigate, treeId]);
+  // Deleting the thread or leaving it forgets its saved page state; moving
+  // it to the Trash keeps it for Restore.
+  const leaveTree = useCallback(
+    (options: { keepState?: boolean } = {}) => {
+      if (!options.keepState) forgetThread(treeId);
+      void routerNavigate({ to: "/" });
+    },
+    [routerNavigate, treeId],
+  );
   const removeNode = useCallback(
     async (node: ResearchNode) => {
       const currentDetail = detailRef.current;
@@ -1834,7 +1853,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   );
   const trashRoot = useCallback(async () => {
     await trashTreeMutate(treeId);
-    leaveTree();
+    leaveTree({ keepState: true });
   }, [leaveTree, trashTreeMutate, treeId]);
 
   /* --------------------------------------------------- note actions */
@@ -2034,7 +2053,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       // Into the reader's own ask box, so only the item's author edits it.
       canEdit: (item) => permissions.canContribute && mayRetryQueued(permissions, item),
       onCancel: (item) => cancelQueued(headId, item),
-      onEdit: (item) => editQueued(headId, item, tail?.id ?? null),
+      onEdit: (item) => void editQueued(headId, item, tail?.id ?? null),
       onRetry: (item, row) => {
         queuedMutate(
           { action: "retry", treeId, headNodeId: headId, itemId: item.id },
@@ -2615,7 +2634,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             tree={detail.tree}
             meId={meId}
             onClose={() => setSharing(false)}
-            onLeft={leaveTree}
+            onLeft={() => leaveTree()}
           />
         ) : null}
         {staleEdit ? (

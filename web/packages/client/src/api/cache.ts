@@ -21,6 +21,8 @@ import type {
 } from "@session/shared";
 import { recentActivityItemId } from "@session/shared";
 import {
+  patchResearchDetailNode,
+  patchResearchSummaryForNode,
   patchResearchSummaryTree,
   researchSummaryFromDetail,
   upsertResearchActivity,
@@ -274,6 +276,43 @@ export function writeDetailSummary(
     client.setQueryData(query.queryKey, [fresh, ...summaries]);
   }
   eachSharedList(client, (summaries) => replace(summaries) ?? summaries);
+}
+
+/**
+ * What a relaunch (Retry, Rerun) or a Cancel answered, written to the caches
+ * before the `research.node.updated` it also publishes arrives. That event
+ * patches the summary counts as a delta from the node the caches hold, so
+ * the counts have to move here, from the predecessor, or the event would
+ * read the new state as its own predecessor and move nothing.
+ *
+ * - A detail (Retry, Rerun): the detail replaces the cached one, and the
+ *   lists that hold the thread take its counts (`writeDetailSummary`).
+ * - A node (Cancel): the node is patched into the detail, and the lists'
+ *   counts move from the cached copy of the node to it.
+ */
+export function writeRelaunch(
+  client: QueryClient,
+  result: { detail: ResearchTreeDetail } | { node: ResearchNode },
+): void {
+  if ("detail" in result) {
+    const { detail } = result;
+    client.setQueryData(queryKeys.tree(detail.tree.id), detail);
+    writeDetailSummary(client, detail, { insert: false });
+    for (const node of detail.nodes) patchActiveNodes(client, node);
+    return;
+  }
+  const { node } = result;
+  const previous = cachedNode(client, node.treeId, node.id);
+  patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+  patchActiveNodes(client, node);
+  patchActivityFeedNode(client, node);
+  if (previous) {
+    mapSummaries(client, (summary) =>
+      patchResearchSummaryForNode(summary, previous, node, Date.now()),
+    );
+  } else {
+    invalidateKeys(client, ["trees"]);
+  }
 }
 
 /** Patches a tree detail already in the cache. A no-op when nothing is cached for it. */
