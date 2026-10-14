@@ -205,7 +205,7 @@ unless noted:
 | `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId }` | source delete or archive |
 | `settings.updated` | `{ settings }` | another tab changed settings |
 | `models.updated` | `{ models }` | provider availability change |
-| `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | server-originated toasts |
+| `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | planned, not emitted: server-originated toasts. The client has no handler yet |
 | `connection.ready` | `{ connectionId }` | the initial event of every connection; supplies the connection ID for `events.setInterest`, and subsequent emissions indicate that the link has reconnected (`07-client-architecture.md` §4.2) |
 
 Run events (new; `05-run-lifecycle-and-streaming.md` §4):

@@ -19,7 +19,6 @@ import {
 } from "../src/api/events.js";
 import { useConnectionStore } from "../src/stores/connection.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
-import { useNotificationsStore } from "../src/stores/notifications.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 
 import { node, summary, tree } from "./fixtures.js";
@@ -53,7 +52,6 @@ function sleep(ms: number): Promise<void> {
 
 test.beforeEach(() => {
   useLiveTurnsStore.setState({ byNode: {} });
-  useNotificationsStore.getState().clear();
   useSettingsStore.setState({ settings: { ...DEFAULT_USER_SETTINGS } });
   useConnectionStore.setState({ status: "connecting", disconnectedSince: null });
   resetNodeInterest();
@@ -239,33 +237,6 @@ test.serial("a folders event replaces the workspace's folder state", (t) => {
   applyEventBatch([event("folders.updated", { workspaceId: "w1", state })], queryClient);
 
   t.deepEqual(queryClient.getQueryData(queryKeys.folders("w1")), state);
-});
-
-test.serial("a toast is pushed, and silenced by the preference", (t) => {
-  const queryClient = client();
-  const toast = {
-    id: "toast-1",
-    title: "Run finished",
-    body: "Collective memory",
-    tone: "success",
-    timeoutMs: 5_000,
-  };
-
-  applyEventBatch([event("notification.requested", toast)], queryClient);
-  t.deepEqual(
-    useNotificationsStore.getState().items.map((item) => item.id),
-    ["toast-1"],
-  );
-
-  useNotificationsStore.getState().clear();
-  useSettingsStore.getState().set("showNotifications", false);
-  applyEventBatch([event("notification.requested", toast)], queryClient);
-  t.is(useNotificationsStore.getState().items.length, 0);
-});
-
-test.serial("a malformed notification payload produces no toast", (t) => {
-  applyEventBatch([event("notification.requested", { id: "x", title: "Only a title" })], client());
-  t.is(useNotificationsStore.getState().items.length, 0);
 });
 
 test.serial("the first event carries the connection id, and opens the stream", async (t) => {

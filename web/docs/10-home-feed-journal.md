@@ -135,7 +135,9 @@ and the sidebar parts of `App.tsx`:
 
 ## 8. Notifications
 
-`UserNotificationStack` and `useUserNotifications` port unchanged. Sources: server `notification.requested` events
-(run finished or failed while its tree is not the open route; sign-in from a
-new device), client-originated toasts (copy confirmations, errors). Max 20
-kept, 3 visible, `showNotifications` setting honored.
+`UserNotificationStack` and `useUserNotifications` port unchanged. The only
+source today is client-originated toasts (copy confirmations, errors). Server
+`notification.requested` events (run finished or failed while its tree is not
+the open route; sign-in from a new device) are planned: the server does not
+emit them and the client does not handle them. Max 20 kept, 3 visible,
+`showNotifications` setting honored.

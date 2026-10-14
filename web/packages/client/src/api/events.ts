@@ -44,7 +44,6 @@ import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
-import { notificationFromPayload, useNotificationsStore } from "../stores/notifications.js";
 import { useRecapPendingStore } from "../stores/recapPending.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
@@ -451,18 +450,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
       client.setQueryData(queryKeys.settings(), settings);
       // Another tab changed them; the mirror follows the server (06 §6).
       useSettingsStore.getState().replace(normalizeSettings(settings));
-      return;
-    }
-
-    case "notification.requested": {
-      // The bridge is the only ingress for server-originated toasts, so the
-      // `showNotifications` preference is enforced here. The store does not
-      // know about settings, and the server keeps sending the events either
-      // way — a notification the user opted out of is still a run that
-      // finished, and the caches that reflect it are patched above.
-      if (!useSettingsStore.getState().settings.showNotifications) return;
-      const item = notificationFromPayload(payload, event.timestamp);
-      if (item) useNotificationsStore.getState().push(item);
       return;
     }
 

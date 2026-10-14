@@ -165,7 +165,8 @@ Per event type:
   `settings.updated`, `models.updated` → targeted `setQueryData` or
   invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
-- `notification.requested` → `notifications` store.
+- `notification.requested` is planned and not emitted; the client does not
+  handle it yet. Toasts come only from client code (`lib/toast.ts`).
 - On (re)connect: `invalidateQueries()` for list queries and a snapshot
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps

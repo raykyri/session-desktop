@@ -1,9 +1,6 @@
-// Client-originated toasts (`10-home-feed-journal.md` §8).
-//
-// Server-originated toasts arrive through the event bridge, which is also
-// where the `showNotifications` preference is enforced. A copy confirmation or
-// a failed action has no event behind it, so it is pushed here — through the
-// same store, past the same preference check, so one setting governs both.
+// Client-originated toasts (`10-home-feed-journal.md` §8): a copy confirmation
+// or a failed action. They are pushed to the notifications store past the
+// `showNotifications` preference check. The server emits no toasts yet.
 
 import { useNotificationsStore, type NotificationTone } from "../stores/notifications.js";
 import { useSettingsStore } from "../stores/settings.js";

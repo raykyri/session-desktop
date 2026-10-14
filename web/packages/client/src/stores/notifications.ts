@@ -1,6 +1,7 @@
-// Server-originated toasts (07 §4.2, §4.3). The event bridge pushes
-// `notification.requested` here; `NotificationStack` renders at most the first
-// three and the list is capped at twenty so a burst cannot grow without bound.
+// Toasts. Client code pushes them through `lib/toast.ts`; the server emits no
+// notification events yet (`03-api-and-events.md` §3). `NotificationStack`
+// renders at most the first three and the list is capped at twenty so a burst
+// cannot grow without bound.
 
 import { create } from "zustand";
 
@@ -47,30 +48,3 @@ export const useNotificationsStore = create<NotificationsState>()((set) => ({
   dismiss: (id) => set((state) => ({ items: state.items.filter((item) => item.id !== id) })),
   clear: () => set({ items: [] }),
 }));
-
-/** Narrows a `notification.requested` payload. Anything missing a required
- * field is dropped rather than rendered as a half-empty toast. */
-export function notificationFromPayload(
-  payload: Record<string, unknown>,
-  now = Date.now(),
-): NotificationItem | null {
-  const { id, title, body, tone, timeoutMs, createdAt, href } = payload;
-  if (
-    typeof id !== "string" ||
-    typeof title !== "string" ||
-    typeof body !== "string" ||
-    typeof timeoutMs !== "number" ||
-    !Number.isFinite(timeoutMs)
-  ) {
-    return null;
-  }
-  return {
-    id,
-    title,
-    body,
-    tone: tone === "success" || tone === "warning" || tone === "error" ? tone : "info",
-    timeoutMs,
-    createdAt: typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : now,
-    href: typeof href === "string" ? href : undefined,
-  };
-}
