@@ -1,7 +1,7 @@
 // Rules for the editor column (ResearchEditorColumn): which blocks of an
 // edited text changed, and whether the text can be asked as a question.
 
-import { closesFence, markerRunAtLineStart, type MarkdownFence } from "./markdownMathDelimiters";
+import { closesFence, markerRunAtLineStart, type MarkdownFence } from "@session/shared/markdown/mathDelimiters";
 
 /** The longest text, in characters after trimming, that "Ask as a question"
  * sends as a question. */

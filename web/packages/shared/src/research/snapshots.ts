@@ -4,8 +4,17 @@
 // refetch that changed nothing would still replace every cached record and
 // invalidate every memoized view. These helpers compare the incoming values by
 // meaning and hand back the records and collections the client already holds.
+//
+// Shared by the desktop and the web. The functions are generic over the record
+// shapes they read, so they accept both the wire model (`../wire/research.ts`)
+// and the web's current flat types (`../types/research.ts`).
 
-import type { ResearchNode, ResearchTreeDetail, ResearchTreeSummary } from "../types/research.js";
+/** The fields `clearResearchTreeAttention` reads from a tree summary. */
+interface AttentionSummary {
+  id: string;
+  hasUnseenUpdate: boolean;
+  hasUnseenFailure: boolean;
+}
 
 /** Research payloads are JSON-shaped. Compare their serialized meaning without
  * depending on object key insertion order, and treat an omitted optional field
@@ -65,24 +74,27 @@ function reconcileById<T extends { id: string }>(current: T[], incoming: T[]): T
   return changed ? reconciled : current;
 }
 
-export function reconcileResearchTreeSummaries(
-  current: ResearchTreeSummary[],
-  incoming: ResearchTreeSummary[],
-): ResearchTreeSummary[] {
+export function reconcileResearchTreeSummaries<Summary extends { id: string }>(
+  current: Summary[],
+  incoming: Summary[],
+): Summary[] {
   return reconcileById(current, incoming);
 }
 
-export function reconcileResearchActivity(
-  current: ResearchNode[],
-  incoming: ResearchNode[],
-): ResearchNode[] {
+export function reconcileResearchActivity<Node extends { id: string }>(
+  current: Node[],
+  incoming: Node[],
+): Node[] {
   return reconcileById(current, incoming);
 }
 
-export function reconcileResearchTreeDetail(
-  current: ResearchTreeDetail | null,
-  incoming: ResearchTreeDetail,
-): ResearchTreeDetail {
+export function reconcileResearchTreeDetail<
+  Tree extends { id: string },
+  Node extends { id: string },
+>(
+  current: { tree: Tree; nodes: Node[] } | null,
+  incoming: { tree: Tree; nodes: Node[] },
+): { tree: Tree; nodes: Node[] } {
   if (!current || current.tree.id !== incoming.tree.id) {
     return incoming;
   }
@@ -93,10 +105,10 @@ export function reconcileResearchTreeDetail(
 
 /** A viewed acknowledgment is normally already reflected locally. Preserve
  * list identity in that common case so it does not manufacture a render. */
-export function clearResearchTreeAttention(
-  trees: ResearchTreeSummary[],
+export function clearResearchTreeAttention<Summary extends AttentionSummary>(
+  trees: Summary[],
   treeId: string,
-): ResearchTreeSummary[] {
+): Summary[] {
   const index = trees.findIndex(
     (tree) => tree.id === treeId && (tree.hasUnseenUpdate || tree.hasUnseenFailure),
   );

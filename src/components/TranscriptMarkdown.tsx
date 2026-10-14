@@ -29,7 +29,7 @@ import {
   SESSION_FILE_HREF_PREFIX,
   safeHref,
 } from "../lib/links";
-import { normalizeLatexMathDelimiters } from "../lib/markdownMathDelimiters";
+import { normalizeLatexMathDelimiters } from "@session/shared/markdown/mathDelimiters";
 import {
   isSessionWidgetClassName,
   MAX_SESSION_WIDGET_BYTES,
@@ -37,7 +37,7 @@ import {
   SESSION_WIDGET_STATE_ATTRIBUTE,
   sessionWidgetByteLength,
 } from "../lib/sessionWidgets";
-import { escapeWikilinkTablePipes, remarkWikilinks } from "../lib/wikilinks";
+import { escapeWikilinkTablePipes, remarkWikilinks } from "@session/shared/markdown/wikilinks";
 import DiagramBlock, { diagramLangFromClassName, nodeText } from "./DiagramBlock";
 import SessionWidget, { SessionWidgetPending, SessionWidgetStreamingContext } from "./SessionWidget";
 

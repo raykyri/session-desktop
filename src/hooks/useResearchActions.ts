@@ -24,7 +24,7 @@ import {
   updateResearchDocument,
   updateResearchPost,
 } from "../lib/api";
-import { reconcileResearchTreeDetail } from "../lib/researchSnapshots";
+import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 import type {
   AgentSpec,

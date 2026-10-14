@@ -4,7 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Upload } from "lucide-react";
 import { readResearchReport } from "../../lib/api";
-import { estimateTokenCount } from "../../lib/tokenEstimate";
+import { estimateTokenCount } from "@session/shared/util/tokenEstimate";
 
 export default function ResearchReportImport({ dropTarget, onImport, onError }: {
   dropTarget: RefObject<HTMLDivElement | null>;

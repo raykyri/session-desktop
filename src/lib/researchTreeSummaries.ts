@@ -2,7 +2,7 @@
 // keep unchanged entries (and unchanged lists) identical, so memoized
 // consumers skip them.
 import { researchNodeIsActivity } from "./researchEvents";
-import { reconcileResearchActivity } from "./researchSnapshots";
+import { reconcileResearchActivity } from "@session/shared/research/snapshots";
 import type { ResearchNode, ResearchTreeDetail, ResearchTreeSummary } from "../types";
 
 /** Splits trees into the active and the archived list. */

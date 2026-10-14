@@ -21,7 +21,7 @@ import {
   reconcileResearchActivity,
   reconcileResearchTreeDetail,
   reconcileResearchTreeSummaries,
-} from "../src/lib/researchSnapshots";
+} from "@session/shared/research/snapshots";
 import type {
   ResearchHighlight,
   ResearchNode,

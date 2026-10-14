@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   estimateTokenCount,
   formatEstimatedTokenCount,
-} from "../src/lib/tokenEstimate";
+} from "@session/shared/util/tokenEstimate";
 
 test("estimates ASCII text at roughly four characters per token", () => {
   assert.equal(estimateTokenCount(""), 0);

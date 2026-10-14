@@ -9,7 +9,7 @@ import {
   MAX_WIKILINK_CHARS,
   escapeWikilinkTablePipes,
   stripWikilinks,
-} from "../src/lib/wikilinks";
+} from "@session/shared/markdown/wikilinks";
 
 function render(text: string, inline = false) {
   return renderToStaticMarkup(createElement(TranscriptMarkdown, { text, inline }));

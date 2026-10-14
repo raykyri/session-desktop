@@ -5,7 +5,7 @@ import {
   stripTaggedInstructionBlocksForPreview,
   stripTaggedUserInstructionBlocks,
   taggedUserInstructionDetails,
-} from "../src/lib/taggedInstructions";
+} from "@session/shared/app/taggedInstructions";
 
 test("removes embedded tagged instruction blocks from copied user messages", () => {
   const message = [

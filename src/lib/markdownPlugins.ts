@@ -3,7 +3,7 @@ import rehypeMathjax from "rehype-mathjax/svg";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import { remarkWikilinks } from "./wikilinks";
+import { remarkWikilinks } from "@session/shared/markdown/wikilinks";
 
 type PluginList = NonNullable<Options["remarkPlugins"]>;
 

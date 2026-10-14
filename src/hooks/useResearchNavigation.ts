@@ -47,7 +47,7 @@ import {
   reconcileResearchActivity,
   reconcileResearchTreeDetail,
   reconcileResearchTreeSummaries,
-} from "../lib/researchSnapshots";
+} from "@session/shared/research/snapshots";
 import { partitionResearchTrees } from "../lib/researchTreeSummaries";
 import { groupsForScope } from "../lib/workspaceScope";
 import type {

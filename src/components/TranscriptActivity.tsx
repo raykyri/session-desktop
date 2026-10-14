@@ -10,7 +10,7 @@ import {
   type TurnTimelineContextStatus,
   type TurnTimelineStatus,
 } from "../lib/turnTimeline";
-import { formatEstimatedTokenCount } from "../lib/tokenEstimate";
+import { formatEstimatedTokenCount } from "@session/shared/util/tokenEstimate";
 import TranscriptMarkdown, { type OversizedMarkdownPolicy } from "./TranscriptMarkdown";
 
 // Reasoning can run long, and react-markdown re-parses on every render. Past

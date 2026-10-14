@@ -23,7 +23,7 @@ import {
 } from "../lib/researchEvents";
 import { pruneResearchNavigation, pruneResearchNavigationNodes } from "../lib/researchNavigation";
 import { nodeRun, nodeStatus } from "../lib/researchNodeTypes";
-import { reconcileResearchTreeDetail } from "../lib/researchSnapshots";
+import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
 import {
   patchResearchTreeSummaries,
   removeResearchTreeSummary,

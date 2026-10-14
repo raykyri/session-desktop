@@ -1,9 +1,9 @@
-// Models in the registry (`models/registry.ts`) use different — and changing —
-// tokenizers, so the UI deliberately reports an estimate rather than implying
-// model-specific precision. Four ASCII characters per token is a useful average
-// for prose and code; non-ASCII scripts tend to encode more densely in
-// characters, so weight those code units more heavily. Sampling bounds the cost
-// for large tool output while still accounting for its character mix.
+// Models use different (and changing) tokenizers, so the UI deliberately
+// reports an estimate rather than implying model-specific precision. Four ASCII
+// characters per token is a useful average for prose and code; non-ASCII
+// scripts tend to encode more densely in characters, so weight those code units
+// more heavily. Sampling bounds the cost for large tool output while still
+// accounting for its character mix.
 const MAX_SAMPLED_CODE_UNITS = 2_048;
 
 export function estimateTokenCount(text: string): number {

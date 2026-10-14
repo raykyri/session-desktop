@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeLatexMathDelimiters } from "../src/lib/markdownMathDelimiters";
+import { normalizeLatexMathDelimiters } from "@session/shared/markdown/mathDelimiters";
 
 test("normalizes block and inline LaTeX delimiters", () => {
   assert.equal(normalizeLatexMathDelimiters("\\[\nx^2\n\\]"), "$$\nx^2\n$$");

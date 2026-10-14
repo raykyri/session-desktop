@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { clearResearchTreeAttention } from "../lib/researchSnapshots";
+import { clearResearchTreeAttention } from "@session/shared/research/snapshots";
 import type {
   RecentResearchQuery,
   ResearchNode,

@@ -13,8 +13,8 @@ import {
   stripTaggedInstructionBlocks,
   stripTaggedUserInstructionBlocks,
   taggedUserInstructionDetails,
-} from "./taggedInstructions";
-import { stripWikilinks } from "./wikilinks";
+} from "@session/shared/app/taggedInstructions";
+import { stripWikilinks } from "@session/shared/markdown/wikilinks";
 
 type TextBlock = Extract<TurnBlock, { type: "text" }>;
 type ToolUseBlock = Extract<TurnBlock, { type: "toolUse" }>;
