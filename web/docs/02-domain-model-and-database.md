@@ -757,7 +757,11 @@ Each item names the desktop source and the enforcing function.
   reads the image ids in `nodes.message_json`, `research_drafts`
   `.attachments_json` and `followup_queue.message_json` with `json_each`.
   `attached_at` is set when a message or draft is written
-  (`images.markAttached`) and corrected by the sweep.
+  (`images.markAttached`, by `createTree`, `forkNode`, `followups.ask`,
+  `createPost` and `drafts.save`), returned to null for the images nothing
+  names any more when a draft is removed or its images replaced and when a
+  queued follow-up is cancelled (`images.release`), and corrected by the
+  sweep.
 - `images.sweep(at)`, run every maintenance interval: a referenced pending
   row is marked attached; an unreferenced row older than 24 h
   (`PENDING_IMAGE_LIFETIME_MS`) is deleted, pending or not; an unreferenced

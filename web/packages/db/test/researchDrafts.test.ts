@@ -188,3 +188,30 @@ test("drafts are private to the person who saved them", (t) => {
   });
   t.deepEqual(researchDrafts.list(fixture.db, fixture.userId, fixture.workspaceId), []);
 });
+
+test("replacing or removing a draft's images releases the ones nothing else names", (t) => {
+  const fixture = createFixture(t);
+  const a = upload(fixture, "release-a");
+  const b = upload(fixture, "release-b");
+  const draft = researchDrafts.save(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Two images",
+    images: [a, b],
+  });
+  const other = researchDrafts.save(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Shares b",
+    images: [b],
+  });
+  const attachedAt = (id: string) => images.get(fixture.db, fixture.userId, id)?.attachedAt;
+  researchDrafts.save(fixture.db, fixture.userId, {
+    id: draft.id,
+    workspaceId: fixture.workspaceId,
+    prompt: "No images",
+    images: [],
+  });
+  t.is(attachedAt(a.id), null, "a is named by nothing");
+  t.not(attachedAt(b.id), null, "b is still named by the other draft");
+  researchDrafts.remove(fixture.db, fixture.userId, other.id);
+  t.is(attachedAt(b.id), null);
+});

@@ -167,6 +167,32 @@ export function markAttached(db: SessionDatabase, imageIds: readonly string[], a
     .run();
 }
 
+/**
+ * Returns the images among `imageIds` that nothing names any more to
+ * pending, after the message, draft or queued follow-up that named them was
+ * removed or changed (the desktop's `release`). The sweep then deletes them
+ * once they are older than the pending lifetime, which leaves a composer
+ * that still holds one a day to send it again. Returns how many were
+ * released.
+ */
+export function release(db: SessionDatabase, imageIds: readonly string[]): number {
+  if (imageIds.length === 0) {
+    return 0;
+  }
+  return transact(db, (tx) => {
+    const referenced = referencedIds(tx);
+    const released = [...new Set(imageIds)].filter((id) => !referenced.has(id));
+    if (released.length === 0) {
+      return 0;
+    }
+    return tx
+      .update(researchImages)
+      .set({ attachedAt: null })
+      .where(inArray(researchImages.id, released))
+      .run().changes;
+  });
+}
+
 /** Every image id a node message, a draft or a queued follow-up names. The
  * `like` filters skip rows without an image before their JSON is parsed. */
 export function referencedIds(db: SessionDatabase): Set<string> {

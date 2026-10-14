@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { images } from "@session/db";
+import { images, nodes as nodesRepo } from "@session/db";
 import type { ResearchImageAttachment } from "@session/shared";
 import {
   DOWNSCALED_IMAGE_SIDE,
@@ -277,4 +277,68 @@ test("the sweep removes unattached images and their files after a day", async (t
   t.false(existsSync(stray));
   t.true(existsSync(attachedPath));
   t.true(existsSync(thumbnailPath(attachedPath)));
+});
+
+test("forkNode attaches images and refuses them for a model without image input", async (t) => {
+  const harness = createHarness(t);
+  const { cookie, caller, user } = signedIn(harness, "forker");
+  const workspace = await caller.workspaces.ensureDefault();
+  const root = await caller.research.createTree({
+    prompt: "A question",
+    model: "gemini-flash",
+    workspaceId: workspace.id,
+  });
+  nodesRepo.setStatus(harness.db, user.id, root.tree.rootNodeId, "running");
+  nodesRepo.setStatus(harness.db, user.id, root.tree.rootNodeId, "complete");
+  const image = await uploaded(harness, cookie, await png(16, 16));
+
+  const blind = await t.throwsAsync<TRPCError>(
+    caller.research.forkNode({
+      parentNodeId: root.tree.rootNodeId,
+      prompt: "Describe it",
+      agent: { model: "deepseek-flash" },
+      images: [image.id],
+    }),
+  );
+  t.is(blind?.code, "BAD_REQUEST");
+
+  const child = await caller.research.forkNode({
+    parentNodeId: root.tree.rootNodeId,
+    prompt: "Describe it",
+    images: [image.id],
+  });
+  t.deepEqual(child.message?.attachments, [image]);
+  t.not(images.get(harness.db, user.id, image.id)?.attachedAt, null);
+});
+
+test("a queued follow-up keeps its images attached until it is cancelled", async (t) => {
+  const harness = createHarness(t);
+  const { cookie, caller, user } = signedIn(harness, "queuer");
+  const workspace = await caller.workspaces.ensureDefault();
+  const root = await caller.research.createTree({
+    prompt: "A question",
+    model: "gemini-flash",
+    workspaceId: workspace.id,
+  });
+  // The root has not run, so the follow-up waits in the queue.
+  const image = await uploaded(harness, cookie, await png(16, 16));
+  const asked = await caller.followups.ask({
+    headNodeId: root.tree.rootNodeId,
+    prompt: "And this picture?",
+    images: [image.id],
+  });
+  if (asked.kind !== "queued") {
+    t.fail("a follow-up of an unfinished answer is queued");
+    return;
+  }
+  t.deepEqual(asked.item.message.attachments, [image]);
+  t.not(images.get(harness.db, user.id, image.id)?.attachedAt, null);
+
+  // A day later the sweep keeps it: the queued item names it.
+  const later = Date.now() + images.PENDING_IMAGE_LIFETIME_MS + 1;
+  t.is((await sweepImages(harness.deps, harness.logger, later)).deleted, 0);
+
+  await caller.followups.cancel({ itemId: asked.item.id });
+  t.is(images.get(harness.db, user.id, image.id)?.attachedAt, null, "released to pending");
+  t.is((await sweepImages(harness.deps, harness.logger, later)).deleted, 1);
 });

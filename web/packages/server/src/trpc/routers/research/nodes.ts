@@ -26,6 +26,11 @@ import {
   nodeContent,
   queuePositionOf,
 } from "../../../research/admission.js";
+import {
+  assertModelReadsImages,
+  markImagesAttached,
+  resolveImageAttachments,
+} from "../../../research/images.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
 import { catalogUserId } from "../../catalog.js";
 import { publish } from "../../emit.js";
@@ -54,6 +59,8 @@ export const nodeProcedures = {
         anchor: nodeAnchorSchema.nullish(),
         inline: z.boolean().optional(),
         replacesNodeId: z.string().optional(),
+        /** Ids from `POST /api/images`. */
+        images: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
@@ -74,10 +81,15 @@ export const nodeProcedures = {
       assertEffortAccepted(model, effort);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
-      const attachments = await resolveMessageAttachments(
-        { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
-        input.prompt,
-      );
+      const images = resolveImageAttachments(ctx.db, ctx.user.id, input.images);
+      assertModelReadsImages(model, images);
+      const attachments = [
+        ...(await resolveMessageAttachments(
+          { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+          input.prompt,
+        )),
+        ...images,
+      ];
       const admitted = repo(() =>
         nodes.admitChildDetailed(ctx.db, ctx.user.id, {
           parentNodeId: input.parentNodeId,
@@ -92,6 +104,7 @@ export const nodeProcedures = {
         }),
       );
       const node = admitted.node;
+      markImagesAttached(ctx.db, images);
       enqueueRun(ctx, node.id, model);
       if (admitted.replacedNodeId !== null) {
         publish(ctx, "research.node.removed", {

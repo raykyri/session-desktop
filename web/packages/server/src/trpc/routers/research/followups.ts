@@ -19,6 +19,12 @@ import {
   assertWithinDailyLimits,
 } from "../../../research/admission.js";
 import { publishAdmittedFollowup, publishQueue } from "../../../research/followups.js";
+import {
+  assertModelReadsImages,
+  markImagesAttached,
+  releaseImages,
+  resolveImageAttachments,
+} from "../../../research/images.js";
 import { protectedProcedure } from "../../base.js";
 import { repo, required } from "../../errors.js";
 
@@ -55,6 +61,9 @@ export const followupProcedures = {
         prompt: z.string().min(1),
         model: z.string().optional(),
         effort: z.string().nullish(),
+        /** Ids from `POST /api/images`, resolved now and stored on the queued
+         * item's message. */
+        images: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<AskFollowupResult> => {
@@ -70,10 +79,15 @@ export const followupProcedures = {
       assertEffortAccepted(model, effort);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
-      const attachments = await resolveMessageAttachments(
-        { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
-        input.prompt,
-      );
+      const images = resolveImageAttachments(ctx.db, ctx.user.id, input.images);
+      assertModelReadsImages(model, images);
+      const attachments = [
+        ...(await resolveMessageAttachments(
+          { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+          input.prompt,
+        )),
+        ...images,
+      ];
       const result = repo(() =>
         followups.ask(ctx.db, ctx.user.id, {
           headNodeId: input.headNodeId,
@@ -85,6 +99,9 @@ export const followupProcedures = {
           ...(ctx.user.isAdmin ? {} : { maxQueued: ctx.config.limits.queuedPerUser }),
         }),
       );
+      // Attached whether sent or queued, so the sweep keeps a queued item's
+      // images however long the chain takes to free up.
+      markImagesAttached(ctx.db, images);
       if (result.kind === "sent") {
         publishAdmittedFollowup(ctx, ctx.user.id, result.node);
         ctx.runs.start(result.node.id);
@@ -99,6 +116,7 @@ export const followupProcedures = {
     .input(z.object({ itemId: z.string() }))
     .mutation(({ ctx, input }): ResearchFollowupQueueItem[] => {
       const item = repo(() => followups.cancel(ctx.db, ctx.user.id, input.itemId));
+      releaseImages(ctx.db, item.message.attachments);
       publishQueue(ctx, ctx.user.id, item.treeId, item.headNodeId);
       // The cancelled item may have been a refused one the queue waited on.
       dispatchFollowups(ctx, item.treeId);

@@ -25,7 +25,7 @@ import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
 import { MAX_DRAFT_VALUE_BYTES } from "./drafts.js";
-import { imageIdsOf, markAttached } from "./images.js";
+import { imageIdsOf, markAttached, release } from "./images.js";
 
 const attachmentListSchema = z.array(researchMessageAttachmentSchema);
 
@@ -104,7 +104,16 @@ export function save(db: SessionDatabase, userId: string, input: SaveDraftInput)
     }
     const at = now();
     let row: DraftRow | undefined;
+    let replaced: string[] = [];
     if (input.id !== undefined && input.id !== null) {
+      const previous = tx
+        .select()
+        .from(researchDrafts)
+        .where(and(workspacePredicate(userId, input.workspaceId), eq(researchDrafts.id, input.id)))
+        .get();
+      if (previous && images !== null) {
+        replaced = imageIdsOf(toResearchDraft(previous).attachments);
+      }
       row = tx
         .update(researchDrafts)
         .set({
@@ -139,26 +148,30 @@ export function save(db: SessionDatabase, userId: string, input: SaveDraftInput)
         .get();
     }
     markAttached(tx, imageIdsOf(images), at);
+    release(tx, replaced);
     return toResearchDraft(row);
   });
 }
 
-/** Deletes one draft and returns the workspace it was in. Its images are
- * released by the image sweep once nothing else names them. */
+/** Deletes one draft and returns the workspace it was in. Its images that
+ * nothing else names go back to pending (`images.release`). */
 export function remove(
   db: SessionDatabase,
   userId: string,
   draftId: string,
 ): { workspaceId: string } {
-  const row = db
-    .delete(researchDrafts)
-    .where(and(eq(researchDrafts.userId, userId), eq(researchDrafts.id, draftId)))
-    .returning({ workspaceId: researchDrafts.workspaceId })
-    .get();
-  if (!row) {
-    throw new Error(`research draft ${draftId} was not found`);
-  }
-  return row;
+  return transact(db, (tx) => {
+    const row = tx
+      .delete(researchDrafts)
+      .where(and(eq(researchDrafts.userId, userId), eq(researchDrafts.id, draftId)))
+      .returning()
+      .get();
+    if (!row) {
+      throw new Error(`research draft ${draftId} was not found`);
+    }
+    release(tx, imageIdsOf(toResearchDraft(row).attachments));
+    return { workspaceId: row.workspaceId };
+  });
 }
 
 /** The desktop's refusal of a reorder built from a stale list. */
