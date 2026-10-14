@@ -362,7 +362,7 @@ unless noted:
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s), updatePost, hydratePostTweet |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` (web: also `removedBy`) | removeBranch, forkNode with `replacesNodeId` |
 | `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused, dropped with a member who left, was removed or became a viewer, moved to an edited branch question); `items` is the chain's whole queue after the change, empty once drained |
-| `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument |
+| `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument; followed by `research.node.updated` for each passage branch whose anchor moved |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |

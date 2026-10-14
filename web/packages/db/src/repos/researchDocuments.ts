@@ -4,28 +4,32 @@
 
 import type {
   NodeAnchor,
+  ResearchNode,
   ResearchTreeDetail,
   Turn,
   UpdateResearchDocumentResult,
 } from "@session/shared";
 import { nodeAnchorSchema, sanitizeResearchTitle } from "@session/shared";
+import { reanchorResearchQuote } from "@session/shared/lib/researchAnchors";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
 } from "@session/shared/lib/researchDocuments";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { withFullSync } from "../connection.js";
 import { parseWireColumn } from "../json.js";
+import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
 import { requireNodeAccess } from "./access.js";
-import { removeAllForNode, listForNode } from "./highlights.js";
+import { listForNode } from "./highlights.js";
+import { toResearchHighlight } from "./mappers.js";
 import { get as getNode } from "./nodes.js";
 import { applyReplacedTurns, read as readSnapshot } from "./snapshots.js";
 import type { NodeAgentInput } from "./trees.js";
@@ -73,24 +77,32 @@ export interface UpdateDocumentInput {
   expectedHighlightIds?: readonly string[] | undefined;
 }
 
+/** What `update` did, with the branches whose passage anchors moved, for
+ * the caller's `research.node.updated` events. */
+export interface UpdateDocumentOutcome extends UpdateResearchDocumentResult {
+  movedBranches: ResearchNode[];
+}
+
 /**
  * Replaces a root document's markdown under a four-way optimistic check: the
  * node is its thread's root and a document, the thread is not archived, the
  * title the editor opened with is still the title, and the revision it opened
  * with is still the answer. When the markdown changed, the highlight set must
- * also be the one the editor knew, because a rewrite deletes every highlight
+ * also be the one the editor knew, because a rewrite can delete highlights
  * and the user should not lose one they did not know existed.
  *
- * A title-only edit keeps the snapshot and the highlights: nothing the anchors
- * point into moved.
+ * A new body moves each highlight, and each branch asked about a passage, to
+ * its quote in the new text (`reanchorResearchQuote`); a highlight whose
+ * quote is gone is deleted, a branch keeps its anchor. The recap is cleared
+ * (`update_research_document` in `state.rs`). A title-only edit keeps the
+ * snapshot and the highlights: nothing the anchors point into moved.
  */
 export function update(
   db: SessionDatabase,
   userId: string,
   input: UpdateDocumentInput,
-): UpdateResearchDocumentResult {
+): UpdateDocumentOutcome {
   const markdown = input.markdown.trim();
-  validateDocumentMarkdown(markdown);
   return withFullSync(db, (tx) => {
     // A document is a thread's root, and saving it renames the thread: the
     // owner's.
@@ -131,8 +143,14 @@ export function update(
     if (currentMarkdown === null) {
       throw new Error("the document's content is unavailable");
     }
-    const markdownChanged = currentMarkdown !== markdown;
+    // The stored body is trimmed for the comparison as the request is, so a
+    // title-only save of a body stored with surrounding whitespace (an
+    // imported report ending in a newline) does not count as a rewrite.
+    const markdownChanged = currentMarkdown.trim() !== markdown;
     if (markdownChanged) {
+      // Only a new body is validated: an imported report may exceed the
+      // editor's word limit, and its title stays editable.
+      validateDocumentMarkdown(markdown);
       const expected = new Set(input.expectedHighlightIds ?? []);
       const current = listForNode(tx, userId, node.id).map((highlight) => highlight.id);
       const same =
@@ -148,13 +166,29 @@ export function update(
       deriveResearchDocumentTitle(markdown);
     let responseRevision = snapshot.revision;
     let removedHighlightCount = 0;
+    let movedBranchIds: string[] = [];
+    let unmatchedBranchCount = 0;
     const at = now();
     if (markdownChanged) {
-      removedHighlightCount = removeAllForNode(tx, userId, node.id);
       responseRevision = applyReplacedTurns(tx, userId, node.id, [
         documentTurn(node.id, markdown),
       ]).revision;
-      tx.update(nodes).set({ editedAt: at, editedBy: userId }).where(eq(nodes.id, node.id)).run();
+      removedHighlightCount = reanchorHighlights(
+        tx,
+        node.id,
+        currentMarkdown,
+        markdown,
+        responseRevision,
+      );
+      const branches = reanchorBranches(tx, node.id, currentMarkdown, markdown, responseRevision);
+      movedBranchIds = branches.movedIds;
+      unmatchedBranchCount = branches.unmatched;
+      // A recap describes the previous body (`state.rs`
+      // `update_research_document`).
+      tx.update(nodes)
+        .set({ editedAt: at, editedBy: userId, recapJson: null })
+        .where(eq(nodes.id, node.id))
+        .run();
     }
     const treeRow = tx
       .update(trees)
@@ -174,27 +208,88 @@ export function update(
       responseRevision,
       markdownChanged,
       removedHighlightCount,
-      unmatchedBranchCount: markdownChanged ? unmatchedBranches(tx, node.id, markdown) : 0,
+      unmatchedBranchCount,
+      movedBranches: movedBranchIds.flatMap((id) => getNode(tx, userId, id) ?? []),
     };
   });
 }
 
-/** Branches asked about a passage whose quote is no longer in `markdown`.
- * They keep their anchors; the count tells the editor to say so. */
-function unmatchedBranches(db: SessionDatabase, nodeId: string, markdown: string): number {
-  return db
-    .select({ anchorJson: nodes.anchorJson })
+/** Moves the document's highlights to their quote in the new body
+ * (`reanchorResearchQuote`, the desktop's `reanchor_highlights`): a moved
+ * highlight takes the new offsets and revision, one whose quote is gone is
+ * deleted. Returns how many were deleted. */
+function reanchorHighlights(
+  db: SessionDatabase,
+  nodeId: string,
+  oldMarkdown: string,
+  newMarkdown: string,
+  revision: string,
+): number {
+  let removed = 0;
+  for (const row of db.select().from(highlights).where(eq(highlights.nodeId, nodeId)).all()) {
+    const { anchor } = toResearchHighlight(row);
+    const outcome = reanchorResearchQuote(anchor, oldMarkdown, newMarkdown);
+    if (outcome.kind === "unmatched") {
+      db.delete(highlights).where(eq(highlights.id, row.id)).run();
+      removed += 1;
+    } else if (outcome.kind === "moved") {
+      db.update(highlights)
+        .set({
+          anchorJson: {
+            ...anchor,
+            start: outcome.start,
+            end: outcome.end,
+            responseRevision: revision,
+          },
+        })
+        .where(eq(highlights.id, row.id))
+        .run();
+    }
+  }
+  return removed;
+}
+
+/** Moves the anchors of the branches asked about a passage of the document
+ * with their quote, as highlights move. A branch whose quote is gone keeps
+ * its anchor, and is counted so the editor can say so. */
+function reanchorBranches(
+  db: SessionDatabase,
+  nodeId: string,
+  oldMarkdown: string,
+  newMarkdown: string,
+  revision: string,
+): { movedIds: string[]; unmatched: number } {
+  const movedIds: string[] = [];
+  let unmatched = 0;
+  for (const row of db
+    .select({ id: nodes.id, anchorJson: nodes.anchorJson })
     .from(nodes)
     .where(and(eq(nodes.parentNodeId, nodeId), isNotNull(nodes.anchorJson)))
-    .all()
-    .filter((row) => {
-      const anchor = parseWireColumn<NodeAnchor>(
-        nodeAnchorSchema,
-        row.anchorJson,
-        "nodes.anchor_json",
-      );
-      return !markdown.includes(anchor.anchor.exact);
-    }).length;
+    .orderBy(asc(nodes.createdAt), asc(nodes.id))
+    .all()) {
+    const stored = parseWireColumn<NodeAnchor>(
+      nodeAnchorSchema,
+      row.anchorJson,
+      "nodes.anchor_json",
+    );
+    const outcome = reanchorResearchQuote(stored.anchor, oldMarkdown, newMarkdown);
+    if (outcome.kind === "unmatched") {
+      unmatched += 1;
+    } else if (outcome.kind === "moved") {
+      const anchor: NodeAnchor = {
+        ...stored,
+        anchor: {
+          ...stored.anchor,
+          start: outcome.start,
+          end: outcome.end,
+          responseRevision: revision,
+        },
+      };
+      db.update(nodes).set({ anchorJson: anchor }).where(eq(nodes.id, row.id)).run();
+      movedIds.push(row.id);
+    }
+  }
+  return { movedIds, unmatched };
 }
 
 export interface ImportReportInput {

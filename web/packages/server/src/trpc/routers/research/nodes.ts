@@ -274,7 +274,7 @@ export const nodeProcedures = {
       }),
     )
     .mutation(({ ctx, input }): UpdateResearchDocumentResult => {
-      const result = repo(() =>
+      const { movedBranches, ...result } = repo(() =>
         researchDocuments.update(ctx.db, ctx.user.id, {
           nodeId: input.nodeId,
           markdown: input.markdown,
@@ -295,6 +295,8 @@ export const nodeProcedures = {
         markdownChanged: result.markdownChanged,
         removedHighlightCount: result.removedHighlightCount,
       });
+      // Branches asked about a passage moved with their quote.
+      for (const branch of movedBranches) publishNode(ctx, branch);
       emitFeedItemUpsertedForNode(ctx, result.node.id);
       return result;
     }),

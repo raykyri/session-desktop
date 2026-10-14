@@ -571,11 +571,23 @@ Each item names the desktop source and the enforcing function.
 - `researchDocuments.update` performs the 4-way optimistic check: node is the
   tree's root and `type = document`; tree not archived; `expectedTitle === tree.title`;
   `expectedResponseRevision === snapshot.revision`; and if markdown changed,
-  `expectedHighlightIds` equals the current set (`state.rs:4961`). A markdown
-  change deletes all highlights, rewrites `response_preview`, writes a new
-  snapshot (single `Turn` with one `text` block), and returns
-  `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }`.
-- Limits: 10,000 words and 10 MiB (`research.rs:17-20`).
+  `expectedHighlightIds` equals the current set (`state.rs:4961`). The stored
+  body is trimmed before it is compared with the trimmed request, so a
+  title-only save is not a body change. A markdown change writes a new
+  snapshot (single `Turn` with one `text` block) and `response_preview`,
+  moves each highlight and each passage branch's anchor to its quote in the
+  new body (`reanchorResearchQuote`, the desktop's `reanchor_highlights`; a
+  moved anchor takes the new revision), deletes the highlights whose quote
+  is gone (a branch whose quote is gone keeps its anchor and is counted in
+  `unmatchedBranchCount`), and clears the recap. It returns
+  `{ tree, node, responseRevision, markdownChanged, removedHighlightCount,
+  unmatchedBranchCount }` and, for the server, the moved branches (each
+  announced as `research.node.updated`). Web documents have no recap to
+  regenerate: recaps are refused for non-exchanges (§5.8), so no recap is
+  scheduled after an edit, unlike the desktop's imported reports.
+- Limits: 10,000 words and 10 MiB (`research.rs:17-20`), checked only for a
+  new body, so an imported report over the word limit keeps an editable
+  title.
 
 ### 5.7 Runs and admission
 - Insert node as `queued` and a `run_queue` row in one transaction. The

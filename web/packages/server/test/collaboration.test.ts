@@ -552,6 +552,11 @@ test("tree events carry no per-person fields to the rest of the audience", async
     workspaceId: workspace.id,
   });
   const revision = snapshots.revision(harness.db, owner.id, detail.tree.rootNodeId) ?? "";
+  const branch = await ownerCaller.research.forkNode({
+    parentNodeId: detail.tree.rootNodeId,
+    prompt: "What text?",
+    anchor: { kind: "passage", anchor: anchorFor(revision, "Body text", 10) },
+  });
   const link = await ownerCaller.invites.create({ treeId: detail.tree.id, role: "commenter" });
   await harness.caller(member).invites.accept({ token: link.token });
   // The member's own Archive is theirs.
@@ -580,6 +585,12 @@ test("tree events carry no per-person fields to the rest of the audience", async
     true,
     "the rest of the payload is the same",
   );
+  // The branch asked about the passage moved with it, and everyone hears so.
+  const moved = memberEvents
+    .of("research.node.updated")
+    .map((event) => event.payload["node"] as { id: string; anchor?: { anchor: { start: number } } })
+    .find((node) => node.id === branch.id);
+  t.is(moved?.anchor?.anchor.start, 18);
   ownerEvents.close();
   memberEvents.close();
 });
