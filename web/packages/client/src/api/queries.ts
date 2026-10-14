@@ -6,6 +6,7 @@
 // loaders, which need the same key and fetcher a component would use.
 
 import type {
+  InboxNotificationPage,
   RecentActivityCursor,
   RecentActivityScope,
   RecentResearchQuery,
@@ -38,6 +39,7 @@ import { nodeResponseSnapshotAt, nodeStatus } from "@session/shared/lib/research
 import {
   queryOptions,
   useInfiniteQuery,
+  type InfiniteData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -54,7 +56,11 @@ import {
   createThreadInvite,
   getThreadPresence,
   leaveThread,
+  getUnreadNotificationCount,
+  listNotifications,
   listReceivedInvites,
+  markAllNotificationsRead,
+  markNotificationRead,
   listSharedResearchTrees,
   listThreadInvites,
   listThreadMembers,
@@ -359,6 +365,75 @@ export function useReceivedInvites() {
     queryKey: queryKeys.receivedInvites(),
     queryFn: () => listReceivedInvites(),
     enabled: signedIn,
+  });
+}
+
+/** The reader's notification inbox, newest first, a page at a time
+ * (`notifications.list`). `notification.requested` and `notifications.read`
+ * refetch it (`api/events.ts`). */
+export function useNotificationInbox(enabled = true) {
+  const signedIn = useSignedIn();
+  return useInfiniteQuery({
+    queryKey: queryKeys.notifications(),
+    queryFn: ({ pageParam }) => listNotifications(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
+    enabled: signedIn && enabled,
+  });
+}
+
+/** How many notifications the reader has not read, for the sidebar badge. */
+export function useUnreadNotificationCount() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.unreadNotifications(),
+    queryFn: () => getUnreadNotificationCount(),
+    enabled: signedIn,
+    select: (data) => data.count,
+  });
+}
+
+type InboxPages = InfiniteData<InboxNotificationPage, string | null>;
+
+/** Marks the cached inbox entries `ids` (all when null) read at `at`, and
+ * lowers the cached unread count by as many as changed. */
+function markInboxRead(client: QueryClient, ids: ReadonlySet<string> | null, at: number): void {
+  let changed = 0;
+  client.setQueryData<InboxPages>(queryKeys.notifications(), (data) =>
+    data
+      ? {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) => {
+              if (item.readAt !== null || (ids !== null && !ids.has(item.id))) return item;
+              changed += 1;
+              return { ...item, readAt: at };
+            }),
+          })),
+        }
+      : data,
+  );
+  client.setQueryData<{ count: number }>(queryKeys.unreadNotifications(), (data) =>
+    data ? { count: ids === null ? 0 : Math.max(0, data.count - changed) } : data,
+  );
+}
+
+export function useMarkNotificationRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => markNotificationRead(id),
+    onMutate: (id) => markInboxRead(client, new Set([id]), Date.now()),
+    onError: () => invalidateKeys(client, ["notifications"]),
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => markAllNotificationsRead(),
+    onMutate: () => markInboxRead(client, null, Date.now()),
+    onError: () => invalidateKeys(client, ["notifications"]),
   });
 }
 

@@ -70,6 +70,10 @@ export const queryKeys = {
   receivedInvites: () => ["receivedInvites"] as const,
   /** Who has a thread open (`events.presence`, `research.presence.changed`). */
   presence: (treeId: string) => ["presence", treeId] as const,
+  /** The reader's notification inbox (`notifications.list`), page by page. */
+  notifications: () => ["notifications", "list"] as const,
+  /** Their unread count (`notifications.unreadCount`). */
+  unreadNotifications: () => ["notifications", "unread"] as const,
 } as const;
 
 /** The lists the bridge invalidates on reconnect: everything the server keeps
@@ -90,6 +94,7 @@ export const eventPatchedListKeys = [
   "invites",
   "receivedInvites",
   "presence",
+  "notifications",
 ] as const;
 
 export function invalidateKeys(

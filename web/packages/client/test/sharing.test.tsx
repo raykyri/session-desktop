@@ -27,7 +27,7 @@ import {
   resetNodeInterest,
 } from "../src/api/events.js";
 import { queryClientDefaults, queryKeys } from "../src/api/queries.js";
-import { TreeLifecycleItems } from "../src/features/home/TreeMenu.js";
+import { TreeLifecycleItems, treeDeleteDialogProps } from "../src/features/home/TreeMenu.js";
 import { stalledChainNote } from "../src/features/sharing/context.js";
 import {
   mayCancel,
@@ -44,9 +44,18 @@ import { SelectionToolbar } from "../src/features/thread/SelectionToolbar.js";
 import { DeleteDialog as ThreadDeleteDialog } from "../src/features/thread/ThreadDialogs.js";
 import { resetThreadNavigationForTests } from "../src/features/thread/persistence.js";
 import type { SelectionAction } from "../src/features/thread/selectionCapture.js";
+import {
+  PENDING_INVITE_TTL_MS,
+  captureInviteFragment,
+  clearPendingInvite,
+  readPendingInvite,
+  savePendingInvite,
+} from "../src/lib/pendingInvite.js";
+import { INCOMPLETE_INVITE_MESSAGE } from "../src/routes/invite.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
+import { DeleteDialog } from "../src/ui/DeleteDialog.js";
 import { Menu } from "../src/ui/Menu.js";
 
 import { node, summary, tree } from "./fixtures.js";
@@ -272,6 +281,54 @@ test("the thread page's Delete for a member moves it to their Trash or leaves", 
   const leave = screen.getByRole("dialog", { name: /^Leave “.+”\?$/ });
   t.truthy(within(leave).getByRole("button", { name: "Leave" }));
   t.is(screen.queryByText("Delete permanently?"), null);
+  cleanup();
+});
+
+test("the owner's Delete of a shared thread says what its members lose", (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const props = {
+    nodes: [root],
+    nodeId: "n1",
+    rootNodeId: "n1",
+    treeTitle: "Collective memory",
+    onTrashRoot: () => Promise.resolve(),
+    onRemove: () => Promise.resolve(),
+    onClose: () => {},
+  };
+  const view = render(<ThreadDeleteDialog {...props} memberCount={2} />);
+  const dialog = screen.getByRole("dialog", { name: /^Delete “.+”\?$/ });
+  t.is(
+    dialog.querySelector("[data-members-warning]")?.textContent,
+    "The 2 people it is shared with lose access while it is in the Trash. The questions and notes they added go with it.",
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete now" }));
+  const remove = screen.getByRole("dialog", { name: "Delete permanently?" });
+  t.truthy(within(remove).getByText("This can’t be undone."));
+  t.is(
+    remove.querySelector("[data-members-warning]")?.textContent,
+    "The 2 people it is shared with lose access, and the questions and notes they added are deleted with it.",
+  );
+  view.unmount();
+
+  // Not shared: no sentence.
+  render(<ThreadDeleteDialog {...props} />);
+  t.is(document.querySelector("[data-members-warning]"), null);
+  cleanup();
+});
+
+test("Home's Delete for an owner names one member in the singular", (t) => {
+  const props = treeDeleteDialogProps({
+    tree: summary({ id: "t1", title: "Collective memory" }),
+    memberCount: 1,
+    onClose: () => {},
+    onTrash: () => Promise.resolve(),
+    onRemove: () => Promise.resolve(),
+  });
+  render(<DeleteDialog {...props} />);
+  t.is(
+    document.querySelector("[data-members-warning]")?.textContent,
+    "The person it is shared with loses access while it is in the Trash. The questions and notes they added go with it.",
+  );
   cleanup();
 });
 
@@ -509,6 +566,53 @@ const LINK_INVITE: ThreadInvite = {
   expiresAt: 1_800_000_000_000,
 };
 
+test.serial("making a public thread private is confirmed, and members keep access", async (t) => {
+  const { root, content } = ownerAndMine();
+  const { trpc } = await mount({
+    tree: { role: "owner", ownerId: ME, visibility: "public" },
+    nodes: [{ ...root, authorId: ME }],
+    contentByNode: content,
+    responses: {
+      "sharing.listMembers": MEMBERS,
+      "invites.list": [],
+      "sharing.setVisibility": (input: { visibility: "public" | "private" }) =>
+        tree({ ownerId: ME, role: "owner", visibility: input.visibility }),
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer loads");
+  fireEvent.click(screen.getByRole("button", { name: "Thread actions" }));
+  fireEvent.click(await waitFor(() => screen.getByRole("menuitem", { name: "Share…" })));
+  const dialog = await waitFor(() =>
+    screen.getByRole("dialog", { name: "Share “Collective memory”" }),
+  );
+  await waitUntil(t, () => within(dialog).queryByText("Ada") !== null, "the members load");
+
+  fireEvent.click(within(dialog).getByRole("radio", { name: /Private/ }));
+  const confirm = await waitFor(() => {
+    const found = dialog.querySelector("[data-make-private-confirm]");
+    if (!found) throw new Error("no confirmation");
+    return found;
+  });
+  t.is(
+    confirm.textContent,
+    "Make it private? People who aren’t in it lose access, and it leaves All Users. The person it is shared with keeps access.",
+  );
+  t.false(
+    trpc.calls.some((call) => call.path === "sharing.setVisibility"),
+    "not yet",
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Make private" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "sharing.setVisibility"),
+    "visibility is set",
+  );
+  t.deepEqual(trpc.calls.find((call) => call.path === "sharing.setVisibility")?.input, {
+    treeId: "t1",
+    visibility: "private",
+  });
+});
+
 test.serial("the owner shares: visibility, members, invitations", async (t) => {
   const { root, content } = ownerAndMine();
   const { trpc } = await mount({
@@ -529,7 +633,7 @@ test.serial("the owner shares: visibility, members, invitations", async (t) => {
           githubLogin: input.githubLogin ?? null,
         },
         token: "tok",
-        url: "http://localhost/invite/tok",
+        url: "http://localhost/invite#tok",
       }),
       "invites.revoke": LINK_INVITE,
     },
@@ -568,17 +672,17 @@ test.serial("the owner shares: visibility, members, invitations", async (t) => {
     githubLogin: "grace",
   });
 
-  fireEvent.click(within(dialog).getByRole("button", { name: "Copy invite link" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Copy invitation link" }));
   await waitUntil(
     t,
-    () => within(dialog).queryByRole("textbox", { name: "Invite link" }) !== null,
+    () => within(dialog).queryByRole("textbox", { name: "Invitation link" }) !== null,
     "the link is shown",
   );
   const linkCall = trpc.calls.filter((call) => call.path === "invites.create")[1];
   t.deepEqual(linkCall?.input, { treeId: "t1", role: "commenter" });
   t.is(
-    within(dialog).getByRole<HTMLInputElement>("textbox", { name: "Invite link" }).value,
-    "http://localhost/invite/tok",
+    within(dialog).getByRole<HTMLInputElement>("textbox", { name: "Invitation link" }).value,
+    "http://localhost/invite#tok",
   );
 
   fireEvent.click(within(dialog).getByRole("button", { name: "Remove Ada" }));
@@ -600,7 +704,7 @@ test.serial("the owner shares: visibility, members, invitations", async (t) => {
     "the pending-link notice shows",
   );
 
-  fireEvent.click(within(dialog).getByRole("button", { name: "Revoke Invite link" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Revoke Invitation link" }));
   await waitUntil(
     t,
     () => trpc.calls.some((call) => call.path === "invites.revoke"),
@@ -1002,7 +1106,49 @@ test.serial("Shared with me lists shared threads and accepts an invitation", asy
   });
 });
 
-test.serial("an invitation link accepts and opens the thread", async (t) => {
+test.serial("an invitation link's fragment leaves the address bar and waits in storage", (t) => {
+  clearPendingInvite();
+  const replaced: string[] = [];
+  const history = {
+    state: { key: "entry" },
+    replaceState: (state: unknown, _unused: string, url?: string | URL | null) => {
+      t.deepEqual(state, { key: "entry" }, "the history entry's state is kept");
+      replaced.push(String(url));
+    },
+  };
+  t.is(captureInviteFragment({ pathname: "/r/t1", search: "", hash: "#x" }, history), null);
+  t.deepEqual(replaced, [], "only an invitation link is touched");
+  t.is(
+    captureInviteFragment({ pathname: "/invite", search: "", hash: "#tok%2D9" }, history),
+    "tok-9",
+  );
+  t.deepEqual(replaced, ["/invite"]);
+  t.is(readPendingInvite(), "tok-9");
+  // A sign-in abandoned for more than the TTL does not accept it later.
+  t.is(readPendingInvite(Date.now() + PENDING_INVITE_TTL_MS + 1), null);
+  clearPendingInvite();
+  t.is(readPendingInvite(), null);
+});
+
+test.serial("/invite accepts the stored token and opens the thread", async (t) => {
+  clearPendingInvite();
+  savePendingInvite("tok-3");
+  const { router, trpc } = await renderApp("/invite", {
+    queryClient: testQueryClient(),
+    responses: {
+      "invites.accept": () => tree({ id: "t8", role: "viewer" }),
+      "research.getTree": () => ({ tree: tree({ id: "t8" }), nodes: [] }),
+    },
+  });
+  await waitUntil(t, () => router.state.location.pathname === "/r/t8", "the thread opens");
+  t.deepEqual(trpc.calls.find((call) => call.path === "invites.accept")?.input, {
+    token: "tok-3",
+  });
+  t.is(readPendingInvite(), null, "used once");
+});
+
+test.serial("an earlier /invite/<token> link still accepts, through /invite", async (t) => {
+  clearPendingInvite();
   const { router, trpc } = await renderApp("/invite/tok-1", {
     queryClient: testQueryClient(),
     responses: {
@@ -1014,6 +1160,15 @@ test.serial("an invitation link accepts and opens the thread", async (t) => {
   t.deepEqual(trpc.calls.find((call) => call.path === "invites.accept")?.input, {
     token: "tok-1",
   });
+  t.is(readPendingInvite(), null, "stored like a fragment's token, and used once");
+});
+
+test.serial("/invite without a token says the link is incomplete", async (t) => {
+  clearPendingInvite();
+  const { trpc } = await renderApp("/invite", { queryClient: testQueryClient() });
+  const alert = await waitFor(() => screen.getByRole("alert"));
+  t.is(alert.textContent, INCOMPLETE_INVITE_MESSAGE);
+  t.false(trpc.calls.some((call) => call.path === "invites.accept"));
 });
 
 test.serial("an invalid invitation says why", async (t) => {
@@ -1030,16 +1185,24 @@ test.serial("an invalid invitation says why", async (t) => {
   t.truthy(screen.getByRole("heading", { name: "This invitation can’t be used" }));
 });
 
-test.serial("signed out, an invitation link signs in first", async (t) => {
-  const { router } = await renderApp("/invite/tok-2", {
-    user: null,
-    queryClient: testQueryClient(),
-    responses: { "feed.recentActivity": { items: [], nextCursor: null } },
-  });
-  await waitUntil(t, () => router.state.location.pathname === "/login", "sign-in opens");
-  t.is(
-    (router.state.location.search as { redirect?: string }).redirect,
-    "/invite/tok-2",
-    "and comes back to the invitation",
-  );
-});
+test.serial(
+  "signed out, an invitation link signs in first, without the token in the URL",
+  async (t) => {
+    clearPendingInvite();
+    savePendingInvite("tok-2");
+    const { router } = await renderApp("/invite", {
+      user: null,
+      queryClient: testQueryClient(),
+      responses: { "feed.recentActivity": { items: [], nextCursor: null } },
+    });
+    await waitUntil(t, () => router.state.location.pathname === "/login", "sign-in opens");
+    t.is(
+      (router.state.location.search as { redirect?: string }).redirect,
+      "/invite",
+      "and comes back to the invitation",
+    );
+    t.false(router.state.location.href.includes("tok-2"));
+    t.is(readPendingInvite(), "tok-2", "the token waits for the sign-in");
+    clearPendingInvite();
+  },
+);

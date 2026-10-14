@@ -19,11 +19,13 @@ import {
   treesQueryOptions,
   workspacesQueryOptions,
 } from "../api/queries.js";
+import { savePendingInvite } from "../lib/pendingInvite.js";
 import { AdminPage } from "../routes/admin.js";
 import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
+import { NotificationsPage } from "../routes/notifications.js";
 import {
   ArchivePage,
   DraftPage,
@@ -67,9 +69,12 @@ const researchSearchSchema = z.object({
   feed: z.string().optional(),
 });
 
-/** Query parameters passed to /login when authentication fails, including redirect target and optional invite code. */
+/** Query parameters of /login: a sign-in refusal (`error`), where to go after
+ * signing in (`redirect`), and a sign-up code for a new account (`signup`;
+ * `invite`, its earlier name, is still read). */
 const loginSearchSchema = z.object({
   error: z.string().optional(),
+  signup: z.string().optional(),
   invite: z.string().optional(),
   redirect: z.string().optional(),
 });
@@ -242,12 +247,34 @@ const sharedRoute = createRoute({
   component: SharedPage,
 });
 
-/** Web only: an invitation link (`invites.create`'s `url`). Signed out, the
- * page sends the reader to sign in and back here. */
+/** Web only: the notification inbox. */
+const notificationsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/notifications",
+  validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
+  component: NotificationsPage,
+});
+
+/** Web only: an invitation link (`invites.create`'s `url`, `/invite#<token>`).
+ * Signed out, the page sends the reader to sign in and back here; the token
+ * waits in `sessionStorage` (`lib/pendingInvite.ts`). */
 const inviteRoute = createRoute({
   getParentRoute: () => shellRoute,
-  path: "/invite/$token",
+  path: "/invite",
   component: InvitePage,
+});
+
+/** Links created before the token moved to the fragment: the token is
+ * stored as a fragment's would be, and the address becomes `/invite`. */
+const legacyInviteRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/invite/$token",
+  beforeLoad: ({ params }) => {
+    savePendingInvite(params.token);
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ to: "/invite", replace: true });
+  },
 });
 
 const researchRoute = createRoute({
@@ -300,7 +327,9 @@ export const routeTree = rootRoute.addChildren([
     archiveRoute,
     trashRoute,
     sharedRoute,
+    notificationsRoute,
     inviteRoute,
+    legacyInviteRoute,
     researchRoute,
     settingsRoute,
     adminRoute,

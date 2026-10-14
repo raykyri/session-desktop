@@ -371,8 +371,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "notification.requested": {
+      // The server stored it in the inbox, which refetches whatever the
+      // setting says.
+      invalidate(client, ["notifications"]);
       // The bridge is the only ingress for server notifications, so the
-      // `showNotifications` preference is enforced here.
+      // `showNotifications` preference, which governs the toast only, is
+      // enforced here.
       if (!useSettingsStore.getState().settings.showNotifications) return;
       const { id, title, body, tone, timeoutMs, createdAt, href } = event.notification;
       useNotificationsStore.getState().push({
@@ -386,6 +390,11 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       });
       return;
     }
+
+    case "notifications.read":
+      // Marked read in another tab (or this one, after its own patch).
+      invalidate(client, ["notifications"]);
+      return;
 
     case "research.sharing.changed":
       // Access, members or visibility changed: the lists, the thread and its

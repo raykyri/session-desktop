@@ -49,7 +49,8 @@ function NotificationCard({
   notification: NotificationItem;
   active: boolean;
   onDismiss: (id: string) => void;
-  onOpen?: ((href: string) => void) | undefined;
+  /** `id` is the notification's: a server notification's is its inbox entry's. */
+  onOpen?: ((href: string, id: string) => void) | undefined;
 }) {
   const [phase, setPhase] = useState<"entering" | "visible" | "exiting">("entering");
   const [hovered, setHovered] = useState(false);
@@ -129,7 +130,7 @@ function NotificationCard({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left"
           aria-label={`${notification.title}: ${notification.body}. Open.`}
           onClick={() => {
-            onOpen(notification.href!);
+            onOpen(notification.href!, notification.id);
             beginDismiss();
           }}
         >
@@ -160,7 +161,8 @@ function NotificationCard({
 export interface NotificationStackProps {
   notifications: readonly NotificationItem[];
   onDismiss: (id: string) => void;
-  onOpen?: ((href: string) => void) | undefined;
+  /** `id` is the notification's: a server notification's is its inbox entry's. */
+  onOpen?: ((href: string, id: string) => void) | undefined;
 }
 
 /**

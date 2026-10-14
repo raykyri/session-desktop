@@ -110,7 +110,7 @@ test.serial("a refused folder change restores the state it replaced and rejects"
 });
 
 test.serial(
-  "the sidebar lists Home, Highlights, Shared with me, then Drafts, the folders, Archive and Trash",
+  "the sidebar lists Home, Highlights, Shared with me, Notifications, then Drafts, the folders, Archive and Trash",
   async (t) => {
     const app = await renderApp("/", {
       queryClient: testQueryClient(),
@@ -125,7 +125,7 @@ test.serial(
 
     t.deepEqual(
       rows("Research").map((row) => row.textContent),
-      ["Home", "Highlights", "Shared with me", "All Users"],
+      ["Home", "Highlights", "Shared with me", "Notifications", "All Users"],
     );
     t.deepEqual(
       rows("Folders").map((row) => row.textContent),
@@ -137,6 +137,7 @@ test.serial(
     );
     t.deepEqual(drops, [
       "system:unfiled",
+      null,
       null,
       null,
       null,
@@ -343,6 +344,7 @@ test.serial("a collapsed sidebar is the desktop's icon rail", async (t) => {
       "Home",
       "Highlights",
       "Shared with me",
+      "Notifications",
       "All Users",
       "Drafts",
       "Papers",
@@ -448,6 +450,32 @@ test.serial(
       const rail = await screen.findByRole("complementary", { name: "Sidebar" });
       const icon = await within(rail).findByRole("link", { name: "Shared with me, 2 invitations" });
       t.is(icon.querySelector("[data-invite-count]")?.textContent, "2");
+      app.unmount();
+    } finally {
+      useNavigationStore.setState({ sidebarCollapsed: false });
+    }
+  },
+);
+
+test.serial(
+  "unread notifications are counted on Notifications, in the sidebar and the rail",
+  async (t) => {
+    const responses = { ...sidebarResponses(), "notifications.unreadCount": { count: 120 } };
+    let app = await renderApp("/", { queryClient: testQueryClient(), responses });
+    const row = await screen.findByRole("link", { name: "Notifications, 120 unread" });
+    t.is(row.querySelector("[data-unread-count]")?.textContent, "99+");
+    t.is(row.getAttribute("href")?.split("?")[0], "/notifications");
+    app.unmount();
+
+    useNavigationStore.setState({ sidebarCollapsed: true });
+    try {
+      app = await renderApp("/", {
+        queryClient: testQueryClient(),
+        responses: { ...responses, "notifications.unreadCount": { count: 3 } },
+      });
+      const rail = await screen.findByRole("complementary", { name: "Sidebar" });
+      const icon = await within(rail).findByRole("link", { name: "Notifications, 3 unread" });
+      t.is(icon.querySelector("[data-unread-count]")?.textContent, "3");
       app.unmount();
     } finally {
       useNavigationStore.setState({ sidebarCollapsed: false });

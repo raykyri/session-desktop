@@ -1,6 +1,6 @@
 // Sharing a thread between accounts and a guest, each in its own browser
 // context (`02-domain-model-and-database.md` §5.16). The first tests go
-// through the sharing UI: the Share dialog's invite links, a commenter's
+// through the sharing UI: the Share dialog's invitation links, a commenter's
 // question seen live by the owner, a viewer's and a guest's read-only page,
 // and the stale-edit prompt. The rest drive the server through its tRPC
 // endpoint with each context's own session cookie.
@@ -14,6 +14,7 @@ import {
   query,
   refusal,
   signedInContext,
+  signIn,
   type Detail,
 } from "./helpers.js";
 
@@ -25,11 +26,18 @@ async function openShareDialog(page: Page, { owner = true }: { owner?: boolean }
   return page.getByRole("dialog", { name: owner ? /^Share “/ : /^People in “/ });
 }
 
-/** Copies an invite link from the open Share dialog and reads it back. */
+/** An invitation link's path and fragment (`/invite#<token>`), to open it on
+ * this server. */
+function invitePath(link: string): string {
+  const url = new URL(link);
+  return `${url.pathname}${url.hash}`;
+}
+
+/** Copies an invitation link from the open Share dialog and reads it back. */
 async function copyInviteLink(dialog: ReturnType<Page["getByRole"]>): Promise<string> {
-  const field = dialog.getByRole("textbox", { name: "Invite link" });
+  const field = dialog.getByRole("textbox", { name: "Invitation link" });
   const before = (await field.count()) > 0 ? await field.inputValue() : "";
-  await dialog.getByRole("button", { name: "Copy invite link" }).click();
+  await dialog.getByRole("button", { name: "Copy invitation link" }).click();
   await expect(field).not.toHaveValue(before);
   return field.inputValue();
 }
@@ -52,16 +60,17 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
       "Owner",
     );
     const commenterLink = await copyInviteLink(dialog);
-    expect(commenterLink).toMatch(/\/invite\/[^/]+$/);
+    // The token is the fragment: no request for the link carries it.
+    expect(commenterLink).toMatch(/\/invite#[^/#]+$/);
     await dialog.getByRole("combobox", { name: "Role for the invitation" }).click();
     await owner.page.getByRole("option", { name: /^Viewer/ }).click();
     const viewerLink = await copyInviteLink(dialog);
     expect(viewerLink).not.toBe(commenterLink);
-    await expect(dialog.getByRole("list").filter({ hasText: "Invite link" })).toBeVisible();
+    await expect(dialog.getByRole("list").filter({ hasText: "Invitation link" })).toBeVisible();
     await dialog.getByRole("button", { name: "Done" }).click();
 
     // The commenter accepts the link and lands on the thread.
-    await commenter.page.goto(new URL(commenterLink).pathname);
+    await commenter.page.goto(invitePath(commenterLink));
     await commenter.page.waitForURL(new RegExp(`/r/${treeId}`));
     const before = await query<{ runs: number }>(commenter.request, "usage.summary", undefined);
     const field = commenter.page.getByRole("textbox", { name: "Follow-up in this conversation" });
@@ -89,7 +98,7 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
     });
 
     // The viewer reads and cannot ask.
-    await viewer.page.goto(new URL(viewerLink).pathname);
+    await viewer.page.goto(invitePath(viewerLink));
     await viewer.page.waitForURL(new RegExp(`/r/${treeId}`));
     await expect(viewer.page.getByText(prompt).first()).toBeVisible();
     await expect(viewer.page.getByText(question).first()).toBeVisible();
@@ -169,7 +178,7 @@ test("a removed member cannot rejoin through an earlier link; a new link lets th
     const dialog = await openShareDialog(owner.page);
     const link = await copyInviteLink(dialog);
 
-    await member.page.goto(new URL(link).pathname);
+    await member.page.goto(invitePath(link));
     await member.page.waitForURL(new RegExp(`/r/${treeId}`));
 
     // The owner removes them while the link is still pending.
@@ -182,18 +191,121 @@ test("a removed member cannot rejoin through an earlier link; a new link lets th
     );
 
     // The link no longer lets them in, but it still lets someone else in.
-    await member.page.goto(new URL(link).pathname);
+    await member.page.goto(invitePath(link));
     await expect(member.page.getByRole("alert")).toHaveText("You were removed from this thread.");
-    await newcomer.page.goto(new URL(link).pathname);
+    await newcomer.page.goto(invitePath(link));
     await newcomer.page.waitForURL(new RegExp(`/r/${treeId}`));
 
     // A link created after the removal admits them again.
     const newLink = await copyInviteLink(dialog);
-    await member.page.goto(new URL(newLink).pathname);
+    await member.page.goto(invitePath(newLink));
     await member.page.waitForURL(new RegExp(`/r/${treeId}`));
     await expect(member.page.getByText(prompt).first()).toBeVisible();
   } finally {
     await Promise.all([owner.context.close(), member.context.close(), newcomer.context.close()]);
+  }
+});
+
+test("signed out, an invitation link signs in first; the token stays out of the URL", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-fragment-owner");
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const legacy = await signedInContext(browser, "e2e-fragment-legacy");
+  try {
+    const detail = await completedThread(owner.page, "Does an invitation survive the sign-in?");
+    const treeId = detail.tree.id;
+    const link = await mutation<{ url: string; token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "viewer",
+    });
+    expect(new URL(link.url).hash).toBe(`#${link.token}`);
+
+    // Signed out: the token leaves the address bar and the sign-in redirect
+    // names only /invite.
+    await guest.goto(invitePath(link.url));
+    await guest.waitForURL(/\/login\?/);
+    expect(guest.url()).not.toContain(link.token);
+    expect(new URL(guest.url()).searchParams.get("redirect")).toBe("/invite");
+    // The test sign-in stands in for GitHub's round trip, which returns to
+    // /invite; the token waited in this tab's sessionStorage.
+    const user = await signIn(guest, { login: "e2e-fragment-guest" });
+    await guest.goto("/invite");
+    await guest.waitForURL(new RegExp(`/r/${treeId}`));
+    expect(guest.url()).not.toContain(link.token);
+    const members = await query<{ login: string; role: string }[]>(
+      owner.request,
+      "sharing.listMembers",
+      { treeId },
+    );
+    expect(members.find((member) => member.login === user.login)?.role).toBe("viewer");
+
+    // A link in the earlier form, /invite/<token>, still works.
+    await legacy.page.goto(`/invite/${encodeURIComponent(link.token)}`);
+    await legacy.page.waitForURL(new RegExp(`/r/${treeId}`));
+    expect(legacy.page.url()).not.toContain(link.token);
+  } finally {
+    await Promise.all([owner.context.close(), guestContext.close(), legacy.context.close()]);
+  }
+});
+
+test("a member's question lands in the owner's inbox, which opens it and marks it read", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-inbox-owner");
+  const member = await signedInContext(browser, "e2e-inbox-member");
+  try {
+    const detail = await completedThread(owner.page, "Who hears about a member's question?");
+    const treeId = detail.tree.id;
+    const rootId = detail.nodes[0]!.id;
+    const link = await mutation<{ token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "commenter",
+    });
+    await mutation(member.request, "invites.accept", { token: link.token });
+
+    await owner.page.goto("/");
+    const places = owner.page.getByRole("navigation", { name: "Research" });
+    // The owner's own first run finishing is already in the inbox.
+    await expect(places.getByRole("link", { name: "Notifications, 1 unread" })).toBeVisible();
+    await mutation(owner.request, "notifications.markAllRead", undefined);
+    // Read in another tab (here, a request): this page's badge goes too.
+    await expect(places.getByRole("link", { name: "Notifications", exact: true })).toBeVisible();
+
+    // The owner follows their own thread, so a member's question notifies
+    // them; the badge appears without a reload.
+    const asked = await mutation<{ node?: { id: string } }>(member.request, "followups.ask", {
+      headNodeId: rootId,
+      prompt: "A question for the owner's inbox",
+    });
+    const badge = places.getByRole("link", { name: "Notifications, 1 unread" });
+    await expect(badge).toBeVisible();
+    await badge.click();
+    await owner.page.waitForURL(/\/notifications/);
+    const item = owner.page.getByRole("button", { name: /^Unread: New question in / });
+    await expect(item).toBeVisible();
+    await item.click();
+    await owner.page.waitForURL(new RegExp(`/r/${treeId}\\?.*sel=${asked.node?.id ?? ""}`));
+    await expect(places.getByRole("link", { name: "Notifications", exact: true })).toBeVisible();
+    expect(
+      (await query<{ count: number }>(owner.request, "notifications.unreadCount", undefined)).count,
+    ).toBe(0);
+
+    // The member hears that their run finished, and clears it with Mark all
+    // as read.
+    await member.page.goto("/notifications");
+    await expect(
+      member.page.getByRole("button", { name: /^Unread: Research (finished|failed)$/ }),
+    ).toBeVisible({ timeout: 60_000 });
+    const markAll = member.page.getByRole("button", { name: "Mark all as read" });
+    await markAll.click();
+    await expect(markAll).toBeDisabled();
+    await expect(
+      member.page.getByRole("button", { name: /^Research (finished|failed)$/ }),
+    ).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close()]);
   }
 });
 

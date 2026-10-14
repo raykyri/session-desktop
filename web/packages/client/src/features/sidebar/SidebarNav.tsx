@@ -1,5 +1,5 @@
 // The sidebar's places (the desktop's `ResearchSidebarNav.tsx`): Home,
-// Highlights, Shared with me and All Users (web only), then the Folders section (Drafts, the workspace's folders,
+// Highlights, Shared with me, Notifications and All Users (web only), then the Folders section (Drafts, the workspace's folders,
 // Archive, Trash) with New folder. Rows carry no counts. Every row but
 // Highlights and Trash takes card drops; a folder row has a … menu with
 // Rename and Delete.
@@ -13,10 +13,20 @@ import {
   researchPlaceName,
 } from "@session/shared/lib/researchFolders";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Ellipsis, Globe, Highlighter, House, Pencil, Plus, Trash2, Users } from "lucide-react";
+import {
+  Bell,
+  Ellipsis,
+  Globe,
+  Highlighter,
+  House,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { useReceivedInvites } from "../../api/queries.js";
+import { useReceivedInvites, useUnreadNotificationCount } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
 import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
@@ -28,16 +38,26 @@ import { useFolderDialogStore, useRequestFolderDelete } from "../home/FolderDial
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import {
-  INVITE_BADGE,
+  badgeText,
+  COUNT_BADGE,
   invitationCountLabel,
   SIDEBAR_ROW,
   SIDEBAR_ROW_SELECTED,
   SIDEBAR_SECTION_HEADING,
+  unreadCountLabel,
 } from "./rows.js";
 
 interface NavEntry {
   /** The route path the row opens. */
-  to: "/" | "/highlights" | "/shared" | "/drafts" | "/archive" | "/trash" | "/f/$folderId";
+  to:
+    | "/"
+    | "/highlights"
+    | "/shared"
+    | "/notifications"
+    | "/drafts"
+    | "/archive"
+    | "/trash"
+    | "/f/$folderId";
   folderId?: string;
   label: string;
   icon: ReactNode;
@@ -74,6 +94,7 @@ function currentKey(pathname: string, feed: string | null): string | null {
   if (pathname === "/") return feed === "all" ? "all-users" : "home";
   if (pathname === "/highlights") return "highlights";
   if (pathname === "/shared") return "shared";
+  if (pathname === "/notifications") return "notifications";
   if (pathname === "/drafts" || pathname.startsWith("/drafts/")) return RESEARCH_DRAFTS_FOLDER_ID;
   if (pathname === "/archive") return RESEARCH_ARCHIVE_FOLDER_ID;
   if (pathname === "/trash") return RESEARCH_TRASH_FOLDER_ID;
@@ -107,6 +128,13 @@ export function SidebarNav({
   // Invitations waiting for the reader, counted on Shared with me, where
   // they are accepted.
   const invitations = useReceivedInvites().data?.length ?? 0;
+  const unread = useUnreadNotificationCount().data ?? 0;
+  const badgeOf = (key: string): { count: number; label: string } | null =>
+    key === "shared" && invitations > 0
+      ? { count: invitations, label: invitationCountLabel(invitations) }
+      : key === "notifications" && unread > 0
+        ? { count: unread, label: unreadCountLabel(unread) }
+        : null;
   const [menu, setMenu] = useState<{ folderId: string; anchor: HTMLElement } | null>(null);
   const openNew = useFolderDialogStore((state) => state.openNew);
   const openRename = useFolderDialogStore((state) => state.openRename);
@@ -138,6 +166,13 @@ export function SidebarNav({
             label: "Shared with me",
             icon: <Users size={14} aria-hidden="true" />,
           },
+          // Web only: the notification inbox.
+          {
+            key: "notifications",
+            to: "/notifications" as const,
+            label: "Notifications",
+            icon: <Bell size={14} aria-hidden="true" />,
+          },
           // Web only: every account's public threads (a guest's `/`).
           {
             key: "all-users",
@@ -152,6 +187,7 @@ export function SidebarNav({
 
   const renderRow = (entry: NavEntry) => {
     const isSelected = entry.key === selected;
+    const badge = badgeOf(entry.key);
     const menuOpen = menu !== null && menu.folderId === entry.folderId;
     return (
       <div
@@ -171,18 +207,20 @@ export function SidebarNav({
               : search
           }
           aria-current={isSelected ? "page" : undefined}
-          aria-label={
-            entry.key === "shared" && invitations > 0
-              ? `${entry.label}, ${invitationCountLabel(invitations)}`
-              : undefined
-          }
+          aria-label={badge ? `${entry.label}, ${badge.label}` : undefined}
           className={cn(SIDEBAR_ROW, isSelected && SIDEBAR_ROW_SELECTED, entry.folderId && "pr-8")}
         >
           <span className="text-fg-muted inline-flex shrink-0">{entry.icon}</span>
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-          {entry.key === "shared" && invitations > 0 ? (
-            <span className={INVITE_BADGE} aria-hidden="true" data-invite-count={invitations}>
-              {invitations}
+          {badge ? (
+            <span
+              className={COUNT_BADGE}
+              aria-hidden="true"
+              {...(entry.key === "shared"
+                ? { "data-invite-count": badge.count }
+                : { "data-unread-count": badge.count })}
+            >
+              {badgeText(badge.count)}
             </span>
           ) : null}
           {entry.key === "home" && hintsShown ? (

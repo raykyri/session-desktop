@@ -6,7 +6,13 @@
 // can leave it.
 
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import type { MemberRole, ResearchTree, ThreadInvite, ThreadMember } from "@session/shared";
+import type {
+  MemberRole,
+  ResearchTree,
+  ResearchTreeVisibility,
+  ThreadInvite,
+  ThreadMember,
+} from "@session/shared";
 import { Link as LinkIcon } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
@@ -30,6 +36,7 @@ import { CONTROL_BUTTON, CONTROL_BUTTON_SIZE, INPUT_FIELD } from "../../ui/surfa
 
 import { Avatar } from "./AuthorChip.js";
 import { participantName } from "./context.js";
+import { membersKeepAccessSentence } from "./ownerWarnings.js";
 
 export const ROLE_LABELS: Record<ThreadMember["role"], string> = {
   owner: "Owner",
@@ -59,11 +66,14 @@ function SectionHeading({ children }: { children: string }) {
 function Visibility({
   tree,
   editable,
+  pending,
+  onChange,
 }: {
   tree: Pick<ResearchTree, "id" | "visibility">;
   editable: boolean;
+  pending: boolean;
+  onChange: (visibility: ResearchTreeVisibility) => void;
 }) {
-  const setVisibility = useSetTreeVisibility();
   const name = useId();
   const current = tree.visibility ?? "private";
   const options = [
@@ -105,13 +115,8 @@ function Visibility({
             className="row-span-2 mt-[3px]"
             value={option.value}
             checked={current === option.value}
-            disabled={setVisibility.isPending}
-            onChange={() =>
-              setVisibility.mutate(
-                { treeId: tree.id, visibility: option.value },
-                { onError: (error) => pushErrorToast("Couldn’t change who can read it", error) },
-              )
-            }
+            disabled={pending}
+            onChange={() => onChange(option.value)}
           />
           <span className="text-fg-primary text-sm font-medium">{option.label}</span>
           <span className="text-fg-muted col-start-2 text-xs">{option.detail}</span>
@@ -225,7 +230,7 @@ function InviteForm({ treeId }: { treeId: string }) {
         onSuccess: (created) => {
           setLink(created.url);
           writeClipboardText(created.url)
-            .then(() => pushToast({ title: "Invite link copied.", tone: "success" }))
+            .then(() => pushToast({ title: "Invitation link copied.", tone: "success" }))
             .catch(() => pushToast({ title: "Couldn't copy. Copy the link below.", tone: "info" }));
         },
         onError: (failure) => setError(errorText(failure)),
@@ -266,7 +271,7 @@ function InviteForm({ treeId }: { treeId: string }) {
           onClick={copyLink}
         >
           <LinkIcon size={13} aria-hidden="true" />
-          Copy invite link
+          Copy invitation link
         </button>
         <span className="text-fg-muted text-xs">
           Anyone with the link can join as {role === "commenter" ? "a commenter" : "a viewer"}.
@@ -275,7 +280,7 @@ function InviteForm({ treeId }: { treeId: string }) {
       {link ? (
         <input
           className={cn(INPUT_FIELD, "text-fg-secondary text-xs")}
-          aria-label="Invite link"
+          aria-label="Invitation link"
           readOnly
           value={link}
           onFocus={(event) => event.currentTarget.select()}
@@ -292,7 +297,7 @@ function InviteForm({ treeId }: { treeId: string }) {
 
 function InviteRow({ invite }: { invite: ThreadInvite }) {
   const revoke = useRevokeThreadInvite();
-  const label = invite.githubLogin ? `@${invite.githubLogin}` : "Invite link";
+  const label = invite.githubLogin ? `@${invite.githubLogin}` : "Invitation link";
   return (
     <li className="flex min-h-9 items-center gap-2 py-1" data-share-invite={invite.id}>
       <span className="flex min-w-0 flex-1 flex-col">
@@ -341,6 +346,28 @@ export function ShareDialog({
   // removal, but anyone else holding it still can.
   const pendingLinks = pending.some((invite) => invite.githubLogin === null);
   const [removedWithLinks, setRemovedWithLinks] = useState(false);
+  const setVisibility = useSetTreeVisibility();
+  // Making a public thread private is confirmed in the footer: readers who
+  // are not members lose it.
+  const [confirmingPrivate, setConfirmingPrivate] = useState(false);
+  const memberCount = list.filter((entry) => entry.role !== "owner").length;
+  const changeVisibility = (visibility: ResearchTreeVisibility) => {
+    setConfirmingPrivate(false);
+    setVisibility.mutate(
+      { treeId: tree.id, visibility },
+      { onError: (error) => pushErrorToast("Couldn’t change who can read it", error) },
+    );
+  };
+  const requestVisibility = (visibility: ResearchTreeVisibility) => {
+    if (visibility === (tree.visibility ?? "private")) return;
+    if (visibility === "private") {
+      setConfirmingLeave(false);
+      setConfirmingPrivate(true);
+      return;
+    }
+    changeVisibility(visibility);
+  };
+  const keepAccess = membersKeepAccessSentence(memberCount);
 
   return (
     <Dialog
@@ -351,7 +378,24 @@ export function ShareDialog({
       title={owner ? `Share “${tree.title}”` : `People in “${tree.title}”`}
       className="w-[min(520px,calc(100vw-32px))]"
       footer={
-        confirmingLeave ? (
+        confirmingPrivate ? (
+          <>
+            <span
+              className="text-fg-secondary mr-auto self-center text-sm"
+              data-make-private-confirm=""
+            >
+              Make it private? People who aren’t in it lose access, and it leaves All Users.
+              {keepAccess ? ` ${keepAccess}` : ""}
+            </span>
+            <ControlButton onClick={() => setConfirmingPrivate(false)}>Cancel</ControlButton>
+            <ControlButton
+              disabled={setVisibility.isPending}
+              onClick={() => changeVisibility("private")}
+            >
+              Make private
+            </ControlButton>
+          </>
+        ) : confirmingLeave ? (
           <>
             <span className="text-fg-secondary mr-auto self-center text-sm">
               Leave this thread? You can come back only with a new invitation.
@@ -394,7 +438,12 @@ export function ShareDialog({
       <div className="flex flex-col gap-5" data-share-dialog="">
         <section aria-label="Who can read it">
           <SectionHeading>Who can read it</SectionHeading>
-          <Visibility tree={tree} editable={owner} />
+          <Visibility
+            tree={tree}
+            editable={owner}
+            pending={setVisibility.isPending || confirmingPrivate}
+            onChange={requestVisibility}
+          />
         </section>
         <section aria-label="People">
           <SectionHeading>People</SectionHeading>

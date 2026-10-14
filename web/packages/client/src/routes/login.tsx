@@ -19,9 +19,11 @@ import { GitHubMark } from "../ui/GitHubMark.js";
  */
 const SIGN_IN_ERRORS: Readonly<Record<string, string>> = {
   not_allowed: "This GitHub account is not authorized to access this Session instance.",
+  // Sign-up codes are for new accounts (admin "Sign-up codes"); a thread
+  // invitation (`/invite`) is a different thing and needs an account first.
   invite_required:
-    "An invite code is required to create an account. Please use the invitation link you received.",
-  invite_invalid: "This invite code is invalid or has already been used.",
+    "A sign-up code is required to create an account. Open the sign-up link you received.",
+  invite_invalid: "This sign-up code is invalid or has already been used.",
   expired_state: "The sign-in attempt timed out. Try again.",
   missing_code: "GitHub did not complete the sign-in. Try again.",
   exchange_failed: "GitHub sign-in could not be completed. Please try again.",
@@ -51,7 +53,7 @@ export function LoginPage() {
         <ControlButton
           size="lg"
           className="w-full gap-2"
-          onClick={() => startGitHubSignIn(search.redirect, search.invite)}
+          onClick={() => startGitHubSignIn(search.redirect, search.signup ?? search.invite)}
         >
           <GitHubMark />
           Sign in with GitHub

@@ -1,6 +1,7 @@
 // The collapsed sidebar (the desktop's `ResearchSidebarRail` in
 // `ResearchSidebarNav.tsx`): a 52px column of icons. Expand sidebar, then
-// Home and Highlights (and the web's Shared with me and All Users), then one
+// Home and Highlights (and the web's Shared with me, Notifications and All
+// Users), then one
 // icon per place — Drafts, each folder as its first letter (named in the
 // tooltip), Archive, Trash — then New folder, and at the foot the Light/Dark
 // toggle and Settings. Home and every place but Trash take card drops, as in
@@ -17,6 +18,7 @@ import {
 } from "@session/shared/lib/researchFolders";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  Bell,
   Globe,
   Highlighter,
   House,
@@ -29,7 +31,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useReceivedInvites } from "../../api/queries.js";
+import { useReceivedInvites, useUnreadNotificationCount } from "../../api/queries.js";
 import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
@@ -39,7 +41,7 @@ import { FOCUS_RING } from "../../ui/surfaces.js";
 import { PlaceIcon } from "../home/FeedTray.js";
 import { useFolderDialogStore } from "../home/FolderDialogsHost.js";
 
-import { INVITE_BADGE, invitationCountLabel } from "./rows.js";
+import { badgeText, COUNT_BADGE, invitationCountLabel, unreadCountLabel } from "./rows.js";
 
 /** The rail is this wide (the desktop's 52px). */
 export const SIDEBAR_RAIL_WIDTH = 52;
@@ -57,6 +59,7 @@ type RailPath =
   | "/"
   | "/highlights"
   | "/shared"
+  | "/notifications"
   | "/settings"
   | "/drafts"
   | "/archive"
@@ -106,6 +109,7 @@ function currentKey(pathname: string, feed: string | null): string | null {
   if (pathname === "/") return feed === "all" ? "all-users" : "home";
   if (pathname === "/highlights") return "highlights";
   if (pathname === "/shared") return "shared";
+  if (pathname === "/notifications") return "notifications";
   if (pathname === "/settings") return "settings";
   if (pathname === "/drafts" || pathname.startsWith("/drafts/")) return RESEARCH_DRAFTS_FOLDER_ID;
   if (pathname === "/archive") return RESEARCH_ARCHIVE_FOLDER_ID;
@@ -140,6 +144,7 @@ export function SidebarRail({
   });
   const selected = currentKey(pathname, feed);
   const invitations = useReceivedInvites().data?.length ?? 0;
+  const unread = useUnreadNotificationCount().data ?? 0;
   const openNew = useFolderDialogStore((state) => state.openNew);
   const search = (previous: Record<string, unknown>) => ({
     ws: (previous["ws"] as string | undefined) ?? (workspaceId || undefined),
@@ -174,11 +179,31 @@ export function SidebarRail({
                 <Users size={16} aria-hidden="true" />
                 {invitations > 0 ? (
                   <span
-                    className={cn(INVITE_BADGE, "absolute -top-0.5 -right-0.5")}
+                    className={cn(COUNT_BADGE, "absolute -top-0.5 -right-0.5")}
                     aria-hidden="true"
                     data-invite-count={invitations}
                   >
-                    {invitations}
+                    {badgeText(invitations)}
+                  </span>
+                ) : null}
+              </>
+            ),
+          },
+          {
+            key: "notifications",
+            to: "/notifications" as const,
+            label: unread > 0 ? `Notifications, ${unreadCountLabel(unread)}` : "Notifications",
+            tooltip: "Notifications",
+            icon: (
+              <>
+                <Bell size={16} aria-hidden="true" />
+                {unread > 0 ? (
+                  <span
+                    className={cn(COUNT_BADGE, "absolute -top-0.5 -right-0.5")}
+                    aria-hidden="true"
+                    data-unread-count={unread}
+                  >
+                    {badgeText(unread)}
                   </span>
                 ) : null}
               </>

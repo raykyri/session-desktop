@@ -30,6 +30,7 @@ import { DIALOG_BACKDROP, DIALOG_POPUP } from "../../ui/surfaces.js";
 import { treeDeleteDialogProps } from "../home/TreeMenu.js";
 import { useFiling } from "../home/useFiling.js";
 import { useGroupActions } from "../home/useGroupActions.js";
+import { useOwnerMemberCount } from "../sharing/ownerWarnings.js";
 
 export interface DeleteOffer {
   treeId: string;
@@ -149,6 +150,7 @@ export function DeleteOfferHost() {
       ) ?? null)
     : null;
   const listsLoaded = useTreeSummaries({ workspaceId, includeArchived: true }).isSuccess;
+  const memberCount = useOwnerMemberCount(deleting?.treeId ?? "", deleting !== null);
 
   useEffect(() => {
     if (!target || !listsLoaded || tree) return;
@@ -172,6 +174,7 @@ export function DeleteOfferHost() {
       {...treeDeleteDialogProps({
         tree,
         groupChildren: group.groupChildren(tree.id),
+        memberCount,
         onClose: closeDelete,
         onTrash: group.trashGroup,
         onRemove: group.removeGroup,

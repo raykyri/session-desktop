@@ -21,6 +21,11 @@ import { DeleteDialog as SharedDeleteDialog } from "../../ui/DeleteDialog.js";
 import { ConfirmDialog, ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { INPUT_FIELD } from "../../ui/surfaces.js";
 import { sharedTreeDeleteSteps } from "../home/TreeMenu.js";
+import {
+  MembersWarning,
+  membersDeleteSentence,
+  membersTrashSentence,
+} from "../sharing/ownerWarnings.js";
 
 import { branchInfo } from "./ThreadMenu.js";
 
@@ -147,6 +152,7 @@ export function DeleteDialog({
   treeTitle,
   groupChildCount = 0,
   shared = false,
+  memberCount = 0,
   onTrashRoot,
   onRemove,
   onClose,
@@ -154,6 +160,9 @@ export function DeleteDialog({
   /** The thread is shared with the reader (web only): deleting the root
    * moves it to the reader's Trash or leaves it, with Home's sentences. */
   shared?: boolean;
+  /** For the owner's root: the people the thread is shared with (web
+   * only), whom both steps mention. */
+  memberCount?: number;
   nodes: ResearchNode[];
   nodeId: string;
   rootNodeId: string;
@@ -195,16 +204,26 @@ export function DeleteDialog({
         trash={{
           title:
             groupChildCount > 0 ? `Delete “${name}” and its ${children}?` : `Delete “${name}”?`,
-          body: <p className="m-0">{researchTrashTreeSentence(count, groupChildCount)}</p>,
+          body: (
+            <>
+              <p className="m-0">{researchTrashTreeSentence(count, groupChildCount)}</p>
+              <MembersWarning sentence={membersTrashSentence(memberCount)} />
+            </>
+          ),
           onConfirm: onTrashRoot,
         }}
         remove={{
-          ...(groupChildCount > 0
+          ...(groupChildCount > 0 || memberCount > 0
             ? {
                 body: (
-                  <p className="m-0">
-                    “{name}” and its {children} will be deleted. This can’t be undone.
-                  </p>
+                  <>
+                    <p className="m-0">
+                      {groupChildCount > 0
+                        ? `“${name}” and its ${children} will be deleted. This can’t be undone.`
+                        : "This can’t be undone."}
+                    </p>
+                    <MembersWarning sentence={membersDeleteSentence(memberCount)} />
+                  </>
                 ),
               }
             : {}),

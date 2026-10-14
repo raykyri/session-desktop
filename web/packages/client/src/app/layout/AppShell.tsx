@@ -3,7 +3,7 @@ import type { AppShortcutCommand } from "@session/shared";
 import { Outlet, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
-import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
+import { useMarkNotificationRead, useSignedIn, useTreeSummaries } from "../../api/queries.js";
 import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
 import { useWorkspaceScope, workspaceSearch } from "../../features/sidebar/scope.js";
@@ -51,6 +51,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
   const signedIn = useSignedIn();
+  const markNotificationRead = useMarkNotificationRead().mutate;
   const { notifications, dismiss } = useUserNotifications();
   const { workspaceId } = useWorkspaceScope();
   const trees = useTreeSummaries({ workspaceId });
@@ -151,8 +152,10 @@ export function AppShell() {
         notifications={notifications}
         onDismiss={dismiss}
         // A server notification names the in-app path it is about
-        // (`notification.requested` `href`).
-        onOpen={(href) => {
+        // (`notification.requested` `href`); opening it marks its inbox
+        // entry, which has the same id, read.
+        onOpen={(href, id) => {
+          if (signedIn) markNotificationRead(id);
           if (href.startsWith("/") && !href.startsWith("//")) void navigate({ href });
         }}
       />

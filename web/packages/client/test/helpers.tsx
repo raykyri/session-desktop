@@ -58,6 +58,9 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
     "invites.received": [],
     "invites.list": [],
     "events.presence": [],
+    // An empty notification inbox.
+    "notifications.list": { items: [], nextCursor: null },
+    "notifications.unreadCount": { count: 0 },
     "events.setInterest": { applied: true },
     "events.subscribe": undefined,
   };

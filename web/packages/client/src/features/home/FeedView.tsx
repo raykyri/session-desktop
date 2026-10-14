@@ -99,6 +99,7 @@ import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { ReceivedInvites } from "../sharing/ReceivedInvites.js";
+import { useOwnerMemberCount } from "../sharing/ownerWarnings.js";
 import { archivedByOwner, OWNER_ARCHIVED_MESSAGE } from "../sharing/permissions.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
@@ -288,6 +289,10 @@ export function FeedView({
     setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
+  const deletingMembers = useOwnerMemberCount(
+    deletingTree?.id ?? "",
+    deletingTree !== null && ownTree(deletingTree),
+  );
   // Home's Trash tray starts collapsed; opening it is not saved, as on the
   // desktop (`ResearchActivityFeed`'s `trashTrayOpen`).
   const [trashTrayOpen, setTrashTrayOpen] = useState(false);
@@ -883,7 +888,7 @@ export function FeedView({
           <ReceivedInvites />
           {sharedTrees.length === 0 ? (
             <FeedEmpty>
-              Threads other people share with you appear here. Open an invite link to join one.
+              Threads other people share with you appear here. Open an invitation link to join one.
             </FeedEmpty>
           ) : (
             sharedTrees.map((tree) => (
@@ -1371,6 +1376,7 @@ export function FeedView({
             tree: deletingTree,
             shared: !ownTree(deletingTree),
             groupChildren: group.groupChildren(deletingTree.id),
+            memberCount: deletingMembers,
             onClose: () => setDeletingTree(null),
             onTrash: group.trashGroup,
             onRemove: group.removeGroup,

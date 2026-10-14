@@ -26,7 +26,7 @@ test.serial("the sign-in page displays server authentication error messages", as
 
   t.is(
     screen.getByRole("alert").textContent,
-    "An invite code is required to create an account. Please use the invitation link you received.",
+    "A sign-up code is required to create an account. Open the sign-up link you received.",
   );
 });
 

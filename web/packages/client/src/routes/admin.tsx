@@ -1,6 +1,6 @@
 // The administrator view (07 §3): who has an account, what they used today,
 // and the two levers an administrator has — per-account daily limits and
-// invite codes.
+// sign-up codes (`admin.createInvites`; a code lets one new account in).
 //
 // The page is rendered only for an administrator. That is a courtesy, not the
 // control: every procedure behind it is an `adminProcedure`, which answers
@@ -183,8 +183,11 @@ export function AdminPage() {
         </section>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-fg-heading m-0 text-base font-semibold">Invites</h2>
-          <Field label="Number of invites" hint="Codes are shown once; copy them before leaving.">
+          <h2 className="text-fg-heading m-0 text-base font-semibold">Sign-up codes</h2>
+          <Field
+            label="Number of codes"
+            hint="Each code creates one account. Codes are shown once; copy them before leaving."
+          >
             {({ id, describedBy }) => (
               <div className="flex items-center gap-2">
                 <Input
@@ -203,7 +206,7 @@ export function AdminPage() {
                     createInvites.mutate(count);
                   }}
                 >
-                  Create invites
+                  Create codes
                 </ControlButton>
               </div>
             )}

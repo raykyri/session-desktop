@@ -13,6 +13,7 @@
 import type {
   ArtifactStateAction,
   CreatedInvite,
+  InboxNotificationPage,
   MemberRole,
   ReceivedInvite,
   ResearchTreeVisibility,
@@ -69,18 +70,20 @@ export function logout() {
   return trpc().auth.logout.mutate();
 }
 
-/** Constructs the GitHub OAuth initiation URL. Invalid or untrusted return_to values are rejected on the server. */
-export function gitHubSignInUrl(returnTo?: string, invite?: string): string {
+/** Constructs the GitHub OAuth initiation URL. Invalid or untrusted return_to
+ * values are rejected on the server. `signupCode` is an account sign-up code
+ * (`invites` table); the server reads it as `invite`. */
+export function gitHubSignInUrl(returnTo?: string, signupCode?: string): string {
   const params = new URLSearchParams();
   if (returnTo) params.set("return_to", returnTo);
-  if (invite) params.set("invite", invite);
+  if (signupCode) params.set("invite", signupCode);
   const query = params.toString();
   return `/auth/github${query === "" ? "" : `?${query}`}`;
 }
 
 /** Initiates full browser navigation to the GitHub OAuth endpoint. */
-export function startGitHubSignIn(returnTo?: string, invite?: string): void {
-  window.location.assign(gitHubSignInUrl(returnTo, invite));
+export function startGitHubSignIn(returnTo?: string, signupCode?: string): void {
+  window.location.assign(gitHubSignInUrl(returnTo, signupCode));
 }
 
 export function getSettings() {
@@ -648,6 +651,23 @@ export function revokeThreadInvite(inviteId: string): Promise<ThreadInvite> {
 /** Notify me: notifications for new questions and notes in the thread. */
 export function setThreadFollowed(treeId: string, value: boolean): Promise<ResearchTree> {
   return trpc().subscriptions.set.mutate({ treeId, value });
+}
+
+/** One page of the notification inbox, newest first. */
+export function listNotifications(cursor: string | null = null): Promise<InboxNotificationPage> {
+  return trpc().notifications.list.query({ cursor });
+}
+
+export function getUnreadNotificationCount(): Promise<{ count: number }> {
+  return trpc().notifications.unreadCount.query();
+}
+
+export function markNotificationRead(id: string): Promise<{ changed: boolean }> {
+  return trpc().notifications.markRead.mutate({ id });
+}
+
+export function markAllNotificationsRead(): Promise<{ count: number }> {
+  return trpc().notifications.markAllRead.mutate();
 }
 
 /* -------------------------------------------------------------------------

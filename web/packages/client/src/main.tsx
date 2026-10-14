@@ -1,3 +1,7 @@
+// First: removes an invitation token from the address bar before the router
+// and the first request start.
+import "./app/captureInvite.js";
+
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

@@ -134,6 +134,7 @@ import {
   type StaleEditSubject,
 } from "../sharing/StaleEditDialog.js";
 import { stalledChainNote, ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
+import { useOwnerMemberCount } from "../sharing/ownerWarnings.js";
 import {
   mayCancelQueued,
   mayChangeHighlights,
@@ -399,6 +400,12 @@ function ThreadView({ treeId }: { treeId: string }) {
   const [menu, setMenu] = useState<ThreadMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
+  // The owner's root Delete says what happens to the people it is shared
+  // with.
+  const deletingMemberCount = useOwnerMemberCount(
+    treeId,
+    permissions.isOwner && deletingNodeId !== null && deletingNodeId === rootNodeId,
+  );
   const [rerunNodeId, setRerunNodeId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ nodeId: string; value: string } | null>(null);
   const [recapNodeId, setRecapNodeId] = useState<string | null>(null);
@@ -2646,6 +2653,7 @@ function ThreadView({ treeId }: { treeId: string }) {
               filing.group && filing.group.parent === null ? filing.group.children.length : 0
             }
             shared={!permissions.isOwner}
+            memberCount={deletingMemberCount}
             onTrashRoot={trashRoot}
             onRemove={removeNode}
             onClose={() => setDeletingNodeId(null)}
