@@ -447,16 +447,77 @@ html.wrap-code-blocks .research-prose-code-block pre code {
   background: rgba(244, 184, 40, 0.28); /* highlight-pseudo-literal */
 }
 
-/* Passages a targeted follow-up was asked about, clearly stronger than a plain
-   saved highlight so a passage that owns a margin card reads as distinct.
-   Mirrors --research-highlight-bg-hover. */
-::highlight(session-research-query-anchors) {
+/* Passages that branches were asked about: a blue tint. Mirrors
+   --research-branch-tint. */
+::highlight(session-research-branch-passages) {
+  color: inherit;
+  background: rgba(91, 164, 243, 0.14); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-branch-passages) {
+  background: rgba(51, 119, 205, 0.12); /* highlight-pseudo-literal */
+}
+
+/* The highlight or passage under the pointer, one step darker. Mirrors
+   --research-highlight-bg-hover. */
+::highlight(session-research-highlight-hover) {
   color: inherit;
   background: rgba(240, 178, 70, 0.32); /* highlight-pseudo-literal */
 }
 
-:root[data-appearance="light"] *::highlight(session-research-query-anchors) {
+:root[data-appearance="light"] *::highlight(session-research-highlight-hover) {
   background: rgba(244, 184, 40, 0.46); /* highlight-pseudo-literal */
+}
+
+::highlight(session-research-branch-hover) {
+  color: inherit;
+  background: rgba(91, 164, 243, 0.26); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-branch-hover) {
+  background: rgba(51, 119, 205, 0.22); /* highlight-pseudo-literal */
+}
+
+/* The passage of a branch open as the next pair, underlined in each color
+   theme's accent. */
+::highlight(session-research-open-branch) {
+  color: inherit;
+  text-decoration: underline 2px #6890f5; /* highlight-pseudo-literal */
+  text-underline-offset: 3px;
+}
+
+:root[data-color-theme="orange-blob"] *::highlight(session-research-open-branch) {
+  text-decoration: underline 2px #33adff; /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-open-branch) {
+  text-decoration: underline 2px #5e6ad2; /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"][data-color-theme="orange-blob"]
+  *::highlight(session-research-open-branch) {
+  text-decoration: underline 2px #0a6fb8; /* highlight-pseudo-literal */
+}
+
+/* The passage of the unsent branch: a dashed underline, no tint. */
+::highlight(session-research-pending-branch) {
+  color: inherit;
+  text-decoration: underline dashed 1.5px rgba(109, 167, 236, 0.7); /* highlight-pseudo-literal */
+  text-underline-offset: 3px;
+}
+
+:root[data-appearance="light"] *::highlight(session-research-pending-branch) {
+  text-decoration: underline dashed 1.5px rgba(11, 127, 209, 0.6); /* highlight-pseudo-literal */
+}
+
+/* A passage flashed after a jump to it. Mirrors --research-highlight-flash. */
+::highlight(session-research-flash) {
+  color: inherit;
+  background: rgba(240, 178, 70, 0.39); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-flash) {
+  background: rgba(240, 170, 40, 0.5); /* highlight-pseudo-literal */
 }
 
 /* Regions where annotations stack: repainted toward the text color so depth
