@@ -10,6 +10,14 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./wire": {
+      "types": "./dist/src/wire/index.d.ts",
+      "default": "./src/wire/index.ts"
+    },
+    "./schemas": {
+      "types": "./dist/src/schemas/index.d.ts",
+      "default": "./src/schemas/index.ts"
     }
   },
   "scripts": {

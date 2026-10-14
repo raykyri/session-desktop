@@ -76,9 +76,24 @@ export default tseslint.config(
   // The rule reads `.eslintrc.json` for its ignore patterns; that file exists
   // only because the rule cannot see flat-config ignores. The `.ts` entry in
   // `import-x/extensions` above is what makes it run at all.
+  //
+  // The package's subpath entry points (`wire`, `schemas`; see
+  // `packages/shared/package.json`) are also imported by the desktop app,
+  // which this config does not lint, so their exports are not reported.
   {
     files: ["packages/shared/src/**/*.ts", "packages/db/src/**/*.ts"],
-    rules: { "import-x/no-unused-modules": ["error", { unusedExports: true }] },
+    rules: {
+      "import-x/no-unused-modules": [
+        "error",
+        {
+          unusedExports: true,
+          ignoreExports: [
+            "packages/shared/src/wire/index.ts",
+            "packages/shared/src/schemas/index.ts",
+          ],
+        },
+      ],
+    },
   },
   {
     files: ["packages/client/**/*.{ts,tsx}"],

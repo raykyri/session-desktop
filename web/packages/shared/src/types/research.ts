@@ -1,3 +1,8 @@
+// The web's current research types: a flat `run | document` node. The shared
+// wire model in `../wire/research.ts` (the desktop's envelope with a typed
+// `post | exchange | document` body) replaces them in phase 2 of the
+// desktop-parity work; until then the server and client use these.
+//
 // Research wire types, ported from the desktop `src/types.ts` with the
 // modifications in `docs/02-domain-model-and-database.md` §2: the terminal-era
 // fields (`worktreeDir`, `agentId`, `paneId`, `runtime`, `threadId`,

@@ -1,7 +1,13 @@
-// The public surface of `@session/shared`. Every module in `src/` is
-// re-exported here: `db`, `server`, and `client` import from the package root
-// and never reach into a subpath, so this file is the whole contract between
-// the packages.
+// The root surface of `@session/shared`: `db`, `server`, and `client` import
+// the web's current types and logic from here. The package also exports
+// subpaths that the desktop imports too, through the `@session/shared/*`
+// alias in the repository root's tsconfig.json and vite.config.ts:
+//
+// - `@session/shared/wire`: the research wire model as plain types.
+// - `@session/shared/schemas`: zod schemas for the wire model.
+//
+// Phase 2 of the desktop-parity work replaces the flat types in
+// `types/research.ts` with the wire model.
 
 /** Product name used in page titles, prompts, and user-facing copy. */
 export const appName = "Session";

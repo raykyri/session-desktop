@@ -1,3 +1,7 @@
+// The web's current event envelope. The shared wire model's envelope and
+// research event union are in `../wire/events.ts`; phase 2 of the
+// desktop-parity work moves the web onto them.
+//
 // The server-sent event envelope (`03-api-and-events.md` §3). Taken from the
 // desktop's `events.rs` without `paneId` and `agentId` — the web has neither
 // panes nor agent records — and with `seq` carried inside run event payloads.

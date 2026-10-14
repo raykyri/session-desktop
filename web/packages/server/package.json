@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --packages=external --alias:@session/db=../db/src/index.ts --alias:@session/shared=../shared/src/index.ts --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
+    "build": "esbuild src/index.ts --bundle --packages=external --alias:@session/db=../db/src/index.ts --alias:@session/shared=../shared/src --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
     "start": "node dist/server.mjs",
     "test": "ava"
   },
