@@ -82,11 +82,11 @@ export function updateSettings(input: SettingsUpdate) {
 }
 
 export function getDraft(key: string) {
-  return trpc().drafts.get.query({ key });
+  return trpc().interfaceDrafts.get.query({ key });
 }
 
 export function setDraft(key: string, value: string) {
-  return trpc().drafts.set.mutate({ key, value });
+  return trpc().interfaceDrafts.set.mutate({ key, value });
 }
 
 export function getUsageSummary() {

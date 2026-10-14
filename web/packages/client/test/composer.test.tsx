@@ -240,7 +240,7 @@ test.serial("Home restores a draft from the server in a fresh scope", async (t) 
       ...homeResponses,
       "workspaces.list": [workspace({ id: workspaceId })],
       "settings.get": serverSettings({ defaultWorkspaceId: workspaceId }),
-      "drafts.get": { key: homeDraftKey(workspaceId), value: JSON.stringify(draft) },
+      "interfaceDrafts.get": { key: homeDraftKey(workspaceId), value: JSON.stringify(draft) },
     },
   });
   t.teardown(() => app.unmount());
@@ -265,7 +265,7 @@ test.serial("a delayed server draft does not replace typing in the composer", as
       ...homeResponses,
       "workspaces.list": [workspace({ id: workspaceId })],
       "settings.get": serverSettings({ defaultWorkspaceId: workspaceId }),
-      "drafts.get": () => response,
+      "interfaceDrafts.get": () => response,
     },
   });
   t.teardown(() => app.unmount());

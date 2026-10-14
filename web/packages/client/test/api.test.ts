@@ -123,7 +123,7 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
       "recaps.applyCandidate",
       "folders.set",
       "settings.update",
-      "drafts.set",
+      "interfaceDrafts.set",
       "events.setInterest",
     ],
   );

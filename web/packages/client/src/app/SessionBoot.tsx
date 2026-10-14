@@ -61,7 +61,7 @@ function useEventBridge(): void {
 /**
  * The drafts store is local-first and already debounces; this only gives it
  * somewhere to write. A draft is a string field per key, so the whole record
- * is serialized: the server stores an opaque value (`drafts.set`).
+ * is serialized: the server stores an opaque value (`interfaceDrafts.set`).
  */
 function useDraftSync(): void {
   useEffect(() => {

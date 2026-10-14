@@ -28,6 +28,7 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /the research response changed/, code: "CONFLICT" },
   { pattern: /changed while/, code: "CONFLICT" },
   { pattern: /is stale; refresh/, code: "CONFLICT" },
+  { pattern: /^Research draft order is stale/, code: "CONFLICT" },
   { pattern: /already has an inline follow-up/, code: "CONFLICT" },
   { pattern: /already exists$/, code: "CONFLICT" },
   { pattern: /already finished as/, code: "CONFLICT" },

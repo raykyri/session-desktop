@@ -1,7 +1,7 @@
-// `auth`, `settings`, `drafts`, `usage`, and `admin`
+// `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { auth, drafts as draftsRepo, preferences, usage, users, workspaces } from "@session/db";
+import { auth, preferences, usage, users, workspaces } from "@session/db";
 import type { User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
@@ -79,23 +79,6 @@ export const settingsRouter = router({
       const settings = readSettings(ctx, ctx.user.id);
       publish(ctx, "settings.updated", { settings });
       return settings;
-    }),
-});
-
-export const draftsRouter = router({
-  get: protectedProcedure.input(z.object({ key: z.string().min(1) })).query(({ ctx, input }) => ({
-    key: input.key,
-    value: repo(() => draftsRepo.get(ctx.db, ctx.user.id, input.key)),
-  })),
-  set: protectedProcedure
-    .input(z.object({ key: z.string().min(1), value: z.string() }))
-    .mutation(({ ctx, input }) => {
-      if (input.value === "") {
-        repo(() => draftsRepo.remove(ctx.db, ctx.user.id, input.key));
-        return { key: input.key, value: null };
-      }
-      repo(() => draftsRepo.set(ctx.db, ctx.user.id, input.key, input.value));
-      return { key: input.key, value: input.value };
     }),
 });
 

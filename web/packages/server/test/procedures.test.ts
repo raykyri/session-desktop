@@ -136,11 +136,11 @@ test("settings round-trip with the shared instruction clamp", async (t) => {
 test("drafts are per key and cleared by an empty value", async (t) => {
   const harness = createHarness(t);
   const caller = harness.caller(harness.addUser("drafter"));
-  t.is((await caller.drafts.get({ key: "home" })).value, null);
-  await caller.drafts.set({ key: "home", value: "half a question" });
-  t.is((await caller.drafts.get({ key: "home" })).value, "half a question");
-  await caller.drafts.set({ key: "home", value: "" });
-  t.is((await caller.drafts.get({ key: "home" })).value, null);
+  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, null);
+  await caller.interfaceDrafts.set({ key: "home", value: "half a question" });
+  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, "half a question");
+  await caller.interfaceDrafts.set({ key: "home", value: "" });
+  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, null);
 });
 
 test("usage and the admin surface are gated on is_admin", async (t) => {

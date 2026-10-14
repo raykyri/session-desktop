@@ -3,13 +3,8 @@
 // `client` to `server`.
 
 import { router } from "./base.js";
-import {
-  adminRouter,
-  authRouter,
-  draftsRouter,
-  settingsRouter,
-  usageRouter,
-} from "./routers/account.js";
+import { adminRouter, authRouter, settingsRouter, usageRouter } from "./routers/account.js";
+import { draftsRouter, interfaceDraftsRouter } from "./routers/drafts.js";
 import { artifactsRouter, eventsRouter } from "./routers/events.js";
 import { feedRouter } from "./routers/feed.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
@@ -21,6 +16,7 @@ export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   settings: settingsRouter,
+  interfaceDrafts: interfaceDraftsRouter,
   drafts: draftsRouter,
   usage: usageRouter,
   admin: adminRouter,
