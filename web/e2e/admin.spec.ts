@@ -5,32 +5,33 @@
 // through the test-login route, which is the same `users.setAdmin` the `db:admin` script
 // calls.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-import { signInAndOpenHome } from "./helpers.js";
+import { askBox, signInAndOpenHome } from "./helpers.js";
 
 const GATED_MODEL = "Claude Fable 5.1";
 
-test("an admin sees the gated model in the composer's model chip", async ({ page }) => {
+/** Opens the ask box's model menu: the selected Ask segment opens it. */
+async function openModelMenu(page: Page) {
+  await askBox(page).click();
+  await page.getByRole("radio", { name: /^Ask with / }).click();
+  return page.getByRole("menu", { name: "Model" });
+}
+
+test("an admin sees the gated model in the ask box's model menu", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-admin", isAdmin: true });
 
-  await page.getByTitle("Model (Tab)").click();
-  // The popup takes its accessible name from the trigger (the current model),
-  // so it is addressed by role alone.
-  const menu = page.getByRole("menu");
+  const menu = await openModelMenu(page);
   await expect(menu.getByRole("menuitem", { name: GATED_MODEL })).toBeVisible();
 
   await menu.getByRole("menuitem", { name: GATED_MODEL }).click();
-  await expect(page.getByTitle("Model (Tab)")).toContainText(GATED_MODEL);
+  await expect(page.getByRole("radio", { name: `Ask with ${GATED_MODEL}` })).toBeVisible();
 });
 
 test("hides admin-only models from non-admin users in the model menu", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-plain" });
 
-  await page.getByTitle("Model (Tab)").click();
-  // The popup takes its accessible name from the trigger (the current model),
-  // so it is addressed by role alone.
-  const menu = page.getByRole("menu");
+  const menu = await openModelMenu(page);
   // The menu is populated — this is not an empty-list false pass.
   // Exact: the registry also holds "Gemini 3.8 Flash (Google Search)".
   await expect(menu.getByRole("menuitem", { name: "Gemini 3.8 Flash", exact: true })).toBeVisible();

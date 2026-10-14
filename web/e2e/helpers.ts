@@ -35,12 +35,18 @@ export async function signIn(page: Page, options: SignInOptions): Promise<Signed
   return (await response.json()) as SignedInUser;
 }
 
-/** Signs in and opens Home with the feed rendered. */
+/** Signs in and opens the workspace's Home with its list rendered. */
 export async function signInAndOpenHome(page: Page, options: SignInOptions): Promise<SignedInUser> {
   const user = await signIn(page, options);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("feed", { name: "Recent activity" })).toBeVisible();
   return user;
+}
+
+/** The Home ask box's field. */
+export function askBox(page: Page) {
+  return page.getByRole("textbox", { name: "New question" });
 }
 
 /**
@@ -49,7 +55,7 @@ export async function signInAndOpenHome(page: Page, options: SignInOptions): Pro
  * the text of the question (`packages/server/src/runs/fixtureProvider.ts`).
  */
 export async function startResearch(page: Page, prompt: string): Promise<string> {
-  const composer = page.getByRole("textbox", { name: "What do you want to investigate?" });
+  const composer = askBox(page);
   await composer.click();
   await composer.fill(prompt);
   await page.getByRole("button", { name: "Start research" }).click();
