@@ -1,6 +1,6 @@
-// Content-addressed files on the volume (`src/uploads/storage.ts`). No route
-// writes them since uploaded documents were removed; the module is kept for
-// image attachments (phase 2.9), and these tests keep it exercised until then.
+// Content-addressed files on the volume (`src/uploads/storage.ts`), which
+// hold image attachments. The image sweep built on these is covered in
+// `images.test.ts`.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

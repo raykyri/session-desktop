@@ -25,6 +25,7 @@ import { RateLimiter } from "./middleware/rateLimit.js";
 import { dispatchAll } from "./research/followups.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
+import { sweepImages } from "./uploads/storage.js";
 
 /**
  * Writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to a file and points
@@ -148,7 +149,8 @@ export function sweepExpired(deps: ServerDeps, limiter: RateLimiter, logger: Log
   logger.debug(swept, "swept expired state");
 }
 
-/** One maintenance tick: the expiries above, plus the embed cache sweep. */
+/** One maintenance tick: the expiries above, the embed cache sweep, and the
+ * image attachment sweep. */
 export async function runMaintenance(
   deps: ServerDeps,
   limiter: RateLimiter,
@@ -168,6 +170,11 @@ export async function runMaintenance(
     }
   } catch (error) {
     logger.error({ error }, "the embed sweep failed");
+  }
+  try {
+    await sweepImages(deps, logger);
+  } catch (error) {
+    logger.error({ error }, "the image sweep failed");
   }
 }
 

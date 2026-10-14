@@ -8,12 +8,16 @@
 // the context budget — and both only shape what the model sees. The displayed
 // document is unaffected.
 
-import type { SessionDatabase } from "@session/db";
-import { messages as messagesRepo } from "@session/db";
-import type { ResearchNode, Turn } from "@session/shared";
-import { estimateTokenCount, nodeModelId } from "@session/shared";
-import type { AssistantContent, ModelMessage, TextPart, ToolContent } from "ai";
+import { readFile } from "node:fs/promises";
 
+import type { SessionDatabase } from "@session/db";
+import { images, messages as messagesRepo } from "@session/db";
+import type { ResearchNode, Turn } from "@session/shared";
+import { estimateTokenCount, findModel, nodeModelId } from "@session/shared";
+import { nodeAttachments } from "@session/shared/lib/researchNodeTypes";
+import type { AssistantContent, ImagePart, ModelMessage, TextPart, ToolContent } from "ai";
+
+import { RunInputError } from "./errors.js";
 import type { RunToolContext } from "./tools/context.js";
 
 /** `04-agent-runtime.md` §4. Below each model's context window to limit
@@ -319,6 +323,37 @@ export async function compactContext(
   };
 }
 
+/**
+ * The images the node's own message carries, as image parts of the user
+ * message, read from the volume. Only this attempt's question carries them:
+ * the stored conversation keeps each message's text (`loop.ts`), so a
+ * follow-up does not send its ancestors' images again.
+ *
+ * A model that cannot read images, or an image that is gone, fails the
+ * attempt rather than sending the question without them, as the desktop
+ * refuses such a launch (`ensure_adapter_reads_images`).
+ */
+export async function imageParts(db: SessionDatabase, node: ResearchNode): Promise<ImagePart[]> {
+  const ids = images.imageIdsOf(nodeAttachments(node));
+  if (ids.length === 0) {
+    return [];
+  }
+  const model = findModel(nodeModelId(node));
+  if (model?.supportsImages !== true) {
+    throw new RunInputError(`${model?.label ?? nodeModelId(node)} can't read images.`);
+  }
+  return Promise.all(
+    ids.map(async (id) => {
+      const row = images.findById(db, id);
+      const bytes = row ? await readFile(row.storagePath).catch(() => null) : null;
+      if (!row || !bytes) {
+        throw new RunInputError(images.IMAGE_UNAVAILABLE);
+      }
+      return { type: "image" as const, image: new Uint8Array(bytes), mediaType: row.mime };
+    }),
+  );
+}
+
 export interface BuildMessagesInput {
   ctx: RunToolContext;
   node: ResearchNode;
@@ -352,7 +387,10 @@ export async function buildMessages(input: BuildMessagesInput): Promise<BuiltMes
 
   const messages: ModelMessage[] = [
     ...compacted.messages,
-    { role: "user", content: [{ type: "text", text: input.userText }] },
+    {
+      role: "user",
+      content: [{ type: "text", text: input.userText }, ...(await imageParts(ctx.db, node))],
+    },
     ...(input.priorMessages ?? []),
   ];
   return {

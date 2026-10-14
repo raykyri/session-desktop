@@ -70,9 +70,22 @@ const COPY: Record<RunErrorClass, string> = {
   unknown: "The model provider returned an error.",
 };
 
+/** A refusal of the attempt's own input rather than a provider failure (an
+ * attached image the model cannot read, or one that is gone). The document
+ * shows its message as written. */
+export class RunInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RunInputError";
+  }
+}
+
 /** The class of one thrown provider error. */
 export function classifyRunError(error: unknown): ClassifiedError {
   const detail = errorText(error);
+  if (error instanceof RunInputError) {
+    return { errorClass: "unknown", message: error.message, detail };
+  }
   const classOf = (errorClass: RunErrorClass): ClassifiedError => ({
     errorClass,
     message: COPY[errorClass],

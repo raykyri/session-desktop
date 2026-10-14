@@ -31,6 +31,7 @@ import { clientStatic } from "./middleware/static.js";
 import type { AppContext } from "./trpc/base.js";
 import { createAppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
+import { imageRoutes } from "./uploads/route.js";
 
 /** Constant-time string comparison for the metrics bearer token. */
 function timingSafeEqualString(offered: string, expected: string): boolean {
@@ -126,6 +127,9 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // Public, like the cards whose images it serves: the Home feed renders
   // signed out, and an embed asset says nothing about who stored it.
   app.route("/", embedRoutes({ deps: { ...deps, logger } }));
+  // Image attachments: uploaded and read by their owner only, behind the
+  // session loader and, for the upload, the CSRF guard.
+  app.route("/", imageRoutes({ deps: { ...deps, logger }, limiter }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`

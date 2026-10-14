@@ -49,6 +49,7 @@ export * from "./research/events.js";
 export * from "./research/folders.js";
 export * from "./research/highlightAnchor.js";
 export * from "./research/history.js";
+export * from "./research/images.js";
 export * from "./research/navigation.js";
 export * from "./research/order.js";
 export * from "./research/preview.js";

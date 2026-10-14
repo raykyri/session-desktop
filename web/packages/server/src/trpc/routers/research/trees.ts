@@ -18,6 +18,11 @@ import {
   enqueueRun,
   queuePositionOf,
 } from "../../../research/admission.js";
+import {
+  assertModelReadsImages,
+  markImagesAttached,
+  resolveImageAttachments,
+} from "../../../research/images.js";
 import { protectedProcedure, publicProcedure } from "../../base.js";
 import { catalogUserId } from "../../catalog.js";
 import { publish } from "../../emit.js";
@@ -80,6 +85,8 @@ export const treeProcedures = {
         /** A reasoning effort the model accepts; absent or null, its default. */
         effort: z.string().nullish(),
         workspaceId: z.string(),
+        /** Ids from `POST /api/images`. */
+        images: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchTreeDetail> => {
@@ -87,14 +94,19 @@ export const treeProcedures = {
       assertEffortAccepted(input.model, input.effort);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
+      const images = resolveImageAttachments(ctx.db, ctx.user.id, input.images);
+      assertModelReadsImages(input.model, images);
       // The posts the question links to are resolved before the node exists,
       // so the snapshot is on the row the run and every later reader see
       // (`journal/attachments.ts`). Admission is checked first: a launch that
       // is going to be refused should not spend a fetch.
-      const attachments = await resolveMessageAttachments(
-        { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
-        input.prompt,
-      );
+      const attachments = [
+        ...(await resolveMessageAttachments(
+          { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+          input.prompt,
+        )),
+        ...images,
+      ];
       const detail = repo(() =>
         trees.admitRoot(ctx.db, ctx.user.id, {
           workspaceId: input.workspaceId,
@@ -108,6 +120,7 @@ export const treeProcedures = {
         }),
       );
       const node = required(detail.nodes[0], "the new thread has no root node");
+      markImagesAttached(ctx.db, images);
       enqueueRun(ctx, node.id, input.model);
       publish(ctx, "research.tree.created", { tree: detail.tree, node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));

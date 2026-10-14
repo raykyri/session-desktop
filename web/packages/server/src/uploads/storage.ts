@@ -1,10 +1,11 @@
 // Content-addressed files on the volume (`13-deployment-fly.md` §6).
 //
-// No server code imports this module since the uploaded-documents feature was
-// removed; phase 2.9 uses it to store image attachments.
+// Image attachments (`research_images`, `uploads/route.ts`) are stored here
+// since the uploaded-documents feature was removed.
 //
-// A file is stored at `${SESSION_DATA_DIR}/documents/<userId>/<sha256>` and
-// its metadata row lives in SQLite, which cannot remove the file. Deleting a
+// A file is stored at `${SESSION_DATA_DIR}/documents/<userId>/<sha256>` (an
+// image's thumbnail beside it as `<sha256>.thumb.jpg`) and its metadata row
+// lives in SQLite, which cannot remove the file. Deleting a
 // row without unlinking the file leaks the volume: a per-user quota summed
 // from rows lets an account delete and re-upload until the mount fills and
 // every write fails with SQLITE_FULL.
@@ -20,8 +21,12 @@
 import { readdir, rm, stat, unlink } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 
+import { images } from "@session/db";
+
 import type { ServerDeps } from "../deps.js";
 import type { Logger } from "../logger.js";
+
+import { thumbnailPath } from "./images.js";
 
 /** A path is unlinked only if it is genuinely inside the documents directory.
  * The column is written by this server and never by a client, but an unlink
@@ -144,4 +149,39 @@ export async function sweepOrphanedDocuments(
     logger.info({ ...result }, "swept orphaned document bytes");
   }
   return result;
+}
+
+export interface ImageSweep extends images.ImageSweepResult {
+  files: OrphanSweep;
+}
+
+/**
+ * The maintenance pass over image attachments: `images.sweep` deletes the
+ * rows nothing needs (pending past a day, or released and older than that),
+ * then every file under the documents directory that no remaining row names,
+ * thumbnails included, is unlinked. A file two rows share stays while either
+ * row does.
+ */
+export async function sweepImages(
+  deps: Pick<ServerDeps, "config" | "db">,
+  logger: Logger,
+  at: number = Date.now(),
+): Promise<ImageSweep> {
+  const rows = images.sweep(deps.db, at);
+  const files = await sweepOrphanedDocuments(
+    deps,
+    () => {
+      const keep = new Set<string>();
+      for (const path of images.storagePaths(deps.db)) {
+        keep.add(path);
+        keep.add(thumbnailPath(path));
+      }
+      return keep;
+    },
+    logger,
+  );
+  if (rows.deleted > 0 || rows.released > 0) {
+    logger.info({ ...rows }, "swept image attachments");
+  }
+  return { ...rows, files };
 }
