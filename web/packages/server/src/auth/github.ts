@@ -4,7 +4,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { auth, users } from "@session/db";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import type { AppEnv, ServerDeps } from "../deps.js";
@@ -184,7 +184,12 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
     return client;
   };
 
-  app.use("/auth/*", rateLimitByIp(limiter, "auth", RATE_LIMITS.auth));
+  const authLimit = rateLimitByIp(limiter, "auth", RATE_LIMITS.auth);
+  // The test-only sign-in (below) is outside the per-address budget: an e2e
+  // run signs in dozens of accounts a minute from one address.
+  const authBudget: MiddlewareHandler<AppEnv> = (c, next) =>
+    config.testAuthEnabled && c.req.path === "/auth/test-login" ? next() : authLimit(c, next);
+  app.use("/auth/*", authBudget);
 
   app.get("/auth/github", async (c) => {
     if (config.github.clientId === null || config.github.clientSecret === null) {

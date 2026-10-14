@@ -5,6 +5,7 @@ import test from "ava";
 
 import { safeReturnTo } from "../src/auth/github.js";
 import type { OAuthClient } from "../src/auth/github.js";
+import { RATE_LIMITS } from "../src/middleware/rateLimit.js";
 
 import { PUBLIC_ORIGIN, createHarness } from "./helpers.js";
 
@@ -228,6 +229,23 @@ test("test-login signs in without GitHub, and logout clears the session", async 
   const logout = await harness.request("/auth/logout", { method: "POST", cookie: token });
   t.is(logout.status, 204);
   t.is(auth.readSession(harness.db, token), null);
+});
+
+test("test-login is outside the per-address sign-in budget; GitHub sign-in is not", async (t) => {
+  const harness = createHarness(t);
+  for (let index = 0; index <= RATE_LIMITS.auth.limit; index += 1) {
+    const response = await harness.request("/auth/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login: `tester-${index}` }),
+    });
+    t.is(response.status, 200, `sign-in ${index + 1}`);
+  }
+  const statuses: number[] = [];
+  for (let index = 0; index <= RATE_LIMITS.auth.limit; index += 1) {
+    statuses.push((await harness.request("/auth/github")).status);
+  }
+  t.is(statuses.at(-1), 429);
 });
 
 test("test-login is absent unless SESSION_TEST_AUTH is set", async (t) => {

@@ -119,8 +119,10 @@ volume — but until an automated procedure is implemented, account deletion mus
 ## 8. Rate limits
 
 Request-level (from launch): per user 60 mutations/min; per user 120 image
-uploads/hour (`POST /api/images`); per IP on `/auth/*` 20/min. Buckets of
-their own, apart from the mutation budget: `artifacts.*` 600/min per user,
+uploads/hour (`POST /api/images`); per IP on `/auth/*` 20/min, except the
+test-only `/auth/test-login`, which an e2e run calls dozens of times a minute.
+Buckets of their own, apart from the mutation budget: `artifacts.*` 600/min
+per user,
 `events.setInterest` 120/min per user (each open tab renews every 30 s);
 and on top of it, titles and recaps asked for (`research.generateTitle`,
 `recaps.generateCandidate`) 30 per 10 minutes per user, each a billed
