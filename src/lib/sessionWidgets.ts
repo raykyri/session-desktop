@@ -7,9 +7,9 @@
 import type { ResearchWidgetUrls } from "./api";
 import { fromMarkdown } from "mdast-util-from-markdown";
 
-export { MAX_SESSION_WIDGET_BYTES, SESSION_WIDGET_STATE_ATTRIBUTE, isSessionWidgetInfo, isSessionWidgetClassName, sessionWidgetByteLength, sessionWidgetHasScripts, fencedBlockIsClosed, remarkSessionWidgetFences, sessionWidgetMetadata } from "../../web/packages/shared/src/markdown/sessionWidgets";
-import { isSessionWidgetInfo } from "../../web/packages/shared/src/markdown/sessionWidgets";
-import type { WidgetMarkdownNode } from "../../web/packages/shared/src/markdown/sessionWidgets";
+export { MAX_SESSION_WIDGET_BYTES, SESSION_WIDGET_STATE_ATTRIBUTE, isSessionWidgetInfo, isSessionWidgetClassName, sessionWidgetByteLength, sessionWidgetHasScripts, fencedBlockIsClosed, remarkSessionWidgetFences, sessionWidgetMetadata } from "@session/shared/markdown/sessionWidgets";
+import { isSessionWidgetInfo } from "@session/shared/markdown/sessionWidgets";
+import type { WidgetMarkdownNode } from "@session/shared/markdown/sessionWidgets";
 
 /** Remove only parsed widget blocks, including fences immediately after list
  * markers. Using CommonMark also preserves indented code and samples inside

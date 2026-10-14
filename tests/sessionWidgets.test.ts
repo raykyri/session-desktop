@@ -507,7 +507,7 @@ test("fence metadata remains after CommonMark escape processing", async () => {
 });
 
 test("desktop executes the shared web fence contract", async () => {
-  const { sessionWidgetFixtures } = await import('../web/packages/shared/test/sessionWidgetFixtures');
+  const { sessionWidgetFixtures } = await import('@session/shared-test/sessionWidgetFixtures');
   const { fromMarkdown } = await import('mdast-util-from-markdown');
   const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
   type Node = Parameters<ReturnType<typeof remarkSessionWidgetFences>>[0];

@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@session/shared/*": ["./web/packages/shared/src/*"],
+      "@session/shared-test/*": ["./web/packages/shared/test/*"]
+    }
+  },
   "include": [
     "src",
     "tests"
