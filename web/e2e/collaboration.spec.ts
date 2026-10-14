@@ -98,7 +98,9 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
     await expect(owner.page.getByText(prompt).first()).toBeVisible();
 
     const dialog = await openShareDialog(owner.page);
-    await expect(dialog.locator('[data-share-member="e2e-ui-owner"]')).toContainText("Owner");
+    await expect(dialog.locator(`[data-share-member="${owner.user.login}"]`)).toContainText(
+      "Owner",
+    );
     const commenterLink = await copyInviteLink(dialog);
     expect(commenterLink).toMatch(/\/invite\/[^/]+$/);
     await dialog.getByRole("combobox", { name: "Role for the invitation" }).click();
@@ -130,7 +132,7 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
     // credited to them, and opens its answer.
     const row = owner.page.locator("[data-research-msg-row]", { hasText: question });
     await expect(row).toBeVisible();
-    await expect(row.locator("[data-author-chip]")).toContainText("e2e-ui-commenter");
+    await expect(row.locator("[data-author-chip]")).toContainText(commenter.user.login);
     await row.locator("[data-research-row]").click();
     await expect(owner.page.locator("[data-research-response-root]").last()).not.toBeEmpty({
       timeout: 60_000,
@@ -145,7 +147,9 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
       viewer.page.getByRole("textbox", { name: "Follow-up in this conversation" }),
     ).toHaveCount(0);
     const people = await openShareDialog(viewer.page);
-    await expect(people.locator('[data-share-member="e2e-ui-viewer"]')).toContainText("Viewer");
+    await expect(people.locator(`[data-share-member="${viewer.user.login}"]`)).toContainText(
+      "Viewer",
+    );
     await expect(people.getByRole("radio")).toHaveCount(0);
   } finally {
     await Promise.all([owner.context.close(), commenter.context.close(), viewer.context.close()]);
@@ -171,7 +175,7 @@ test("a removed member cannot rejoin through an earlier link; a new link lets th
     await member.page.waitForURL(new RegExp(`/r/${treeId}`));
 
     // The owner removes them while the link is still pending.
-    const row = dialog.locator('[data-share-member="e2e-ui-removed"]');
+    const row = dialog.locator(`[data-share-member="${member.user.login}"]`);
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: /^Remove / }).click();
     await expect(row).toHaveCount(0);
@@ -308,7 +312,7 @@ test("invite and accept; the commenter asks and pays; the viewer cannot ask", as
     const byLogin = await mutation<{ invite: { id: string } }>(owner.request, "invites.create", {
       treeId,
       role: "viewer",
-      githubLogin: "e2e-share-viewer",
+      githubLogin: viewer.user.login,
     });
     await mutation(viewer.request, "invites.accept", { inviteId: byLogin.invite.id });
 
@@ -336,9 +340,9 @@ test("invite and accept; the commenter asks and pays; the viewer cannot ask", as
       { treeId },
     );
     expect(members.map((member) => [member.login, member.role])).toEqual([
-      ["e2e-share-owner", "owner"],
-      ["e2e-share-commenter", "commenter"],
-      ["e2e-share-viewer", "viewer"],
+      [owner.user.login, "owner"],
+      [commenter.user.login, "commenter"],
+      [viewer.user.login, "viewer"],
     ]);
   } finally {
     await Promise.all([owner.context.close(), commenter.context.close(), viewer.context.close()]);

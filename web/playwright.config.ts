@@ -9,9 +9,23 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-import { APP_ORIGIN, ARTIFACT_ORIGIN, E2E_DATA_DIR, E2E_PORT } from "./e2e/constants.js";
+import {
+  APP_ORIGIN,
+  ARTIFACT_ORIGIN,
+  E2E_DATA_DIR,
+  E2E_PORT,
+  E2E_REUSE_SERVER,
+  E2E_RUN_ID_VARIABLE,
+} from "./e2e/constants.js";
 
 const CI = Boolean(process.env["CI"]);
+
+// One id per run, set in the runner before the workers start (they inherit
+// it, and keep it when they load this file again). Logins carry it, with the
+// attempt's retry number (`e2e/helpers.ts:e2eLogin`), so a retry or a second
+// run against a reused server signs in as fresh accounts instead of finding
+// the folders and threads an earlier attempt made.
+process.env[E2E_RUN_ID_VARIABLE] ??= Date.now().toString(36);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -58,7 +72,10 @@ export default defineConfig({
       "npx tsx packages/server/src/index.ts",
     ].join(" && "),
     url: `${APP_ORIGIN}/healthz`,
-    reuseExistingServer: !CI,
+    // A server already on the port is used only when asked for
+    // (`SESSION_E2E_REUSE_SERVER=1`); otherwise Playwright refuses to start
+    // rather than run against another suite's server and data.
+    reuseExistingServer: E2E_REUSE_SERVER,
     timeout: 180_000,
     // Request logging is disabled in e2e test mode to avoid obscuring test runner output.
     stdout: "ignore",

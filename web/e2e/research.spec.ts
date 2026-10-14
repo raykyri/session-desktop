@@ -184,9 +184,17 @@ test("a highlight is saved, and Branch to right asks about a passage on another 
   // The highlight is durable: the Highlights feed lists it.
   await page.goto("/highlights");
   await expect(page.getByRole("heading", { name: "Highlights", level: 1 })).toBeVisible();
-  await expect(page.locator('[role="feed"][aria-label="Highlights"] [role="button"]')).toHaveCount(
-    1,
-  );
+  const feed = page.locator('[role="feed"][aria-label="Highlights"]');
+  await expect(feed.locator("[data-highlight-open]")).toHaveCount(1);
+  // Grouped under the thread's title, with Remove and Refresh as on the desktop.
+  await expect(feed.getByRole("region")).toHaveCount(1);
+  await page.getByRole("button", { name: "Refresh Highlights" }).click();
+  await expect(feed.locator("[data-highlight-open]")).toHaveCount(1);
+  await feed.locator("article").hover();
+  await feed.getByRole("button", { name: "Remove highlight" }).click();
+  await expect(
+    page.getByText("No highlights. Select text in an answer and choose Highlight."),
+  ).toBeVisible();
   await page.goBack();
   await waitForAnswer(page);
 
@@ -229,26 +237,49 @@ test("a follow-up asked while the answer streams is queued on the server; it can
 }) => {
   await signIn(page, { login: "e2e-queue" });
   await openThread(page, "fixture:paced-answer consistent hashing on a ring");
-  await expect(responseRoot(page)).toContainText("Consistent hashing", { timeout: 30_000 });
 
-  // While the answer runs, the composer queues rather than refusing.
+  // While the answer runs, the composer queues rather than refusing. Only the
+  // first Queue needs the root still running (a paced answer of about ten
+  // seconds); the second queues behind the first whatever the root does, and
+  // the first is itself a paced answer, so the second cannot be sent before
+  // Cancel reaches it.
   const queued = page.locator("[data-research-queued]");
   await expect(rootComposer(page)).toHaveAttribute("placeholder", "Queue a follow-up");
-  await rootComposer(page).fill("A question to cancel");
-  await page.getByRole("button", { name: "Queue", exact: true }).click();
-  await expect(queued).toContainText("A question to cancel");
-  await page.getByRole("button", { name: "Cancel this queued message" }).click();
-  await expect(queued).toHaveCount(0);
-
-  await rootComposer(page).fill("And how are virtual nodes placed?");
+  await rootComposer(page).fill("fixture:paced-answer And how are virtual nodes placed?");
   await page.getByRole("button", { name: "Queue", exact: true }).click();
   await expect(queued).toContainText("And how are virtual nodes placed?");
+  await rootComposer(page).fill("A question to cancel");
+  await page.getByRole("button", { name: "Queue", exact: true }).click();
+  const cancelled = queued.filter({ hasText: "A question to cancel" });
+  await expect(cancelled).toHaveCount(1);
+  await cancelled.getByRole("button", { name: "Cancel this queued message" }).click();
+  await expect(cancelled).toHaveCount(0);
 
   // The answer finishes; the server sends the queued question as the next
-  // message of the thread.
+  // message of the thread, and the cancelled one never.
   await expect(queued).toHaveCount(0, { timeout: 60_000 });
   await expect(messageRows(page)).toHaveCount(2, { timeout: 60_000 });
   await expect(messageRow(page, "And how are virtual nodes placed?")).toBeVisible();
+});
+
+test("Edit question on a queued follow-up behind a stopped answer moves it to the ask box", async ({
+  page,
+}) => {
+  await signIn(page, { login: "e2e-queue-edit" });
+  await openThread(page, "fixture:paced-answer what is a merkle tree");
+  const queued = page.locator("[data-research-queued]");
+  await expect(rootComposer(page)).toHaveAttribute("placeholder", "Queue a follow-up");
+  await rootComposer(page).fill("How are proofs checked?");
+  await page.getByRole("button", { name: "Queue", exact: true }).click();
+  await expect(queued).toContainText("How are proofs checked?");
+
+  // Stopping the answer stalls the queue: the item says so and offers Edit.
+  await page.getByRole("button", { name: "Stop", exact: true }).first().click();
+  await expect(queued).toContainText("The last answer stopped; retry it, or edit this question.");
+  await expect(queued).toContainText("Not sent");
+  await queued.getByRole("button", { name: "Edit question" }).click();
+  await expect(queued).toHaveCount(0);
+  await expect(rootComposer(page)).toHaveValue("How are proofs checked?");
 });
 
 test("a note takes follow-up notes, and a double-click edits it; a stale edit is refused", async ({

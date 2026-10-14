@@ -262,7 +262,7 @@ test("persists theme and appearance preferences across page reloads", async ({ p
   await page.getByRole("option", { name: "Light" }).click();
   await expect(html).toHaveAttribute("data-appearance", "light");
 
-  await page.getByRole("combobox", { name: "Theme" }).click();
+  await page.getByRole("combobox", { name: "Color theme" }).click();
   await page.getByRole("option", { name: "Warm" }).click();
   await expect(html).toHaveAttribute("data-color-theme", "orange-blob");
 
@@ -272,4 +272,31 @@ test("persists theme and appearance preferences across page reloads", async ({ p
   await page.reload();
   await expect(html).toHaveAttribute("data-appearance", "light");
   await expect(html).toHaveAttribute("data-color-theme", "orange-blob");
+});
+
+test("the desktop's Reduce motion and Require ⌘↵ settings take effect and persist", async ({
+  page,
+}) => {
+  await signInAndOpenHome(page, { login: "e2e-settings-input" });
+  const html = page.locator("html");
+  await expect(html).not.toHaveAttribute("data-reduce-motion", "");
+
+  await page.goto("/settings");
+  await page.getByRole("checkbox", { name: "Reduce motion" }).click();
+  await expect(html).toHaveAttribute("data-reduce-motion", "");
+  await page.getByRole("checkbox", { name: /^Require .+ to send/ }).click();
+  await expect(page.getByRole("checkbox", { name: /^Require .+ to send/ })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /^Widgets in answers/ })).toBeChecked();
+  await expect(page.getByText("Show tool calls")).toHaveCount(0);
+
+  await page.waitForTimeout(1_000);
+  await page.reload();
+  await expect(html).toHaveAttribute("data-reduce-motion", "");
+
+  // Without Require ⌘↵, a bare Enter sends from the Home ask box.
+  await page.goto("/");
+  await askBox(page).click();
+  await askBox(page).fill("What is a skip list?");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(/\/r\/[^/?]+/, { timeout: 30_000 });
 });

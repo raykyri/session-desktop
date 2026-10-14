@@ -5,9 +5,9 @@
 // session cookie the OAuth callback does, so everything downstream — the CSRF
 // header, the SSE subscription, the run queue — is the real thing.
 
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-import { APP_ORIGIN } from "./constants.js";
+import { APP_ORIGIN, E2E_RUN_ID_VARIABLE } from "./constants.js";
 
 /** Required CSRF header for mutation requests (`06-auth-and-users.md` §5). */
 const MUTATION_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
@@ -24,12 +24,31 @@ export interface SignedInUser {
   isAdmin: boolean;
 }
 
+/**
+ * The account a spec's login names in this run: the login with the run's id
+ * and, on a retry, the attempt number, so neither a retry nor a second run
+ * against the same server finds the folders, threads and counts an earlier
+ * attempt left (`playwright.config.ts` sets the run id). A spec that needs
+ * the login itself (an invitation, a member list) reads it from
+ * `signIn`'s result.
+ */
+export function e2eLogin(base: string): string {
+  const run = process.env[E2E_RUN_ID_VARIABLE] ?? "local";
+  let retry = 0;
+  try {
+    retry = test.info().retry;
+  } catch {
+    // Outside a test (a setup script): the run id alone.
+  }
+  return `${base}-${run}${retry > 0 ? `r${retry}` : ""}`;
+}
+
 /** Signs in on the page's own context, so the cookie is the one the browser
- * will send. */
+ * will send. The account is the run's own (`e2eLogin`). */
 export async function signIn(page: Page, options: SignInOptions): Promise<SignedInUser> {
   const response = await page.request.post(`${APP_ORIGIN}/auth/test-login`, {
     headers: MUTATION_HEADERS,
-    data: { login: options.login, isAdmin: options.isAdmin === true },
+    data: { login: e2eLogin(options.login), isAdmin: options.isAdmin === true },
   });
   expect(response.ok(), `test-login failed: ${response.status()}`).toBe(true);
   return (await response.json()) as SignedInUser;
