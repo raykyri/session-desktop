@@ -1,88 +1,159 @@
 # Home feed, journal, report import
 
-Ports `src/components/research/ResearchActivityFeed.tsx` (1,483 lines),
-`ResearchHighlightsFeed.tsx`, `ResearchReportImport.tsx`,
-`TweetEmbed.tsx`, `ResearchQueryComposer.tsx`, `AgentSetupGuide.tsx`, and
-the Home-related parts of `App.tsx`, onto the server API in
-`03-api-and-events.md`. Behavior reference: `docs/home.md`.
+Ports `src/components/research/ResearchActivityFeed.tsx`,
+`ResearchFeedCard.tsx`, `ResearchFeedTray.tsx`, `ResearchTrashList.tsx`,
+`ResearchDraftView.tsx`, `ResearchFolderDialogs.tsx`,
+`ResearchDeleteDialog.tsx`, `ResearchQueryComposer.tsx`,
+`AskNoteSwitch.tsx`, `ResearchQuestionModelPicker.tsx`, `ResearchImages.tsx`,
+`ResearchSidebarNav.tsx`, `ResearchHighlightsFeed.tsx`,
+`ResearchReportImport.tsx` and `TweetEmbed.tsx` onto the server API in
+`03-api-and-events.md`. Behavior reference: `docs/home.md`. The code is in
+`features/home`, `features/composer`, `features/drafts` and
+`features/sidebar`; the routes are in `routes/home.tsx` and
+`routes/places.tsx`.
 
-## 1. Home (`/`)
+## 1. Home and the places
 
-Layout: `.research-reading-surface` column capped at
-`--research-feed-max-width` (540 px) plus padding, vertical scroll only.
+A signed-in visit to `/` in workspace mode renders `FeedView` with the
+`home` view (`routes/home.tsx`); the header's "Feed: …" menu switches to the
+public feeds (§2). The column is capped at `--research-feed-max-width` and
+scrolls vertically; the scroll offset is kept per workspace under
+`home:<workspaceId>` in the `navigation` store.
 
-Sections top to bottom:
-1. Header title and signed-in feed switcher: `All Users`, `My Workspaces`, or
-   the current workspace name. The mode is mirrored between `?feed=` and the
-   navigation store; guests always see `All Users`.
-2. `ResearchQueryComposer` (`07-client-architecture.md` §6) with model chip.
-   (Document attachments were removed in phase 2.0.) Submit →
-   `research.createTree` → navigate to `/r/$treeId`; the returned detail is written
-   to the `tree` cache and the summary prepended to `trees` (position 0).
-3. `ReportImport` drop target and composer icon (§5). The desktop's
-   `AgentSetupGuide` (`App.tsx:11877`) is not ported: models are configured
-   by the deployment; a model without a provider is hidden from the pickers,
-   unless no model has one, in which case all are listed, disabled.
-5. Activity feed (§2).
-6. The delete-undo bar for journal removals was removed with journal entries
-   in phase 2.0.
+Home, top to bottom:
 
-## 2. Activity feed
+1. The composer (§6), above the list. Report import (§5) wraps the column.
+2. **Unfiled**: the workspace's threads that are not in a folder, the
+   Archive or the Trash, in the stored order. The list is virtualized
+   (TanStack Virtual) and is the drop target `system:unfiled`.
+3. One tray per place, each collapsible with its state stored through
+   `folders.set` (`collapsed`): **Drafts**, one tray per folder in folder
+   order, **Archive**, then **Trash**. The Trash tray starts collapsed and its
+   open state is local to the view. An empty tray shows the desktop's empty
+   text ("No drafts. Use Save draft in the composer to keep a question for
+   later.", "Empty folder. Drag or file questions here.", …).
+4. A "+ New folder" link below the Trash tray.
 
-Data: `useInfiniteQuery(["activity", { scope, workspaceId }])`
-over `feed.recentActivity`, page size 50, `getNextPageParam = nextCursor`.
-`all` reads every public post, `mine` reads the signed-in account across all
-workspaces, and `workspace` reads one workspace. Items are
-`RecentActivityItem` (`research-query`; the `journal` kind was removed in
-phase 2.0).
+Places (all behind `requireSignedIn`; `routes/places.tsx`):
 
-Live updates: `feed.item.upserted` and `feed.item.removed` patch or invalidate
-only cache keys whose author/workspace scope matches. Existing node
-events still patch in-place status, title, recap, and hydration
-fields. New items
-arriving while the user is scrolled down increment a counter shown on the
-"new activity" button, which scrolls to top and clears it (desktop behavior).
-"Load older" fetches the next page; a failed
-page shows Retry.
+| Route | View |
+| --- | --- |
+| `/f/$folderId` | One folder's cards; Rename and Delete buttons in the header; the composer below the list files new threads into the folder. |
+| `/drafts` | The drafts; composer below the list. |
+| `/drafts/$draftId` | `DraftView` (§3). A draft that no longer exists shows "This draft was sent or deleted." |
+| `/archive` | Archived threads. |
+| `/trash` | `TrashList` (§4). |
+| `/highlights` | §4a. |
 
-Virtualization: TanStack Virtual with dynamic measurement (`measureElement`);
-replaces the hand-rolled canvas rows in `ResearchActivityFeed.tsx`. Scroll
-anchor (top item id + offset) saved to the `navigation` store under
-`all-users`, `my-workspaces`, or `ws:<id>`, debounced 200 ms, flushed on
-`pagehide` (`useActivityFeedState.ts`), restored on return.
+Each place view has a Back to Home button and the place name as its `h1`.
 
-Cards:
-- `ResearchQueryCard`: prompt (tagged-instruction stripped, wikilinks
-  stripped), model icon and label, document count, status, relative time,
-  recap text
-  (`.research-summary-text`), `queryTarget` quote for anchored follow-ups,
-  the question's embedded posts (`TweetAttachments`, shared with the open
-  thread; a trailing permalink that embedded is dropped from the displayed
-  text by `visibleResearchPrompt`), up to one level of `children` as compact
-  rows — indented under the question, each marked with the desktop's elbow
-  (`journal.css` `.recent-query-child::before`, re-expressed as `before:`
-  utilities) and reading at the body size, its `@` passage quote subdued and
-  its question a link into the child node. (The Follow and Bookmark toggles
-  were removed in phase 2.0.) While the run is in flight the card shows
-  the "Generating answer" line and no status word: the desktop drops its whole
-  footer for a running question (`ResearchActivityFeed.tsx:466`), so repeating
-  "Queued" or "Running" beside the model would only restate the spinner. Right-click opens the same tree menu as
-  the sidebar (`ResearchTreeMenuItems`, including Generate summary) with
-  rename and delete dialogs rendered inline in the feed
-  (`ResearchActivityFeed.tsx:1408-1441`). Click → `/r/$treeId?node=<nodeId>`.
-- Journal cards (`JournalEntryCard`, its menu, the undo bar) and saving a
-  bare URL from the composer were removed with journal entries in phase 2.0.
-  A bare URL now starts a research run like any other prompt until link posts
-  arrive in phase 2.3. `TweetEmbed` stays: it renders the X posts a question
-  links to.
+Data: the structure (order, places, groups) is `research.listTrees` with
+`includeArchived: true` plus `folders.get` (`["folders", workspaceId]`). A
+card's content is its thread's root entry, read per rendered card through
+`useFeedRoot(treeId)`: `loadFeedRoot` batches the reads of one tick (up to
+100 ids) into `feed.recentQueriesForTrees` and caches each result under
+`["feedRoot", treeId]`. Events keep that key current (`07` §4).
 
-## 3. Bookmarks (removed)
+### Cards (`FeedCard`, `CardBody`)
 
-The Bookmarks feed, the stored Follow flag and sidebar stars were removed in
-phase 2.0 of the desktop parity plan. Follow returns later as a notification
-subscription.
+- The glyph is `ui/RowGlyph.tsx` (`researchRowGlyph`): question, note, link
+  or document, with the run state.
+- Title: `researchCardTitle`. A note or an untitled question shows its text
+  as a muted preview clamped to four lines, with blank lines collapsed; a
+  note whose first line is a Markdown heading shows that heading in the title
+  style above a three-line preview. A link post shows the X post label
+  "[Tweet: @handle]" ("[Tweet]" without a handle) or a link card.
+- The rail (on hover or focus) holds the drag grip and the … button
+  ("Thread actions"). There is no Follow or Bookmark control.
+- A card with children shows "N items" with a collapse toggle and the
+  `researchGroupSummary` line; children render one level deep in an indented
+  group, whose foot holds the "Move out of group" drop strip while a child is
+  dragged.
+- Click, Enter or → opens the thread (`/r/$treeId`). A draft card opens
+  `/drafts/$draftId`.
 
-## 4. Highlights (`/highlights`)
+### Card menu (`TreeMenu.tsx`)
+
+Opened by the … button, a right-click (at the pointer) or Shift+F10:
+Make child of… (the `researchNestCandidates`), Move out of group,
+Collapse/Expand group, "Move to" (Unfiled, each folder, Archive, Trash),
+Generate recap, Rename…, Unarchive research, Delete…. Archiving a parent
+confirms "Archive “T” and its N child?"; nesting a card that holds children
+confirms flattening them. Moves toast "Moved to X." or "Moved under “P”." with
+Undo (`lib/toast.ts`, 8 s).
+
+### Nesting and reordering by drag (`useCardDrag.ts`)
+
+Port of the desktop's `useResearchCardDrag`, reading cards, groups and drop
+targets by `data-research-*` attributes. Over a card, the middle band nests
+under it and the top and bottom edges reorder before or after it; groups are
+one level deep, so a card that holds children cannot nest under another card
+(`researchCardDrop`). A tray, a sidebar place or the "Move out of group"
+strip files the card there. The marks (`is-insert-before`/`-after`,
+`is-drop-nest`, `is-drop-invalid`, `is-drop-target`) and the drag ghost are
+classes in `styles/feed.css`. Escape cancels.
+
+### Keyboard
+
+↑/↓ move between cards (roving tabindex, `applyFeedRoving`); Enter and →
+open the focused card (Enter does not move into its children); ⌥↑/⌥↓
+reorder within the place and announce "Moved to position i of n."; ⌥→ nests
+under the card above; ⌥← moves a child out of its group.
+
+### Delete, Archive, Trash
+
+Delete is two-step (`ui/DeleteDialog.tsx`): "Move to Trash" is the primary
+action and a "Delete now" link opens a second confirmation ("Delete
+permanently?", "This can’t be undone."). The server cascades archive, trash,
+restore and delete from a parent to its group's children, so the client calls
+each procedure once, for the parent. Moving to the Trash toasts with Undo.
+
+## 2. Public feeds
+
+The "Feed: …" menu offers Home, My Workspaces and All Users; guests always
+see All Users. The public feeds keep `ActivityFeed` over
+`useInfiniteQuery(["activity", { scope, workspaceId }])` and
+`feed.recentActivity` (page size 50, "Load older", Retry on a failed page),
+rendering `PublicFeedCard` (glyph, title, preview; no menu). Live updates:
+`feed.item.upserted` and `feed.item.removed` patch only the keys whose scope
+matches; items that arrive while the list is scrolled down raise the "new
+activity" counter. The scroll anchor is saved under `all-users` or
+`my-workspaces`.
+
+## 3. Drafts
+
+The composer's More actions → "Save draft" saves a draft (`drafts.save`).
+Drafts are listed in the Drafts tray and at `/drafts`, reordered by drag
+(`drafts.reorder`) and deleted from their menu (Open, Delete). `DraftView`
+(`/drafts/$draftId`) shows a "Draft question" field that saves 500 ms after
+the last edit (`lib/researchDraftAutosave.ts`, ported from the desktop), saves
+at once on ⌘S ("Draft saved.") and flushes on close. Send asks the question
+with the Home composer's model and effort (`research.createTree`), deletes the
+draft and opens the thread. `drafts.changed` invalidates `["drafts", ws]`.
+
+## 4. Trash (`TrashList`)
+
+`research.listTrash` for the workspace, with trashed folders and their
+threads grouped (`researchTrashEntries`). Each entry has Restore and "Delete
+now" (with the permanent-delete confirmation); the header has "Empty Trash"
+("Empty the Trash?", "N items will be deleted.", `research.emptyTrash`).
+`research.trash.changed` invalidates `["trash", ws]`. A restored child whose
+parent is still in the Trash returns to its place as a top-level card.
+
+### Folders
+
+`FolderDialogsHost` (mounted in `AppShell`) owns the New folder and Rename
+dialogs and the folder delete confirmation for the sidebar, the trays and the
+folder view. The name field starts empty, as on the desktop (a prefilled
+default name collides with the uniqueness check); `researchFolderNameError`
+validates locally and the message of a refused `folders.set` is shown in the
+dialog. Deleting a folder moves it to the Trash ("Moved the folder to the
+Trash." with Undo); deleting it permanently files its threads in Unfiled
+("Deleted folder. N questions moved to Unfiled."). Folder state writes are
+optimistic and serialized per workspace (`commitFolderState` in
+`useFiling.ts`).
+
+## 4a. Highlights (`/highlights`)
 
 `highlights.listFeed` → items grouped under day headers (local time), newest
 first, each rendered as the highlighted passage inside its prefix/suffix
@@ -94,50 +165,71 @@ list; `research.tree.archived` removes that tree's items.
 
 ## 5. Report import
 
-`ResearchReportImport.tsx` minus the Tauri drag-drop branch (`:66-80`) and
-`readResearchReport`. An upload icon in the composer's control row opens `<input type="file" accept=".md">`; HTML5 drop on
-the Home column; one file at a time; `.md` only; non-empty; modal dialog
-asking for the prompt that produced the report; token estimate via
-`estimateTokenCount`. Submit → `research.importReport({ markdown, prompt,
-workspaceId })` (the desktop chose an adapter, `App.tsx:7244-7257`; the web
-always uses `gemini-flash` for the recap); server inserts a `complete` root
-`run` node with
-`origin: "imported"`, writes a single-turn snapshot, schedules the recap
-(imported reports bypass the length cutoffs), emits `research.tree.created`.
-Limits: 10,000 words / 10 MiB with the same messages as the composer.
+`ResearchReportImport.tsx` minus the Tauri drag-drop branch and
+`readResearchReport`. An upload icon in the composer's control row opens
+`<input type="file" accept=".md">`; HTML5 drop on the Home column (drops on
+the composer, `[data-research-image-drop]`, are left to image attachment);
+one file at a time; `.md` only; non-empty; modal dialog asking for the prompt
+that produced the report; token estimate via `estimateTokenCount`. Submit →
+`research.importReport({ markdown, prompt, workspaceId })` (the web always
+uses `gemini-flash` for the recap); the server inserts a `complete` root
+`run` node with `origin: "imported"`, writes a single-turn snapshot,
+schedules the recap (imported reports bypass the length cutoffs) and emits
+`research.tree.created`. Limits: 10,000 words / 10 MiB.
+
+## 6. Composer (`features/composer`)
+
+`ResearchQueryComposer`: the "New question" field in the form "New research".
+
+- The Ask/Note switch (`AskNoteSwitch`, a radio group). In Ask mode the field
+  reads "Ask a question" and sends `research.createTree`, then opens the
+  thread; in Note mode it reads "Write a note, or paste a link to save" and
+  sends `research.createPost` (a bare URL saves a link post, which the server
+  hydrates) and stays on Home. The send button reads Start research, Save
+  note or Save link.
+- Clicking the selected Ask segment opens the model menu
+  (`QuestionModelPicker`): the launchable models of the registry (gated
+  models only for admins) and an Effort submenu (Default, Low, Medium, High,
+  and Extra or Max where the model has them). ⌃Tab cycles the model. The Ask
+  segment's label reads "Ask with <model> (<effort>)".
+- More actions → "Save draft".
+- Images: paste, drop or the picker attach PNG, JPEG, GIF or WebP images,
+  uploaded at once (`POST /api/images`) and shown as thumbnails with remove
+  buttons. The limits and messages are the desktop's
+  (`lib/researchImages.ts`): 20 MB per image, 5 MB for GIF and WebP, the
+  per-message count and total size, no images on a note; a model that cannot
+  read images blocks the send.
+- ⌘↵ sends; Enter in an empty field does nothing; Esc leaves the field.
+- The text, model, effort and images persist per workspace in the `drafts`
+  store.
+
+`ui/AnchoredMenu.tsx` opens a Base UI menu at an element or a point without
+a visible trigger (the card menu, the context menu, the model menu). It
+renders a hidden `Menu.Trigger`: Base UI assigns a root menu its floating
+tree node through the trigger, and without one a submenu opening closes the
+root menu as a sibling.
 
 ## 7. Sidebar (`features/sidebar`)
 
-Port of `ResearchSidebarSection.tsx` (1,605 lines), `ResearchFolderSwitcher.tsx`,
-and the sidebar parts of `App.tsx`:
+Port of `ResearchSidebarNav.tsx`: the workspace switcher (`WorkspaceSwitcher`,
+unchanged), then the places:
 
-- Rows: Home, Highlights. Their Cmd-digit chords resolve
-  (`shared/app/shortcuts.ts`) however, navigation rows no longer display shortcut badges, as the `showShortcutHints` preference and its associated modifier badges have been removed.
-- Research list: folders (collapsible), trees with status dot,
-  unseen-update and unseen-failure badges, running count, multi-select
-  (Shift/Cmd-click), drag reorder with pointer gaps (`researchFolders.ts` drag
-  math), row context menu (`ResearchTreeMenuItems`,
-  `ResearchTreeMenu.tsx:60-180`: Generate summary, Unarchive,
-  Rename, Remove from folder, New folder with selection, Archive, Delete), a
-  multi-selection menu when right-clicking inside an active selection
-  (`ResearchSidebarSection.tsx:381-384`: New folder from selection, Remove
-  from folders, Archive, Delete), visibility filter (active/archived/all),
-  archived section, "N selected" stage (`ResearchFolderDialog`).
-- Persisted order: `research.reorderTrees` for tree moves within a section;
-  `folders.set` for folder structure and collapsed state. Optimistic updates
-  with rollback on error.
-- Folder switcher (`ResearchFolderSwitcher`, Cmd-O): list of workspaces with
-  tree counts, create (name prompt instead of the native picker), rename,
-  delete (blocked while runs are active; confirms deletion of its trees),
-  reorder, set as default.
-- Sidebar resize 208–420 px and collapse (Shift-Cmd-G), persisted in
-  `navigation`.
+- "Research" navigation: Home (a drop target for Unfiled) and Highlights
+  (signed in).
+- A Folders heading with a New folder button, then the "Folders" navigation:
+  Drafts, each folder (a drop target; its … menu offers Rename… and
+  Delete…), Archive (a drop target) and Trash.
+
+The tree list, multi-selection, visibility filter and the `filter` search
+parameter of the earlier sidebar are removed; threads are filed and ordered
+from Home. Sidebar resize 208–420 px and collapse (Shift-Cmd-G) persist in
+`navigation`.
 
 ## 8. Notifications
 
-`UserNotificationStack` and `useUserNotifications` port unchanged. The only
-source today is client-originated toasts (copy confirmations, errors). Server
-`notification.requested` events (run finished or failed while its tree is not
-the open route; sign-in from a new device) are planned: the server does not
-emit them and the client does not handle them. Max 20 kept, 3 visible,
-`showNotifications` setting honored.
+`UserNotificationStack` and `useUserNotifications` port unchanged. A toast
+may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
+"Undo" action, stays 8 s, and is shown even when notifications are off. The
+sources today are client-originated toasts. Server `notification.requested`
+events are planned: the server does not emit them and the client does not
+handle them. Max 20 kept, 3 visible, `showNotifications` setting honored.

@@ -78,6 +78,7 @@ primitives.
 @layer components {
   @import "./prose.css";
   @import "./tweet.css";
+  @import "./feed.css";
 }
 ```
 
@@ -105,6 +106,12 @@ and `style` props; the two documented exceptions (image scrims,
 - `::highlight(session-search)` and `::highlight(session-search-active)` for
   the CSS Custom Highlight API used by DOM search.
 - Keyframes for spinners and the thinking dot.
+- `feed.css`: the Home drag marks (`is-insert-before`/`-after`,
+  `is-drop-nest`, `is-drop-invalid`, `is-drop-target`, `has-dragged-child`),
+  the drop label, the drag ghost and the row glyph's pulse. `useCardDrag`
+  sets these classes on cards it finds by `data-research-*` attributes during
+  a drag, outside React's render, so they cannot be utilities on the
+  components.
 
 Everything else in the 12 feature files (`shell.css` 2,794 lines,
 `research.css` 2,371, `journal.css` 746, …) is re-expressed as utilities on

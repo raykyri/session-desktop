@@ -33,17 +33,16 @@ packages/client/
       queries.ts             hooks and query options (useTreeSummaries, useNodeContent, …)
     stores/
       settings.ts            Zustand persist; mirrors server UserSettings
-      navigation.ts          per-document node history, folder scope, visibility filter
+      navigation.ts          per-document node history, feed mode, scroll anchors, sidebar
       drafts.ts              composer drafts (sessionStorage + server interface_drafts)
       overlays.ts            dialog/menu/lightbox stack
-      selection.ts           research multi-select
       liveTurns.ts           per-node streaming buffers
       lightboxes.ts          image/diagram (useSyncExternalStore, ported)
       notifications.ts       toast list
       connection.ts          SSE status
     ui/                      design-system wrappers (08-design-system-and-styling.md)
     features/
-      composer/  highlights/  home/  import/  widgets/
+      composer/  drafts/  highlights/  home/  import/  widgets/
       journal/  markdown/  palette/  research/  sidebar/
     lib/                     client-only helpers (clipboard, keyboard, dom search)
     styles/
@@ -91,9 +90,14 @@ parameter.
 | Path | Component | Notes |
 | --- | --- | --- |
 | `/login` | `LoginPage` | GitHub button; shows allowlist/closed messages |
-| `/` | `HomePage` | Home feed + composer; search `?ws=` |
+| `/` | `HomePage` | Home (workspace mode) or a public feed + composer; search `?ws=` |
+| `/f/$folderId` | `FolderPage` | signed in; one folder |
+| `/drafts` | `DraftsPage` | signed in |
+| `/drafts/$draftId` | `DraftPage` | signed in; `DraftView` |
+| `/archive` | `ArchivePage` | signed in |
+| `/trash` | `TrashPage` | signed in; `TrashList` |
 | `/highlights` | `HighlightsPage` | |
-| `/r/$treeId` | `ResearchPage` | search `?node=&highlight=&filter=`; `key={treeId}` remount as today |
+| `/r/$treeId` | `ResearchPage` | search `?node=&highlight=`; `key={treeId}` remount as today |
 | `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
@@ -124,6 +128,9 @@ Query keys (factory in `api/queries.ts`):
 ["tree", treeId]                         research.getTree
 ["nodeContent", nodeId]                  research.getNodeContent
 ["activity", { scope, workspaceId }]     infinite: feed.recentActivity
+["feedRoot", treeId]                     feed.recentQueriesForTrees (batched per tick)
+["drafts", workspaceId]                  drafts.list
+["trash", workspaceId]                   research.listTrash
 ["highlightsFeed", workspaceId]          highlights.listFeed
 ["activeNodes"]                          research.listActivity
 ["adminUsers"]                           admin.listUsers
@@ -162,7 +169,10 @@ Per event type:
   `unsupported` → `invalidateQueries` for the affected scope.
 - `research.turn.delta|committed|run.*` → `liveTurns` store.
 - `research.folders.changed` → invalidate that workspace's `folders` query
-  (the event carries no state).
+  (the event carries no state); `research.trash.changed` and
+  `research.drafts.changed` invalidate that workspace's `trash` and `drafts`
+  queries. `feedRoot` entries are seeded by `research.tree.created`, patched
+  by node and feed-item events, and dropped by `research.tree.removed`.
 - `workspace.*`, `settings.updated`, `models.updated` → targeted
   `setQueryData` or invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
@@ -193,13 +203,13 @@ session on to that path.
 | Store | Contents | Persistence |
 | --- | --- | --- |
 | `settings` | `UserSettings` mirror | localStorage `session.settings.v2`; server copy authoritative |
-| `navigation` | per-tree node history stacks, `visibilityFilter`, `sidebarCollapsed`, `sidebarWidth`, per-node scroll offsets (15 min TTL), "show earlier" expansions | localStorage `session.navigation.v2` |
-| `drafts` | home composer drafts, per-node follow-up drafts, targeted asks in progress | sessionStorage + `drafts.set` (debounce 120 ms, flush on `pagehide`) |
+| `navigation` | per-tree node history stacks, `feedMode`, feed scroll anchors, `sidebarCollapsed`, `sidebarWidth`, per-node scroll offsets (15 min TTL), "show earlier" expansions | localStorage `session.navigation.v2` |
+| `drafts` | home composer drafts (text, model, effort, images), per-node follow-up drafts, targeted asks in progress | sessionStorage + `drafts.set` (debounce 120 ms, flush on `pagehide`) |
 | `overlays` | stack of open dismissable layers with `onEscape` | none |
-| `selection` | research multi-select ids | none |
 | `liveTurns` | `Map<nodeId, { turns, inFlightText, inFlightTurnId, lastSeq, status }>` | none |
 | `lightboxes` | image/diagram lightbox state (ported `useSyncExternalStore` stores) | none |
-| `notifications` | toast list (≤ 20), dedupe by id | none |
+| `notifications` | toast list (≤ 20), dedupe by id, optional action (Undo) | none |
+| `folderDialogs` (`features/home/FolderDialogsHost.tsx`) | the open New folder / Rename dialog and pending folder delete | none |
 | `connection` | `connecting | open | closed`, lastEventId | none |
 
 Stores expose selectors; components subscribe to slices. No module-level
@@ -208,8 +218,8 @@ refs mirror state.
 ### 4.4 Escape and dismissal
 
 Base UI handles Escape for its own dialogs/menus/popovers with correct
-nesting. Non-library layers (lightboxes, DOM search bar, selection popover,
-sidebar multi-select) register in `overlays` with a priority; a single
+nesting. Non-library layers (lightboxes, DOM search bar, selection popover)
+register in `overlays` with a priority; a single
 capture-phase keydown handler in `AppShell` calls the top entry's `onEscape`.
 This replaces `App.tsx:9094-9220`.
 
@@ -250,14 +260,14 @@ built only while open (`App.tsx:8098`).
 ## 6. Composer
 
 `ResearchQueryComposer` (`src/components/research/ResearchQueryComposer.tsx`)
-ports with: a model chip cycling through the models the user may access on
-Tab (`launcherKeyboard`, reduced to one dimension), draft persistence
-(prompt, model),
-`growComposerTextarea`, `isComposerSubmitShortcut` (⌘↵ on Apple platforms,
-Ctrl↵ elsewhere; Enter inserts a newline). Dropped: the "Ask network" toggle, provider
-cycling, custom model input, and per-model effort options (effort is fixed
-at medium). Slash commands are not ported. Document attachments were removed
-in phase 2.0.
+ports with the Ask/Note switch, the model menu with its Effort submenu
+(`QuestionModelPicker`; ⌃Tab cycles the model), Save draft, image
+attachments (`lib/researchImages.ts`, uploaded through `POST /api/images`),
+draft persistence (prompt, model, effort, images), `growComposerTextarea`, and
+`isComposerSubmitShortcut` (⌘↵ on Apple platforms, Ctrl↵ elsewhere; Enter
+inserts a newline). Behavior: `10-home-feed-journal.md` §6. Dropped: the "Ask
+network" toggle, provider cycling and custom model input. Slash commands are
+not ported.
 
 ## 7. Shared package usage from the client
 

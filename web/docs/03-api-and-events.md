@@ -177,6 +177,7 @@ on that item until it is retried or cancelled.
 | --- | --- | --- | --- |
 | `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` filters by `workspaceId` |
 | `feed.recentQueries` | Q | `{ limit?, before? }` → `RecentResearchQueryPage` | `list_recent_research_queries` |
+| `feed.recentQueriesForTrees` | Q | `{ treeIds: string[] }` (at most 200) → `RecentResearchQuery[]` | web only: the root entries of the caller's own threads among `treeIds`, in that order, without archived or trashed threads and with their children; Home reads its cards' content through it (`10` §1) |
 
 ### X posts
 

@@ -163,12 +163,14 @@ browser can be in) and `long-answer` (past `MIN_RECAP_CHARS`, so a run
 schedules a recap). Nothing in the suite reaches the network: the fixture
 providers answer for the models, `web_search` is unregistered because no
 search key is set, and `web_fetch` reads the fixture's page in process
-(`fixturePageFetch`).
+(`fixturePageFetch`). With fixture providers the server's own fetches (link
+post hydration) also go to `fixturePageFetch`, which answers the X
+syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 
 | Spec | What it drives |
 | --- | --- |
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
-| `library.spec.ts` | A finished thread on Home; archive from the sidebar row menu and the archived filter; Markdown report import; the appearance and theme pickers surviving a reload |
+| `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload |
 | `admin.spec.ts` | `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
 | `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |
 
