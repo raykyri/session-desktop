@@ -17,6 +17,7 @@ import {
   assertWithinDailyLimits,
   enqueueRun,
   queuePositionOf,
+  scheduleDocumentRecap,
 } from "../../../research/admission.js";
 import {
   assertModelReadsImages,
@@ -160,6 +161,8 @@ export const treeProcedures = {
       const root = required(detail.nodes[0], "the imported thread has no root node");
       publish(ctx, "research.tree.created", { tree: detail.tree, node: root });
       emitFeedItemUpsertedForNode(ctx, root.id);
+      // The report's recap, as the desktop schedules one after an import.
+      scheduleDocumentRecap(ctx, root.id);
       return detail;
     }),
 

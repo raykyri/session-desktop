@@ -7,6 +7,7 @@ import {
   MIN_RECAP_CHARS,
   extractRecapSource,
   normalizeRecap,
+  recapEligible,
   recapJobKey,
   recapSourceFitsBudget,
   recapSourceForNode,
@@ -192,9 +193,21 @@ test("custom instructions are non-empty and bounded", (t) => {
   t.notThrows(() => validateRecapInstructions("é".repeat(MAX_RECAP_INSTRUCTIONS_CHARS)));
 });
 
-test("only a settled exchange without a recap is scheduled", (t) => {
+test("a settled exchange or an imported report without a recap is scheduled", (t) => {
   t.true(shouldScheduleRecap(node()));
-  t.false(shouldScheduleRecap(importedReport()));
+  // The desktop's `recap_eligible`: an imported report too, not an authored
+  // document or a transcript, and only with a body.
+  t.true(shouldScheduleRecap(importedReport()));
+  t.true(recapEligible(importedReport()));
+  t.false(shouldScheduleRecap({ ...importedReport(), source: "authored" }));
+  t.false(shouldScheduleRecap({ ...importedReport(), source: "transcript" }));
+  t.false(shouldScheduleRecap({ ...importedReport(), responseSnapshotAt: null }));
+  t.false(
+    shouldScheduleRecap({
+      ...importedReport(),
+      recap: { text: "Done.", responseRevision: "a".repeat(64) },
+    }),
+  );
   t.false(shouldScheduleRecap(node({}, { status: "running" })));
   t.false(shouldScheduleRecap(node({}, { status: "failed" })));
   t.false(shouldScheduleRecap(node({}, { responseSnapshotAt: null })));

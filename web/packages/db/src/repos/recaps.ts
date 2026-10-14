@@ -15,7 +15,16 @@ import { now } from "../time.js";
 
 import { nodeReadableBy, rejectTrashed, requireNodeAccess } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
+import type { NodeRow } from "./mappers.js";
 import { get as getNode } from "./nodes.js";
+
+/** Whether a node row can carry a recap: a completed exchange, or an
+ * imported report (`recapEligible` in `@session/shared`). */
+function recapEligibleRow(node: Pick<NodeRow, "type" | "status" | "source">): boolean {
+  return node.type === "exchange"
+    ? node.status === "complete"
+    : node.type === "document" && node.source === "imported";
+}
 
 export interface SaveRecapInput {
   nodeId: string;
@@ -43,7 +52,8 @@ export interface SaveRecapInput {
  *
  * A no-op rather than an error: nothing asked for this recap, so a stale one
  * is not a failure to report. Three of the conditions are the desktop's
- * (`state.rs:8942`) — still complete, same snapshot, same revision — and the
+ * (`state.rs:8942`) — still complete (an exchange) or an imported report,
+ * same snapshot, same revision — and the
  * fourth is `expectedCurrentRecapId`, which is what keeps a scheduled recap
  * from overwriting one the user applied while it was generating.
  */
@@ -62,7 +72,7 @@ export function save(
       .from(nodes)
       .where(and(nodeReadableBy(userId), eq(nodes.id, input.nodeId)))
       .get();
-    if (!node || node.status !== "complete") {
+    if (!node || !recapEligibleRow(node)) {
       return null;
     }
     if ((node.responseSnapshotAt ?? null) !== input.expectedSnapshotAt) {
@@ -124,7 +134,7 @@ export function applyCandidate(
     if (tree) {
       rejectTrashed(tree);
     }
-    if (node.type !== "exchange" || node.status !== "complete") {
+    if (!recapEligibleRow(node)) {
       throw new Error("Cannot update summary: the research run has not completed.");
     }
     const currentRecapId = node.recapJson?.id ?? null;

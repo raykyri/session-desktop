@@ -27,6 +27,7 @@ import {
   enqueueRun,
   nodeContent,
   queuePositionOf,
+  scheduleDocumentRecap,
 } from "../../../research/admission.js";
 import { publishQueue } from "../../../research/followups.js";
 import {
@@ -300,6 +301,8 @@ export const nodeProcedures = {
       // Branches asked about a passage moved with their quote.
       for (const branch of movedBranches) publishNode(ctx, branch);
       emitFeedItemUpsertedForNode(ctx, result.node.id);
+      // A new body cleared the recap; an imported report gets a new one.
+      if (result.markdownChanged) scheduleDocumentRecap(ctx, result.node.id);
       return result;
     }),
 

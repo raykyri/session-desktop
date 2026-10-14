@@ -12,7 +12,12 @@
 // Recaps are derived metadata: generation never delays research completion,
 // and every rejection here is silent — the answer simply has no summary.
 
-import { documentSource, nodePrompt, nodeResponseSnapshotAt } from "../lib/researchNodeTypes.js";
+import {
+  documentSource,
+  nodePrompt,
+  nodeRecap,
+  nodeResponseSnapshotAt,
+} from "../lib/researchNodeTypes.js";
 import { stripSessionWidgetBlocks } from "../markdown/widgetProjection.js";
 import { stripWikilinks } from "../markdown/wikilinks.js";
 import type { ResearchNode, Turn } from "../wire/index.js";
@@ -209,18 +214,27 @@ export function validateRecapInstructions(value: string): string {
 }
 
 /**
- * Whether an automatic recap should be scheduled for a settled node. The node
- * must be a completed exchange with a durable snapshot and no existing recap.
- * Posts and documents are excluded; an imported report's recap is asked for
- * explicitly.
+ * Whether a node can carry a recap: a completed exchange, or an imported
+ * report (the desktop's `recap_eligible` with `status() == Complete`; a
+ * document has no run and counts as complete). Posts, authored documents
+ * and transcripts cannot.
+ */
+export function recapEligible(node: ResearchNode): boolean {
+  if (node.type === "exchange") {
+    return node.run.status === "complete";
+  }
+  return node.type === "document" && node.source === "imported";
+}
+
+/**
+ * Whether an automatic recap should be scheduled for a node: one that can
+ * carry a recap (`recapEligible`), has a durable snapshot, and has no recap
+ * yet. Scheduled when an exchange's run completes, when a report is
+ * imported, and when an imported report's body is edited (the edit clears
+ * its recap), as on the desktop (`research_recap::schedule`).
  */
 export function shouldScheduleRecap(node: ResearchNode): boolean {
-  return (
-    node.type === "exchange" &&
-    node.run.status === "complete" &&
-    node.run.responseSnapshotAt != null &&
-    node.recap == null
-  );
+  return recapEligible(node) && nodeResponseSnapshotAt(node) != null && nodeRecap(node) == null;
 }
 
 /**
