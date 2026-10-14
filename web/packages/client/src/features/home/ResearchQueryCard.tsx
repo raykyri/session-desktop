@@ -3,9 +3,7 @@
 //
 // The prompt is shown as the reader's own question, which means the launch
 // scaffolding comes off first (`stripTaggedInstructionBlocksForPreview`) and
-// wikilinks render as their labels rather than as `[[…]]`. Follow and Bookmark
-// appear only once the run has settled: a card whose answer is still being
-// written has nothing to follow yet.
+// wikilinks render as their labels rather than as `[[…]]`.
 
 import type { RecentResearchQuery, ResearchTreeSummary } from "@session/shared";
 import {
@@ -25,7 +23,6 @@ import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
 import { TweetAttachments } from "../journal/TweetAttachments.js";
 import { ResearchMarkdown } from "../markdown/index.js";
-import { ThreadActions } from "../research/ThreadActions.js";
 
 /** The short quote a follow-up anchored to a passage shows above its question
  * (`ResearchActivityFeed.tsx:318`). */
@@ -99,9 +96,6 @@ export function ResearchQueryCard({
   menuItems,
   onOpen,
   onOpenChild,
-  onToggleFollow,
-  onToggleBookmark,
-  actionsBusy = false,
 }: {
   query: RecentResearchQuery;
   tree: ResearchTreeSummary | undefined;
@@ -109,9 +103,6 @@ export function ResearchQueryCard({
   menuItems: ReactNode;
   onOpen: () => void;
   onOpenChild: (child: RecentResearchQuery) => void;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-  actionsBusy?: boolean;
 }) {
   const recap = query.recap?.trim() ?? "";
   const running = isActiveResearchStatus(query.status);
@@ -120,8 +111,6 @@ export function ResearchQueryCard({
   // question, exactly as in an open thread (`visibleResearchPrompt`).
   const prompt = promptPreview(visibleResearchPrompt(query.prompt, query.attachments));
   const signedIn = useSignedIn();
-  const followed = Boolean(tree?.followed);
-  const bookmarked = Boolean(tree?.bookmarked);
 
   const body = (
     <div className="flex flex-col gap-2">
@@ -203,16 +192,6 @@ export function ResearchQueryCard({
         <ModelMeta modelId={query.model} origin={query.origin} at={query.createdAt} />
         {status ? (
           <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
-        ) : null}
-        <span className="flex-1" />
-        {signedIn && tree && !running ? (
-          <ThreadActions
-            followed={followed}
-            bookmarked={bookmarked}
-            onToggleFollow={onToggleFollow}
-            onToggleBookmark={onToggleBookmark}
-            busy={actionsBusy}
-          />
         ) : null}
       </div>
     </div>

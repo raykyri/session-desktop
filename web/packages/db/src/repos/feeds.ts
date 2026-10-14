@@ -45,9 +45,6 @@ export interface RecentActivityOptions {
   workspaceId?: string | null | undefined;
   limit?: number | undefined;
   before?: RecentActivityCursor | null | undefined;
-  /** Bookmarked threads only. Journal entries are excluded when set: a
-   * bookmark is a property of a thread, and a link has none. */
-  bookmarkedOnly?: boolean | undefined;
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -105,7 +102,6 @@ export function recentActivity(
     scope: options.scope ?? "workspace",
     userId,
     workspaceId: options.workspaceId ?? null,
-    bookmarkedOnly: options.bookmarkedOnly ?? false,
     before: options.before ?? null,
     limit: limit + 1,
   });

@@ -163,7 +163,7 @@ search key is set, and `web_fetch` reads the fixture's page in process
 | Spec | What it drives |
 | --- | --- |
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
-| `library.spec.ts` | Bookmark → Home and Bookmarks; archive from the sidebar row menu and the archived filter; Markdown report import; the appearance and theme pickers surviving a reload |
+| `library.spec.ts` | A finished thread on Home; archive from the sidebar row menu and the archived filter; Markdown report import; the appearance and theme pickers surviving a reload |
 | `artifacts.spec.ts` | Attach a Markdown document, open its chip into the preview panel, framed from the artifact origin with the expected `sandbox`; Reload, Shift-Cmd-E, Escape |
 | `admin.spec.ts` | `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
 | `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |

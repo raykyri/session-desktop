@@ -61,7 +61,7 @@ test.serial("text fields suppress only shortcuts that conflict with text input",
 
   press("2", { ctrlKey: true }, input);
   t.is(
-    screen.queryByRole("heading", { name: "Bookmarks" }),
+    screen.queryByRole("heading", { name: "Highlights" }),
     null,
     "a digit chord must not navigate away mid-sentence",
   );
@@ -89,7 +89,7 @@ test.serial("a contenteditable target counts as a text field", async (t) => {
 
   press("2", { ctrlKey: true }, editable);
 
-  t.is(screen.queryByRole("heading", { name: "Bookmarks" }), null);
+  t.is(screen.queryByRole("heading", { name: "Highlights" }), null);
   editable.remove();
 });
 
@@ -100,7 +100,7 @@ test.serial(
     t.truthy(container);
 
     press("2", { ctrlKey: true });
-    t.truthy(await screen.findByRole("heading", { name: "Bookmarks" }));
+    t.truthy(await screen.findByRole("heading", { name: "Highlights" }));
 
     press("1", { ctrlKey: true });
     t.truthy(await screen.findByRole("heading", { name: "All Users" }));

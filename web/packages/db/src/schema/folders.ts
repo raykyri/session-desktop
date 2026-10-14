@@ -19,8 +19,6 @@ export const folders = sqliteTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     collapsed: integer("collapsed", { mode: "boolean" }).notNull().default(false),
-    /** Rank in the workspace's starred list, or 0. See `trees.starred`. */
-    starred: integer("starred").notNull().default(0),
     position: integer("position").notNull(),
     createdAt: integer("created_at").notNull(),
   },

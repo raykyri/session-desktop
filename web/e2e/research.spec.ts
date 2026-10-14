@@ -158,8 +158,6 @@ test("the home feed is public and personal routes still require a session", asyn
   await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
-  await page.goto("/bookmarks");
-  await expect(page).toHaveURL(/\/login/);
   await page.goto("/highlights");
   await expect(page).toHaveURL(/\/login/);
 

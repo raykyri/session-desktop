@@ -32,7 +32,7 @@ deletes the WebKit and Tauri workarounds.
 | `ResearchPage` (route) | `App.tsx:11929` integration + `ResearchDocument:1760` | Loads `tree` and route params, manages per-tree stores, renders header, search bar, scroller, portals |
 | `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
 | `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
-| `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
+| `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with the model summary and relative time |
 | `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu) after the run stops; while it is active a single status line replaces the footer, showing the queue position, "Working…"/"Thinking…", the elapsed time and a confirmed Cancel link |
 | `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
 | `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
@@ -132,8 +132,8 @@ Web:
   duplicate the persisted highlight in the overlap layer. Create-then-remove ordering for Expand is preserved (`:4134`).
 - Mutations owned by the page (previously props from `App.tsx`):
   `research.forkNode`, `cancelNode`, `retryNode`, `renameTree`,
-  `renameNode`, `removeBranch`, `removeTree`, `setTreeFollowed`,
-  `setTreeBookmarked`, `updateDocument`, `markTreeViewed` (on mount and when
+  `renameNode`, `removeBranch`, `removeTree`, `updateDocument`,
+  `markTreeViewed` (on mount and when
   the tree gains a completion while open), `recaps.*`.
 - Per-tree persistent UI state (`researchNavigation.ts`: `selectedNodeId`,
   `scrollByNode` with 15-min TTL, `expandedByNode`, `askByNode`,

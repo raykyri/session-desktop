@@ -18,12 +18,11 @@ import type {
 } from "@session/shared";
 import {
   addTreesToResearchFolder,
-  buildResearchSidebarLists,
+  buildResearchSidebarUnits,
   createResearchFolder,
   dissolveResearchFolder,
   flattenResearchSidebarUnits,
   flattenVisibleResearchSidebarUnits,
-  isResearchStarred,
   moveResearchFolderMemberToGap,
   moveResearchTreeIdToGap,
   moveResearchUnitToGap,
@@ -31,7 +30,6 @@ import {
   renameResearchFolder,
   researchSidebarUnitId,
   setResearchFolderCollapsed,
-  toggleResearchStar,
   translateResearchGapAfterInsertion,
 } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,8 +44,6 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Pencil,
-  Star,
-  StarOff,
   Trash2,
 } from "lucide-react";
 import { Fragment, useCallback, useMemo, useRef, useState } from "react";
@@ -139,17 +135,7 @@ const ROW_OVERFLOW_MENU_MULTI =
   "bg-accent-subtle/75 hover:not-disabled:bg-accent-subtle " +
   "focus-visible:bg-accent-subtle data-popup-open:bg-accent-subtle";
 
-/** Same slot as the ⋯; hidden while the menu is shown. */
-const ROW_STAR_SLOT =
-  "pointer-events-none absolute top-0 right-[7px] bottom-0 z-1 my-auto " +
-  "flex size-control-sm items-center justify-center " +
-  "group-hover:invisible group-has-[[data-popup-open]]:invisible";
-
-type DragScope =
-  | { kind: "units" }
-  | { kind: "starred" }
-  | { kind: "folder"; folderId: string }
-  | { kind: "archived" };
+type DragScope = { kind: "units" } | { kind: "folder"; folderId: string } | { kind: "archived" };
 
 interface PointerDrag {
   pointerId: number;
@@ -181,7 +167,6 @@ export function routeParam(params: unknown, name: string): string | null {
 const EMPTY_FOLDER_STATE: ResearchFolderState = {
   folders: [],
   membership: {},
-  starred: [],
   collapsed: [],
 };
 
@@ -220,16 +205,13 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
   const visibleArchived = filter === "active" ? [] : archivedTrees;
   const activeListVisible = filter !== "archived";
 
-  const lists = useMemo(
-    () => buildResearchSidebarLists(trees, folderState, workspaceId),
+  const units = useMemo(
+    () => buildResearchSidebarUnits(trees, folderState, workspaceId),
     [trees, folderState, workspaceId],
   );
   const displayOrderIds = useMemo(
-    () => [
-      ...flattenVisibleResearchSidebarUnits(lists.starred, folderState),
-      ...flattenVisibleResearchSidebarUnits(lists.main, folderState),
-    ],
-    [lists, folderState],
+    () => flattenVisibleResearchSidebarUnits(units, folderState),
+    [units, folderState],
   );
 
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
@@ -337,8 +319,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     writeFolders(removeTreesFromResearchFolderMembership(folderState, treeIds));
   };
 
-  const toggleStar = (id: string) => writeFolders(toggleResearchStar(folderState, id));
-
   const setCollapsed = (folderId: string, collapsed: boolean) => {
     if (!signedIn) {
       setGuestCollapsed((current) => {
@@ -437,11 +417,12 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     }
 
     const draggedTree = trees.find((tree) => tree.id === drag.id) ?? null;
-    const unitGap = (list: "units" | "starred", index: number): DropTarget | null => {
-      const units = list === "starred" ? lists.starred : lists.main;
+    const unitGap = (index: number): DropTarget | null => {
       const dragIndex = units.findIndex((unit) => researchSidebarUnitId(unit) === drag.id);
-      if (drag.scope.kind === list && (index === dragIndex || index === dragIndex + 1)) return null;
-      return { kind: "gap", scope: { kind: list }, index };
+      if (drag.scope.kind === "units" && (index === dragIndex || index === dragIndex + 1)) {
+        return null;
+      }
+      return { kind: "gap", scope: { kind: "units" }, index };
     };
 
     const hit = document.elementFromPoint(clientX, clientY);
@@ -450,7 +431,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
     const memberFolderId = hitRow?.dataset["researchFolderMember"];
     if (draggedTree && memberFolderId) {
-      const unit = [...lists.starred, ...lists.main].find(
+      const unit = units.find(
         (candidate) => candidate.kind === "folder" && candidate.folder.id === memberFolderId,
       );
       if (unit?.kind === "folder") {
@@ -473,21 +454,16 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
     const headerFolderId = hitRow?.dataset["researchFolderId"];
     if (hitRow && headerFolderId) {
-      const list = hitRow.dataset["researchStarIndex"] === undefined ? "units" : "starred";
-      const unitIndex = Number(
-        list === "starred"
-          ? hitRow.dataset["researchStarIndex"]
-          : hitRow.dataset["researchUnitIndex"],
-      );
+      const unitIndex = Number(hitRow.dataset["researchUnitIndex"]);
       const rect = hitRow.getBoundingClientRect();
       const edge = Math.min(6, rect.height * 0.25);
       if (!draggedTree) {
-        return unitGap(list, unitIndex + (clientY >= rect.top + rect.height / 2 ? 1 : 0));
+        return unitGap(unitIndex + (clientY >= rect.top + rect.height / 2 ? 1 : 0));
       }
       if (clientY < rect.top + edge || clientY > rect.bottom - edge) {
-        return unitGap(list, unitIndex + (clientY > rect.bottom - edge ? 1 : 0));
+        return unitGap(unitIndex + (clientY > rect.bottom - edge ? 1 : 0));
       }
-      const target = [...lists.starred, ...lists.main].find(
+      const target = units.find(
         (unit) => unit.kind === "folder" && unit.folder.id === headerFolderId,
       );
       if (target?.kind === "folder") {
@@ -501,21 +477,12 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     }
 
     if (hitRow && !memberFolderId) {
-      const list = hitRow.dataset["researchStarIndex"] !== undefined ? "starred" : "units";
-      // Prevent cross-list drops into the starred section. Items enter it only
-      // through the star action.
-      if (draggedTree && list === "starred" && drag.scope.kind !== "starred") return null;
-      const index = Number(
-        list === "starred"
-          ? hitRow.dataset["researchStarIndex"]
-          : hitRow.dataset["researchUnitIndex"],
-      );
+      const index = Number(hitRow.dataset["researchUnitIndex"]);
       const rect = hitRow.getBoundingClientRect();
-      return unitGap(list, index + (clientY >= rect.top + rect.height / 2 ? 1 : 0));
+      return unitGap(index + (clientY >= rect.top + rect.height / 2 ? 1 : 0));
     }
 
-    const list = drag.scope.kind === "starred" ? "starred" : "units";
-    return unitGap(list, (list === "starred" ? lists.starred : lists.main).length);
+    return unitGap(units.length);
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>, id: string, scope: DragScope) {
@@ -594,15 +561,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
     if (target.kind === "folder" && draggedTree) {
       const proposedState = addTreesToResearchFolder(folderState, target.folderId, [drag.id]);
-      const proposed = buildResearchSidebarLists(trees, proposedState, workspaceId);
-      const targetIsStarred = proposed.starred.some(
-        (unit) => unit.kind === "folder" && unit.folder.id === target.folderId,
-      );
-      const currentTarget = findFolderUnit([...lists.starred, ...lists.main], target.folderId);
-      const proposedTarget = findFolderUnit(
-        [...proposed.starred, ...proposed.main],
-        target.folderId,
-      );
+      const proposed = buildResearchSidebarUnits(trees, proposedState, workspaceId);
+      const currentTarget = findFolderUnit(units, target.folderId);
+      const proposedTarget = findFolderUnit(proposed, target.folderId);
       const insertedIntoTarget =
         currentTarget !== null && !currentTarget.trees.some((tree) => tree.id === drag.id);
       const proposedMemberIndex = proposedTarget
@@ -611,71 +572,34 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       const targetIndex = insertedIntoTarget
         ? translateResearchGapAfterInsertion(target.index, proposedMemberIndex)
         : target.index;
-      const moved = moveResearchFolderMemberToGap(
-        targetIsStarred ? proposed.starred : proposed.main,
-        target.folderId,
-        drag.id,
-        targetIndex,
-      );
-      // Membership and the star are one folder write; the order is the other.
-      let nextState = proposedState;
-      if (isResearchStarred(folderState, drag.id))
-        nextState = toggleResearchStar(nextState, drag.id);
-      writeFolders(nextState);
-      if (moved) {
-        writeOrder(false, [
-          ...flattenResearchSidebarUnits(targetIsStarred ? moved : proposed.starred),
-          ...flattenResearchSidebarUnits(targetIsStarred ? proposed.main : moved),
-        ]);
-      }
+      const moved = moveResearchFolderMemberToGap(proposed, target.folderId, drag.id, targetIndex);
+      // Membership is one folder write; the order is the other.
+      writeFolders(proposedState);
+      if (moved) writeOrder(false, flattenResearchSidebarUnits(moved));
       return;
     }
 
     if (target.kind !== "gap") return;
-
-    if (drag.scope.kind === "starred" && target.scope.kind === "starred") {
-      // Starred item order is stored in client folder state rather than the
-      // server list order.
-      const current = lists.starred.map(researchSidebarUnitId);
-      const next = moveResearchTreeIdToGap(current, drag.id, target.index);
-      if (next !== current) {
-        writeFolders({
-          ...folderState,
-          starred: withDisplayedStarOrder(folderState.starred, next),
-        });
-      }
-      return;
-    }
     if (target.scope.kind !== "units") return;
 
     const proposedState = draggedTree
       ? removeTreesFromResearchFolderMembership(folderState, [drag.id])
       : folderState;
-    const proposed = buildResearchSidebarLists(trees, proposedState, workspaceId);
+    const proposed = buildResearchSidebarUnits(trees, proposedState, workspaceId);
     const sourceFolder =
-      drag.scope.kind === "folder"
-        ? findFolderUnit([...lists.starred, ...lists.main], drag.scope.folderId)
-        : null;
+      drag.scope.kind === "folder" ? findFolderUnit(units, drag.scope.folderId) : null;
     // Extracting a member adds a top-level unit without removing its still
     // populated source folder, so a gap measured before the extraction moves
     // one slot right.
     const extractionAddsUnit =
-      sourceFolder !== null &&
-      (sourceFolder.trees.length > 1 || !lists.main.includes(sourceFolder));
-    const proposedDragIndex = proposed.main.findIndex(
-      (unit) => researchSidebarUnitId(unit) === drag.id,
-    );
+      sourceFolder !== null && (sourceFolder.trees.length > 1 || !units.includes(sourceFolder));
+    const proposedDragIndex = proposed.findIndex((unit) => researchSidebarUnitId(unit) === drag.id);
     const targetIndex = extractionAddsUnit
       ? translateResearchGapAfterInsertion(target.index, proposedDragIndex)
       : target.index;
-    const moved = moveResearchUnitToGap(proposed.main, drag.id, targetIndex);
+    const moved = moveResearchUnitToGap(proposed, drag.id, targetIndex);
     if (draggedTree && folderState.membership[drag.id]) writeFolders(proposedState);
-    if (moved) {
-      writeOrder(false, [
-        ...flattenResearchSidebarUnits(proposed.starred),
-        ...flattenResearchSidebarUnits(moved),
-      ]);
-    }
+    if (moved) writeOrder(false, flattenResearchSidebarUnits(moved));
   }
 
   /* ---------------------------------------------------------------------
@@ -686,7 +610,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     tree,
     archived,
     folderState,
-    onToggleStar: toggleStar,
     onRename: setRenamingTree,
     onArchive: (treeId: string) => archive.mutate({ treeId, archived: true }),
     onRestore: (treeId: string) => archive.mutate({ treeId, archived: false }),
@@ -738,13 +661,11 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       archived: boolean;
       dragScope: DragScope;
       unitIndex?: number;
-      unitList?: "units" | "starred";
       folderId?: string;
       dropClass?: string;
     },
   ) {
     const { archived } = options;
-    const starred = isResearchStarred(folderState, tree.id);
     const selected = activeTreeId === tree.id;
     const multi = !archived && selectedIds.includes(tree.id);
     const inSelectionMenu = multi && selectedIds.length > 1;
@@ -753,11 +674,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         data-research-row
         data-research-tree-id={tree.id}
         data-research-archived={archived ? "true" : "false"}
-        {...(options.unitList === "units" && options.unitIndex !== undefined
+        {...(options.unitIndex !== undefined
           ? { "data-research-unit-index": options.unitIndex }
-          : {})}
-        {...(options.unitList === "starred" && options.unitIndex !== undefined
-          ? { "data-research-star-index": options.unitIndex }
           : {})}
         {...(options.folderId === undefined
           ? {}
@@ -768,7 +686,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           selected && SIDEBAR_ROW_SELECTED,
           multi && SIDEBAR_ROW_MULTI,
           options.folderId !== undefined && "pl-6",
-          starred && "pr-8",
           archived && "text-fg-muted",
           draggingId === tree.id && "opacity-50",
           options.dropClass,
@@ -836,11 +753,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             New<span className="sr-only"> since last viewed</span>
           </span>
         ) : null}
-        {starred ? (
-          <span className={ROW_STAR_SLOT} aria-hidden="true">
-            <Star size={12} className="text-fg-subtle" />
-          </span>
-        ) : null}
         {signedIn ? (
           <Menu
             label={`Actions for ${tree.title}`}
@@ -883,21 +795,18 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     );
   }
 
-  function renderUnit(unit: ResearchSidebarUnit, unitIndex: number, list: "units" | "starred") {
-    const units = list === "starred" ? lists.starred : lists.main;
-    const scope: DragScope = { kind: list };
+  function renderUnit(unit: ResearchSidebarUnit, unitIndex: number) {
+    const scope: DragScope = { kind: "units" };
     if (unit.kind === "tree") {
       return renderTreeRow(unit.tree, {
         archived: false,
         dragScope: scope,
         unitIndex,
-        unitList: list,
-        dropClass: gapClass(dropTarget, list, unitIndex, units.length, "only"),
+        dropClass: gapClass(dropTarget, unitIndex, units.length, "only"),
       });
     }
     const { folder } = unit;
     const collapsed = folderIsCollapsed(folder.id);
-    const folderStarred = isResearchStarred(folderState, folder.id);
     const hasRunning = memberTrees(folder.id).some((tree) => tree.runningCount > 0);
     const folderHeader = (
       <div
@@ -906,19 +815,16 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         role="button"
         tabIndex={0}
         aria-expanded={!collapsed}
-        {...(list === "units" ? { "data-research-unit-index": unitIndex } : {})}
-        {...(list === "starred" ? { "data-research-star-index": unitIndex } : {})}
+        data-research-unit-index={unitIndex}
         className={cn(
           SIDEBAR_ROW,
           "group relative",
-          folderStarred && "pr-8",
           draggingId === folder.id && "opacity-50",
           dropTarget?.kind === "folder" && dropTarget.folderId === folder.id && dropTarget.onHeader
             ? "ring-focus-ring ring-1 ring-inset"
             : null,
           gapClass(
             dropTarget,
-            list,
             unitIndex,
             units.length,
             collapsed || unit.trees.length === 0 ? "only" : "first",
@@ -961,11 +867,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         <Folder size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
-        {folderStarred ? (
-          <span className={ROW_STAR_SLOT} aria-hidden="true">
-            <Star size={12} className="text-fg-subtle" />
-          </span>
-        ) : null}
         {signedIn ? (
           <Menu
             label={`Actions for ${folder.name}`}
@@ -983,10 +884,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           >
             <FolderMenuItems
               folder={folder}
-              starred={folderStarred}
               memberCount={memberTrees(folder.id).length}
               hasRunning={hasRunning}
-              onToggleStar={toggleStar}
               onRename={setRenamingFolder}
               onDissolve={setDissolving}
               onArchive={() => {
@@ -1012,10 +911,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             items={
               <FolderMenuItems
                 folder={folder}
-                starred={folderStarred}
                 memberCount={memberTrees(folder.id).length}
                 hasRunning={hasRunning}
-                onToggleStar={toggleStar}
                 onRename={setRenamingFolder}
                 onDissolve={setDissolving}
                 onArchive={() => {
@@ -1040,12 +937,11 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 archived: false,
                 dragScope: { kind: "folder", folderId: folder.id },
                 unitIndex,
-                unitList: list,
                 folderId: folder.id,
                 dropClass: cn(
                   memberDropClass(dropTarget, folder.id, memberIndex, unit.trees.length),
                   memberIndex === unit.trees.length - 1
-                    ? gapClass(dropTarget, list, unitIndex, units.length, "last")
+                    ? gapClass(dropTarget, unitIndex, units.length, "last")
                     : undefined,
                 ),
               }),
@@ -1114,12 +1010,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         </div>
       ) : null}
 
-      {activeListVisible && lists.starred.length > 0 ? (
-        <div role="group" aria-label="Starred research" className="flex flex-col gap-px">
-          {lists.starred.map((unit, index) => renderUnit(unit, index, "starred"))}
-        </div>
-      ) : null}
-      {activeListVisible ? lists.main.map((unit, index) => renderUnit(unit, index, "units")) : null}
+      {activeListVisible ? units.map((unit, index) => renderUnit(unit, index)) : null}
 
       {visibleArchived.length > 0 ? (
         <>
@@ -1256,26 +1147,22 @@ function StatusDot({ tree, archived }: { tree: ResearchTreeSummary; archived: bo
         : "bg-fg-subtle/50";
   // mx-1 centers the 6px dot in the 14px slot the top-level nav icons occupy
   // (14px icon = 6px dot + 2x4px margin), so the dot's center aligns with the
-  // nav icons' center and the title starts where Home/Bookmarks titles start.
+  // nav icons' center and the title starts where Home/Highlights titles start.
   return <span aria-hidden="true" className={cn("mx-1 size-1.5 shrink-0 rounded-full", tone)} />;
 }
 
 function FolderMenuItems({
   folder,
-  starred,
   memberCount,
   hasRunning,
-  onToggleStar,
   onRename,
   onDissolve,
   onArchive,
   onDelete,
 }: {
   folder: ResearchFolder;
-  starred: boolean;
   memberCount: number;
   hasRunning: boolean;
-  onToggleStar: (id: string) => void;
   onRename: (folder: ResearchFolder) => void;
   onDissolve: (folder: ResearchFolder) => void;
   onArchive: () => void;
@@ -1283,17 +1170,6 @@ function FolderMenuItems({
 }) {
   return (
     <>
-      <IconMenuItem
-        icon={
-          starred ? (
-            <StarOff size={ICON} aria-hidden="true" />
-          ) : (
-            <Star size={ICON} aria-hidden="true" />
-          )
-        }
-        label={starred ? "Unstar" : "Star"}
-        onClick={() => onToggleStar(folder.id)}
-      />
       <IconMenuItem
         icon={<Pencil size={ICON} aria-hidden="true" />}
         label="Rename"
@@ -1335,22 +1211,13 @@ function findFolderUnit(
   return unit?.kind === "folder" ? unit : null;
 }
 
-/** Applies a new order for the starred entries currently on screen while
- * keeping stored entries that are not displayed (other scopes, archived) after
- * them (`replaceResearchStarOrder`). */
-function withDisplayedStarOrder(stored: string[], displayed: string[]): string[] {
-  const shown = new Set(displayed);
-  return [...displayed, ...stored.filter((id) => !shown.has(id))];
-}
-
 function gapClass(
   target: DropTarget | null,
-  list: "units" | "starred",
   unitIndex: number,
   length: number,
   role: "first" | "last" | "only",
 ): string | undefined {
-  if (target?.kind !== "gap" || target.scope.kind !== list) return undefined;
+  if (target?.kind !== "gap" || target.scope.kind !== "units") return undefined;
   const before = target.index === unitIndex && (role === "first" || role === "only");
   const after =
     target.index === length && unitIndex === length - 1 && (role === "last" || role === "only");

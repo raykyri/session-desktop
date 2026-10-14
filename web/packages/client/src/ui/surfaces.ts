@@ -102,7 +102,7 @@ export const INPUT_FIELD = `${FORM_FIELD} min-h-control-md`;
 
 export const SHORTCUT_HINT = "whitespace-nowrap text-xs leading-none text-fg-muted";
 
-/** Model, time, Follow/Bookmark, word count. Nested buttons otherwise snap to
+/** Model, time, word count. Nested buttons otherwise snap to
  * `--fs-base` from the global form rule in `app.css`. */
 export const METADATA_LINE =
   "text-[length:calc(var(--fs-base)-1px)] " +

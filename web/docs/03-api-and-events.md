@@ -95,7 +95,6 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText, seq, children, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
 | `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
-| `research.setTreeFollowed` / `setTreeBookmarked` | M | `{ treeId, value }` → `ResearchTree` | same |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same |
 | `research.removeTree` | M | `{ treeId }` → void | `remove_research_tree` (permanent, in or out of the Trash) |
 | `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree`, `restore_research_tree_from_trash` |
@@ -118,7 +117,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 ### `feed`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor, bookmarkedOnly? }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` keeps journal account-wide and filters research by `workspaceId`; `bookmarkedOnly` is refused for `all` because bookmark state is private |
+| `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` keeps journal account-wide and filters research by `workspaceId` |
 | `feed.recentQueries` | Q | `{ limit?, before? }` → `RecentResearchQueryPage` | `list_recent_research_queries` |
 
 ### `journal`
@@ -192,7 +191,7 @@ unless noted:
 | Type | Payload | Emitted by |
 | --- | --- | --- |
 | `research.tree.created` | `{ tree, node }` | createTree, importReport |
-| `research.tree.updated` | `{ tree }` | rename, followed, bookmarked, viewed |
+| `research.tree.updated` | `{ tree }` | rename, viewed |
 | `research.tree.archived` / `restored` | `{ tree }` | archive/restore; `restored` also by restoreTreeFromTrash |
 | `research.tree.removed` | `{ treeId }` | removeTree, trashTree, workspace remove |
 | `research.trash.changed` | `{}` | trashTree, restoreTreeFromTrash, removeTree of a trashed tree |
@@ -208,8 +207,8 @@ unless noted:
 | `folders.updated` | `{ workspaceId, state }` | new (desktop kept folders client-side) |
 | `journal.entry.updated` | `{ entry }` | add, hydrate, update, restore |
 | `journal.entry.removed` | `{ id }` | remove |
-| `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, bookmarked, item }` | public feed source create/update/restore |
-| `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, bookmarked }` | source delete or archive |
+| `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, item }` | public feed source create/update/restore |
+| `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId }` | source delete or archive |
 | `settings.updated` | `{ settings }` | another tab changed settings |
 | `models.updated` | `{ models }` | provider availability change |
 | `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | server-originated toasts |

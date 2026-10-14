@@ -63,7 +63,7 @@ test.serial("the feed shows each passage inside its context, under a day header"
       "workspaces.list": [workspace()],
       "settings.get": serverSettings(),
       "research.listTrees": [summary({ workspaceId: WORKSPACE_ID })],
-      "folders.get": { folders: [], membership: {}, starred: [], collapsed: [] },
+      "folders.get": { folders: [], membership: {}, collapsed: [] },
       "feed.recentActivity": activityPage([]),
       "highlights.listFeed": [
         highlightItem({ nodeLabel: "Roots", treeTitle: "Collective memory" }),

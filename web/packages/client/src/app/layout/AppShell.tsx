@@ -19,7 +19,7 @@ import { SessionBoot } from "../SessionBoot.js";
 import { Sidebar } from "./Sidebar.js";
 
 /** The routes Cmd-1..9 and Ctrl-Tab cycle through, in sidebar order. */
-const TAB_ROUTES = ["/", "/bookmarks", "/highlights"] as const;
+const TAB_ROUTES = ["/", "/highlights"] as const;
 
 /** An open Base UI dialog, popover, menu or select popup, if there is one.
  * Every Base UI layer has `data-open` while it is mounted and open; the

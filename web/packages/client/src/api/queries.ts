@@ -69,8 +69,6 @@ import {
   restoreResearchTree,
   retryResearchNode,
   setResearchFolders,
-  setResearchTreeBookmarked,
-  setResearchTreeFollowed,
   setUserLimits,
   updateSettings,
   type SettingsUpdate,
@@ -231,17 +229,14 @@ export function useAdminUsers(enabled = true) {
 export function useActivityFeed(scope: {
   scope: RecentActivityScope;
   workspaceId?: string | null;
-  bookmarkedOnly?: boolean;
 }) {
-  const bookmarkedOnly = scope.bookmarkedOnly ?? false;
   const workspaceId = scope.scope === "workspace" ? scope.workspaceId || null : null;
   return useInfiniteQuery({
-    queryKey: queryKeys.activity({ scope: scope.scope, workspaceId, bookmarkedOnly }),
+    queryKey: queryKeys.activity({ scope: scope.scope, workspaceId }),
     queryFn: ({ pageParam }) =>
       listRecentActivity({
         scope: scope.scope,
         ...(workspaceId ? { workspaceId } : {}),
-        bookmarkedOnly,
         before: pageParam,
       }),
     initialPageParam: null as RecentActivityCursor | null,
@@ -532,28 +527,6 @@ export function useRenameResearchTree() {
     mutationFn: (input: { treeId: string; title: string }) =>
       renameResearchTree(input.treeId, input.title),
     onSuccess: (tree) => writeTree(client, tree),
-  });
-}
-
-export function useSetTreeFollowed() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { treeId: string; value: boolean }) =>
-      setResearchTreeFollowed(input.treeId, input.value),
-    onSuccess: (tree) => writeTree(client, tree),
-  });
-}
-
-export function useSetTreeBookmarked() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { treeId: string; value: boolean }) =>
-      setResearchTreeBookmarked(input.treeId, input.value),
-    onSuccess: (tree) => {
-      writeTree(client, tree);
-      // The bookmarked feed is a different list, not a filter of a cached one.
-      invalidateKeys(client, ["activity"]);
-    },
   });
 }
 

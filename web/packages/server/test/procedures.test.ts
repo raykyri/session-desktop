@@ -191,7 +191,6 @@ test("workspaces and folders behave as the sidebar expects", async (t) => {
     state: {
       folders: [{ id: "f1", name: "Later", workspaceId: first.id }],
       membership: {},
-      starred: [],
       collapsed: [],
     },
   });

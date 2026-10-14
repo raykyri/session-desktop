@@ -528,7 +528,11 @@ test.serial(
     );
     const field = screen.getByLabelText("Follow-up question");
     t.false(field.hasAttribute("disabled"));
-    const footer = screen.getByText("Follow").closest("div")?.parentElement;
+    // The first model button is the question's footer mark; the composer's
+    // model picker carries the same name.
+    const footer = screen
+      .getAllByRole("button", { name: "Gemini 3.8 Flash" })[0]
+      ?.closest("span")?.parentElement;
     t.truthy(footer, "the prompt footer is on the completed thread");
     t.truthy(
       within(footer as HTMLElement).getByRole("button", { name: "Gemini 3.8 Flash" }),

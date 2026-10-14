@@ -6,7 +6,6 @@
 
 export * from "./ResearchPage.js";
 export * from "./treeMenu.js";
-export { ThreadActions } from "./ThreadActions.js";
 export {
   assignConnectorLanes,
   buildSegmentConnectors,

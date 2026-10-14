@@ -160,7 +160,7 @@ one predicate and indexes are simple.
 
 `folders` (desktop `ResearchFolder` + parts of `ResearchFolderState`)
 - `id` PK, `user_id` FK, `workspace_id` FK, `name` text
-- `collapsed` integer bool, `starred` integer bool, `position` integer
+- `collapsed` integer bool, `position` integer
 - `created_at`
 
 `tree_folder_membership`: `tree_id` PK FK, `folder_id` FK. One folder per
@@ -172,8 +172,6 @@ tree, as in `membership: HashMap<treeId, folderId>`.
 - `id` PK, `user_id` FK, `workspace_id` FK
 - `title` text, `root_node_id` text (FK to nodes, deferred; see §5.1)
 - `created_at`, `updated_at`, `archived_at` null, `last_viewed_at` null
-- `followed`, `bookmarked`, `starred` integer bool (starred is the folder
-  state's `starred` list for trees)
 - `position` integer — master sidebar order within (`workspace_id`,
   `archived_at IS NULL`)
 - Indexes: (`user_id`, `workspace_id`, `archived_at`, `position`),
@@ -479,7 +477,7 @@ Each item names the desktop source and the enforcing function.
 ### 5.11 Folders
 - `folders.setState(workspaceId, state)` applies the desktop's
   `normalize_research_folder_state`: dedupe folders, drop membership and
-  collapsed entries pointing at absent folders, dedupe stars; it does not
+  collapsed entries pointing at absent folders; it does not
   prune by tree existence (`research.rs:94`, `state.rs:4142-4149`). Tree
   deletion cascades membership via FK, which is the web equivalent of
   `remove_trees_from_research_folders`.

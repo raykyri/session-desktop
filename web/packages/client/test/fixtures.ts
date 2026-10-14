@@ -15,8 +15,6 @@ export function tree(overrides: Partial<ResearchTree> = {}): ResearchTree {
     updatedAt: 1_700_000_000_000,
     archivedAt: null,
     lastViewedAt: null,
-    followed: false,
-    bookmarked: false,
     ...overrides,
   };
 }
@@ -56,8 +54,6 @@ export function summary(overrides: Partial<ResearchTreeSummary> = {}): ResearchT
     cancelledCount: 0,
     updatedAt: 1_700_000_000_000,
     archivedAt: null,
-    followed: false,
-    bookmarked: false,
     hasUnseenUpdate: false,
     hasUnseenFailure: false,
     ...overrides,

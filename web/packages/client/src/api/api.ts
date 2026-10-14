@@ -245,14 +245,6 @@ export function markResearchTreeViewed(treeId: string): Promise<ResearchTree> {
   return trpc().research.markTreeViewed.mutate({ treeId });
 }
 
-export function setResearchTreeFollowed(treeId: string, value: boolean): Promise<ResearchTree> {
-  return trpc().research.setTreeFollowed.mutate({ treeId, value });
-}
-
-export function setResearchTreeBookmarked(treeId: string, value: boolean): Promise<ResearchTree> {
-  return trpc().research.setTreeBookmarked.mutate({ treeId, value });
-}
-
 export function archiveResearchTree(treeId: string): Promise<ResearchTree> {
   return trpc().research.archiveTree.mutate({ treeId });
 }
@@ -344,7 +336,6 @@ export function listRecentActivity(input?: {
   workspaceId?: string;
   limit?: number;
   before?: RecentActivityCursor | null;
-  bookmarkedOnly?: boolean;
 }): Promise<RecentActivityPage> {
   return trpc().feed.recentActivity.query(input);
 }

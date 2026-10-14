@@ -46,8 +46,6 @@ export function toResearchTree(row: TreeRow): ResearchTree {
     updatedAt: row.updatedAt,
     archivedAt: row.archivedAt,
     lastViewedAt: row.lastViewedAt,
-    followed: row.followed,
-    bookmarked: row.bookmarked,
   };
 }
 

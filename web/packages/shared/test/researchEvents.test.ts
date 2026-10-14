@@ -422,8 +422,6 @@ test("researchSummaryFromDetail exactly derives counts, kind, and unseen attenti
     cancelledCount: 1,
     updatedAt: 10,
     archivedAt: null,
-    followed: false,
-    bookmarked: false,
     hasUnseenUpdate: true,
     hasUnseenFailure: true,
   });
@@ -633,22 +631,4 @@ test("tree summary patch adopts authoritative metadata and preserves derived fie
   t.is(patched.failedCount, summary.failedCount);
   t.is(patched.hasUnseenFailure, summary.hasUnseenFailure);
   t.is(patchResearchSummaryTree(patched, archived), patched);
-
-  // Follow / Bookmark flags ride the same tree event without touching recency.
-  t.is(summary.followed, false);
-  t.is(summary.bookmarked, false);
-  const followed = patchResearchSummaryTree(patched, { ...archived, followed: true });
-  t.is(followed.followed, true);
-  t.is(followed.bookmarked, false);
-  t.is(followed.updatedAt, 45);
-  const bookmarked = patchResearchSummaryTree(followed, {
-    ...archived,
-    followed: true,
-    bookmarked: true,
-  });
-  t.is(bookmarked.bookmarked, true);
-  t.is(
-    patchResearchSummaryTree(bookmarked, { ...archived, followed: true, bookmarked: true }),
-    bookmarked,
-  );
 });

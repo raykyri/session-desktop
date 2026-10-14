@@ -225,7 +225,6 @@ export const feedRouter = router({
           workspaceId: z.string().optional(),
           limit: z.number().int().min(1).max(100).optional(),
           before: recentActivityCursorSchema.nullish(),
-          bookmarkedOnly: z.boolean().optional(),
         })
         .optional(),
     )
@@ -234,19 +233,12 @@ export const feedRouter = router({
       if (ctx.user === null && scope !== "all") {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to read this feed" });
       }
-      if (scope === "all" && input?.bookmarkedOnly === true) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "the global feed cannot be filtered by private bookmarks",
-        });
-      }
       return repo(() =>
         feeds.recentActivity(ctx.db, ctx.user?.id ?? null, {
           scope,
           workspaceId: input?.workspaceId ?? null,
           ...(input?.limit === undefined ? {} : { limit: input.limit }),
           before: input?.before ?? null,
-          ...(input?.bookmarkedOnly === undefined ? {} : { bookmarkedOnly: input.bookmarkedOnly }),
         }),
       );
     }),

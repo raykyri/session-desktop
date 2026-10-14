@@ -6,32 +6,24 @@ import { type ResearchFolderScope, workspaceIsInResearchScope } from "../researc
 import type { ResearchTreeSummary } from "../types/research.js";
 
 export const RESEARCH_HOME_TAB_ID = "__research_home__";
-export const RESEARCH_BOOKMARKS_TAB_ID = "__research_bookmarks__";
 export const RESEARCH_HIGHLIGHTS_TAB_ID = "__research_highlights__";
 const RESEARCH_TREE_TAB_PREFIX = "__research_tree__:";
 
 /** Pages the journal surface can show. */
-export type ResearchJournalView = "home" | "bookmarks" | "highlights";
+export type ResearchJournalView = "home" | "highlights";
 
 /** Every journal view, for tests that must cover the whole set. */
-export const RESEARCH_JOURNAL_VIEWS: readonly ResearchJournalView[] = [
-  "home",
-  "bookmarks",
-  "highlights",
-];
+export const RESEARCH_JOURNAL_VIEWS: readonly ResearchJournalView[] = ["home", "highlights"];
 
 /** The journal pages in sidebar order. They lead the Ctrl-Tab cycle, ahead of
  * the research trees, so cycling follows the sidebar top to bottom. */
 export const RESEARCH_JOURNAL_TAB_IDS: readonly string[] = [
   RESEARCH_HOME_TAB_ID,
-  RESEARCH_BOOKMARKS_TAB_ID,
   RESEARCH_HIGHLIGHTS_TAB_ID,
 ];
 
 export function researchJournalTabId(view: ResearchJournalView): string {
   switch (view) {
-    case "bookmarks":
-      return RESEARCH_BOOKMARKS_TAB_ID;
     case "highlights":
       return RESEARCH_HIGHLIGHTS_TAB_ID;
     default:
@@ -43,8 +35,6 @@ export function researchJournalViewFromTabId(tabId: string): ResearchJournalView
   switch (tabId) {
     case RESEARCH_HOME_TAB_ID:
       return "home";
-    case RESEARCH_BOOKMARKS_TAB_ID:
-      return "bookmarks";
     case RESEARCH_HIGHLIGHTS_TAB_ID:
       return "highlights";
     default:

@@ -229,7 +229,6 @@ function menuFor(overrides: Partial<Parameters<typeof ResearchTreeMenuItems>[0]>
       tree={summary(overrides.tree ? {} : { runningCount: 0 })}
       archived={false}
       folderState={emptyResearchFolderState()}
-      onToggleStar={() => calls.push("star")}
       onRename={() => calls.push("rename")}
       onArchive={() => calls.push("archive")}
       onRestore={() => calls.push("restore")}
@@ -249,7 +248,7 @@ function menuFor(overrides: Partial<Parameters<typeof ResearchTreeMenuItems>[0]>
 
 test.serial("the tree menu offers the active-thread actions", (t) => {
   const calls = menuFor();
-  for (const label of ["Star", "Rename", "Move to new folder", "Archive", "Delete"]) {
+  for (const label of ["Rename", "Move to new folder", "Archive", "Delete"]) {
     t.truthy(screen.getByRole("menuitem", { name: new RegExp(label) }), label);
   }
   fireEvent.click(screen.getByRole("menuitem", { name: /Rename/ }));

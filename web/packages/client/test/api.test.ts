@@ -23,7 +23,6 @@ import {
   setDraft,
   setEventInterest,
   setResearchFolders,
-  setResearchTreeBookmarked,
   updateSettings,
   uploadDocuments,
 } from "../src/api/api.js";
@@ -31,7 +30,7 @@ import { setTrpcClient } from "../src/api/trpc.js";
 
 import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
 
-const EMPTY_FOLDERS = { folders: [], membership: {}, starred: [], collapsed: [] };
+const EMPTY_FOLDERS = { folders: [], membership: {}, collapsed: [] };
 
 let stub: TrpcStub;
 
@@ -50,7 +49,7 @@ test.serial("reads reach the query procedures with their inputs", async (t) => {
   await getResearchTree("t1");
   await listResearchTrees({ workspaceId: "w1", includeArchived: true });
   await getResearchNodeContent("n1");
-  await listRecentActivity({ scope: "workspace", workspaceId: "w1", bookmarkedOnly: true });
+  await listRecentActivity({ scope: "workspace", workspaceId: "w1" });
 
   t.deepEqual(stub.calls, [
     { path: "auth.me", kind: "query", input: undefined },
@@ -64,7 +63,7 @@ test.serial("reads reach the query procedures with their inputs", async (t) => {
     {
       path: "feed.recentActivity",
       kind: "query",
-      input: { scope: "workspace", workspaceId: "w1", bookmarkedOnly: true },
+      input: { scope: "workspace", workspaceId: "w1" },
     },
   ]);
 });
@@ -76,7 +75,6 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
   await retryResearchNode("n1", "claude-sonnet");
   await cancelResearchNode("n1");
   await archiveResearchTree("t1");
-  await setResearchTreeBookmarked("t1", true);
   await removeResearchBranch("n2");
   await createResearchHighlight("n1", {
     version: 1,
@@ -114,7 +112,6 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
       "research.retryNode",
       "research.cancelNode",
       "research.archiveTree",
-      "research.setTreeBookmarked",
       "research.removeBranch",
       "highlights.create",
       "recaps.applyCandidate",
@@ -127,8 +124,7 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
   t.true(stub.calls.every((call) => call.kind === "mutate"));
   t.deepEqual(stub.calls[2]?.input, { nodeId: "n1" }, "an absent model is omitted, not null");
   t.deepEqual(stub.calls[3]?.input, { nodeId: "n1", model: "claude-sonnet" });
-  t.deepEqual(stub.calls[6]?.input, { treeId: "t1", value: true });
-  t.deepEqual(stub.calls[13]?.input, { connectionId: "c1", nodeIds: ["n1", "n2"] });
+  t.deepEqual(stub.calls[12]?.input, { connectionId: "c1", nodeIds: ["n1", "n2"] });
 });
 
 test.serial("sign-in carries the return path and the invite code", (t) => {

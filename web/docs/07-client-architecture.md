@@ -21,7 +21,7 @@ packages/client/
       SessionBoot.tsx        subscription, draft writer, settings mirror
       layout/                AppShell, Sidebar
     routes/
-      login.tsx  home.tsx  bookmarks.tsx  highlights.tsx
+      login.tsx  home.tsx  highlights.tsx
       research.$treeId.tsx  settings.tsx  admin.tsx
     api/
       trpc.ts                createTRPCClient (batch + subscription links); the only
@@ -92,7 +92,6 @@ parameter.
 | --- | --- | --- |
 | `/login` | `LoginPage` | GitHub button; shows allowlist/closed messages |
 | `/` | `HomePage` | Home feed + composer; search `?ws=` |
-| `/bookmarks` | `BookmarksPage` | feed with `bookmarkedOnly` |
 | `/highlights` | `HighlightsPage` | |
 | `/r/$treeId` | `ResearchPage` | search `?node=&highlight=&filter=`; `key={treeId}` remount as today |
 | `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
@@ -125,7 +124,7 @@ Query keys (factory in `api/queries.ts`):
 ["trees", { workspaceId, includeArchived }]  research.listTrees
 ["tree", treeId]                         research.getTree
 ["nodeContent", nodeId]                  research.getNodeContent
-["activity", { workspaceId, bookmarkedOnly }]  infinite: feed.recentActivity
+["activity", { scope, workspaceId }]     infinite: feed.recentActivity
 ["highlightsFeed", workspaceId]          highlights.listFeed
 ["activeNodes"]                          research.listActivity
 ["adminUsers"]                           admin.listUsers

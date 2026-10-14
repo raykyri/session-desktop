@@ -27,13 +27,6 @@ export const trees = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     archivedAt: integer("archived_at"),
     lastViewedAt: integer("last_viewed_at"),
-    followed: integer("followed", { mode: "boolean" }).notNull().default(false),
-    bookmarked: integer("bookmarked", { mode: "boolean" }).notNull().default(false),
-    /** Rank in the workspace's starred list, or 0 when not starred. A rank
-     * rather than a flag because `ResearchFolderState.starred` is one ordered
-     * sequence interleaving tree and folder ids, which two booleans cannot
-     * round-trip; `folders.starred` uses the same numbering. */
-    starred: integer("starred").notNull().default(0),
     /** Sidebar order within (`workspace_id`, `archived_at IS NULL`). New roots
      * insert at 0. */
     position: integer("position").notNull(),

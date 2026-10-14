@@ -35,8 +35,6 @@ import {
   useRemoveResearchTree,
   useRetryResearchNode,
   useRuntimeConfig,
-  useSetTreeBookmarked,
-  useSetTreeFollowed,
   useSettings,
   useTreeDetail,
 } from "../../api/queries.js";
@@ -182,8 +180,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const retryNode = useRetryResearchNode();
   const removeBranch = useRemoveResearchBranch();
   const removeTree = useRemoveResearchTree();
-  const setFollowed = useSetTreeFollowed();
-  const setBookmarked = useSetTreeBookmarked();
   const markViewed = useMarkTreeViewed();
   const updateDocument = useUpdateResearchDocument();
   const highlights = useHighlightMutations(treeId);
@@ -623,8 +619,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const retryMutate = retryNode.mutateAsync;
   const removeBranchMutate = removeBranch.mutateAsync;
   const removeTreeMutate = removeTree.mutateAsync;
-  const setFollowedMutate = setFollowed.mutate;
-  const setBookmarkedMutate = setBookmarked.mutate;
 
   // What a click acts on is what is on screen when it happens, not what was on
   // screen when its callback was created. Reading these through a ref is what
@@ -1037,16 +1031,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   /* ------------------------------------------------------------------ render */
 
-  // The detail object is replaced by every research event, so the toggles read
-  // the flag they invert at click time rather than closing over it.
-  const handleToggleFollow = useCallback(() => {
-    const tree = latestRef.current.detail?.tree;
-    if (tree) setFollowedMutate({ treeId, value: !tree.followed });
-  }, [setFollowedMutate, treeId]);
-  const handleToggleBookmark = useCallback(() => {
-    const tree = latestRef.current.detail?.tree;
-    if (tree) setBookmarkedMutate({ treeId, value: !tree.bookmarked });
-  }, [setBookmarkedMutate, treeId]);
   const handleExpandTurns = useCallback(
     (nodeId: string) => setExpanded(nodeId, true),
     [setExpanded],
@@ -1303,8 +1287,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                         null)
                       : null
                   }
-                  followed={Boolean(detail.tree.followed)}
-                  bookmarked={Boolean(detail.tree.bookmarked)}
                   showAllTurns={Boolean(expandedByNode[node.id])}
                   showFullTrace={Boolean(fullTraceNodes[node.id])}
                   durationText={durationLabel(node, now)}
@@ -1330,9 +1312,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                   answerMenuItems={me ? (answerMenuByNode.get(node.id) ?? null) : null}
                   registerElement={registerElement}
                   publish={publish}
-                  onToggleFollow={handleToggleFollow}
-                  onToggleBookmark={handleToggleBookmark}
-                  actionsBusy={setFollowed.isPending || setBookmarked.isPending}
                   onSelectNode={selectNode}
                   onExpandTurns={handleExpandTurns}
                   onShowFullTrace={handleShowFullTrace}

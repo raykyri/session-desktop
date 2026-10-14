@@ -2,7 +2,7 @@ import test from "ava";
 
 import {
   addTreesToResearchFolder,
-  buildResearchSidebarLists,
+  buildResearchSidebarUnits,
   createResearchFolder,
   dissolveResearchFolder,
   emptyResearchFolderState,
@@ -10,11 +10,9 @@ import {
   moveResearchFolderMemberToGap,
   moveResearchUnitToGap,
   removeTreesFromResearchFolderMembership,
-  removeTreesFromResearchFolders,
   researchFolderMemberIds,
   researchSidebarUnitId,
   setResearchFolderCollapsed,
-  toggleResearchStar,
   translateResearchGapAfterInsertion,
   visibleResearchTreeIds,
 } from "../src/research/folders.js";
@@ -44,7 +42,6 @@ function state(): ResearchFolderState {
       { id: "folder-b", name: "B", workspaceId: "workspace-1" },
     ],
     membership: { one: "folder-a", two: "folder-a", three: "folder-b" },
-    starred: ["one", "folder-a"],
     collapsed: ["folder-a"],
   };
 }
@@ -66,11 +63,11 @@ test("collapsed folders hide members from the visible research order", (t) => {
   const initial = state();
   t.deepEqual(
     visibleResearchTreeIds([tree("one"), tree("two"), tree("three"), tree("four")], initial),
-    ["one", "three", "four"],
+    ["three", "four"],
   );
 });
 
-test("unfoldering preserves item stars and the emptied folder", (t) => {
+test("unfoldering preserves the emptied folder", (t) => {
   const initial = state();
   const next = removeTreesFromResearchFolderMembership(initial, ["one", "two"]);
   t.deepEqual(next.membership, { three: "folder-b" });
@@ -78,17 +75,8 @@ test("unfoldering preserves item stars and the emptied folder", (t) => {
     next.folders.map((folder) => folder.id),
     ["folder-a", "folder-b"],
   );
-  t.deepEqual(next.starred, ["one", "folder-a"]);
   t.deepEqual(next.collapsed, ["folder-a"]);
   t.is(removeTreesFromResearchFolderMembership(next, ["one"]), next);
-});
-
-test("deleting trees drops their membership and their stars", (t) => {
-  const initial = state();
-  const next = removeTreesFromResearchFolders(initial, ["one"]);
-  t.deepEqual(next.membership, { two: "folder-a", three: "folder-b" });
-  t.deepEqual(next.starred, ["folder-a"]);
-  t.is(removeTreesFromResearchFolders(next, ["missing"]), next);
 });
 
 test("dissolving a folder returns its trees to the flat list", (t) => {
@@ -98,19 +86,12 @@ test("dissolving a folder returns its trees to the flat list", (t) => {
     ["folder-b"],
   );
   t.deepEqual(next.membership, { three: "folder-b" });
-  t.deepEqual(next.starred, ["one"]);
   t.deepEqual(next.collapsed, []);
 });
 
 test("folder membership is queryable by folder", (t) => {
   t.deepEqual(researchFolderMemberIds(state(), "folder-a"), ["one", "two"]);
   t.deepEqual(researchFolderMemberIds(state(), "missing"), []);
-});
-
-test("starring appends to the stored order and unstarring removes it", (t) => {
-  const starred = toggleResearchStar(state(), "three");
-  t.deepEqual(starred.starred, ["one", "folder-a", "three"]);
-  t.deepEqual(toggleResearchStar(starred, "one").starred, ["folder-a", "three"]);
 });
 
 test("moving the last member to another folder preserves the empty source folder", (t) => {
@@ -128,61 +109,36 @@ test("moving the last member to another folder preserves the empty source folder
   t.is(addTreesToResearchFolder(initial, "missing", ["three"]), initial);
 });
 
-test("moving trees into a folder clears their individual stars", (t) => {
-  const initial = state();
-  const next = addTreesToResearchFolder(initial, "folder-b", ["one"]);
-  t.is(next.membership.one, "folder-b");
-  t.deepEqual(next.starred, ["folder-a"]);
-});
-
-test("creating a folder moves its trees out of the individual starred list", (t) => {
+test("creating a folder moves its trees into it", (t) => {
   const created = createResearchFolder(state(), "workspace-1", ["one"], "Created");
   t.is(created.state.membership.one, created.folder.id);
-  t.deepEqual(created.state.starred, ["folder-a"]);
   t.regex(created.folder.id, /^rfolder-/);
 });
 
 test("empty folders are created and displayed in their workspace", (t) => {
   const created = createResearchFolder(emptyResearchFolderState(), "workspace-1", [], "Empty");
-  const lists = buildResearchSidebarLists([], created.state, "workspace-1");
   t.is(created.folder.name, "Empty");
-  t.deepEqual(lists.main, [{ kind: "folder", folder: created.folder, trees: [] }]);
-  t.deepEqual(buildResearchSidebarLists([], created.state, "workspace-2"), {
-    starred: [],
-    main: [],
-  });
-});
-
-test("starred trees and folders are pinned above the main list", (t) => {
-  const lists = buildResearchSidebarLists(
-    [tree("one"), tree("two"), tree("three"), tree("four")],
-    state(),
-  );
-  t.deepEqual(lists.starred.map(researchSidebarUnitId), ["one", "folder-a"]);
-  // `one` is starred individually, so folder A carries only its other member.
-  t.deepEqual(
-    lists.starred.map((unit) => (unit.kind === "folder" ? unit.trees.map((item) => item.id) : [])),
-    [[], ["two"]],
-  );
-  t.deepEqual(lists.main.map(researchSidebarUnitId), ["folder-b", "four"]);
+  t.deepEqual(buildResearchSidebarUnits([], created.state, "workspace-1"), [
+    { kind: "folder", folder: created.folder, trees: [] },
+  ]);
+  t.deepEqual(buildResearchSidebarUnits([], created.state, "workspace-2"), []);
 });
 
 test("units and folder members move to pointer gaps or report a no-op", (t) => {
-  const units = buildResearchSidebarLists(
+  const units = buildResearchSidebarUnits(
     [tree("one"), tree("two"), tree("three"), tree("four")],
     state(),
-  ).main;
+  );
+  t.deepEqual(units.map(researchSidebarUnitId), ["folder-a", "folder-b", "four"]);
   t.deepEqual(moveResearchUnitToGap(units, "four", 0)?.map(researchSidebarUnitId), [
     "four",
+    "folder-a",
     "folder-b",
   ]);
-  t.is(moveResearchUnitToGap(units, "four", 2), null);
+  t.is(moveResearchUnitToGap(units, "four", 3), null);
   t.is(moveResearchUnitToGap(units, "missing", 0), null);
 
-  const withMembers = buildResearchSidebarLists([tree("one"), tree("two")], {
-    ...state(),
-    starred: [],
-  }).main;
+  const withMembers = buildResearchSidebarUnits([tree("one"), tree("two")], state());
   const reordered = moveResearchFolderMemberToGap(withMembers, "folder-a", "two", 0);
   const folderUnit = reordered?.[0];
   t.deepEqual(folderUnit?.kind === "folder" ? folderUnit.trees.map((item) => item.id) : [], [

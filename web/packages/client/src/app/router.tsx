@@ -20,7 +20,6 @@ import {
   workspacesQueryOptions,
 } from "../api/queries.js";
 import { AdminPage } from "../routes/admin.js";
-import { BookmarksPage } from "../routes/bookmarks.js";
 import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
 import { LoginPage } from "../routes/login.js";
@@ -172,14 +171,6 @@ async function requireSignedIn({
   }
 }
 
-const bookmarksRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: "/bookmarks",
-  validateSearch: workspaceScopeSearchSchema,
-  beforeLoad: requireSignedIn,
-  component: BookmarksPage,
-});
-
 const highlightsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/highlights",
@@ -231,7 +222,6 @@ export const routeTree = rootRoute.addChildren([
   loginRoute,
   shellRoute.addChildren([
     homeRoute,
-    bookmarksRoute,
     highlightsRoute,
     researchRoute,
     settingsRoute,

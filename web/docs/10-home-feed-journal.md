@@ -30,7 +30,7 @@ Sections top to bottom:
 
 ## 2. Activity feed
 
-Data: `useInfiniteQuery(["activity", { scope, workspaceId, bookmarkedOnly }])`
+Data: `useInfiniteQuery(["activity", { scope, workspaceId }])`
 over `feed.recentActivity`, page size 50, `getNextPageParam = nextCursor`.
 `all` reads every public post, `mine` reads the signed-in account across all
 workspaces, and `workspace` preserves the existing account-wide journal plus
@@ -38,7 +38,7 @@ workspace-filtered research behavior. Items are `RecentActivityItem` (`journal`
 or `research-query`).
 
 Live updates: `feed.item.upserted` and `feed.item.removed` patch or invalidate
-only cache keys whose author/workspace/bookmark scope matches. Existing node
+only cache keys whose author/workspace scope matches. Existing node
 and journal events still patch in-place status, title, recap, and hydration
 fields. New items
 arriving while the user is scrolled down increment a counter shown on the
@@ -63,10 +63,8 @@ Cards:
   rows — indented under the question, each marked with the desktop's elbow
   (`journal.css` `.recent-query-child::before`, re-expressed as `before:`
   utilities) and reading at the body size, its `@` passage quote subdued and
-  its question a link into the child node — Follow
-  and Bookmark toggles beside the timestamp once the query is no longer
-  running (`ResearchActivityFeed.tsx:365`; `research.setTreeFollowed` /
-  `setTreeBookmarked`, optimistic). While the run is in flight the card shows
+  its question a link into the child node. (The Follow and Bookmark toggles
+  were removed in phase 2.0.) While the run is in flight the card shows
   the "Generating answer" line and no status word: the desktop drops its whole
   footer for a running question (`ResearchActivityFeed.tsx:466`), so repeating
   "Queued" or "Running" beside the model would only restate the spinner. Right-click opens the same tree menu as
@@ -92,10 +90,11 @@ otherwise, it creates a link entry. The server hydrates tweets and caches the
 snapshot. This
 is an addition beyond desktop parity and is marked as such in the checklist.
 
-## 3. Bookmarks (`/bookmarks`)
+## 3. Bookmarks (removed)
 
-Same feed component with `bookmarkedOnly: true` and no composer; the server
-filters roots by `trees.bookmarked` (the desktop filtered client-side).
+The Bookmarks feed, the stored Follow flag and sidebar stars were removed in
+phase 2.0 of the desktop parity plan. Follow returns later as a notification
+subscription.
 
 ## 4. Highlights (`/highlights`)
 
@@ -127,21 +126,20 @@ Limits: 10,000 words / 10 MiB with the same messages as the composer.
 Port of `ResearchSidebarSection.tsx` (1,605 lines), `ResearchFolderSwitcher.tsx`,
 and the sidebar parts of `App.tsx`:
 
-- Rows: Home, Bookmarks, Highlights. Their Cmd-digit chords resolve
+- Rows: Home, Highlights. Their Cmd-digit chords resolve
   (`shared/app/shortcuts.ts`) however, navigation rows no longer display shortcut badges, as the `showShortcutHints` preference and its associated modifier badges have been removed.
-- Research list: folders (collapsible, starred first), trees with status dot,
-  unseen-update and unseen-failure badges, running count, star, multi-select
+- Research list: folders (collapsible), trees with status dot,
+  unseen-update and unseen-failure badges, running count, multi-select
   (Shift/Cmd-click), drag reorder with pointer gaps (`researchFolders.ts` drag
   math), row context menu (`ResearchTreeMenuItems`,
-  `ResearchTreeMenu.tsx:60-180`: Generate summary, Unarchive, Star/Unstar,
-  Rename, Remove from folder, New folder with selection, Archive, Delete; Follow
-  and Bookmark live in the document footer and feed cards, not here), a
+  `ResearchTreeMenu.tsx:60-180`: Generate summary, Unarchive,
+  Rename, Remove from folder, New folder with selection, Archive, Delete), a
   multi-selection menu when right-clicking inside an active selection
   (`ResearchSidebarSection.tsx:381-384`: New folder from selection, Remove
   from folders, Archive, Delete), visibility filter (active/archived/all),
   archived section, "N selected" stage (`ResearchFolderDialog`).
 - Persisted order: `research.reorderTrees` for tree moves within a section;
-  `folders.set` for folder structure, stars, collapsed. Optimistic updates
+  `folders.set` for folder structure and collapsed state. Optimistic updates
   with rollback on error.
 - Folder switcher (`ResearchFolderSwitcher`, Cmd-O): list of workspaces with
   tree counts, create (name prompt instead of the native picker), rename,

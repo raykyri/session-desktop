@@ -4,16 +4,12 @@
 // the server normalizes it structurally and stores it, last write wins. The
 // desktop's `normalize_research_folder_state` (`research.rs:94`) is reproduced
 // exactly: dedupe folders, drop membership and collapsed entries pointing at
-// folders that are not in the state, dedupe stars. It deliberately does not
-// prune by tree existence.
+// folders that are not in the state. It deliberately does not prune by tree
+// existence.
 //
-// Membership and star rows reference `trees` and `folders`. Entries naming
-// nonexistent records are omitted during normalization because they cannot
-// satisfy the foreign key constraints used for tree deletion (`02` §3.2).
-//
-// `starred` is a rank, not a flag: `ResearchFolderState.starred` is one
-// ordered sequence interleaving tree ids and folder ids, and two booleans
-// cannot round-trip an interleaving.
+// Membership rows reference `trees` and `folders`. Entries naming nonexistent
+// records are omitted during normalization because they cannot satisfy the
+// foreign key constraints used for tree deletion (`02` §3.2).
 
 import type { ResearchFolder, ResearchFolderState } from "@session/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -40,13 +36,11 @@ export function normalizeFolderState(state: ResearchFolderState): ResearchFolder
       membership[treeId] = folderId;
     }
   }
-  const seenStars = new Set<string>();
-  const starred = state.starred.filter((id) => !seenStars.has(id) && seenStars.add(id));
   const seenCollapsed = new Set<string>();
   const collapsed = state.collapsed.filter(
     (id) => seenFolders.has(id) && !seenCollapsed.has(id) && seenCollapsed.add(id),
   );
-  return { folders: folderList, membership, starred, collapsed };
+  return { folders: folderList, membership, collapsed };
 }
 
 export function getState(
@@ -61,7 +55,7 @@ export function getState(
     .orderBy(asc(folders.position), asc(folders.id))
     .all();
   const treeRows = db
-    .select({ id: trees.id, starred: trees.starred })
+    .select({ id: trees.id })
     .from(trees)
     .where(and(eq(trees.userId, userId), eq(trees.workspaceId, workspaceId)))
     .all();
@@ -76,12 +70,6 @@ export function getState(
       membership[row.treeId] = row.folderId;
     }
   }
-  const ranked = [
-    ...folderRows.map((row) => ({ id: row.id, rank: row.starred })),
-    ...treeRows.map((row) => ({ id: row.id, rank: row.starred })),
-  ]
-    .filter((entry) => entry.rank > 0)
-    .sort((left, right) => left.rank - right.rank || left.id.localeCompare(right.id));
   return {
     folders: folderRows.map((row) => ({
       id: row.id,
@@ -89,7 +77,6 @@ export function getState(
       workspaceId: row.workspaceId,
     })),
     membership,
-    starred: ranked.map((entry) => entry.id),
     collapsed: folderRows.filter((row) => row.collapsed).map((row) => row.id),
   };
 }
@@ -146,12 +133,6 @@ export function setState(
     const keptFolders = candidateFolders.filter((folder) => !claimedElsewhere.has(folder.id));
     const keptFolderIds = new Set(keptFolders.map((folder) => folder.id));
     const collapsed = new Set(normalized.collapsed.filter((id) => keptFolderIds.has(id)));
-    const starRank = new Map<string, number>();
-    normalized.starred.forEach((id, index) => {
-      if (keptFolderIds.has(id) || knownTreeIds.has(id)) {
-        starRank.set(id, index + 1);
-      }
-    });
     const at = now();
     // Delete folder membership associations prior to deleting the folder record.
     for (const treeId of knownTreeIds) {
@@ -169,7 +150,6 @@ export function setState(
         workspaceId,
         name: folder.name,
         collapsed: collapsed.has(folder.id),
-        starred: starRank.get(folder.id) ?? 0,
         position,
         createdAt: at,
       };
@@ -180,7 +160,6 @@ export function setState(
           set: {
             name: values.name,
             collapsed: values.collapsed,
-            starred: values.starred,
             position,
             workspaceId,
           },
@@ -191,12 +170,6 @@ export function setState(
       if (knownTreeIds.has(treeId) && keptFolderIds.has(folderId)) {
         tx.insert(treeFolderMembership).values({ treeId, folderId }).run();
       }
-    }
-    for (const treeId of knownTreeIds) {
-      tx.update(trees)
-        .set({ starred: starRank.get(treeId) ?? 0 })
-        .where(eq(trees.id, treeId))
-        .run();
     }
     return getState(tx, userId, workspaceId);
   });

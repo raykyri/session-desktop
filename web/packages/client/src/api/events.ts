@@ -305,7 +305,6 @@ interface FeedEventMetadata {
   kind: "journal" | "research";
   authorId: string;
   workspaceId: string | null;
-  bookmarked: boolean;
 }
 
 function feedEventMetadata(payload: Record<string, unknown>): FeedEventMetadata | null {
@@ -313,17 +312,15 @@ function feedEventMetadata(payload: Record<string, unknown>): FeedEventMetadata 
   const kind = payload["kind"];
   const authorId = payload["authorId"];
   const workspaceId = payload["workspaceId"];
-  const bookmarked = payload["bookmarked"];
   if (
     typeof id !== "string" ||
     (kind !== "journal" && kind !== "research") ||
     typeof authorId !== "string" ||
-    (workspaceId !== null && typeof workspaceId !== "string") ||
-    typeof bookmarked !== "boolean"
+    (workspaceId !== null && typeof workspaceId !== "string")
   ) {
     return null;
   }
-  return { id, kind, authorId, workspaceId, bookmarked };
+  return { id, kind, authorId, workspaceId };
 }
 
 function cachedActivityScopes(client: QueryClient): ActivityQueryScope[] {
@@ -333,15 +330,13 @@ function cachedActivityScopes(client: QueryClient): ActivityQueryScope[] {
     if (typeof value !== "object" || value === null) continue;
     const scope = (value as Record<string, unknown>)["scope"];
     const workspaceId = (value as Record<string, unknown>)["workspaceId"];
-    const bookmarkedOnly = (value as Record<string, unknown>)["bookmarkedOnly"];
     if (
       (scope !== "all" && scope !== "mine" && scope !== "workspace") ||
-      (workspaceId !== null && typeof workspaceId !== "string") ||
-      typeof bookmarkedOnly !== "boolean"
+      (workspaceId !== null && typeof workspaceId !== "string")
     ) {
       continue;
     }
-    scopes.push({ scope, workspaceId, bookmarkedOnly });
+    scopes.push({ scope, workspaceId });
   }
   return scopes;
 }
@@ -351,7 +346,6 @@ function feedItemBelongs(
   metadata: FeedEventMetadata,
   userId: string | null,
 ): boolean {
-  if (scope.bookmarkedOnly && (metadata.kind !== "research" || !metadata.bookmarked)) return false;
   if (scope.scope === "all") return true;
   if (userId === null || metadata.authorId !== userId) return false;
   if (scope.scope === "mine" || metadata.kind === "journal") return true;

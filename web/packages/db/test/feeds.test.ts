@@ -172,29 +172,6 @@ test("the workspace filter narrows research and keeps journal entries", (t) => {
   t.deepEqual(page.items.map(itemId), ["here", "j1"], "the journal keeps its place in the order");
 });
 
-test("bookmarkedOnly shows bookmarked threads and no journal entries", (t) => {
-  const fixture = createFixture(t);
-  journal.add(fixture.db, fixture.userId, linkEntry("j1", 1_700_000_000_000));
-  const bookmarked = trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "Kept",
-    model: "gemini-flash",
-    nodeId: "kept",
-  });
-  trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "Not kept",
-    model: "gemini-flash",
-    nodeId: "not-kept",
-  });
-  trees.setBookmarked(fixture.db, fixture.userId, bookmarked.tree.id, true);
-  const page = feeds.recentActivity(fixture.db, fixture.userId, {
-    bookmarkedOnly: true,
-    limit: 10,
-  });
-  t.deepEqual(page.items.map(itemId), ["kept"]);
-});
-
 test("feedgen materializes writes and removes archived or deleted sources", (t) => {
   const fixture = createFixture(t);
   const entry = linkEntry("journal-row", 1_700_000_000_000);

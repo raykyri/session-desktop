@@ -58,8 +58,6 @@ export interface ThreadSegmentProps {
   workspaceId: string;
   isSelected: boolean;
   replyToAnswer: string | null;
-  followed: boolean;
-  bookmarked: boolean;
   showAllTurns: boolean;
   showFullTrace: boolean;
   durationText: string | null;
@@ -81,9 +79,6 @@ export interface ThreadSegmentProps {
 
   registerElement: (nodeId: string, kind: SegmentElementKind, element: HTMLElement | null) => void;
   publish: (segment: PublishedSegment) => void;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-  actionsBusy?: boolean;
   onSelectNode: (nodeId: string) => void;
   onExpandTurns: (nodeId: string) => void;
   onShowFullTrace: (nodeId: string) => void;
@@ -106,8 +101,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
     workspaceId,
     isSelected,
     replyToAnswer,
-    followed,
-    bookmarked,
     showAllTurns,
     showFullTrace,
     durationText,
@@ -221,13 +214,8 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
           index={index}
           replyToAnswer={replyToAnswer}
           running={segmentActive}
-          followed={followed}
-          bookmarked={bookmarked}
           workspaceId={workspaceId}
           onSelectNode={onSelectNode}
-          onToggleFollow={props.onToggleFollow}
-          onToggleBookmark={props.onToggleBookmark}
-          actionsBusy={props.actionsBusy ?? false}
         />
       </div>
       <div

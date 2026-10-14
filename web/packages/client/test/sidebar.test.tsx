@@ -24,7 +24,7 @@ import { activityPage, serverSettings, workspace, WORKSPACE_ID } from "./phase6F
 import { createTrpcStub } from "./trpcStub.js";
 
 function folderState(overrides: Partial<ResearchFolderState> = {}): ResearchFolderState {
-  return { folders: [], membership: {}, starred: [], collapsed: [], ...overrides };
+  return { folders: [], membership: {}, collapsed: [], ...overrides };
 }
 
 function testClient(): QueryClient {
@@ -56,13 +56,16 @@ test("reorder requests omitting section items are rejected without modifying ord
 });
 
 test("folder updates apply optimistically and reconcile with server responses", async (t) => {
-  const stored = folderState({ starred: ["t1"] });
+  const stored = folderState({
+    folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
+    membership: { t1: "f1" },
+  });
   const stub = createTrpcStub({ "folders.set": stored });
   setTrpcClient(stub.client);
   const client = testClient();
   client.setQueryData(queryKeys.folders("w1"), folderState());
 
-  const guess = folderState({ starred: ["t1"], collapsed: ["f1"] });
+  const guess = { ...stored, collapsed: ["f1"] };
   const applied = await applyFolderState(client, "w1", guess);
 
   t.true(applied);
@@ -75,7 +78,10 @@ test("folder updates apply optimistically and reconcile with server responses", 
 });
 
 test("a failed folder update rolls back the cache to its previous state", async (t) => {
-  const before = folderState({ starred: ["t1"] });
+  const before = folderState({
+    folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
+    membership: { t1: "f1" },
+  });
   const stub = createTrpcStub({
     "folders.set": () => {
       throw new Error("nope");
@@ -85,7 +91,7 @@ test("a failed folder update rolls back the cache to its previous state", async 
   const client = testClient();
   client.setQueryData(queryKeys.folders("w1"), before);
 
-  const applied = await applyFolderState(client, "w1", folderState({ starred: ["t1", "t2"] }));
+  const applied = await applyFolderState(client, "w1", { ...before, collapsed: ["f1"] });
 
   t.false(applied);
   t.deepEqual(client.getQueryData(queryKeys.folders("w1")), before);

@@ -6,7 +6,7 @@ import { folders, trees } from "../src/index.js";
 import { addUser, createFixture } from "./helpers.js";
 
 function state(partial: Partial<ResearchFolderState>): ResearchFolderState {
-  return { folders: [], membership: {}, starred: [], collapsed: [], ...partial };
+  return { folders: [], membership: {}, collapsed: [], ...partial };
 }
 
 test("normalization dedupes folders and drops entries naming absent folders", (t) => {
@@ -18,7 +18,6 @@ test("normalization dedupes folders and drops entries naming absent folders", (t
         { id: "f2", name: "Two", workspaceId: "w" },
       ],
       membership: { t1: "f1", t2: "missing" },
-      starred: ["t1", "t1", "f2"],
       collapsed: ["f1", "f1", "missing"],
     }),
   );
@@ -28,16 +27,10 @@ test("normalization dedupes folders and drops entries naming absent folders", (t
     "the first record of an id wins",
   );
   t.deepEqual(normalized.membership, { t1: "f1" });
-  t.deepEqual(normalized.starred, ["t1", "f2"]);
   t.deepEqual(normalized.collapsed, ["f1"]);
 });
 
-test("normalization does not prune stars by tree existence", (t) => {
-  const normalized = folders.normalizeFolderState(state({ starred: ["a-tree-we-cannot-see"] }));
-  t.deepEqual(normalized.starred, ["a-tree-we-cannot-see"]);
-});
-
-test("the stored state round-trips folders, membership, stars, and collapse", (t) => {
+test("the stored state round-trips folders, membership, and collapse", (t) => {
   const fixture = createFixture(t);
   const first = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -58,10 +51,7 @@ test("the stored state round-trips folders, membership, stars, and collapse", (t
         { id: "f1", name: "Reading", workspaceId: fixture.workspaceId },
         { id: "f2", name: "Later", workspaceId: fixture.workspaceId },
       ],
-      membership: { [first.tree.id]: "f1" },
-      // An interleaving of a tree and a folder, which is why `starred` is a
-      // rank rather than a flag.
-      starred: [second.tree.id, "f2", first.tree.id],
+      membership: { [first.tree.id]: "f1", [second.tree.id]: "f2" },
       collapsed: ["f2"],
     }),
   );
@@ -69,8 +59,7 @@ test("the stored state round-trips folders, membership, stars, and collapse", (t
     stored.folders.map((folder) => folder.id),
     ["f1", "f2"],
   );
-  t.deepEqual(stored.membership, { [first.tree.id]: "f1" });
-  t.deepEqual(stored.starred, [second.tree.id, "f2", first.tree.id]);
+  t.deepEqual(stored.membership, { [first.tree.id]: "f1", [second.tree.id]: "f2" });
   t.deepEqual(stored.collapsed, ["f2"]);
   t.deepEqual(folders.getState(fixture.db, fixture.userId, fixture.workspaceId), stored);
 });
@@ -84,11 +73,9 @@ test("entries naming a tree the workspace does not have are dropped", (t) => {
     state({
       folders: [{ id: "f1", name: "Reading", workspaceId: fixture.workspaceId }],
       membership: { "tree-that-does-not-exist": "f1" },
-      starred: ["tree-that-does-not-exist", "f1"],
     }),
   );
   t.deepEqual(stored.membership, {});
-  t.deepEqual(stored.starred, ["f1"]);
 });
 
 test("a later write replaces the earlier one", (t) => {

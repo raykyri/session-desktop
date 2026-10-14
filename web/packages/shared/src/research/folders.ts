@@ -16,15 +16,14 @@ import type {
 } from "../types/research.js";
 
 export function emptyResearchFolderState(): ResearchFolderState {
-  return { folders: [], membership: {}, starred: [], collapsed: [] };
+  return { folders: [], membership: {}, collapsed: [] };
 }
 
-/** No folders, memberships, stars, or collapsed flags — nothing to persist. */
+/** No folders, memberships, or collapsed flags — nothing to persist. */
 export function isEmptyResearchFolderState(state: ResearchFolderState): boolean {
   return (
     state.folders.length === 0 &&
     Object.keys(state.membership).length === 0 &&
-    state.starred.length === 0 &&
     state.collapsed.length === 0
   );
 }
@@ -37,34 +36,6 @@ function generateFolderId(): string {
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   return `rfolder-${uuid}`;
-}
-
-export function isResearchStarred(state: ResearchFolderState, id: string): boolean {
-  return state.starred.includes(id);
-}
-
-/** Adds the id to the end of the starred order, or removes it. */
-export function toggleResearchStar(state: ResearchFolderState, id: string): ResearchFolderState {
-  return {
-    ...state,
-    starred: state.starred.includes(id)
-      ? state.starred.filter((starredId) => starredId !== id)
-      : [...state.starred, id],
-  };
-}
-
-/** Applies a new order for the currently displayed starred entries while
- * preserving any stored entries that are not on screen (other scopes,
- * archived trees) in their relative positions after them. */
-export function replaceResearchStarOrder(
-  state: ResearchFolderState,
-  orderedDisplayedIds: string[],
-): ResearchFolderState {
-  const displayed = new Set(orderedDisplayedIds);
-  return {
-    ...state,
-    starred: [...orderedDisplayedIds, ...state.starred.filter((id) => !displayed.has(id))],
-  };
 }
 
 export function createResearchFolder(
@@ -83,15 +54,12 @@ export function createResearchFolder(
       ...state,
       folders: [...state.folders, folder],
       membership,
-      starred: state.starred.filter((id) => !treeIds.includes(id)),
     },
     folder,
   };
 }
 
-/** Moves trees into one folder. A tree-level star is cleared so the moved row
- * appears inside its destination; the destination folder's own star is
- * independent and remains intact. */
+/** Moves trees into one folder. */
 export function addTreesToResearchFolder(
   state: ResearchFolderState,
   folderId: string,
@@ -107,7 +75,6 @@ export function addTreesToResearchFolder(
   return {
     ...state,
     membership,
-    starred: state.starred.filter((id) => !treeIds.includes(id)),
   };
 }
 
@@ -142,36 +109,9 @@ export function renameResearchFolder(
   };
 }
 
-/** Drops individual trees out of whatever folder holds them, and out of the
- * starred list — a tree passed here is gone, foldered or not. Folder records
+/** Drops individual trees out of whatever folder holds them. Folder records
  * survive independently so deleting their last member leaves a reusable empty
  * folder. */
-export function removeTreesFromResearchFolders(
-  state: ResearchFolderState,
-  treeIds: string[],
-): ResearchFolderState {
-  const removed = new Set(treeIds);
-  const membership = { ...state.membership };
-  let membershipChanged = false;
-  for (const treeId of treeIds) {
-    if (treeId in membership) {
-      delete membership[treeId];
-      membershipChanged = true;
-    }
-  }
-  const starred = state.starred.filter((id) => !removed.has(id));
-  if (!membershipChanged && starred.length === state.starred.length) {
-    return state;
-  }
-  return {
-    ...state,
-    membership,
-    starred,
-  };
-}
-
-/** Removes only the organizational membership for the supplied trees. Stars
- * on the trees and empty folders are preserved. */
 export function removeTreesFromResearchFolderMembership(
   state: ResearchFolderState,
   treeIds: string[],
@@ -208,7 +148,6 @@ export function dissolveResearchFolder(
   return {
     folders: state.folders.filter((folder) => folder.id !== folderId),
     membership,
-    starred: state.starred.filter((id) => id !== folderId),
     collapsed: state.collapsed.filter((id) => id !== folderId),
   };
 }
@@ -307,67 +246,7 @@ export function visibleResearchTreeIds(
   trees: ResearchTreeSummary[],
   state: ResearchFolderState,
 ): string[] {
-  const lists = buildResearchSidebarLists(trees, state);
-  return [
-    ...flattenVisibleResearchSidebarUnits(lists.starred, state),
-    ...flattenVisibleResearchSidebarUnits(lists.main, state),
-  ];
-}
-
-export interface ResearchSidebarLists {
-  /** Units pinned to the top, in the stored starred order. */
-  starred: ResearchSidebarUnit[];
-  /** Everything else, in the server's flat order. */
-  main: ResearchSidebarUnit[];
-}
-
-/** Splits the display into the starred list and the main list. A starred tree
- * always shows in the starred list — even out of a folder it belongs to — and
- * a starred folder brings its remaining members with it. */
-export function buildResearchSidebarLists(
-  trees: ResearchTreeSummary[],
-  state: ResearchFolderState,
-  workspaceId?: string | null,
-): ResearchSidebarLists {
-  const starredSet = new Set(state.starred);
-  const starredFolderIds = new Set(
-    state.folders.filter((folder) => starredSet.has(folder.id)).map((folder) => folder.id),
-  );
-  const mainTrees = trees.filter((tree) => {
-    if (starredSet.has(tree.id)) {
-      return false;
-    }
-    const folderId = state.membership[tree.id];
-    return !folderId || !starredFolderIds.has(folderId);
-  });
-  const starred: ResearchSidebarUnit[] = [];
-  const displayedWorkspaceId = workspaceId ?? inferWorkspaceId(trees);
-  const foldersWithStoredMembers = new Set(Object.values(state.membership));
-  for (const id of state.starred) {
-    const folder = state.folders.find((candidate) => candidate.id === id);
-    if (folder) {
-      const members = trees.filter(
-        (tree) => state.membership[tree.id] === id && !starredSet.has(tree.id),
-      );
-      if (
-        members.length > 0 ||
-        (folder.workspaceId === displayedWorkspaceId && !foldersWithStoredMembers.has(folder.id))
-      ) {
-        starred.push({ kind: "folder", folder, trees: members });
-      }
-      continue;
-    }
-    const tree = trees.find((candidate) => candidate.id === id);
-    if (tree) {
-      starred.push({ kind: "tree", tree });
-    }
-  }
-  return {
-    starred,
-    main: buildResearchSidebarUnits(mainTrees, state, displayedWorkspaceId).filter(
-      (unit) => unit.kind === "tree" || !starredFolderIds.has(unit.folder.id),
-    ),
-  };
+  return flattenVisibleResearchSidebarUnits(buildResearchSidebarUnits(trees, state), state);
 }
 
 /** Moves one unit (tree or whole folder) to a gap in the unit list. Returns

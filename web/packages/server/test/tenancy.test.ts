@@ -189,16 +189,6 @@ const ATTEMPTS: readonly Attempt[] = [
     run: ({ caller, owned }) => caller.research.markTreeViewed({ treeId: owned.treeId }),
   },
   {
-    name: "research.setTreeFollowed",
-    run: ({ caller, owned }) =>
-      caller.research.setTreeFollowed({ treeId: owned.treeId, value: true }),
-  },
-  {
-    name: "research.setTreeBookmarked",
-    run: ({ caller, owned }) =>
-      caller.research.setTreeBookmarked({ treeId: owned.treeId, value: true }),
-  },
-  {
     name: "research.archiveTree",
     run: ({ caller, owned }) => caller.research.archiveTree({ treeId: owned.treeId }),
   },
@@ -432,9 +422,6 @@ test("global feed reads cross accounts while personal scopes and fields stay bou
   await t.throwsAsync(guest.feed.recentActivity({ scope: "mine" }), { message: /sign in/ });
   await t.throwsAsync(guest.feed.recentActivity({ scope: "workspace" }), {
     message: /sign in/,
-  });
-  await t.throwsAsync(guest.feed.recentActivity({ scope: "all", bookmarkedOnly: true }), {
-    message: /private bookmarks/,
   });
 });
 

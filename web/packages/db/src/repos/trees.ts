@@ -22,12 +22,7 @@ import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
 import { attachWithin } from "./documents.js";
-import {
-  markArchived,
-  removeResearchTree,
-  upsertResearchRoot,
-  upsertResearchTree,
-} from "./feedgen.js";
+import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
 
@@ -138,9 +133,6 @@ export function admitRoot(
         updatedAt: at,
         archivedAt: null,
         lastViewedAt: at,
-        followed: false,
-        bookmarked: false,
-        starred: 0,
         position: 0,
       })
       .returning()
@@ -337,8 +329,6 @@ export function summaries(
       cancelledCount: entry?.cancelled ?? 0,
       updatedAt: row.updatedAt,
       archivedAt: row.archivedAt,
-      followed: row.followed,
-      bookmarked: row.bookmarked,
       hasUnseenUpdate: unseen(entry?.latestSettlement),
       hasUnseenFailure: unseen(entry?.latestFailure),
     };
@@ -443,28 +433,6 @@ function setFlag(
     throw new Error(`research tree ${treeId} was not found`);
   }
   return toResearchTree(row);
-}
-
-export function setFollowed(
-  db: SessionDatabase,
-  userId: string,
-  treeId: string,
-  followed: boolean,
-): ResearchTree {
-  return setFlag(db, userId, treeId, { followed });
-}
-
-export function setBookmarked(
-  db: SessionDatabase,
-  userId: string,
-  treeId: string,
-  bookmarked: boolean,
-): ResearchTree {
-  return transact(db, (tx) => {
-    const tree = setFlag(tx, userId, treeId, { bookmarked });
-    upsertResearchTree(tx, treeId);
-    return tree;
-  });
 }
 
 /** Viewing acknowledges unseen updates and failures. */

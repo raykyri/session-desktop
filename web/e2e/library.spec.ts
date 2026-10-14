@@ -1,22 +1,15 @@
 // Everything that happens to a thread after it finishes
-// (`12-testing-linting-ci.md` §3.6): bookmarking and the two feeds, archiving,
-// importing a report, and the
-// appearance settings surviving a reload.
+// (`12-testing-linting-ci.md` §3.6): the Home feed, archiving, importing a
+// report, and the appearance settings surviving a reload.
 
 import { expect, test } from "@playwright/test";
 
 import { responseRoot, signInAndOpenHome, startResearch, waitForAnswer } from "./helpers.js";
 
-test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", async ({
-  page,
-}) => {
+test("a finished thread shows in Home, and archiving hides it", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-library" });
   await startResearch(page, "What is a skip list?");
   await waitForAnswer(page);
-
-  // Thread actions menu is displayed below the root question after run completion.
-  await page.getByRole("button", { name: "Bookmark", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Remove bookmark" })).toBeVisible();
 
   const title = "What is a skip list?";
 
@@ -24,11 +17,6 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   const home = page.getByRole("feed", { name: "All Users" });
   // The row and the card are both articles, so the outermost match is taken.
   await expect(home.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
-
-  await page.goto("/bookmarks");
-  await expect(page.getByRole("heading", { name: "Bookmarks", level: 1 })).toBeVisible();
-  const bookmarks = page.getByRole("feed", { name: "Bookmarks" });
-  await expect(bookmarks.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
 
   // Archive is in the thread menu, which the sidebar row and the Home card
   // share (`features/research/treeMenu.tsx`).
@@ -50,7 +38,7 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
 
   await expect(rows).toHaveCount(0);
   // The thread behind the menu is not opened by the same click.
-  await expect(page).toHaveURL(/\/bookmarks$/);
+  await expect(page).not.toHaveURL(/\/r\//);
   await expect(page.locator("[data-base-ui-inert]")).toHaveCount(0);
 
   // The item is filtered from the active view; switching to the archived filter displays it.

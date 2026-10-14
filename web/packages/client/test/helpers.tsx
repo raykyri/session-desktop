@@ -50,7 +50,7 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
     "research.listTrees": [],
     "research.listActivity": [],
     "feed.recentActivity": { items: [], nextCursor: null },
-    "folders.get": { folders: [], membership: {}, starred: [], collapsed: [] },
+    "folders.get": { folders: [], membership: {}, collapsed: [] },
     "events.subscribe": undefined,
   };
 }

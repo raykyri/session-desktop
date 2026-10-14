@@ -1,8 +1,8 @@
 // One thread segment's question (`09-research-document-view.md` §2).
 //
 // Index 0 is the page's own question and contains the thread's chrome: the Back
-// link to the parent it branched from, the Follow / Bookmark pair, the
-// answering model and when it was asked. Every later segment is an inline
+// link to the parent it branched from, the answering model and when it was
+// asked. Every later segment is an inline
 // follow-up and shows only what orients the reader inside the thread — the
 // snippet it replies to and, for a targeted ask, the passage it was asked
 // about.
@@ -12,7 +12,6 @@ import { visibleResearchPrompt } from "@session/shared";
 import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
-import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { ControlButton } from "../../ui/Button.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
@@ -21,11 +20,8 @@ import { TweetAttachments, resolvedTweets } from "../journal/TweetAttachments.js
 import { ResearchMarkdown } from "../markdown/index.js";
 
 import { DocumentChips } from "./DocumentChips.js";
-import { ThreadActions } from "./ThreadActions.js";
 import { formatResearchReplySnippet, quoteDisplayText } from "./selection/dom.js";
 
-/** Follow and Bookmark for one thread. Both flags live on the tree, so Home's
- * card and the open thread render the same pair from the same state. */
 export interface SegmentPromptProps {
   node: ResearchNode;
   /** Position in the rendered spine. Index 0 is the page's question. */
@@ -33,13 +29,8 @@ export interface SegmentPromptProps {
   /** The previous segment's answer, for the "Reply to" line. */
   replyToAnswer: string | null;
   running: boolean;
-  followed: boolean;
-  bookmarked: boolean;
   workspaceId: string;
   onSelectNode: (nodeId: string) => void;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-  actionsBusy?: boolean;
 }
 
 export const SegmentPrompt = memo(function SegmentPrompt({
@@ -47,15 +38,9 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   index,
   replyToAnswer,
   running,
-  followed,
-  bookmarked,
   workspaceId,
   onSelectNode,
-  onToggleFollow,
-  onToggleBookmark,
-  actionsBusy = false,
 }: SegmentPromptProps) {
-  const signedIn = useSignedIn();
   if ((node.kind ?? "run") === "document") return null;
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   // The posts the question links to are embedded below it, and a permalink
@@ -65,7 +50,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   const prompt = visibleResearchPrompt(node.prompt, node.attachments);
   const embedded = resolvedTweets(node.attachments).length > 0;
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
-  // Metadata items (follow button, model badge, elapsed time) are displayed only after the run completes.
+  // Metadata items (model badge, elapsed time) are displayed only after the run completes.
   const showFooter = index === 0 && !running;
   const parentNodeId = node.parentNodeId ?? null;
 
@@ -115,16 +100,6 @@ export const SegmentPrompt = memo(function SegmentPrompt({
           )}
         >
           <ModelMeta modelId={node.model} origin={node.origin} at={askedAt} />
-          {signedIn ? (
-            <ThreadActions
-              className="ml-auto"
-              followed={followed}
-              bookmarked={bookmarked}
-              onToggleFollow={onToggleFollow}
-              onToggleBookmark={onToggleBookmark}
-              busy={actionsBusy}
-            />
-          ) : null}
         </div>
       ) : null}
     </div>

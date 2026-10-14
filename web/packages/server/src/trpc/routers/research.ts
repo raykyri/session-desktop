@@ -297,23 +297,6 @@ export const researchRouter = router({
       return tree;
     }),
 
-  setTreeFollowed: protectedProcedure
-    .input(z.object({ treeId: z.string(), value: z.boolean() }))
-    .mutation(({ ctx, input }) => {
-      const tree = repo(() => trees.setFollowed(ctx.db, ctx.user.id, input.treeId, input.value));
-      publish(ctx, "research.tree.updated", { tree });
-      return tree;
-    }),
-
-  setTreeBookmarked: protectedProcedure
-    .input(z.object({ treeId: z.string(), value: z.boolean() }))
-    .mutation(({ ctx, input }) => {
-      const tree = repo(() => trees.setBookmarked(ctx.db, ctx.user.id, input.treeId, input.value));
-      publish(ctx, "research.tree.updated", { tree });
-      emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
-      return tree;
-    }),
-
   archiveTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {

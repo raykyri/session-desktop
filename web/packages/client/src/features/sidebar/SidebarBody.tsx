@@ -1,11 +1,11 @@
 // Everything inside the sidebar frame (`10-home-feed-journal.md`
-// §7): the three top-level rows, the workspace switcher, and the research list.
+// §7): the two top-level rows, the workspace switcher, and the research list.
 //
 // Split out of `AppShell`'s `Sidebar` so the narrow-layout drawer and the
 // resizable column render the same thing rather than two divergent copies.
 
 import { Link } from "@tanstack/react-router";
-import { Bookmark, Highlighter, Home } from "lucide-react";
+import { Highlighter, Home } from "lucide-react";
 
 import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
@@ -15,13 +15,12 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher.js";
 import { SIDEBAR_ROW, SIDEBAR_ROW_SELECTED } from "./rows.js";
 import { useWorkspaceScope } from "./scope.js";
 
-/** The three top-level rows. Their Cmd-digit chords still resolve
+/** The two top-level rows. Their Cmd-digit chords still resolve
  * (`shared/app/shortcuts.ts`); the rows no longer print a badge for them, so
  * the chord table in the command palette is the one place that advertises a
  * chord. */
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Home },
-  { to: "/bookmarks", label: "Bookmarks", icon: Bookmark },
   { to: "/highlights", label: "Highlights", icon: Highlighter },
 ] as const;
 

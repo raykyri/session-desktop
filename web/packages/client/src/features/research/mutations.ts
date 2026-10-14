@@ -1,8 +1,8 @@
 // Mutations used only by the document view
 // (`09-research-document-view.md` §4).
 //
-// The thread-level mutations (fork, cancel, retry, rename, remove, follow,
-// bookmark, mark-viewed) live in `api/queries.ts` because the sidebar and Home
+// The thread-level mutations (fork, cancel, retry, rename, remove,
+// mark-viewed) live in `api/queries.ts` because the sidebar and Home
 // call them too. Highlights, document edits and recaps are only ever issued
 // from an open document, so they live beside it.
 //

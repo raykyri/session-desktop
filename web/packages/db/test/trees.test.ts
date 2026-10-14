@@ -154,11 +154,9 @@ test("archive and restore move a thread between sections", (t) => {
   t.is(trees.summaries(fixture.db, fixture.userId).length, 1);
 });
 
-test("follow, bookmark, rename, and touch move updated_at strictly forward", (t) => {
+test("rename and touch move updated_at strictly forward", (t) => {
   const fixture = createFixture(t);
   const detail = admit(fixture, "Root");
-  t.true(trees.setFollowed(fixture.db, fixture.userId, detail.tree.id, true).followed);
-  t.true(trees.setBookmarked(fixture.db, fixture.userId, detail.tree.id, true).bookmarked);
   t.is(trees.rename(fixture.db, fixture.userId, detail.tree.id, "  Renamed  ").title, "Renamed");
   const before = trees.get(fixture.db, fixture.userId, detail.tree.id)?.updatedAt ?? 0;
   trees.touchTree(fixture.db, detail.tree.id, before - 10_000);

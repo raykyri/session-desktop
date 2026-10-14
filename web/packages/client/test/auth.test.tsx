@@ -1,5 +1,5 @@
-// The shell is public (07 §2). Guests read the catalog; `/bookmarks`,
-// `/highlights`, and `/admin` still redirect to `/login`. Account-scoped boot
+// The shell is public (07 §2). Guests read the catalog; `/highlights` and
+// `/admin` still redirect to `/login`. Account-scoped boot
 // queries (`settings.get`, live events) stay behind a session.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";

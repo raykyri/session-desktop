@@ -148,10 +148,6 @@ export const researchTreeSchema = z.object({
   updatedAt: z.number(),
   archivedAt: z.number().nullish(),
   lastViewedAt: z.number().nullish(),
-  /** Home's Follow control; persisted on the thread. */
-  followed: z.boolean().optional(),
-  /** Home's Bookmark control; persisted on the thread. */
-  bookmarked: z.boolean().optional(),
 });
 
 export type ResearchTree = z.infer<typeof researchTreeSchema>;
@@ -209,8 +205,6 @@ export const researchTreeSummarySchema = z.object({
   cancelledCount: z.number(),
   updatedAt: z.number(),
   archivedAt: z.number().nullish(),
-  followed: z.boolean().optional(),
-  bookmarked: z.boolean().optional(),
   hasUnseenUpdate: z.boolean(),
   /** A failure settled after the tree was last viewed. An attention flag —
    * viewing the tree acknowledges it — unlike `failedCount`, a lifetime
@@ -357,8 +351,6 @@ export const researchFolderStateSchema = z.object({
   folders: z.array(researchFolderSchema),
   /** treeId -> folderId */
   membership: z.record(z.string(), z.string()),
-  /** Starred tree and folder ids, in the starred list's display order. */
-  starred: z.array(z.string()),
   /** Folder ids whose member rows are hidden in the sidebar. */
   collapsed: z.array(z.string()),
 });

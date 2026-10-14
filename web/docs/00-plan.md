@@ -29,7 +29,7 @@ updated (`14-legacy-inventory.md`).
 
 Goals
 
-- Functional parity for the research product: Home / Bookmarks / Highlights,
+- Functional parity for the research product: Home / Highlights,
   research documents with streaming answers, follow-ups (inline and branching),
   highlight-anchored asks, retry/cancel, recaps, titles,
   journal links and X posts, workspaces and folders, report import, settings,
@@ -166,8 +166,9 @@ Spec: `09-research-document-view.md`, `10-home-feed-journal.md`.
   picker, document attach), cards, pagination, undo, import; research
   document view with streaming, `interrupted`, queue position, highlights,
   asks, inline and branch follow-ups with model choice, recap dialog, DOM
-  search, sources footer, document chips; highlights and
-  bookmarks feeds; shortcuts and palette; admin user list.
+  search, sources footer, document chips; highlights feed; shortcuts and
+  palette; admin user list. (Bookmarks, stars and Follow were removed in
+  phase 2.0 of the desktop parity plan.)
 - Exit: parity checklist §8 green except Phase 7 items.
 
 ### Phase 7 — Artifacts and document preview (small)
@@ -244,13 +245,12 @@ specs under `e2e/`.
       reader's row are counted as new". The error-state Retry button, the
       Refresh button, the sticky new-activity button, and scroll-anchor
       restoration have no test that drives them through the DOM.
-- [x] **Verified** — Query cards with children, recap, follow and bookmark,
-      context menu with Generate summary.
+- [x] **Verified** — Query cards with children, recap, and a context menu
+      with Generate summary. (Follow and Bookmark were removed in phase 2.0.)
       `features/home/ResearchQueryCard.tsx`; `feed.test.tsx` "a query card
-      renders its recap and its follow-up questions" and "a card's menu writes
-      the star it offers, and offers no folder row";
-      `research.dialogs.test.tsx` covers the Generate summary row;
-      `library.spec.ts` drives Bookmark and its two feeds.
+      renders its recap and its follow-up questions" and "feed card menu omits
+      folder actions"; `research.dialogs.test.tsx` covers the Generate summary
+      row.
 - [x] **Verified** — Journal link and X post cards with hydration, menu
       rows (without shortcut badges: Base UI menus do not support letter shortcuts), undo delete; adding a
       link or X URL from the composer (web addition).
@@ -261,9 +261,9 @@ specs under `e2e/`.
       URL omits actions that require it", "removing a journal entry displays an
       undo action that restores the same row"; `composer.test.tsx` "a bare URL is saved to
       the journal instead of launching a run"; `packages/server/test/journal.test.ts`.
-- [ ] **Partial** — Bookmarks tab; Highlights tab with day headers, refresh,
-      and focus scroll.
-      `routes/bookmarks.tsx`, `features/highlights/HighlightsFeed.tsx`;
+- [ ] **Partial** — Highlights tab with day headers, refresh, and focus
+      scroll. (The Bookmarks tab was removed in phase 2.0.)
+      `features/highlights/HighlightsFeed.tsx`;
       `highlights.test.tsx` "day headers are named in local time, not in UTC"
       and "grouping keeps the server's order and starts a section per day";
       `research.document.test.tsx` "?highlight= scrolls the passage into view

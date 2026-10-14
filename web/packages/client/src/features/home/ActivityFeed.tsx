@@ -1,4 +1,4 @@
-// The Home and Bookmarks feed (`10-home-feed-journal.md` §2, §3,
+// The Home feed (`10-home-feed-journal.md` §2,
 // ported from `ResearchActivityFeed.tsx`).
 //
 // The desktop hand-rolled its virtual canvas — cumulative offsets, a binary
@@ -12,7 +12,6 @@ import {
   buildRecentActivityFromItems,
   normalizeJournalEntry,
   recentActivityItemId,
-  toggleResearchStar,
 } from "@session/shared";
 import type {
   JournalEntry,
@@ -41,8 +40,6 @@ import {
   useArchiveResearchTree,
   useRemoveResearchTree,
   useRenameResearchTree,
-  useSetTreeBookmarked,
-  useSetTreeFollowed,
   useTreeSummaries,
   useFolders,
 } from "../../api/queries.js";
@@ -62,7 +59,6 @@ import { JournalEntryCard } from "../journal/JournalEntryCard.js";
 import { journalEntryUrl, type JournalMenuAction } from "../journal/entryMenu.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../research/treeMenu.js";
-import { applyFolderState } from "../sidebar/mutations.js";
 
 import { ResearchQueryCard } from "./ResearchQueryCard.js";
 import {
@@ -91,7 +87,6 @@ export function estimateRowHeight(item: RecentActivityItem): number {
 const EMPTY_FOLDER_STATE: ResearchFolderState = {
   folders: [],
   membership: {},
-  starred: [],
   collapsed: [],
 };
 
@@ -103,9 +98,6 @@ export interface ActivityFeedProps {
     workspaceTitle: string;
     onChange: (mode: FeedMode) => void;
   };
-  /** Bookmarks is the same feed with the server filtering roots by
-   * `trees.bookmarked`; it has no composer and no import target. */
-  bookmarkedOnly?: boolean;
   title: string;
   /** Home's composer and import row, rendered above the feed. */
   header?: React.ReactNode;
@@ -146,7 +138,6 @@ export function ActivityFeed({
   workspaceId,
   scope = "workspace",
   scopeSwitcher,
-  bookmarkedOnly = false,
   title,
   header,
   scrollRef: externalScrollRef,
@@ -158,22 +149,17 @@ export function ActivityFeed({
 
   const navigate = useNavigate();
   const client = useQueryClient();
-  const feed = useActivityFeed({ scope, workspaceId, bookmarkedOnly });
+  const feed = useActivityFeed({ scope, workspaceId });
   const summaries = useTreeSummaries({ workspaceId });
   const folders = useFolders(workspaceId);
   const rename = useRenameResearchTree();
   const archive = useArchiveResearchTree();
   const remove = useRemoveResearchTree();
-  const setFollowed = useSetTreeFollowed();
-  const setBookmarked = useSetTreeBookmarked();
 
   const signedIn = useSignedIn();
   const canManage = signedIn && scope !== "all";
-  const view = bookmarkedOnly
-    ? workspaceId === ""
-      ? ""
-      : `bookmarks:${workspaceId}`
-    : scope === "all"
+  const view =
+    scope === "all"
       ? "all-users"
       : scope === "mine"
         ? "my-workspaces"
@@ -418,12 +404,8 @@ export function ActivityFeed({
         tree={tree}
         archived={tree.archivedAt != null}
         folderState={folderState}
-        // Star status is folder state, which can be updated from either the feed
-        // or sidebar. Folder actions are omitted because this surface has no
-        // folder dialog to support them (`10` §2).
-        onToggleStar={(treeId) =>
-          void applyFolderState(client, workspaceId, toggleResearchStar(folderState, treeId))
-        }
+        // Folder actions are omitted because this surface has no folder dialog
+        // to support them (`10` §2).
         onRename={setRenamingTree}
         onArchive={(treeId) => archive.mutate({ treeId, archived: true })}
         onRestore={(treeId) => archive.mutate({ treeId, archived: false })}
@@ -583,19 +565,6 @@ export function ActivityFeed({
                             }
                             onOpen={() => openQuery(source.query)}
                             onOpenChild={openQuery}
-                            onToggleFollow={() =>
-                              setFollowed.mutate({
-                                treeId: source.query.treeId,
-                                value: !treeById.get(source.query.treeId)?.followed,
-                              })
-                            }
-                            onToggleBookmark={() =>
-                              setBookmarked.mutate({
-                                treeId: source.query.treeId,
-                                value: !treeById.get(source.query.treeId)?.bookmarked,
-                              })
-                            }
-                            actionsBusy={setFollowed.isPending || setBookmarked.isPending}
                           />
                         </>
                       )}
@@ -606,13 +575,7 @@ export function ActivityFeed({
             </div>
 
             {nothingYet ? (
-              <QueryState
-                empty={
-                  bookmarkedOnly
-                    ? "No bookmarked threads yet. Bookmark a thread to see it here."
-                    : "No recent activity yet. Run a query or save a source to see it here."
-                }
-              />
+              <QueryState empty="No recent activity yet. Run a query or save a source to see it here." />
             ) : null}
 
             <div aria-live="polite" className="flex flex-col items-start gap-2 py-4">

@@ -10,7 +10,6 @@
 // and the confirmation dialogs below are exported separately so a caller that
 // already has one does not get a second.
 
-import { isResearchStarred } from "@session/shared";
 import type { ResearchFolderState, ResearchTreeSummary } from "@session/shared";
 import { useState } from "react";
 
@@ -23,10 +22,9 @@ import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
 export interface ResearchTreeMenuItemsProps {
   tree: ResearchTreeSummary;
   archived: boolean;
-  /** Supplies the star and folder membership state; pass
+  /** Supplies the folder membership state; pass
    * `emptyResearchFolderState()` where folders are not offered. */
   folderState: ResearchFolderState;
-  onToggleStar: (treeId: string) => void;
   onRename: (tree: ResearchTreeSummary) => void;
   onArchive: (treeId: string) => void;
   onRestore: (treeId: string) => void;
@@ -48,7 +46,6 @@ export function ResearchTreeMenuItems({
   tree,
   archived,
   folderState,
-  onToggleStar,
   onRename,
   onArchive,
   onRestore,
@@ -57,7 +54,6 @@ export function ResearchTreeMenuItems({
   onRequestCreateFolder,
   onRegenerateSummary,
 }: ResearchTreeMenuItemsProps) {
-  const starred = isResearchStarred(folderState, tree.id);
   const inFolder = Boolean(folderState.membership[tree.id]);
   const running = tree.runningCount > 0;
 
@@ -73,7 +69,6 @@ export function ResearchTreeMenuItems({
         <MenuItem onClick={() => onRestore(tree.id)}>Unarchive</MenuItem>
       ) : (
         <>
-          <MenuItem onClick={() => onToggleStar(tree.id)}>{starred ? "Unstar" : "Star"}</MenuItem>
           <MenuItem onClick={() => onRename(tree)}>Rename</MenuItem>
           {inFolder && onRemoveFromFolder ? (
             <MenuItem onClick={() => onRemoveFromFolder([tree.id])}>Remove from folder</MenuItem>

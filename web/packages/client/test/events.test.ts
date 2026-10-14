@@ -230,7 +230,11 @@ test.serial("a settings event writes the cache and the local mirror", (t) => {
 
 test.serial("a folders event replaces the workspace's folder state", (t) => {
   const queryClient = client();
-  const state = { folders: [], membership: {}, starred: ["t1"], collapsed: [] };
+  const state = {
+    folders: [{ id: "f1", name: "Reading", workspaceId: "w1" }],
+    membership: { t1: "f1" },
+    collapsed: [],
+  };
 
   applyEventBatch([event("folders.updated", { workspaceId: "w1", state })], queryClient);
 
@@ -501,29 +505,16 @@ test.serial(
 test.serial("feed item events patch and invalidate only matching scope caches", (t) => {
   const queryClient = client();
   queryClient.setQueryData(queryKeys.me(), { id: "u1" });
-  const allKey = queryKeys.activity({ scope: "all", workspaceId: null, bookmarkedOnly: false });
-  const mineKey = queryKeys.activity({ scope: "mine", workspaceId: null, bookmarkedOnly: false });
-  const workspaceKey = queryKeys.activity({
-    scope: "workspace",
-    workspaceId: "w1",
-    bookmarkedOnly: false,
-  });
-  const otherWorkspaceKey = queryKeys.activity({
-    scope: "workspace",
-    workspaceId: "w2",
-    bookmarkedOnly: false,
-  });
-  const bookmarksKey = queryKeys.activity({
-    scope: "workspace",
-    workspaceId: "w1",
-    bookmarkedOnly: true,
-  });
+  const allKey = queryKeys.activity({ scope: "all", workspaceId: null });
+  const mineKey = queryKeys.activity({ scope: "mine", workspaceId: null });
+  const workspaceKey = queryKeys.activity({ scope: "workspace", workspaceId: "w1" });
+  const otherWorkspaceKey = queryKeys.activity({ scope: "workspace", workspaceId: "w2" });
   const initial = queryItem(researchQuery({ workspaceId: "w1" }));
   const data = (items: RecentActivityPage["items"]): InfiniteData<RecentActivityPage> => ({
     pages: [activityPage(items)],
     pageParams: [null],
   });
-  for (const key of [allKey, mineKey, workspaceKey, bookmarksKey]) {
+  for (const key of [allKey, mineKey, workspaceKey]) {
     queryClient.setQueryData(key, data([initial]));
   }
   queryClient.setQueryData(otherWorkspaceKey, data([]));
@@ -540,14 +531,13 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
         occurredAt: updated.occurredAt,
         sourceRank: 1,
         workspaceId: "w1",
-        bookmarked: true,
         item: updated,
       }),
     ],
     queryClient,
   );
 
-  for (const key of [allKey, mineKey, workspaceKey, bookmarksKey]) {
+  for (const key of [allKey, mineKey, workspaceKey]) {
     const page = queryClient.getQueryData<InfiniteData<RecentActivityPage>>(key)?.pages[0];
     const item = page?.items[0];
     t.is(item?.kind === "research-query" ? item.query.title : null, "Updated");
@@ -567,7 +557,6 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
         occurredAt: 1_700_000_200_000,
         sourceRank: 1,
         workspaceId: "w2",
-        bookmarked: false,
         item: queryItem(researchQuery({ nodeId: "n2", treeId: "t2", workspaceId: "w2" })),
       }),
     ],
@@ -579,26 +568,6 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
 
   applyEventBatch(
     [
-      event("feed.item.upserted", {
-        id: "n1",
-        kind: "research",
-        authorId: "u1",
-        occurredAt: updated.occurredAt,
-        sourceRank: 1,
-        workspaceId: "w1",
-        bookmarked: false,
-        item: updated,
-      }),
-    ],
-    queryClient,
-  );
-  t.deepEqual(
-    queryClient.getQueryData<InfiniteData<RecentActivityPage>>(bookmarksKey)?.pages[0]?.items,
-    [],
-  );
-
-  applyEventBatch(
-    [
       event("feed.item.removed", {
         id: "n1",
         kind: "research",
@@ -606,7 +575,6 @@ test.serial("feed item events patch and invalidate only matching scope caches", 
         occurredAt: updated.occurredAt,
         sourceRank: 1,
         workspaceId: "w1",
-        bookmarked: false,
       }),
     ],
     queryClient,

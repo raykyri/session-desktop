@@ -23,7 +23,6 @@ import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 export interface ActivityQueryScope {
   scope: RecentActivityScope;
   workspaceId: string | null;
-  bookmarkedOnly: boolean;
 }
 
 export const queryKeys = {
