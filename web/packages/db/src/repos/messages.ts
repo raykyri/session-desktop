@@ -12,6 +12,8 @@ import { nodes } from "../schema/nodes.js";
 import { nodeMessages, nodeSummaries } from "../schema/runs.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
+
 export interface MessageWrite {
   message: NodeMessage;
   /** Which model produced an assistant message; a cross-model fork reads this
@@ -35,7 +37,7 @@ function requireNode(
   const row = db
     .select()
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!row) {
     throw new Error(`research node ${nodeId} was not found`);

@@ -25,7 +25,8 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
-import { toResearchHighlight } from "./mappers.js";
+import { highlightOwnedBy, nodeOwnedBy } from "./access.js";
+import { rowPrompt, toResearchHighlight } from "./mappers.js";
 
 /** Shown when an anchor was captured against an answer that has since been
  * replaced. Kept verbatim from the desktop. */
@@ -40,7 +41,7 @@ export function listForNode(
   return db
     .select()
     .from(highlights)
-    .where(and(eq(highlights.userId, userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
     .orderBy(asc(highlights.createdAt), asc(highlights.id))
     .all()
     .map(toResearchHighlight);
@@ -67,7 +68,7 @@ export function create(
     const node = tx
       .select({ id: nodes.id })
       .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
       .get();
     if (!node) {
       throw new Error(`research node ${nodeId} was not found`);
@@ -104,7 +105,7 @@ export function create(
     tx.insert(highlights)
       .values({
         id: candidate.id,
-        userId,
+        authorId: userId,
         nodeId,
         anchorJson: anchor,
         responseRevision: anchor.responseRevision,
@@ -115,12 +116,13 @@ export function create(
   });
 }
 
-/** Total highlight storage charged to one account, across every node. */
+/** Total highlight storage charged to one account: the highlights it saved,
+ * across every node. */
 export function userStorageBytes(db: SessionDatabase, userId: string): number {
   return db
     .select()
     .from(highlights)
-    .where(eq(highlights.userId, userId))
+    .where(eq(highlights.authorId, userId))
     .all()
     .reduce((total, row) => total + highlightStorageBytes(toResearchHighlight(row)), 0);
 }
@@ -134,11 +136,7 @@ export function remove(
   const row = db
     .delete(highlights)
     .where(
-      and(
-        eq(highlights.userId, userId),
-        eq(highlights.nodeId, nodeId),
-        eq(highlights.id, highlightId),
-      ),
+      and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId), eq(highlights.id, highlightId)),
     )
     .returning()
     .get();
@@ -161,7 +159,7 @@ export function removeMany(
     .delete(highlights)
     .where(
       and(
-        eq(highlights.userId, userId),
+        highlightOwnedBy(userId),
         eq(highlights.nodeId, nodeId),
         inArray(highlights.id, highlightIds),
       ),
@@ -176,7 +174,7 @@ export function removeMany(
 export function removeAllForNode(db: SessionDatabase, userId: string, nodeId: string): number {
   return db
     .delete(highlights)
-    .where(and(eq(highlights.userId, userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
     .returning({ id: highlights.id })
     .all().length;
 }
@@ -198,7 +196,7 @@ export function feed(
       treeId: trees.id,
       treeTitle: trees.title,
       nodeTitle: nodes.title,
-      prompt: nodes.prompt,
+      messageJson: nodes.messageJson,
       anchorJson: highlights.anchorJson,
       createdAt: highlights.createdAt,
     })
@@ -207,8 +205,9 @@ export function feed(
     .innerJoin(trees, eq(trees.id, nodes.treeId))
     .where(
       and(
-        eq(highlights.userId, userId),
+        eq(trees.ownerId, userId),
         isNull(trees.archivedAt),
+        isNull(trees.trashedAt),
         workspaceId ? eq(trees.workspaceId, workspaceId) : undefined,
       ),
     )
@@ -220,7 +219,7 @@ export function feed(
         row.anchorJson,
         "highlights.anchor_json",
       );
-      const label = [row.nodeTitle, row.prompt].find(
+      const label = [row.nodeTitle, rowPrompt(row)].find(
         (candidate): candidate is string =>
           typeof candidate === "string" && candidate.trim() !== "",
       );
@@ -243,7 +242,7 @@ export function countForNode(db: SessionDatabase, userId: string, nodeId: string
   const row = db
     .select({ value: sql<number>`count(*)` })
     .from(highlights)
-    .where(and(eq(highlights.userId, userId), eq(highlights.nodeId, nodeId)))
+    .where(and(highlightOwnedBy(userId), eq(highlights.nodeId, nodeId)))
     .get();
   return row?.value ?? 0;
 }

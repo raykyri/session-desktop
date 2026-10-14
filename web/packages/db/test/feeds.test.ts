@@ -12,9 +12,10 @@ function itemId(item: RecentActivityItem): string {
 /** A root question whose `created_at` is pinned, so the feed order is known. */
 function rootAt(fixture: ReturnType<typeof createFixture>, nodeId: string, at: number): void {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: `Question ${nodeId}`,
-    model: "gemini-flash",
+    message: { text: `Question ${nodeId}` },
+    agent: { model: "gemini-flash" },
     nodeId,
   });
   fixture.db.$client
@@ -69,20 +70,21 @@ test("the limit is clamped to 1..100", (t) => {
 test("excludes archived threads and follow-ups from the feed while including thread children", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
     nodeId: "root-1",
     status: "complete",
   });
   const first = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: "root-1",
-    prompt: "First follow-up",
+    message: { text: "First follow-up" },
     nodeId: "child-1",
   });
   nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: "root-1",
-    prompt: "Second follow-up",
+    message: { text: "Second follow-up" },
     nodeId: "child-2",
   });
   t.is(first.parentNodeId, "root-1");
@@ -104,15 +106,17 @@ test("the workspace filter narrows the feed to one workspace", (t) => {
   const fixture = createFixture(t);
   const other = workspaces.create(fixture.db, fixture.userId, "Reading");
   trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Here",
-    model: "gemini-flash",
+    message: { text: "Here" },
+    agent: { model: "gemini-flash" },
     nodeId: "here",
   });
   trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: other.id,
-    prompt: "There",
-    model: "gemini-flash",
+    message: { text: "There" },
+    agent: { model: "gemini-flash" },
     nodeId: "there",
   });
   const page = feeds.recentActivity(fixture.db, fixture.userId, {
@@ -125,15 +129,16 @@ test("the workspace filter narrows the feed to one workspace", (t) => {
 test("feedgen materializes writes and removes archived or deleted sources", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
     nodeId: "root-row",
     status: "complete",
   });
   nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: "root-row",
-    prompt: "Child",
+    message: { text: "Child" },
     nodeId: "child-row",
   });
   nodes.setStatus(fixture.db, fixture.userId, "child-row", "cancelled");
@@ -155,21 +160,24 @@ test("all, mine, and workspace scopes read one materialized stream", (t) => {
   const otherWorkspace = workspaces.create(fixture.db, fixture.userId, "Other");
   const stranger = addUser(fixture.db, "stranger-feed");
   trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Mine here",
-    model: "gemini-flash",
+    message: { text: "Mine here" },
+    agent: { model: "gemini-flash" },
     nodeId: "mine-here",
   });
   trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: otherWorkspace.id,
-    prompt: "Mine elsewhere",
-    model: "gemini-flash",
+    message: { text: "Mine elsewhere" },
+    agent: { model: "gemini-flash" },
     nodeId: "mine-elsewhere",
   });
   trees.admitRoot(fixture.db, stranger.userId, {
+    type: "exchange",
     workspaceId: stranger.workspaceId,
-    prompt: "Stranger root",
-    model: "gemini-flash",
+    message: { text: "Stranger root" },
+    agent: { model: "gemini-flash" },
     nodeId: "stranger-root",
   });
 
@@ -193,9 +201,10 @@ test("paginates only root research questions in recentQueries", (t) => {
   const at = 1_700_000_000_000;
   for (let index = 0; index < 3; index += 1) {
     const detail = trees.admitRoot(fixture.db, fixture.userId, {
+      type: "exchange",
       workspaceId: fixture.workspaceId,
-      prompt: `Question ${index}`,
-      model: "gemini-flash",
+      message: { text: `Question ${index}` },
+      agent: { model: "gemini-flash" },
       nodeId: `n${index}`,
     });
     fixture.db.$client

@@ -12,6 +12,7 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
 import { removeResearchTree } from "./feedgen.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
 import { deleteNodesOfTrees } from "./subtrees.js";
@@ -130,7 +131,7 @@ export function remove(
       .innerJoin(trees, eq(trees.id, nodes.treeId))
       .where(
         and(
-          eq(nodes.userId, userId),
+          nodeOwnedBy(userId),
           eq(trees.workspaceId, workspaceId),
           inArray(nodes.status, [...ACTIVE_STATUSES]),
         ),
@@ -142,7 +143,7 @@ export function remove(
     const removedTreeIds = tx
       .select({ id: trees.id })
       .from(trees)
-      .where(and(eq(trees.userId, userId), eq(trees.workspaceId, workspaceId)))
+      .where(and(eq(trees.ownerId, userId), eq(trees.workspaceId, workspaceId)))
       .all()
       .map((row) => row.id);
     // Leaves before parents: `nodes.parent_node_id` is RESTRICT, so the tree
@@ -233,7 +234,7 @@ export function treeCounts(db: SessionDatabase, userId: string): Map<string, num
   const rows = db
     .select({ workspaceId: trees.workspaceId, value: sql<number>`count(*)` })
     .from(trees)
-    .where(eq(trees.userId, userId))
+    .where(eq(trees.ownerId, userId))
     .groupBy(trees.workspaceId)
     .all();
   return new Map(rows.map((row) => [row.workspaceId, row.value]));

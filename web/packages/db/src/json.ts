@@ -46,7 +46,7 @@ export const nodeMessageSchema = z
 
 export type NodeMessage = z.infer<typeof nodeMessageSchema>;
 
-/** A list of strings, for `links_json` and `sibling_terms_json`. */
+/** A list of ids, for `nodes.chain_order_json`. */
 export const stringListSchema = z.array(z.string());
 
 /**
@@ -66,6 +66,29 @@ export function parseJsonColumn<TSchema extends z.ZodType>(
     throw new Error(`Failed to parse ${column}: invalid data schema (${result.error.message})`);
   }
   return result.data;
+}
+
+/**
+ * {@link parseJsonColumn} for a column holding a wire type from
+ * `@session/shared/wire`, returned as that type.
+ *
+ * A zod schema's output marks an optional key `?: T | undefined`, which
+ * `exactOptionalPropertyTypes` does not accept where the wire type writes
+ * `?: T`. A value parsed from JSON has no `undefined` members, so the parsed
+ * value is the wire type; `test/wireSchemas.test.ts` in `shared` checks that
+ * each schema and its wire type agree.
+ */
+export function parseWireColumn<TWire>(schema: z.ZodType, value: unknown, column: string): TWire {
+  return parseJsonColumn(schema, value, column) as TWire;
+}
+
+/** {@link parseWireColumn} for a nullable column. */
+export function parseNullableWireColumn<TWire>(
+  schema: z.ZodType,
+  value: unknown,
+  column: string,
+): TWire | null {
+  return value === null || value === undefined ? null : parseWireColumn(schema, value, column);
 }
 
 /** {@link parseJsonColumn} for a nullable column: `null` and `undefined` pass

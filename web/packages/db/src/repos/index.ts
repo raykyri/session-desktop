@@ -15,17 +15,22 @@ import * as feedItems from "./feedItems.js";
 import * as feedgen from "./feedgen.js";
 import * as feeds from "./feeds.js";
 import * as folders from "./folders.js";
+import * as followups from "./followups.js";
 import * as highlights from "./highlights.js";
+import * as images from "./images.js";
 import * as mappers from "./mappers.js";
 import * as messages from "./messages.js";
 import * as nodes from "./nodes.js";
+import * as posts from "./posts.js";
 import * as preferences from "./preferences.js";
 import * as queue from "./queue.js";
 import * as recaps from "./recaps.js";
 import * as researchDocuments from "./researchDocuments.js";
+import * as researchDrafts from "./researchDrafts.js";
 import * as runs from "./runs.js";
 import * as snapshots from "./snapshots.js";
 import * as subtrees from "./subtrees.js";
+import * as trash from "./trash.js";
 import * as trees from "./trees.js";
 import * as tweets from "./tweets.js";
 import * as usage from "./usage.js";
@@ -40,17 +45,22 @@ export {
   feedItems,
   feeds,
   folders,
+  followups,
   highlights,
+  images,
   mappers,
   messages,
   nodes,
+  posts,
   preferences,
   queue,
   recaps,
   researchDocuments,
+  researchDrafts,
   runs,
   snapshots,
   subtrees,
+  trash,
   trees,
   tweets,
   usage,

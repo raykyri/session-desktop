@@ -11,6 +11,8 @@ import { nodes } from "../schema/nodes.js";
 import { runQueue } from "../schema/runs.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
+
 /**
  * Which cap a queued row is admitted under.
  *
@@ -39,7 +41,7 @@ export function enqueue(db: SessionDatabase, userId: string, input: EnqueueInput
   const node = db
     .select({ id: nodes.id })
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, input.nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
     .get();
   if (!node) {
     throw new Error(`research node ${input.nodeId} was not found`);

@@ -8,7 +8,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Turn } from "@session/shared";
+import type { ResearchNode, ResearchRecap, RunState, Turn } from "@session/shared";
+import { nodeRecap, nodeResponseSnapshotAt } from "@session/shared/lib/researchNodeTypes";
 import type { ExecutionContext } from "ava";
 
 import type { SessionDatabase } from "../src/index.js";
@@ -94,4 +95,22 @@ export function anchorFor(
     prefix: "",
     suffix: "",
   };
+}
+
+/** An exchange's run, failing the test for a node without one. */
+export function runOf(node: ResearchNode | null | undefined): RunState {
+  if (node?.type !== "exchange") {
+    throw new Error(`expected an exchange, got ${node?.type ?? "no node"}`);
+  }
+  return node.run;
+}
+
+/** A node's recap, or undefined for a node without one. */
+export function recapOf(node: ResearchNode | null | undefined): ResearchRecap | undefined {
+  return node ? (nodeRecap(node) ?? undefined) : undefined;
+}
+
+/** When a node's answer or body snapshot was last written. */
+export function snapshotAtOf(node: ResearchNode | null | undefined): number | null {
+  return node ? nodeResponseSnapshotAt(node) : null;
 }

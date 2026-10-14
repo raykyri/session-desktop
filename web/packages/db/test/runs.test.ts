@@ -2,13 +2,14 @@ import test from "ava";
 
 import { messages, nodes, runs, snapshots, trees } from "../src/index.js";
 
-import { answerTurn, createFixture } from "./helpers.js";
+import { answerTurn, createFixture, runOf } from "./helpers.js";
 
 function startedRoot(fixture: ReturnType<typeof createFixture>) {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   nodes.setStatus(fixture.db, fixture.userId, detail.tree.rootNodeId, "running");
   return detail.tree.rootNodeId;
@@ -113,10 +114,10 @@ test("final snapshot commit marks node status as terminal and removes live turns
     turns: [answerTurn(nodeId, "Birds sing at dawn because sound carries further.", "t1")],
     outcome: { status: "complete" },
   });
-  t.is(result.node.status, "complete");
-  t.not(result.node.responseSnapshotAt, null);
+  t.is(runOf(result.node).status, "complete");
+  t.not(runOf(result.node).responseSnapshotAt, null);
   t.regex(result.revision, /^[0-9a-f]{64}$/);
-  t.true((result.node.responsePreview ?? "").startsWith("Birds sing at dawn"));
+  t.true((runOf(result.node).responsePreview ?? "").startsWith("Birds sing at dawn"));
   t.deepEqual(runs.liveWindow(fixture.db, fixture.userId, nodeId).turns, []);
   const stored = snapshots.read(fixture.db, fixture.userId, nodeId);
   t.is(stored?.revision, result.revision);
@@ -212,7 +213,7 @@ test("a node's context is its ancestors' messages, root first", (t) => {
   ]);
   const child = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: rootId,
-    prompt: "Follow-up",
+    message: { text: "Follow-up" },
   });
   nodes.setStatus(fixture.db, fixture.userId, child.id, "running");
   snapshots.commit(fixture.db, fixture.userId, {
@@ -225,7 +226,7 @@ test("a node's context is its ancestors' messages, root first", (t) => {
   ]);
   const grandchild = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: child.id,
-    prompt: "Deeper",
+    message: { text: "Deeper" },
   });
   t.deepEqual(messages.ancestorPath(fixture.db, fixture.userId, grandchild.id), [
     rootId,

@@ -2,27 +2,21 @@ import test from "ava";
 
 import { highlights, nodes, researchDocuments, snapshots, trees } from "../src/index.js";
 
-import { anchorFor, createFixture } from "./helpers.js";
+import { anchorFor, createFixture, snapshotAtOf } from "./helpers.js";
 
 const BODY = "# Quarterly report\n\nRevenue grew by a third.";
 
 function importedDocument(fixture: ReturnType<typeof createFixture>, body = BODY) {
-  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+  const detail = researchDocuments.importReport(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     prompt: "An imported report",
-    title: "Quarterly report",
-    model: "gemini-flash",
-    kind: "document",
-    origin: "imported",
-    status: "complete",
+    markdown: body,
+    agent: { model: "gemini-flash" },
   });
   const nodeId = detail.tree.rootNodeId;
-  const committed = snapshots.commit(fixture.db, fixture.userId, {
-    nodeId,
-    turns: [researchDocuments.documentTurn(nodeId, body)],
-    outcome: { status: "complete" },
-  });
-  return { treeId: detail.tree.id, nodeId, revision: committed.revision };
+  const revision = snapshots.revision(fixture.db, fixture.userId, nodeId);
+  if (revision === null) throw new Error("the import wrote no snapshot");
+  return { treeId: detail.tree.id, nodeId, revision };
 }
 
 test("a title-only edit keeps the snapshot and the highlights", (t) => {
@@ -60,7 +54,7 @@ test("a markdown change writes a new revision and drops every highlight", (t) =>
     document.nodeId,
     anchorFor(document.revision, "Revenue", 21),
   );
-  const before = nodes.get(fixture.db, fixture.userId, document.nodeId)?.responseSnapshotAt ?? 0;
+  const before = snapshotAtOf(nodes.get(fixture.db, fixture.userId, document.nodeId)) ?? 0;
   const result = researchDocuments.update(fixture.db, fixture.userId, {
     nodeId: document.nodeId,
     markdown: "# Quarterly report\n\nRevenue fell by a third.",
@@ -73,7 +67,7 @@ test("a markdown change writes a new revision and drops every highlight", (t) =>
   t.not(result.responseRevision, document.revision);
   t.is(result.tree.title, "Quarterly report", "the derived title comes from the heading");
   t.deepEqual(highlights.listForNode(fixture.db, fixture.userId, document.nodeId), []);
-  const after = nodes.get(fixture.db, fixture.userId, document.nodeId)?.responseSnapshotAt ?? 0;
+  const after = snapshotAtOf(nodes.get(fixture.db, fixture.userId, document.nodeId)) ?? 0;
   t.true(after > before);
   t.is(
     snapshots.read(fixture.db, fixture.userId, document.nodeId)?.revision,
@@ -143,9 +137,10 @@ test("each of the four checks rejects with its own message", (t) => {
 test("only a root document node is editable", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "A question",
-    model: "gemini-flash",
+    message: { text: "A question" },
+    agent: { model: "gemini-flash" },
     status: "complete",
   });
   t.throws(
@@ -171,7 +166,7 @@ test("the document limits are enforced before anything is read", (t) => {
         expectedTitle: "Quarterly report",
         expectedResponseRevision: document.revision,
       }),
-    { message: /exceeds maximum limit of 10000 words/ },
+    { message: /limited to 10000 words/ },
   );
 });
 

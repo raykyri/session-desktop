@@ -2,41 +2,55 @@
 // thread-level flags (`docs/02-domain-model-and-database.md` §5.1, §5.9).
 
 import type {
-  ResearchMessageAttachment,
+  DocumentSource,
+  PostFormat,
   ResearchNodeStatus,
+  ResearchNodeType,
   ResearchTree,
   ResearchTreeDetail,
   ResearchTreeSummary,
+  UserMessage,
 } from "@session/shared";
 import { defaultTitle, sanitizeResearchTitle } from "@session/shared";
-import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
-import { trees } from "../schema/trees.js";
+import { treeViews, trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
+import type { TreeRow } from "./mappers.js";
 import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
+
+/** The agent a node runs on (an exchange) or defaults its follow-ups to (a
+ * post or document): a registry model id and a reasoning effort, null for
+ * the model's default. */
+export interface NodeAgentInput {
+  model: string;
+  effort?: string | null | undefined;
+}
 
 export interface AdmitRootInput {
   workspaceId: string;
-  /** The bare question, or the prompt an imported report was filed under. */
-  prompt: string;
-  /** Registry id. Metadata and imports still record which model owns them. */
-  model: string;
+  type: ResearchNodeType;
+  /** A post's text, an exchange's question, or the question an imported
+   * report answers. Required except for an authored document. */
+  message?: UserMessage | null | undefined;
+  /** Posts only; derived from the text when absent. */
+  format?: PostFormat | undefined;
+  /** Documents only. */
+  source?: DocumentSource | undefined;
+  agent: NodeAgentInput;
   title?: string | undefined;
-  kind?: "run" | "document" | undefined;
-  origin?: "imported" | null | undefined;
-  /** `queued` for a run to be admitted, `complete` for imported content that
-   * already has its answer. */
+  /** Exchanges only: `queued` for a run to be admitted (the default). */
   status?: ResearchNodeStatus | undefined;
-  attachments?: ResearchMessageAttachment[] | undefined;
   /** Supplied only by tests and by an importer that minted ids beforehand. */
   treeId?: string | undefined;
   nodeId?: string | undefined;
@@ -47,15 +61,22 @@ export interface TreeListOptions {
   includeArchived?: boolean | undefined;
 }
 
-function requireTreeRow(
-  db: SessionDatabase,
-  userId: string,
-  treeId: string,
-): typeof trees.$inferSelect {
+/** The trees one sidebar section lists: not archived (or archived), and not
+ * in the Trash. */
+function sectionPredicate(ownerId: string, workspaceId: string, archived: boolean) {
+  return and(
+    eq(trees.ownerId, ownerId),
+    eq(trees.workspaceId, workspaceId),
+    archived ? isNotNull(trees.archivedAt) : isNull(trees.archivedAt),
+    isNull(trees.trashedAt),
+  );
+}
+
+function requireTreeRow(db: SessionDatabase, userId: string, treeId: string): TreeRow {
   const row = db
     .select()
     .from(trees)
-    .where(and(eq(trees.userId, userId), eq(trees.id, treeId)))
+    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
     .get();
   if (!row) {
     throw new Error(`research tree ${treeId} was not found`);
@@ -63,13 +84,59 @@ function requireTreeRow(
   return row;
 }
 
+/** When `userId` last viewed the thread, or null. */
+export function lastViewedAt(db: SessionDatabase, userId: string, treeId: string): number | null {
+  return (
+    db
+      .select({ at: treeViews.lastViewedAt })
+      .from(treeViews)
+      .where(and(eq(treeViews.userId, userId), eq(treeViews.treeId, treeId)))
+      .get()?.at ?? null
+  );
+}
+
+/** A tree row as `userId` sees it. */
+export function treeFor(db: SessionDatabase, userId: string, row: TreeRow): ResearchTree {
+  return toResearchTree(row, lastViewedAt(db, userId, row.id));
+}
+
 export function get(db: SessionDatabase, userId: string, treeId: string): ResearchTree | null {
   const row = db
     .select()
     .from(trees)
-    .where(and(eq(trees.userId, userId), eq(trees.id, treeId)))
+    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
     .get();
-  return row ? toResearchTree(row) : null;
+  return row ? treeFor(db, userId, row) : null;
+}
+
+function writeView(db: SessionDatabase, userId: string, treeId: string, at: number): void {
+  db.insert(treeViews)
+    .values({ userId, treeId, lastViewedAt: at })
+    .onConflictDoUpdate({
+      target: [treeViews.userId, treeViews.treeId],
+      set: { lastViewedAt: at },
+    })
+    .run();
+}
+
+function rootMessage(input: AdmitRootInput): UserMessage | null {
+  const message = input.message ?? null;
+  if (message === null) {
+    if (input.type === "document" && input.source === "authored") {
+      return null;
+    }
+    throw new Error("research prompt cannot be empty");
+  }
+  const text = message.text.trim();
+  if (text === "") {
+    throw new Error("research prompt cannot be empty");
+  }
+  return {
+    text,
+    ...(message.attachments && message.attachments.length > 0
+      ? { attachments: message.attachments }
+      : {}),
+  };
 }
 
 /**
@@ -85,12 +152,12 @@ export function admitRoot(
   userId: string,
   input: AdmitRootInput,
 ): ResearchTreeDetail {
-  const prompt = input.prompt.trim();
-  if (prompt === "") {
-    throw new Error("research prompt cannot be empty");
-  }
-  if (input.model.trim() === "") {
+  const message = rootMessage(input);
+  if (input.agent.model.trim() === "") {
     throw new Error("research model cannot be empty");
+  }
+  if (input.type === "document" && input.source === undefined) {
+    throw new Error("a research document needs a source");
   }
   return transact(db, (tx) => {
     const workspace = tx
@@ -106,30 +173,26 @@ export function admitRoot(
     const at = now();
     const title =
       (input.title === undefined ? undefined : sanitizeResearchTitle(input.title)) ??
-      defaultTitle(prompt);
+      defaultTitle(message?.text ?? "");
     // New roots take position 0; everything visible in the section moves down.
     tx.update(trees)
       .set({ position: sql`${trees.position} + 1` })
-      .where(
-        and(
-          eq(trees.userId, userId),
-          eq(trees.workspaceId, input.workspaceId),
-          isNull(trees.archivedAt),
-        ),
-      )
+      .where(sectionPredicate(userId, input.workspaceId, false))
       .run();
     const treeRow = tx
       .insert(trees)
       .values({
         id: treeId,
-        userId,
+        ownerId: userId,
         workspaceId: input.workspaceId,
         title,
         rootNodeId: nodeId,
         createdAt: at,
         updatedAt: at,
         archivedAt: null,
-        lastViewedAt: at,
+        trashedAt: null,
+        parentTreeId: null,
+        visibility: "private",
         position: 0,
       })
       .returning()
@@ -137,19 +200,20 @@ export function admitRoot(
     tx.insert(nodes)
       .values({
         id: nodeId,
-        userId,
         treeId,
         parentNodeId: null,
+        authorId: userId,
         inline: false,
-        prompt,
-        queryAnchorJson: null,
-        attachmentsJson: input.attachments ?? [],
+        type: input.type,
+        messageJson: message,
+        anchorJson: null,
+        format: input.type === "post" ? (input.format ?? postFormatOf(message?.text ?? "")) : null,
+        source: input.type === "document" ? (input.source ?? null) : null,
+        model: input.agent.model,
+        effort: input.agent.effort ?? null,
         title: null,
         responsePreview: null,
-        model: input.model,
-        kind: input.kind ?? "run",
-        origin: input.origin ?? null,
-        status: input.status ?? "queued",
+        status: input.type === "exchange" ? (input.status ?? "queued") : null,
         error: null,
         attempt: 1,
         runSeq: 0,
@@ -161,21 +225,19 @@ export function admitRoot(
         recapJson: null,
       })
       .run();
+    writeView(tx, userId, treeId, at);
     upsertResearchRoot(tx, nodeId);
-    return detailFromRow(tx, treeRow);
+    return detailFromRow(tx, userId, treeRow);
   });
 }
 
 /** Every node of a tree, ordered `(created_at, id)` — the one ordering the
  * domain uses (`docs/02` §5.1). */
 export function detail(db: SessionDatabase, userId: string, treeId: string): ResearchTreeDetail {
-  return detailFromRow(db, requireTreeRow(db, userId, treeId));
+  return detailFromRow(db, userId, requireTreeRow(db, userId, treeId));
 }
 
-function detailFromRow(
-  db: SessionDatabase,
-  treeRow: typeof trees.$inferSelect,
-): ResearchTreeDetail {
+function detailFromRow(db: SessionDatabase, userId: string, treeRow: TreeRow): ResearchTreeDetail {
   const nodeRows = db
     .select()
     .from(nodes)
@@ -197,7 +259,7 @@ function detailFromRow(
     }
   }
   return {
-    tree: toResearchTree(treeRow),
+    tree: treeFor(db, userId, treeRow),
     nodes: nodeRows.map((row) =>
       toResearchNode(row, {
         workspaceId: treeRow.workspaceId,
@@ -209,9 +271,10 @@ function detailFromRow(
 
 /**
  * The sidebar list with its counts and attention flags
- * (`docs/02` §5.9). `interrupted` counts in no bucket and raises no flag: it
- * is shown in the activity rail, and a run the server is about to resume is
- * not something the user has to act on.
+ * (`docs/02` §5.9). Trees in the Trash are left out. `interrupted` counts in
+ * no bucket and raises no flag: it is shown in the activity rail, and a run
+ * the server is about to resume is not something the user has to act on.
+ * Posts and documents have no run and count in no bucket either.
  */
 export function summaries(
   db: SessionDatabase,
@@ -219,13 +282,15 @@ export function summaries(
   options: TreeListOptions = {},
 ): ResearchTreeSummary[] {
   const treeRows = db
-    .select()
+    .select({ tree: trees, lastViewedAt: treeViews.lastViewedAt })
     .from(trees)
+    .leftJoin(treeViews, and(eq(treeViews.treeId, trees.id), eq(treeViews.userId, userId)))
     .where(
       and(
-        eq(trees.userId, userId),
+        eq(trees.ownerId, userId),
         options.workspaceId ? eq(trees.workspaceId, options.workspaceId) : undefined,
         options.includeArchived === true ? undefined : isNull(trees.archivedAt),
+        isNull(trees.trashedAt),
       ),
     )
     .orderBy(asc(trees.position), asc(trees.id))
@@ -233,7 +298,7 @@ export function summaries(
   if (treeRows.length === 0) {
     return [];
   }
-  const treeIds = treeRows.map((row) => row.id);
+  const treeIds = treeRows.map((row) => row.tree.id);
   const grouped = db
     .select({
       treeId: nodes.treeId,
@@ -242,21 +307,21 @@ export function summaries(
       latestSettlement: sql<number | null>`max(${nodes.completedAt})`,
     })
     .from(nodes)
-    .where(inArray(nodes.treeId, treeIds))
+    .where(and(inArray(nodes.treeId, treeIds), isNotNull(nodes.status)))
     .groupBy(nodes.treeId, nodes.status)
     .all();
-  const rootKinds = new Map(
+  const rootTypes = new Map(
     db
-      .select({ id: nodes.id, kind: nodes.kind })
+      .select({ id: nodes.id, type: nodes.type })
       .from(nodes)
       .where(
         inArray(
           nodes.id,
-          treeRows.map((row) => row.rootNodeId),
+          treeRows.map((row) => row.tree.rootNodeId),
         ),
       )
       .all()
-      .map((row) => [row.id, row.kind]),
+      .map((row) => [row.id, row.type]),
   );
   interface Counts {
     running: number;
@@ -291,17 +356,15 @@ export function summaries(
     entry.latestSettlement = merge(entry.latestSettlement, row.latestSettlement);
     counts.set(row.treeId, entry);
   }
-  return treeRows.map((row) => {
+  return treeRows.map(({ tree: row, lastViewedAt: viewedAt }) => {
     const entry = counts.get(row.id);
     const unseen = (settledAt: number | null | undefined): boolean =>
-      settledAt !== null &&
-      settledAt !== undefined &&
-      (row.lastViewedAt === null || settledAt > row.lastViewedAt);
+      settledAt !== null && settledAt !== undefined && (viewedAt === null || settledAt > viewedAt);
     return {
       id: row.id,
       title: row.title,
       rootNodeId: row.rootNodeId,
-      kind: rootKinds.get(row.rootNodeId) ?? "run",
+      type: rootTypes.get(row.rootNodeId) ?? "exchange",
       workspaceId: row.workspaceId,
       runningCount: entry?.running ?? 0,
       failedCount: entry?.failed ?? 0,
@@ -318,10 +381,10 @@ export function summaries(
 /**
  * Replaces the order of exactly one visible sidebar section.
  *
- * The section is `(workspace_id, archived)`; positions are scoped to it, so
- * archived threads and other workspaces keep their places untouched. The three
- * rejections are the desktop's (`state.rs:3792`) with its messages: a stale
- * count, a duplicate, and an id from another section.
+ * The section is `(workspace_id, archived)`, without the Trash; positions are
+ * scoped to it, so archived threads and other workspaces keep their places
+ * untouched. The three rejections are the desktop's (`state.rs:3792`) with
+ * its messages: a stale count, a duplicate, and an id from another section.
  */
 export function reorder(
   db: SessionDatabase,
@@ -334,13 +397,7 @@ export function reorder(
     const expected = tx
       .select({ id: trees.id })
       .from(trees)
-      .where(
-        and(
-          eq(trees.userId, userId),
-          eq(trees.workspaceId, workspaceId),
-          archived ? isNotNull(trees.archivedAt) : isNull(trees.archivedAt),
-        ),
-      )
+      .where(sectionPredicate(userId, workspaceId, archived))
       .orderBy(asc(trees.position), asc(trees.id))
       .all()
       .map((row) => row.id);
@@ -388,13 +445,13 @@ export function rename(
   const row = db
     .update(trees)
     .set({ title: clean, updatedAt: now() })
-    .where(and(eq(trees.userId, userId), eq(trees.id, treeId)))
+    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
     .returning()
     .get();
   if (!row) {
     throw new Error(`research tree ${treeId} was not found`);
   }
-  return toResearchTree(row);
+  return treeFor(db, userId, row);
 }
 
 function setFlag(
@@ -406,18 +463,22 @@ function setFlag(
   const row = db
     .update(trees)
     .set(patch)
-    .where(and(eq(trees.userId, userId), eq(trees.id, treeId)))
+    .where(and(eq(trees.ownerId, userId), eq(trees.id, treeId)))
     .returning()
     .get();
   if (!row) {
     throw new Error(`research tree ${treeId} was not found`);
   }
-  return toResearchTree(row);
+  return treeFor(db, userId, row);
 }
 
-/** Viewing acknowledges unseen updates and failures. */
+/** Viewing acknowledges unseen updates and failures, for this person only. */
 export function markViewed(db: SessionDatabase, userId: string, treeId: string): ResearchTree {
-  return setFlag(db, userId, treeId, { lastViewedAt: now() });
+  return transact(db, (tx) => {
+    const row = requireTreeRow(tx, userId, treeId);
+    writeView(tx, userId, row.id, now());
+    return treeFor(tx, userId, row);
+  });
 }
 
 /** Moves the thread into the archived section at position 0. */
@@ -425,18 +486,12 @@ export function archive(db: SessionDatabase, userId: string, treeId: string): Re
   return transact(db, (tx) => {
     const row = requireTreeRow(tx, userId, treeId);
     if (row.archivedAt !== null) {
-      return toResearchTree(row);
+      return treeFor(tx, userId, row);
     }
     const at = now();
     tx.update(trees)
       .set({ position: sql`${trees.position} + 1` })
-      .where(
-        and(
-          eq(trees.userId, userId),
-          eq(trees.workspaceId, row.workspaceId),
-          isNotNull(trees.archivedAt),
-        ),
-      )
+      .where(sectionPredicate(userId, row.workspaceId, true))
       .run();
     const tree = setFlag(tx, userId, treeId, {
       archivedAt: at,
@@ -452,18 +507,12 @@ export function restore(db: SessionDatabase, userId: string, treeId: string): Re
   return transact(db, (tx) => {
     const row = requireTreeRow(tx, userId, treeId);
     if (row.archivedAt === null) {
-      return toResearchTree(row);
+      return treeFor(tx, userId, row);
     }
     const at = now();
     tx.update(trees)
       .set({ position: sql`${trees.position} + 1` })
-      .where(
-        and(
-          eq(trees.userId, userId),
-          eq(trees.workspaceId, row.workspaceId),
-          isNull(trees.archivedAt),
-        ),
-      )
+      .where(sectionPredicate(userId, row.workspaceId, false))
       .run();
     const tree = setFlag(tx, userId, treeId, {
       archivedAt: null,

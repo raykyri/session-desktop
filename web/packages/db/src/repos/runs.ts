@@ -9,10 +9,12 @@ import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import type { AttemptUsage } from "../json.js";
-import { parseJsonColumn } from "../json.js";
+import { parseWireColumn } from "../json.js";
 import { nodes } from "../schema/nodes.js";
 import { runAttempts, runTurns } from "../schema/runs.js";
 import { now } from "../time.js";
+
+import { nodeOwnedBy } from "./access.js";
 
 function requireNode(
   db: SessionDatabase,
@@ -22,7 +24,7 @@ function requireNode(
   const row = db
     .select()
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!row) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -187,7 +189,7 @@ export function liveWindow(db: SessionDatabase, userId: string, nodeId: string):
   const turns: Turn[] = [];
   let inFlight: { text: string; turnId: string } | undefined;
   for (const row of rows) {
-    const turn = parseJsonColumn(turnSchema, row.turnJson, "run_turns.turn_json");
+    const turn = parseWireColumn<Turn>(turnSchema, row.turnJson, "run_turns.turn_json");
     if (row.committed) {
       turns.push(turn);
     } else {

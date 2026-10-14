@@ -2,13 +2,14 @@ import test from "ava";
 
 import { nodes, recaps, snapshots, trees } from "../src/index.js";
 
-import { answerTurn, createFixture } from "./helpers.js";
+import { answerTurn, createFixture, recapOf, snapshotAtOf } from "./helpers.js";
 
 function answered(fixture: ReturnType<typeof createFixture>) {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const nodeId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, nodeId, "running");
@@ -22,7 +23,7 @@ function answered(fixture: ReturnType<typeof createFixture>) {
     treeId: detail.tree.id,
     nodeId,
     revision: committed.revision,
-    snapshotAt: node?.responseSnapshotAt ?? null,
+    snapshotAt: snapshotAtOf(node),
   };
 }
 
@@ -36,8 +37,8 @@ test("an automatic recap commits only against the answer it summarized", (t) => 
     model: "gemini-flash",
     expectedSnapshotAt: target.snapshotAt,
   });
-  t.is(saved?.recap?.text, "birds sing at dawn.", "the Summary: label is stripped");
-  t.is(saved?.recap?.responseRevision, target.revision);
+  t.is(recapOf(saved)?.text, "birds sing at dawn.", "the Summary: label is stripped");
+  t.is(recapOf(saved)?.responseRevision, target.revision);
 });
 
 test("a stale recap is a no-op rather than an error", (t) => {
@@ -76,7 +77,7 @@ test("a stale recap is a no-op rather than an error", (t) => {
     null,
     "an empty summary",
   );
-  t.is(nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap, undefined);
+  t.is(recapOf(nodes.get(fixture.db, fixture.userId, target.nodeId)), undefined);
 });
 
 test("a recap over the length cap is rejected", (t) => {
@@ -102,6 +103,7 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
     text: "A user-directed summary.",
     responseRevision: target.revision,
     generatedAt: Date.now(),
+    adapter: "gemini",
     model: "gemini-flash",
     instructions: "Focus on the mechanism.",
   };
@@ -139,8 +141,8 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
     expectedResponseRevision: target.revision,
     candidate,
   });
-  t.is(applied.recap?.id, "candidate-1");
-  t.is(applied.recap?.instructions, "Focus on the mechanism.");
+  t.is(recapOf(applied)?.id, "candidate-1");
+  t.is(recapOf(applied)?.instructions, "Focus on the mechanism.");
 
   // The next apply has to name the recap it is replacing.
   t.throws(
@@ -168,6 +170,7 @@ test("rejects summary replacement on archived threads", (t) => {
           text: "x",
           responseRevision: target.revision,
           generatedAt: Date.now(),
+          adapter: "gemini",
           model: "gemini-flash",
           instructions: "y",
         },
@@ -180,7 +183,7 @@ test("prevents background recap from overwriting user-applied summary", (t) => {
   const fixture = createFixture(t);
   const target = answered(fixture);
   // The scheduled job read the node here: no recap yet.
-  const startedWith = nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.id ?? null;
+  const startedWith = recapOf(nodes.get(fixture.db, fixture.userId, target.nodeId))?.id ?? null;
   t.is(startedWith, null);
 
   // While the model was generating, the user previewed and applied their own.
@@ -192,12 +195,13 @@ test("prevents background recap from overwriting user-applied summary", (t) => {
       id: "candidate-1",
       text: "The user's own summary.",
       responseRevision: target.revision,
+      adapter: "gemini",
       instructions: "Three sentences, plain language.",
       generatedAt: 1_700_000_000_000,
       model: "gemini-flash",
     },
   });
-  t.is(applied.recap?.text, "The user's own summary.");
+  t.is(recapOf(applied)?.text, "The user's own summary.");
 
   // Applying a recap changes neither the snapshot nor the revision, so the
   // three older guards all still pass; only the recap identity has moved.
@@ -211,18 +215,18 @@ test("prevents background recap from overwriting user-applied summary", (t) => {
   });
   t.is(late, null, "the stale automatic recap is a no-op");
   t.is(
-    nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.text,
+    recapOf(nodes.get(fixture.db, fixture.userId, target.nodeId))?.text,
     "The user's own summary.",
     "and the user's summary is untouched",
   );
   t.is(
-    nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.instructions,
+    recapOf(nodes.get(fixture.db, fixture.userId, target.nodeId))?.instructions,
     "Three sentences, plain language.",
   );
 
   // Nothing raced: the same save against the recap that is actually there
   // commits.
-  const current = nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.id ?? null;
+  const current = recapOf(nodes.get(fixture.db, fixture.userId, target.nodeId))?.id ?? null;
   const saved = recaps.save(fixture.db, fixture.userId, {
     nodeId: target.nodeId,
     text: "The automatic summary.",
@@ -231,5 +235,5 @@ test("prevents background recap from overwriting user-applied summary", (t) => {
     expectedSnapshotAt: target.snapshotAt,
     expectedCurrentRecapId: current,
   });
-  t.is(saved?.recap?.text, "The automatic summary.");
+  t.is(recapOf(saved)?.text, "The automatic summary.");
 });

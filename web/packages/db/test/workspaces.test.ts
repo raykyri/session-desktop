@@ -49,9 +49,10 @@ test("reorder rejects a stale list, a duplicate, and a foreign workspace", (t) =
 test("prevents workspace deletion while runs are actively executing", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Why do birds sing at dawn?",
-    model: "gemini-flash",
+    message: { text: "Why do birds sing at dawn?" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   t.throws(() => workspaces.remove(fixture.db, fixture.userId, fixture.workspaceId), {
@@ -67,18 +68,22 @@ test("prevents workspace deletion while runs are actively executing", (t) => {
 test("removing a workspace deletes a whole subtree of nodes", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
     status: "complete",
   });
   const rootId = detail.tree.rootNodeId;
   const child = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: rootId,
-    prompt: "Child",
+    message: { text: "Child" },
   });
   nodes.setStatus(fixture.db, fixture.userId, child.id, "complete");
-  nodes.admitChild(fixture.db, fixture.userId, { parentNodeId: child.id, prompt: "Grandchild" });
+  nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: child.id,
+    message: { text: "Grandchild" },
+  });
   nodes.setStatus(
     fixture.db,
     fixture.userId,

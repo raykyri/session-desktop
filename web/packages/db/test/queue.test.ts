@@ -11,9 +11,10 @@ function admit(
   nodeId: string,
 ) {
   trees.admitRoot(fixture.db, userId, {
+    type: "exchange",
     workspaceId,
-    prompt: nodeId,
-    model: "gemini-flash",
+    message: { text: nodeId },
+    agent: { model: "gemini-flash" },
     nodeId,
   });
   return nodeId;

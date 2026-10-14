@@ -3,7 +3,7 @@
 // Entry points validate revision consistency before applying asynchronously generated summaries to prevent applying stale summaries to updated responses.
 
 import type { ResearchNode, ResearchRecap, ResearchRecapCandidate } from "@session/shared";
-import { normalizeRecap, validateRecapInstructions } from "@session/shared";
+import { findModel, normalizeRecap, validateRecapInstructions } from "@session/shared";
 import { and, eq } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
@@ -14,6 +14,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode } from "./nodes.js";
 
@@ -60,7 +61,7 @@ export function save(
     const node = tx
       .select()
       .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node || node.status !== "complete") {
       return null;
@@ -87,6 +88,7 @@ export function save(
       text,
       responseRevision: input.responseRevision,
       generatedAt: now(),
+      adapter: findModel(input.model)?.adapter ?? input.model,
       model: input.model,
     };
     tx.update(nodes).set({ recapJson: recap }).where(eq(nodes.id, node.id)).run();
@@ -118,7 +120,7 @@ export function applyCandidate(
     const node = tx
       .select()
       .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node) {
       throw new Error(`research node ${input.nodeId} was not found`);
@@ -127,7 +129,7 @@ export function applyCandidate(
     if (tree?.archivedAt != null) {
       throw new Error("Cannot update summary of archived research: restore the thread first.");
     }
-    if (node.kind !== "run" || node.status !== "complete") {
+    if (node.type !== "exchange" || node.status !== "complete") {
       throw new Error("Cannot update summary: the research run has not completed.");
     }
     const currentRecapId = node.recapJson?.id ?? null;
@@ -161,6 +163,7 @@ export function applyCandidate(
       text,
       responseRevision: input.expectedResponseRevision,
       generatedAt: input.candidate.generatedAt,
+      adapter: input.candidate.adapter,
       model: input.candidate.model,
       instructions,
     };
@@ -181,7 +184,7 @@ export function clear(db: SessionDatabase, userId: string, nodeId: string): void
     const row = tx
       .update(nodes)
       .set({ recapJson: null })
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
       .returning({ id: nodes.id })
       .get();
     if (row) upsertResearchRoot(tx, row.id);

@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { SessionDatabase } from "../connection.js";
 import { withFullSync } from "../connection.js";
 import type { RunOutcome } from "../json.js";
-import { parseJsonColumn, parseNullableJsonColumn, runOutcomeSchema } from "../json.js";
+import { parseNullableJsonColumn, parseWireColumn, runOutcomeSchema } from "../json.js";
 import { revisionOf, snapshotByteSize } from "../revision.js";
 import { nodes } from "../schema/nodes.js";
 import { runTurns } from "../schema/runs.js";
@@ -17,6 +17,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now, strictlyAfter } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode, isTerminalStatus } from "./nodes.js";
 import { touchTree } from "./trees.js";
@@ -93,17 +94,21 @@ export function commit(db: SessionDatabase, userId: string, input: CommitInput):
     const node = tx
       .select()
       .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node) {
       throw new Error(`research node ${input.nodeId} was not found`);
     }
+    if (node.type !== "exchange" || node.status === null) {
+      // A document's body is written with `applyReplacedTurns`; it has no run
+      // to settle.
+      throw new Error(`research node ${node.id} is a ${node.type} and has no run to commit`);
+    }
     // The monotonicity `nodes.setStatus` enforces, narrowed to what this path
     // can tell apart: a node that is terminal *and* already has its answer has
     // settled, and settling it twice would replace a revision that highlights
-    // and document edits are anchored to. A terminal node without a snapshot
-    // is the import path — the content arrives after the row — and is allowed.
-    // Retry deletes the snapshot; resume leaves the node `queued`.
+    // are anchored to. Retry deletes the snapshot; resume leaves the node
+    // `queued`.
     const existing = tx
       .select({ nodeId: responseSnapshots.nodeId })
       .from(responseSnapshots)
@@ -168,7 +173,7 @@ export function read(db: SessionDatabase, userId: string, nodeId: string): Store
     .select({ snapshot: responseSnapshots })
     .from(responseSnapshots)
     .innerJoin(nodes, eq(nodes.id, responseSnapshots.nodeId))
-    .where(and(eq(nodes.userId, userId), eq(responseSnapshots.nodeId, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(responseSnapshots.nodeId, nodeId)))
     .get();
   if (!row) {
     return null;
@@ -177,7 +182,11 @@ export function read(db: SessionDatabase, userId: string, nodeId: string): Store
   return {
     nodeId: snapshot.nodeId,
     revision: snapshot.revision,
-    turns: parseJsonColumn(turnListSchema, snapshot.turnsJson, "response_snapshots.turns_json"),
+    turns: parseWireColumn<Turn[]>(
+      turnListSchema,
+      snapshot.turnsJson,
+      "response_snapshots.turns_json",
+    ),
     outcome: parseNullableJsonColumn(
       runOutcomeSchema,
       snapshot.outcomeJson,
@@ -194,18 +203,11 @@ export function revision(db: SessionDatabase, userId: string, nodeId: string): s
     .select({ revision: responseSnapshots.revision })
     .from(responseSnapshots)
     .innerJoin(nodes, eq(nodes.id, responseSnapshots.nodeId))
-    .where(and(eq(nodes.userId, userId), eq(responseSnapshots.nodeId, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(responseSnapshots.nodeId, nodeId)))
     .get();
   return row?.revision ?? null;
 }
 
-/**
- * Replaces a node's snapshot without touching its status — the path a root
- * document's markdown edit takes, where the node was already `complete` and
- * only its content changes. The thread's `updated_at` and the node's
- * `response_snapshot_at` are both forced strictly forward so a client polling
- * either one sees the change.
- */
 export interface ReplaceResult {
   revision: string;
   responseSnapshotAt: number;
@@ -213,9 +215,9 @@ export interface ReplaceResult {
 }
 
 /**
- * Replaces a node's snapshot without touching its status — the path a root
- * document's markdown edit takes, where the node was already `complete` and
- * only its content changes. The node's `response_snapshot_at` and the thread's
+ * Writes a node's snapshot without touching its status — the path a document
+ * takes when it is imported and when its markdown is edited; a document has
+ * no run. The node's `response_snapshot_at` and the thread's
  * `updated_at` are both forced strictly forward so a client polling either one
  * sees the change (`state.rs:5074`).
  *
@@ -238,7 +240,7 @@ export function applyReplacedTurns(
   const node = tx
     .select()
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -290,7 +292,7 @@ export function remove(db: SessionDatabase, userId: string, nodeId: string): boo
   const node = db
     .select({ id: nodes.id })
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     return false;

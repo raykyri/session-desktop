@@ -3,13 +3,19 @@
 // `docs/05-run-lifecycle-and-streaming.md` §3, §7).
 
 import type {
+  NodeAnchor,
   ResearchBranchRemoval,
-  ResearchHighlightAnchor,
-  ResearchMessageAttachment,
   ResearchNode,
   ResearchNodeStatus,
+  UserMessage,
 } from "@session/shared";
-import { findModel, sanitizeResearchTitle, validateHighlightAnchor } from "@session/shared";
+import {
+  DEFAULT_MODEL_ID,
+  findModel,
+  sanitizeResearchTitle,
+  validateHighlightAnchor,
+} from "@session/shared";
+import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
@@ -23,11 +29,13 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
 import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
 import { enqueue } from "./queue.js";
 import { subtreeIdsDepthFirst, deleteNodesInOrder } from "./subtrees.js";
+import type { NodeAgentInput } from "./trees.js";
 import { touchTree } from "./trees.js";
 
 /** Statuses a node cannot be moved out of by `setStatus`. `interrupted` is
@@ -48,14 +56,30 @@ export function isTerminalStatus(status: ResearchNodeStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
+/** The run status of an exchange row. Posts and documents have no run, so a
+ * status change on one is a caller error. */
+function runStatus(node: NodeRow): ResearchNodeStatus {
+  if (node.type !== "exchange" || node.status === null) {
+    throw new Error(`research node ${node.id} is a ${node.type} and has no run`);
+  }
+  return node.status;
+}
+
+/** The registry model a row runs on or defaults its follow-ups to. */
+function rowModel(node: Pick<NodeRow, "model">): string {
+  return node.model ?? DEFAULT_MODEL_ID;
+}
+
 export interface AdmitChildInput {
   parentNodeId: string;
-  prompt: string;
-  /** Defaults to the parent's model. The caller checks the user may use it. */
-  model?: string | undefined;
+  /** `exchange` (the default) asks a question; `post` adds a follow-up note,
+   * which only a post can take. */
+  type?: "exchange" | "post" | undefined;
+  message: UserMessage;
+  /** Defaults to the parent's agent. The caller checks the user may use it. */
+  agent?: NodeAgentInput | undefined;
   inline?: boolean | undefined;
-  queryAnchor?: ResearchHighlightAnchor | null | undefined;
-  attachments?: ResearchMessageAttachment[] | undefined;
+  anchor?: NodeAnchor | null | undefined;
   nodeId?: string | undefined;
 }
 
@@ -68,7 +92,7 @@ function loadNode(db: SessionDatabase, userId: string, nodeId: string): LoadedNo
   const node = db
     .select()
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     throw new Error(`research node ${nodeId} was not found`);
@@ -97,7 +121,7 @@ export function get(db: SessionDatabase, userId: string, nodeId: string): Resear
   const node = db
     .select()
     .from(nodes)
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .where(and(nodeOwnedBy(userId), eq(nodes.id, nodeId)))
     .get();
   if (!node) {
     return null;
@@ -135,25 +159,33 @@ function isInlineSlotConflict(error: unknown): boolean {
 }
 
 /**
- * Creates a follow-up under `parentNodeId` (`docs/02` §5.4).
+ * Creates a follow-up under `parentNodeId` (`docs/02` §5.4): an exchange, or
+ * a follow-up note under a post.
  *
  * The parent must have finished — a follow-up's context is the parent's
- * answer — and the thread must not be archived. One inline child per parent,
- * whatever its status: a failed continuation stays in the thread until it is
- * deliberately removed, which reopens the slot.
+ * answer — and the thread must be neither archived nor in the Trash. One
+ * inline child per parent, whatever its status: a failed continuation stays
+ * in the thread until it is deliberately removed, which reopens the slot.
  */
 export function admitChild(
   db: SessionDatabase,
   userId: string,
   input: AdmitChildInput,
 ): ResearchNode {
-  const prompt = input.prompt.trim();
-  if (prompt === "") {
+  const text = input.message.text.trim();
+  if (text === "") {
     throw new Error("research prompt cannot be empty");
   }
-  if (input.queryAnchor) {
-    validateHighlightAnchor(input.queryAnchor);
+  if (input.anchor) {
+    validateHighlightAnchor(input.anchor.anchor);
   }
+  const type = input.type ?? "exchange";
+  const message: UserMessage = {
+    text,
+    ...(input.message.attachments && input.message.attachments.length > 0
+      ? { attachments: input.message.attachments }
+      : {}),
+  };
   return transact(db, (tx) => {
     const { node: parent, tree } = loadNode(tx, userId, input.parentNodeId);
     if (tree.archivedAt !== null) {
@@ -161,7 +193,15 @@ export function admitChild(
         "Cannot create follow-up on archived research: restore the research thread first.",
       );
     }
-    if (parent.status !== "complete") {
+    if (tree.trashedAt !== null) {
+      throw new Error(
+        "Cannot create follow-up on research in the Trash: restore the research thread first.",
+      );
+    }
+    if (type === "post" && parent.type !== "post") {
+      throw new Error("Cannot add a follow-up note: only notes take follow-up notes.");
+    }
+    if (parent.type === "exchange" && parent.status !== "complete") {
       throw new Error("Cannot create follow-up: the parent research run has not completed.");
     }
     const nodeId = input.nodeId ?? newId();
@@ -170,19 +210,20 @@ export function admitChild(
       tx.insert(nodes)
         .values({
           id: nodeId,
-          userId,
           treeId: parent.treeId,
           parentNodeId: parent.id,
+          authorId: userId,
           inline: input.inline === true,
-          prompt,
-          queryAnchorJson: input.queryAnchor ?? null,
-          attachmentsJson: input.attachments ?? [],
+          type,
+          messageJson: message,
+          anchorJson: input.anchor ?? null,
+          format: type === "post" ? postFormatOf(text) : null,
+          source: null,
+          model: input.agent?.model ?? rowModel(parent),
+          effort: input.agent === undefined ? parent.effort : (input.agent.effort ?? null),
           title: null,
           responsePreview: null,
-          model: input.model ?? parent.model,
-          kind: "run",
-          origin: null,
-          status: "queued",
+          status: type === "exchange" ? "queued" : null,
           error: null,
           attempt: 1,
           runSeq: 0,
@@ -234,9 +275,10 @@ export function setStatus(
 ): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
-    if (isTerminalStatus(node.status) && node.status !== status) {
+    const current = runStatus(node);
+    if (isTerminalStatus(current) && current !== status) {
       throw new Error(
-        `Research node ${nodeId} already has terminal status '${node.status}' and cannot transition to '${status}'.`,
+        `Research node ${nodeId} already has terminal status '${current}' and cannot transition to '${status}'.`,
       );
     }
     const at = now();
@@ -304,7 +346,8 @@ export function resetForRetry(
 ): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
-    if (node.status !== "failed" && node.status !== "cancelled" && node.status !== "interrupted") {
+    const status = runStatus(node);
+    if (status !== "failed" && status !== "cancelled" && status !== "interrupted") {
       throw new Error(
         "Cannot retry run: only runs with status 'failed', 'cancelled', or 'interrupted' can be retried.",
       );
@@ -329,7 +372,7 @@ export function resetForRetry(
       })
       .where(eq(nodes.id, nodeId))
       .run();
-    enqueueForRun(tx, userId, node.id, model ?? node.model, at);
+    enqueueForRun(tx, userId, node.id, model ?? rowModel(node), at);
     touchTree(tx, node.treeId, at);
     syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
@@ -348,7 +391,7 @@ export function resetForRetry(
 export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
-    if (node.status !== "interrupted") {
+    if (runStatus(node) !== "interrupted") {
       throw new Error("Cannot resume run: only runs with status 'interrupted' can be resumed.");
     }
     const attempt = node.attempt + 1;
@@ -371,7 +414,7 @@ export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: strin
       })
       .where(eq(nodes.id, nodeId))
       .run();
-    enqueueForRun(tx, userId, node.id, node.model, 0);
+    enqueueForRun(tx, userId, node.id, rowModel(node), 0);
     touchTree(tx, node.treeId, at);
     syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
@@ -400,9 +443,10 @@ export function requeueAfterRateLimit(
 ): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
-    if (isTerminalStatus(node.status)) {
+    const status = runStatus(node);
+    if (isTerminalStatus(status)) {
       throw new Error(
-        `research node ${nodeId} already finished as ${node.status} and cannot be re-queued`,
+        `research node ${nodeId} already finished as ${status} and cannot be re-queued`,
       );
     }
     tx.delete(runTurns).where(eq(runTurns.nodeId, nodeId)).run();
@@ -452,7 +496,7 @@ export function markInterrupted(
 ): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
-    if (node.status !== "running") {
+    if (node.type !== "exchange" || node.status !== "running") {
       return reload(tx, userId, nodeId);
     }
     const at = now();
@@ -479,8 +523,6 @@ export interface BootReconciliation {
   requeuedNodeIds: string[];
   /** `queued` nodes that had no `run_queue` row, given one. */
   reenqueuedNodeIds: string[];
-  /** `complete` documents with no content, failed so they can be acted on. */
-  emptyDocumentNodeIds: string[];
 }
 
 /**
@@ -492,10 +534,9 @@ export interface BootReconciliation {
  * nodes stay queued. Every `resume_pending` node, including ones marked by a
  * clean `SIGTERM`, is re-queued ahead of new work.
  *
- * Boot is also the only place that can repair the two states no caller can
- * reach afterwards, both of which are a crash between two transactions that a
- * single one would have made impossible: a `queued` node with no queue row,
- * and a `complete` document with no snapshot.
+ * Boot is also the only place that can repair a state no caller can reach
+ * afterwards: a `queued` node with no queue row, which a crash between the
+ * admission and enqueue transactions leaves behind.
  */
 export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
   return transact(db, (tx) => {
@@ -504,7 +545,6 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       interruptedNodeIds: [],
       requeuedNodeIds: [],
       reenqueuedNodeIds: [],
-      emptyDocumentNodeIds: [],
     };
     const active = tx
       .select()
@@ -546,18 +586,20 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         result.interruptedNodeIds.push(node.id);
       }
     }
-    // Handle orphaned queued nodes missing a corresponding `run_queue` record due to crash between transactions; re-enqueue them to allow processing. The node row and its queue row are separate transactions under
-    // `synchronous = NORMAL` (`routers/research.ts`, `createTree` then
+    // A `queued` node with no `run_queue` row. The node row and its queue row
+    // are separate transactions under `synchronous = NORMAL`
+    // (`routers/research/trees.ts`, `createTree` then
     // `enqueueRun`), so a crash between them produces exactly this. Re-queued
     // at the back rather than the head: the node is new work, not a resume.
     const orphanedQueued = tx
       .select({
         id: nodes.id,
-        userId: nodes.userId,
+        userId: trees.ownerId,
         model: nodes.model,
         createdAt: nodes.createdAt,
       })
       .from(nodes)
+      .innerJoin(trees, eq(trees.id, nodes.treeId))
       .where(
         and(
           eq(nodes.status, "queued"),
@@ -568,56 +610,27 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       .orderBy(asc(nodes.createdAt), asc(nodes.id))
       .all();
     for (const node of orphanedQueued) {
-      enqueueForRun(tx, node.userId, node.id, node.model, node.createdAt);
+      enqueueForRun(tx, node.userId, node.id, rowModel(node), node.createdAt);
       result.reenqueuedNodeIds.push(node.id);
-    }
-
-    // If document metadata is committed without Markdown content across the two
-    // import transactions, mark the node as failed to enable recovery actions.
-    const emptyDocuments = tx
-      .select({ id: nodes.id })
-      .from(nodes)
-      .where(
-        and(
-          eq(nodes.status, "complete"),
-          eq(nodes.kind, "document"),
-          sql`not exists (select 1 from ${responseSnapshots} where ${responseSnapshots.nodeId} = ${nodes.id})`,
-        ),
-      )
-      .orderBy(asc(nodes.id))
-      .all();
-    for (const node of emptyDocuments) {
-      tx.update(nodes)
-        .set({
-          status: "failed",
-          error: "this document was not saved completely; import it again",
-          runSeq: sql`${nodes.runSeq} + 1`,
-        })
-        .where(eq(nodes.id, node.id))
-        .run();
-      result.emptyDocumentNodeIds.push(node.id);
     }
 
     // Every pending resume goes back to the head of the queue: `enqueued_at`
     // 0 sorts ahead of any real timestamp, and the ULID tie-break keeps the
     // original order among them.
     const pending = tx
-      .select({ id: nodes.id, userId: nodes.userId, model: nodes.model })
+      .select({ id: nodes.id, userId: trees.ownerId, model: nodes.model })
       .from(nodes)
+      .innerJoin(trees, eq(trees.id, nodes.treeId))
       .where(eq(nodes.resumePending, true))
       .orderBy(asc(nodes.id))
       .all();
     for (const node of pending) {
-      enqueueForRun(tx, node.userId, node.id, node.model, 0);
+      enqueueForRun(tx, node.userId, node.id, rowModel(node), 0);
       result.requeuedNodeIds.push(node.id);
     }
     // Reset claims previously acquired by terminated server instances.
     tx.update(runQueue).set({ claimedAt: null }).run();
-    for (const nodeId of new Set([
-      ...result.adoptedNodeIds,
-      ...result.interruptedNodeIds,
-      ...result.emptyDocumentNodeIds,
-    ])) {
+    for (const nodeId of new Set([...result.adoptedNodeIds, ...result.interruptedNodeIds])) {
       upsertResearchRoot(tx, nodeId);
     }
     return result;
@@ -643,14 +656,12 @@ export function rename(
   });
 }
 
-/** Active nodes across the account, for the activity rail. */
+/** Active nodes across the account's threads, for the activity rail. */
 export function listActive(db: SessionDatabase, userId: string): ResearchNode[] {
   const rows = db
     .select()
     .from(nodes)
-    .where(
-      and(eq(nodes.userId, userId), inArray(nodes.status, ["queued", "running", "interrupted"])),
-    )
+    .where(and(nodeOwnedBy(userId), inArray(nodes.status, ["queued", "running", "interrupted"])))
     .orderBy(asc(nodes.createdAt), asc(nodes.id))
     .all();
   return rows.flatMap((row) => {

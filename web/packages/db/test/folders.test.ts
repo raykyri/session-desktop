@@ -6,7 +6,14 @@ import { folders, trees } from "../src/index.js";
 import { addUser, createFixture } from "./helpers.js";
 
 function state(partial: Partial<ResearchFolderState>): ResearchFolderState {
-  return { folders: [], membership: {}, collapsed: [], ...partial };
+  return {
+    folders: [],
+    membership: {},
+    collapsed: [],
+    parents: {},
+    collapsedGroups: [],
+    ...partial,
+  };
 }
 
 test("normalization dedupes folders and drops entries naming absent folders", (t) => {
@@ -33,14 +40,16 @@ test("normalization dedupes folders and drops entries naming absent folders", (t
 test("the stored state round-trips folders, membership, and collapse", (t) => {
   const fixture = createFixture(t);
   const first = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "One",
-    model: "gemini-flash",
+    message: { text: "One" },
+    agent: { model: "gemini-flash" },
   });
   const second = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Two",
-    model: "gemini-flash",
+    message: { text: "Two" },
+    agent: { model: "gemini-flash" },
   });
   const stored = folders.setState(
     fixture.db,
@@ -101,9 +110,10 @@ test("a later write replaces the earlier one", (t) => {
 test("deleting a tree takes its membership with it", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "One",
-    model: "gemini-flash",
+    message: { text: "One" },
+    agent: { model: "gemini-flash" },
     status: "complete",
   });
   folders.setState(
@@ -142,6 +152,6 @@ test("a folder id already owned elsewhere is not taken over", (t) => {
   );
   t.deepEqual(stored.folders, []);
   t.deepEqual(folders.getState(fixture.db, other.userId, other.workspaceId).folders, [
-    { id: "shared-id", name: "Theirs", workspaceId: other.workspaceId },
+    { id: "shared-id", name: "Theirs", workspaceId: other.workspaceId, trashedAt: null },
   ]);
 });

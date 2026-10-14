@@ -16,15 +16,19 @@ export function upsertResearchRoot(db: SessionDatabase, nodeId: string): boolean
     .innerJoin(trees, eq(trees.id, nodes.treeId))
     .where(eq(nodes.id, nodeId))
     .get();
-  if (!row || row.node.parentNodeId !== null || row.tree.archivedAt !== null) {
+  if (
+    !row ||
+    row.node.parentNodeId !== null ||
+    row.tree.archivedAt !== null ||
+    row.tree.trashedAt !== null
+  ) {
     db.delete(feedItems).where(eq(feedItems.nodeId, nodeId)).run();
     return false;
   }
   db.insert(feedItems)
     .values({
       id: row.node.id,
-      authorId: row.node.userId,
-      kind: "research",
+      authorId: row.node.authorId ?? row.tree.ownerId,
       occurredAt: row.node.createdAt,
       sourceRank: RESEARCH_ACTIVITY_SOURCE_RANK,
       nodeId: row.node.id,
@@ -34,8 +38,7 @@ export function upsertResearchRoot(db: SessionDatabase, nodeId: string): boolean
     .onConflictDoUpdate({
       target: feedItems.id,
       set: {
-        authorId: row.node.userId,
-        kind: "research",
+        authorId: row.node.authorId ?? row.tree.ownerId,
         occurredAt: row.node.createdAt,
         sourceRank: RESEARCH_ACTIVITY_SOURCE_RANK,
         nodeId: row.node.id,

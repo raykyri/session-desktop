@@ -1,29 +1,35 @@
-// Root research documents: imported reports and anything else the user
-// authored as markdown rather than asked for
-// (`docs/02-domain-model-and-database.md` §5.6).
-//
-// Manages root markdown research documents, distinct from attached reference documents in `repos/documents.ts`.
+// Root research documents: imported reports and documents the user authored
+// as markdown rather than asked for (`docs/02-domain-model-and-database.md`
+// §5.6). A document node has no run; its body is a one-turn snapshot.
 
-import type { Turn, UpdateResearchDocumentResult } from "@session/shared";
+import type {
+  NodeAnchor,
+  ResearchTreeDetail,
+  Turn,
+  UpdateResearchDocumentResult,
+} from "@session/shared";
+import { nodeAnchorSchema, sanitizeResearchTitle } from "@session/shared";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
-  sanitizeResearchTitle,
-} from "@session/shared";
-import { and, eq, sql } from "drizzle-orm";
+} from "@session/shared/lib/researchDocuments";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { withFullSync } from "../connection.js";
+import { parseWireColumn } from "../json.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { nodeOwnedBy } from "./access.js";
 import { removeAllForNode, listForNode } from "./highlights.js";
-import { toResearchTree } from "./mappers.js";
 import { get as getNode } from "./nodes.js";
 import { applyReplacedTurns, read as readSnapshot } from "./snapshots.js";
+import type { NodeAgentInput } from "./trees.js";
+import { admitRoot, detail, treeFor } from "./trees.js";
 
 /** The single-turn form a document's markdown is stored in, so the viewer,
  * the revision hash, and highlight anchors all see one representation. */
@@ -89,7 +95,7 @@ export function update(
     const node = tx
       .select()
       .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, input.nodeId)))
+      .where(and(nodeOwnedBy(userId), eq(nodes.id, input.nodeId)))
       .get();
     if (!node) {
       throw new Error(`research node ${input.nodeId} was not found`);
@@ -98,12 +104,22 @@ export function update(
     if (!tree) {
       throw new Error(`research tree ${node.treeId} was not found`);
     }
-    if (node.kind !== "document" || node.parentNodeId !== null || tree.rootNodeId !== node.id) {
+    if (
+      node.type !== "document" ||
+      node.source === "transcript" ||
+      node.parentNodeId !== null ||
+      tree.rootNodeId !== node.id
+    ) {
       throw new Error("Cannot edit non-root node: only root research documents can be edited.");
     }
     if (tree.archivedAt !== null) {
       throw new Error(
         "Cannot edit document in archived research: restore the research thread first.",
+      );
+    }
+    if (tree.trashedAt !== null) {
+      throw new Error(
+        "Cannot edit document in research in the Trash: restore the research thread first.",
       );
     }
     if (tree.title !== input.expectedTitle) {
@@ -147,6 +163,7 @@ export function update(
       responseRevision = applyReplacedTurns(tx, userId, node.id, [
         documentTurn(node.id, markdown),
       ]).revision;
+      tx.update(nodes).set({ editedAt: at }).where(eq(nodes.id, node.id)).run();
     }
     const treeRow = tx
       .update(trees)
@@ -161,11 +178,66 @@ export function update(
       throw new Error(`research node ${node.id} was not found`);
     }
     return {
-      tree: toResearchTree(treeRow),
+      tree: treeFor(tx, userId, treeRow),
       node: updatedNode,
       responseRevision,
       markdownChanged,
       removedHighlightCount,
+      unmatchedBranchCount: markdownChanged ? unmatchedBranches(tx, node.id, markdown) : 0,
     };
+  });
+}
+
+/** Branches asked about a passage whose quote is no longer in `markdown`.
+ * They keep their anchors; the count tells the editor to say so. */
+function unmatchedBranches(db: SessionDatabase, nodeId: string, markdown: string): number {
+  return db
+    .select({ anchorJson: nodes.anchorJson })
+    .from(nodes)
+    .where(and(eq(nodes.parentNodeId, nodeId), isNotNull(nodes.anchorJson)))
+    .all()
+    .filter((row) => {
+      const anchor = parseWireColumn<NodeAnchor>(
+        nodeAnchorSchema,
+        row.anchorJson,
+        "nodes.anchor_json",
+      );
+      return !markdown.includes(anchor.anchor.exact);
+    }).length;
+}
+
+export interface ImportReportInput {
+  workspaceId: string;
+  /** The question the report answers. */
+  prompt: string;
+  /** Already stripped of citation markers and validated. */
+  markdown: string;
+  /** The agent its follow-ups default to. */
+  agent: NodeAgentInput;
+}
+
+/**
+ * Files an imported report as a new thread whose root is a document with
+ * `source = imported`. The node and its body are written in one durable
+ * transaction, so no reader sees a document without content.
+ */
+export function importReport(
+  db: SessionDatabase,
+  userId: string,
+  input: ImportReportInput,
+): ResearchTreeDetail {
+  validateDocumentMarkdown(input.markdown);
+  return withFullSync(db, (tx) => {
+    const created = admitRoot(tx, userId, {
+      workspaceId: input.workspaceId,
+      type: "document",
+      source: "imported",
+      message: { text: input.prompt },
+      agent: input.agent,
+      title: deriveResearchDocumentTitle(input.markdown),
+    });
+    const nodeId = created.tree.rootNodeId;
+    applyReplacedTurns(tx, userId, nodeId, [documentTurn(nodeId, input.markdown)]);
+    return detail(tx, userId, created.tree.id);
   });
 }

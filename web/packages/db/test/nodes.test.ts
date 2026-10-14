@@ -1,14 +1,16 @@
+import { nodeModelId } from "@session/shared";
 import test from "ava";
 
 import { nodes, queue, runs, snapshots, trees } from "../src/index.js";
 
-import { answerTurn, createFixture } from "./helpers.js";
+import { answerTurn, createFixture, runOf } from "./helpers.js";
 
 function completedRoot(fixture: ReturnType<typeof createFixture>, prompt = "Root question") {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt,
-    model: "gemini-flash",
+    message: { text: prompt },
+    agent: { model: "gemini-flash" },
   });
   nodes.setStatus(fixture.db, fixture.userId, detail.tree.rootNodeId, "complete");
   return detail;
@@ -17,15 +19,16 @@ function completedRoot(fixture: ReturnType<typeof createFixture>, prompt = "Root
 test("a follow-up requires a completed parent and a live thread", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   t.throws(
     () =>
       nodes.admitChild(fixture.db, fixture.userId, {
         parentNodeId: detail.tree.rootNodeId,
-        prompt: "Too early",
+        message: { text: "Too early" },
       }),
     { message: /parent research run has not completed/ },
   );
@@ -35,7 +38,7 @@ test("a follow-up requires a completed parent and a live thread", (t) => {
     () =>
       nodes.admitChild(fixture.db, fixture.userId, {
         parentNodeId: detail.tree.rootNodeId,
-        prompt: "Archived",
+        message: { text: "Archived" },
       }),
     { message: /Cannot create follow-up on archived research/ },
   );
@@ -46,15 +49,15 @@ test("a follow-up inherits the parent's model unless it names one", (t) => {
   const detail = completedRoot(fixture);
   const inherited = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Inherits",
+    message: { text: "Inherits" },
   });
-  t.is(inherited.model, "gemini-flash");
+  t.is(nodeModelId(inherited), "gemini-flash");
   const chosen = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Chooses",
-    model: "claude-fable",
+    message: { text: "Chooses" },
+    agent: { model: "claude-fable" },
   });
-  t.is(chosen.model, "claude-fable");
+  t.is(nodeModelId(chosen), "claude-fable");
 });
 
 test("the partial unique index allows one inline child per parent", (t) => {
@@ -62,7 +65,7 @@ test("the partial unique index allows one inline child per parent", (t) => {
   const detail = completedRoot(fixture);
   const inline = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Continues",
+    message: { text: "Continues" },
     inline: true,
   });
   t.true(inline.inline);
@@ -70,7 +73,7 @@ test("the partial unique index allows one inline child per parent", (t) => {
     () =>
       nodes.admitChild(fixture.db, fixture.userId, {
         parentNodeId: detail.tree.rootNodeId,
-        prompt: "Also continues",
+        message: { text: "Also continues" },
         inline: true,
       }),
     { message: nodes.INLINE_SLOT_TAKEN },
@@ -78,11 +81,11 @@ test("the partial unique index allows one inline child per parent", (t) => {
   // Branching children are unlimited.
   nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Branch one",
+    message: { text: "Branch one" },
   });
   nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Branch two",
+    message: { text: "Branch two" },
   });
   // A failed inline child still holds the slot; removing it reopens one.
   nodes.setStatus(fixture.db, fixture.userId, inline.id, "failed", { error: "x" });
@@ -90,7 +93,7 @@ test("the partial unique index allows one inline child per parent", (t) => {
     () =>
       nodes.admitChild(fixture.db, fixture.userId, {
         parentNodeId: detail.tree.rootNodeId,
-        prompt: "Third",
+        message: { text: "Third" },
         inline: true,
       }),
     { message: nodes.INLINE_SLOT_TAKEN },
@@ -98,7 +101,7 @@ test("the partial unique index allows one inline child per parent", (t) => {
   nodes.removeBranch(fixture.db, fixture.userId, inline.id);
   const replacement = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Third",
+    message: { text: "Third" },
     inline: true,
   });
   t.true(replacement.inline);
@@ -107,14 +110,15 @@ test("the partial unique index allows one inline child per parent", (t) => {
 test("terminal statuses are monotonic", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running", { startedAt: Date.now() });
   const complete = nodes.setStatus(fixture.db, fixture.userId, rootId, "complete");
-  t.not(complete.completedAt, null);
+  t.not(runOf(complete).completedAt, null);
   for (const status of ["running", "failed", "cancelled", "queued"] as const) {
     t.throws(() => nodes.setStatus(fixture.db, fixture.userId, rootId, status), {
       message: /already has terminal status 'complete'/,
@@ -125,9 +129,10 @@ test("terminal statuses are monotonic", (t) => {
 test("every status change bumps run_seq", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   const before = runs.liveWindow(fixture.db, fixture.userId, rootId).seq;
@@ -139,9 +144,10 @@ test("every status change bumps run_seq", (t) => {
 test("retry needs a terminal-but-retryable status and clears the attempt", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   t.throws(() => nodes.resetForRetry(fixture.db, fixture.userId, rootId), {
@@ -155,12 +161,12 @@ test("retry needs a terminal-but-retryable status and clears the attempt", (t) =
     outcome: { status: "failed", error: "provider fell over" },
   });
   const retried = nodes.resetForRetry(fixture.db, fixture.userId, rootId, "gpt-luna");
-  t.is(retried.status, "queued");
-  t.is(retried.attempt, 2);
-  t.is(retried.error, null);
-  t.is(retried.completedAt, null);
-  t.is(retried.responseSnapshotAt, null);
-  t.is(retried.model, "gpt-luna");
+  t.is(runOf(retried).status, "queued");
+  t.is(runOf(retried).attempt, 2);
+  t.is(runOf(retried).error, null);
+  t.is(runOf(retried).completedAt, null);
+  t.is(runOf(retried).responseSnapshotAt, null);
+  t.is(nodeModelId(retried), "gpt-luna");
   t.is(snapshots.read(fixture.db, fixture.userId, rootId), null);
   t.deepEqual(runs.liveWindow(fixture.db, fixture.userId, rootId).turns, []);
   // A node put back to `queued` has something to admit it again, and a retry
@@ -176,9 +182,10 @@ test("retry needs a terminal-but-retryable status and clears the attempt", (t) =
 test("resume keeps the committed turns and drops the checkpoint", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
@@ -192,11 +199,11 @@ test("resume keeps the committed turns and drops the checkpoint", (t) => {
     turn: answerTurn(rootId, "half a sentence", "turn-2"),
   });
   const interrupted = nodes.markInterrupted(fixture.db, fixture.userId, rootId);
-  t.is(interrupted.status, "interrupted");
+  t.is(runOf(interrupted).status, "interrupted");
 
   const resumed = nodes.resumeAttempt(fixture.db, fixture.userId, rootId);
-  t.is(resumed.status, "queued");
-  t.is(resumed.attempt, 2);
+  t.is(runOf(resumed).status, "queued");
+  t.is(runOf(resumed).attempt, 2);
   const window = runs.liveWindow(fixture.db, fixture.userId, rootId);
   t.is(window.turns.length, 1);
   t.is(window.turns[0]?.id, "turn-1");
@@ -215,14 +222,16 @@ test("resume keeps the committed turns and drops the checkpoint", (t) => {
 test("reconciles in-flight runs at startup by marking them interrupted and re-enqueuing", (t) => {
   const fixture = createFixture(t);
   const running = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Running",
-    model: "gemini-flash",
+    message: { text: "Running" },
+    agent: { model: "gemini-flash" },
   });
   const queued = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Queued",
-    model: "gemini-flash",
+    message: { text: "Queued" },
+    agent: { model: "gemini-flash" },
   });
   const runningId = running.tree.rootNodeId;
   const queuedId = queued.tree.rootNodeId;
@@ -235,8 +244,8 @@ test("reconciles in-flight runs at startup by marking them interrupted and re-en
   t.deepEqual(result.interruptedNodeIds, [runningId]);
   t.deepEqual(result.requeuedNodeIds, [runningId]);
   const reconciled = nodes.get(fixture.db, fixture.userId, runningId);
-  t.is(reconciled?.status, "interrupted");
-  t.is(nodes.get(fixture.db, fixture.userId, queuedId)?.status, "queued");
+  t.is(runOf(reconciled).status, "interrupted");
+  t.is(runOf(nodes.get(fixture.db, fixture.userId, queuedId)).status, "queued");
   // The resumed node is ahead of the one that was merely waiting.
   t.is(queue.position(fixture.db, fixture.userId, runningId), 1);
   t.is(queue.position(fixture.db, fixture.userId, queuedId), 2);
@@ -245,9 +254,10 @@ test("reconciles in-flight runs at startup by marking them interrupted and re-en
 test("synchronizes node status with existing terminal snapshot outcome at startup", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
@@ -263,8 +273,8 @@ test("synchronizes node status with existing terminal snapshot outcome at startu
   t.deepEqual(result.adoptedNodeIds, [rootId]);
   t.deepEqual(result.interruptedNodeIds, []);
   const adopted = nodes.get(fixture.db, fixture.userId, rootId);
-  t.is(adopted?.status, "complete");
-  t.is(adopted?.completedAt, 1_700_000_000_000);
+  t.is(runOf(adopted).status, "complete");
+  t.is(runOf(adopted).completedAt, 1_700_000_000_000);
 });
 
 test("deletes child subtree while disallowing root node deletion", (t) => {
@@ -272,12 +282,12 @@ test("deletes child subtree while disallowing root node deletion", (t) => {
   const detail = completedRoot(fixture);
   const child = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: detail.tree.rootNodeId,
-    prompt: "Child",
+    message: { text: "Child" },
   });
   nodes.setStatus(fixture.db, fixture.userId, child.id, "complete");
   const grandchild = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: child.id,
-    prompt: "Grandchild",
+    message: { text: "Grandchild" },
   });
   nodes.setStatus(fixture.db, fixture.userId, grandchild.id, "cancelled");
   t.throws(() => nodes.removeBranch(fixture.db, fixture.userId, detail.tree.rootNodeId), {
@@ -301,9 +311,10 @@ test("nodes of another account are invisible", (t) => {
 test("a boot re-queue with no queue row records the model's provider", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
@@ -319,9 +330,10 @@ test("a boot re-queue with no queue row records the model's provider", (t) => {
 test("halts automatic re-enqueuing once retry attempt limit is reached", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
@@ -335,7 +347,7 @@ test("halts automatic re-enqueuing once retry attempt limit is reached", (t) => 
     "the queue row goes with the flag",
   );
   t.is(
-    nodes.get(fixture.db, fixture.userId, rootId)?.status,
+    runOf(nodes.get(fixture.db, fixture.userId, rootId)).status,
     "interrupted",
     "the node keeps its status and its partial output for Retry",
   );
@@ -345,9 +357,10 @@ test("halts automatic re-enqueuing once retry attempt limit is reached", (t) => 
 test("creates a new attempt record on rate-limited re-enqueue to preserve prior attempt history", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
@@ -371,9 +384,9 @@ test("creates a new attempt record on rate-limited re-enqueue to preserve prior 
   const before = seqOf();
 
   const requeued = nodes.requeueAfterRateLimit(fixture.db, fixture.userId, rootId);
-  t.is(requeued.status, "queued");
-  t.is(requeued.attempt, 2);
-  t.is(requeued.startedAt ?? null, null, "the new attempt has not started");
+  t.is(runOf(requeued).status, "queued");
+  t.is(runOf(requeued).attempt, 2);
+  t.is(runOf(requeued).startedAt ?? null, null, "the new attempt has not started");
 
   // The next attempt writes under attempt 2, so the throttled row is still
   // there to count the backoff from after a restart.
@@ -399,13 +412,14 @@ test("creates a new attempt record on rate-limited re-enqueue to preserve prior 
 test("re-enqueues queued nodes missing queue table records during startup reconciliation", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Root",
-    model: "gemini-flash",
+    message: { text: "Root" },
+    agent: { model: "gemini-flash" },
   });
   const rootId = detail.tree.rootNodeId;
   // The node row and its queue row are separate transactions under
-  // `synchronous = NORMAL` (`routers/research.ts`: `createTree` then
+  // `synchronous = NORMAL` (`routers/research/trees.ts`: `createTree` then
   // `enqueueRun`), so a crash between them leaves the node `queued` with
   // nothing to admit it. The claim loop reads the queue, so it waits forever,
   // and Retry is offered only on failed, cancelled and interrupted — there is
@@ -415,48 +429,9 @@ test("re-enqueues queued nodes missing queue table records during startup reconc
   const result = nodes.reconcileOnBoot(fixture.db);
   t.deepEqual(result.reenqueuedNodeIds, [rootId]);
   t.deepEqual(result.requeuedNodeIds, [], "it is not a resume");
-  t.is(nodes.get(fixture.db, fixture.userId, rootId)?.status, "queued");
+  t.is(runOf(nodes.get(fixture.db, fixture.userId, rootId)).status, "queued");
   t.is(queue.position(fixture.db, fixture.userId, rootId), 1, "it is in the queue now");
 
   // Idempotent: a second boot leaves it alone rather than re-enqueueing it.
   t.deepEqual(nodes.reconcileOnBoot(fixture.db).reenqueuedNodeIds, []);
-});
-
-test("marks imported document as failed if markdown content was not saved", (t) => {
-  const fixture = createFixture(t);
-  const detail = trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "An import",
-    model: "gemini-flash",
-    kind: "document",
-    origin: "imported",
-    status: "complete",
-  });
-  const rootId = detail.tree.rootNodeId;
-  // `importReport` writes the row `complete` and the snapshot after it. A
-  // crash in between leaves a document that reads as "this research produced
-  // no readable response" and that `updateDocument` and `retryNode` both
-  // refuse — permanently unreadable and unrepairable.
-  const result = nodes.reconcileOnBoot(fixture.db);
-  t.deepEqual(result.emptyDocumentNodeIds, [rootId]);
-  const failed = nodes.get(fixture.db, fixture.userId, rootId);
-  t.is(failed?.status, "failed");
-  t.regex(failed?.error ?? "", /import it again/);
-
-  // A document that does have its markdown is untouched.
-  const good = trees.admitRoot(fixture.db, fixture.userId, {
-    workspaceId: fixture.workspaceId,
-    prompt: "A complete import",
-    model: "gemini-flash",
-    kind: "document",
-    origin: "imported",
-    status: "complete",
-  });
-  snapshots.commit(fixture.db, fixture.userId, {
-    nodeId: good.tree.rootNodeId,
-    turns: [answerTurn(good.tree.rootNodeId, "# A report")],
-    outcome: { status: "complete" },
-  });
-  t.deepEqual(nodes.reconcileOnBoot(fixture.db).emptyDocumentNodeIds, []);
-  t.is(nodes.get(fixture.db, fixture.userId, good.tree.rootNodeId)?.status, "complete");
 });

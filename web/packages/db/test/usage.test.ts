@@ -13,9 +13,10 @@ const NOON = Math.floor(1_700_000_000_000 / DAY) * DAY + DAY / 2;
  * several records is still one run. */
 function attemptAt(fixture: Fixture, at: number): string {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: `Question at ${at}`,
-    model: "gemini-flash",
+    message: { text: `Question at ${at}` },
+    agent: { model: "gemini-flash" },
   });
   runs.startAttempt(fixture.db, {
     nodeId: detail.tree.rootNodeId,

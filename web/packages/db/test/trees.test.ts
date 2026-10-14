@@ -2,13 +2,14 @@ import test from "ava";
 
 import { nodes, trees } from "../src/index.js";
 
-import { createFixture } from "./helpers.js";
+import { createFixture, runOf } from "./helpers.js";
 
 function admit(fixture: ReturnType<typeof createFixture>, prompt: string) {
   return trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt,
-    model: "gemini-flash",
+    message: { text: prompt },
+    agent: { model: "gemini-flash" },
   });
 }
 
@@ -20,9 +21,9 @@ test("creates thread and root node atomically at position 0", (t) => {
   const root = first.nodes[0];
   t.is(root?.id, first.tree.rootNodeId);
   t.is(root?.parentNodeId, null);
-  t.is(root?.status, "queued");
-  t.is(root?.attempt, 1);
-  t.is(root?.workspaceId, fixture.workspaceId);
+  t.is(runOf(root).status, "queued");
+  t.is(runOf(root).attempt, 1);
+  t.is(root?.groupId, fixture.workspaceId);
   t.is(first.tree.title, "First question");
   t.deepEqual(
     trees.summaries(fixture.db, fixture.userId).map((summary) => summary.id),
@@ -35,18 +36,20 @@ test("rejects root node creation with empty prompt or unauthorized workspace ID"
   t.throws(
     () =>
       trees.admitRoot(fixture.db, fixture.userId, {
+        type: "exchange",
         workspaceId: fixture.workspaceId,
-        prompt: "   ",
-        model: "gemini-flash",
+        message: { text: "   " },
+        agent: { model: "gemini-flash" },
       }),
     { message: /prompt cannot be empty/ },
   );
   t.throws(
     () =>
       trees.admitRoot(fixture.db, fixture.userId, {
+        type: "exchange",
         workspaceId: "nope",
-        prompt: "Question",
-        model: "gemini-flash",
+        message: { text: "Question" },
+        agent: { model: "gemini-flash" },
       }),
     { message: /workspace nope was not found/ },
   );
@@ -59,7 +62,7 @@ test("summaries count statuses and raise attention flags only for unseen ones", 
   nodes.setStatus(fixture.db, fixture.userId, rootId, "complete");
   const child = nodes.admitChild(fixture.db, fixture.userId, {
     parentNodeId: rootId,
-    prompt: "Follow-up",
+    message: { text: "Follow-up" },
   });
   nodes.setStatus(fixture.db, fixture.userId, child.id, "failed", { error: "boom" });
   const [summary] = trees.summaries(fixture.db, fixture.userId);

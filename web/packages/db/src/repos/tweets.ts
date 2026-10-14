@@ -9,7 +9,7 @@ import { MAX_TWEET_SNAPSHOT_BYTES, tweetSnapshotSchema } from "@session/shared";
 import { eq, lt } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
-import { parseNullableJsonColumn } from "../json.js";
+import { parseNullableWireColumn } from "../json.js";
 import { tweetCache } from "../schema/tweets.js";
 import { now } from "../time.js";
 
@@ -36,7 +36,7 @@ export function get(db: SessionDatabase, tweetId: string): CachedTweet | null {
   return {
     tweetId: row.tweetId,
     payload: row.payloadJson,
-    snapshot: parseNullableJsonColumn(
+    snapshot: parseNullableWireColumn<TweetSnapshot>(
       tweetSnapshotSchema,
       row.snapshotJson,
       "tweet_cache.snapshot_json",

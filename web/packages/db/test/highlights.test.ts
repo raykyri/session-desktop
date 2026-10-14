@@ -1,7 +1,7 @@
 import { MAX_RESEARCH_HIGHLIGHTS_PER_NODE } from "@session/shared";
 import test from "ava";
 
-import { highlights, nodes, snapshots, trees } from "../src/index.js";
+import { highlights, nodes, researchDocuments, snapshots, trees } from "../src/index.js";
 
 import { anchorFor, answerTurn, createFixture } from "./helpers.js";
 
@@ -9,9 +9,10 @@ const ANSWER = "Birds sing at dawn because the cool, still air carries sound muc
 
 function answeredRoot(fixture: ReturnType<typeof createFixture>, text = ANSWER) {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
     workspaceId: fixture.workspaceId,
-    prompt: "Why do birds sing at dawn?",
-    model: "gemini-flash",
+    message: { text: "Why do birds sing at dawn?" },
+    agent: { model: "gemini-flash" },
   });
   const nodeId = detail.tree.rootNodeId;
   nodes.setStatus(fixture.db, fixture.userId, nodeId, "running");
@@ -139,33 +140,29 @@ test("the feed is newest first, skips archived threads, and labels documents", (
     anchorFor(answered.revision, "Birds"),
   );
 
-  const document = trees.admitRoot(fixture.db, fixture.userId, {
+  const document = researchDocuments.importReport(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     prompt: "An imported report",
-    title: "Quarterly report",
-    model: "gemini-flash",
-    kind: "document",
-    origin: "imported",
-    status: "complete",
+    markdown: "Report body with a finding.",
+    agent: { model: "gemini-flash" },
   });
   const documentNodeId = document.tree.rootNodeId;
-  const documentSnapshot = snapshots.commit(fixture.db, fixture.userId, {
-    nodeId: documentNodeId,
-    turns: [answerTurn(documentNodeId, "Report body with a finding.")],
-    outcome: { status: "complete" },
-  });
-  fixture.db.$client.prepare(`UPDATE nodes SET prompt = '' WHERE id = ?`).run(documentNodeId);
+  const documentRevision = snapshots.revision(fixture.db, fixture.userId, documentNodeId) ?? "";
+  // A document without a message: the label falls back to the thread title.
+  fixture.db.$client
+    .prepare(`UPDATE nodes SET message_json = NULL WHERE id = ?`)
+    .run(documentNodeId);
   highlights.create(
     fixture.db,
     fixture.userId,
     documentNodeId,
-    anchorFor(documentSnapshot.revision, "finding", 17),
+    anchorFor(documentRevision, "finding", 17),
   );
 
   const feed = highlights.feed(fixture.db, fixture.userId);
   t.is(feed.length, 2);
   t.is(feed[0]?.nodeId, documentNodeId);
-  t.is(feed[0]?.nodeLabel, "Quarterly report", "a document falls back to the thread title");
+  t.is(feed[0]?.nodeLabel, document.tree.title, "a document falls back to the thread title");
   t.is(feed[1]?.nodeLabel, "Why do birds sing at dawn?");
 
   trees.archive(fixture.db, fixture.userId, answered.treeId);

@@ -35,7 +35,7 @@ export function stream(db: SessionDatabase, options: FeedStreamOptions): FeedStr
   if (options.scope !== "all" && !options.userId) return [];
   const cursor = options.before ?? null;
   return db.all<FeedStreamRow>(sql`
-    SELECT fi.kind AS source, fi.occurred_at AS occurredAt, fi.source_rank AS sourceRank,
+    SELECT 'research' AS source, fi.occurred_at AS occurredAt, fi.source_rank AS sourceRank,
       fi.id, fi.author_id AS authorId, fi.workspace_id AS workspaceId
     FROM feed_items fi
     WHERE 1 = 1
@@ -60,7 +60,7 @@ export function stream(db: SessionDatabase, options: FeedStreamOptions): FeedStr
 
 function descriptors(db: SessionDatabase, predicate: ReturnType<typeof sql>): FeedItemDescriptor[] {
   return db.all<FeedItemDescriptor>(sql`
-    SELECT fi.id, fi.kind, fi.author_id AS authorId, fi.occurred_at AS occurredAt,
+    SELECT fi.id, 'research' AS kind, fi.author_id AS authorId, fi.occurred_at AS occurredAt,
       fi.source_rank AS sourceRank, fi.workspace_id AS workspaceId
     FROM feed_items fi
     WHERE ${predicate}
