@@ -171,7 +171,7 @@ test("the script status names running, stopped and unavailable scripts", async (
   });
   await withWidget({ id: "5", scripts: false }, async ({ figure }) => {
     assert.equal(status(figure)?.word, "Scripts off");
-    assert.match(status(figure)!.title!, /scripts are off/i);
+    assert.match(status(figure)!.title!, /^Widget scripts (run only on macOS|can.t run in this app.s web view)\.$/);
     assert.equal(figure.dataset.scripts, "unavailable");
     assert.equal(figure.querySelector('[aria-label="Run the widget\'s scripts"]'), null);
   });

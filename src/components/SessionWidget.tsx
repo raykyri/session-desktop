@@ -5,6 +5,7 @@ import SessionWidgetMenu, { useArtifactHistory } from "./SessionWidgetMenu";
 import { createContext, useContext, useEffect, useId, useReducer, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { Ellipsis, MessageSquare, Play, RotateCcw } from "lucide-react";
 import { downloadResearchWidget, prepareResearchWidget, type ResearchArtifactRevision, type ResearchWidgetUrls } from "../lib/api";
+import { IS_MAC } from "../lib/appHelpers";
 import { writeClipboardText } from "../lib/clipboard";
 import { WidgetAnswerContext, WidgetChangeContext } from "../lib/sessionWidgetActions";
 import { useSessionWidgetGuards } from "../hooks/useSessionWidgetGuards";
@@ -53,9 +54,11 @@ function prepareWidget(html: string): Promise<ResearchWidgetUrls> {
 }
 
 /** Shown on "Scripts off" when the backend withholds the run page
- * (src-tauri/src/research_widgets.rs, `scripts_allowed`). */
-const SCRIPTS_OFF_TITLE =
-  "Widget scripts are off. Session runs them only on macOS, after it turns off WebRTC in the app's web view.";
+ * (src-tauri/src/research_widgets.rs, `scripts_allowed`): scripts run only on
+ * macOS, and there only after the app turns off WebRTC in its web view. */
+const SCRIPTS_OFF_TITLE = IS_MAC
+  ? "Widget scripts can't run in this app's web view."
+  : "Widget scripts run only on macOS.";
 
 /** Time after Run or Reload during which frame focus counts as app-initiated. */
 const PROGRAMMATIC_FOCUS_MS = 1500;

@@ -148,7 +148,7 @@ test.serial("without a run page the header says Scripts off", async (t) => {
   });
   const status = container.querySelector(".session-widget-status")!;
   t.is(status.textContent, "Scripts off");
-  t.regex(status.getAttribute("title") ?? "", /Widget scripts are off/u);
+  t.is(status.getAttribute("title"), "Widget scripts are turned off on this server.");
   t.is(screen.queryByRole("button", { name: "Run the widget's scripts" }), null);
 });
 

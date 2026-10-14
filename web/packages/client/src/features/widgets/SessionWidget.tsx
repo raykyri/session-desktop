@@ -87,9 +87,9 @@ function prepareWidget(nodeId: string, html: string, fresh: boolean): Promise<Pr
   return page;
 }
 
-/** Shown on "Scripts off" when the server withholds the run page. */
-const SCRIPTS_OFF_TITLE =
-  "Widget scripts are off. This server serves widgets from the app's own site, so it does not run their scripts.";
+/** Shown on "Scripts off" when the server withholds the run page. The reason
+ * for the operator is in the boot log (`server/src/artifacts/site.ts`). */
+const SCRIPTS_OFF_TITLE = "Widget scripts are turned off on this server.";
 
 /** Time after Run or Reload during which frame focus counts as app-initiated. */
 const PROGRAMMATIC_FOCUS_MS = 1500;
