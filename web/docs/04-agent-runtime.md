@@ -83,9 +83,9 @@ packages/server/src/runs/
 Three modules the earlier sketch listed live elsewhere, because Phase 3 already
 owned them: launch-time admission checks are `src/research/admission.ts`, and
 tweet hydration is `src/journal/tweets.ts` (with `oembed.ts` behind it and
-`attachments.ts` in front). `src/uploads/storage.ts` (content-addressed files
-on the volume) is kept for image attachments after uploaded documents were
-removed in phase 2.0.
+`attachments.ts` in front). Image attachments are uploaded through
+`src/uploads/route.ts` onto `src/uploads/storage.ts` (content-addressed files
+on the volume), and `src/research/images.ts` checks the ids a question names.
 
 ## 3. The agent loop (`loop.ts`)
 
@@ -254,13 +254,22 @@ history replay of thinking blocks, 30-day retention configured on the
 Anthropic org, streaming with `max_tokens` high enough for long answers, and
 long turns (minutes) without client timeouts.
 
-## 8. Documents as context (removed)
+## 8. Images as context
 
 Uploaded documents as run context (`documents`, `document_text`,
 `node_documents`, `POST /uploads`, the `document_read` tool and the provider
 file parts built from them) were removed in phase 2.0 of the desktop parity
-plan. Image attachments return in phase 2.9 on top of
-`src/uploads/storage.ts`.
+plan.
+
+Image attachments (`POST /api/images`, `03-api-and-events.md` §5) ride in the
+user message of the attempt whose node carries them: `buildMessages` appends
+one AI SDK `image` part per image after the question text
+(`messages.ts:imageParts`), read from the volume. The stored conversation
+keeps text only (`loop.ts` writes the question as a string), so a follow-up
+does not send its ancestors' images again. `createTree` refuses images for a
+model whose registry entry has `supportsImages: false`; the loop checks again
+and fails the attempt with the desktop's message (`RunInputError`, shown as
+written) when the model cannot read images or an image file is gone.
 
 ## 9. Metadata runs (`metadata.ts`)
 

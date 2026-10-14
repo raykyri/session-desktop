@@ -232,10 +232,12 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   machine holding one volume: a Fly scheduled machine would need the volume
   this one has, and relying on manual operator cron jobs risks skipped or inconsistent backups. A failed backup is logged and retried on the next scheduled run. The marker
   advances only after success, so no backup interval is skipped.
-- Uploaded documents were removed in phase 2.0 of the desktop parity plan, and
-  with them the maintenance sweep that reconciled `/data/documents` with the
-  `documents` table. `server/src/uploads/storage.ts` keeps the sweep for image
-  attachments (phase 2.9); until then nothing writes to `/data/documents`.
+- `/data/documents` holds image attachments (`research_images`,
+  `<owner>/<sha256>` plus `<sha256>.thumb.jpg`); uploaded documents were
+  removed in phase 2.0. The maintenance interval runs `sweepImages`
+  (`server/src/uploads/storage.ts`): rows no message, draft or queued
+  follow-up has named for a day are deleted, then every file no remaining row
+  names is unlinked.
   `session_volume_free_bytes` (§7) is the gauge to alert on — a full volume
   fails every SQLite write at once.
 - `/data/embeds` is the one directory on the volume that is **not** backed up. It holds

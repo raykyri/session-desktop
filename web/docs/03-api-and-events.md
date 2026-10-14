@@ -61,11 +61,26 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | --- | --- | --- | --- |
 | `settings.get` | Q | → `UserSettings & { researchLaunchInstruction, defaultWorkspaceId, defaultModel }` | localStorage `session.settings.v1`, `research_launch_instruction_get` |
 | `settings.update` | M | partial → full | `research_launch_instruction_set` |
-| `drafts.get` / `drafts.set` | Q/M | `{ key }` / `{ key, value }` | `interface_draft_get/set` |
+| `interfaceDrafts.get` / `interfaceDrafts.set` | Q/M | `{ key }` / `{ key, value }` (an empty value deletes) | `interface_draft_get/set` |
 | `usage.summary` | Q | no input → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
 | `admin.listUsers` | Q (admin) | → `User[]` with usage totals and limits | — (new) |
 | `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }` | — (new) |
 | `admin.createInvites` | M (admin) | `{ count }` → codes | — (new; also grants `invites_remaining` to users later) |
+
+### `drafts`
+
+The saved list of unsent questions in the Drafts place
+(`server/src/trpc/routers/drafts.ts`, `repos/researchDrafts.ts`). Drafts are
+per person and private: every query is scoped to the caller, and another
+account's draft id is `NOT_FOUND`. Each change emits
+`research.drafts.changed { workspaceId }` to the caller's own connections.
+
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
+| `drafts.list` | Q | `{ workspaceId }` → `ResearchDraft[]`, top of the list first | `list_research_drafts` |
+| `drafts.save` | M | `{ id?, workspaceId, prompt, images?: string[] }` → `ResearchDraft` | `save_research_draft` (no `id`: a new draft at the top; with one, the prompt is replaced in place; `images`, ids from `POST /api/images`, replaces the draft's images and absent keeps them) |
+| `drafts.remove` | M | `{ draftId }` → `{ ok }` | `delete_research_draft` |
+| `drafts.reorder` | M | `{ workspaceId, draftIds }` → `ResearchDraft[]` | `reorder_research_drafts` (`draftIds` must be exactly the workspace's drafts, else `CONFLICT`; an unchanged order emits nothing) |
 
 ### `workspaces`
 | Procedure | Kind | Input → Output | Desktop |
@@ -104,7 +119,7 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
 | `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` (with `queues`, the follow-up queues keyed by chain head, when any item is queued) | `get_research_tree` |
-| `research.createTree` | M | `{ prompt, title?, model, effort?, workspaceId }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `BAD_REQUEST` on an effort the model does not accept; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
+| `research.createTree` | M | `{ prompt, title?, model, effort?, workspaceId, images?: string[] }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `BAD_REQUEST` on an effort the model does not accept; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does; `images` are ids from `POST /api/images`, checked with `resolveImageAttachments` and refused with `BAD_REQUEST` for a model whose `supportsImages` is false) |
 | `research.forkNode` | M | `{ parentNodeId, prompt, agent?: { model, effort? }, anchor?: NodeAnchor, inline?, replacesNodeId? }` → `ResearchNode` | `fork_research_node`. `agent` is any registry model the account may use and an effort it accepts; absent, the parent's agent; a different model without an effort runs at its default effort. `replacesNodeId` names a failed or stopped childless question under the same parent with the same `inline`, which is deleted in the same transaction (`research.node.removed`, then `research.node.created`). An occupied inline slot is still refused; continuing a busy chain is `followups.ask`. Resolves its own attachments |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
 | `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node`: a settled exchange, a `complete` one included, is reset in place; the snapshot and recap are deleted, highlights stay. The parent's answer must be complete, except for an inline follow-up of an answer that is active again, which waits in the run queue until that answer settles (`PRECONDITION_FAILED` otherwise) |
@@ -114,6 +129,10 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |
 | `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText?, seq?, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
 | `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
+| `research.createPost` | M | `{ body, workspaceId, model, effort?, images?: string[] }` → `ResearchTreeDetail` | `create_research_post` (a note: `format = link` when `body` is one http(s) URL; `model`/`effort` are the default for its AI follow-ups and must be a model the account may use and an effort it takes; X permalinks resolved as for a question; no run, so no admission or daily limit) |
+| `research.createPostFollowUp` | M | `{ parentNodeId, body }` → `ResearchNode` | `create_research_post_follow_up` (a follow-up note; the parent must be a post in a thread that is not archived or in the Trash) |
+| `research.updatePost` | M | `{ nodeId, text, expectedText }` → `UpdateResearchPostResult { tree, node, removedHighlightCount }` | `update_research_post` (`CONFLICT` when the stored text is not `expectedText`; `BAD_REQUEST` for unchanged text or a missing X post link; `PRECONDITION_FAILED` in an archived thread or one in the Trash; highlights re-anchored; the derived root title follows; `02` §5.14) |
+| `research.hydratePostTweet` | M | `{ nodeId }` → `ResearchNode` | — (asks the X providers again for a post's `unavailable` tweet attachments, past a cached failure; `PRECONDITION_FAILED` when none is unavailable; replaces the journal's `hydrateTweet`) |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same; the children listed under the tree go with it (`02` §5.10). `PRECONDITION_FAILED` for a tree in the Trash |
 | `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees |
@@ -171,7 +190,11 @@ post, link card, counts), then `publish.twitter.com/oembed` for the author,
 text and date when syndication does not serve it. The provider that answered
 is stored on the row and on the attachment (`xSyndication | xOembed`), so a
 reduced card is recognizable as one. A resolved snapshot is stored with its
-image URLs rewritten to `/embeds/<hash>` (§5).
+image URLs rewritten to `/embeds/<hash>` (§5). The same pipeline resolves the
+X posts of questions (`createTree`, `forkNode`) and notes (`createPost`,
+`createPostFollowUp`). A failure is cached for `TWEET_CACHE_TTL_MS` like a
+success; `research.hydratePostTweet` passes `retryUnavailable` to ask again
+inside that window.
 
 ### `artifacts`
 | Procedure | Kind | Input → Output | Desktop |
@@ -228,20 +251,21 @@ unless noted:
 
 | Type | Payload | Emitted by |
 | --- | --- | --- |
-| `research.tree.created` | `{ tree, node }` | createTree, importReport |
-| `research.tree.updated` | `{ tree }` | rename, viewed |
+| `research.tree.created` | `{ tree, node }` | createTree, createPost, importReport |
+| `research.tree.updated` | `{ tree }` | rename, viewed, updatePost when the root title followed the text |
 | `research.tree.archived` / `restored` | `{ tree }` | archive/restore, once per tree of the group; `restored` also by restoreTreeFromTrash |
 | `research.tree.removed` | `{ treeId }` | removeTree, trashTree, emptyTrash (once per tree), workspace remove |
 | `research.trash.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | trashTree, restoreTreeFromTrash, emptyTrash, removeTree of a tree in the Trash; only when something changed |
 | `research.folders.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | folders.set when the stored state changed, emptyTrash when it deleted folders, workspace remove. Carries no state: clients refetch `folders.get` |
-| `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch |
-| `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s) |
+| `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch, createPostFollowUp |
+| `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s), updatePost, hydratePostTweet |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` | removeBranch, forkNode with `replacesNodeId` |
 | `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused); `items` is the chain's whole queue after the change, empty once drained |
 | `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |
+| `research.drafts.changed` | `{ workspaceId }` | drafts.save, drafts.remove, drafts.reorder (when the order changed); to the draft owner's connections only |
 | `workspace.created` / `updated` / `removed` | `{ workspace }` / `{ workspaceId }` | replaces `group.*` |
 | `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, item }` | public feed source create/update/restore |
 | `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId }` | source delete or archive |
@@ -280,6 +304,8 @@ snapshot → `run_turns` → `sourceError` for finished nodes without a snapshot
 | `GET /healthz` | `ok\n`, `Cache-Control: no-store` (Fly check) |
 | `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/logout` | OAuth flow |
 | `GET /embeds/:hash` | one cached image of an embedded post (public, `immutable`); the hash is SHA-256 of the origin URL and names an `embed_assets` row, whose bytes are fetched on the first request and may be swept back off the volume (`13-deployment-fly.md` §6) |
+| `POST /api/images` | uploads one image attachment (multipart, one `file` field) and answers `201` with its `ResearchImageAttachment`; signed in, CSRF-guarded, 120 uploads an hour per account (`RATE_LIMITS.uploads`), 512 MiB of images per account. The type is read from the bytes (PNG, JPEG, GIF, WebP; else `415`); files over 20 MB are `413`; a PNG or JPEG over 5 MB or 8000 px on a side is downscaled to 2048 px and stored as JPEG, a GIF or WebP must already fit (`413`). The image is pending until a message or draft names its id (`02` §5.15) |
+| `GET /images/:id[?thumb]` | an image attachment, to its owner only (`401` signed out, `404` otherwise); `?thumb` serves the 256 px JPEG thumbnail of a PNG or JPEG image, written again when missing, and a GIF or WebP image whole. `Cache-Control: private, immutable` |
 | `GET /w/:token` | a widget preview page, on `artifacts.session.dev` only |
 | `GET /*` | built client `index.html` (SPA fallback) and hashed assets |
 

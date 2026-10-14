@@ -153,6 +153,7 @@ threads must survive an account deletion.
   `attachments_json` text (image attachments, default `[]`), `position`,
   `created_at`, `updated_at`
 - Index (`user_id`, `workspace_id`, `position`)
+- `repos/researchDrafts.ts` (§5.14)
 
 ### 3.2 Organization
 
@@ -348,13 +349,21 @@ nothing reads or writes them yet.
 
 ### 3.6 Images and widgets
 
-`research_images` (step 2.9)
+`research_images` (step 2.9; the desktop's research image store,
+`research_images.rs`)
 
-- `id` PK, `owner_id` FK, `sha256`, `mime`, `byte_size`, `width` null,
-  `height` null, `file_name` null, `storage_path`, `created_at`,
+- `id` PK (ULID), `owner_id` FK, `sha256` (of the stored bytes), `mime`
+  (`image/png | image/jpeg | image/gif | image/webp`), `byte_size`, `width`
+  null, `height` null (as displayed, after EXIF orientation), `file_name`
+  null (the last path component of the uploaded name, control characters
+  removed, at most 255 code points), `storage_path`, `created_at`,
   `attached_at` null (set when a node, queued follow-up or draft uses the
-  image; unattached images are swept)
+  image; null means pending)
 - Indexes (`owner_id`, `sha256`), (`attached_at`, `created_at`)
+- The bytes are at `${SESSION_DATA_DIR}/documents/<owner_id>/<sha256>`, with
+  a 256 px JPEG thumbnail beside a PNG or JPEG image as
+  `<sha256>.thumb.jpg`. Two rows of one owner with the same bytes share the
+  file. §5.15 has the lifecycle.
 
 `widget_revisions` (the desktop's research artifact store)
 
@@ -696,6 +705,67 @@ Each item names the desktop source and the enforcing function.
   owner: model access, daily limits, and the run-queue bound. A refusal is
   stored as `failed_reason`; the chain waits on that item until
   `followups.retry` clears it or `followups.cancel` removes it.
+
+### 5.14 Posts and drafts
+- `posts.admitPost` (`create_research_post`, `state.rs:1912`): the text is
+  trimmed, non-empty ("note cannot be empty") and at most 64 KiB of UTF-8
+  (`MAX_POST_TEXT_BYTES`, "notes are limited to 65536 bytes"). The root is a
+  `post` node with `format = link` when the whole text is one http(s) URL
+  (`postFormatOf`), `model`/`effort` as the follow-up agent, and the X posts
+  and images resolved by the caller as attachments. The thread title is the
+  first non-empty line cut to 80 code points (`postDefaultTitle`, the
+  desktop's `post_default_title`), not the question title rule.
+- `posts.admitFollowUpNote` (`create_research_post_follow_up`): a `post`
+  child of a post, same text rules, the parent's follow-up agent, refused in
+  an archived thread (`nodes.admitChild`) or one in the Trash
+  (`access.rejectTrashedNode`, §5.10).
+- `posts.updatePost` (`update_research_post`, `state.rs:2053`), in one
+  transaction: the node must be a post in a thread that is neither in the
+  Trash (`access.rejectTrashed`) nor archived; `expectedText` must equal
+  the stored text ("the note changed while you were editing; …",
+  `CONFLICT`); the trimmed new text must differ from the trimmed old one
+  ("the note's text is unchanged"); every attached X post's `sourceUrl` must still be in the text. Each highlight is
+  re-anchored with `reanchorResearchQuote` (`lib/researchAnchors`): kept,
+  moved (new `start`/`end`, revision unchanged) or deleted when its quote is
+  gone. The node gets the text, `format` from the text and `edited_at`; the
+  thread title follows the text only for the root and only while it still
+  equals `postDefaultTitle(old text)`; `trees.updated_at` moves strictly
+  forward. Returns `{ tree, node, removedHighlightCount, titleChanged }`.
+- `posts.replaceTweetAttachments`: swaps a post's tweet attachments for fresh
+  resolutions of the same tweet ids (`research.hydratePostTweet`).
+- `researchDrafts.save` (`save_research_draft_with_images`, `state.rs:3726`):
+  the prompt is trimmed, non-empty and at most 1 MiB; the workspace must be
+  the caller's. No `id` inserts at position 0 and moves the workspace's other
+  drafts down; an `id` updates that draft's prompt and `updated_at` in place,
+  and an id from another workspace or account is not found (a draft does not
+  change workspace). `images` replaces `attachments_json` when given and is
+  left alone when absent; only image attachments are accepted.
+- `researchDrafts.reorder` (`reorder_research_drafts`): `draftIds` must be
+  exactly the workspace's drafts, each once, or it fails with "Research draft
+  order is stale. Refresh before reordering." (`CONFLICT`); it reports
+  whether the order changed so an unchanged order emits nothing.
+- `researchDrafts.remove` deletes one draft and returns its workspace id.
+
+### 5.15 Images
+- `images.resolveAttachments(userId, ids)` (`attachments_for_inputs`): ids
+  are deduplicated in order; at most 8 (`MAX_IMAGES_PER_MESSAGE`) and 20 MB
+  in total (`MAX_MESSAGE_IMAGE_BYTES`); each must be a row the caller owns.
+  A missing and a foreign id get the same message ("An attached image is no
+  longer available. Remove it and attach it again."). The server wraps it as
+  `resolveImageAttachments` (`server/src/research/images.ts`).
+- What keeps an image is a reference, not the column: `images.referencedIds`
+  reads the image ids in `nodes.message_json`, `research_drafts`
+  `.attachments_json` and `followup_queue.message_json` with `json_each`.
+  `attached_at` is set when a message or draft is written
+  (`images.markAttached`) and corrected by the sweep.
+- `images.sweep(at)`, run every maintenance interval: a referenced pending
+  row is marked attached; an unreferenced row older than 24 h
+  (`PENDING_IMAGE_LIFETIME_MS`) is deleted, pending or not; an unreferenced
+  attached row younger than that returns to pending. This is the desktop's
+  pending lifetime and `release`; it also covers references removed by a
+  cascade (a deleted thread, branch or workspace). The server then unlinks
+  every file under the documents directory that no remaining row names,
+  thumbnails included (`uploads/storage.ts` `sweepImages`).
 
 ## 6. Data volumes and performance notes
 
