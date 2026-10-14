@@ -10,18 +10,12 @@ import {
   type ResearchColumnId,
 } from "@session/shared/lib/researchColumns";
 
+import { prefersReducedMotion } from "../../lib/motion.js";
+
 /** The id of the column that holds `element`, or null outside the strip. */
 export function columnIdOf(element: Element | null | undefined): ResearchColumnId | null {
   const id = element?.closest<HTMLElement>(columnSelector())?.dataset["researchColumn"];
   return id && /^(feed|placeholder|[TANE]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
-}
-
-/** The system's reduced-motion preference. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
 }
 
 // Scrolling is immediate until the first pointer, key or wheel input, so

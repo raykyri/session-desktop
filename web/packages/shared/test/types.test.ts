@@ -203,14 +203,37 @@ test("the event envelope keeps its payload", (t) => {
 });
 
 test("a stored settings blob carrying a removed key still parses", (t) => {
-  // `showShortcutHints` was dropped with the sidebar's Cmd-held badges. Rows
-  // written before that are still in `user_preferences.settings_json` and in
-  // every browser's `session.settings.v2`, and the loader reads them through
-  // this schema — so a key no longer defined by the shape has to be ignored, not
+  // `showToolCalls` and `showAssistantTimestamps` were web-only settings
+  // that did nothing, removed for the desktop's four. Rows written before
+  // that are still in `user_preferences.settings_json` and in every
+  // browser's `session.settings.v2`, and the loader reads them through this
+  // schema — so a key no longer defined by the shape has to be ignored, not
   // rejected.
-  const stored = { ...DEFAULT_USER_SETTINGS, showShortcutHints: true };
+  const stored = { ...DEFAULT_USER_SETTINGS, showToolCalls: true, showAssistantTimestamps: false };
   const parsed = userSettingsSchema.safeParse(stored);
   t.true(parsed.success, "an unknown key does not fail the whole object");
   t.deepEqual(parsed.data, DEFAULT_USER_SETTINGS, "and is dropped rather than carried");
-  t.false("showShortcutHints" in DEFAULT_USER_SETTINGS);
+  t.false("showToolCalls" in DEFAULT_USER_SETTINGS);
+});
+
+test("a stored settings blob from before the desktop's four takes their defaults", (t) => {
+  const {
+    requireCmdEnterToSend,
+    researchInlineWidgets,
+    showShortcutHints,
+    reduceMotion,
+    ...older
+  } = DEFAULT_USER_SETTINGS;
+  t.deepEqual(
+    { requireCmdEnterToSend, researchInlineWidgets, showShortcutHints, reduceMotion },
+    {
+      requireCmdEnterToSend: true,
+      researchInlineWidgets: true,
+      showShortcutHints: true,
+      reduceMotion: false,
+    },
+  );
+  t.deepEqual(userSettingsSchema.parse(older), DEFAULT_USER_SETTINGS);
+  // A partial update leaves an absent field alone rather than resetting it.
+  t.deepEqual(userSettingsSchema.partial().parse({ reduceMotion: true }), { reduceMotion: true });
 });

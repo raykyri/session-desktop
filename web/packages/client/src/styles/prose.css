@@ -574,8 +574,29 @@ html.wrap-code-blocks .research-prose-code-block pre code {
 }
 
 /* Accessibility overrides outrank component transitions. The OS preference
-   is the one source; `.session-spin` stays, since a spinner that does not
-   spin reads as stuck. */
+   and the app's Reduce motion setting (`data-reduce-motion` on the root,
+   `lib/motion.ts`) apply the same rules; `.session-spin` stays, since a
+   spinner that does not spin reads as stuck. */
+:root[data-reduce-motion],
+:root[data-reduce-motion] *,
+:root[data-reduce-motion] *::before,
+:root[data-reduce-motion] *::after {
+  scroll-behavior: auto !important;
+  transition-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+}
+
+:root[data-reduce-motion] .session-thinking-dot {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+:root[data-reduce-motion] .session-notification {
+  transform: none;
+  translate: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root,
   *,

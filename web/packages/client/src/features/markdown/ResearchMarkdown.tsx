@@ -44,6 +44,7 @@ import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 
 import { cn } from "../../lib/cn.js";
+import { useSettingsStore } from "../../stores/settings.js";
 import { SessionWidget } from "../widgets/SessionWidget.js";
 import { WidgetAnswerContext } from "../widgets/context.js";
 
@@ -323,6 +324,8 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
   oversized,
 }: ResearchMarkdownProps) {
   const math = useSyncExternalStore(subscribeToMathPlugins, readMathPlugins, readMathPlugins);
+  // "Widgets in answers": off, a `session-html` block is ordinary code.
+  const widgetsShown = useSettingsStore((state) => state.settings.researchInlineWidgets);
   // Collapse pasted-image markers to an inert `[Image]` chip before parsing
   // (`shared/markdown/imageMarkers`).
   const source = escapeWikilinkTablePipes(collapseImageMarkers(markdown));
@@ -358,7 +361,11 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
 
   return (
     <WidgetContext.Provider
-      value={widgetNodeId !== undefined && !inline && variant === "prose" ? widgetNodeId : null}
+      value={
+        widgetsShown && widgetNodeId !== undefined && !inline && variant === "prose"
+          ? widgetNodeId
+          : null
+      }
     >
       <WidgetAnswerContext.Provider value={widgetAnswer}>
         <div className={cn(VARIANT_CLASS[variant], className)}>

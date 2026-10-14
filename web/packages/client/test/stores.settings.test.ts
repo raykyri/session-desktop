@@ -51,16 +51,30 @@ test.serial("hydration flips `hydrated` even when nothing was stored", async (t)
   t.deepEqual(useSettingsStore.getState().settings, GUEST_USER_SETTINGS);
 });
 
-test.serial("a stored record still carrying `showShortcutHints` loads intact", async (t) => {
-  // The setting was removed with the sidebar's Cmd-held badges, but every
-  // browser that ran an earlier build still has it in `session.settings.v2`.
-  // Preserve valid settings while removing deprecated keys.
+test.serial("a stored record still carrying `showToolCalls` loads intact", async (t) => {
+  // The web-only Reading settings (Show tool calls, Show timestamps) were
+  // removed for the desktop's four, but browsers that ran an earlier build
+  // still have them in `session.settings.v2`. Valid settings are kept, the
+  // removed keys dropped, and the new ones start at their defaults.
+  const {
+    requireCmdEnterToSend,
+    researchInlineWidgets,
+    showShortcutHints,
+    reduceMotion,
+    ...older
+  } = DEFAULT_USER_SETTINGS;
+  t.true(requireCmdEnterToSend && researchInlineWidgets && showShortcutHints && !reduceMotion);
   localStorage.setItem(
     SETTINGS_STORAGE_KEY,
     JSON.stringify({
       version: 2,
       state: {
-        settings: { ...DEFAULT_USER_SETTINGS, showShortcutHints: false, appearance: "light" },
+        settings: {
+          ...older,
+          showToolCalls: false,
+          showAssistantTimestamps: true,
+          appearance: "light",
+        },
       },
     }),
   );
@@ -69,8 +83,32 @@ test.serial("a stored record still carrying `showShortcutHints` loads intact", a
 
   const settings = useSettingsStore.getState().settings;
   t.is(settings.appearance, "light", "the rest of the record is not discarded");
-  t.false("showShortcutHints" in settings, "and the removed key is not carried forward");
+  t.false("showToolCalls" in settings, "and the removed keys are not carried forward");
   t.deepEqual(settings, { ...GUEST_USER_SETTINGS, appearance: "light" });
+});
+
+test.serial("the desktop's four settings are kept as stored", async (t) => {
+  localStorage.setItem(
+    SETTINGS_STORAGE_KEY,
+    JSON.stringify({
+      version: 3,
+      state: {
+        settings: {
+          ...DEFAULT_USER_SETTINGS,
+          requireCmdEnterToSend: false,
+          researchInlineWidgets: false,
+          showShortcutHints: false,
+          reduceMotion: true,
+        },
+      },
+    }),
+  );
+  await useSettingsStore.persist.rehydrate();
+  const settings = useSettingsStore.getState().settings;
+  t.false(settings.requireCmdEnterToSend);
+  t.false(settings.researchInlineWidgets);
+  t.false(settings.showShortcutHints);
+  t.true(settings.reduceMotion);
 });
 
 test.serial(

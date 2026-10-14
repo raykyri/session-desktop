@@ -26,13 +26,16 @@ import {
   useSaveResearchDraft,
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { formatChord } from "../../lib/platform.js";
 import { RESEARCH_NOTE_IMAGE_ERROR, researchImageBlockReason } from "../../lib/researchImages.js";
 import { errorMessage } from "../../lib/toast.js";
 import { homeDraftKey, markDraftEdited, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
-import { isComposerSubmitShortcut } from "../../ui/ComposerSubmitShortcut.js";
+import {
+  composerSendChord,
+  isComposerSubmitShortcut,
+  useRequireCmdEnterToSend,
+} from "../../ui/ComposerSubmitShortcut.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
@@ -134,6 +137,7 @@ export function ResearchQueryComposer({
   const askSegmentRef = useRef<HTMLButtonElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   const imageProblemId = useId();
+  const requireCmdEnter = useRequireCmdEnterToSend();
 
   useRemoteComposerDraft(draftKey, (draft) => {
     setPrompt(draft.text);
@@ -336,7 +340,7 @@ export function ResearchQueryComposer({
     placeholder,
   );
   const askLabel = askLabelFor(selected, effort);
-  const sendShortcut = formatChord("mod+enter");
+  const sendShortcut = composerSendChord(requireCmdEnter);
 
   return (
     <div
@@ -426,7 +430,7 @@ export function ResearchQueryComposer({
               event.preventDefault();
               return;
             }
-            if (isComposerSubmitShortcut(event)) {
+            if (isComposerSubmitShortcut(event, undefined, requireCmdEnter)) {
               event.preventDefault();
               void submit();
             }

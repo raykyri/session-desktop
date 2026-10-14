@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { prefersReducedMotion } from "../../lib/motion.js";
 import type { FeedScrollAnchor } from "../../stores/navigation.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 
@@ -24,14 +25,12 @@ export const FEED_TOP_THRESHOLD = 60;
 /**
  * How the feed's two "return to the head" controls should travel.
  *
- * The OS preference is the one consulted (the app has no motion setting of
- * its own): a several-screen animated jump is the kind of motion
- * `prefers-reduced-motion` exists to suppress. `matchMedia` is optional here because jsdom does not implement
- * it, and a missing implementation reads as "no preference stated".
+ * The system's reduced motion preference and the app's "Reduce motion"
+ * setting both make the jump immediate (`lib/motion`): a several-screen
+ * animated jump is the kind of motion they exist to suppress.
  */
 export function feedScrollBehavior(): ScrollBehavior {
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  return reduced ? "auto" : "smooth";
+  return prefersReducedMotion() ? "auto" : "smooth";
 }
 
 export interface FeedAnchorControl {

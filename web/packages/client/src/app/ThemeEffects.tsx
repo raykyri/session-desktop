@@ -3,14 +3,15 @@ import { useEffect, useLayoutEffect } from "react";
 
 import { useResolvedAppearance } from "../lib/appearance.js";
 import { bodyFontStackFor, detectAvailableBodyFonts } from "../lib/bodyFonts.js";
+import { REDUCE_MOTION_ATTRIBUTE } from "../lib/motion.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 /**
  * Writes the settings store onto `<html>` (07 §2, ported from
  * `App.tsx:1926-1969`): `data-color-theme`, `data-appearance`,
  * `data-body-font`, the `--font-ui` stack, and the `color-scheme` meta that
- * replaces the desktop's `getCurrentWindow().setTheme`. Reduced motion follows
- * the OS preference alone (`prefers-reduced-motion` in `prose.css`).
+ * replaces the desktop's `getCurrentWindow().setTheme`, and
+ * `data-reduce-motion` for the "Reduce motion" setting (`lib/motion.ts`).
  *
  * Everything runs in a layout effect so the attributes land before paint —
  * switching or restoring a theme must not flash the default palette. The
@@ -30,6 +31,11 @@ export function ThemeEffects() {
   useLayoutEffect(() => {
     document.documentElement.dataset["colorTheme"] = settings.colorTheme;
   }, [settings.colorTheme]);
+
+  // The "Reduce motion" setting, beside the system preference (`lib/motion`).
+  useLayoutEffect(() => {
+    document.documentElement.toggleAttribute(REDUCE_MOTION_ATTRIBUTE, settings.reduceMotion);
+  }, [settings.reduceMotion]);
 
   useLayoutEffect(() => {
     const root = document.documentElement;

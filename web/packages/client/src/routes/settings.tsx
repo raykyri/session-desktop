@@ -19,6 +19,7 @@ import {
   useWorkspaces,
 } from "../api/queries.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
+import { isApplePlatform } from "../lib/platform.js";
 import { errorMessage, pushErrorToast, pushToast } from "../lib/toast.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { ControlButton } from "../ui/Button.js";
@@ -261,6 +262,8 @@ export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
   const setTextSize = useSettingsStore((state) => state.setTextSize);
+  // The desktop names the macOS chord; elsewhere the browser's is Ctrl+↵.
+  const sendChord = isApplePlatform() ? "⌘↵" : "Ctrl+↵";
 
   return (
     <div className="h-full overflow-y-auto px-8 py-10">
@@ -268,6 +271,21 @@ export function SettingsPage() {
         <h1 className="text-title text-fg-heading m-0 font-semibold">Settings</h1>
 
         <div className="flex flex-col gap-8">
+          <SettingsGroup title="General">
+            <Checkbox
+              label={`Require ${sendChord} to send`}
+              description={`Thread ask boxes always require ${sendChord}. This setting controls all other ask boxes.`}
+              checked={settings.requireCmdEnterToSend}
+              onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
+            />
+            <Checkbox
+              label="Widgets in answers"
+              description="Agents may add sandboxed HTML; its scripts run only when you start them"
+              checked={settings.researchInlineWidgets}
+              onCheckedChange={(checked) => set("researchInlineWidgets", checked)}
+            />
+          </SettingsGroup>
+
           <SettingsGroup title="Appearance">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Appearance">
@@ -284,10 +302,10 @@ export function SettingsPage() {
                 )}
               </Field>
 
-              <Field label="Theme">
+              <Field label="Color theme">
                 {() => (
                   <Select
-                    label="Theme"
+                    label="Color theme"
                     value={settings.colorTheme}
                     options={COLOR_THEME_OPTIONS}
                     className="w-full"
@@ -324,20 +342,15 @@ export function SettingsPage() {
                 )}
               </Field>
             </div>
-          </SettingsGroup>
-
-          <SettingsGroup title="Reading">
             <Checkbox
-              label="Show tool calls"
-              description="Include searches, fetches and document reads in answers."
-              checked={settings.showToolCalls}
-              onCheckedChange={(checked) => set("showToolCalls", checked)}
+              label="Show keyboard shortcut hints"
+              checked={settings.showShortcutHints}
+              onCheckedChange={(checked) => set("showShortcutHints", checked)}
             />
             <Checkbox
-              label="Show timestamps"
-              description="Display timestamps on assistant responses."
-              checked={settings.showAssistantTimestamps}
-              onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
+              label="Reduce motion"
+              checked={settings.reduceMotion}
+              onCheckedChange={(checked) => set("reduceMotion", checked)}
             />
           </SettingsGroup>
 

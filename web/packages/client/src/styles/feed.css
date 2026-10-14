@@ -174,3 +174,8 @@
     animation: none;
   }
 }
+
+/* The app's Reduce motion setting (`lib/motion.ts`). */
+:root[data-reduce-motion] .session-row-pulse {
+  animation: none;
+}

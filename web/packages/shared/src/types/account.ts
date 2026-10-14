@@ -53,10 +53,20 @@ export const userSettingsSchema = z.object({
   /** Id into the client's body font options. */
   bodyFontId: z.string(),
   textSize: z.number().int().min(APP_TEXT_SIZE_MIN).max(APP_TEXT_SIZE_MAX),
-  /** Show tool calls and other activity detail in research answers. */
-  showToolCalls: z.boolean(),
-  /** Show a wall-clock timestamp after each run of assistant messages. */
-  showAssistantTimestamps: z.boolean(),
+  // The desktop's four reading and input settings. Each falls back to its
+  // default (`.catch`) so a row stored before the field existed still
+  // parses; `.catch` rather than `.default` because a partial update must
+  // leave an absent field alone instead of resetting it.
+  /** Ask boxes other than a thread's send with ⌘↵ (Ctrl+↵ outside macOS)
+   * rather than ↵; a thread's ask boxes always do. */
+  requireCmdEnterToSend: z.boolean().catch(true),
+  /** Answers render `session-html` blocks as widgets; off, as code. */
+  researchInlineWidgets: z.boolean().catch(true),
+  /** The shortcut hints shown while ⌘ (Ctrl outside macOS) is held. */
+  showShortcutHints: z.boolean().catch(true),
+  /** Transitions and animations settle at once, as with the system's reduced
+   * motion preference. */
+  reduceMotion: z.boolean().catch(false),
   /** Overlay toasts for server-originated notifications. */
   showNotifications: z.boolean(),
   /** Registry id the composer preselects. */
@@ -80,8 +90,10 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
    * from here, so the value is repeated rather than referenced. */
   bodyFontId: "dm-sans",
   textSize: APP_TEXT_SIZE,
-  showToolCalls: true,
-  showAssistantTimestamps: false,
+  requireCmdEnterToSend: true,
+  researchInlineWidgets: true,
+  showShortcutHints: true,
+  reduceMotion: false,
   showNotifications: true,
   defaultModel: DEFAULT_MODEL_ID,
 };

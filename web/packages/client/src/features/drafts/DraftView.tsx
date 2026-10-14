@@ -21,7 +21,6 @@ import {
   useSaveResearchDraft,
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { formatChord } from "../../lib/platform.js";
 import {
   createResearchDraftAutosave,
   createResearchDraftImageSave,
@@ -31,7 +30,11 @@ import { errorMessage, pushToast } from "../../lib/toast.js";
 import { homeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { IconButton } from "../../ui/Button.js";
-import { isComposerSubmitShortcut } from "../../ui/ComposerSubmitShortcut.js";
+import {
+  composerSendChord,
+  isComposerSubmitShortcut,
+  useRequireCmdEnterToSend,
+} from "../../ui/ComposerSubmitShortcut.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { composerModels, resolvedEffort } from "../composer/QuestionModelPicker.js";
 import { ImageStrip, useImageInput } from "../composer/images.js";
@@ -64,6 +67,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
   );
   const imagesRef = useRef(images);
   const [sending, setSending] = useState(false);
+  const requireCmdEnter = useRequireCmdEnterToSend();
   const [error, setError] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -233,7 +237,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
                 imageInput.clearError();
               }}
               onKeyDown={(event) => {
-                if (isComposerSubmitShortcut(event)) {
+                if (isComposerSubmitShortcut(event, undefined, requireCmdEnter)) {
                   event.preventDefault();
                   void send();
                 }
@@ -248,7 +252,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
                 )}
                 disabled={!canSend}
                 aria-label="Send"
-                title={`Send (${formatChord("mod+enter")})`}
+                title={`Send (${composerSendChord(requireCmdEnter)})`}
                 onClick={() => void send()}
               >
                 {sending ? (
