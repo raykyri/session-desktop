@@ -142,10 +142,10 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `research.hydratePostTweet` | M | `{ nodeId }` → `ResearchNode` | — (a commenter's or the owner's, checked before anything is fetched; asks the X providers again for a post's `unavailable` tweet attachments, past a cached failure; `PRECONDITION_FAILED` when none is unavailable; replaces the journal's `hydrateTweet`) |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
 | `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same; the children listed under the tree go with it (`02` §5.10). `PRECONDITION_FAILED` for a tree in the Trash |
-| `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees |
+| `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees. For a member it is `sharing.leave` |
 | `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree` (`PRECONDITION_FAILED` while the tree or a child going with it has an active run), `restore_research_tree_from_trash`; the children listed under the tree go with it |
 | `research.listTrash` | Q | `{ workspaceId }` → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` (one workspace; folders in the Trash are in `folders.get`) |
-| `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction |
+| `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction. The shared threads in the caller's own Trash are left as by `sharing.leave` |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch`. Refused while a run in the branch is active: `queued`, `running`, or `interrupted` with a resume pending (`run.resumePending`); an interrupted node the server stopped resuming is removable like a failed one. The same rule applies to `removeTree` and `workspaces.remove` |
 | `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
@@ -200,8 +200,8 @@ createdBy, createdAt, expiresAt }` (`shared/src/types/sharing.ts`).
 | --- | --- | --- | --- |
 | `sharing.setVisibility` | M | `{ treeId, visibility: "private" \| "public" }` → `ResearchTree` | owner; emits `research.tree.updated`, `research.sharing.changed` to the audience, and the All Users feed's `feed.item.*` |
 | `sharing.listMembers` | Q | `{ treeId }` → `ThreadMember[]` | anyone who may read the thread |
-| `sharing.setRole` | M | `{ treeId, userId, role: "commenter" \| "viewer" }` → `ThreadMember[]` | owner |
-| `sharing.removeMember` | M | `{ treeId, userId }` → `{ ok }` | owner. The member's nodes and highlights stay; their queued follow-ups are deleted and their queued or running questions cancelled; they get `research.tree.removed`. Link invitations created before the removal no longer admit them (`invites.accept`); pending login invitations addressed to them are revoked |
+| `sharing.setRole` | M | `{ treeId, userId, role: "commenter" \| "viewer" }` → `ThreadMember[]` | owner. A member made a viewer loses their queued follow-ups (`research.queue.changed`); their questions already sent run on |
+| `sharing.removeMember` | M | `{ treeId, userId }` → `{ ok }` | owner. The member's nodes and highlights stay; their queued follow-ups are deleted and their queued or running questions cancelled; they get `research.tree.removed`, and the thread's queues dispatch again. Link invitations created before the removal no longer admit them (`invites.accept`); pending login invitations addressed to them are revoked |
 | `sharing.leave` | M | `{ treeId }` → `{ ok }` | a member (the owner is `FORBIDDEN`); as `removeMember` for oneself |
 | `sharing.listShared` | Q | `{ place?: "shared" \| "archive" \| "trash" }` → `ResearchTreeSummary[]` | the threads shared with the caller: outside their Archive and Trash (most recently updated first), in their Archive or archived by the owner, or in their own Trash |
 | `invites.create` | M | `{ treeId, role, githubLogin? }` → `CreatedInvite { invite, token, url }` | owner. A login invitation is accepted once, by that GitHub account, which gets a `notification.requested` (`kind: invite`) and `research.invites.changed`; a link invitation by anyone holding `url` (`/invite/<token>`, the client route `routes/invite.tsx`, `10-home-feed-journal.md` §4b). The token is returned once and stored as its SHA-256. 14 days; at most 50 pending per thread |
@@ -229,15 +229,15 @@ agent, position, createdAt, failedReason }`).
 
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
+| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. With nothing queued behind a tail that stopped (failed, cancelled, or interrupted with no resume pending) it is `PRECONDITION_FAILED` with the desktop's ask-box note ("The last answer stopped with an error. Retry it or edit its question to continue." / "The last answer was stopped. Run it again to continue."). `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
 | `followups.cancel` | M | `{ itemId }` → the chain's queue after the change | the queue's Remove |
-| `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | the queue's Retry: clears `failedReason` and dispatches |
+| `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | the queue's Retry, the author's while they may ask (a viewer is `FORBIDDEN`): clears `failedReason` and dispatches |
 | `followups.list` | Q | `{ treeId }` → `Record<headNodeId, ResearchFollowupQueueItem[]>` | — |
 
 The server sends a chain's first item when the chain frees up: after a run
 settles, `removeBranch`, `setChainOrder`, `restoreTree`,
-`restoreTreeFromTrash`, `followups.cancel` and `followups.retry`, and on boot. Archived threads and threads in the Trash
-wait. The send is checked against the item's author (model access, daily
+`restoreTreeFromTrash`, `followups.cancel` and `followups.retry`, a member leaving or being removed, and on boot. Archived threads and threads in the Trash
+wait. The send is checked against the item's author (may still ask there, model access, daily
 limits, run-queue bound); a refusal sets `failedReason`, and the chain waits
 on that item until it is retried or cancelled.
 
@@ -361,7 +361,7 @@ unless noted:
 | `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch, createPostFollowUp |
 | `research.node.updated` | `{ node, queuePosition? }` | status transitions, rename, retry/rerun/resume reset, chain order stored, recap saved, snapshot stamped, preview (≤ 2/s), updatePost, hydratePostTweet |
 | `research.node.removed` | `{ treeId, parentNodeId, removedNodeIds }` (web: also `removedBy`) | removeBranch, forkNode with `replacesNodeId` |
-| `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused); `items` is the chain's whole queue after the change, empty once drained |
+| `research.queue.changed` | `{ treeId, headNodeId, items }` | new (web only): a chain's follow-up queue changed (queued, sent, cancelled, retried, refused, dropped with a member who left, was removed or became a viewer, moved to an edited branch question); `items` is the chain's whole queue after the change, empty once drained |
 | `research.document.updated` | `{ tree, node, responseRevision, markdownChanged, removedHighlightCount }` | updateDocument |
 | `research.highlight.created` | `{ nodeId, highlight }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |

@@ -14,8 +14,9 @@
 import type { ResearchFollowupQueueItem, ResearchNode, UserMessage } from "@session/shared";
 import { agentSpecFor, findModel, userMessageSchema } from "@session/shared";
 import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
-import { researchQueueAction } from "@session/shared/lib/researchBranchView";
+import { researchQueueAction, researchQueueStep } from "@session/shared/lib/researchBranchView";
 import { inlineChainFor } from "@session/shared/lib/researchChains";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
@@ -34,6 +35,8 @@ import {
   rejectTrashed,
   rejectTrashedNode,
   requireNodeAccess,
+  requireTreeAccess,
+  roleAtLeast,
   treeAccess,
   treeReadableBy,
 } from "./access.js";
@@ -131,6 +134,47 @@ export function countByAuthor(db: SessionDatabase, authorId: string): number {
       .where(eq(followupQueue.authorId, authorId))
       .get()?.value ?? 0
   );
+}
+
+/** The desktop's ask-box notes for a chain whose last answer stopped
+ * (`researchChainComposerState`). */
+export const STALLED_TAIL_MESSAGES = {
+  failed: "The last answer stopped with an error. Retry it or edit its question to continue.",
+  stopped: "The last answer was stopped. Run it again to continue.",
+} as const;
+
+/** Why a follow-up cannot be asked at the end of the chain `headNodeId`
+ * heads: its last answer stopped (`researchQueueStep` "stalled"), or was
+ * interrupted and will not resume (web only: the server gave up resuming
+ * it). Null when it can be asked or queued. */
+function stalledTailMessage(treeNodes: readonly ResearchNode[], headNodeId: string): string | null {
+  const chain = inlineChainFor([...treeNodes], headNodeId);
+  const tailId = chain[chain.length - 1];
+  const tail = treeNodes.find((node) => node.id === tailId) ?? null;
+  if (!tail) {
+    return null;
+  }
+  const status = nodeStatus(tail);
+  if (status === "interrupted") {
+    return tail.type === "exchange" && tail.run.resumePending !== true
+      ? STALLED_TAIL_MESSAGES.failed
+      : null;
+  }
+  if (researchQueueStep(tail) !== "stalled") {
+    return null;
+  }
+  return status === "failed" ? STALLED_TAIL_MESSAGES.failed : STALLED_TAIL_MESSAGES.stopped;
+}
+
+/** Whether the author of a queued item may still ask in its thread: they
+ * read it as its owner or a commenter. A member made a viewer may not; their
+ * items are dropped then (`sharing.setRole`), and dispatch checks again. */
+export function authorMayAsk(
+  db: SessionDatabase,
+  item: Pick<FollowupItem, "authorId" | "treeId">,
+): boolean {
+  const access = treeAccess(db, item.authorId, item.treeId);
+  return access !== null && roleAtLeast(access.role, "commenter");
 }
 
 /** A chain's head as the client computes it, from any node in the chain. */
@@ -249,6 +293,14 @@ export function ask(db: SessionDatabase, userId: string, input: AskInput): AskRe
           agent: input.agent,
         });
         return { kind: "sent", node, headNodeId: state.headNodeId };
+      }
+      // A question would wait behind an answer that stopped and will not
+      // complete on its own; the desktop's ask box refuses it with these
+      // words (`researchChainComposerState`). Behind queued items it is
+      // queued, as there.
+      const stalled = stalledTailMessage(state.treeNodes, state.headNodeId);
+      if (stalled !== null) {
+        throw new Error(stalled);
       }
     }
     if (input.maxQueued !== undefined && countByAuthor(tx, userId) >= input.maxQueued) {
@@ -432,10 +484,12 @@ export function cancel(db: SessionDatabase, userId: string, itemId: string): Fol
 }
 
 /** Clears a refused item's reason so the queue tries to send it again.
- * Refused while the thread is in the Trash. */
+ * Refused while the thread is in the Trash, and when the author may no
+ * longer ask there (a viewer). */
 export function retry(db: SessionDatabase, userId: string, itemId: string): FollowupItem {
   return transact(db, (tx) => {
     const row = itemRow(tx, userId, itemId, "retry");
+    requireTreeAccess(tx, userId, row.treeId, "commenter");
     rejectTrashedNode(tx, row.headNodeId);
 
     const updated = tx

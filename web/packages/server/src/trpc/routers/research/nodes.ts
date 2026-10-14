@@ -27,6 +27,7 @@ import {
   nodeContent,
   queuePositionOf,
 } from "../../../research/admission.js";
+import { publishQueue } from "../../../research/followups.js";
 import {
   assertModelReadsImages,
   markImagesAttached,
@@ -121,6 +122,12 @@ export const nodeProcedures = {
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
       if (admitted.reorderedHead) {
         publishNode(ctx, admitted.reorderedHead);
+      }
+      if (admitted.movedQueue && admitted.replacedNodeId !== null) {
+        // The queue now waits under the new question: announced under both
+        // heads, so a client holding it under the old one drops it there.
+        publishQueue(ctx, ctx.user.id, node.treeId, admitted.replacedNodeId);
+        publishQueue(ctx, ctx.user.id, node.treeId, node.id);
       }
       const feedItem = feedItems.forTree(ctx.db, node.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);

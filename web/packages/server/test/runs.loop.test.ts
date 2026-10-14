@@ -367,6 +367,44 @@ test.serial(
   },
 );
 
+test.serial("a node past its automatic resumes is announced as settled", async (t) => {
+  setFixtureScenario("abort");
+  const harness = createAgentHarness(t);
+  const { user, caller, nodeId } = await launch(harness, "given-up");
+  await harness.agent.tick();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await harness.agent.drain();
+  const queued = await caller.followups.ask({ headNodeId: nodeId, prompt: "And then?" });
+  t.is(queued.kind, "queued");
+  // Two resumes were already spent on it.
+  for (const attempt of [2, 3]) {
+    harness.db.$client
+      .prepare(
+        `INSERT INTO run_attempts (node_id, attempt, kind, model, started_at, steps, tool_calls)
+           VALUES (?, ?, 'resume', 'gpt-luna', ?, 0, 0)`,
+      )
+      .run(nodeId, attempt, Date.now());
+  }
+  nodesRepo.reconcileOnBoot(harness.db);
+  const events = collectEvents(t, harness, user.id, [nodeId]);
+  const next = nextProcessAgent(harness);
+  await next.settle();
+  await new Promise((resolve) => setImmediate(resolve));
+  const updated = events.find(
+    (event) =>
+      event.type === "research.node.updated" &&
+      (event.payload["node"] as { id?: string } | undefined)?.id === nodeId,
+  );
+  const run = (updated?.payload["node"] as { run?: { status?: string; resumePending?: boolean } })
+    ?.run;
+  t.is(run?.status, "interrupted");
+  t.false(run?.resumePending ?? true, "readers learn it will not resume");
+  t.true(events.some((event) => event.type === "feed.item.upserted"));
+  // The follow-up behind it waits for Retry, as behind a failed answer.
+  const treeId = (updated?.payload["node"] as { treeId?: string } | undefined)?.treeId ?? "";
+  t.is((await caller.followups.list({ treeId }))[nodeId]?.length, 1);
+});
+
 test.serial(
   "admission holds runs above the per-user cap and reports queue positions",
   async (t) => {

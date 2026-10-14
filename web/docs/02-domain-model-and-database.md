@@ -493,7 +493,9 @@ Each item names the desktop source and the enforcing function.
 - An exchange's run is *active* while it is `queued` or `running`, or
   `interrupted` with `resume_pending = 1` (`subtrees.activeRun`). An
   `interrupted` node whose resume is no longer pending
-  (`nodes.clearResumePending`, after `MAX_AUTO_RESUMES`) is settled: it can
+  (`nodes.clearResumePending`, after `MAX_AUTO_RESUMES`; the server then
+  publishes `research.node.updated` and runs what follows a settled run) is
+  settled: it can
   be retried, rerun, replaced, or deleted (`removeBranch`, `trees.remove`,
   `workspaces.remove`) like a failed node. The wire node carries the flag as
   `run.resumePending`. Deleting a node with a pending resume is refused, as
@@ -717,8 +719,13 @@ Each item names the desktop source and the enforcing function.
   is admitted as the chain tail's inline child and its run enqueued;
   otherwise it is appended at the next `position`. `headNodeId` may be any
   node of the chain; the queue is kept under the chain's head. Archived and
-  trashed threads refuse. Queueing (not sending) is bounded per author by
-  `SESSION_QUEUED_PER_USER`.
+  trashed threads refuse. With nothing queued, a chain whose last answer
+  stopped (failed, cancelled, or interrupted with no resume pending) refuses
+  with the desktop's ask-box notes ("The last answer stopped with an error.
+  Retry it or edit its question to continue." / "The last answer was
+  stopped. Run it again to continue.", `PRECONDITION_FAILED`); behind queued
+  items it queues, as the desktop does. Queueing (not sending) is bounded per
+  author by `SESSION_QUEUED_PER_USER`.
 - `followups.nextStep` is `researchQueueAction` over the stored queue: send
   the first item when the tail is `complete` (and, for an exchange, its
   session is ready) and has no inline child; wait while the tail is active,
@@ -732,10 +739,16 @@ Each item names the desktop source and the enforcing function.
 - The server (`server/src/research/followups.ts`) dispatches every chain of
   a thread after a run settles, `removeBranch`, `setChainOrder`, a restore
   from the Archive or the Trash, and a cancel or retry of a queue item; and
-  every chain on boot. Before sending it checks the item's author, not the thread's
-  owner: model access, daily limits, and the run-queue bound. A refusal is
-  stored as `failed_reason`; the chain waits on that item until
-  `followups.retry` clears it or `followups.cancel` removes it.
+  every chain on boot; also after a member leaves or is removed. Before
+  sending it checks the item's author, not the thread's owner: that they
+  may still ask there (owner or commenter, `followups.authorMayAsk`), model
+  access, daily limits, and the run-queue bound. A refusal is stored as
+  `failed_reason`; the chain waits on that item until `followups.retry`
+  clears it or `followups.cancel` removes it. `followups.retry` is the
+  author's and is refused once they are a viewer.
+- A branch question replaced by an edited one (`nodes.admitChildDetailed`
+  with `replacesNodeId`) hands its queue to the new node (`movedQueue`); the
+  server announces `research.queue.changed` under both heads.
 
 ### 5.14 Posts and drafts
 - `posts.admitPost` (`create_research_post`, `state.rs:1912`): the text is
@@ -872,11 +885,15 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
 - Images: `images.readable(userId | null, id)` is the uploader, or anyone who
   may read a thread whose node or queued follow-up names the image. Widget
   revisions follow the thread; saved inputs stay per person.
-- `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole`,
-  `removeMember` and `leave` (both return the member's queued follow-ups,
-  which are deleted, and their active questions, which the server cancels;
-  `removeMember` also records the removal in `tree_member_removals` and
-  revokes the pending login invitations addressed to the member),
+- `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole` (making a
+  member a viewer deletes their queued follow-ups, `dropQueuedFollowups`;
+  their questions already sent run on), `removeMember` and `leave` (both
+  return the member's queued follow-ups, which are deleted, and their active
+  questions, which the server cancels, `trees.depart`; a member's Delete,
+  `trees.remove`, and Empty Trash, `trash.empty`, leave the same way and
+  return the same `Departure`; `removeMember` also records the removal in
+  `tree_member_removals` and revokes the pending login invitations addressed
+  to the member),
   `createInvite` (token returned once; at most 50 pending per thread),
   `listInvites` (usable ones: a used link stays listed so it can be revoked), `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
   (by token, or by id for a login invitation addressed to the caller; a

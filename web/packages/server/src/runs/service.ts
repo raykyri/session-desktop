@@ -497,6 +497,14 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
               // The flag goes with the queue row: left set, every later boot
               // would re-queue a node the runtime has already given up on.
               nodesRepo.clearResumePending(deps.db, run.userId, node.id);
+              // The node is settled now: readers see that it will not resume
+              // (Retry is offered), and what waited on it moves on.
+              const settled = nodesRepo.get(deps.db, run.userId, node.id);
+              if (settled) {
+                emit(run.userId, "research.node.updated", { node: settled });
+                emitFeedItemUpsertedForNode(deps, settled.id);
+              }
+              afterSettle(run.userId, node.id);
               continue;
             }
             const resumed = nodesRepo.resumeAttempt(deps.db, run.userId, node.id);

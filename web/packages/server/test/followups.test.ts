@@ -4,6 +4,7 @@
 import { auth, nodes as nodesRepo, runs as runsRepo, snapshots } from "@session/db";
 import type { ResearchFollowupQueueItem, SessionEvent } from "@session/shared";
 import { nodeEffort, nodeModelId } from "@session/shared";
+import type { TRPCError } from "@trpc/server";
 import test from "ava";
 
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
@@ -330,4 +331,52 @@ test("queued follow-ups wait while the thread is in the Trash and send on restor
   );
   t.true(child?.inline);
   t.true(harness.runs.started.includes(child?.id ?? ""));
+});
+
+test("a follow-up behind an answer that stopped is refused, as the desktop's ask box does", async (t) => {
+  const harness = createHarness(t);
+  const { user, caller, treeId, rootId } = await thread(harness, "staller", "gemini-flash");
+  nodesRepo.setStatus(harness.db, user.id, rootId, "failed", { error: "boom" });
+  const refused = await t.throwsAsync<TRPCError>(
+    caller.followups.ask({ headNodeId: rootId, prompt: "Anyway?" }),
+  );
+  t.is(refused?.code, "PRECONDITION_FAILED");
+  t.is(
+    refused?.message,
+    "The last answer stopped with an error. Retry it or edit its question to continue.",
+  );
+  t.deepEqual(await caller.followups.list({ treeId }), {});
+});
+
+test("an edited branch question announces the queue it takes over", async (t) => {
+  const harness = createHarness(t);
+  const { user, caller, rootId } = await thread(harness, "rebrancher", "gemini-flash");
+  complete(harness, user.id, rootId);
+  const branch = await caller.research.forkNode({ parentNodeId: rootId, prompt: "Branch" });
+  const asked = await caller.followups.ask({ headNodeId: branch.id, prompt: "Behind it" });
+  t.is(asked.kind, "queued");
+  nodesRepo.setStatus(harness.db, user.id, branch.id, "failed", { error: "boom" });
+  const events: SessionEvent[] = [];
+  const subscription = harness.eventBus.subscribe(user.id, "conn-rebranch");
+  t.teardown(() => subscription.close());
+  void (async () => {
+    for await (const event of subscription.events) events.push(event);
+  })();
+  const edited = await caller.research.forkNode({
+    parentNodeId: rootId,
+    prompt: "Branch, edited",
+    replacesNodeId: branch.id,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const changes = events.filter((event) => event.type === "research.queue.changed");
+  t.deepEqual(
+    changes.map((event) => [
+      event.payload["headNodeId"],
+      (event.payload["items"] as ResearchFollowupQueueItem[]).map((item) => item.message.text),
+    ]),
+    [
+      [branch.id, []],
+      [edited.id, ["Behind it"]],
+    ],
+  );
 });

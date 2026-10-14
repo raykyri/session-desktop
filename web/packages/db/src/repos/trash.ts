@@ -47,6 +47,7 @@ import {
   trashRow,
   untrashRow,
 } from "./trees.js";
+import type { Departure } from "./trees.js";
 
 /** The desktop's refusal (`state.rs`, `trash_research_tree`). */
 const TRASH_ACTIVE_RUN_ERROR =
@@ -70,6 +71,8 @@ export interface EmptiedTrash {
   folderIds: string[];
   /** Of `treeIds`, the shared threads the caller left. */
   leftTreeIds: string[];
+  /** What leaving each of `leftTreeIds` took away (`trees.leave`). */
+  departures: Departure[];
 }
 
 /** Trees among `treeIds` with a run the server still owns: queued, running,
@@ -199,9 +202,7 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
       .all()
       .map((row) => row.treeId)
       .sort();
-    for (const treeId of leftTreeIds) {
-      leave(tx, userId, treeId);
-    }
+    const departures = leftTreeIds.map((treeId) => leave(tx, userId, treeId).departure);
     const folderIds = tx
       .select({ id: folders.id })
       .from(folders)
@@ -226,6 +227,6 @@ export function empty(db: SessionDatabase, userId: string, workspaceId: string):
         )
         .run();
     }
-    return { treeIds: [...treeIds, ...leftTreeIds], folderIds, leftTreeIds };
+    return { treeIds: [...treeIds, ...leftTreeIds], folderIds, leftTreeIds, departures };
   });
 }

@@ -6,7 +6,7 @@
 // private (its owner and members) or public (anyone, guests included). The
 // owner changes visibility, members and invitations; a member may leave.
 
-import { nodes, queue, sharing, trees } from "@session/db";
+import { sharing, trees } from "@session/db";
 import type {
   CreatedInvite,
   ReceivedInvite,
@@ -20,47 +20,18 @@ import { z } from "zod";
 
 import { sessionEvent } from "../../events/bus.js";
 import { emitFeedVisibilityChanged } from "../../events/feed.js";
-import { publishQueue } from "../../research/followups.js";
 import { notifyInvite } from "../../research/notifications.js";
 import { protectedProcedure, router } from "../base.js";
-import type { EmitterContext } from "../emit.js";
-import { publish, publishToTree } from "../emit.js";
+import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
-import { publishSharingChanged, publishTree, treeAudienceIds } from "./research/common.js";
-
-/**
- * After a member leaves or is removed: their queued follow-ups are gone
- * (the queues are announced) and their running questions are stopped, since
- * they can no longer read the thread. They are told the thread is gone, and
- * the rest of the audience that its members changed.
- */
-function afterDeparture(ctx: EmitterContext, departure: sharing.Departure): void {
-  const { treeId, memberId } = departure;
-  for (const headNodeId of departure.changedHeadNodeIds) {
-    publishQueue(ctx, ctx.user.id, treeId, headNodeId);
-  }
-  const ownerId = treeAudienceIds(ctx, treeId)[0];
-  for (const nodeId of departure.activeNodeIds) {
-    if (ownerId === undefined) break;
-    try {
-      const node = nodes.setStatus(ctx.db, ownerId, nodeId, "cancelled", {
-        error: "Stopped: the person who asked no longer has access to this thread.",
-      });
-      queue.release(ctx.db, nodeId);
-      queue.wakeChildrenOf(ctx.db, nodeId);
-      ctx.runs.cancel(nodeId);
-      publishToTree(ctx, treeId, "research.node.updated", { node });
-    } catch (error) {
-      ctx.logger.warn({ nodeId, error }, "could not stop a departed member's run");
-    }
-  }
-  ctx.eventBus.emitToUsers(
-    [memberId],
-    sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
-  );
-  publishSharingChanged(ctx, treeId, [memberId, ...treeAudienceIds(ctx, treeId)]);
-}
+import {
+  afterDeparture,
+  afterQueuedFollowupsDropped,
+  publishSharingChanged,
+  publishTree,
+  treeAudienceIds,
+} from "./research/common.js";
 
 const treeInput = z.object({ treeId: z.string() });
 
@@ -95,15 +66,17 @@ export const sharingRouter = router({
       repo(() => sharing.listMembers(ctx.db, ctx.user.id, input.treeId)),
     ),
 
-  /** Changes a member's role. The owner's. */
+  /** Changes a member's role. The owner's. A member made a viewer can no
+   * longer ask: their queued follow-ups are dropped. */
   setRole: protectedProcedure
     .input(z.object({ treeId: z.string(), userId: z.string(), role: memberRoleSchema }))
     .mutation(({ ctx, input }): ThreadMember[] => {
-      const members = repo(() =>
+      const change = repo(() =>
         sharing.setRole(ctx.db, ctx.user.id, input.treeId, input.userId, input.role),
       );
+      afterQueuedFollowupsDropped(ctx, input.treeId, change.dropped);
       publishSharingChanged(ctx, input.treeId, treeAudienceIds(ctx, input.treeId));
-      return members;
+      return change.members;
     }),
 
   /** Removes a member. The owner's. Their questions, notes and highlights

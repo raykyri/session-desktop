@@ -12,7 +12,7 @@ import type {
   ThreadInvite,
   ThreadMember,
 } from "@session/shared";
-import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -23,16 +23,16 @@ import {
   treeMembers,
   treeSubscriptions,
 } from "../schema/collaboration.js";
-import { followupQueue } from "../schema/followups.js";
-import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
 import { users } from "../schema/users.js";
 import { now } from "../time.js";
 
 import { memberRow, requireTreeAccess } from "./access.js";
 import type { TreeRow } from "./mappers.js";
-import { activeRun } from "./subtrees.js";
-import { leave as leaveTree } from "./trees.js";
+import { depart, dropQueuedFollowups, leave as leaveTree } from "./trees.js";
+import type { Departure, QueuedFollowupsDropped } from "./trees.js";
+
+export type { Departure, QueuedFollowupsDropped } from "./trees.js";
 
 /** How long an invitation can be accepted. */
 export const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -210,6 +210,14 @@ export function audience(db: SessionDatabase, treeId: string): TreeAudience | nu
   };
 }
 
+/** A role change, and the queued follow-ups it dropped. */
+export interface RoleChange {
+  members: ThreadMember[];
+  /** A member made a viewer can no longer ask: their queued follow-ups are
+   * deleted (`dropQueuedFollowups`). Their questions already sent run on. */
+  dropped: QueuedFollowupsDropped;
+}
+
 /** Changes a member's role. The owner's. */
 export function setRole(
   db: SessionDatabase,
@@ -217,8 +225,8 @@ export function setRole(
   treeId: string,
   memberId: string,
   role: MemberRole,
-): ThreadMember[] {
-  transact(db, (tx) => {
+): RoleChange {
+  const dropped = transact(db, (tx) => {
     const tree = requireTreeAccess(tx, userId, treeId, "owner").tree;
     if (memberId === tree.ownerId) {
       throw new Error(INVITE_MESSAGES.ownerRole);
@@ -232,52 +240,11 @@ export function setRole(
     if (!row) {
       throw new Error(`member ${memberId} was not found`);
     }
+    return role === "viewer"
+      ? dropQueuedFollowups(tx, treeId, memberId)
+      : { removedFollowupIds: [], changedHeadNodeIds: [] };
   });
-  return listMembers(db, userId, treeId);
-}
-
-/** What leaving or being removed took away from a member. */
-export interface Departure {
-  treeId: string;
-  memberId: string;
-  /** Their queued follow-ups, deleted with the membership. */
-  removedFollowupIds: string[];
-  /** The chains whose queues changed, for `research.queue.changed`. */
-  changedHeadNodeIds: string[];
-  /** Their questions still queued or running, which the caller cancels: a
-   * person who can no longer read the thread cannot keep a run in it. */
-  activeNodeIds: string[];
-}
-
-function depart(db: SessionDatabase, treeId: string, memberId: string): Departure {
-  const queued = db
-    .select({ id: followupQueue.id, headNodeId: followupQueue.headNodeId })
-    .from(followupQueue)
-    .where(and(eq(followupQueue.treeId, treeId), eq(followupQueue.authorId, memberId)))
-    .all();
-  if (queued.length > 0) {
-    db.delete(followupQueue)
-      .where(
-        inArray(
-          followupQueue.id,
-          queued.map((row) => row.id),
-        ),
-      )
-      .run();
-  }
-  const activeNodeIds = db
-    .select({ id: nodes.id })
-    .from(nodes)
-    .where(and(eq(nodes.treeId, treeId), eq(nodes.authorId, memberId), activeRun()))
-    .all()
-    .map((row) => row.id);
-  return {
-    treeId,
-    memberId,
-    removedFollowupIds: queued.map((row) => row.id),
-    changedHeadNodeIds: [...new Set(queued.map((row) => row.headNodeId))].sort(),
-    activeNodeIds,
-  };
+  return { members: listMembers(db, userId, treeId), dropped };
 }
 
 /**
@@ -336,10 +303,7 @@ export function removeMember(
 
 /** The caller leaves a thread shared with them. */
 export function leave(db: SessionDatabase, userId: string, treeId: string): Departure {
-  return transact(db, (tx) => {
-    leaveTree(tx, userId, treeId);
-    return depart(tx, treeId, userId);
-  });
+  return leaveTree(db, userId, treeId).departure;
 }
 
 export interface CreateInviteInput {

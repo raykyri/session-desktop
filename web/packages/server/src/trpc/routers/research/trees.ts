@@ -28,10 +28,10 @@ import { publish } from "../../emit.js";
 import { repo, required } from "../../errors.js";
 
 import {
+  afterDeparture,
   detailWithQueues,
   dispatchFollowups,
   publishNode,
-  publishSharingChanged,
   publishTree,
   treeAudienceIds,
 } from "./common.js";
@@ -221,15 +221,12 @@ export const treeProcedures = {
       // Read before the delete, which takes the members' access with it.
       const audience = treeAudienceIds(ctx, input.treeId);
       const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
-      for (const treeId of removed.treeIds) {
-        if (removed.left === true) {
-          publish(ctx, "research.tree.removed", { treeId, removedBy: ctx.user.id });
-          publishSharingChanged(
-            ctx,
-            treeId,
-            audience.filter((id) => id !== ctx.user.id),
-          );
-        } else {
+      if (removed.departure) {
+        // A member left: their queued follow-ups are gone and their running
+        // questions stop, as for `sharing.leave`.
+        afterDeparture(ctx, removed.departure);
+      } else {
+        for (const treeId of removed.treeIds) {
           ctx.eventBus.emitToUsers(
             [ctx.user.id, ...(treeId === input.treeId ? audience : [])],
             sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),

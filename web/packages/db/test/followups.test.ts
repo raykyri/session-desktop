@@ -194,3 +194,68 @@ test("a failed tail stalls its queue until it is removed", (t) => {
   const step = followups.nextStep(fixture.db, fixture.userId, tree.rootNodeId);
   t.is(step.kind === "send" ? step.tailId : null, tree.rootNodeId);
 });
+
+test("asking behind an answer that stopped is refused with the desktop's words", (t) => {
+  const fixture = createFixture(t);
+  const tree = runningRoot(fixture);
+  nodes.setStatus(fixture.db, fixture.userId, tree.rootNodeId, "failed", { error: "boom" });
+  t.throws(() => ask(fixture, tree.rootNodeId, "After the failure"), {
+    message: followups.STALLED_TAIL_MESSAGES.failed,
+  });
+  const stopped = runningRoot(fixture);
+  nodes.setStatus(fixture.db, fixture.userId, stopped.rootNodeId, "cancelled");
+  t.throws(() => ask(fixture, stopped.rootNodeId, "After the stop"), {
+    message: followups.STALLED_TAIL_MESSAGES.stopped,
+  });
+  // Web only: an interrupted answer waits while the server will resume it,
+  // and stalls once it will not.
+  const interrupted = runningRoot(fixture);
+  const setResume = fixture.db.$client.prepare(
+    "UPDATE nodes SET status = 'interrupted', resume_pending = ? WHERE id = ?",
+  );
+  setResume.run(0, interrupted.rootNodeId);
+  t.throws(() => ask(fixture, interrupted.rootNodeId, "After the interruption"), {
+    message: followups.STALLED_TAIL_MESSAGES.failed,
+  });
+  t.is(tableRowCount(fixture.db, "followup_queue"), 0, "nothing was queued");
+  setResume.run(1, interrupted.rootNodeId);
+  t.is(ask(fixture, interrupted.rootNodeId, "While it resumes").kind, "queued");
+});
+
+test("asking behind a queue whose tail then stopped still queues, as on the desktop", (t) => {
+  const fixture = createFixture(t);
+  const tree = runningRoot(fixture);
+  t.is(ask(fixture, tree.rootNodeId, "First").kind, "queued");
+  nodes.setStatus(fixture.db, fixture.userId, tree.rootNodeId, "failed", { error: "boom" });
+  t.is(ask(fixture, tree.rootNodeId, "Second").kind, "queued");
+});
+
+test("an edited branch question takes the queue behind it and says so", (t) => {
+  const fixture = createFixture(t);
+  const tree = runningRoot(fixture);
+  nodes.setStatus(fixture.db, fixture.userId, tree.rootNodeId, "complete");
+  const branch = nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: tree.rootNodeId,
+    message: { text: "A branch" },
+  });
+  nodes.setStatus(fixture.db, fixture.userId, branch.id, "running");
+  t.is(ask(fixture, branch.id, "Queued behind the branch").kind, "queued");
+  nodes.setStatus(fixture.db, fixture.userId, branch.id, "failed", { error: "boom" });
+  const edited = nodes.admitChildDetailed(fixture.db, fixture.userId, {
+    parentNodeId: tree.rootNodeId,
+    message: { text: "The branch, edited" },
+    replacesNodeId: branch.id,
+  });
+  t.true(edited.movedQueue);
+  t.deepEqual(
+    followups
+      .listForHead(fixture.db, fixture.userId, edited.node.id)
+      .map((item) => item.message.text),
+    ["Queued behind the branch"],
+  );
+  const plain = nodes.admitChildDetailed(fixture.db, fixture.userId, {
+    parentNodeId: tree.rootNodeId,
+    message: { text: "Another branch" },
+  });
+  t.false(plain.movedQueue);
+});

@@ -639,6 +639,89 @@ test("removing a member revokes the login invitations still addressed to them", 
   t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
 });
 
+test("a member made a viewer loses their queued follow-ups and cannot retry one", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const running = ask(shared, shared.commenter.userId, "Running question");
+  nodes.setStatus(db, shared.commenter.userId, running.id, "running");
+  const queued = followups.ask(db, shared.commenter.userId, {
+    headNodeId: running.id,
+    message: { text: "Queued behind it" },
+    agent: { model: "gemini-flash" },
+  });
+  if (queued.kind !== "queued") {
+    t.fail("expected a queued item");
+    return;
+  }
+  const change = sharing.setRole(
+    db,
+    shared.fixture.userId,
+    shared.treeId,
+    shared.commenter.userId,
+    "viewer",
+  );
+  t.deepEqual(change.dropped, {
+    removedFollowupIds: [queued.item.id],
+    changedHeadNodeIds: [running.id],
+  });
+  t.deepEqual(followups.listForHead(db, shared.fixture.userId, running.id), []);
+  t.false(followups.authorMayAsk(db, queued.item));
+  // Promoting drops nothing.
+  t.deepEqual(
+    sharing.setRole(db, shared.fixture.userId, shared.treeId, shared.commenter.userId, "commenter")
+      .dropped,
+    { removedFollowupIds: [], changedHeadNodeIds: [] },
+  );
+  // An item they still had (written past the role change) cannot be retried
+  // once they are a viewer again.
+  sharing.setRole(db, shared.fixture.userId, shared.treeId, shared.commenter.userId, "viewer");
+  db.insert(schema.followupQueue)
+    .values({
+      id: "left-behind",
+      treeId: shared.treeId,
+      headNodeId: running.id,
+      authorId: shared.commenter.userId,
+      messageJson: { text: "Left behind" },
+      model: "gemini-flash",
+      effort: null,
+      position: 0,
+      createdAt: 1,
+      failedReason: "refused",
+    })
+    .run();
+  t.throws(() => followups.retry(db, shared.commenter.userId, "left-behind"), {
+    message: access.ACCESS_MESSAGES.viewer,
+  });
+});
+
+test("a member's Delete and Empty Trash leave as leaving does", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const running = ask(shared, shared.commenter.userId, "Running question");
+  nodes.setStatus(db, shared.commenter.userId, running.id, "running");
+  followups.ask(db, shared.commenter.userId, {
+    headNodeId: running.id,
+    message: { text: "Queued behind it" },
+    agent: { model: "gemini-flash" },
+  });
+  const removed = trees.remove(db, shared.commenter.userId, shared.treeId);
+  t.true(removed.left);
+  t.like(removed.departure, {
+    treeId: shared.treeId,
+    memberId: shared.commenter.userId,
+    activeNodeIds: [running.id],
+    changedHeadNodeIds: [running.id],
+  });
+  t.deepEqual(followups.listForHead(db, shared.fixture.userId, running.id), []);
+
+  // The viewer queues nothing, but Empty Trash reports their departure too.
+  trash.trashTree(db, shared.viewer.userId, shared.treeId);
+  const emptied = trash.empty(db, shared.viewer.userId, shared.viewer.workspaceId);
+  t.deepEqual(emptied.leftTreeIds, [shared.treeId]);
+  t.like(emptied.departures, [{ treeId: shared.treeId, memberId: shared.viewer.userId }]);
+  t.is(access.treeAccess(db, shared.viewer.userId, shared.treeId), null);
+});
+
 test("leaving is not a removal: a link still lets the person back in", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;

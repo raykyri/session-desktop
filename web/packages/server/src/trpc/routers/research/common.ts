@@ -1,15 +1,75 @@
 // Helpers the `research` procedure files share.
 
-import { followups, sharing, trees } from "@session/db";
+import { followups, nodes, queue, sharing, trees } from "@session/db";
 import type { ResearchNode, ResearchTree, ResearchTreeDetail } from "@session/shared";
 
 import { sessionEvent } from "../../../events/bus.js";
 import { sharedTree } from "../../../research/access.js";
 import type { FollowupDeps } from "../../../research/followups.js";
-import { dispatchTree } from "../../../research/followups.js";
+import { dispatchTree, publishQueue } from "../../../research/followups.js";
 import type { AppContext } from "../../base.js";
+import type { EmitterContext } from "../../emit.js";
 import { publish, publishToTree } from "../../emit.js";
 import { repo } from "../../errors.js";
+
+/** The error a departed member's stopped question shows. */
+export const DEPARTED_ASKER_STOPPED =
+  "Stopped: the person who asked no longer has access to this thread.";
+
+/**
+ * After a member's queued follow-ups were deleted (`sharing.setRole` to
+ * viewer, and every departure): the changed queues are announced, and the
+ * thread's queues dispatch again, since a deleted item may have been the
+ * one a chain waited on.
+ */
+export function afterQueuedFollowupsDropped(
+  ctx: EmitterContext,
+  treeId: string,
+  dropped: sharing.QueuedFollowupsDropped,
+): void {
+  for (const headNodeId of dropped.changedHeadNodeIds) {
+    publishQueue(ctx, ctx.user.id, treeId, headNodeId);
+  }
+  if (dropped.changedHeadNodeIds.length > 0) {
+    dispatchFollowups(ctx, treeId);
+  }
+}
+
+/**
+ * After a member leaves or is removed (`sharing.leave`, `removeMember`, and
+ * a member's Delete or Empty Trash): their queued follow-ups are gone (the
+ * queues are announced and dispatch again) and their running questions are
+ * stopped, since they can no longer read the thread. They are told the
+ * thread is gone, and the rest of the audience that its members changed.
+ */
+export function afterDeparture(ctx: EmitterContext, departure: sharing.Departure): void {
+  const { treeId, memberId } = departure;
+  const ownerId = treeAudienceIds(ctx, treeId)[0];
+  for (const nodeId of departure.activeNodeIds) {
+    if (ownerId === undefined) break;
+    try {
+      const node = nodes.setStatus(ctx.db, ownerId, nodeId, "cancelled", {
+        error: DEPARTED_ASKER_STOPPED,
+      });
+      queue.release(ctx.db, nodeId);
+      queue.wakeChildrenOf(ctx.db, nodeId);
+      ctx.runs.cancel(nodeId);
+      publishToTree(ctx, treeId, "research.node.updated", { node });
+    } catch (error) {
+      ctx.logger.warn({ nodeId, error }, "could not stop a departed member's run");
+    }
+  }
+  for (const headNodeId of departure.changedHeadNodeIds) {
+    publishQueue(ctx, ctx.user.id, treeId, headNodeId);
+  }
+  // After the stops, so each chain is read as it is now.
+  dispatchFollowups(ctx, treeId);
+  ctx.eventBus.emitToUsers(
+    [memberId],
+    sessionEvent("research.tree.removed", { treeId, removedBy: ctx.user.id }),
+  );
+  publishSharingChanged(ctx, treeId, [memberId, ...treeAudienceIds(ctx, treeId)]);
+}
 
 /** Publishes `research.node.updated` for the node a mutation just changed,
  * with its queue position while it waits for admission. */

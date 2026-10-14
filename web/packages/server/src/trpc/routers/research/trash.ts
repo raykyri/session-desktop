@@ -16,7 +16,12 @@ import { protectedProcedure } from "../../base.js";
 import { publish } from "../../emit.js";
 import { repo } from "../../errors.js";
 
-import { dispatchFollowups, publishSharingChanged, treeAudienceIds } from "./common.js";
+import {
+  afterDeparture,
+  dispatchFollowups,
+  publishSharingChanged,
+  treeAudienceIds,
+} from "./common.js";
 
 export const trashProcedures = {
   /** Moves a thread, and the children listed under it, to the Trash.
@@ -82,14 +87,15 @@ export const trashProcedures = {
     .input(z.object({ workspaceId: z.string() }))
     .mutation(({ ctx, input }): { treeIds: string[]; folderIds: string[] } => {
       const emptied = repo(() => trash.empty(ctx.db, ctx.user.id, input.workspaceId));
+      const left = new Set(emptied.leftTreeIds);
       for (const treeId of emptied.treeIds) {
+        if (left.has(treeId)) continue;
         publish(ctx, "research.tree.removed", { treeId, removedBy: ctx.user.id });
       }
-      // The owners of the shared threads the caller left see their members
-      // change.
-      for (const treeId of emptied.leftTreeIds) {
-        publishSharingChanged(ctx, treeId, treeAudienceIds(ctx, treeId));
-      }
+      // The shared threads the caller left: as `sharing.leave` (their queued
+      // follow-ups and running questions go; the others see the members
+      // change).
+      for (const departure of emptied.departures) afterDeparture(ctx, departure);
       if (emptied.folderIds.length > 0) {
         publish(ctx, "research.folders.changed", { workspaceId: input.workspaceId });
       }

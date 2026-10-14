@@ -290,7 +290,12 @@ test("emptying the Trash deletes the workspace's trashed trees and folders in on
   trash.trashTree(fixture.db, stranger.userId, theirs.tree.id);
 
   const emptied = trash.empty(fixture.db, fixture.userId, fixture.workspaceId);
-  t.deepEqual(emptied, { treeIds: [gone.tree.id], folderIds: ["binned"], leftTreeIds: [] });
+  t.deepEqual(emptied, {
+    treeIds: [gone.tree.id],
+    folderIds: ["binned"],
+    leftTreeIds: [],
+    departures: [],
+  });
   t.is(trees.get(fixture.db, fixture.userId, gone.tree.id), null);
   t.truthy(trees.get(fixture.db, fixture.userId, elsewhere.tree.id), "other workspaces are kept");
   t.truthy(trees.get(fixture.db, stranger.userId, theirs.tree.id), "other people are kept");
@@ -306,6 +311,7 @@ test("emptying the Trash deletes the workspace's trashed trees and folders in on
     treeIds: [],
     folderIds: [],
     leftTreeIds: [],
+    departures: [],
   });
 });
 

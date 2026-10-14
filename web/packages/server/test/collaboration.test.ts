@@ -2,13 +2,14 @@
 // events, presence, notifications, who pays, stale edits, and images
 // (`03-api-and-events.md` §2–§3, `02-domain-model-and-database.md` §5.16).
 
-import { schema, snapshots } from "@session/db";
+import { followups, nodes, schema, snapshots } from "@session/db";
 import type { ResearchImageAttachment, SessionEvent, User } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
 import sharp from "sharp";
 
 import { sessionEvent } from "../src/events/bus.js";
+import { AUTHOR_MAY_NOT_ASK, dispatchTree } from "../src/research/followups.js";
 import { notifyRunFinished } from "../src/research/notifications.js";
 
 import type { Harness } from "./helpers.js";
@@ -515,6 +516,30 @@ test("a thread's images are readable by whoever may read the thread", async (t) 
   t.is((await read()).status, 200);
 });
 
+/** Commits an answer for a node the recording run service never runs. */
+function complete(harness: Harness, userId: string, nodeId: string): void {
+  nodes.setStatus(harness.db, userId, nodeId, "running");
+  snapshots.commit(harness.db, userId, {
+    nodeId,
+    turns: [answerTurn(nodeId, "An answer.")],
+    outcome: { status: "complete" },
+  });
+}
+
+/** The commenter's inline question under the root, still queued, and a
+ * follow-up of theirs queued behind it. */
+async function commenterQueue(thread: Thread) {
+  const caller = thread.harness.caller(thread.commenter);
+  const running = await caller.research.forkNode({
+    parentNodeId: thread.rootId,
+    prompt: "How many hash functions?",
+    inline: true,
+  });
+  const asked = await caller.followups.ask({ headNodeId: thread.rootId, prompt: "And deletes?" });
+  if (asked.kind !== "queued") throw new Error("expected the follow-up to be queued");
+  return { running, item: asked.item };
+}
+
 test("tree events carry no per-person fields to the rest of the audience", async (t) => {
   const harness = createHarness(t);
   const owner = harness.addUser("document-owner");
@@ -557,6 +582,109 @@ test("tree events carry no per-person fields to the rest of the audience", async
   );
   ownerEvents.close();
   memberEvents.close();
+});
+
+test("a member's Delete stops their questions and drops their queued follow-ups", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const { running } = await commenterQueue(thread);
+  const owner = listen(harness, thread.owner);
+  await harness.caller(thread.commenter).research.removeTree({ treeId: thread.treeId });
+  await settle();
+  t.true(harness.runs.cancelled.includes(running.id));
+  const ownerCaller = harness.caller(thread.owner);
+  t.deepEqual(await ownerCaller.followups.list({ treeId: thread.treeId }), {});
+  const queueChanges = owner.of("research.queue.changed");
+  t.deepEqual(queueChanges.at(-1)?.payload["items"], []);
+  t.true(owner.types().includes("research.sharing.changed"));
+  const stopped = (await ownerCaller.research.getTree({ treeId: thread.treeId })).nodes.find(
+    (node) => node.id === running.id,
+  );
+  t.is(stopped?.type === "exchange" ? stopped.run.status : null, "cancelled");
+  owner.close();
+});
+
+test("a member's Empty Trash leaves the way Delete does", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const { running } = await commenterQueue(thread);
+  const caller = harness.caller(thread.commenter);
+  const workspace = await caller.workspaces.ensureDefault();
+  await caller.research.trashTree({ treeId: thread.treeId });
+  const commenter = listen(harness, thread.commenter);
+  const emptied = await caller.research.emptyTrash({ workspaceId: workspace.id });
+  await settle();
+  t.deepEqual(emptied.treeIds, [thread.treeId]);
+  t.true(harness.runs.cancelled.includes(running.id));
+  t.deepEqual(await harness.caller(thread.owner).followups.list({ treeId: thread.treeId }), {});
+  t.is(commenter.of("research.tree.removed").length, 1, "told once that the thread is gone");
+  commenter.close();
+});
+
+test("removing a member sends the follow-ups their refused item held up", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const { running, item } = await commenterQueue(thread);
+  const ownerCaller = harness.caller(thread.owner);
+  const behind = await ownerCaller.followups.ask({
+    headNodeId: thread.rootId,
+    prompt: "The owner's follow-up",
+  });
+  t.is(behind.kind, "queued");
+  followups.markFailed(harness.db, item.id, "refused");
+  complete(harness, thread.commenter.id, running.id);
+  await ownerCaller.sharing.removeMember({ treeId: thread.treeId, userId: thread.commenter.id });
+  // The commenter's item went with them; the owner's was sent.
+  t.deepEqual(await ownerCaller.followups.list({ treeId: thread.treeId }), {});
+  const detail = await ownerCaller.research.getTree({ treeId: thread.treeId });
+  const sent = detail.nodes.find(
+    (node) => node.type === "exchange" && node.message.text === "The owner's follow-up",
+  );
+  t.truthy(sent);
+  t.true(harness.runs.started.includes(sent?.id ?? ""));
+});
+
+test("a member made a viewer loses their queue, and dispatch refuses a viewer's item", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const { running } = await commenterQueue(thread);
+  const owner = listen(harness, thread.owner);
+  const ownerCaller = harness.caller(thread.owner);
+  await ownerCaller.sharing.setRole({
+    treeId: thread.treeId,
+    userId: thread.commenter.id,
+    role: "viewer",
+  });
+  await settle();
+  t.deepEqual(await ownerCaller.followups.list({ treeId: thread.treeId }), {});
+  t.deepEqual(owner.of("research.queue.changed").at(-1)?.payload["items"], []);
+  owner.close();
+  // An item of theirs that is still there (written past the role change) is
+  // refused when its turn comes, not sent on their account.
+  harness.db
+    .insert(schema.followupQueue)
+    .values({
+      id: "viewer-item",
+      treeId: thread.treeId,
+      headNodeId: thread.rootId,
+      authorId: thread.commenter.id,
+      messageJson: { text: "Left behind" },
+      model: "gemini-flash",
+      effort: null,
+      position: 0,
+      createdAt: 1,
+      failedReason: null,
+    })
+    .run();
+  complete(harness, thread.commenter.id, running.id);
+  const started = harness.runs.started.length;
+  dispatchTree(
+    { config: harness.deps.config, db: harness.db, eventBus: harness.eventBus, runs: harness.runs },
+    thread.treeId,
+  );
+  t.is(harness.runs.started.length, started);
+  const queues = await ownerCaller.followups.list({ treeId: thread.treeId });
+  t.is(queues[thread.rootId]?.[0]?.failedReason, AUTHOR_MAY_NOT_ASK);
 });
 
 test("a private thread's feed removal reaches its owner only", async (t) => {

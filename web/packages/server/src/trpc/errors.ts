@@ -50,6 +50,11 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /^A thread can (have|be shared with) at most/, code: "PRECONDITION_FAILED" },
   // The follow-up queue's own bound (`followups.ask`).
   { pattern: /follow-ups queued\. Wait/, code: "TOO_MANY_REQUESTS" },
+  // A follow-up asked behind an answer that stopped (`followups.ask`).
+  {
+    pattern: /^The last answer (stopped with an error|was stopped)\./,
+    code: "PRECONDITION_FAILED",
+  },
   // Preconditions on the run state machine and on archived content.
   { pattern: /^only /, code: "PRECONDITION_FAILED" },
   { pattern: /^restore archived /, code: "PRECONDITION_FAILED" },

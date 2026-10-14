@@ -28,6 +28,7 @@ import { transact } from "../connection.js";
 import { newId } from "../ids.js";
 import { treeMembers, treeSubscriptions } from "../schema/collaboration.js";
 import { collapsedGroups, folders, treeFolderMembership } from "../schema/folders.js";
+import { followupQueue } from "../schema/followups.js";
 import { highlights } from "../schema/highlights.js";
 import { nodes } from "../schema/nodes.js";
 import { treeViews, trees } from "../schema/trees.js";
@@ -50,7 +51,7 @@ import type { FeedItemRemoval } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import type { TreeRow } from "./mappers.js";
-import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
+import { activeRun, deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
 
 /** The agent a node runs on (an exchange) or defaults its follow-ups to (a
  * post or document): a registry model id and a reasoning effort, null for
@@ -1001,16 +1002,84 @@ export interface RemovedTrees {
   /** True when the caller was a member and left the thread instead: nothing
    * was deleted, and only the caller no longer has it. */
   left?: boolean;
+  /** When `left`: what leaving took away (`leave`). */
+  departure?: Departure;
+}
+
+/** A member's queued follow-ups in one thread, deleted. */
+export interface QueuedFollowupsDropped {
+  removedFollowupIds: string[];
+  /** The chains whose queues changed, for `research.queue.changed`. */
+  changedHeadNodeIds: string[];
+}
+
+/** What leaving or being removed took away from a member: their queued
+ * follow-ups, deleted with the membership, and their active questions. */
+export interface Departure extends QueuedFollowupsDropped {
+  treeId: string;
+  memberId: string;
+  /** Their questions still queued or running, which the caller cancels: a
+   * person who can no longer read the thread cannot keep a run in it. */
+  activeNodeIds: string[];
+}
+
+/** Deletes `memberId`'s queued follow-ups in a thread, inside the caller's
+ * transaction: on leaving, removal, and becoming a viewer. */
+export function dropQueuedFollowups(
+  db: SessionDatabase,
+  treeId: string,
+  memberId: string,
+): QueuedFollowupsDropped {
+  const queued = db
+    .select({ id: followupQueue.id, headNodeId: followupQueue.headNodeId })
+    .from(followupQueue)
+    .where(and(eq(followupQueue.treeId, treeId), eq(followupQueue.authorId, memberId)))
+    .all();
+  if (queued.length > 0) {
+    db.delete(followupQueue)
+      .where(
+        inArray(
+          followupQueue.id,
+          queued.map((row) => row.id),
+        ),
+      )
+      .run();
+  }
+  return {
+    removedFollowupIds: queued.map((row) => row.id),
+    changedHeadNodeIds: [...new Set(queued.map((row) => row.headNodeId))].sort(),
+  };
+}
+
+/** Deletes a departing member's queued follow-ups and lists their active
+ * questions, inside the caller's transaction. */
+export function depart(db: SessionDatabase, treeId: string, memberId: string): Departure {
+  const dropped = dropQueuedFollowups(db, treeId, memberId);
+  const activeNodeIds = db
+    .select({ id: nodes.id })
+    .from(nodes)
+    .where(and(eq(nodes.treeId, treeId), eq(nodes.authorId, memberId), activeRun()))
+    .all()
+    .map((row) => row.id);
+  return { treeId, memberId, ...dropped, activeNodeIds };
+}
+
+/** A membership `leave` removed. */
+export interface LeftTree {
+  member: MemberRow;
+  departure: Departure;
 }
 
 /**
  * Removes the caller's membership of a shared thread (`sharing.leave`, and
  * Delete or Empty Trash by a member). Their nodes and highlights stay in the
- * thread. Returns the member row that was removed.
+ * thread; their queued follow-ups are deleted, and their active questions
+ * are listed for the caller to stop (`depart`).
  */
-export function leave(db: SessionDatabase, userId: string, treeId: string): MemberRow {
+export function leave(db: SessionDatabase, userId: string, treeId: string): LeftTree {
   return transact(db, (tx) => {
     const access = requireMember(tx, userId, treeId);
+    const departure = depart(tx, treeId, userId);
     tx.delete(treeMembers)
       .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)))
       .run();
@@ -1021,7 +1090,7 @@ export function leave(db: SessionDatabase, userId: string, treeId: string): Memb
       .where(and(eq(collapsedGroups.treeId, treeId), eq(collapsedGroups.userId, userId)))
       .run();
     // `requireMember` refuses a caller without a row.
-    return access.member as MemberRow;
+    return { member: access.member as MemberRow, departure };
   });
 }
 
@@ -1037,13 +1106,14 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): Rem
     const access = requireTreeAccess(tx, userId, treeId, "viewer");
     if (access.role !== "owner") {
       // A member's Delete is leaving: the thread stays for everyone else.
-      const member = leave(tx, userId, treeId);
+      const { member, departure } = leave(tx, userId, treeId);
       return {
         workspaceId: access.tree.workspaceId,
         treeIds: [treeId],
         trashed: member.trashedAt !== null,
         removedFeedItems: [],
         left: true,
+        departure,
       };
     }
     const row = requireTreeRow(tx, userId, treeId);

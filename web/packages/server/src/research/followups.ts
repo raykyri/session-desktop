@@ -9,7 +9,8 @@
 //
 // The send is checked against the item's author, not the thread's owner: the
 // author pays for the run. A refused send (a daily limit, a model the author
-// can no longer use, a full run queue) records `failed_reason` on the item,
+// can no longer use, a full run queue, an author who is no longer a
+// commenter or the owner) records `failed_reason` on the item,
 // and the chain's queue waits on it until the item is retried or cancelled,
 // as the desktop's client-side queue does.
 
@@ -38,6 +39,11 @@ export interface FollowupDeps {
 
 /** The message stored when the account that queued an item is gone. */
 export const AUTHOR_MISSING = "The account that asked this follow-up no longer exists.";
+
+/** The message stored when the person who queued an item can no longer ask
+ * in the thread (made a viewer, or no longer a member). */
+export const AUTHOR_MAY_NOT_ASK =
+  "The person who asked this follow-up can no longer ask in this thread.";
 
 /** `research.queue.changed` with the chain's whole queue after a change, to
  * the thread's audience and to `actorId`. */
@@ -108,10 +114,12 @@ export function dispatchChain(
   const refusal =
     author === null
       ? { message: AUTHOR_MISSING }
-      : launchRefusal(
-          { config: deps.config, db, user: author },
-          item.agent.model ?? DEFAULT_MODEL_ID,
-        );
+      : !followups.authorMayAsk(db, item)
+        ? { message: AUTHOR_MAY_NOT_ASK }
+        : launchRefusal(
+            { config: deps.config, db, user: author },
+            item.agent.model ?? DEFAULT_MODEL_ID,
+          );
   if (refusal !== null) {
     followups.markFailed(db, item.id, refusal.message);
     publishQueue(deps, chain.ownerId, chain.treeId, chain.headNodeId);

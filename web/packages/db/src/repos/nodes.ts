@@ -115,6 +115,9 @@ export interface AdmittedChild {
   /** The chain head whose stored order now lists the new node in place of the
    * replaced one; null when nothing was reordered. */
   reorderedHead: ResearchNode | null;
+  /** Whether follow-ups queued behind the replaced branch question moved to
+   * the new one, which heads their chain now. */
+  movedQueue: boolean;
 }
 
 type LoadedNode = NodeAccess;
@@ -361,13 +364,16 @@ export function admitChildDetailed(
       }
       throw error;
     }
+    let movedQueue = false;
     if (replacedNodeId !== null && !inline) {
       // A branch question heads its own chain: follow-ups queued behind it
       // move to the question that replaces it.
-      tx.update(followupQueue)
-        .set({ headNodeId: nodeId })
-        .where(eq(followupQueue.headNodeId, replacedNodeId))
-        .run();
+      movedQueue =
+        tx
+          .update(followupQueue)
+          .set({ headNodeId: nodeId })
+          .where(eq(followupQueue.headNodeId, replacedNodeId))
+          .run().changes > 0;
       deleteNodesInOrder(tx, [replacedNodeId]);
     }
     let reorderedHead: ResearchNode | null = null;
@@ -384,7 +390,7 @@ export function admitChildDetailed(
       }
     }
     touchTree(tx, parent.treeId, at);
-    return { node: reload(tx, userId, nodeId), replacedNodeId, reorderedHead };
+    return { node: reload(tx, userId, nodeId), replacedNodeId, reorderedHead, movedQueue };
   });
 }
 
