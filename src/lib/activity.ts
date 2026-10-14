@@ -1,4 +1,4 @@
-import { nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor } from "./researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor } from "@session/shared/lib/researchNodeTypes";
 import type {
   RecentResearchQuery,
   RecentResearchQueryCursor,

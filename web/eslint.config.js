@@ -77,7 +77,7 @@ export default tseslint.config(
   // only because the rule cannot see flat-config ignores. The `.ts` entry in
   // `import-x/extensions` above is what makes it run at all.
   //
-  // The package's subpath entry points (`wire`, `schemas`; see
+  // The package's subpath entry points (`wire`, `schemas`, `lib/*`; see
   // `packages/shared/package.json`) are also imported by the desktop app,
   // which this config does not lint, so their exports are not reported.
   {
@@ -90,6 +90,7 @@ export default tseslint.config(
           ignoreExports: [
             "packages/shared/src/wire/index.ts",
             "packages/shared/src/schemas/index.ts",
+            "packages/shared/src/lib/*.ts",
           ],
         },
       ],

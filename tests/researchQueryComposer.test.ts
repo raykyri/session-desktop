@@ -20,7 +20,7 @@ const {
   researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
 const { AskNoteSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskNoteSwitch");
-const { postFormatOf } = await import("../src/lib/researchNodeTypes");
+const { postFormatOf } = await import("@session/shared/lib/researchNodeTypes");
 const { ResearchModelNameDialog } = await import("../src/components/research/ResearchModelNameDialog");
 const { withWidgetDom } = await import("./widgetDom");
 const { LauncherSelect, OptionIcon: LauncherSelectIcon } = await import("../src/components/LauncherSelect");

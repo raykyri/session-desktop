@@ -10,15 +10,15 @@ import {
   type ResearchNativeHighlight,
   type ResearchResolvedHighlight,
 } from "../components/research/researchTextRanges";
-import { researchBranchesInReadingOrder } from "../lib/researchBranchView";
-import type { ResearchLevel } from "../lib/researchColumns";
+import { researchBranchesInReadingOrder } from "@session/shared/lib/researchBranchView";
+import type { ResearchLevel } from "@session/shared/lib/researchColumns";
 import {
   overlappingResearchHighlightRegions,
   resolveResearchHighlightOffset,
 } from "../lib/researchHighlights";
-import { passageAnchor } from "../lib/researchNodeTypes";
+import { passageAnchor } from "@session/shared/lib/researchNodeTypes";
 import type { createResearchThreadPersistence } from "../lib/researchThreadPersistence";
-import { sameNumberRecord } from "../lib/researchThreadView";
+import { sameNumberRecord } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchNode, ResearchNodeContent } from "../types";
 import { useStableValue } from "./useStableValue";
 

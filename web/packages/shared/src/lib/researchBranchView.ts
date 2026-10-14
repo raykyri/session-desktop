@@ -3,10 +3,29 @@
 // heads. Level 0 is the root's chain; each later level is a branch whose source
 // message appears in the previous level's column (see researchColumns).
 
-import { canContinueChain, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchChains";
-import type { QueuedResearchFollowup } from "./researchNavigation";
-import type { ResearchNode } from "../types";
-import { nodeStatus, passageAnchor } from "./researchNodeTypes";
+import type { ResearchImageAttachment, ResearchNode } from "../wire/index.js";
+
+import {
+  canContinueChain,
+  canFollowUpFrom,
+  inlineChainFor,
+  isActiveResearchStatus,
+} from "./researchChains.js";
+import { nodeStatus, passageAnchor } from "./researchNodeTypes.js";
+
+/** A follow-up submitted while its chain's tail was still running. It is
+ * sent when that tail completes. The desktop stores the queue per tree in
+ * its navigation state (src/lib/researchNavigation.ts). */
+export interface QueuedResearchFollowup {
+  id: string;
+  prompt: string;
+  createdAt: number;
+  /** Images sent with the question. Absent when it has none. */
+  images?: ResearchImageAttachment[];
+  /** Why sending it failed. A failed question is not sent again until the
+   * reader retries it; this is not restored on load, so a reload retries. */
+  failed?: string;
+}
 
 function byCreation(left: ResearchNode, right: ResearchNode) {
   return left.createdAt - right.createdAt || left.id.localeCompare(right.id);
@@ -14,9 +33,7 @@ function byCreation(left: ResearchNode, right: ResearchNode) {
 
 /** Branches created from one answer: its non-inline children, oldest first. */
 export function researchBranchesOf(nodes: readonly ResearchNode[], nodeId: string): ResearchNode[] {
-  return nodes
-    .filter((node) => node.parentNodeId === nodeId && !node.inline)
-    .sort(byCreation);
+  return nodes.filter((node) => node.parentNodeId === nodeId && !node.inline).sort(byCreation);
 }
 
 /** Non-inline children per parent id, for rendering every turn's branch
@@ -68,7 +85,11 @@ export function researchLevelPathShows(
   nodeId: string,
 ): boolean {
   const path = researchLevelPath(nodes, nodeId);
-  return path.length > 0 && path.length === levelPath.length && path.every((id, index) => id === levelPath[index]);
+  return (
+    path.length > 0 &&
+    path.length === levelPath.length &&
+    path.every((id, index) => id === levelPath[index])
+  );
 }
 
 /** The nearest node on `nodeId`'s ancestry (itself included) that still
@@ -117,7 +138,9 @@ export function researchBranchesInReadingOrder(
  * whole-answer branches, each group oldest first. The branch indicator, →
  * and the keys that move between sibling branches use this order too. */
 export function researchBranchesInPassageOrder(branches: readonly ResearchNode[]): ResearchNode[] {
-  const start = new Map(branches.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]));
+  const start = new Map(
+    branches.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]),
+  );
   return researchBranchesInReadingOrder(branches, (branchId) => start.get(branchId) ?? null);
 }
 
@@ -149,18 +172,25 @@ export function researchQueueAction(
   headId: string,
   queue: readonly QueuedResearchFollowup[],
   inFlight: string | true | undefined,
-): { kind: "clear" } | { kind: "wait" } | { kind: "send"; item: QueuedResearchFollowup; tailId: string } {
-  if (queue.length === 0) {
+):
+  | { kind: "clear" }
+  | { kind: "wait" }
+  | { kind: "send"; item: QueuedResearchFollowup; tailId: string } {
+  const first = queue[0];
+  if (!first) {
     return { kind: "wait" };
   }
   if (!nodes.some((node) => node.id === headId)) {
     return { kind: "clear" };
   }
-  if (inFlight === true || (inFlight !== undefined && !nodes.some((node) => node.id === inFlight))) {
+  if (
+    inFlight === true ||
+    (inFlight !== undefined && !nodes.some((node) => node.id === inFlight))
+  ) {
     return { kind: "wait" };
   }
   // A question the backend refused waits for Retry or Remove.
-  if (queue[0].failed) {
+  if (first.failed) {
     return { kind: "wait" };
   }
   const chain = inlineChainFor(nodes, headId);
@@ -169,7 +199,7 @@ export function researchQueueAction(
   if (!tail || researchQueueStep(tail) !== "send" || !canContinueChain(nodes, tail)) {
     return { kind: "wait" };
   }
-  return { kind: "send", item: queue[0], tailId: tail.id };
+  return { kind: "send", item: first, tailId: tail.id };
 }
 
 /** A chain's queue after cancelling the queued message `itemId`: the

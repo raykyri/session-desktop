@@ -1,5 +1,5 @@
 import type { ResearchFolderState, ResearchNodeType } from "../types";
-import type { ResearchRowState } from "./researchRowGlyph";
+import type { ResearchRowState } from "@session/shared/lib/researchRowGlyph";
 import { researchTreeOrderAfterMove } from "./researchFolders";
 
 // Nesting in Home: a question, a document or a post (the parent) lists other

@@ -1,5 +1,5 @@
-import { researchBranchBlocker } from "../../lib/researchThreadView";
-import { researchNoteEditable } from "../../lib/researchNoteEdit";
+import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
+import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 import { WidgetChangeContext, widgetChangePrompt } from "../../lib/sessionWidgetActions";
 import {
   useResearchComposerDrafts,
@@ -40,10 +40,9 @@ import { writeClipboardText } from "../../lib/clipboard";
 import type { ResearchPostThreadHandle } from "./ResearchPostThread";
 import type { PostActions } from "./ResearchPost";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
-import { documentHoldsMarkdown, documentSource, followUpAdapter, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, followUpAdapter, nodeMessage, nodePrompt, nodeRecap, nodeStatus, nodeType, passageAnchor } from "@session/shared/lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
-  columnIdOf,
   columnKey,
   columnLevelIndex,
   columnSelector,
@@ -57,7 +56,8 @@ import {
   type ResearchColumn,
   type ResearchColumnId,
   type ResearchStackGroup,
-} from "../../lib/researchColumns";
+} from "@session/shared/lib/researchColumns";
+import { columnIdOf } from "../../lib/researchColumnDom";
 import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 import {
   researchBranchesByParent,
@@ -68,7 +68,7 @@ import {
   researchQueueStep,
   researchQueueWithout,
   researchSurvivingAncestor,
-} from "../../lib/researchBranchView";
+} from "@session/shared/lib/researchBranchView";
 import {
   canContinueChain,
   canFollowUpFrom,
@@ -76,7 +76,7 @@ import {
   inlineChainFor,
   researchRerunConfirms,
   researchRerunDialogNode,
-} from "../../lib/researchChains";
+} from "@session/shared/lib/researchChains";
 import { buildSegmentView, type SegmentView } from "../../lib/researchSegmentView";
 import {
   researchEditorCanSave,
@@ -88,7 +88,7 @@ import {
   researchBranchStates,
   sameIds,
   withoutKeys,
-} from "../../lib/researchThreadView";
+} from "@session/shared/lib/researchThreadView";
 import {
   pruneResearchNavigationNodes,
   recordResearchComposerImages,

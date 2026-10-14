@@ -9,7 +9,7 @@ import {
   nodePrompt,
   nodeStatus,
   nodeType,
-} from "../../lib/researchNodeTypes";
+} from "@session/shared/lib/researchNodeTypes";
 import { researchImages } from "../../lib/researchImages";
 import { ResearchImageStrip } from "./ResearchImages";
 import { recentResearchQueryFromNode } from "../../lib/activity";
@@ -20,7 +20,7 @@ import { PostFollowUpStatus, type PostActions } from "./ResearchPost";
 import { PostFollowUpField } from "./ResearchPostFollowUpField";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
-import { researchNoteEditable } from "../../lib/researchNoteEdit";
+import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is

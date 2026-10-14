@@ -6,7 +6,7 @@ import {
 } from "./researchNavigation";
 import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchHighlightAnchor } from "../types";
-import type { ResearchScrollKind } from "./researchColumns";
+import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
 
 /** Prevent transitional React state from overwriting the destination tree's draft. */
 export function createResearchComposerDraftRestoration(

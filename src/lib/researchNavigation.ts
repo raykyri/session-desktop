@@ -4,8 +4,12 @@
 // deleted trees) mutate the same object. A separate in-memory copy could restore
 // pruned localStorage data on the next save.
 
-import type { ResearchScrollKind } from "./researchColumns";
+import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
+import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
 import type { ResearchHighlightAnchor, ResearchImageAttachment } from "../types";
+
+// Queued follow-ups are stored here; the type is shared with the level math.
+export type { QueuedResearchFollowup };
 
 interface SavedResearchScrollPosition {
   top: number;
@@ -27,19 +31,6 @@ interface SavedPendingBranch {
 interface SavedResearchFollowupDraft {
   text: string;
   updatedAt: number;
-}
-
-/** A follow-up submitted while its chain's tail was still running. It is
- * sent from the client when that tail completes. */
-export interface QueuedResearchFollowup {
-  id: string;
-  prompt: string;
-  createdAt: number;
-  /** Images sent with the question. Absent when it has none. */
-  images?: ResearchImageAttachment[];
-  /** Why sending it failed. A failed question is not sent again until the
-   * reader retries it; this is not restored on load, so a reload retries. */
-  failed?: string;
 }
 
 export interface SavedResearchNavigation {

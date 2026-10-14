@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { flushSync } from "react-dom";
-import { columnSelector } from "../../lib/researchColumns";
+import { columnSelector } from "@session/shared/lib/researchColumns";
 import {
   researchColumnResize,
   researchColumnWidthKind,

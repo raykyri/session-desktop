@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
-import { researchRerunBlocker, researchRerunOffered } from "../../lib/researchChains";
-import { nodeStatus } from "../../lib/researchNodeTypes";
+import { researchRerunBlocker, researchRerunOffered } from "@session/shared/lib/researchChains";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { ResearchNode } from "../../types";
 import { ResearchMenuItem } from "./ResearchMenu";
 

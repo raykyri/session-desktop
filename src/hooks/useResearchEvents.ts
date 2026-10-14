@@ -22,7 +22,7 @@ import {
   type ParsedResearchEvent,
 } from "../lib/researchEvents";
 import { pruneResearchNavigation, pruneResearchNavigationNodes } from "../lib/researchNavigation";
-import { nodeRun, nodeStatus } from "../lib/researchNodeTypes";
+import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { reconcileResearchTreeDetail } from "@session/shared/research/snapshots";
 import {
   patchResearchTreeSummaries,

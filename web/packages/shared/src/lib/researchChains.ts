@@ -5,18 +5,21 @@
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
 
-import { documentSource, followUpLaunch, nodeRun, nodeStatus, nodeType } from "./researchNodeTypes";
-import type { ResearchNode, ResearchNodeStatus } from "../types";
+import type { ResearchNode, ResearchNodeStatus } from "../wire/index.js";
+
+import {
+  documentSource,
+  followUpLaunch,
+  nodeRun,
+  nodeStatus,
+  nodeType,
+} from "./researchNodeTypes.js";
 
 /** The statuses of a run that has been admitted but not settled. One list,
  * shared by the branch and chain math and the thread page, so a future status
  * cannot fall out of sync between them. Mirrors the backend's
  * ResearchNodeStatus::is_active (src-tauri/src/research.rs). */
-const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = [
-  "queued",
-  "starting",
-  "running",
-];
+const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = ["queued", "starting", "running"];
 
 export function isActiveResearchStatus(status: ResearchNodeStatus): boolean {
   return ACTIVE_RESEARCH_STATUSES.includes(status);
@@ -88,12 +91,18 @@ function inlineChildByParent(nodes: readonly ResearchNode[]): Map<string, Resear
  * children: the returned function lists a head and the inline follow-ups
  * after it, oldest first. A branch head is not inline, so its chain starts
  * at it; the walk is cycle-guarded like inlineChainFor. */
-export function inlineChainsFromHeads(nodes: readonly ResearchNode[]): (headId: string) => string[] {
+export function inlineChainsFromHeads(
+  nodes: readonly ResearchNode[],
+): (headId: string) => string[] {
   const childByParent = inlineChildByParent(nodes);
   return (headId) => {
     const chain = [headId];
     const seen = new Set(chain);
-    for (let next = childByParent.get(headId); next && !seen.has(next.id); next = childByParent.get(next.id)) {
+    for (
+      let next = childByParent.get(headId);
+      next && !seen.has(next.id);
+      next = childByParent.get(next.id)
+    ) {
       seen.add(next.id);
       chain.push(next.id);
     }
@@ -227,7 +236,10 @@ export const RESEARCH_RERUN_PENDING_REASON = "Another retry or rerun is starting
  * follows (its fork point) must be complete.
  * An inline follow-up whose previous answer is still running is not blocked:
  * the rerun waits behind it, as a Retry does. */
-export function researchRerunBlocker(node: ResearchNode, parent: ResearchNode | null): string | null {
+export function researchRerunBlocker(
+  node: ResearchNode,
+  parent: ResearchNode | null,
+): string | null {
   if (isActiveResearchStatus(nodeStatus(node))) {
     return "Wait for the answer to finish";
   }

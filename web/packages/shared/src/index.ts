@@ -5,9 +5,11 @@
 //
 // - `@session/shared/wire`: the research wire model as plain types.
 // - `@session/shared/schemas`: zod schemas for the wire model.
+// - `@session/shared/lib/<module>`: research logic on the wire model, moved
+//   from the desktop's `src/lib`.
 //
 // Phase 2 of the desktop-parity work replaces the flat types in
-// `types/research.ts` with the wire model.
+// `types/research.ts` with the wire model and moves the web onto `lib/`.
 
 /** Product name used in page titles, prompts, and user-facing copy. */
 export const appName = "Session";

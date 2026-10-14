@@ -2,8 +2,9 @@
 // from the tree's nodes, and the sentence the "Delete the original thread?"
 // dialog (after "Ask as a question") states it with.
 
-import { nodeType } from "./researchNodeTypes";
-import type { ResearchNode } from "../types";
+import type { ResearchNode } from "../wire/index.js";
+
+import { nodeType } from "./researchNodeTypes.js";
 
 export interface ResearchTreeContents {
   /** Nodes other than the root that continue a note's thread or a
@@ -68,8 +69,12 @@ export function researchTreeContentsSentence(contents: ResearchTreeContents): st
     contents.followUps > 0 && contents.branches > 0
       ? `${counted(contents.followUps, "follow-up", "follow-ups")} and ${counted(contents.branches, "branch", "branches")}`
       : contents.followUps > 0
-        ? messages === 1 ? "a follow-up" : "all follow-ups"
-        : messages === 1 ? "a branch" : "all branches";
+        ? messages === 1
+          ? "a follow-up"
+          : "all follow-ups"
+        : messages === 1
+          ? "a branch"
+          : "all branches";
   return `It has ${counted(messages, "message", "messages")} (${kinds}); deleting the thread also deletes ${
     messages === 1 ? "it" : "them"
   }.`;

@@ -13,7 +13,7 @@ import {
   researchSurvivingAncestor,
   researchQueueStep,
   researchPairLabel,
-} from "../src/lib/researchBranchView";
+} from "@session/shared/lib/researchBranchView";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode, withRun, type NodeFixture } from "./researchNodeFixture";
 

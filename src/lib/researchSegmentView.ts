@@ -1,9 +1,9 @@
 // The content-derived render state of one answer: which timeline items it
 // shows, its copy text, word count and editable Markdown.
 
-import { countResearchDocumentWords } from "./researchDocuments";
+import { countResearchDocumentWords } from "@session/shared/lib/researchDocuments";
 import { stripSessionWidgetBlocks } from "./sessionWidgets";
-import { documentHoldsMarkdown, documentSource } from "./researchNodeTypes";
+import { documentHoldsMarkdown, documentSource } from "@session/shared/lib/researchNodeTypes";
 import {
   assistantTextFromTimelineItems,
   buildTimelineItems,

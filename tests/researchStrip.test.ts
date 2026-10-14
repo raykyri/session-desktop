@@ -16,7 +16,7 @@ import {
   researchStrip,
   researchStripSettleLeft,
   sameResearchStrip,
-} from "../src/lib/researchColumns";
+} from "@session/shared/lib/researchColumns";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 

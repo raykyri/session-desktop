@@ -11,7 +11,7 @@ import {
   researchTrashEntries,
   researchTrashFolderSentence,
   researchTrashTreeSentence,
-} from "../src/lib/researchTrash";
+} from "@session/shared/lib/researchTrash";
 import type { ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 

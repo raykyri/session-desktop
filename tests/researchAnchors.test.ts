@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countUnmatchedResearchAnchors, reanchorResearchQuote } from "../src/lib/researchAnchors";
+import { countUnmatchedResearchAnchors, reanchorResearchQuote } from "@session/shared/lib/researchAnchors";
 
 // The cases below are repeated in src-tauri/src/research_anchors.rs.
 

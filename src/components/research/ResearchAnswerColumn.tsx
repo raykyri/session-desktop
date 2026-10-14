@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps, type UIEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchBranchMarker } from "../../hooks/useResearchAnnotations";
-import { researchPairLabel } from "../../lib/researchBranchView";
-import { canRetryResearchNode, isActiveResearchStatus } from "../../lib/researchChains";
-import { columnAttributes, type ResearchColumn } from "../../lib/researchColumns";
-import { nodeEditedAt, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
+import { researchPairLabel } from "@session/shared/lib/researchBranchView";
+import { canRetryResearchNode, isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { columnAttributes, type ResearchColumn } from "@session/shared/lib/researchColumns";
+import { nodeEditedAt, nodePrompt, nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { SegmentView } from "../../lib/researchSegmentView";
-import { researchMarkerLabel } from "../../lib/researchThreadView";
+import { researchMarkerLabel } from "@session/shared/lib/researchThreadView";
 import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
 import type { ResearchNode } from "../../types";
 import { ResearchRelativeTime } from "./ResearchClock";

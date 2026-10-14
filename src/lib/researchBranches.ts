@@ -1,6 +1,6 @@
-import { isActiveResearchStatus } from "./researchChains";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import type { ResearchNode } from "../types";
-import { nodeStatus } from "./researchNodeTypes";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
 interface ResearchBranchInfo {
   nodeIds: string[];

@@ -5,8 +5,8 @@ import {
   feedCycleStep,
   researchCycleColumn,
   researchCycleDirection,
-} from "../src/lib/researchSiblingCycle";
-import { columnMessageIds, researchStrip, type ResearchColumnId } from "../src/lib/researchColumns";
+} from "@session/shared/lib/researchSiblingCycle";
+import { columnMessageIds, researchStrip, type ResearchColumnId } from "@session/shared/lib/researchColumns";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 

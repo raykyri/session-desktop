@@ -26,7 +26,7 @@ import {
   researchTreeGroups,
   researchTreeHoldsChildren,
 } from "../src/lib/researchGroups";
-import { researchTrashTreeSentence } from "../src/lib/researchTrash";
+import { researchTrashTreeSentence } from "@session/shared/lib/researchTrash";
 import type { RecentResearchQuery, ResearchFolderState, ResearchTreeSummary } from "../src/types";
 
 function tree(id: string, overrides: Partial<ResearchTreeSummary> = {}): ResearchTreeSummary {

@@ -15,7 +15,7 @@ import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../../lib/adapterIcons
 import { formatLauncherModelLabel, modelPresetsFor } from "../../lib/launcherModels";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import { researchReadyAdaptersFirst } from "../../lib/adapterReadiness";
-import { followUpAdapter, nodeAgent } from "../../lib/researchNodeTypes";
+import { followUpAdapter, nodeAgent } from "@session/shared/lib/researchNodeTypes";
 import { insideComposer, type ResearchLaunchChoice } from "./ResearchQueryComposer";
 import {
   ResearchQuestionModelPicker,

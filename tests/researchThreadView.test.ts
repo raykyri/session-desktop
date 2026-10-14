@@ -16,10 +16,10 @@ import {
   sameNumberRecord,
   surrogateSafeSlice,
   withoutKeys,
-} from "../src/lib/researchThreadView";
-import { researchBranchesByParent } from "../src/lib/researchBranchView";
+} from "@session/shared/lib/researchThreadView";
+import { researchBranchesByParent } from "@session/shared/lib/researchBranchView";
 import { buildSegmentView, TIMELINE_ITEM_RENDER_WINDOW } from "../src/lib/researchSegmentView";
-import { RESEARCH_DOCUMENT_WORD_LIMIT } from "../src/lib/researchDocuments";
+import { RESEARCH_DOCUMENT_WORD_LIMIT } from "@session/shared/lib/researchDocuments";
 import type { ResearchHighlightAnchor, ResearchNode, Turn } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 

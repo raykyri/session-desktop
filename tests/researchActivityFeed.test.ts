@@ -10,7 +10,7 @@ import ResearchActivityFeed, {
 } from "../src/components/research/ResearchActivityFeed";
 import { researchFolderDeleteDialogProps } from "../src/components/research/ResearchFolderDialogs";
 import { ResearchDeleteDialogPanel } from "../src/components/research/ResearchDeleteDialog";
-import { researchTrashEntries } from "../src/lib/researchTrash";
+import { researchTrashEntries } from "@session/shared/lib/researchTrash";
 import type { ResearchFolderState } from "../src/types";
 
 const noop = () => {};

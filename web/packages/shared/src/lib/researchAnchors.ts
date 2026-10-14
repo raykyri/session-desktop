@@ -13,15 +13,13 @@
 // match. A quote with no match in the old text is left unchanged; one that
 // matches in the old text but not in the new one no longer matches.
 
-import type { ResearchHighlightAnchor } from "../types";
+import type { ResearchHighlightAnchor } from "../wire/index.js";
 
 /** Characters of normalized context compared on each side of a quote. */
 const RESEARCH_ANCHOR_CONTEXT_CHARS = 32;
 
 type ResearchAnchorOutcome =
-  | { kind: "unchanged" }
-  | { kind: "moved"; start: number; end: number }
-  | { kind: "unmatched" };
+  { kind: "unchanged" } | { kind: "moved"; start: number; end: number } | { kind: "unmatched" };
 
 type AnchorQuote = Pick<ResearchHighlightAnchor, "exact" | "prefix" | "suffix" | "start" | "end">;
 
@@ -84,9 +82,11 @@ function locate(
   let looseCount = 0;
   let at = text.indexOf(quote);
   while (at >= 0) {
-    const prefixMatches = !prefix || (at >= prefix.length && text.slice(at - prefix.length, at) === prefix);
+    const prefixMatches =
+      !prefix || (at >= prefix.length && text.slice(at - prefix.length, at) === prefix);
     const suffixMatches = !suffix || text.startsWith(suffix, at + quote.length);
-    const offset = haystack.offsets[at];
+    // `offsets` has an entry for every index of `text`.
+    const offset = haystack.offsets[at]!;
     if (prefixMatches && suffixMatches) {
       const distance = Math.abs(offset - near);
       if (distance < bestDistance) {
@@ -105,7 +105,11 @@ function locate(
 }
 
 /** Where `anchor` goes when `oldText` is replaced by `newText`. */
-export function reanchorResearchQuote(anchor: AnchorQuote, oldText: string, newText: string): ResearchAnchorOutcome {
+export function reanchorResearchQuote(
+  anchor: AnchorQuote,
+  oldText: string,
+  newText: string,
+): ResearchAnchorOutcome {
   const quote = normalize(anchor.exact);
   if (!quote) return { kind: "unchanged" };
   const prefix = lastCodePoints(normalize(anchor.prefix), RESEARCH_ANCHOR_CONTEXT_CHARS);

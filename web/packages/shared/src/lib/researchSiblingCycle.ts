@@ -5,7 +5,7 @@
 // column and dispatches the key; the feed and the document perform the moves.
 // This module contains the DOM-independent logic.
 
-import type { ResearchColumnId } from "./researchColumns";
+import type { ResearchColumnId } from "./researchColumns.js";
 
 /** 1 for the next row, -1 for the previous one. */
 type ResearchCycleDirection = 1 | -1;
@@ -41,7 +41,11 @@ export function researchCycleDirection(event: CycleKeyInput): ResearchCycleDirec
  * items, wrapping at both ends. With no current item (`index` outside the
  * list), forward starts at the first item and backward at the last. -1 for an
  * empty list. */
-export function cycleIndex(count: number, index: number, direction: ResearchCycleDirection): number {
+export function cycleIndex(
+  count: number,
+  index: number,
+  direction: ResearchCycleDirection,
+): number {
   if (count <= 0) {
     return -1;
   }
@@ -105,11 +109,11 @@ export function feedCycleStep(
 ): string | null {
   const list = (current !== null && lists.find((keys) => keys.includes(current))) || null;
   if (current !== null && list) {
-    return list[cycleIndex(list.length, list.indexOf(current), direction)];
+    return list[cycleIndex(list.length, list.indexOf(current), direction)] ?? null;
   }
   const first = lists.find((keys) => keys.length > 0);
   if (!first) {
     return null;
   }
-  return first[cycleIndex(first.length, -1, direction)];
+  return first[cycleIndex(first.length, -1, direction)] ?? null;
 }

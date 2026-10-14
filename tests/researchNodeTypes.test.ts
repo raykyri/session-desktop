@@ -7,8 +7,8 @@ import {
   nodeType,
   postFollowUpSourceExcerpt,
   recapEligible,
-} from "../src/lib/researchNodeTypes";
-import { canFollowUpFrom } from "../src/lib/researchChains";
+} from "@session/shared/lib/researchNodeTypes";
+import { canFollowUpFrom } from "@session/shared/lib/researchChains";
 import type { AgentAdapterMetadata, ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { recentResearchQueryFromNode } from "../src/lib/activity";

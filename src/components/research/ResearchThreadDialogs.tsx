@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "../../lib/researchChains";
-import { nodePrompt, nodeType } from "../../lib/researchNodeTypes";
-import { researchDeleteLabel } from "../../lib/researchThreadView";
-import { researchTrashTreeSentence } from "../../lib/researchTrash";
+import { RESEARCH_RERUN_PENDING_REASON, researchRerunBlocker } from "@session/shared/lib/researchChains";
+import { nodePrompt, nodeType } from "@session/shared/lib/researchNodeTypes";
+import { researchDeleteLabel } from "@session/shared/lib/researchThreadView";
+import { researchTrashTreeSentence } from "@session/shared/lib/researchTrash";
 import type { ResearchNode } from "../../types";
 import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";

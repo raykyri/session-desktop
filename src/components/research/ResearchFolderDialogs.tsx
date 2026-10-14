@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
 import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
 import { researchFeedCardControl } from "./ResearchFeedCard";
-import { researchTrashFolderSentence } from "../../lib/researchTrash";
+import { researchTrashFolderSentence } from "@session/shared/lib/researchTrash";
 import { ResearchDeleteDialog, type ResearchDeleteDialogProps } from "./ResearchDeleteDialog";
 import { trapResearchDialogTab } from "./researchFocus";
 

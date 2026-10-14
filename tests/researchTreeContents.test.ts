@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ResearchTreeDeleteOfferPanel } from "../src/components/research/ResearchTreeMenu";
-import { researchTreeContents, researchTreeContentsSentence } from "../src/lib/researchTreeContents";
+import { researchTreeContents, researchTreeContentsSentence } from "@session/shared/lib/researchTreeContents";
 import type { ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 

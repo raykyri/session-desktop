@@ -7,13 +7,13 @@ import {
   intersectingResearchHighlightIds,
   researchAnchorContextBounds,
 } from "../lib/researchHighlights";
-import { documentSource, nodeStatus } from "../lib/researchNodeTypes";
+import { documentSource, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import {
   clipResearchSelectionToParagraph,
   createResearchSelectionExpander,
   isLiveResearchSelection,
 } from "../lib/researchSelection";
-import { researchBranchBlocker, surrogateSafeSlice } from "../lib/researchThreadView";
+import { researchBranchBlocker, surrogateSafeSlice } from "@session/shared/lib/researchThreadView";
 import type {
   ResearchHighlight,
   ResearchHighlightAnchor,

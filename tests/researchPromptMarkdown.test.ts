@@ -12,7 +12,7 @@ import {
   visibleResearchPrompt,
 } from "../src/components/research/ResearchMessage";
 import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
-import { nodePrompt } from "../src/lib/researchNodeTypes";
+import { nodePrompt } from "@session/shared/lib/researchNodeTypes";
 import { tweetLabelText } from "../src/lib/tweets";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 

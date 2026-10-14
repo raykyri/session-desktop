@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getResearchNodeContent } from "../lib/api";
-import { isActiveResearchStatus } from "../lib/researchChains";
-import type { ResearchLevel } from "../lib/researchColumns";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import type { ResearchLevel } from "@session/shared/lib/researchColumns";
 import {
   createContentRefresh,
   reuseUnchangedContent,
   subscribeResearchContentChanged,
   type ContentRefresh,
 } from "../lib/researchContentRefresh";
-import { nodeRecap, nodeResponseSnapshotAt, nodeStatus } from "../lib/researchNodeTypes";
-import { withoutKeys } from "../lib/researchThreadView";
+import { nodeRecap, nodeResponseSnapshotAt, nodeStatus } from "@session/shared/lib/researchNodeTypes";
+import { withoutKeys } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlight, ResearchNode, ResearchNodeContent, ResearchTreeDetail } from "../types";
 
 /** Minimum spacing between full content fetches of one answer while

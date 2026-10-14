@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { researchQueueAction } from "../lib/researchBranchView";
+import { researchQueueAction } from "@session/shared/lib/researchBranchView";
 import type { QueuedResearchFollowup } from "../lib/researchNavigation";
 import type { createResearchThreadPersistence } from "../lib/researchThreadPersistence";
-import { withoutKeys } from "../lib/researchThreadView";
+import { withoutKeys } from "@session/shared/lib/researchThreadView";
 import type { NodeAnchor, ResearchImageAttachment, ResearchNode, ResearchTreeDetail } from "../types";
 
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];

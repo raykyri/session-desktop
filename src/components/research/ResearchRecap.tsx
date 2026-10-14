@@ -1,5 +1,5 @@
 import { LoaderCircle } from "lucide-react";
-import { nodeRecap, nodeStatus, recapEligible } from "../../lib/researchNodeTypes";
+import { nodeRecap, nodeStatus, recapEligible } from "@session/shared/lib/researchNodeTypes";
 import type { ResearchNodeContent } from "../../types";
 
 function ResearchRecapLine({

@@ -31,10 +31,15 @@
 // identity in the DOM, and code that has to find a column element uses
 // columnSelector.
 
-import { nodeType, passageAnchor } from "./researchNodeTypes";
-import { researchBranchesByParent, researchBranchesInPassageOrder, researchLevelPath } from "./researchBranchView";
-import { chainDisplayOrder, inlineChainFor, inlineChainsFromHeads } from "./researchChains";
-import type { ResearchHighlightAnchor, ResearchNode } from "../types";
+import type { ResearchHighlightAnchor, ResearchNode } from "../wire/index.js";
+
+import {
+  researchBranchesByParent,
+  researchBranchesInPassageOrder,
+  researchLevelPath,
+} from "./researchBranchView.js";
+import { chainDisplayOrder, inlineChainFor, inlineChainsFromHeads } from "./researchChains.js";
+import { nodeType, passageAnchor } from "./researchNodeTypes.js";
 
 export interface ResearchLevel {
   /** 0 is the root level. */
@@ -94,12 +99,7 @@ export type ResearchStackGroup = ResearchBranchGroup | ResearchPendingGroup;
  * column, left of its follow-ups; `En`: the editor of the document or note
  * that level n shows (a note's editor replaces `Nn`). */
 export type ResearchColumnId =
-  | "feed"
-  | "placeholder"
-  | `T${number}`
-  | `A${number}`
-  | `N${number}`
-  | `E${number}`;
+  "feed" | "placeholder" | `T${number}` | `A${number}` | `N${number}` | `E${number}`;
 
 export type ResearchColumn =
   | { id: "feed"; role: "feed" }
@@ -142,7 +142,10 @@ interface ResearchPendingBranch {
   anchor: ResearchHighlightAnchor | null;
 }
 
-const pendingGroup = (level: ResearchLevel, pending: ResearchPendingBranch): ResearchPendingGroup => ({
+const pendingGroup = (
+  level: ResearchLevel,
+  pending: ResearchPendingBranch,
+): ResearchPendingGroup => ({
   kind: "pending",
   levelIndex: level.index + 1,
   parentNodeId: pending.parentNodeId,
@@ -167,7 +170,9 @@ function branchGroups(
   const groups: ResearchStackGroup[] = [];
   for (const messageId of listed) {
     const children = level.kind === "post" ? [] : (branchesByParent.get(messageId) ?? []);
-    const startOf = new Map(children.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]));
+    const startOf = new Map(
+      children.map((branch) => [branch.id, passageAnchor(branch)?.start ?? null]),
+    );
     const branches = researchBranchesInPassageOrder(children);
     const unsent = pending?.parentNodeId === messageId ? pending : null;
     let unsentAt = -1;
@@ -238,14 +243,16 @@ function researchSelectionLevels(
     const headId = chainIds[0] ?? selectedId;
     const head = byId.get(headId);
     const parentId = head?.parentNodeId ?? null;
-    const previous = index > 0 ? opened[index - 1] : null;
+    const previous = index > 0 ? (opened[index - 1] ?? null) : null;
     if (previous === null ? parentId !== null : parentId === null) {
       break;
     }
     if (
       previous &&
       parentId !== null &&
-      !(previous.level.kind === "post" ? parentId === previous.level.selectedId : previous.listed.includes(parentId))
+      !(previous.level.kind === "post"
+        ? parentId === previous.level.selectedId
+        : previous.listed.includes(parentId))
     ) {
       break;
     }
@@ -266,7 +273,9 @@ function researchSelectionLevels(
     const listed =
       previous === null || previous.level.kind === "post"
         ? displayIds
-        : groupMessageIds(branchGroups(previous.level, previous.listed, null, branchesByParent, chainOf, null));
+        : groupMessageIds(
+            branchGroups(previous.level, previous.listed, null, branchesByParent, chainOf, null),
+          );
     opened.push({ level, listed });
   }
   return opened;
@@ -275,10 +284,16 @@ function researchSelectionLevels(
 /** `selection` cut to the part the tree shows: each column's selected
  * message, root column first, up to the first one its column does not
  * list (see researchStrip). */
-export function researchSelectionPath(nodes: readonly ResearchNode[], selection: readonly string[]): string[] {
-  return researchSelectionLevels(nodes, selection, researchBranchesByParent(nodes), inlineChainsFromHeads(nodes)).map(
-    ({ level }) => level.selectedId,
-  );
+export function researchSelectionPath(
+  nodes: readonly ResearchNode[],
+  selection: readonly string[],
+): string[] {
+  return researchSelectionLevels(
+    nodes,
+    selection,
+    researchBranchesByParent(nodes),
+    inlineChainsFromHeads(nodes),
+  ).map(({ level }) => level.selectedId);
 }
 
 /** The selection a thread opens with, from its saved selection (see
@@ -294,7 +309,8 @@ export function researchRestoredSelection(
   if (typeof saved === "string" && nodes.some((node) => node.id === saved)) {
     return saved;
   }
-  const path = saved !== null && typeof saved !== "string" ? researchSelectionPath(nodes, saved) : [];
+  const path =
+    saved !== null && typeof saved !== "string" ? researchSelectionPath(nodes, saved) : [];
   if (path.length > 0) {
     return path;
   }
@@ -378,7 +394,8 @@ export function researchStrip(
   const opened = researchSelectionLevels(nodes, requested, branchesByParent, chainOf);
   const levels = opened.map(({ level }) => level);
   const deepest = levels[levels.length - 1]?.selectedId ?? null;
-  const shownPending = pending && deepest !== null && deepest === pending.parentNodeId ? pending : null;
+  const shownPending =
+    pending && deepest !== null && deepest === pending.parentNodeId ? pending : null;
   const columns: ResearchColumn[] = [];
   let pendingShown: ResearchPendingGroup | null = null;
   // The level's messages column is the previous level's branches column.
@@ -387,7 +404,9 @@ export function researchStrip(
     // A document is edited only as the root; a note (the root note or a
     // follow-up note) at the level that shows it.
     const editor: ResearchColumn | null =
-      editingNodeId !== null && level.headId === editingNodeId && (level.index === 0 || level.kind === "post")
+      editingNodeId !== null &&
+      level.headId === editingNodeId &&
+      (level.index === 0 || level.kind === "post")
         ? { id: `E${level.index}`, role: "editor", levelIndex: level.index, nodeId: editingNodeId }
         : null;
     if (level.kind === "post") {
@@ -404,16 +423,35 @@ export function researchStrip(
     }
     inBranches = false;
     const next = levels[level.index + 1] ?? null;
-    const groups = branchGroups(level, listed, next, branchesByParent, chainOf, next ? null : shownPending);
+    const groups = branchGroups(
+      level,
+      listed,
+      next,
+      branchesByParent,
+      chainOf,
+      next ? null : shownPending,
+    );
     // The next level is one of the groups, unless it opens from a note's
     // follow-ups column (or is a follow-up note): then it shows its own
     // columns, and the branches column is left out.
-    const open = next && groups.some((group) => group.kind === "branch" && group.headId === next.headId) ? next : null;
+    const open =
+      next && groups.some((group) => group.kind === "branch" && group.headId === next.headId)
+        ? next
+        : null;
     if (groups.length === 0 || (next && (!open || next.kind === "post"))) {
       continue;
     }
-    pendingShown = groups.find((group): group is ResearchPendingGroup => group.kind === "pending") ?? pendingShown;
-    columns.push({ id: `T${level.index + 1}`, role: "branches", levelIndex: level.index + 1, source: level, level: open, groups });
+    pendingShown =
+      groups.find((group): group is ResearchPendingGroup => group.kind === "pending") ??
+      pendingShown;
+    columns.push({
+      id: `T${level.index + 1}`,
+      role: "branches",
+      levelIndex: level.index + 1,
+      source: level,
+      level: open,
+      groups,
+    });
     inBranches = open !== null;
   }
   return {
@@ -439,6 +477,7 @@ export function sameResearchLevels(
     previous.every((level, index) => {
       const other = candidate[index];
       return (
+        other !== undefined &&
         level.headId === other.headId &&
         level.selectedId === other.selectedId &&
         level.sourceId === other.sourceId &&
@@ -483,7 +522,7 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
   }
   return previous.columns.every((column, index) => {
     const other = candidate.columns[index];
-    if (column.id !== other.id || column.role !== other.role) {
+    if (!other || column.id !== other.id || column.role !== other.role) {
       return false;
     }
     if (column.role === "editor" && other.role === "editor") {
@@ -493,7 +532,10 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
       return (
         (column.level === null) === (other.level === null) &&
         column.groups.length === other.groups.length &&
-        column.groups.every((group, position) => sameGroup(group, other.groups[position]))
+        column.groups.every((group, position) => {
+          const otherGroup = other.groups[position];
+          return otherGroup !== undefined && sameGroup(group, otherGroup);
+        })
       );
     }
     return true;
@@ -505,12 +547,6 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
 export function columnLevelIndex(id: string | null | undefined): number | null {
   const match = id ? /^[TANE](\d+)$/.exec(id) : null;
   return match ? Number(match[1]) : null;
-}
-
-/** The id of the column that holds `element`, or null outside the strip. */
-export function columnIdOf(element: Element | null | undefined): ResearchColumnId | null {
-  const id = element?.closest<HTMLElement>(columnSelector())?.dataset.researchColumn;
-  return id && /^(feed|placeholder|[TANE]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
 }
 
 /** Whether `id` names a messages-side column (a level's messages column, a
@@ -582,7 +618,11 @@ export function columnAttributes(column: ResearchColumn): Record<string, string>
   }
 }
 
-function pairAttributes(id: ResearchColumnId, pair: "messages" | "answer" | "post" | "editor", level: number) {
+function pairAttributes(
+  id: ResearchColumnId,
+  pair: "messages" | "answer" | "post" | "editor",
+  level: number,
+) {
   return {
     "data-research-column": id,
     "data-research-pair": pair,
@@ -633,7 +673,9 @@ export type ResearchScrollKind = "answer" | "messages" | "branches";
 
 /** The scroll persistence key of a column, or null for a column whose scroll
  * position is not kept. */
-export function columnScrollKey(column: ResearchColumn): { kind: ResearchScrollKind; key: string } | null {
+export function columnScrollKey(
+  column: ResearchColumn,
+): { kind: ResearchScrollKind; key: string } | null {
   switch (column.role) {
     case "answer":
       return { kind: "answer", key: column.nodeId };
@@ -668,10 +710,14 @@ export function columnMessageIds(column: ResearchColumn): string[] {
 }
 
 /** The branch group that lists `nodeId` in a branches column. */
-export function branchGroupOf(column: ResearchBranchesColumn, nodeId: string): ResearchBranchGroup | null {
+export function branchGroupOf(
+  column: ResearchBranchesColumn,
+  nodeId: string,
+): ResearchBranchGroup | null {
   return (
     column.groups.find(
-      (group): group is ResearchBranchGroup => group.kind === "branch" && group.chainIds.includes(nodeId),
+      (group): group is ResearchBranchGroup =>
+        group.kind === "branch" && group.chainIds.includes(nodeId),
     ) ?? null
   );
 }

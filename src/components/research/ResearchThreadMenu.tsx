@@ -9,9 +9,9 @@ import {
   X,
 } from "lucide-react";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { inlineChainFor, isActiveResearchStatus } from "../../lib/researchChains";
+import { inlineChainFor, isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
-import { researchNoteEditable } from "../../lib/researchNoteEdit";
+import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 import {
   documentHoldsMarkdown,
   documentSource,
@@ -21,9 +21,9 @@ import {
   nodeRecap,
   nodeRun,
   nodeStatus,
-} from "../../lib/researchNodeTypes";
+} from "@session/shared/lib/researchNodeTypes";
 import type { SegmentView } from "../../lib/researchSegmentView";
-import { researchBranchBlocker, researchDeleteLabel, researchNodeLabel } from "../../lib/researchThreadView";
+import { researchBranchBlocker, researchDeleteLabel, researchNodeLabel } from "@session/shared/lib/researchThreadView";
 import { formatRunDuration } from "../../lib/shortTime";
 import type { ResearchHighlightAnchor, ResearchNode, ResearchNodeContent } from "../../types";
 import { ResearchBranchIcon } from "./ResearchIcons";

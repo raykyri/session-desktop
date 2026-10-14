@@ -30,7 +30,7 @@ import {
   researchReadyAdaptersFirst,
   researchReadinessLabel,
 } from "../../lib/adapterReadiness";
-import { postFormatOf } from "../../lib/researchNodeTypes";
+import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
 import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch";
 import { ResearchModelNameDialog } from "./ResearchModelNameDialog";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";

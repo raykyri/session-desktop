@@ -7,7 +7,7 @@ import {
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
   researchDocumentEditGate,
-} from "../src/lib/researchDocuments";
+} from "@session/shared/lib/researchDocuments";
 
 test("word counting matches whitespace-delimited tokens", () => {
   assert.equal(countResearchDocumentWords(""), 0);

@@ -134,7 +134,11 @@ export function unusedExports(sourceFiles, compilerOptions = {}) {
 
 function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const sources = ["src"].flatMap((directory) => sourceFilesIn(resolve(root, directory)));
+  // web/packages/shared/src/lib holds modules moved from src/lib that the
+  // desktop imports through the @session/shared alias. The desktop is still
+  // their only consumer, so they are checked like the app's own modules.
+  const sources = ["src", "web/packages/shared/src/lib"]
+    .flatMap((directory) => sourceFilesIn(resolve(root, directory)));
   const tests = ["tests"].flatMap((directory) => sourceFilesIn(resolve(root, directory)))
     .filter((file) => /\.test\.tsx?$/.test(file));
   // Report app-only reachability separately; tests must not silently keep modules alive.

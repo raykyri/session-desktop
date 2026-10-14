@@ -1,6 +1,6 @@
 import { Folder } from "lucide-react";
-import type { ResearchTrashEntry } from "../../lib/researchTrash";
-import { researchThreadKind } from "../../lib/researchRowGlyph";
+import type { ResearchTrashEntry } from "@session/shared/lib/researchTrash";
+import { researchThreadKind } from "@session/shared/lib/researchRowGlyph";
 import { shortWhen } from "../../lib/shortTime";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 

@@ -117,7 +117,7 @@ import { useResearchDrafts } from "./hooks/useResearchDrafts";
 import { useResearchCardDrag } from "./hooks/useResearchCardDrag";
 import { useResearchGroupActions } from "./hooks/useResearchGroupActions";
 import { researchTreeGroups } from "./lib/researchGroups";
-import { researchThreadKind, researchThreadState } from "./lib/researchRowGlyph";
+import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import type { ResearchThreadGroup } from "./components/research/ResearchGroupPanel";
 import {
   ResearchFolderNameDialog,
@@ -127,9 +127,9 @@ import {
   ResearchTreeDeleteDialog,
   ResearchTreeDeleteOfferDialog,
 } from "./components/research/ResearchTreeMenu";
-import { researchTreeContents, type ResearchTreeContents } from "./lib/researchTreeContents";
+import { researchTreeContents, type ResearchTreeContents } from "@session/shared/lib/researchTreeContents";
 import { emptyResearchTrash } from "./lib/api";
-import { researchTrashEntries, type ResearchTrashEntry } from "./lib/researchTrash";
+import { researchTrashEntries, type ResearchTrashEntry } from "@session/shared/lib/researchTrash";
 import { useResearchTrash } from "./hooks/useResearchTrash";
 import type {
   AgentAdapterMetadata,

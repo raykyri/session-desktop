@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExitDialogState, ExitPreflightRequest } from "../appTypes";
 import { cancelResearchNode, confirmAppExit } from "../lib/api";
 import { waitForNextPaint } from "../lib/appHelpers";
-import { isActiveResearchStatus } from "../lib/researchChains";
-import { nodeStatus } from "../lib/researchNodeTypes";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { ResearchNode } from "../types";
 
 /**

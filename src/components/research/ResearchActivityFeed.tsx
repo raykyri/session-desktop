@@ -1,7 +1,7 @@
 import { collapseBlankLines, feedTextRuns, splitNoteHeading } from "../../lib/feedLinkText";
 import ResearchReportImport from "./ResearchReportImport";
-import { nodeType } from "../../lib/researchNodeTypes";
-import { researchNoteEditable } from "../../lib/researchNoteEdit";
+import { nodeType } from "@session/shared/lib/researchNodeTypes";
+import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 import {
   Fragment,
   memo,
@@ -48,7 +48,7 @@ import {
   stepReorderTarget,
   type ResearchDropPosition,
 } from "../../lib/researchFolders";
-import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
+import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import {
   researchChildCount,
   researchGroupSummary,
@@ -61,7 +61,7 @@ import ResearchRowGlyph from "./ResearchRowGlyph";
 import {
   feedCycleStep,
   type ResearchCycleRequest,
-} from "../../lib/researchSiblingCycle";
+} from "@session/shared/lib/researchSiblingCycle";
 import { researchFeedPageKey, type ResearchFeedView } from "../../lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
@@ -76,7 +76,7 @@ import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchDeleteDialog } from "./ResearchDeleteDialog";
 import { ResearchFolderDeleteDialog } from "./ResearchFolderDialogs";
 import ResearchTrashList from "./ResearchTrashList";
-import { researchTrashCount, type ResearchTrashEntry } from "../../lib/researchTrash";
+import { researchTrashCount, type ResearchTrashEntry } from "@session/shared/lib/researchTrash";
 import { ResearchMenu, ResearchMenuItem, ResearchMenuTitle } from "./ResearchMenu";
 import ResearchFeedRowMenu from "./ResearchMoveMenu";
 import type { ResearchUnitMenuPlacement } from "./researchUnitMenu";

@@ -3,7 +3,7 @@ import type { KeyboardEvent } from "react";
 import type { ResearchDraft, ResearchImageAttachment } from "../../types";
 import { createResearchDraftAutosave, createResearchDraftImageSave } from "../../lib/researchDraftAutosave";
 import { researchImages } from "../../lib/researchImages";
-import { columnAttributes } from "../../lib/researchColumns";
+import { columnAttributes } from "@session/shared/lib/researchColumns";
 import { isSaveShortcut } from "../../lib/editorShortcuts";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";

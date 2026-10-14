@@ -7,7 +7,7 @@ import type {
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "../types";
-import { nodeRun, nodeStatus } from "./researchNodeTypes";
+import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
 type TreeCreatedEvent = {
   type: "research.tree.created";

@@ -16,7 +16,7 @@ import type {
   ResearchNodeContent,
   ResearchRecapCandidate,
 } from "../../types";
-import { nodeAdapter, nodeAgent, nodeRecap } from "../../lib/researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeRecap } from "@session/shared/lib/researchNodeTypes";
 
 const MAX_INSTRUCTIONS = 4_000;
 

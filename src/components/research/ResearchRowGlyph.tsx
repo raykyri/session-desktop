@@ -4,7 +4,7 @@ import {
   type ResearchRowGlyphShape,
   type ResearchRowKind,
   type ResearchRowState,
-} from "../../lib/researchRowGlyph";
+} from "@session/shared/lib/researchRowGlyph";
 
 // Paths on a 14px grid. The stroke width is set in CSS (feed.css), so it is
 // one value for every shape.

@@ -7,9 +7,9 @@ import type {
   ResearchBranchSourceProps,
   ResearchChainRowsShared,
 } from "../src/components/research/ResearchMessagesColumn";
-import { researchBranchesByParent } from "../src/lib/researchBranchView";
-import { researchStrip, type ResearchBranchesColumn as BranchesColumn } from "../src/lib/researchColumns";
-import { researchNodeLabel } from "../src/lib/researchThreadView";
+import { researchBranchesByParent } from "@session/shared/lib/researchBranchView";
+import { researchStrip, type ResearchBranchesColumn as BranchesColumn } from "@session/shared/lib/researchColumns";
+import { researchNodeLabel } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 

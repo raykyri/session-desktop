@@ -2,27 +2,31 @@
 // blockers, editor statistics, and the record helpers its per-node caches
 // share.
 
-import { countUnmatchedResearchAnchors } from "./researchAnchors";
-import { researchQueueStep } from "./researchBranchView";
+import type { ResearchHighlightAnchor, ResearchNode } from "../wire/index.js";
+
+import { countUnmatchedResearchAnchors } from "./researchAnchors.js";
+import { researchQueueStep } from "./researchBranchView.js";
 import {
   canContinueChain,
   canFollowUpFrom,
   chainComposerPlaceholder,
   isActiveResearchStatus,
-} from "./researchChains";
+} from "./researchChains.js";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
   ResearchDocumentWordLimitExceeded,
   countResearchDocumentWords,
   researchDocumentEditGate,
-} from "./researchDocuments";
-import { nodePrompt, nodeStatus } from "./researchNodeTypes";
-import type { ResearchHighlightAnchor, ResearchNode } from "../types";
+} from "./researchDocuments.js";
+import { nodePrompt, nodeStatus } from "./researchNodeTypes.js";
 
 /** Removes the given keys from a record, keeping the identity when none are
  * present — the shape every per-node cache invalidation needs. */
-export function withoutKeys<T>(record: Record<string, T>, keys: Iterable<string>): Record<string, T> {
+export function withoutKeys<T>(
+  record: Record<string, T>,
+  keys: Iterable<string>,
+): Record<string, T> {
   const stale = [...keys].filter((key) => key in record);
   if (stale.length === 0) {
     return record;
@@ -36,17 +40,13 @@ export function withoutKeys<T>(record: Record<string, T>, keys: Iterable<string>
 
 export function sameIds(previous: readonly string[], candidate: readonly string[]) {
   return (
-    previous.length === candidate.length &&
-    previous.every((id, index) => id === candidate[index])
+    previous.length === candidate.length && previous.every((id, index) => id === candidate[index])
   );
 }
 
 export function sameNumberRecord(a: Record<string, number>, b: Record<string, number>) {
   const aKeys = Object.keys(a);
-  return (
-    aKeys.length === Object.keys(b).length &&
-    aKeys.every((key) => a[key] === b[key])
-  );
+  return aKeys.length === Object.keys(b).length && aKeys.every((key) => a[key] === b[key]);
 }
 
 /** A node's title, else its question, else `fallback`. */
@@ -86,16 +86,16 @@ export function surrogateSafeSlice(text: string, start: number, end: number) {
   if (
     safeStart > 0 &&
     safeStart < text.length &&
-    /[\uDC00-\uDFFF]/.test(text[safeStart]) &&
-    /[\uD800-\uDBFF]/.test(text[safeStart - 1])
+    /[\uDC00-\uDFFF]/.test(text.charAt(safeStart)) &&
+    /[\uD800-\uDBFF]/.test(text.charAt(safeStart - 1))
   ) {
     safeStart -= 1;
   }
   if (
     safeEnd > 0 &&
     safeEnd < text.length &&
-    /[\uD800-\uDBFF]/.test(text[safeEnd - 1]) &&
-    /[\uDC00-\uDFFF]/.test(text[safeEnd])
+    /[\uD800-\uDBFF]/.test(text.charAt(safeEnd - 1)) &&
+    /[\uDC00-\uDFFF]/.test(text.charAt(safeEnd))
   ) {
     safeEnd += 1;
   }
@@ -105,7 +105,7 @@ export function surrogateSafeSlice(text: string, start: number, end: number) {
 /** `rootId` and every node below it. */
 export function researchSubtreeIds(nodes: readonly ResearchNode[], rootId: string): Set<string> {
   const subtree = new Set([rootId]);
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const node of nodes) {
       if (node.parentNodeId && subtree.has(node.parentNodeId) && !subtree.has(node.id)) {
@@ -181,7 +181,11 @@ export function researchBranchStates(
 
 /** The delete action's label for a message: the whole research for the
  * root, else what the deletion takes with it. */
-export function researchDeleteLabel(isRoot: boolean, inline: boolean | undefined, descendantCount: number) {
+export function researchDeleteLabel(
+  isRoot: boolean,
+  inline: boolean | undefined,
+  descendantCount: number,
+) {
   if (isRoot) {
     return "Delete research";
   }
@@ -229,8 +233,13 @@ export function researchEditorStats(
     wordCount,
     overWordLimit,
     overByteLimit:
-      session.kind === "document" && new TextEncoder().encode(text).length > RESEARCH_DOCUMENT_BYTE_LIMIT,
-    removedHighlights: countUnmatchedResearchAnchors(session.highlightAnchors, session.initialText, text),
+      session.kind === "document" &&
+      new TextEncoder().encode(text).length > RESEARCH_DOCUMENT_BYTE_LIMIT,
+    removedHighlights: countUnmatchedResearchAnchors(
+      session.highlightAnchors,
+      session.initialText,
+      text,
+    ),
     unmatchedBranches:
       session.kind === "document"
         ? countUnmatchedResearchAnchors(session.branchAnchors, session.initialText, text)
@@ -242,7 +251,13 @@ export function researchEditorStats(
  * text changed and is not empty, or a document that passes
  * researchDocumentEditGate. */
 export function researchEditorCanSave(
-  session: { kind: "document" | "post"; text: string; initialText: string; title: string; initialTitle: string },
+  session: {
+    kind: "document" | "post";
+    text: string;
+    initialText: string;
+    title: string;
+    initialTitle: string;
+  },
   stats: Pick<ResearchEditorStats, "overWordLimit" | "overByteLimit"> | null,
 ) {
   if (session.kind === "post") {
@@ -314,11 +329,13 @@ export function researchChainComposerState({
   queued: boolean;
   archived: boolean;
 }) {
-  const head = chain[0];
-  const tail = chain[chain.length - 1];
+  // `chain` is not empty.
+  const head = chain[0]!;
+  const tail = chain[chain.length - 1]!;
   const step = researchQueueStep(tail);
   const awaitingCheckpoint = nodeStatus(tail) === "complete" && !canFollowUpFrom(tail);
-  const canSend = !archived && (editing || step === "wait" || queued || canContinueChain(nodes, tail));
+  const canSend =
+    !archived && (editing || step === "wait" || queued || canContinueChain(nodes, tail));
   const note = editing
     ? null
     : archived
@@ -335,7 +352,9 @@ export function researchChainComposerState({
     canSend,
     disabled: archived || (step === "stalled" && !editing && !queued),
     note,
-    placeholder: editing ? "Edit the question" : chainComposerPlaceholder(head, chain.length, busy || queued),
+    placeholder: editing
+      ? "Edit the question"
+      : chainComposerPlaceholder(head, chain.length, busy || queued),
   };
 }
 

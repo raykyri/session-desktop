@@ -1,11 +1,11 @@
 import type { ComponentProps, ReactNode, Ref } from "react";
-import type { ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
+import type { ResearchEditorColumn as EditorColumn } from "@session/shared/lib/researchColumns";
 import {
   RESEARCH_DOCUMENT_WORD_LIMIT,
   deriveResearchDocumentTitle,
   researchDocumentEditGate,
-} from "../../lib/researchDocuments";
-import { researchEditorCanSave, type researchEditorStats } from "../../lib/researchThreadView";
+} from "@session/shared/lib/researchDocuments";
+import { researchEditorCanSave, type researchEditorStats } from "@session/shared/lib/researchThreadView";
 import type { AgentAdapterMetadata, ResearchHighlightAnchor } from "../../types";
 import { ResearchEditorColumn } from "./ResearchEditorColumn";
 import type { ResearchLaunchChoice } from "./ResearchQueryComposer";

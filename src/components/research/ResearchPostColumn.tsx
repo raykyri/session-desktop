@@ -7,7 +7,7 @@ import {
   nodeEditedAt,
   nodePrompt,
   postFollowUpSourceExcerpt,
-} from "../../lib/researchNodeTypes";
+} from "@session/shared/lib/researchNodeTypes";
 
 /** A note's own column body: the note as a turn's question. Follow-ups and
  * the follow-up composer are in the follow-ups column to its right

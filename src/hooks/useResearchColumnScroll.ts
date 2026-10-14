@@ -6,7 +6,7 @@ import {
   columnSelector,
   type ResearchColumn,
   type ResearchScrollKind,
-} from "../lib/researchColumns";
+} from "@session/shared/lib/researchColumns";
 import { restoreResearchScrollPosition } from "../lib/researchNavigation";
 import type { createResearchThreadPersistence } from "../lib/researchThreadPersistence";
 import type { ResearchNodeContent } from "../types";

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Ellipsis, Terminal, X } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
-import { columnAttributes } from "../../lib/researchColumns";
+import { columnAttributes } from "@session/shared/lib/researchColumns";
 
 /** Header for one column pair. Thread headers span messages and answers; note
  * columns have separate Note and Follow-ups headers. The header is a window

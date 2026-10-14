@@ -4,7 +4,6 @@
 // types carry with one answer for the others.
 
 import type {
-  AgentAdapterMetadata,
   AgentSpec,
   DocumentSource,
   PostFormat,
@@ -15,10 +14,10 @@ import type {
   ResearchNodeType,
   ResearchRecap,
   RunState,
-} from "../types";
+} from "../wire/index.js";
 
 /** Returns the node type tag. Hand-built fixtures without a tag are exchanges. */
-type Typed = { type?: ResearchNodeType; source?: DocumentSource | null };
+type Typed = { type?: ResearchNodeType | undefined; source?: DocumentSource | null };
 
 export function nodeType(node: Typed): ResearchNodeType {
   return node.type ?? "exchange";
@@ -110,6 +109,15 @@ export function followUpLaunch(node: Typed): "fork" | "context" {
   return nodeType(node) === "exchange" ? "fork" : "context";
 }
 
+/** The fields of an agent adapter (the desktop's AgentAdapterMetadata) that
+ * `followUpAdapter` reads. */
+interface FollowUpAdapterOption {
+  id: string;
+  default: boolean;
+  supportsResearch: boolean;
+  researchReadiness: string;
+}
+
 /** The adapter a follow-up of `parent` runs on, as the backend picks it
  * (create_research_child in state.rs): an exchange's own agent; a post's,
  * an imported report's, or a transcript's follow-up agent when it supports
@@ -118,14 +126,18 @@ export function followUpLaunch(node: Typed): "fork" | "context" {
  * (`default_fork_adapter`). Null when no adapter is ready for research. */
 export function followUpAdapter(
   parent: ResearchNode,
-  adapters: readonly AgentAdapterMetadata[],
+  adapters: readonly FollowUpAdapterOption[],
 ): string | null {
   if (parent.type === "exchange") return parent.agent.adapter || null;
-  const ready = adapters.filter((adapter) => adapter.supportsResearch && adapter.researchReadiness === "ready");
+  const ready = adapters.filter(
+    (adapter) => adapter.supportsResearch && adapter.researchReadiness === "ready",
+  );
   const fallback = (ready.find((adapter) => adapter.default) ?? ready[0])?.id ?? null;
   if (documentSource(parent) === "authored") return fallback;
   const own = nodeAdapter(parent);
-  return own && adapters.some((adapter) => adapter.id === own && adapter.supportsResearch) ? own : fallback;
+  return own && adapters.some((adapter) => adapter.id === own && adapter.supportsResearch)
+    ? own
+    : fallback;
 }
 
 /** Whether a summary (recap) belongs to the node: exchanges and imported
@@ -135,9 +147,7 @@ export function recapEligible(node: Typed): boolean {
 }
 
 /** The passage of the parent's answer a follow-up was asked about. */
-export function passageAnchor(
-  node: Pick<ResearchNode, "anchor">,
-): ResearchHighlightAnchor | null {
+export function passageAnchor(node: Pick<ResearchNode, "anchor">): ResearchHighlightAnchor | null {
   return node.anchor?.kind === "passage" ? node.anchor.anchor : null;
 }
 

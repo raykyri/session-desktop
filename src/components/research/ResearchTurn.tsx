@@ -1,4 +1,4 @@
-import { researchBranchBlocker } from "../../lib/researchThreadView";
+import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
 import { memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -13,7 +13,7 @@ import {
   conversationActivityToolCalls,
   conversationToolCallLabel,
 } from "../../lib/researchConversations";
-import { stripImportedReportCitations } from "../../lib/researchDocuments";
+import { stripImportedReportCitations } from "@session/shared/lib/researchDocuments";
 import { formatRunDuration } from "../../lib/shortTime";
 import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
 import type { ResearchNode, ResearchNodeStatus } from "../../types";
@@ -35,13 +35,13 @@ import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./Re
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { ResearchTileToggle, useResearchTileClamp } from "./ResearchTileClamp";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
-import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
+import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import {
   researchMessageRowHasGlyph,
   researchRowKind,
   researchRowState,
   type ResearchRowState,
-} from "../../lib/researchRowGlyph";
+} from "@session/shared/lib/researchRowGlyph";
 
 // The backend's 64MB snapshot limit is too large for synchronous Markdown
 // rendering. Content above these limits uses capped preformatted text, and long

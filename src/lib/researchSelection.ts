@@ -1,4 +1,4 @@
-import { isActiveResearchStatus } from "./researchChains";
+import { isActiveResearchStatus } from "@session/shared/lib/researchChains";
 import type { ResearchNodeStatus } from "../types";
 
 interface ExpandedResearchSelection {

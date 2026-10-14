@@ -12,7 +12,7 @@ import {
   researchRerunBlocker,
   researchRerunConfirms,
   researchRerunDialogNode,
-} from "../src/lib/researchChains";
+} from "@session/shared/lib/researchChains";
 import type { ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { withWidgetDom } from "./widgetDom";

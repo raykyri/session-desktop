@@ -12,18 +12,12 @@ import type {
   ResearchNodeStatus,
   ResearchNodeType,
   ResearchTreeSummary,
-} from "../types";
-import { nodeType } from "./researchNodeTypes";
+} from "../wire/index.js";
+
+import { nodeType } from "./researchNodeTypes.js";
 
 export type ResearchRowKind =
-  | "exchange"
-  | "note"
-  | "link"
-  | "xpost"
-  | "imported"
-  | "authored"
-  | "transcript"
-  | "draft";
+  "exchange" | "note" | "link" | "xpost" | "imported" | "authored" | "transcript" | "draft";
 
 /** A row's run state: an exchange's own run, or for a feed card the whole
  * thread's (a running follow-up makes the card running). */
@@ -52,7 +46,7 @@ interface ResearchRowGlyphSpec {
 
 /** A node or a feed entry: the fields that decide its kind. */
 interface KindSource {
-  type?: ResearchNodeType;
+  type?: ResearchNodeType | undefined;
   source?: DocumentSource | null;
   format?: PostFormat | null;
   attachments?: ResearchMessageAttachment[];
@@ -151,6 +145,9 @@ export function researchThreadState(
 
 /** Whether a row of a thread's messages column shows a glyph: every row
  * except an answered exchange, the common case. */
-export function researchMessageRowHasGlyph(kind: ResearchRowKind, state: ResearchRowState): boolean {
+export function researchMessageRowHasGlyph(
+  kind: ResearchRowKind,
+  state: ResearchRowState,
+): boolean {
   return kind !== "exchange" || state !== "answered";
 }

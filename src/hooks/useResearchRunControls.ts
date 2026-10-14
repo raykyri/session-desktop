@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { canRerunResearchNode, inlineChainFor, isActiveResearchStatus } from "../lib/researchChains";
-import { nodeStatus } from "../lib/researchNodeTypes";
+import { canRerunResearchNode, inlineChainFor, isActiveResearchStatus } from "@session/shared/lib/researchChains";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import type { ResearchNode } from "../types";
 
 /** Whether another answer in `nodeId`'s conversation is running or queued. */

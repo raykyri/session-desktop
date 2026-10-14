@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { researchNoteDoubleClickEdits, researchNoteEditable } from "../src/lib/researchNoteEdit";
+import { researchNoteDoubleClickEdits, researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 
 test("a text note or link post outside Archive can be edited", () => {
   assert.equal(researchNoteEditable({ type: "post" }, false), true);

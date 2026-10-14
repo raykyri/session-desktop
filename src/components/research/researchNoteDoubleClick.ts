@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { researchNoteDoubleClickEdits } from "../../lib/researchNoteEdit";
+import { researchNoteDoubleClickEdits } from "@session/shared/lib/researchNoteEdit";
 
 /** The props that make a double-click on a note item edit the note. `edit`
  * is undefined for a note that cannot be edited, which leaves the item's

@@ -1,5 +1,5 @@
 import type { ComponentProps, Ref } from "react";
-import { columnAttributes, type ResearchColumn } from "../../lib/researchColumns";
+import { columnAttributes, type ResearchColumn } from "@session/shared/lib/researchColumns";
 import type { AgentAdapterMetadata, ResearchNode, ResearchTreeDetail } from "../../types";
 import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
@@ -9,7 +9,7 @@ import ResearchPostColumn from "./ResearchPostColumn";
 import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
-import { NOTE_DOUBLE_CLICK_IGNORE_SELECTOR } from "../../lib/researchNoteEdit";
+import { NOTE_DOUBLE_CLICK_IGNORE_SELECTOR } from "@session/shared/lib/researchNoteEdit";
 
 type HistoryNav = ComponentProps<typeof ResearchPairHeader>["history"];
 

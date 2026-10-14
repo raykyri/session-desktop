@@ -5,7 +5,8 @@ import {
   scrollIntoColumn,
   settleResearchStrip,
 } from "../components/research/ResearchColumns";
-import { columnIdOf, columnLevelIndex, columnSelector } from "../lib/researchColumns";
+import { columnLevelIndex, columnSelector } from "@session/shared/lib/researchColumns";
+import { columnIdOf } from "../lib/researchColumnDom";
 
 /** How long a focus request waits for its element to render. */
 const FOCUS_REQUEST_TTL_MS = 2_000;

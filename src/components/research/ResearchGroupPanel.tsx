@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { CornerLeftUp } from "lucide-react";
-import type { ResearchRowKind, ResearchRowState } from "../../lib/researchRowGlyph";
+import type { ResearchRowKind, ResearchRowState } from "@session/shared/lib/researchRowGlyph";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 
 /** The Home group of the open thread: as a parent, the children listed under

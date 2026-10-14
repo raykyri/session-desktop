@@ -18,6 +18,10 @@
     "./schemas": {
       "types": "./dist/src/schemas/index.d.ts",
       "default": "./src/schemas/index.ts"
+    },
+    "./lib/*": {
+      "types": "./dist/src/lib/*.d.ts",
+      "default": "./src/lib/*.ts"
     }
   },
   "scripts": {

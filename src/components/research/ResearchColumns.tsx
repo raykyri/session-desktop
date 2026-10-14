@@ -3,14 +3,14 @@ import type { CSSProperties, ReactNode } from "react";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
-  columnIdOf,
   columnSelector,
   isMessagesColumnId,
   researchStripSettleLeft,
   type ResearchColumnId,
-} from "../../lib/researchColumns";
+} from "@session/shared/lib/researchColumns";
+import { columnIdOf } from "../../lib/researchColumnDom";
 import { isEditableTarget } from "../../lib/appHelpers";
-import { researchCycleDirection, type ResearchCycleRequest } from "../../lib/researchSiblingCycle";
+import { researchCycleDirection, type ResearchCycleRequest } from "@session/shared/lib/researchSiblingCycle";
 import {
   loadResearchColumnWidths,
   researchColumnWidthBounds,

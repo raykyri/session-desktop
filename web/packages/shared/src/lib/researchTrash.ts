@@ -1,4 +1,4 @@
-import type { ResearchFolder, ResearchTreeSummary } from "../types";
+import type { ResearchFolder, ResearchTreeSummary } from "../wire/index.js";
 
 /** A row of the Trash: a tree (question, post or document) or a folder. */
 export type ResearchTrashEntry =

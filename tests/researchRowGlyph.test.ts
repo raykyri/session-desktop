@@ -12,7 +12,7 @@ import {
   researchThreadState,
   type ResearchRowKind,
   type ResearchRowState,
-} from "../src/lib/researchRowGlyph";
+} from "@session/shared/lib/researchRowGlyph";
 import type { ResearchMessageAttachment, ResearchTreeSummary } from "../src/types";
 
 const tweet: ResearchMessageAttachment = {

@@ -6,10 +6,10 @@ import {
   type ResearchColumn,
   type ResearchPendingGroup,
   type ResearchStackGroup,
-} from "../../lib/researchColumns";
+} from "@session/shared/lib/researchColumns";
 import type { QueuedResearchFollowup } from "../../lib/researchNavigation";
-import { nodeMessage, postFollowUpSourceExcerpt } from "../../lib/researchNodeTypes";
-import { researchChainComposerState, researchNodeLabel, researchQuoteText } from "../../lib/researchThreadView";
+import { nodeMessage, postFollowUpSourceExcerpt } from "@session/shared/lib/researchNodeTypes";
+import { researchChainComposerState, researchNodeLabel, researchQuoteText } from "@session/shared/lib/researchThreadView";
 import type { ResearchHighlightAnchor, ResearchImageAttachment, ResearchNode } from "../../types";
 import { ResearchImageStrip, type ResearchImagesUpdate } from "./ResearchImages";
 import { ResearchPairHeader } from "./ResearchColumnChrome";

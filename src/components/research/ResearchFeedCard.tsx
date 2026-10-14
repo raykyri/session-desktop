@@ -5,7 +5,7 @@ import {
   researchRowGlyph,
   type ResearchRowKind,
   type ResearchRowState,
-} from "../../lib/researchRowGlyph";
+} from "@session/shared/lib/researchRowGlyph";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchRowGlyph from "./ResearchRowGlyph";
 import ResearchRowRail from "./ResearchRowRail";

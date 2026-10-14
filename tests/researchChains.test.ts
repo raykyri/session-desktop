@@ -11,7 +11,7 @@ import {
   isActiveResearchStatus,
   researchChainStopTarget,
   chainComposerPlaceholder,
-} from "../src/lib/researchChains";
+} from "@session/shared/lib/researchChains";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 

@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import type { ResearchTreeSummary } from "../../types";
 import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
-import { researchThreadKind, researchThreadState } from "../../lib/researchRowGlyph";
+import { researchThreadKind, researchThreadState } from "@session/shared/lib/researchRowGlyph";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchFeedCard from "./ResearchFeedCard";
 import { researchPlaceEmptyText } from "./ResearchFeedTray";

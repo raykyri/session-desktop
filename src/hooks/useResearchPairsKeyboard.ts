@@ -8,18 +8,18 @@ import {
 } from "../components/research/ResearchColumns";
 import type { ResearchPostThreadHandle } from "../components/research/ResearchPostThread";
 import { isEditableTarget } from "../lib/appHelpers";
-import { researchBranchesInPassageOrder } from "../lib/researchBranchView";
+import { researchBranchesInPassageOrder } from "@session/shared/lib/researchBranchView";
 import {
   COLUMN_ROW_SELECTOR,
-  columnIdOf,
   columnLevelIndex,
   columnMessageIds,
   columnSelector,
   type ResearchColumnId,
   type ResearchLevel,
   type researchStrip,
-} from "../lib/researchColumns";
-import { cycleIndex, researchCycleColumn, type ResearchCycleRequest } from "../lib/researchSiblingCycle";
+} from "@session/shared/lib/researchColumns";
+import { columnIdOf } from "../lib/researchColumnDom";
+import { cycleIndex, researchCycleColumn, type ResearchCycleRequest } from "@session/shared/lib/researchSiblingCycle";
 import { listenToResearchFollowupsFocus } from "../lib/researchShortcuts";
 import type { ResearchNode } from "../types";
 import type { ResearchFocusTarget, ResearchStripFollow } from "./useResearchFocusRequests";
