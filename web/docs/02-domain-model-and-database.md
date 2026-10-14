@@ -352,6 +352,9 @@ Web only; the desktop has one person. Rules in §5.16.
   a link; `created_by`, `expires_at` (14 days), `accepted_by/at`,
   `revoked_at`).
 - `tree_subscriptions` (`user_id`, `tree_id`, `created_at`): Follow.
+- `tree_member_removals` (`tree_id`, `user_id`, `removed_by`, `removed_at`):
+  people the owner removed. A link invitation created at or before
+  `removed_at` does not admit them again (§5.16).
 - `trees.visibility` (`private | public`) and `trees.trashed_by` (who moved
   the thread to its owner's Trash).
 - `nodes.author_id` and `highlights.author_id` are `ON DELETE SET NULL`;
@@ -855,12 +858,17 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   revisions follow the thread; saved inputs stay per person.
 - `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole`,
   `removeMember` and `leave` (both return the member's queued follow-ups,
-  which are deleted, and their active questions, which the server cancels),
+  which are deleted, and their active questions, which the server cancels;
+  `removeMember` also records the removal in `tree_member_removals`),
   `createInvite` (token returned once; at most 50 pending per thread),
-  `listInvites`, `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
+  `listInvites` (usable ones: a used link stays listed so it can be revoked), `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
   (by token, or by id for a login invitation addressed to the caller; a
   login invitation is used once, a link until it expires or is revoked;
-  joining never lowers a role; at most 100 members), `setFollowing`,
+  a person the owner removed is refused, "You were removed from this
+  thread." (`FORBIDDEN`), a link created at or before the removal, while a
+  later link or a login invitation to them admits them and deletes the
+  removal; leaving records nothing; joining never lowers a role; at most
+  100 members), `setFollowing`,
   `followers` (those who may still read the thread), `audience` (owner,
   members, public) and `workspaceMembers`.
 

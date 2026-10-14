@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0f748375-ca20-4269-99c6-2a056945d074",
+  "id": "a6405eae-3f2c-42e1-a523-876ef60098df",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "backfills": {
@@ -167,6 +167,92 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tree_member_removals": {
+      "name": "tree_member_removals",
+      "columns": {
+        "tree_id": {
+          "name": "tree_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tree_member_removals_tree_id_trees_id_fk": {
+          "name": "tree_member_removals_tree_id_trees_id_fk",
+          "tableFrom": "tree_member_removals",
+          "tableTo": "trees",
+          "columnsFrom": [
+            "tree_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tree_member_removals_user_id_users_id_fk": {
+          "name": "tree_member_removals_user_id_users_id_fk",
+          "tableFrom": "tree_member_removals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tree_member_removals_removed_by_users_id_fk": {
+          "name": "tree_member_removals_removed_by_users_id_fk",
+          "tableFrom": "tree_member_removals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "removed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "tree_member_removals_tree_id_user_id_pk": {
+          "columns": [
+            "tree_id",
+            "user_id"
+          ],
+          "name": "tree_member_removals_tree_id_user_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

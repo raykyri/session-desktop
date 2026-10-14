@@ -46,6 +46,7 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   // Invitations (`repos/sharing.ts`).
   { pattern: /^This invitation was not found/, code: "NOT_FOUND" },
   { pattern: /^This invitation is for another GitHub account/, code: "FORBIDDEN" },
+  { pattern: /^You were removed from this thread/, code: "FORBIDDEN" },
   { pattern: /^A thread can (have|be shared with) at most/, code: "PRECONDITION_FAILED" },
   // The follow-up queue's own bound (`followups.ask`).
   { pattern: /follow-ups queued\. Wait/, code: "TOO_MANY_REQUESTS" },

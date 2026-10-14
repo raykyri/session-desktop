@@ -76,3 +76,21 @@ export const treeSubscriptions = sqliteTable(
     index("tree_subscriptions_tree_idx").on(table.treeId),
   ],
 );
+
+/** People the owner removed from a thread. A link invitation created at or
+ * before `removed_at` no longer admits them; an invitation created after it,
+ * or a login invitation addressed to them, does, and deletes the row. */
+export const treeMemberRemovals = sqliteTable(
+  "tree_member_removals",
+  {
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    removedBy: text("removed_by").references(() => users.id, { onDelete: "set null" }),
+    removedAt: integer("removed_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.treeId, table.userId] })],
+);

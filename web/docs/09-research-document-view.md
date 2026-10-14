@@ -253,7 +253,7 @@ are centred confirm dialogs (`ThreadDialogs.tsx`):
 | Stop | any run | their own | no |
 | Cancel / Retry a queued follow-up | Cancel any; Retry their own | their own | no |
 | Rename the thread, reorder messages, Edit document, delete the thread | yes | no | no |
-| Remove a highlight | any | their own | no |
+| Remove a highlight | any | their own (the selection bar leaves out Highlight when the selection covers someone else's highlight, since merging or removing it deletes it) | no |
 
 An archived thread is read-only for everyone, as on the desktop. A guest
 (signed out, on a public thread) has no event stream, so the page does not
@@ -265,7 +265,9 @@ update live.
 - **Share dialog** (`features/sharing/ShareDialog.tsx`): "Who can read it"
   (Private: the owner and the people it is shared with; Public: anyone with
   the link, listed in All Users), People (owner first; the owner changes a
-  member's role, Commenter or Viewer, or removes them), Invite (by GitHub
+  member's role, Commenter or Viewer, or removes them; after a removal
+  while link invitations are pending it notes "Links you’ve shared still let
+  new people join; revoke them to stop that."), Invite (by GitHub
   username, or Copy invite link, each with a role; the created link is shown
   so it can be copied by hand), and Pending invitations with Revoke. Anyone
   else sees "Who can read it" and People read-only; a member has Leave…,

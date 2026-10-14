@@ -460,6 +460,22 @@ test("removing a member stops their running question and tells them", async (t) 
   commenter.close();
 });
 
+test("a removed member is FORBIDDEN from rejoining through an earlier link", async (t) => {
+  const thread = await sharedThread(t);
+  const { harness } = thread;
+  const owner = harness.caller(thread.owner);
+  const link = await owner.invites.create({ treeId: thread.treeId, role: "viewer" });
+  await owner.sharing.removeMember({ treeId: thread.treeId, userId: thread.commenter.id });
+  const error = await t.throwsAsync<TRPCError>(
+    harness.caller(thread.commenter).invites.accept({ token: link.token }),
+  );
+  t.is(error?.code, "FORBIDDEN");
+  t.is(error?.message, "You were removed from this thread.");
+  // A stranger can still use it.
+  const joined = await harness.caller(thread.stranger).invites.accept({ token: link.token });
+  t.is(joined.role, "viewer");
+});
+
 test("a thread's images are readable by whoever may read the thread", async (t) => {
   const harness = createHarness(t);
   const owner = harness.addUser("image-owner");

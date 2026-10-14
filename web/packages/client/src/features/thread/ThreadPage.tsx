@@ -122,6 +122,7 @@ import {
 import { ThreadCollaborationContext, threadPeople } from "../sharing/context.js";
 import {
   mayCancelQueued,
+  mayChangeHighlights,
   mayEditText,
   mayRetryQueued,
   threadPermissions,
@@ -2396,6 +2397,11 @@ function ThreadView({ treeId }: { treeId: string }) {
             action={textSelection.action}
             saving={textSelection.saving}
             canAnnotate={permissions.canContribute}
+            canChangeHighlights={mayChangeHighlights(
+              permissions,
+              nodeById.get(textSelection.action.nodeId)?.highlights ?? [],
+              textSelection.action.highlightIds,
+            )}
             branchBlocker={textSelection.branchBlocker}
             onBranch={textSelection.branchFromSelection}
             onHighlight={() => void textSelection.applyHighlight()}

@@ -22,6 +22,17 @@ CREATE TABLE `tree_invites` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `tree_invites_token_hash_unique` ON `tree_invites` (`token_hash`);--> statement-breakpoint
 CREATE INDEX `tree_invites_tree_idx` ON `tree_invites` (`tree_id`);--> statement-breakpoint
+CREATE TABLE `tree_member_removals` (
+	`tree_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`removed_by` text,
+	`removed_at` integer NOT NULL,
+	PRIMARY KEY(`tree_id`, `user_id`),
+	FOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`removed_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
 CREATE TABLE `tree_members` (
 	`tree_id` text NOT NULL,
 	`user_id` text NOT NULL,

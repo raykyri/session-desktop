@@ -12,12 +12,17 @@ import type {
   ThreadInvite,
   ThreadMember,
 } from "@session/shared";
-import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { newId } from "../ids.js";
-import { treeInvites, treeMembers, treeSubscriptions } from "../schema/collaboration.js";
+import {
+  treeInvites,
+  treeMemberRemovals,
+  treeMembers,
+  treeSubscriptions,
+} from "../schema/collaboration.js";
 import { followupQueue } from "../schema/followups.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
@@ -45,6 +50,7 @@ export const INVITE_MESSAGES = {
   ownerRole: "The owner's role cannot be changed.",
   tooManyInvites: `A thread can have at most ${MAX_PENDING_INVITES} pending invitations.`,
   tooManyMembers: `A thread can be shared with at most ${MAX_MEMBERS} people.`,
+  removed: "You were removed from this thread.",
 } as const;
 
 type InviteRow = typeof treeInvites.$inferSelect;
@@ -274,7 +280,11 @@ function depart(db: SessionDatabase, treeId: string, memberId: string): Departur
   };
 }
 
-/** Removes a member. The owner's. Their nodes and highlights stay. */
+/**
+ * Removes a member. The owner's. Their nodes and highlights stay. The
+ * removal is recorded, so a link invitation created before it does not let
+ * them join again (`acceptInvite`).
+ */
 export function removeMember(
   db: SessionDatabase,
   userId: string,
@@ -287,6 +297,14 @@ export function removeMember(
       throw new Error(`member ${memberId} was not found`);
     }
     const departure = depart(tx, treeId, memberId);
+    const removedAt = now();
+    tx.insert(treeMemberRemovals)
+      .values({ treeId, userId: memberId, removedBy: userId, removedAt })
+      .onConflictDoUpdate({
+        target: [treeMemberRemovals.treeId, treeMemberRemovals.userId],
+        set: { removedBy: userId, removedAt },
+      })
+      .run();
     tx.delete(treeMembers)
       .where(and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, memberId)))
       .run();
@@ -324,6 +342,15 @@ function pendingPredicate(at: number) {
   return and(isNull(treeInvites.revokedAt), gt(treeInvites.expiresAt, at));
 }
 
+/** Still usable: a link until it expires or is revoked, however often it was
+ * used; a login invitation until it is accepted too. */
+function usablePredicate(at: number) {
+  return and(
+    pendingPredicate(at),
+    or(isNull(treeInvites.githubLogin), isNull(treeInvites.acceptedAt)),
+  );
+}
+
 /**
  * Invites someone to a thread, by GitHub login or by link. The owner's. A
  * login invitation is accepted once, by that account; a link invitation by
@@ -341,9 +368,7 @@ export function createInvite(
     const pending = tx
       .select({ value: sql<number>`count(*)` })
       .from(treeInvites)
-      .where(
-        and(eq(treeInvites.treeId, tree.id), pendingPredicate(at), isNull(treeInvites.acceptedAt)),
-      )
+      .where(and(eq(treeInvites.treeId, tree.id), usablePredicate(at)))
       .get();
     if ((pending?.value ?? 0) >= MAX_PENDING_INVITES) {
       throw new Error(INVITE_MESSAGES.tooManyInvites);
@@ -381,15 +406,15 @@ export function createInvite(
   });
 }
 
-/** A thread's pending invitations, newest first. The owner's. */
+/** A thread's invitations that can still be used, newest first: a link
+ * stays listed after someone joined through it, so it can be revoked. The
+ * owner's. */
 export function listInvites(db: SessionDatabase, userId: string, treeId: string): ThreadInvite[] {
   requireTreeAccess(db, userId, treeId, "owner");
   return db
     .select()
     .from(treeInvites)
-    .where(
-      and(eq(treeInvites.treeId, treeId), pendingPredicate(now()), isNull(treeInvites.acceptedAt)),
-    )
+    .where(and(eq(treeInvites.treeId, treeId), usablePredicate(now())))
     .orderBy(desc(treeInvites.createdAt), desc(treeInvites.id))
     .all()
     .map(toInvite);
@@ -454,7 +479,10 @@ export interface AcceptedInvite {
  * Accepts an invitation: by its token (a link, or a login invitation's link),
  * or by id for a login invitation addressed to the caller. Joining keeps a
  * higher role the caller already has. Expired, revoked and used login
- * invitations are "not found", as is an unknown token.
+ * invitations are "not found", as is an unknown token. A person the owner
+ * removed is refused a link invitation created at or before the removal; a
+ * later invitation, or a login invitation addressed to them, admits them
+ * and clears the removal.
  */
 export function acceptInvite(
   db: SessionDatabase,
@@ -493,6 +521,14 @@ export function acceptInvite(
     let joined = false;
     let role: MemberRole = row.role;
     if (!existing) {
+      const removal = tx
+        .select({ removedAt: treeMemberRemovals.removedAt })
+        .from(treeMemberRemovals)
+        .where(and(eq(treeMemberRemovals.treeId, tree.id), eq(treeMemberRemovals.userId, user.id)))
+        .get();
+      if (removal && !loginInvite && row.createdAt <= removal.removedAt) {
+        throw new Error(INVITE_MESSAGES.removed);
+      }
       const count = tx
         .select({ value: sql<number>`count(*)` })
         .from(treeMembers)
@@ -510,6 +546,13 @@ export function acceptInvite(
           createdAt: at,
         })
         .run();
+      if (removal) {
+        tx.delete(treeMemberRemovals)
+          .where(
+            and(eq(treeMemberRemovals.treeId, tree.id), eq(treeMemberRemovals.userId, user.id)),
+          )
+          .run();
+      }
       joined = true;
     } else if (existing.role === "viewer" && row.role === "commenter") {
       tx.update(treeMembers)

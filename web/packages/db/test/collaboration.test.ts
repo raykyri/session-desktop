@@ -521,6 +521,111 @@ test("removing a member drops their queued follow-ups and names their active run
   );
 });
 
+/** Waits until the clock moves past `at`, so the next write is later. */
+function after(at: number): void {
+  while (Date.now() <= at) {
+    // spin; at most a millisecond
+  }
+}
+
+test("a removed member cannot rejoin through a link created before the removal", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const commenterLogin = (
+    sharing
+      .listMembers(db, shared.fixture.userId, shared.treeId)
+      .find((member) => member.userId === shared.commenter.userId) ?? { login: "" }
+  ).login;
+  const commenter = { id: shared.commenter.userId, login: commenterLogin };
+  const oldLink = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "viewer",
+  });
+  sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.commenter.userId);
+  const removal = db.select().from(schema.treeMemberRemovals).all();
+  t.deepEqual(
+    removal.map((row) => [row.treeId, row.userId, row.removedBy]),
+    [[shared.treeId, shared.commenter.userId, shared.fixture.userId]],
+  );
+  // The link they joined with and a link pending at the removal both refuse them.
+  t.throws(() => sharing.acceptInvite(db, commenter, { token: oldLink.token }), {
+    message: "You were removed from this thread.",
+  });
+  t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
+  // The same links still admit someone else.
+  const newcomer = addUser(db, `newcomer${loginCounter}`);
+  t.true(
+    sharing.acceptInvite(
+      db,
+      { id: newcomer.userId, login: `newcomer${loginCounter}` },
+      { token: oldLink.token },
+    ).joined,
+  );
+  // A used link stays listed, so the owner can still revoke it; the used
+  // login invitation from the fixture does not.
+  const listed = sharing.listInvites(db, shared.fixture.userId, shared.treeId);
+  t.true(listed.some((invite) => invite.id === oldLink.invite.id));
+  t.false(listed.some((invite) => invite.githubLogin !== null));
+  // A link created after the removal lets them back in and clears it.
+  after(removal[0]?.removedAt ?? 0);
+  const newLink = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "viewer",
+  });
+  t.deepEqual(sharing.acceptInvite(db, commenter, { token: newLink.token }), {
+    treeId: shared.treeId,
+    role: "viewer",
+    joined: true,
+  });
+  t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
+  // Once back in, the older link works for them again (joining never lowers
+  // a role, and they are a member).
+  t.true(sharing.acceptInvite(db, commenter, { token: oldLink.token }).role === "viewer");
+});
+
+test("a login invitation lets a removed member back in", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const viewerLogin = (
+    sharing
+      .listMembers(db, shared.fixture.userId, shared.treeId)
+      .find((member) => member.userId === shared.viewer.userId) ?? { login: "" }
+  ).login;
+  sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.viewer.userId);
+  // Created in the same millisecond as the removal or later: a login
+  // invitation names them, so it admits them either way.
+  const byLogin = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "commenter",
+    githubLogin: viewerLogin,
+  });
+  t.deepEqual(
+    sharing.acceptInvite(
+      db,
+      { id: shared.viewer.userId, login: viewerLogin },
+      { inviteId: byLogin.invite.id },
+    ),
+    { treeId: shared.treeId, role: "commenter", joined: true },
+  );
+  t.is(access.treeAccess(db, shared.viewer.userId, shared.treeId)?.role, "commenter");
+  t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
+});
+
+test("leaving is not a removal: a link still lets the person back in", (t) => {
+  const shared = sharedThread(t);
+  const { db } = shared.fixture;
+  const link = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "viewer",
+  });
+  sharing.leave(db, shared.commenter.userId, shared.treeId);
+  t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
+  t.true(
+    sharing.acceptInvite(db, { id: shared.commenter.userId, login: "x" }, { token: link.token })
+      .joined,
+  );
+});
+
 test("public threads are listed for everyone; detail names the participants", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;

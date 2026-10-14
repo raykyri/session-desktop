@@ -15,7 +15,7 @@ import type {
   Turn,
 } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import test from "ava";
 
 import { mergeTreeEvent } from "../src/api/cache.js";
@@ -28,13 +28,16 @@ import {
 import { queryClientDefaults, queryKeys } from "../src/api/queries.js";
 import {
   mayCancel,
+  mayChangeHighlights,
   mayChangeNode,
   mayEditText,
   mayRelaunch,
   mayRemoveHighlight,
   threadPermissions,
 } from "../src/features/sharing/permissions.js";
+import { SelectionToolbar } from "../src/features/thread/SelectionToolbar.js";
 import { resetThreadNavigationForTests } from "../src/features/thread/persistence.js";
+import type { SelectionAction } from "../src/features/thread/selectionCapture.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
@@ -214,6 +217,15 @@ test("the permission rules follow the server's", (t) => {
     mayRemoveHighlight(commenter, { id: "h", anchor: {} as never, createdAt: 0, authorId: OWNER }),
   );
 
+  // A selection over saved highlights removes or merges them: a commenter's
+  // own only; the owner any.
+  const mineHighlight = { id: "h1", anchor: {} as never, createdAt: 0, authorId: ME };
+  const theirs = { id: "h2", anchor: {} as never, createdAt: 0, authorId: OWNER };
+  t.true(mayChangeHighlights(commenter, [mineHighlight, theirs], []));
+  t.true(mayChangeHighlights(commenter, [mineHighlight, theirs], ["h1"]));
+  t.false(mayChangeHighlights(commenter, [mineHighlight, theirs], ["h1", "h2"]));
+  t.false(mayChangeHighlights(commenter, [mineHighlight], ["gone"]));
+
   const viewer = threadPermissions({ role: "viewer", ownerId: OWNER }, ME);
   t.false(viewer.canContribute);
   t.false(mayChangeNode(viewer, nodes, c));
@@ -227,6 +239,7 @@ test("the permission rules follow the server's", (t) => {
   t.true(mayEditText(owner, nodes, node({ id: "d", authorId: null })));
   t.false(mayRelaunch(owner, c));
   t.true(mayCancel(owner, c));
+  t.true(mayChangeHighlights(owner, [mineHighlight, theirs], ["h1", "h2"]));
 
   const guest = threadPermissions({ role: "viewer", ownerId: OWNER }, null);
   t.is(guest.role, "guest");
@@ -235,6 +248,34 @@ test("the permission rules follow the server's", (t) => {
   const archived = threadPermissions({ role: "owner", ownerId: OWNER, archivedAt: 1 }, OWNER);
   t.false(archived.canContribute);
   t.true(archived.contributor);
+});
+
+test.serial("the selection bar leaves out Remove highlight over someone else's", (t) => {
+  const action: SelectionAction = {
+    nodeId: "n1",
+    live: false,
+    crossed: false,
+    copyText: "memory",
+    anchor: { exact: "memory" } as SelectionAction["anchor"],
+    highlightIds: ["h2"],
+    expandAnchor: null,
+  };
+  const props = {
+    action,
+    saving: false,
+    branchBlocker: null,
+    onBranch: () => {},
+    onHighlight: () => {},
+    onCopy: () => {},
+    onDismiss: () => {},
+  };
+  // Without a selection in the document the bar is laid out hidden.
+  const { rerender } = render(<SelectionToolbar {...props} />);
+  t.truthy(screen.queryByText("Remove highlight"));
+  rerender(<SelectionToolbar {...props} canChangeHighlights={false} />);
+  t.is(screen.queryByText("Remove highlight"), null);
+  t.truthy(screen.queryByText("Branch to right"));
+  t.truthy(screen.queryByText("Copy"));
 });
 
 /* ------------------------------------------------------------- gating */
@@ -448,12 +489,6 @@ test.serial("the owner shares: visibility, members, invitations", async (t) => {
     "http://localhost/invite/tok",
   );
 
-  fireEvent.click(within(dialog).getByRole("button", { name: "Revoke Invite link" }));
-  await waitUntil(
-    t,
-    () => trpc.calls.some((call) => call.path === "invites.revoke"),
-    "the invitation is revoked",
-  );
   fireEvent.click(within(dialog).getByRole("button", { name: "Remove Ada" }));
   await waitUntil(
     t,
@@ -464,6 +499,57 @@ test.serial("the owner shares: visibility, members, invitations", async (t) => {
     treeId: "t1",
     userId: OWNER,
   });
+  // A link invitation is still pending: it no longer admits the removed
+  // member, but it admits anyone else.
+  const notice = "Links you’ve shared still let new people join; revoke them to stop that.";
+  await waitUntil(
+    t,
+    () => within(dialog).queryByText(notice) !== null,
+    "the pending-link notice shows",
+  );
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Revoke Invite link" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "invites.revoke"),
+    "the invitation is revoked",
+  );
+  await waitUntil(
+    t,
+    () => within(dialog).queryByText(notice) === null,
+    "the notice goes with the last link",
+  );
+});
+
+test.serial("removing a member with no pending links shows no link notice", async (t) => {
+  const { root, content } = ownerAndMine();
+  const { trpc } = await mount({
+    tree: { role: "owner", ownerId: ME, visibility: "private" },
+    nodes: [{ ...root, authorId: ME }],
+    contentByNode: content,
+    responses: {
+      "sharing.listMembers": MEMBERS,
+      "invites.list": [{ ...LINK_INVITE, githubLogin: "grace" }],
+      "sharing.removeMember": { ok: true },
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer loads");
+  fireEvent.click(screen.getByRole("button", { name: "Thread actions" }));
+  fireEvent.click(await waitFor(() => screen.getByRole("menuitem", { name: "Share…" })));
+  const dialog = await waitFor(() =>
+    screen.getByRole("dialog", { name: "Share “Collective memory”" }),
+  );
+  await waitUntil(t, () => within(dialog).queryByText("@grace") !== null, "the invites load");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Remove Ada" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "sharing.removeMember"),
+    "the member is removed",
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  t.is(within(dialog).queryByText(/Links you’ve shared/), null);
 });
 
 test.serial("a member sees the people read-only and can leave", async (t) => {

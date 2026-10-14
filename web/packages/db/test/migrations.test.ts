@@ -55,6 +55,7 @@ test("applies every migration to an empty database", (t) => {
         "signup_attempts",
         "tree_folder_membership",
         "tree_invites",
+        "tree_member_removals",
         "tree_members",
         "tree_subscriptions",
         "tree_views",

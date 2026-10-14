@@ -123,11 +123,13 @@ function MemberRow({
   member,
   meId,
   editable,
+  onRemoved,
 }: {
   treeId: string;
   member: ThreadMember;
   meId: string | null;
   editable: boolean;
+  onRemoved: () => void;
 }) {
   const setRole = useSetThreadMemberRole();
   const remove = useRemoveThreadMember();
@@ -167,7 +169,10 @@ function MemberRow({
             onClick={() =>
               remove.mutate(
                 { treeId, userId: member.userId },
-                { onError: (error) => pushErrorToast("Couldn’t remove them", error) },
+                {
+                  onSuccess: onRemoved,
+                  onError: (error) => pushErrorToast("Couldn’t remove them", error),
+                },
               )
             }
           >
@@ -329,6 +334,10 @@ export function ShareDialog({
   const list = members.data ?? [];
   const member = !owner && list.some((entry) => entry.userId === meId && entry.role !== "owner");
   const pending = invites.data ?? [];
+  // A removed member cannot rejoin through a link created before the
+  // removal, but anyone else holding it still can.
+  const pendingLinks = pending.some((invite) => invite.githubLogin === null);
+  const [removedWithLinks, setRemovedWithLinks] = useState(false);
 
   return (
     <Dialog
@@ -399,10 +408,16 @@ export function ShareDialog({
                   member={entry}
                   meId={meId}
                   editable={owner}
+                  onRemoved={() => setRemovedWithLinks(pendingLinks)}
                 />
               ))}
             </ul>
           )}
+          {removedWithLinks && pendingLinks ? (
+            <p className="text-fg-muted m-0 mt-1.5 text-xs" role="status" data-share-link-notice="">
+              Links you’ve shared still let new people join; revoke them to stop that.
+            </p>
+          ) : null}
         </section>
         {owner ? (
           <section aria-label="Invite">

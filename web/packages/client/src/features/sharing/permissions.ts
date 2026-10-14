@@ -160,6 +160,22 @@ export function mayRemoveHighlight(
   return highlight.authorId === permissions.userId;
 }
 
+/** Whether the Highlight button over a selection may act on the saved
+ * highlights the selection covers (`ids`): removing them, or merging them
+ * into a longer one, deletes each of them. */
+export function mayChangeHighlights(
+  permissions: ThreadPermissions,
+  highlights: readonly ResearchHighlight[],
+  ids: readonly string[],
+): boolean {
+  if (ids.length === 0) return true;
+  const byId = new Map(highlights.map((highlight) => [highlight.id, highlight]));
+  return ids.every((id) => {
+    const highlight = byId.get(id);
+    return highlight !== undefined && mayRemoveHighlight(permissions, highlight);
+  });
+}
+
 /** Cancel a queued follow-up: its author or the owner. */
 export function mayCancelQueued(
   permissions: ThreadPermissions,

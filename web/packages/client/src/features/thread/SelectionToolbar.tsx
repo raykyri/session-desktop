@@ -45,6 +45,7 @@ export function SelectionToolbar({
   onCopy,
   onDismiss,
   canAnnotate = true,
+  canChangeHighlights = true,
 }: {
   action: SelectionAction;
   saving: boolean;
@@ -57,11 +58,22 @@ export function SelectionToolbar({
   /** Branch and Highlight are offered (web only: not to a viewer or a
    * guest, who get Copy alone). */
   canAnnotate?: boolean;
+  /** The saved highlights the selection covers may be removed or merged by
+   * the reader (web only: a commenter changes only their own). When false
+   * the Highlight button is left out. */
+  canChangeHighlights?: boolean;
 }) {
   const barRef = useRef<HTMLDivElement | null>(null);
   const sizeRef = useRef(INITIAL_SIZE);
   const [placement, setPlacement] = useState<Placement | null>(null);
-  const handlersRef = useLatest({ saving, canAnnotate, onBranch, onHighlight, onDismiss });
+  const handlersRef = useLatest({
+    saving,
+    canAnnotate,
+    canChangeHighlights,
+    onBranch,
+    onHighlight,
+    onDismiss,
+  });
 
   useLayoutEffect(() => {
     const bar = barRef.current;
@@ -105,7 +117,10 @@ export function SelectionToolbar({
         handlersRef.current.onBranch();
         return;
       }
-      if (isResearchHighlightActionShortcut(event) || isResearchExpandActionShortcut(event)) {
+      if (
+        handlersRef.current.canChangeHighlights &&
+        (isResearchHighlightActionShortcut(event) || isResearchExpandActionShortcut(event))
+      ) {
         event.preventDefault();
         event.stopImmediatePropagation();
         handlersRef.current.onHighlight();
@@ -173,26 +188,28 @@ export function SelectionToolbar({
               <ArrowUpRight size={14} aria-hidden="true" />
               <span>Branch to right</span>
             </button>
-            <button
-              type="button"
-              className={item}
-              disabled={saving || action.live}
-              aria-keyshortcuts="H"
-              title={action.live ? "Wait for the answer to finish" : "Highlight (H)"}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onHighlight}
-            >
-              <Highlighter size={14} aria-hidden="true" />
-              <span>
-                {saving
-                  ? "Saving…"
-                  : action.expandAnchor || action.highlightIds.length === 0
-                    ? "Highlight"
-                    : action.highlightIds.length > 1
-                      ? "Remove highlights"
-                      : "Remove highlight"}
-              </span>
-            </button>
+            {canChangeHighlights ? (
+              <button
+                type="button"
+                className={item}
+                disabled={saving || action.live}
+                aria-keyshortcuts="H"
+                title={action.live ? "Wait for the answer to finish" : "Highlight (H)"}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onHighlight}
+              >
+                <Highlighter size={14} aria-hidden="true" />
+                <span>
+                  {saving
+                    ? "Saving…"
+                    : action.expandAnchor || action.highlightIds.length === 0
+                      ? "Highlight"
+                      : action.highlightIds.length > 1
+                        ? "Remove highlights"
+                        : "Remove highlight"}
+                </span>
+              </button>
+            ) : null}
           </>
         ) : null}
         <button

@@ -152,6 +152,49 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
   }
 });
 
+test("a removed member cannot rejoin through an earlier link; a new link lets them back", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-remove-owner");
+  const member = await signedInContext(browser, "e2e-ui-removed");
+  const newcomer = await signedInContext(browser, "e2e-ui-newcomer");
+  try {
+    const prompt = "Can a removed member come back through a link?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    await owner.page.goto(`/r/${treeId}`);
+    await expect(owner.page.getByText(prompt).first()).toBeVisible();
+    const dialog = await openShareDialog(owner.page);
+    const link = await copyInviteLink(dialog);
+
+    await member.page.goto(new URL(link).pathname);
+    await member.page.waitForURL(new RegExp(`/r/${treeId}`));
+
+    // The owner removes them while the link is still pending.
+    const row = dialog.locator('[data-share-member="e2e-ui-removed"]');
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: /^Remove / }).click();
+    await expect(row).toHaveCount(0);
+    await expect(dialog.locator("[data-share-link-notice]")).toHaveText(
+      "Links you’ve shared still let new people join; revoke them to stop that.",
+    );
+
+    // The link no longer lets them in, but it still lets someone else in.
+    await member.page.goto(new URL(link).pathname);
+    await expect(member.page.getByRole("alert")).toHaveText("You were removed from this thread.");
+    await newcomer.page.goto(new URL(link).pathname);
+    await newcomer.page.waitForURL(new RegExp(`/r/${treeId}`));
+
+    // A link created after the removal admits them again.
+    const newLink = await copyInviteLink(dialog);
+    await member.page.goto(new URL(newLink).pathname);
+    await member.page.waitForURL(new RegExp(`/r/${treeId}`));
+    await expect(member.page.getByText(prompt).first()).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close(), newcomer.context.close()]);
+  }
+});
+
 test("a thread made public in the Share dialog opens for a guest, read-only", async ({
   browser,
 }) => {
