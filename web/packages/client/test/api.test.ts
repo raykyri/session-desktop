@@ -130,7 +130,7 @@ test.serial("writes reach the mutation procedures with their inputs", async (t) 
   t.true(stub.calls.every((call) => call.kind === "mutate"));
   t.deepEqual(stub.calls[2]?.input, { nodeId: "n1" }, "an absent model is omitted, not null");
   t.deepEqual(stub.calls[3]?.input, { nodeId: "n1", model: "claude-sonnet" });
-  t.deepEqual(stub.calls[12]?.input, { connectionId: "c1", nodeIds: ["n1", "n2"] });
+  t.deepEqual(stub.calls[12]?.input, { connectionId: "c1", nodeIds: ["n1", "n2"], treeIds: [] });
 });
 
 test.serial("sign-in carries the return path and the invite code", (t) => {

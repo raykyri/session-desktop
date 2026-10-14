@@ -55,11 +55,13 @@ import {
   cachedNode,
   cachedTreeTitle,
   dropActiveNodes,
+  dropFromSharedLists,
   eachTreeList,
   eventPatchedListKeys,
   invalidateHighlightLabels,
   invalidateKeys as invalidate,
   mapSummaries,
+  mergeTreeEvent,
   patchActiveNodes,
   patchActivityFeedItem,
   patchActivityFeedNode,
@@ -78,6 +80,16 @@ export const EVENT_COALESCE_MS = 16;
 /** The interest set is published on a trailing timer: opening five documents
  * in a row is one call, not five (`03-api-and-events.md` §3). */
 export const INTEREST_DEBOUNCE_MS = 200;
+
+/** How often the open threads are declared again while one stays open. The
+ * server drops a declaration after 90 s (`PRESENCE_TTL_MS`); a background
+ * tab's timers may run up to a minute late, so this leaves room for that. */
+export const TREE_INTEREST_RENEW_MS = 30_000;
+
+/** After this long without a declaration the server may have dropped an open
+ * thread, and with it, for a reader of a public thread who is not a member,
+ * the thread's events: the thread refetches when the tab is shown again. */
+export const TREE_INTEREST_LAPSE_MS = 90_000;
 
 /** The first event of every connection (`routers/events.ts`). */
 export const CONNECTION_READY = "connection.ready";
@@ -142,7 +154,11 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     case "research.tree.restored": {
       invalidateHighlightLabels(client, cachedTreeTitle(client, event.tree.id), event.tree.title);
       mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
-      patchDetail(client, event.tree.id, (detail) => patchResearchDetailTree(detail, event.tree));
+      // Another person's change arrives without the reader's own fields
+      // (role, last view, Follow); those keep the values the cache holds.
+      patchDetail(client, event.tree.id, (detail) =>
+        patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree)),
+      );
       if (event.type !== "research.tree.updated") {
         // Archiving moves the thread between the `includeArchived` scopes,
         // and which list it belongs to is the server's answer, not a patch's.
@@ -151,7 +167,13 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         // rows and restoring brings them back (`10` §4). A restored thread
         // (from the Archive or the Trash) has a Home card again, and an
         // archived one has none.
-        invalidate(client, ["trees"], ["highlightsFeed"], queryKeys.feedRoot(event.tree.id));
+        invalidate(
+          client,
+          ["trees"],
+          ["shared"],
+          ["highlightsFeed"],
+          queryKeys.feedRoot(event.tree.id),
+        );
       }
       return;
     }
@@ -164,8 +186,14 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         const next = summaries.filter((summary) => summary.id !== event.treeId);
         return next.length === summaries.length ? summaries : next;
       });
+      // A shared thread the reader left, was removed from or lost to its
+      // owner's Trash leaves the shared lists too; a member's own Trash lists
+      // it again through `research.trash.changed`.
+      dropFromSharedLists(client, new Set([event.treeId]));
       client.removeQueries({ queryKey: queryKeys.tree(event.treeId) });
       client.removeQueries({ queryKey: queryKeys.feedRoot(event.treeId) });
+      client.removeQueries({ queryKey: queryKeys.members(event.treeId) });
+      client.removeQueries({ queryKey: queryKeys.invites(event.treeId) });
       dropActiveNodes(client, (node) => node.treeId === event.treeId);
       invalidate(client, ["highlightsFeed"]);
       return;
@@ -175,6 +203,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       invalidate(
         client,
         event.workspaceId === undefined ? ["trash"] : queryKeys.trash(event.workspaceId),
+        // A member's Trash holds shared threads too (`sharing.listShared`).
+        queryKeys.shared("trash"),
       );
       return;
 
@@ -256,7 +286,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       );
       mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) => {
-        const withTree = patchResearchDetailTree(detail, event.tree);
+        const withTree = patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree));
         return patchResearchDetailNode(withTree, event.node);
       });
       // The markdown itself is not on the event, so the open document refetches,
@@ -346,14 +376,27 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "research.sharing.changed":
-      // Access, members or visibility changed: the lists and the thread
-      // refetch.
-      invalidate(client, ["trees"], queryKeys.tree(event.treeId));
+      // Access, members or visibility changed: the lists, the thread and its
+      // sharing state refetch.
+      invalidate(
+        client,
+        ["trees"],
+        ["shared"],
+        queryKeys.tree(event.treeId),
+        queryKeys.members(event.treeId),
+        queryKeys.invites(event.treeId),
+        queryKeys.feedRoot(event.treeId),
+      );
+      return;
+
+    case "research.invites.changed":
+      // A login invitation to the reader was created.
+      invalidate(client, queryKeys.receivedInvites());
       return;
 
     case "research.presence.changed":
-    case "research.invites.changed":
-      // No cache reads these yet (the sharing UI).
+      // The event carries the thread's whole viewer list.
+      client.setQueryData(queryKeys.presence(event.treeId), event.viewers);
       return;
 
     case "research.run.started":
@@ -590,15 +633,43 @@ function scopeFor(type: string): readonly (readonly unknown[])[] {
 /** Mounted document views, by node id, with a count so two views of one node
  * do not cancel each other's interest on unmount. */
 const interest = new Map<string, number>();
+/** Open threads, by tree id, counted the same way (web only: presence, and a
+ * public thread's events for a reader who is not a member). */
+const treeInterest = new Map<string, number>();
 let interestTimer: ReturnType<typeof setTimeout> | null = null;
-let publishInterest: ((nodeIds: string[]) => void) | null = null;
+let publishInterest: ((nodeIds: string[], treeIds: string[]) => void) | null = null;
+
+function publishNow(): void {
+  publishInterest?.([...interest.keys()], [...treeInterest.keys()]);
+}
 
 function scheduleInterest(): void {
   if (interestTimer !== null) clearTimeout(interestTimer);
   interestTimer = setTimeout(() => {
     interestTimer = null;
-    publishInterest?.([...interest.keys()]);
+    publishNow();
   }, INTEREST_DEBOUNCE_MS);
+}
+
+/** Registers a thread as open. Returns the release function. While a thread
+ * is open the bridge declares the set again every `TREE_INTEREST_RENEW_MS`
+ * and when the tab is shown again. */
+export function addTreeInterest(treeId: string): () => void {
+  treeInterest.set(treeId, (treeInterest.get(treeId) ?? 0) + 1);
+  scheduleInterest();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const count = (treeInterest.get(treeId) ?? 1) - 1;
+    if (count <= 0) treeInterest.delete(treeId);
+    else treeInterest.set(treeId, count);
+    scheduleInterest();
+  };
+}
+
+export function interestedTreeIds(): string[] {
+  return [...treeInterest.keys()];
 }
 
 /** Registers a node as displayed. Returns the release function. */
@@ -623,6 +694,7 @@ export function interestedNodeIds(): string[] {
 /** Test helper: drops the registry and any pending publish. */
 export function resetNodeInterest(): void {
   interest.clear();
+  treeInterest.clear();
   if (interestTimer !== null) clearTimeout(interestTimer);
   interestTimer = null;
 }
@@ -643,7 +715,10 @@ export interface EventBridgeOptions {
   queryClient: QueryClient;
   client?: SessionTrpcClient;
   /** Replaced in tests; defaults to `events.setInterest`. */
-  setInterest?: (connectionId: string, nodeIds: string[]) => Promise<unknown>;
+  setInterest?: (connectionId: string, nodeIds: string[], treeIds: string[]) => Promise<unknown>;
+  /** How often open threads are declared again; replaced in tests. Defaults
+   * to `TREE_INTEREST_RENEW_MS`. */
+  renewIntervalMs?: number;
   /** What to do when the stream reports that the session is gone. Defaults to
    * a full navigation to `/login`. */
   onUnauthorized?: () => void;
@@ -718,14 +793,41 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
     flushTimer ??= setTimeout(flush, EVENT_COALESCE_MS);
   };
 
-  const publisher = (nodeIds: string[]): void => {
+  /** When open threads were last declared, for the lapse check. */
+  let lastTreePublish = 0;
+  const publisher = (nodeIds: string[], treeIds: string[]): void => {
     if (connectionId === null) return;
-    void publish(connectionId, nodeIds).catch(() => {
-      // A failed publish is not retried here: a reconnect republishes the
-      // whole interest set anyway.
+    if (treeIds.length > 0) lastTreePublish = Date.now();
+    void publish(connectionId, nodeIds, treeIds).catch(() => {
+      // A failed publish is not retried here: the renewal timer and a
+      // reconnect republish the whole interest set anyway.
     });
   };
   publishInterest = publisher;
+
+  // Open threads are declared again before the server's 90 s lapse, and at
+  // once when the tab is shown again (a hidden tab's timers can run late). A
+  // thread whose declaration may have lapsed refetches: a reader of a public
+  // thread who is not a member got its events only through it.
+  const renewTimer = setInterval(() => {
+    if (treeInterest.size > 0 && publishInterest === publisher) publishNow();
+  }, options.renewIntervalMs ?? TREE_INTEREST_RENEW_MS);
+  // Under Node (the tests) the timer must not keep the process alive.
+  (renewTimer as { unref?: () => void }).unref?.();
+  const onVisibility = (): void => {
+    if (document.visibilityState !== "visible" || treeInterest.size === 0) return;
+    if (publishInterest !== publisher || connectionId === null) return;
+    const lapsed = Date.now() - lastTreePublish > TREE_INTEREST_LAPSE_MS;
+    publishNow();
+    if (!lapsed) return;
+    for (const treeId of treeInterest.keys()) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tree(treeId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.presence(treeId) });
+    }
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibility);
+  }
 
   const signOut = (): void => {
     if (signedOut) return;
@@ -771,7 +873,7 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
         if (typeof id === "string") {
           connectionId = id;
           // Interest is per connection, so a reconnect republishes it.
-          publishInterest?.([...interest.keys()]);
+          publishNow();
         }
         sessionChecked = false;
         connection.setStatus("open");
@@ -815,10 +917,14 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
         clearTimeout(interestTimer);
         interestTimer = null;
       }
-      publishInterest?.([...interest.keys()]);
+      publishNow();
     },
     close: () => {
       closed = true;
+      clearInterval(renewTimer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
       queue = [];

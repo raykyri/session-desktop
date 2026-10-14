@@ -15,6 +15,11 @@ import type {
   ResearchTree,
   ResearchTreeDetail,
   ResearchTreeSummary,
+  ResearchTreeVisibility,
+  MemberRole,
+  ThreadInvite,
+  ThreadMember,
+  ThreadViewer,
   Turn,
   UserSettings,
 } from "@session/shared";
@@ -46,6 +51,19 @@ import { useLiveTurnsStore, type LiveTurnStatus } from "../stores/liveTurns.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 import {
+  acceptThreadInvite,
+  createThreadInvite,
+  getThreadPresence,
+  leaveThread,
+  listReceivedInvites,
+  listSharedResearchTrees,
+  listThreadInvites,
+  listThreadMembers,
+  removeThreadMember,
+  revokeThreadInvite,
+  setResearchTreeVisibility,
+  setThreadFollowed,
+  setThreadMemberRole,
   archiveResearchTree,
   cancelResearchNode,
   createInvites,
@@ -96,6 +114,7 @@ import {
 import {
   cachedNode,
   dropActiveNodes,
+  dropFromSharedLists,
   eachTreeList,
   invalidateKeys,
   mapSummaries,
@@ -105,7 +124,7 @@ import {
   patchDetailQueue,
   queryKeys,
 } from "./cache.js";
-import { addNodeInterest } from "./events.js";
+import { addNodeInterest, addTreeInterest } from "./events.js";
 
 export { queryKeys, eventPatchedListKeys } from "./cache.js";
 
@@ -256,6 +275,186 @@ export function useResearchTrash(workspaceId: string) {
     queryKey: queryKeys.trash(workspaceId),
     queryFn: () => listResearchTrash(workspaceId),
     enabled: signedIn && workspaceId !== "",
+  });
+}
+
+/* -------------------------------------------------------------------------
+ * Sharing (web only)
+ * ---------------------------------------------------------------------- */
+
+/** Threads shared with the reader: outside their Archive and Trash
+ * (`shared`), in their Archive, or in their Trash. */
+export function useSharedTrees(place: "shared" | "archive" | "trash" = "shared") {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.shared(place),
+    queryFn: () => listSharedResearchTrees(place),
+    enabled: signedIn,
+  });
+}
+
+/** A thread's owner and members. Anyone signed in who may read it. */
+export function useThreadMembers(treeId: string, enabled = true) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.members(treeId),
+    queryFn: () => listThreadMembers(treeId),
+    enabled: signedIn && enabled && treeId !== "",
+  });
+}
+
+/** A thread's pending invitations; only its owner may list them. */
+export function useThreadInvites(treeId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.invites(treeId),
+    queryFn: () => listThreadInvites(treeId),
+    enabled: enabled && treeId !== "",
+  });
+}
+
+/** Invitations addressed to the signed-in account's GitHub login. */
+export function useReceivedInvites() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: queryKeys.receivedInvites(),
+    queryFn: () => listReceivedInvites(),
+    enabled: signedIn,
+  });
+}
+
+/** Who has the thread open, kept current by `research.presence.changed`.
+ * Guests have no event stream, so no presence. */
+export function useThreadPresence(treeId: string): ThreadViewer[] {
+  const signedIn = useSignedIn();
+  return (
+    useQuery({
+      queryKey: queryKeys.presence(treeId),
+      queryFn: () => getThreadPresence(treeId),
+      enabled: signedIn && treeId !== "",
+    }).data ?? NO_VIEWERS
+  );
+}
+
+const NO_VIEWERS: ThreadViewer[] = [];
+
+/**
+ * Declares the thread open on this connection while the component is
+ * mounted (`events.setInterest` `treeIds`): presence, and for a public
+ * thread read by someone who is not a member, its events. The bridge renews
+ * the declaration before the server lets it lapse.
+ */
+export function useThreadInterest(treeId: string | undefined, enabled = true): void {
+  useEffect(() => {
+    if (!treeId || !enabled) return;
+    return addTreeInterest(treeId);
+  }, [enabled, treeId]);
+}
+
+export function useSetTreeVisibility() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { treeId: string; visibility: ResearchTreeVisibility }) =>
+      setResearchTreeVisibility(input.treeId, input.visibility),
+    onSuccess: (tree) => {
+      writeTree(client, tree);
+      mapSummaries(client, (summary) =>
+        summary.id === tree.id && tree.visibility !== undefined
+          ? { ...summary, visibility: tree.visibility }
+          : summary,
+      );
+      // The All Users feed lists public threads only.
+      invalidateKeys(client, ["activity"]);
+    },
+  });
+}
+
+export function useSetThreadMemberRole() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { treeId: string; userId: string; role: MemberRole }) =>
+      setThreadMemberRole(input.treeId, input.userId, input.role),
+    onSuccess: (members, input) => client.setQueryData(queryKeys.members(input.treeId), members),
+  });
+}
+
+export function useRemoveThreadMember() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { treeId: string; userId: string }) =>
+      removeThreadMember(input.treeId, input.userId),
+    onSuccess: (_result, input) => {
+      client.setQueryData<ThreadMember[]>(queryKeys.members(input.treeId), (members) =>
+        members?.filter((member) => member.userId !== input.userId),
+      );
+      invalidateKeys(client, queryKeys.members(input.treeId), queryKeys.tree(input.treeId));
+    },
+  });
+}
+
+/** Leaves a thread shared with the caller: it goes from every list. */
+export function useLeaveThread() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (treeId: string) => leaveThread(treeId),
+    onSuccess: (_result, treeId) => {
+      dropTrees(client, [treeId]);
+      client.removeQueries({ queryKey: queryKeys.members(treeId) });
+      invalidateKeys(client, ["activity"], ["highlightsFeed"], ["trash"]);
+    },
+  });
+}
+
+export function useCreateThreadInvite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createThreadInvite,
+    onSuccess: (created) => {
+      client.setQueryData<ThreadInvite[]>(queryKeys.invites(created.invite.treeId), (invites) =>
+        invites ? [...invites.filter((i) => i.id !== created.invite.id), created.invite] : invites,
+      );
+      invalidateKeys(client, queryKeys.invites(created.invite.treeId));
+    },
+  });
+}
+
+export function useRevokeThreadInvite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (invite: ThreadInvite) => revokeThreadInvite(invite.id),
+    onSuccess: (revoked) =>
+      client.setQueryData<ThreadInvite[]>(queryKeys.invites(revoked.treeId), (invites) =>
+        invites?.filter((invite) => invite.id !== revoked.id),
+      ),
+  });
+}
+
+/** Accepts an invitation by its link's token or, for one addressed to the
+ * caller's login, by id. Answers with the thread as the caller now sees it. */
+export function useAcceptThreadInvite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: acceptThreadInvite,
+    onSuccess: (tree) => {
+      invalidateKeys(
+        client,
+        ["shared"],
+        ["trees"],
+        queryKeys.receivedInvites(),
+        queryKeys.tree(tree.id),
+        queryKeys.members(tree.id),
+        queryKeys.feedRoot(tree.id),
+      );
+    },
+  });
+}
+
+/** Notify me: notifications for new questions and notes in the thread. */
+export function useSetThreadFollowed() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { treeId: string; value: boolean }) =>
+      setThreadFollowed(input.treeId, input.value),
+    onSuccess: (tree) => writeTree(client, tree),
   });
 }
 
@@ -691,7 +890,8 @@ export function useArchiveResearchTree() {
       input.archived ? archiveResearchTree(input.treeId) : restoreResearchTree(input.treeId),
     onSuccess: (tree) => {
       writeTree(client, tree);
-      invalidateKeys(client, ["trees"]);
+      // A member's Archive is their own list (`sharing.listShared`).
+      invalidateKeys(client, ["trees"], ["shared"]);
     },
   });
 }
@@ -704,6 +904,7 @@ function dropTrees(client: QueryClient, treeIds: readonly string[]): void {
     const next = summaries.filter((summary) => !gone.has(summary.id));
     return next.length === summaries.length ? summaries : next;
   });
+  dropFromSharedLists(client, gone);
   for (const treeId of gone) {
     client.removeQueries({ queryKey: queryKeys.tree(treeId) });
     client.removeQueries({ queryKey: queryKeys.feedRoot(treeId) });
@@ -719,7 +920,7 @@ export function useRemoveResearchTree() {
     mutationFn: removeResearchTree,
     onSuccess: (result, treeId) => {
       dropTrees(client, [treeId, ...result.treeIds]);
-      invalidateKeys(client, ["activity"], ["highlightsFeed"], ["trash"]);
+      invalidateKeys(client, ["activity"], ["highlightsFeed"], ["trash"], ["shared"]);
     },
   });
 }
@@ -733,7 +934,14 @@ export function useTrashResearchTree() {
     onSuccess: (tree) => {
       dropTrees(client, [tree.id]);
       // The children moved with it arrive as `research.tree.removed` events.
-      invalidateKeys(client, queryKeys.trash(tree.workspaceId), ["activity"], ["highlightsFeed"]);
+      // A member's Trash is their own list (`sharing.listShared`).
+      invalidateKeys(
+        client,
+        queryKeys.trash(tree.workspaceId),
+        queryKeys.shared("trash"),
+        ["activity"],
+        ["highlightsFeed"],
+      );
     },
   });
 }
@@ -748,6 +956,7 @@ export function useRestoreResearchTreeFromTrash() {
         client,
         queryKeys.trash(tree.workspaceId),
         ["trees"],
+        ["shared"],
         ["activity"],
         ["highlightsFeed"],
         queryKeys.feedRoot(tree.id),
@@ -764,6 +973,8 @@ export function useEmptyResearchTrash() {
     onSuccess: (result, workspaceId) => {
       dropTrees(client, result.treeIds);
       client.setQueryData<ResearchTreeSummary[]>(queryKeys.trash(workspaceId), []);
+      // Shared threads in the Trash were left, whatever their workspace.
+      client.setQueryData<ResearchTreeSummary[]>(queryKeys.shared("trash"), []);
       if (result.folderIds.length > 0) invalidateKeys(client, queryKeys.folders(workspaceId));
     },
   });

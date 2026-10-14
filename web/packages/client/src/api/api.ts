@@ -12,6 +12,13 @@
 
 import type {
   ArtifactStateAction,
+  CreatedInvite,
+  MemberRole,
+  ReceivedInvite,
+  ResearchTreeVisibility,
+  ThreadInvite,
+  ThreadMember,
+  ThreadViewer,
   NodeAnchor,
   RecentActivityCursor,
   RecentActivityPage,
@@ -379,12 +386,17 @@ export function rerunResearchNode(nodeId: string): Promise<ResearchTreeDetail> {
   return trpc().research.rerunNode.mutate({ nodeId });
 }
 
-/** Stores a messages column's display order; `nodeIds` is exactly its chain. */
+/** Stores a messages column's display order; `nodeIds` is exactly its chain.
+ * `expectedOrder` is the order the column showed; another person's change
+ * since then is refused with CONFLICT. */
 export function setResearchChainOrder(
   headNodeId: string,
   nodeIds: string[],
+  expectedOrder?: string[],
 ): Promise<ResearchNode> {
-  return trpc().research.setChainOrder.mutate({ headNodeId, nodeIds });
+  return trpc().research.setChainOrder.mutate(
+    expectedOrder === undefined ? { headNodeId, nodeIds } : { headNodeId, nodeIds, expectedOrder },
+  );
 }
 
 /** Relaunches a failed, cancelled or interrupted run in place: the node keeps
@@ -546,8 +558,90 @@ export function listRecentActivityForTrees(treeIds: string[]): Promise<RecentRes
  * events
  * ---------------------------------------------------------------------- */
 
-export function setEventInterest(connectionId: string, nodeIds: string[]) {
-  return trpc().events.setInterest.mutate({ connectionId, nodeIds });
+/** Which active nodes this connection streams and which threads it has open
+ * (presence, and a public thread's events for a reader who is not a member).
+ * The server drops an open thread not declared again within 90 s. */
+export function setEventInterest(connectionId: string, nodeIds: string[], treeIds: string[] = []) {
+  return trpc().events.setInterest.mutate({ connectionId, nodeIds, treeIds });
+}
+
+/** Who has the thread open now. */
+export function getThreadPresence(treeId: string): Promise<ThreadViewer[]> {
+  return trpc().events.presence.query({ treeId });
+}
+
+/* -------------------------------------------------------------------------
+ * sharing (web only)
+ * ---------------------------------------------------------------------- */
+
+export function setResearchTreeVisibility(
+  treeId: string,
+  visibility: ResearchTreeVisibility,
+): Promise<ResearchTree> {
+  return trpc().sharing.setVisibility.mutate({ treeId, visibility });
+}
+
+/** The owner first, then the members in the order they joined. */
+export function listThreadMembers(treeId: string): Promise<ThreadMember[]> {
+  return trpc().sharing.listMembers.query({ treeId });
+}
+
+export function setThreadMemberRole(
+  treeId: string,
+  userId: string,
+  role: MemberRole,
+): Promise<ThreadMember[]> {
+  return trpc().sharing.setRole.mutate({ treeId, userId, role });
+}
+
+export function removeThreadMember(treeId: string, userId: string) {
+  return trpc().sharing.removeMember.mutate({ treeId, userId });
+}
+
+/** The caller leaves a thread shared with them. */
+export function leaveThread(treeId: string) {
+  return trpc().sharing.leave.mutate({ treeId });
+}
+
+/** The threads shared with the caller, outside their Archive and Trash, in
+ * their Archive, or in their Trash. */
+export function listSharedResearchTrees(
+  place: "shared" | "archive" | "trash" = "shared",
+): Promise<ResearchTreeSummary[]> {
+  return trpc().sharing.listShared.query({ place });
+}
+
+/** An invitation by GitHub login, or by link when `githubLogin` is absent. */
+export function createThreadInvite(input: {
+  treeId: string;
+  role: MemberRole;
+  githubLogin?: string;
+}): Promise<CreatedInvite> {
+  return trpc().invites.create.mutate(input);
+}
+
+export function listThreadInvites(treeId: string): Promise<ThreadInvite[]> {
+  return trpc().invites.list.query({ treeId });
+}
+
+/** Pending invitations addressed to the signed-in account's GitHub login. */
+export function listReceivedInvites(): Promise<ReceivedInvite[]> {
+  return trpc().invites.received.query();
+}
+
+export function acceptThreadInvite(
+  input: { token: string } | { inviteId: string },
+): Promise<ResearchTree> {
+  return trpc().invites.accept.mutate(input);
+}
+
+export function revokeThreadInvite(inviteId: string): Promise<ThreadInvite> {
+  return trpc().invites.revoke.mutate({ inviteId });
+}
+
+/** Notify me: notifications for new questions and notes in the thread. */
+export function setThreadFollowed(treeId: string, value: boolean): Promise<ResearchTree> {
+  return trpc().subscriptions.set.mutate({ treeId, value });
 }
 
 /* -------------------------------------------------------------------------

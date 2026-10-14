@@ -15,6 +15,7 @@ import type {
   RecentResearchQuery,
   ResearchFollowupQueueItem,
   ResearchNode,
+  ResearchTree,
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "@session/shared";
@@ -49,6 +50,17 @@ export const queryKeys = {
   drafts: (workspaceId: string) => ["drafts", workspaceId] as const,
   /** The workspace's threads in the Trash (`research.listTrash`). */
   trash: (workspaceId: string) => ["trash", workspaceId] as const,
+  /** Threads shared with the reader (`sharing.listShared`), outside their
+   * Archive and Trash, in their Archive, or in their Trash. */
+  shared: (place: "shared" | "archive" | "trash") => ["shared", place] as const,
+  /** A thread's owner and members (`sharing.listMembers`). */
+  members: (treeId: string) => ["members", treeId] as const,
+  /** A thread's pending invitations, for its owner (`invites.list`). */
+  invites: (treeId: string) => ["invites", treeId] as const,
+  /** Invitations addressed to the reader's GitHub login (`invites.received`). */
+  receivedInvites: () => ["receivedInvites"] as const,
+  /** Who has a thread open (`events.presence`, `research.presence.changed`). */
+  presence: (treeId: string) => ["presence", treeId] as const,
 } as const;
 
 /** The lists the bridge invalidates on reconnect: everything the server keeps
@@ -64,6 +76,11 @@ export const eventPatchedListKeys = [
   "folders",
   "drafts",
   "trash",
+  "shared",
+  "members",
+  "invites",
+  "receivedInvites",
+  "presence",
 ] as const;
 
 export function invalidateKeys(
@@ -83,11 +100,23 @@ export function eachTreeList(
   );
 }
 
+/** Every `["shared", place]` list (web only). Kept apart from
+ * `eachTreeList`: a new thread is never inserted into these, since which of
+ * them lists a thread is the server's answer. */
+export function eachSharedList(
+  client: QueryClient,
+  update: (summaries: ResearchTreeSummary[]) => ResearchTreeSummary[],
+): void {
+  client.setQueriesData<ResearchTreeSummary[]>({ queryKey: ["shared"] }, (summaries) =>
+    summaries ? update(summaries) : summaries,
+  );
+}
+
 export function mapSummaries(
   client: QueryClient,
   patch: (summary: ResearchTreeSummary) => ResearchTreeSummary,
 ): void {
-  eachTreeList(client, (summaries) => {
+  const apply = (summaries: ResearchTreeSummary[]) => {
     let changed = false;
     const next = summaries.map((summary) => {
       const patched = patch(summary);
@@ -95,7 +124,41 @@ export function mapSummaries(
       return patched;
     });
     return changed ? next : summaries;
+  };
+  eachTreeList(client, apply);
+  eachSharedList(client, apply);
+}
+
+/** Drops a thread from the shared lists (it was left, removed or deleted). */
+export function dropFromSharedLists(client: QueryClient, treeIds: ReadonlySet<string>): void {
+  eachSharedList(client, (summaries) => {
+    const next = summaries.filter((summary) => !treeIds.has(summary.id));
+    return next.length === summaries.length ? summaries : next;
   });
+}
+
+/** The fields of a tree that are the reader's own (web only). The server
+ * leaves them out of a tree event it sends to everyone but the person who
+ * caused it (`research/access.ts:sharedTree`). */
+const PER_PERSON_TREE_FIELDS = ["role", "lastViewedAt", "followed"] as const;
+
+/**
+ * A tree from an event, over the copy the cache holds: a per-person field the
+ * event leaves out keeps its cached value instead of being dropped. Returns
+ * `next` itself when it carries every one of them.
+ */
+export function mergeTreeEvent(
+  previous: ResearchTree | null | undefined,
+  next: ResearchTree,
+): ResearchTree {
+  if (!previous || previous.id !== next.id) return next;
+  let merged: ResearchTree | null = null;
+  for (const field of PER_PERSON_TREE_FIELDS) {
+    if (field in next || previous[field] === undefined) continue;
+    merged ??= { ...next };
+    (merged as unknown as Record<string, unknown>)[field] = previous[field];
+  }
+  return merged ?? next;
 }
 
 /** Patches a tree detail already in the cache. A no-op when nothing is cached for it. */
