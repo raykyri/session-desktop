@@ -14,6 +14,7 @@ import type { Providers } from "../src/runs/providers.js";
 import { createRunsService } from "../src/runs/service.js";
 import { commitAnswer } from "../src/runs/snapshots.js";
 
+import { runOf } from "./helpers.js";
 import { collectEvents, createAgentHarness } from "./runsHelpers.js";
 
 async function launch(
@@ -54,8 +55,8 @@ test.serial("a model the process cannot resolve fails the node, not the process"
   await harness.settle();
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "failed");
-  t.regex(node?.error ?? "", /gemini-flash is not configured on this deployment/);
+  t.is(runOf(node).status, "failed");
+  t.regex(runOf(node).error ?? "", /gemini-flash is not configured on this deployment/);
   t.deepEqual(
     runsRepo.listAttempts(harness.db, nodeId),
     [],
@@ -79,8 +80,8 @@ test.serial("a run that outlasts the wall-clock cap is stopped and classified", 
   await harness.settle();
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "failed");
-  t.regex(node?.error ?? "", /exceeded the maximum duration allowed/);
+  t.is(runOf(node).status, "failed");
+  t.regex(runOf(node).error ?? "", /exceeded the maximum duration allowed/);
   const attempt = runsRepo.listAttempts(harness.db, nodeId)[0];
   t.is(attempt?.outcome, "failed");
   t.is(attempt?.errorClass, "timeout", "a timeout is not a network error or an unknown one");
@@ -127,8 +128,8 @@ test.serial(
     await service.idle();
 
     const node = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(node?.status, "failed", "a node nothing is running must not stay `running`");
-    t.regex(node?.error ?? "", /Research execution terminated unexpectedly/);
+    t.is(runOf(node).status, "failed", "a node nothing is running must not stay `running`");
+    t.regex(runOf(node).error ?? "", /Research execution terminated unexpectedly/);
     t.is(
       harness.db.$client.prepare(`SELECT 1 FROM run_queue WHERE node_id = ?`).get(nodeId),
       undefined,
@@ -168,7 +169,11 @@ test.serial("prevents snapshot commit while the response stream remains active",
   });
   t.false(empty.committed);
   t.regex(empty.reason ?? "", /completed without generating response content/);
-  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "running", "neither settled the node");
+  t.is(
+    runOf(nodesRepo.get(harness.db, user.id, nodeId)).status,
+    "running",
+    "neither settled the node",
+  );
 });
 
 test.serial("rejects responses exceeding snapshot byte limit with an error", async (t) => {

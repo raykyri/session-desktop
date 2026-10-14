@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 
 import { embeds, tweets } from "@session/db";
+import { nodeAttachments, nodePrompt } from "@session/shared/lib/researchNodeTypes";
 import test from "ava";
 
 import {
@@ -257,9 +258,11 @@ test("a question's permalinks become attachments on its node", async (t) => {
     workspaceId: workspace.id,
   });
   const root = detail.nodes[0];
-  t.is(root?.prompt, prompt, "the stored question keeps the author's own text");
-  t.is(root?.attachments?.length, 1);
-  const attachment = root?.attachments?.[0];
+  if (!root) throw new Error("the new thread has no root node");
+  t.is(nodePrompt(root), prompt, "the stored question keeps the author's own text");
+  t.is(nodeAttachments(root).length, 1);
+  const attachment = nodeAttachments(root)[0];
+  if (attachment?.kind !== "tweet") throw new Error("expected a tweet attachment");
   t.is(attachment?.status, "resolved");
   t.is(attachment?.provider, "xSyndication");
   t.is(attachment?.placement, "trailing");
@@ -271,13 +274,15 @@ test("a question's permalinks become attachments on its node", async (t) => {
   const feed = await caller.feed.recentActivity({ scope: "mine" });
   const item = feed.items.find((entry) => entry.kind === "research-query");
   t.is(
-    item?.kind === "research-query" ? item.query.attachments?.[0]?.tweet?.author.handle : null,
+    item?.kind === "research-query"
+      ? item.query.attachments?.find((entry) => entry.kind === "tweet")?.tweet?.author.handle
+      : null,
     "session",
   );
 
   // And the run reads the post, not just the URL: the snapshot rides into the
   // request as explicitly untrusted reference material (`04` §5).
-  const text = researchUserText({ node: root ?? { prompt, attachments: [], queryAnchor: null } });
+  const text = researchUserText({ node: root });
   t.true(text.startsWith(prompt));
   t.true(text.includes("<session_reference_material>"));
   t.true(text.includes("untrusted reference material"));

@@ -10,6 +10,7 @@
 import type { SessionDatabase } from "@session/db";
 import { nodes as nodesRepo, queue as queueRepo, runs as runsRepo } from "@session/db";
 import type { ResearchRecapCandidate } from "@session/shared";
+import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
 import type { Config } from "../config.js";
 import type { EventBus } from "../events/bus.js";
@@ -195,7 +196,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   const publishQueuePositions = (userId: string): void => {
     for (const [nodeId, position] of queueRepo.positions(deps.db, userId)) {
       const node = nodesRepo.get(deps.db, userId, nodeId);
-      if (node && node.status === "queued") {
+      if (node && nodeStatus(node) === "queued") {
         emit(userId, "research.node.updated", { node, queuePosition: position });
       }
     }
@@ -232,7 +233,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   const settleUnhandled = (nodeId: string, userId: string): void => {
     try {
       const node = nodesRepo.get(deps.db, userId, nodeId);
-      if (!node || nodesRepo.isTerminalStatus(node.status)) {
+      if (!node || nodesRepo.isTerminalStatus(nodeStatus(node))) {
         return;
       }
       const failed = nodesRepo.setStatus(deps.db, userId, nodeId, "failed", {
@@ -415,7 +416,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           // An interrupted node was re-queued by boot reconciliation; opening
           // a new attempt on it is what makes it runnable again, and its
           // committed turns come along as context (`05` §7).
-          if (node.status === "interrupted") {
+          if (nodeStatus(node) === "interrupted") {
             const resumesSoFar = runsRepo
               .listAttempts(deps.db, node.id)
               .filter((attempt) => attempt.kind === "resume").length;
@@ -434,7 +435,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
             begin(run.nodeId, run.userId, "resume");
             continue;
           }
-          if (nodesRepo.isTerminalStatus(node.status)) {
+          if (nodesRepo.isTerminalStatus(nodeStatus(node))) {
             queueRepo.release(deps.db, run.nodeId);
             continue;
           }

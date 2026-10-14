@@ -2,9 +2,10 @@
 // `forkNode`, and `retryNode` (`03-api-and-events.md` §2,
 // `05-run-lifecycle-and-streaming.md` §8, `06-auth-and-users.md` §8).
 
-import { nodes, queue, runs as runsRepo, snapshots, trees, usage } from "@session/db";
-import type { ResearchNodeContent, ResearchNodeCard } from "@session/shared";
+import { nodes, queue, runs as runsRepo, snapshots, usage } from "@session/db";
+import type { ResearchNodeContent } from "@session/shared";
 import { canUseModel, findModel } from "@session/shared";
+import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { TRPCError } from "@trpc/server";
 
 import type { AppContext } from "../trpc/base.js";
@@ -105,22 +106,6 @@ export function queuePositionOf(
   return position > 0 ? position : undefined;
 }
 
-function toCard(node: {
-  id: string;
-  prompt: string;
-  responsePreview?: string | null;
-  status: ResearchNodeCard["status"];
-  createdAt: number;
-}): ResearchNodeCard {
-  return {
-    id: node.id,
-    prompt: node.prompt,
-    responsePreview: node.responsePreview ?? null,
-    status: node.status,
-    createdAt: node.createdAt,
-  };
-}
-
 /**
  * Everything one node needs to render (`03-api-and-events.md` §4). Source
  * preference follows the desktop's `main.rs:1843`: the durable snapshot, then
@@ -135,8 +120,6 @@ export function nodeContent(
     repo(() => nodes.get(ctx.db, ctx.user.id, nodeId)),
     `research node ${nodeId} was not found`,
   );
-  const detail = repo(() => trees.detail(ctx.db, ctx.user.id, node.treeId));
-  const children = detail.nodes.filter((child) => child.parentNodeId === node.id).map(toCard);
   // The snapshot is read first so `seq`, read with the live window, is never
   // older than the turns returned beside it: a snapshot committed between the
   // two reads costs the client a refetch, not a silently stale sequence.
@@ -146,7 +129,6 @@ export function nodeContent(
   const content: ResearchNodeContent = {
     node,
     turns: [],
-    children,
     seq: live.seq,
   };
   if (snapshot && snapshot.turns.length > 0) {
@@ -157,10 +139,13 @@ export function nodeContent(
     if (live.inFlightText !== undefined) {
       content.inFlightText = live.inFlightText;
     }
-  } else if (nodes.isTerminalStatus(node.status)) {
-    content.sourceError = node.error ?? "Research completed without generating response content";
+  } else if (node.type === "document") {
+    content.sourceError = "This document's content is unavailable";
+  } else if (node.type === "exchange" && nodes.isTerminalStatus(node.run.status)) {
+    content.sourceError =
+      nodeRun(node)?.error ?? "Research completed without generating response content";
   }
-  if (node.status === "queued") {
+  if (nodeStatus(node) === "queued") {
     const position = queuePositionOf(ctx, nodeId);
     if (position !== undefined) {
       content.queuePosition = position;

@@ -33,9 +33,11 @@ export const highlightsRouter = router({
       const highlight = repo(() =>
         highlights.remove(ctx.db, ctx.user.id, input.nodeId, input.highlightId),
       );
-      publish(ctx, "research.highlight.removed", {
+      // The desktop has no single-highlight event; one removal is a list of
+      // one.
+      publish(ctx, "research.highlights.removed", {
         nodeId: input.nodeId,
-        highlightId: input.highlightId,
+        highlightIds: [input.highlightId],
       });
       return highlight;
     }),

@@ -73,7 +73,6 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
       interrupted: reconciliation.interruptedNodeIds.length,
       requeued: reconciliation.requeuedNodeIds.length,
       reenqueued: reconciliation.reenqueuedNodeIds.length,
-      emptyDocuments: reconciliation.emptyDocumentNodeIds.length,
     },
     "reconciled runs from the previous process",
   );

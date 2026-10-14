@@ -22,7 +22,8 @@ import {
   snapshots as snapshotsRepo,
 } from "@session/db";
 import type { ResearchNode, Turn } from "@session/shared";
-import { responsePreview } from "@session/shared";
+import { DEFAULT_MODEL_ID, responsePreview } from "@session/shared";
+import { nodePrompt } from "@session/shared/lib/researchNodeTypes";
 import type { ModelMessage } from "ai";
 import { stepCountIs, streamText } from "ai";
 
@@ -103,7 +104,7 @@ function parentDocumentOf(
     return undefined;
   }
   const parent = nodesRepo.get(db, userId, node.parentNodeId);
-  if (!parent || parent.kind !== "document") {
+  if (!parent || parent.type !== "document") {
     return undefined;
   }
   const snapshot = snapshotsRepo.read(db, userId, parent.id);
@@ -111,7 +112,7 @@ function parentDocumentOf(
   if (markdown === null) {
     return undefined;
   }
-  return { title: parent.title ?? parent.prompt, markdown };
+  return { title: parent.title ?? nodePrompt(parent), markdown };
 }
 
 /**
@@ -126,21 +127,25 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const { userId, nodeId } = input;
 
   const node = nodesRepo.get(db, userId, nodeId);
-  if (!node) {
+  // Only exchanges have runs; a post or document in the queue is a bug
+  // upstream, and failing the attempt releases its queue row.
+  if (!node || node.type !== "exchange") {
     return { outcome: "failed" };
   }
-  if (nodesRepo.isTerminalStatus(node.status)) {
-    return { outcome: node.status === "complete" ? "complete" : "failed" };
+  if (nodesRepo.isTerminalStatus(node.run.status)) {
+    return { outcome: node.run.status === "complete" ? "complete" : "failed" };
   }
+  const modelId = node.agent.model ?? DEFAULT_MODEL_ID;
+  const attempt = node.run.attempt ?? 1;
 
-  const resolved = deps.providers.resolve(node.model);
+  const resolved = deps.providers.resolve(modelId, node.agent.effort);
   if (!resolved) {
     const error: ClassifiedError = {
       errorClass: "auth",
-      message: `${node.model} is not configured on this deployment`,
+      message: `${modelId} is not configured on this deployment`,
       detail: "missing credential",
     };
-    settleFailure(deps, userId, nodeId, node.attempt, error);
+    settleFailure(deps, userId, nodeId, attempt, error);
     return { outcome: "failed", error };
   }
 
@@ -188,16 +193,16 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   });
   runsRepo.startAttempt(db, {
     nodeId,
-    attempt: node.attempt,
+    attempt: attempt,
     kind: input.kind,
-    model: node.model,
+    model: modelId,
   });
   publishNode(started, {}, true);
   emit("research.run.started", {
     nodeId,
-    attempt: node.attempt,
+    attempt: attempt,
     seq: nextSeq(),
-    model: node.model,
+    model: modelId,
   });
 
   // ── request assembly ────────────────────────────────────────────────────
@@ -255,7 +260,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     );
   } catch (error) {
     const classified = classifyRunError(error);
-    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
+    settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
 
@@ -362,7 +367,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       ...mapper.committedTurns,
       ...(mapper.inFlightTurn() ? [mapper.inFlightTurn() as Turn] : []),
     ]);
-    publishNode({ ...current, responsePreview: preview ?? current.responsePreview ?? null });
+    if (current.type !== "exchange") {
+      return;
+    }
+    publishNode({
+      ...current,
+      run: { ...current.run, responsePreview: preview ?? current.run.responsePreview ?? null },
+    });
   };
 
   const timeoutMs = deps.config.limits.runTimeoutMs;
@@ -433,12 +444,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const timedOut = timeout.aborted && !aborted;
   const draining = input.isDraining();
   const current = nodesRepo.get(db, userId, nodeId);
-  const cancelled = current?.status === "cancelled";
+  const cancelled = current?.type === "exchange" && current.run.status === "cancelled";
 
   const finishAttempt = (outcome: string, error?: ClassifiedError): void => {
     runsRepo.finishAttempt(db, {
       nodeId,
-      attempt: node.attempt,
+      attempt: attempt,
       outcome,
       errorClass: error?.errorClass ?? null,
       steps,
@@ -470,7 +481,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     recordUsage();
     emit("research.run.finished", {
       nodeId,
-      attempt: node.attempt,
+      attempt: attempt,
       seq: finishSeq(),
       status: "interrupted",
     });
@@ -490,7 +501,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     emit("research.run.finished", {
       nodeId,
-      attempt: node.attempt,
+      attempt: attempt,
       seq,
       status: "cancelled",
     });
@@ -512,7 +523,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     }
     finishAttempt("failed", classified);
     recordUsage();
-    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
+    settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
 
@@ -520,7 +531,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const classified = refusalError(rawFinishReason);
     finishAttempt("failed", classified);
     recordUsage();
-    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
+    settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
 
@@ -536,7 +547,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     };
     finishAttempt("failed", classified);
     recordUsage();
-    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
+    settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
   if (!commit.committed) {
@@ -547,7 +558,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     };
     finishAttempt("failed", classified);
     recordUsage();
-    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
+    settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
 
@@ -563,14 +574,14 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     nodeId,
     [askedMessage, ...priorMessages, ...responseMessages].map((message) => ({
       message,
-      model: message.role === "assistant" ? node.model : null,
+      model: message.role === "assistant" ? modelId : null,
     })),
   );
   finishAttempt("complete");
   recordUsage();
   emit("research.run.finished", {
     nodeId,
-    attempt: node.attempt,
+    attempt: attempt,
     seq: finishSeq(),
     status: "complete",
   });

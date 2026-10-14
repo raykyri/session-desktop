@@ -26,7 +26,7 @@ import {
 } from "../src/trpc/errors.js";
 import { searchFeatures } from "../src/trpc/routers/system.js";
 
-import { ARTIFACT_ORIGIN, answerTurn, createHarness, testConfig } from "./helpers.js";
+import { answerTurn, ARTIFACT_ORIGIN, createHarness, runOf, testConfig } from "./helpers.js";
 
 test("returns health status and runtime config for unauthenticated requests", async (t) => {
   const harness = createHarness(t);
@@ -191,6 +191,8 @@ test("workspaces and folders behave as the sidebar expects", async (t) => {
       folders: [{ id: "f1", name: "Later", workspaceId: first.id }],
       membership: {},
       collapsed: [],
+      parents: {},
+      collapsedGroups: [],
     },
   });
   t.is(state.folders.length, 1);
@@ -251,7 +253,7 @@ test("boot writes the Vertex credential and re-queues interrupted runs", async (
   // into `interrupted` and puts it back at the head of the queue.
   harness.runs.started.length = 0;
   reconcileRuns(harness.deps, harness.deps.logger ?? createLogger({ write: () => undefined }));
-  t.is(nodes.get(harness.db, user.id, nodeId)?.status, "interrupted");
+  t.is(runOf(nodes.get(harness.db, user.id, nodeId)).status, "interrupted");
   t.deepEqual(harness.runs.started, [nodeId]);
 });
 

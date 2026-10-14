@@ -25,6 +25,7 @@ import {
   OPENROUTER_PROVIDER_PREFERENCES,
   appName,
   effortProviderOptions,
+  resolveEffort,
   findModel,
 } from "@session/shared";
 import type { LanguageModel, ToolSet } from "ai";
@@ -52,7 +53,7 @@ export interface ResolvedModel {
 export interface Providers {
   /** `null` when the model is unknown or its provider has no credential —
    * the same answer `system.runtimeConfig` gives as `available: false`. */
-  resolve(modelId: string): ResolvedModel | null;
+  resolve(modelId: string, effort?: string | null): ResolvedModel | null;
   /** True when every model is a recorded fixture. */
   readonly fixtures: boolean;
 }
@@ -82,10 +83,11 @@ export function openRouterSettings(effortOptions: Record<string, unknown>) {
   };
 }
 
-/** The provider options for one model: medium effort in each provider's own
- * spelling, plus OpenRouter's routing preferences. */
-export function providerOptionsFor(entry: ModelEntry): ProviderOptions {
-  return effortProviderOptions(entry) as ProviderOptions;
+/** The provider options for one model: the requested effort, or the model's
+ * default when it does not offer that one, in each provider's own spelling,
+ * plus OpenRouter's routing preferences. */
+export function providerOptionsFor(entry: ModelEntry, effort?: string | null): ProviderOptions {
+  return effortProviderOptions(entry, resolveEffort(entry, effort)) as ProviderOptions;
 }
 
 /** What OpenRouter answers when a slug — an alias like `~openai/gpt-luna-latest`
@@ -212,12 +214,13 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
 
   return {
     fixtures,
-    resolve(modelId: string): ResolvedModel | null {
+    resolve(modelId: string, effort?: string | null): ResolvedModel | null {
       const entry = findModel(modelId);
       if (!entry || !config.credentials[entry.provider]) {
         return null;
       }
-      const providerOptions = providerOptionsFor(entry);
+      const resolvedEffort = resolveEffort(entry, effort);
+      const providerOptions = providerOptionsFor(entry, resolvedEffort);
       if (fixtures) {
         return {
           entry,
@@ -252,12 +255,12 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
             model:
               fallbackRoute === undefined
                 ? primary
-                : (routeFallbacks.get(entry.id) ??
+                : (routeFallbacks.get(`${entry.id}:${resolvedEffort}`) ??
                   (() => {
                     const wrapped = withRouteFallback(primary, () =>
                       provider.chat(fallbackRoute, settings),
                     );
-                    routeFallbacks.set(entry.id, wrapped);
+                    routeFallbacks.set(`${entry.id}:${resolvedEffort}`, wrapped);
                     return wrapped;
                   })()),
             providerOptions,

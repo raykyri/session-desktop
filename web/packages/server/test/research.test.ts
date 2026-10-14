@@ -4,13 +4,14 @@
 
 import { runs as runsRepo, snapshots } from "@session/db";
 import type { SessionEvent } from "@session/shared";
-import { RESEARCH_DOCUMENT_BYTE_LIMIT } from "@session/shared";
+import { nodeModelId } from "@session/shared";
+import { RESEARCH_DOCUMENT_BYTE_LIMIT } from "@session/shared/lib/researchDocuments";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
 
 import { sessionEvent } from "../src/events/bus.js";
 
-import { anchorFor, answerTurn, createHarness } from "./helpers.js";
+import { anchorFor, answerTurn, createHarness, recapOf, runOf } from "./helpers.js";
 
 test("a research thread runs from launch to archive", async (t) => {
   const harness = createHarness(t);
@@ -28,7 +29,7 @@ test("a research thread runs from launch to archive", async (t) => {
   });
   const root = detail.nodes[0];
   t.truthy(root);
-  t.is(root?.status, "queued");
+  t.is(runOf(root).status, "queued");
   t.deepEqual(harness.runs.started, [root?.id]);
 
   // The snapshot a fresh viewer gets: no turns yet, a queue position, a seq.
@@ -90,7 +91,7 @@ test("a research thread runs from launch to archive", async (t) => {
     sessionEvent("research.run.finished", {
       nodeId,
       attempt: 1,
-      seq: commit.node.attempt,
+      seq: runOf(commit.node).attempt,
       status: "complete",
     }),
   );
@@ -111,7 +112,7 @@ test("a research thread runs from launch to archive", async (t) => {
 
   // Settled: the durable snapshot wins over the live window.
   const settled = await caller.research.getNodeContent({ nodeId });
-  t.is(settled.node.status, "complete");
+  t.is(runOf(settled.node).status, "complete");
   t.is(settled.responseRevision, commit.revision);
   t.is(settled.turns.length, 1);
   t.is(settled.queuePosition, undefined);
@@ -131,13 +132,13 @@ test("a research thread runs from launch to archive", async (t) => {
     prompt: "How do false positives scale?",
     model: "deepseek-flash",
   });
-  t.is(child.model, "deepseek-flash");
-  t.is(child.status, "queued");
+  t.is(nodeModelId(child), "deepseek-flash");
+  t.is(runOf(child).status, "queued");
   t.deepEqual(harness.runs.started, [nodeId, child.id]);
 
   // Cancel it, then retry it.
   const cancelled = await caller.research.cancelNode({ nodeId: child.id });
-  t.is(cancelled.status, "cancelled");
+  t.is(runOf(cancelled).status, "cancelled");
   t.deepEqual(harness.runs.cancelled, [child.id]);
   await t.throwsAsync(caller.research.cancelNode({ nodeId: child.id }), {
     message: /already in terminal status/,
@@ -145,8 +146,8 @@ test("a research thread runs from launch to archive", async (t) => {
 
   const retried = await caller.research.retryNode({ nodeId: child.id });
   const retriedChild = retried.nodes.find((node) => node.id === child.id);
-  t.is(retriedChild?.status, "queued");
-  t.is(retriedChild?.attempt, 2);
+  t.is(runOf(retriedChild).status, "queued");
+  t.is(runOf(retriedChild).attempt, 2);
 
   // Archive and restore the thread.
   await caller.research.cancelNode({ nodeId: child.id });
@@ -182,7 +183,7 @@ test("a gated model is refused for a non-admin and allowed for an admin", async 
     model: "claude-fable",
     workspaceId: adminWorkspace.id,
   });
-  t.is(detail.nodes[0]?.model, "claude-fable");
+  t.is(detail.nodes[0]?.type === "exchange" ? detail.nodes[0].agent.model : null, "claude-fable");
   t.true((await adminCaller.system.runtimeConfig()).models.some((m) => m.id === "claude-fable"));
 });
 
@@ -280,9 +281,8 @@ test("an imported report becomes a complete document thread", async (t) => {
     workspaceId: workspace.id,
   });
   const node = detail.nodes[0];
-  t.is(node?.status, "complete");
-  t.is(node?.kind, "document");
-  t.is(node?.origin, "imported");
+  t.is(node?.type, "document");
+  t.is(node?.type === "document" ? node.source : null, "imported");
   t.is(detail.tree.title, "Bloom filters");
   const content = await caller.research.getNodeContent({ nodeId: node?.id ?? "" });
   t.true(content.turns.length > 0);
@@ -327,11 +327,12 @@ test("recap generation needs the agent loop; applying a candidate does not", asy
       text: "A summary.",
       responseRevision: commit.revision,
       generatedAt: Date.now(),
+      adapter: "gemini",
       model: "gemini-flash",
       instructions: "Summarize in one sentence.",
     },
   });
-  t.is(node.recap?.text, "A summary.");
+  t.is(recapOf(node)?.text, "A summary.");
 
   // Without a metadata runner the title falls back to the one the node has.
   const title = await caller.research.generateTitle({ nodeId });

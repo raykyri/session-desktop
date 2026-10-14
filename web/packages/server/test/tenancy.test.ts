@@ -217,6 +217,7 @@ const ATTEMPTS: readonly Attempt[] = [
           responseRevision: owned.responseRevision,
           instructions: "Summarize.",
           generatedAt: Date.now(),
+          adapter: "gemini",
           model: "gemini-flash",
         },
       }),

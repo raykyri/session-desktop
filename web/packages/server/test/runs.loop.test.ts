@@ -16,7 +16,7 @@ import test from "ava";
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
 import { researchSystemPrompt } from "../src/runs/prompts.js";
 
-import { createHarness } from "./helpers.js";
+import { createHarness, recapOf, runOf } from "./helpers.js";
 import { collectEvents, createAgentHarness, nextProcessAgent } from "./runsHelpers.js";
 
 function typesOf(events: readonly SessionEvent[]): string[] {
@@ -93,9 +93,9 @@ test.serial(
 
     // The node settled with a durable answer.
     const node = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(node?.status, "complete");
-    t.truthy(node?.responseSnapshotAt);
-    t.regex(node?.responsePreview ?? "", /Bloom filter/);
+    t.is(runOf(node).status, "complete");
+    t.truthy(runOf(node).responseSnapshotAt);
+    t.regex(runOf(node).responsePreview ?? "", /Bloom filter/);
 
     const content = await caller.research.getNodeContent({ nodeId });
     t.truthy(content.responseRevision);
@@ -141,7 +141,7 @@ test.serial(
     // answer is under `MIN_RECAP_CHARS` — but the pending flag is still
     // settled on the way out (`04-agent-runtime.md` §9).
     t.truthy(nodesRepo.get(harness.db, user.id, nodeId)?.title);
-    t.is(nodesRepo.get(harness.db, user.id, nodeId)?.recap, undefined);
+    t.is(recapOf(nodesRepo.get(harness.db, user.id, nodeId)), undefined);
     const pending = events.filter((event) => event.type === "research.recap.pending");
     t.deepEqual(
       pending.map((event) => event.payload["pending"]),
@@ -235,8 +235,8 @@ test.serial("a refusal fails the node with the content-filter class", async (t) 
   await harness.settle();
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "failed");
-  t.regex(node?.error ?? "", /declined to answer/);
+  t.is(runOf(node).status, "failed");
+  t.regex(runOf(node).error ?? "", /declined to answer/);
   t.is(runsRepo.listAttempts(harness.db, nodeId)[0]?.errorClass, "content_filter");
 });
 
@@ -247,7 +247,7 @@ test.serial("context overflow and a mid-stream error are classified apart", asyn
   await harness.settle();
   t.is(runsRepo.listAttempts(harness.db, overflow.nodeId)[0]?.errorClass, "context_too_long");
   t.regex(
-    nodesRepo.get(harness.db, overflow.user.id, overflow.nodeId)?.error ?? "",
+    runOf(nodesRepo.get(harness.db, overflow.user.id, overflow.nodeId)).error ?? "",
     /Context window limit exceeded/,
   );
 
@@ -255,7 +255,7 @@ test.serial("context overflow and a mid-stream error are classified apart", asyn
   const dropped = await launch(harness, "dropped");
   await harness.settle();
   const node = nodesRepo.get(harness.db, dropped.user.id, dropped.nodeId);
-  t.is(node?.status, "failed");
+  t.is(runOf(node).status, "failed");
   t.is(runsRepo.listAttempts(harness.db, dropped.nodeId)[0]?.errorClass, "network");
   // The partial text remains available to the reader.
   const live = runsRepo.liveWindow(harness.db, dropped.user.id, dropped.nodeId);
@@ -277,7 +277,7 @@ test.serial("a rate limit re-queues with backoff instead of failing", async (t) 
 
   await harness.settle();
   const queued = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(queued?.status, "queued", "a 429 goes back to the queue");
+  t.is(runOf(queued).status, "queued", "a 429 goes back to the queue");
   t.is(runsRepo.listAttempts(harness.db, nodeId)[0]?.outcome, "rate_limited");
 
   const row = harness.db.$client
@@ -288,12 +288,12 @@ test.serial("a rate limit re-queues with backoff instead of failing", async (t) 
 
   // A claim before the backoff expires finds nothing.
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "queued");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).status, "queued");
 
   // Move the backoff into the past; the retry succeeds.
   harness.db.$client.prepare("UPDATE run_queue SET not_before = 0 WHERE node_id = ?").run(nodeId);
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "complete");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).status, "complete");
 });
 
 test.serial("cancel aborts the stream and keeps the partial text", async (t) => {
@@ -305,11 +305,11 @@ test.serial("cancel aborts the stream and keeps the partial text", async (t) => 
   // Let a couple of paced deltas land before cancelling.
   await new Promise((resolve) => setTimeout(resolve, 200));
   const cancelled = await caller.research.cancelNode({ nodeId });
-  t.is(cancelled.status, "cancelled");
+  t.is(runOf(cancelled).status, "cancelled");
   await harness.agent.idle();
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "cancelled");
+  t.is(runOf(node).status, "cancelled");
   const content = await caller.research.getNodeContent({ nodeId });
   const text = content.turns
     .flatMap((turn) => turn.blocks)
@@ -332,7 +332,7 @@ test.serial(
     await harness.agent.drain();
 
     const interrupted = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(interrupted?.status, "interrupted");
+    t.is(runOf(interrupted).status, "interrupted");
     const row = harness.db.$client
       .prepare("SELECT resume_pending FROM nodes WHERE id = ?")
       .get(nodeId) as { resume_pending: number };
@@ -342,16 +342,16 @@ test.serial(
     // resumes rather than starting over.
     const reconciliation = nodesRepo.reconcileOnBoot(harness.db);
     t.deepEqual(reconciliation.requeuedNodeIds, [nodeId]);
-    t.is(nodesRepo.get(harness.db, user.id, nodeId)?.attempt, 1, "boot only re-queues");
+    t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).attempt, 1, "boot only re-queues");
 
     // The next process claims it, opens attempt 2, and continues.
     setFixtureScenario("success");
     const next = nextProcessAgent(harness);
     await next.settle();
-    t.is(nodesRepo.get(harness.db, user.id, nodeId)?.attempt, 2);
+    t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).attempt, 2);
 
     const node = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(node?.status, "complete");
+    t.is(runOf(node).status, "complete");
     const attempts = runsRepo.listAttempts(harness.db, nodeId);
     t.is(attempts.at(-1)?.kind, "resume", "the second attempt is recorded as a resume");
 
@@ -389,8 +389,8 @@ test.serial(
     const secondId = second.nodes[0]?.id ?? "";
 
     await harness.agent.tick();
-    t.is(nodesRepo.get(harness.db, user.id, firstId)?.status, "running");
-    t.is(nodesRepo.get(harness.db, user.id, secondId)?.status, "queued");
+    t.is(runOf(nodesRepo.get(harness.db, user.id, firstId)).status, "running");
+    t.is(runOf(nodesRepo.get(harness.db, user.id, secondId)).status, "queued");
 
     const waiting = await caller.research.getNodeContent({ nodeId: secondId });
     t.is(waiting.queuePosition, 1, "the held run reports where it stands");
@@ -399,7 +399,7 @@ test.serial(
     await harness.agent.idle();
     setFixtureScenario("success");
     await harness.settle();
-    t.is(nodesRepo.get(harness.db, user.id, secondId)?.status, "complete");
+    t.is(runOf(nodesRepo.get(harness.db, user.id, secondId)).status, "complete");
   },
 );
 
@@ -426,7 +426,7 @@ test.serial("a follow-up replays the questions as well as the answers", async (t
   const harness = createAgentHarness(t);
   const { user, caller, nodeId } = await launch(harness, "continuer", "What is a skip list?");
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "complete");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).status, "complete");
 
   // The node's own messages open with the question it was asked: a thread of
   // answers without their questions is not a conversation, and Anthropic
@@ -453,7 +453,7 @@ test.serial("a follow-up replays the questions as well as the answers", async (t
     prompt: "How does it compare to a balanced tree?",
   });
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, child.id)?.status, "complete");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, child.id)).status, "complete");
 
   const sent = prompts[0] ?? [];
   t.is(sent[0]?.role, "user", "the conversation opens with the parent's question");
@@ -471,7 +471,7 @@ test.serial("streamed tool input and provider-executed tools reach the transcrip
   const harness = createAgentHarness(t);
   const { user, caller, nodeId } = await launch(harness, "providertools");
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "complete");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).status, "complete");
 
   const content = await caller.research.getNodeContent({ nodeId });
   const blocks = content.turns.flatMap((turn) => turn.blocks);
@@ -516,9 +516,10 @@ test.serial("a wake-up during a claim round is not lost", async (t) => {
   // Admitted through the repository rather than the router: `createTree` wakes
   // the loop itself, which would claim the node before the race can be set up.
   const detail = treesRepo.admitRoot(harness.db, user.id, {
+    type: "exchange",
     workspaceId: workspace.id,
-    prompt: "admitted mid-round",
-    model: "gemini-flash",
+    message: { text: "admitted mid-round" },
+    agent: { model: "gemini-flash" },
   });
   const nodeId = detail.tree.rootNodeId;
 
@@ -532,7 +533,7 @@ test.serial("a wake-up during a claim round is not lost", async (t) => {
   await harness.agent.idle();
 
   t.is(
-    nodesRepo.get(harness.db, user.id, nodeId)?.status,
+    runOf(nodesRepo.get(harness.db, user.id, nodeId)).status,
     "complete",
     "the node admitted mid-round ran without waiting for the interval",
   );
@@ -550,8 +551,8 @@ test.serial("persists rate limit retry counts across service restarts", async (t
     const process = round === 0 ? harness : nextProcessAgent(harness);
     await process.settle();
     const node = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(node?.status, "queued", `429 number ${round + 1} re-queues`);
-    t.is(node?.attempt, round + 2, "and opens a new attempt so its row remains");
+    t.is(runOf(node).status, "queued", `429 number ${round + 1} re-queues`);
+    t.is(runOf(node).attempt, round + 2, "and opens a new attempt so its row remains");
     const row = harness.db.$client
       .prepare("SELECT not_before FROM run_queue WHERE node_id = ?")
       .get(nodeId) as { not_before: number };
@@ -569,8 +570,8 @@ test.serial("persists rate limit retry counts across service restarts", async (t
 
   await nextProcessAgent(harness).settle();
   const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "failed");
-  t.regex(node?.error ?? "", /Model provider rate limit exceeded repeatedly/);
+  t.is(runOf(node).status, "failed");
+  t.regex(runOf(node).error ?? "", /Model provider rate limit exceeded repeatedly/);
 });
 
 test.serial("a long paced answer emits a sequence with no hole in it", async (t) => {

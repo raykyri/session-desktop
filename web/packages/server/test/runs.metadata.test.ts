@@ -7,7 +7,7 @@ import test from "ava";
 
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
 
-import { answerTurn, createHarness } from "./helpers.js";
+import { answerTurn, createHarness, recapOf, runOf } from "./helpers.js";
 import { collectEvents, createAgentHarness } from "./runsHelpers.js";
 
 /** An answer long enough to be worth summarizing (`MIN_RECAP_CHARS`). */
@@ -77,14 +77,14 @@ test.serial("a recap candidate is generated, previewed, and applied", async (t) 
     expectedResponseRevision: revision,
     candidate: { ...candidate, text: "text the client made up" },
   });
-  t.is(node.recap?.text, candidate.text);
+  t.is(recapOf(node)?.text, candidate.text);
 
   // A stale revision is refused rather than silently applied.
   await t.throwsAsync(
     caller.recaps.applyCandidate({
       nodeId,
       expectedResponseRevision: "0".repeat(64),
-      expectedCurrentRecapId: node.recap?.id ?? null,
+      expectedCurrentRecapId: recapOf(node)?.id ?? null,
       candidate,
     }),
     { message: /candidate response revision does not match the current answer revision/ },
@@ -112,7 +112,7 @@ test.serial(
     t.true(first || second, "one of the two ran");
     t.false(first && second, "and only one");
     t.false(runner.isRecapPending(key), "the job is no longer pending");
-    t.truthy(nodesRepo.get(harness.db, user.id, nodeId)?.recap?.text);
+    t.truthy(recapOf(nodesRepo.get(harness.db, user.id, nodeId))?.text);
 
     // A second call now finds a recap already there and declines.
     t.false(await runner.runScheduledRecap(user.id, nodeId));
@@ -134,7 +134,7 @@ test.serial(
     });
     t.true("Too short to summarize.".length < MIN_RECAP_CHARS);
     t.false(await runner.runScheduledRecap(short.id, shortId));
-    t.is(nodesRepo.get(harness.db, short.id, shortId)?.recap, undefined);
+    t.is(recapOf(nodesRepo.get(harness.db, short.id, shortId)), undefined);
   },
 );
 
@@ -178,7 +178,7 @@ test.serial("a grounded run records the searches the provider billed", async (t)
     workspaceId: workspace.id,
   });
   await harness.settle();
-  t.is(nodesRepo.get(harness.db, user.id, detail.nodes[0]?.id ?? "")?.status, "complete");
+  t.is(runOf(nodesRepo.get(harness.db, user.id, detail.nodes[0]?.id ?? "")).status, "complete");
 
   // Two `webSearchQueries`, billed per query, with no owned tool involved
   // (`04-agent-runtime.md` §6.2).

@@ -36,9 +36,10 @@ test("a same-model fork keeps reasoning and a cross-model fork drops it", async 
   const caller = harness.caller(user);
   const workspace = await caller.workspaces.ensureDefault();
   const detail = treesRepo.admitRoot(harness.db, user.id, {
+    type: "exchange",
     workspaceId: workspace.id,
-    prompt: "root",
-    model: "claude-fable",
+    message: { text: "root" },
+    agent: { model: "claude-fable" },
   });
   const rootId = detail.tree.rootNodeId;
   snapshotsRepo.commit(harness.db, user.id, {
@@ -53,8 +54,8 @@ test("a same-model fork keeps reasoning and a cross-model fork drops it", async 
 
   const sameModel = nodesRepo.admitChild(harness.db, user.id, {
     parentNodeId: rootId,
-    prompt: "follow-up",
-    model: "claude-fable",
+    message: { text: "follow-up" },
+    agent: { model: "claude-fable" },
   });
   const kept = ancestorContext(harness.db, user.id, sameModel);
   const keptParts = kept[1]?.message.content as { type: string }[];
@@ -65,8 +66,8 @@ test("a same-model fork keeps reasoning and a cross-model fork drops it", async 
 
   const otherModel = nodesRepo.admitChild(harness.db, user.id, {
     parentNodeId: rootId,
-    prompt: "follow-up elsewhere",
-    model: "gemini-flash",
+    message: { text: "follow-up elsewhere" },
+    agent: { model: "gemini-flash" },
     inline: true,
   });
   const dropped = ancestorContext(harness.db, user.id, otherModel);
@@ -92,9 +93,10 @@ test("the context budget elides old tool results before it summarizes", async (t
   const workspace = await caller.workspaces.ensureDefault();
   // Real nodes, because the summary cache is keyed on the node it covers.
   const detail = treesRepo.admitRoot(harness.db, user.id, {
+    type: "exchange",
     workspaceId: workspace.id,
-    prompt: "root",
-    model: "gemini-flash",
+    message: { text: "root" },
+    agent: { model: "gemini-flash" },
   });
   const ids: string[] = [detail.tree.rootNodeId];
   for (let depth = 0; depth < 2; depth += 1) {
@@ -105,7 +107,10 @@ test("the context budget elides old tool results before it summarizes", async (t
       outcome: { status: "complete" },
     });
     ids.push(
-      nodesRepo.admitChild(harness.db, user.id, { parentNodeId: parentId, prompt: "more" }).id,
+      nodesRepo.admitChild(harness.db, user.id, {
+        parentNodeId: parentId,
+        message: { text: "more" },
+      }).id,
     );
   }
   const [first = "", , third = ""] = ids;

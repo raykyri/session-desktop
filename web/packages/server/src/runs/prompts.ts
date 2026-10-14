@@ -18,6 +18,7 @@ import {
   promptWithResearchAttachments,
   queryFollowupPrompt,
 } from "@session/shared";
+import { nodeAttachments, nodePrompt, passageAnchor } from "@session/shared/lib/researchNodeTypes";
 
 function taggedBlock(tag: string, body: string): string {
   return `<${tag}>\n${body}\n</${tag}>`;
@@ -49,7 +50,7 @@ export function researchSystemPrompt(instruction?: string | null): string {
 }
 
 export interface UserTextInput {
-  node: Pick<ResearchNode, "prompt" | "queryAnchor" | "attachments">;
+  node: ResearchNode;
   /** The markdown of a `document` parent, which has no messages of its own and
    * therefore rides in the child's prompt (`04-agent-runtime.md` §4). */
   parentDocument?: { title: string; markdown: string } | undefined;
@@ -65,11 +66,12 @@ export interface UserTextInput {
  */
 export function researchUserText(input: UserTextInput): string {
   const { node } = input;
-  let text = node.prompt;
+  let text = nodePrompt(node);
+  const anchor = passageAnchor(node);
   if (input.parentDocument) {
     text = documentFollowupPrompt(input.parentDocument.title, input.parentDocument.markdown, text);
-  } else if (node.queryAnchor) {
-    text = queryFollowupPrompt(node.queryAnchor.exact, text);
+  } else if (anchor) {
+    text = queryFollowupPrompt(anchor.exact, text);
   }
-  return promptWithResearchAttachments(text, node.attachments ?? []);
+  return promptWithResearchAttachments(text, nodeAttachments(node));
 }

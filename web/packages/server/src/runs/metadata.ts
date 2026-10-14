@@ -12,6 +12,7 @@ import type { ResearchRecapCandidate } from "@session/shared";
 import {
   DEFAULT_RECAP_INSTRUCTIONS,
   METADATA_MODEL_ID,
+  agentSpecFor,
   RESEARCH_TITLE_MAX_CHARS,
   normalizeRecap,
   recapJobKey,
@@ -20,6 +21,11 @@ import {
   sanitizeResearchTitle,
   shouldScheduleRecap,
 } from "@session/shared";
+import {
+  nodePrompt,
+  nodeRecap,
+  nodeResponseSnapshotAt,
+} from "@session/shared/lib/researchNodeTypes";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
@@ -161,12 +167,13 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
       if (!node) {
         return null;
       }
-      const opening = (node.responsePreview ?? answerText(userId, nodeId) ?? "").slice(0, 2_000);
+      const preview = node.type === "exchange" ? node.run.responsePreview : null;
+      const opening = (preview ?? answerText(userId, nodeId) ?? "").slice(0, 2_000);
       const result = await generate({
         userId,
         nodeId,
         system: TITLE_SYSTEM,
-        prompt: `Question:\n${node.prompt}\n\nAnswer opening:\n${opening || "(no answer yet)"}`,
+        prompt: `Question:\n${nodePrompt(node)}\n\nAnswer opening:\n${opening || "(no answer yet)"}`,
         schema: titleSchema,
         name: "research_title",
       });
@@ -210,7 +217,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         userId,
         nodeId,
         system: RECAP_SYSTEM,
-        prompt: `Instructions:\n${used}\n\nQuestion:\n${node.prompt}\n\nAnswer:\n${source}`,
+        prompt: `Instructions:\n${used}\n\nQuestion:\n${nodePrompt(node)}\n\nAnswer:\n${source}`,
         schema: recapSchema,
         name: "research_recap",
       });
@@ -223,6 +230,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         text,
         responseRevision: snapshot.revision,
         generatedAt: Date.now(),
+        adapter: agentSpecFor(METADATA_MODEL_ID).adapter,
         model: METADATA_MODEL_ID,
         instructions: used,
       };
@@ -256,13 +264,13 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
           nodeId,
           text: candidate.text,
           responseRevision: candidate.responseRevision,
-          model: candidate.model,
-          expectedSnapshotAt: node.responseSnapshotAt ?? null,
+          model: candidate.model ?? METADATA_MODEL_ID,
+          expectedSnapshotAt: nodeResponseSnapshotAt(node),
           // What the node carried before the model was called. Applying a
           // recap from the dialog changes neither the snapshot nor the
           // revision, so without this the automatic recap comes back and
           // replaces the summary the user wrote while it was generating.
-          expectedCurrentRecapId: node.recap?.id ?? null,
+          expectedCurrentRecapId: nodeRecap(node)?.id ?? null,
         });
         if (saved) {
           emit(userId, "research.node.updated", { node: saved });

@@ -11,7 +11,7 @@
 import type { SessionDatabase } from "@session/db";
 import { messages as messagesRepo } from "@session/db";
 import type { ResearchNode, Turn } from "@session/shared";
-import { estimateTokenCount } from "@session/shared";
+import { estimateTokenCount, nodeModelId } from "@session/shared";
 import type { AssistantContent, ModelMessage, TextPart, ToolContent } from "ai";
 
 import type { RunToolContext } from "./tools/context.js";
@@ -79,17 +79,16 @@ interface PathMessage {
 export function ancestorContext(
   db: SessionDatabase,
   userId: string,
-  node: Pick<ResearchNode, "id" | "model">,
+  node: ResearchNode,
 ): PathMessage[] {
+  const model = nodeModelId(node);
   return messagesRepo.ancestorMessages(db, userId, node.id).map((stored) => {
     const message = stored.message as ModelMessage;
     return {
       nodeId: stored.nodeId,
       model: stored.model,
       message:
-        stored.model !== null && stored.model !== node.model
-          ? stripForeignReasoning(message)
-          : message,
+        stored.model !== null && stored.model !== model ? stripForeignReasoning(message) : message,
     };
   });
 }

@@ -16,7 +16,7 @@
 // answer in time is recorded `unavailable` with a `timeout`, which leaves its
 // permalink readable in the question instead of holding up the run.
 
-import type { ResearchMessageAttachment } from "@session/shared";
+import type { ResearchTweetAttachment } from "@session/shared";
 import { tweetAttachment, tweetReferences } from "@session/shared";
 
 import type { TweetHydrationDeps } from "./tweets.js";
@@ -45,7 +45,7 @@ export async function resolveMessageAttachments(
   deps: TweetHydrationDeps,
   prompt: string,
   budgetMs: number = ATTACHMENT_RESOLUTION_BUDGET_MS,
-): Promise<ResearchMessageAttachment[]> {
+): Promise<ResearchTweetAttachment[]> {
   const references = tweetReferences(prompt);
   if (references.length === 0) {
     return [];

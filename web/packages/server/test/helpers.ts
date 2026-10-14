@@ -7,7 +7,8 @@ import { join } from "node:path";
 
 import type { SessionDatabase } from "@session/db";
 import { auth, closeDatabase, openDatabase, users } from "@session/db";
-import type { User } from "@session/shared";
+import type { ResearchNode, ResearchRecap, RunState, User } from "@session/shared";
+import { nodeRecap } from "@session/shared/lib/researchNodeTypes";
 import type { ExecutionContext } from "ava";
 import type { Hono } from "hono";
 
@@ -172,4 +173,17 @@ export function answerTurn(nodeId: string, text: string, id = `${nodeId}-turn`) 
     blocks: [{ type: "text" as const, text }],
     sourceIndex: 0,
   };
+}
+
+/** An exchange's run, failing the test for a node without one. */
+export function runOf(node: ResearchNode | null | undefined): RunState {
+  if (node?.type !== "exchange") {
+    throw new Error(`expected an exchange, got ${node?.type ?? "no node"}`);
+  }
+  return node.run;
+}
+
+/** A node's recap, or undefined for a node without one. */
+export function recapOf(node: ResearchNode | null | undefined): ResearchRecap | undefined {
+  return node ? (nodeRecap(node) ?? undefined) : undefined;
 }
