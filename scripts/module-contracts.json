@@ -5,7 +5,6 @@
       "reason": "Backend wire and persisted record mirrors remain explicit compatibility contracts even when current frontend consumers do not use every DTO.",
       "names": [
         "AgentReadiness",
-        "PostReplyAuthor",
         "ResearchDocumentNode",
         "ResearchExchangeNode",
         "ResearchPostNode",

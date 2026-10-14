@@ -31,38 +31,19 @@ const asyncNoop = async () => {};
 const postFields = {
   id: "post", treeId: "tree", prompt: "Who ships component-model plugins?",
   adapter: "claude", model: "fable", groupId: "ws", type: "post", format: "text",
-  status: "complete", createdAt: 100, highlights: [],
-  delivery: { status: "posted", postedAt: 100 },} satisfies NodeFixture;
+  status: "complete", createdAt: 100, highlights: [],} satisfies NodeFixture;
 const post = researchNode(postFields);
 
-const withRepliesFields = {
-  ...postFields,
-  delivery: {
-    status: "posted", postedAt: 100,
-    replies: [{
-      id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
-      body: "wit-bindgen doubled our SDK surface.", createdAt: 110,
-    }, {
-      id: "r1-response", author: { kind: "author" }, inReplyTo: "r1",
-      body: "Which version?", createdAt: 120,
-    }, {
-      id: "r2", author: { kind: "member", id: "ana", displayName: "Ana Moreau" },
-      body: "We stayed on plain WASI.", createdAt: 150,
-    }],
-  },} satisfies NodeFixture;
-const withReplies = researchNode(withRepliesFields);
 const aboutFields = {
-  ...postFields, id: "about", parentNodeId: "post", type: "exchange", delivery: null,
-  anchor: { kind: "reply", replyId: "r1" },
+  ...postFields, id: "about", parentNodeId: "post", type: "exchange",
   prompt: "How large is the generated surface?", status: "running", createdAt: 130,} satisfies NodeFixture;
 const about = researchNode(aboutFields);
 const answeredFields = {
-  ...postFields, id: "answered", parentNodeId: "post", type: "exchange", delivery: null,
+  ...postFields, id: "answered", parentNodeId: "post", type: "exchange",
   prompt: "Which runtimes support it?", status: "complete", createdAt: 160,} satisfies NodeFixture;
 const answered = researchNode(answeredFields);
 const noteFields = {
-  ...postFields, id: "note", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,
-  delivery: null,} satisfies NodeFixture;
+  ...postFields, id: "note", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
 const note = researchNode(noteFields);
 
 function render(nodes: ResearchNode[], options: { openNodeId?: string | null; archived?: boolean } = {}) {
@@ -87,8 +68,8 @@ test("an empty follow-ups column has the composer and says it has no follow-ups"
   assert.ok(html.indexOf("post-composer") < html.indexOf("post-thread-empty"));
 });
 
-test("the composer comes first, then follow-ups as rows, oldest first; stored replies are not shown", () => {
-  const html = render([withReplies, answered, about, note]);
+test("the composer comes first, then follow-ups as rows, oldest first", () => {
+  const html = render([post, answered, about, note]);
   assert.ok(html.indexOf("post-composer") < html.indexOf("post-thread-rows"));
   assert.match(html, /<ol class="post-thread-list post-thread-rows" aria-label="Follow-ups">/);
   const order = [
@@ -97,8 +78,6 @@ test("the composer comes first, then follow-ups as rows, oldest first; stored re
     "Which runtimes support it?",
   ].map((text) => html.indexOf(text));
   assert.ok(order.every((index, i) => index > 0 && (i === 0 || order[i - 1] < index)), String(order));
-  // Replies, the author's responses and their controls do not render.
-  assert.doesNotMatch(html, /wit-bindgen doubled|Which version\?|We stayed on plain WASI|Ben Kowalski|Ana Moreau/);
   assert.doesNotMatch(html, /Respond|Ask AI about this|Delete|post-avatar|data-type="reply"|is-nested/);
   assert.equal(html.match(/data-research-thread-row=""/g)?.length, 3);
   assert.equal(html.match(/tabindex="0"/g)?.length, 1);
@@ -112,23 +91,21 @@ test("the composer comes first, then follow-ups as rows, oldest first; stored re
 });
 
 test("a follow-up note's row shows its text; an AI follow-up's row its answer state", () => {
-  const html = render([withReplies, answered, about, note]);
+  const html = render([post, answered, about, note]);
   // A follow-up note: the note glyph and text, no status line or reply count.
   assert.match(html, /title="Open this note"/);
   assert.match(html, /lucide-sticky-note/);
   assert.match(html, /Anyone measured wizer\?<\/div><\/div>/);
   assert.doesNotMatch(html, /\d+ repl(y|ies)|lucide-globe|network/i);
-  // An AI follow-up: answering, or answered (no preview of the answer). One
-  // asked about a stored reply does not name the reply.
+  // An AI follow-up: answering, or answered (no preview of the answer).
   assert.match(html, /<span>asked Claude Fable<\/span>/);
-  assert.doesNotMatch(html, /about Ben Kowalski’s reply/);
   assert.match(html, />Answering</);
   assert.match(html, /Which runtimes support it\?<\/div><div class="post-thread-meta">Answered<\/div>/);
   assert.doesNotMatch(html, /Open answer|post-segment/);
 });
 
 test("the open follow-up's row is selected and in the tab order", () => {
-  const html = render([withReplies, answered, about, note], { openNodeId: "note" });
+  const html = render([post, answered, about, note], { openNodeId: "note" });
   assert.match(
     html,
     /<li class="post-thread-item post-thread-follow-up is-selected" data-type="follow-up"><button type="button" class="post-thread-hit" data-research-thread-row="" data-thread-key="note" data-node-id="note" aria-current="true"[^>]*tabindex="0"/,
@@ -138,13 +115,13 @@ test("the open follow-up's row is selected and in the tab order", () => {
 });
 
 test("an archived note has rows but no composer", () => {
-  const html = render([withReplies, answered], { archived: true });
+  const html = render([post, answered], { archived: true });
   assert.doesNotMatch(html, /research-composer/);
   assert.match(html, /Which runtimes support it\?/);
 });
 
 test("a saved link's follow-ups column has the same composer as a note's", () => {
-  const link = researchNode({ ...postFields, prompt: "https://example.com/page", format: "link", delivery: null });
+  const link = researchNode({ ...postFields, prompt: "https://example.com/page", format: "link" });
   const html = render([link]);
   assert.match(html, /placeholder="Ask a follow-up"/);
   // Collapsed while empty; the Ask/Note switch appears once it is focused.
@@ -160,13 +137,13 @@ test("follow-up rows skip documents and break time ties by id", () => {
   const tieAFields = { ...aboutFields, id: "a", createdAt: 170 } satisfies NodeFixture;
   const tieA = researchNode(tieAFields);
   assert.deepEqual(
-    postThreadEntries([withReplies, document, tieB, tieA], withReplies).map((entry) => entry.id),
+    postThreadEntries([post, document, tieB, tieA], post).map((entry) => entry.id),
     ["a", "b"],
   );
 });
 
 test("an edited note's follow-ups column lists only its follow-ups", () => {
-  const edited = researchNode({ ...withRepliesFields, prompt: "Who ships wit-bindgen 0.30 plugins?", editedAt: 135 });
+  const edited = researchNode({ ...postFields, prompt: "Who ships wit-bindgen 0.30 plugins?", editedAt: 135 });
   const nodes = [edited, about, answered];
   // The column header's count is the number of follow-ups.
   assert.deepEqual(
@@ -200,7 +177,7 @@ test("each follow-up row opens its follow-up's menu as its context menu", async 
     const root = createRoot(container);
     await act(async () =>
       root.render(createElement(ResearchPostThread, {
-        nodes: [withReplies, answered, note], post: withReplies, archived: true, requireCmdEnterToSend: true,
+        nodes: [post, answered, note], post: post, archived: true, requireCmdEnterToSend: true,
         openNodeId: null, actions: { onAskFollowUp: asyncNoop, onRetry: asyncNoop }, onOpenFollowUp: noop,
         onOpenContextMenu: (node, placement) => opened.push({ id: node.id, placement }),
       })),

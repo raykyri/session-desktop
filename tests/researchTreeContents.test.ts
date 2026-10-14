@@ -7,32 +7,16 @@ import { researchTreeContents, researchTreeContentsSentence } from "../src/lib/r
 import type { ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
 
-const member = (id: string, createdAt: number) => ({
-  id, author: { kind: "member" as const, id: "ana", displayName: "Ana Moreau" }, body: "Reply", createdAt,
-});
-const response = (id: string, inReplyTo: string, createdAt: number) => ({
-  id, author: { kind: "author" as const }, inReplyTo, body: "Response", createdAt,
-});
-
 const post = researchNode({
   id: "post", type: "post", prompt: "Who ships component-model plugins?",
-  delivery: { status: "posted", postedAt: 100, replies: [member("r1", 110), response("r1-response", "r1", 120)] },
 });
-// A follow-up note with one stored reply, and an AI follow-up asked about r1
-// that continues inline once and has one branch.
-const network = researchNode({
-  id: "net", type: "post", parentNodeId: "post",
-  delivery: { status: "posted", postedAt: 130, replies: [member("n1", 140)] },
-});
-const aiFollowUp = researchNode({ id: "ai", parentNodeId: "post", anchor: { kind: "reply", replyId: "r1" } });
+// A follow-up note, and an AI follow-up that continues inline once and has
+// one branch.
+const network = researchNode({ id: "net", type: "post", parentNodeId: "post" });
+const aiFollowUp = researchNode({ id: "ai", parentNodeId: "post" });
 const aiInline = researchNode({ id: "ai-2", parentNodeId: "ai", inline: true });
 const aiBranch = researchNode({ id: "ai-branch", parentNodeId: "ai" });
 const networkAi = researchNode({ id: "net-ai", parentNodeId: "net" });
-
-test("a note's stored replies are not counted", () => {
-  assert.deepEqual(researchTreeContents([post], "post"), { followUps: 0, branches: 0 });
-  assert.equal(researchTreeContentsSentence(researchTreeContents([post], "post")!), "It has no follow-ups.");
-});
 
 test("a note's follow-ups are its AI follow-ups and follow-up notes and theirs; passage follow-ups are branches", () => {
   const contents = researchTreeContents(
@@ -80,7 +64,7 @@ test("a document's follow-ups: inline ones and passage branches", () => {
 });
 
 test("one item uses singular copy and one message kind is named", () => {
-  const bare = researchNode({ id: "post", type: "post", delivery: null });
+  const bare = researchNode({ id: "post", type: "post" });
   assert.equal(
     researchTreeContentsSentence(researchTreeContents([bare, aiFollowUp], "post")!),
     "It has 1 message (a follow-up); deleting the thread also deletes it.",
@@ -92,7 +76,7 @@ test("one item uses singular copy and one message kind is named", () => {
 });
 
 test("an empty thread has no follow-ups, whatever its root type", () => {
-  const bare = researchNode({ id: "post", type: "post", delivery: null });
+  const bare = researchNode({ id: "post", type: "post" });
   assert.equal(researchTreeContentsSentence(researchTreeContents([bare], "post")!), "It has no follow-ups.");
   const doc = researchNode({ id: "doc", type: "document" });
   assert.equal(researchTreeContentsSentence(researchTreeContents([doc], "doc")!), "It has no follow-ups.");

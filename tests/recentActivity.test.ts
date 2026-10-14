@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  cappedPostDelivery,
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentResearchQueryFromNode,
@@ -14,7 +13,6 @@ import {
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type {
-  PostReply,
   RecentResearchQuery,
   ResearchTreeSummary,
 } from "../src/types";
@@ -207,60 +205,4 @@ test("live summary events retain imported report provenance", () => {
   );
   assert.equal(updated[0].source, "imported");
   assert.equal(updated[0].model, null);
-});
-
-const memberReply = (id: string, createdAt: number, inReplyTo?: string): PostReply => ({
-  id,
-  author: inReplyTo ? { kind: "author" } : { kind: "member", id: `m-${id}`, displayName: `Member ${id}` },
-  body: id,
-  inReplyTo,
-  createdAt,
-});
-
-test("live post updates cut replies to five threads like the backend", () => {
-  const replies = [
-    ...Array.from({ length: 7 }, (_, index) => memberReply(`r${index}`, index)),
-    memberReply("response", 10, "r1"),
-    memberReply("late-response", 11, "r6"),
-  ];
-  const capped = cappedPostDelivery({ status: "posted", postedAt: 0, replies }, 5);
-  assert.deepEqual(capped.replies?.map((reply) => reply.id), ["r0", "r1", "r2", "r3", "r4", "response"]);
-
-  const post = researchNode({
-    id: "post", treeId: "post-tree", prompt: "Question", adapter: "claude",
-    groupId: "workspace", createdAt: 100,
-    type: "post", delivery: { status: "posted", postedAt: 100, replies },
-  });
-  const [item] = upsertRecentActivityResearchNode([], post);
-  assert.equal(item.type, "post");
-  assert.equal(item.replyCount, 7);
-  assert.equal(item.delivery?.replies?.length, 6);
-});
-
-test("follow-ups about a reply resolve its author from the loaded post", () => {
-  const post = researchNode({
-    id: "post", treeId: "post-tree", prompt: "Question", adapter: "claude",
-    groupId: "workspace", createdAt: 100, type: "post",
-    delivery: { status: "posted", postedAt: 100, replies: [memberReply("r0", 110)] },
-  });
-  let items = upsertRecentActivityResearchNode([], post);
-  const childFields = {
-    id: "child", treeId: "post-tree", parentNodeId: "post", prompt: "Question", groupId: "workspace",
-    anchor: { kind: "reply", replyId: "r0" }, status: "running", createdAt: 120,
-  } satisfies NodeFixture;
-  const child = researchNode(childFields);
-  items = upsertRecentActivityResearchNode(items, child);
-  assert.equal(items[0].children?.[0].replyAnchorAuthor, "Member r0");
-  // A target outside the loaded replies keeps the name the backend sent.
-  const withBackendName = [{
-    ...items[0],
-    delivery: { status: "posted" as const, postedAt: 100 },
-    children: [{ ...items[0].children![0], replyAnchorAuthor: "Ana" }],
-  }];
-  const refreshed = upsertRecentActivityResearchNode(
-    withBackendName,
-    researchNode({ ...childFields, status: "complete" }),
-  );
-  assert.equal(refreshed[0].children?.[0].replyAnchorAuthor, "Ana");
-  assert.equal(refreshed[0].children?.[0].status, "complete");
 });

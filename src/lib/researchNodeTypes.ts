@@ -7,7 +7,6 @@ import type {
   AgentAdapterMetadata,
   AgentSpec,
   DocumentSource,
-  PostDelivery,
   PostFormat,
   ResearchHighlightAnchor,
   ResearchMessageAttachment,
@@ -80,10 +79,6 @@ export function nodeRecap(node: ResearchNode): ResearchRecap | null {
   return node.type === "post" ? null : (node.recap ?? null);
 }
 
-export function nodeDelivery(node: ResearchNode): PostDelivery | null {
-  return node.type === "post" ? (node.delivery ?? null) : null;
-}
-
 /** When the node's response snapshot was last written: an exchange's answer
  * or a document's body. */
 export function nodeResponseSnapshotAt(node: ResearchNode): number | null {
@@ -146,15 +141,9 @@ export function passageAnchor(
   return node.anchor?.kind === "passage" ? node.anchor.anchor : null;
 }
 
-/** The id of the parent post's reply a follow-up was asked about. */
-export function replyAnchorId(node: Pick<ResearchNode, "anchor">): string | null {
-  return node.anchor?.kind === "reply" ? node.anchor.replyId : null;
-}
-
 /** The excerpt a follow-up of a note quotes as its source: the note's text
  * on one line, without emphasis and code markers, and cut at a word boundary
- * to at most `maxChars` characters (the ellipsis included). A follow-up asked
- * about a stored reply quotes the note too, since replies are not shown.
+ * to at most `maxChars` characters (the ellipsis included).
  * Null when `parent` is not a post (a note). */
 export function postFollowUpSourceExcerpt(parent: ResearchNode, maxChars = 120): string | null {
   if (parent.type !== "post") {

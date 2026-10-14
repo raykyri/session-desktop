@@ -1,7 +1,5 @@
-import { nodeAdapter, nodeAgent, nodeAttachments, nodeDelivery, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor, replyAnchorId } from "./researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRecap, nodeRun, nodeStatus, passageAnchor } from "./researchNodeTypes";
 import type {
-  PostDelivery,
-  PostReply,
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchNode,
@@ -11,37 +9,6 @@ import type {
 export interface RecentActivityPage {
   items: RecentResearchQuery[];
   nextCursor?: RecentResearchQueryCursor | null;
-}
-
-/** Number of top-level replies included per post on Home; mirrors the backend's
- * `RECENT_ACTIVITY_POST_REPLY_LIMIT`. */
-const RECENT_ACTIVITY_POST_REPLY_LIMIT = 5;
-
-function topLevelReplyCount(replies: PostReply[] = []): number {
-  return replies.filter((reply) => !reply.inReplyTo).length;
-}
-
-/** The delivery with only the first `limit` top-level replies and the
- * responses to them, matching the backend's feed payload. */
-export function cappedPostDelivery(delivery: PostDelivery, limit: number): PostDelivery {
-  const kept = new Set(
-    (delivery.replies ?? [])
-      .filter((reply) => !reply.inReplyTo)
-      .slice(0, limit)
-      .map((reply) => reply.id),
-  );
-  return {
-    ...delivery,
-    replies: (delivery.replies ?? []).filter(
-      (reply) => kept.has(reply.id) || (reply.inReplyTo != null && kept.has(reply.inReplyTo)),
-    ),
-  };
-}
-
-/** Display name of a reply's author, as the backend's `replyAnchorAuthor`
- * names it. */
-function postReplyAuthorName(reply: PostReply): string {
-  return reply.author.kind === "member" ? reply.author.displayName : "You";
 }
 
 export function recentActivityCursor(query: RecentResearchQuery): RecentResearchQueryCursor {
@@ -76,7 +43,6 @@ export function recentResearchQueryFromNode(
   if (!includeFollowUps && node.parentNodeId) {
     return null;
   }
-  const delivery = nodeDelivery(node);
   const error = nodeRun(node)?.error;
   return {
     nodeId: node.id,
@@ -92,32 +58,11 @@ export function recentResearchQueryFromNode(
     type: node.type,
     ...(node.type === "document" ? { source: node.source } : {}),
     ...(node.type === "post" ? { format: node.format } : {}),
-    ...(delivery
-      ? {
-          delivery: cappedPostDelivery(delivery, RECENT_ACTIVITY_POST_REPLY_LIMIT),
-          replyCount: topLevelReplyCount(delivery.replies),
-        }
-      : {}),
-    ...(replyAnchorId(node) ? { replyAnchor: replyAnchorId(node) } : {}),
     status: nodeStatus(node),
     ...(error ? { error } : {}),
     createdAt: node.createdAt,
     recap: nodeRecap(node)?.text.trim() || undefined,
   };
-}
-
-/** Resolves a follow-up's reply target against its loaded parent. The
- * parent's delivery may be cut to the first replies; a target outside that
- * window keeps the author name the backend supplied. */
-function withReplyAnchorAuthor(
-  child: RecentResearchQuery,
-  parent: RecentResearchQuery,
-  existing?: RecentResearchQuery,
-): RecentResearchQuery {
-  if (!child.replyAnchor) return child;
-  const reply = parent.delivery?.replies?.find((candidate) => candidate.id === child.replyAnchor);
-  const author = reply ? postReplyAuthorName(reply) : existing?.replyAnchorAuthor;
-  return author ? { ...child, replyAnchorAuthor: author } : child;
 }
 
 /** Live node events update children within their loaded root, without changing feed order. */
@@ -130,11 +75,9 @@ export function upsertRecentActivityResearchNode(
   if (query.parentNodeId) {
     return items.map((item) => {
       if (item.nodeId !== query.parentNodeId || item.treeId !== query.treeId) return item;
-      const existing = item.children?.find((child) => child.nodeId === query.nodeId);
-      const child = withReplyAnchorAuthor(query, item, existing);
       const children = [
         ...(item.children ?? []).filter((candidate) => candidate.nodeId !== query.nodeId),
-        child,
+        query,
       ].sort((left, right) =>
         left.createdAt - right.createdAt || left.nodeId.localeCompare(right.nodeId),
       );

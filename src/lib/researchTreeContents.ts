@@ -5,8 +5,6 @@
 import { nodeType } from "./researchNodeTypes";
 import type { ResearchNode } from "../types";
 
-/** Stored replies on a note (`delivery.replies`) are not shown in the app, so
- * they are not counted. */
 export interface ResearchTreeContents {
   /** Nodes other than the root that continue a note's thread or a
    * conversation: a note's AI follow-ups and follow-up notes (its children

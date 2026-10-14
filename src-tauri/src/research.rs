@@ -486,70 +486,6 @@ pub fn body_millis(millis: u128) -> u64 {
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
-/// Sharing state of a post. A post with a delivery record is shared with
-/// other users; one without is private. The desktop app creates notes
-/// without one and shows no replies; posts written by earlier builds with
-/// "Post to network" keep theirs. Transport is not implemented: `Posted`
-/// records the intent, and `replies` holds stored replies, which still reach
-/// the AI follow-up prompt.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PostDelivery {
-    pub status: PostDeliveryStatus,
-    pub posted_at: u64,
-    /// Chronological. A reply with `in_reply_to` set follows the reply it
-    /// responds to in time, never precedes it.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub replies: Vec<PostReply>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PostDeliveryStatus {
-    Posted,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PostReply {
-    pub id: String,
-    pub author: PostReplyAuthor,
-    /// Markdown.
-    pub body: String,
-    /// Set on the post author's response to a member's reply. One level
-    /// only: the target is a reply whose own `in_reply_to` is `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub in_reply_to: Option<String>,
-    pub created_at: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum PostReplyAuthor {
-    /// The post's author (this Session's user).
-    Author,
-    /// Another user.
-    Member {
-        id: String,
-        display_name: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        handle: Option<String>,
-    },
-}
-
-impl PostReplyAuthor {
-    pub fn label(&self) -> &str {
-        match self {
-            Self::Author => "the user",
-            Self::Member { display_name, .. } => display_name,
-        }
-    }
-}
-
 /// How a post renders, decided when its text is written: `Link` when the
 /// whole text is one http(s) URL (a saved link, or an X post with its tweet
 /// attachment), `Text` otherwise. See [`PostFormat::of`].
@@ -571,8 +507,10 @@ impl PostFormat {
 }
 
 /// What a follow-up was asked about in its parent: a passage of the parent's
-/// answer or document, or a reply on the parent post. Stored as `queryAnchor`
-/// and `replyAnchor` before state version 8 and archive version 10.
+/// answer or document. Stored as `queryAnchor` before state version 8 and
+/// archive version 10. Earlier builds also stored `{ "kind": "reply" }`
+/// anchors naming a reply on the parent post; loads drop them
+/// ([`migrate_shared_post_fields`]).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(
     tag = "kind",
@@ -583,17 +521,10 @@ pub enum NodeAnchor {
     /// The parent's answer marks the passage as the anchor of the branch; the
     /// quoted text is also included in the launch prompt.
     Passage { anchor: ResearchHighlightAnchor },
-    /// The id of a reply in the parent post's `delivery.replies`. A removed
-    /// reply leaves the id dangling; readers treat it as absent.
-    Reply { reply_id: String },
 }
 
-/// Byte cap for a post's text and for each reply.
+/// Byte cap for a post's text.
 pub const MAX_POST_TEXT_BYTES: usize = 64 * 1024;
-pub const MAX_POST_REPLIES: usize = 1_000;
-/// Top-level replies included per post in the Home feed; the card fetches the
-/// rest from the full node when the user expands it.
-pub const RECENT_ACTIVITY_POST_REPLY_LIMIT: usize = 5;
 
 /// What a person wrote: a post's text, an exchange's question, or the
 /// question an imported report answers.
@@ -688,16 +619,15 @@ pub struct RunBinding {
 }
 
 /// A post, shown in the UI as a note: text or a saved link written by the
-/// user, private unless it has a `delivery` record. It is a tree root or
-/// a child of another post (a follow-up note); its other children are
-/// exchanges launched with the post as context.
+/// user. It is a tree root or a child of another post (a follow-up note); its
+/// other children are exchanges launched with the post as context. Earlier
+/// builds stored a `delivery` record (sharing state and replies) on some
+/// posts; loads drop it ([`migrate_shared_post_fields`]).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PostBody {
     pub message: UserMessage,
     pub format: PostFormat,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delivery: Option<PostDelivery>,
     /// Default agent for AI follow-ups. Not provenance: the post itself is
     /// user-authored.
     pub follow_up_agent: AgentSpec,
@@ -1037,10 +967,6 @@ impl ResearchNode {
         }
     }
 
-    pub fn delivery(&self) -> Option<&PostDelivery> {
-        self.post().and_then(|post| post.delivery.as_ref())
-    }
-
     /// When the node's response snapshot was last written: an exchange's
     /// answer or a document's body.
     pub fn response_snapshot_at(&self) -> Option<u64> {
@@ -1070,14 +996,6 @@ impl ResearchNode {
     pub fn passage_anchor_mut(&mut self) -> Option<&mut ResearchHighlightAnchor> {
         match &mut self.anchor {
             Some(NodeAnchor::Passage { anchor }) => Some(anchor),
-            _ => None,
-        }
-    }
-
-    /// The id of the parent post's reply this follow-up was asked about.
-    pub fn reply_anchor(&self) -> Option<&str> {
-        match &self.anchor {
-            Some(NodeAnchor::Reply { reply_id }) => Some(reply_id),
             _ => None,
         }
     }
@@ -1282,19 +1200,6 @@ pub struct RecentResearchQuery {
     /// A post's format.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<PostFormat>,
-    /// A post's sharing state, with `replies` cut to the first
-    /// [`RECENT_ACTIVITY_POST_REPLY_LIMIT`] top-level replies (each with its
-    /// responses). `reply_count` is the uncut top-level count.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delivery: Option<PostDelivery>,
-    #[serde(default, skip_serializing_if = "is_zero")]
-    pub reply_count: usize,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_anchor: Option<String>,
-    /// Display name of the reply `reply_anchor` names, resolved against the
-    /// parent post; absent when the reply was removed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_anchor_author: Option<String>,
     pub status: ResearchNodeStatus,
     /// Why the run failed, shown on Home's follow-up rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1322,14 +1227,6 @@ impl From<&ResearchNode> for RecentResearchQuery {
             node_type: node.node_type(),
             source: node.document_source(),
             format: node.post().map(|post| post.format),
-            delivery: node
-                .delivery()
-                .map(|delivery| capped_post_delivery(delivery, RECENT_ACTIVITY_POST_REPLY_LIMIT)),
-            reply_count: node
-                .delivery()
-                .map_or(0, |delivery| top_level_reply_count(&delivery.replies)),
-            reply_anchor: node.reply_anchor().map(str::to_string),
-            reply_anchor_author: None,
             status: node.status(),
             error: node
                 .run()
@@ -1340,45 +1237,6 @@ impl From<&ResearchNode> for RecentResearchQuery {
                 (!text.is_empty()).then(|| text.to_string())
             }),
         }
-    }
-}
-
-fn is_zero(value: &usize) -> bool {
-    *value == 0
-}
-
-pub fn top_level_reply_count(replies: &[PostReply]) -> usize {
-    replies
-        .iter()
-        .filter(|reply| reply.in_reply_to.is_none())
-        .count()
-}
-
-/// The delivery with only the first `limit` top-level replies and the
-/// responses to them, preserving chronological order.
-pub fn capped_post_delivery(delivery: &PostDelivery, limit: usize) -> PostDelivery {
-    let kept = delivery
-        .replies
-        .iter()
-        .filter(|reply| reply.in_reply_to.is_none())
-        .take(limit)
-        .map(|reply| reply.id.as_str())
-        .collect::<HashSet<_>>();
-    PostDelivery {
-        status: delivery.status,
-        posted_at: delivery.posted_at,
-        replies: delivery
-            .replies
-            .iter()
-            .filter(|reply| {
-                kept.contains(reply.id.as_str())
-                    || reply
-                        .in_reply_to
-                        .as_deref()
-                        .is_some_and(|parent| kept.contains(parent))
-            })
-            .cloned()
-            .collect(),
     }
 }
 
@@ -1402,26 +1260,6 @@ pub struct CreateResearchPostRequest {
     #[serde(default)]
     pub effort: Option<String>,
     pub workspace_id: String,
-    /// Gives the post a delivery record, which marks it as shared with other
-    /// users. The desktop app has no transport and leaves it false, so its
-    /// notes are private. Named `askNetwork` in earlier builds.
-    #[serde(default, alias = "askNetwork")]
-    pub share: bool,
-}
-
-/// Display name of the author of the reply `child`'s reply anchor names in
-/// `parent`'s delivery, or `None` when either is missing.
-pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Option<String> {
-    let reply_id = child.reply_anchor()?;
-    parent
-        .delivery()?
-        .replies
-        .iter()
-        .find(|reply| reply.id == reply_id)
-        .map(|reply| match &reply.author {
-            PostReplyAuthor::Author => "You".to_string(),
-            PostReplyAuthor::Member { display_name, .. } => display_name.clone(),
-        })
 }
 
 impl ResearchNode {
@@ -1453,16 +1291,11 @@ impl ResearchNode {
 
 impl PostBody {
     /// A post as its create paths admit it, with its format decided from the
-    /// text. `share` gives it a delivery record.
-    pub fn new(message: UserMessage, follow_up_agent: AgentSpec, share: bool, now: u128) -> Self {
+    /// text.
+    pub fn new(message: UserMessage, follow_up_agent: AgentSpec) -> Self {
         Self {
             format: PostFormat::of(&message.text),
             message,
-            delivery: share.then(|| PostDelivery {
-                status: PostDeliveryStatus::Posted,
-                posted_at: body_millis(now),
-                replies: Vec::new(),
-            }),
             follow_up_agent,
             edited_at: None,
         }
@@ -1565,8 +1398,9 @@ pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
 /// reports become documents, notes become posts with merged anchors, every
 /// flat record gets the envelope-and-body shape (state version 9, archive
 /// version 11), `promotedAt` becomes `starredAt` (state version 10, archive
-/// version 12), and a post's `corrections` become its text
-/// ([`migrate_post_corrections_to_text`]; no version change). Shared by state
+/// version 12), a post's `corrections` become its text
+/// ([`migrate_post_corrections_to_text`]; no version change), and the shared-post
+/// fields are dropped ([`migrate_shared_post_fields`]; no version change). Shared by state
 /// loads and archive reads so both paths convert the same shapes. Each step only rewrites nodes in its own old
 /// shape, so the whole migration is idempotent and runs on files of any
 /// supported version, including version-8 and version-10 files, which hold
@@ -1590,6 +1424,38 @@ pub fn migrate_research_node_values(nodes: &mut [&mut serde_json::Value]) -> boo
         changed |= migrate_flat_node_to_body(node);
         changed |= migrate_promoted_at_to_starred_at(node);
         changed |= migrate_post_corrections_to_text(node);
+        changed |= migrate_shared_post_fields(node);
+    }
+    changed
+}
+
+/// Step six of [`migrate_research_node_values`], after every record has the
+/// body shape. Earlier builds stored a sharing model for posts that no build
+/// transmitted or showed: a post body's `delivery` record (sharing state and
+/// stored replies) and follow-up anchors of kind `reply`, which named one of
+/// those replies. The delivery record is removed and a reply anchor is
+/// removed, so the follow-up loads with no anchor, as the follow-ups of a
+/// note are created. Returns whether the node changed.
+pub fn migrate_shared_post_fields(node: &mut serde_json::Value) -> bool {
+    let Some(object) = node.as_object_mut() else {
+        return false;
+    };
+    let mut changed = false;
+    if object
+        .get("anchor")
+        .and_then(|anchor| anchor.get("kind"))
+        .and_then(serde_json::Value::as_str)
+        == Some("reply")
+    {
+        object.remove("anchor");
+        changed = true;
+    }
+    if let Some(body) = object
+        .get_mut("body")
+        .and_then(serde_json::Value::as_object_mut)
+        && body.remove("delivery").is_some()
+    {
+        changed = true;
     }
     changed
 }
@@ -1720,8 +1586,8 @@ pub fn migrate_promoted_at_to_starred_at(node: &mut serde_json::Value) -> bool {
 /// - `queryAnchor` (a passage) and `replyAnchor` (a reply id) merge into
 ///   `anchor`. The create paths never write both; if a node has both, the
 ///   reply wins under a post parent and the passage wins elsewhere, which is
-///   the anchor the validation rules allow there. A node that already has an
-///   `anchor` keeps it.
+///   the anchor the validation rules allowed there. A node that already has
+///   an `anchor` keeps it. Step six then drops reply anchors.
 pub fn migrate_note_nodes_to_posts(nodes: &mut [&mut serde_json::Value]) -> bool {
     use serde_json::Value;
     let mut changed = false;
@@ -1816,8 +1682,9 @@ const ENVELOPE_FIELDS: [&str; 11] = [
 ///   `binding`, and its recap. An imported run nested under another node
 ///   (which the import path never created) stays an exchange and loses its
 ///   `origin`.
-/// - `post`: `message`, `format`, `delivery`, `followUpAgent`,
-///   `corrections` (which step five converts) and `editedAt`.
+/// - `post`: `message`, `format`, `delivery` (which step six drops),
+///   `followUpAgent`, `corrections` (which step five converts) and
+///   `editedAt`.
 /// - `document`: `source` (`imported` from the origin, else `authored`), the
 ///   question as `message` unless it is empty, `followUpAgent` when the
 ///   record names an adapter, the snapshot time, recap and `editedAt`.
@@ -1950,9 +1817,8 @@ pub fn migrate_flat_node_to_body(node: &mut serde_json::Value) -> bool {
 }
 
 /// Structural rules the create paths maintain beyond what the body types
-/// express: a post's parent is a post, a reply anchor sits on an exchange
-/// whose parent is a post, and replies nest at most one level and are
-/// bounded. Checked for archives, which come from outside this process.
+/// express: a post's parent is a post. Checked for archives, which come from
+/// outside this process.
 pub fn validate_node_shape(
     node: &ResearchNode,
     node_by_id: &HashMap<&str, &ResearchNode>,
@@ -1970,48 +1836,6 @@ pub fn validate_node_shape(
             "research post {} has a parent that is not a post",
             node.id
         ));
-    }
-    if node.reply_anchor().is_some()
-        && (node_type != ResearchNodeType::Exchange || parent_type != Some(ResearchNodeType::Post))
-    {
-        return Err(format!(
-            "research node {} has a reply anchor but is not a follow-up of a post",
-            node.id
-        ));
-    }
-    if let Some(delivery) = node.delivery() {
-        validate_post_replies(&delivery.replies)
-            .map_err(|err| format!("research post {}: {err}", node.id))?;
-    }
-    Ok(())
-}
-
-pub fn validate_post_replies(replies: &[PostReply]) -> Result<(), String> {
-    if replies.len() > MAX_POST_REPLIES {
-        return Err(format!("more than {MAX_POST_REPLIES} replies"));
-    }
-    let mut top_level = HashSet::new();
-    let mut seen = HashSet::new();
-    for reply in replies {
-        if reply.id.is_empty() || !seen.insert(reply.id.as_str()) {
-            return Err("reply ids must be unique and non-empty".to_string());
-        }
-        if reply.body.trim().is_empty() || reply.body.len() > MAX_POST_TEXT_BYTES {
-            return Err(format!("reply {} has an empty or oversized body", reply.id));
-        }
-        match reply.in_reply_to.as_deref() {
-            None => {
-                top_level.insert(reply.id.as_str());
-            }
-            // Earlier-only lookup also enforces chronological order.
-            Some(parent) if top_level.contains(parent) => {}
-            Some(_) => {
-                return Err(format!(
-                    "reply {} responds to a reply that is not an earlier top-level reply",
-                    reply.id
-                ));
-            }
-        }
     }
     Ok(())
 }
@@ -3904,74 +3728,19 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
     }
 }
 
-const POST_CONTEXT_TAGS: [&str; 4] = ["note", "post", "replies", "reply"];
+const POST_CONTEXT_TAGS: [&str; 2] = ["note", "post"];
 
 /// The launch prompt for an AI follow-up under a post. A post has no session
-/// to fork, so the prompt includes the post body and its replies as context. Reply
-/// bodies are other people's words, so they (and the post body, which can
-/// quote them) pass through [`neutralized_tag_markup`] for the tags this
-/// serialization uses. `anchored_reply` is the reply the question is about;
-/// it is quoted again next to the question. Slash-command ordering follows
+/// to fork, so the prompt includes the post body as context. The body can
+/// quote other text, so it passes through [`neutralized_tag_markup`] for the
+/// tags this serialization uses. Slash-command ordering follows
 /// [`document_followup_prompt`].
-pub fn post_followup_prompt(
-    post_body: &str,
-    replies: &[PostReply],
-    anchored_reply: Option<&PostReply>,
-    question: &str,
-) -> String {
-    let clean = |text: &str| neutralized_tag_markup(text, &POST_CONTEXT_TAGS);
-    let author = |reply: &PostReply| {
-        reply
-            .author
-            .label()
-            .replace(['"', '\n', '\r'], " ")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
-    let mut context = format!("<note>\n{}\n</note>", clean(post_body.trim()));
-    if !replies.is_empty() {
-        let by_id = replies
-            .iter()
-            .map(|reply| (reply.id.as_str(), reply))
-            .collect::<HashMap<_, _>>();
-        context.push_str("\n<replies>");
-        for reply in replies {
-            let responds_to = reply
-                .in_reply_to
-                .as_deref()
-                .and_then(|parent| by_id.get(parent))
-                .map(|parent| format!(" responding-to=\"{}\"", author(parent)))
-                .unwrap_or_default();
-            context.push_str(&format!(
-                "\n<reply author=\"{}\"{responds_to}>\n{}\n</reply>",
-                author(reply),
-                clean(reply.body.trim())
-            ));
-        }
-        context.push_str("\n</replies>");
-    }
-    let question = match anchored_reply {
-        Some(reply) => {
-            let quote = normalized_text(&clean(&reply.body));
-            let who = author(reply);
-            if question.starts_with('/') {
-                format!(
-                    "{question}\n\nThe request above refers to this reply from {who}:\n\n> {quote}"
-                )
-            } else {
-                format!(
-                    "The user's question refers to this reply from {who}:\n\n> {quote}\n\n{question}"
-                )
-            }
-        }
-        None => question.to_string(),
-    };
-    let preamble = if replies.is_empty() {
-        "The user wrote the note below."
-    } else {
-        "The user shared the note below with other users; their replies follow it."
-    };
+pub fn post_followup_prompt(post_body: &str, question: &str) -> String {
+    let context = format!(
+        "<note>\n{}\n</note>",
+        neutralized_tag_markup(post_body.trim(), &POST_CONTEXT_TAGS)
+    );
+    let preamble = "The user wrote the note below.";
     if question.starts_with('/') {
         format!(
             "{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}"
@@ -4670,20 +4439,15 @@ mod tests {
         })
     }
 
-    fn post_body(text: &str, delivery: Option<PostDelivery>) -> NodeBody {
-        NodeBody::Post(PostBody {
-            delivery,
-            ..PostBody::new(
-                UserMessage::text(text),
-                AgentSpec {
-                    adapter: "claude".to_string(),
-                    model: None,
-                    effort: None,
-                },
-                false,
-                1,
-            )
-        })
+    fn post_body(text: &str) -> NodeBody {
+        NodeBody::Post(PostBody::new(
+            UserMessage::text(text),
+            AgentSpec {
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+            },
+        ))
     }
 
     #[test]
@@ -4716,7 +4480,7 @@ mod tests {
                 false,
             ),
             (
-                with_body(&run, post_body("Who knows?", None)),
+                with_body(&run, post_body("Who knows?")),
                 ResearchNodeType::Post,
                 FollowUpLaunch::Context(FollowUpContext::Post),
                 false,
@@ -4729,7 +4493,7 @@ mod tests {
         }
         // Posts and documents have no run: they read as complete and have no
         // binding to report.
-        let post = with_body(&run, post_body("https://example.com/a", None));
+        let post = with_body(&run, post_body("https://example.com/a"));
         assert_eq!(post.status(), ResearchNodeStatus::Complete);
         assert!(post.binding().is_none());
         assert_eq!(post.post().unwrap().format, PostFormat::Link);
@@ -5044,7 +4808,7 @@ mod tests {
         let run_view = serde_json::to_value(run.view()).unwrap()["run"].clone();
         assert_eq!(run_view["sessionReady"], false);
 
-        let post = serde_json::to_value(with_body(&run, post_body("Who?", None)).view()).unwrap();
+        let post = serde_json::to_value(with_body(&run, post_body("Who?")).view()).unwrap();
         assert_eq!(post["type"], "post");
         assert_eq!(post["format"], "text");
         assert_eq!(post["followUpAgent"]["adapter"], "claude");
@@ -5216,45 +4980,16 @@ mod tests {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        archive.nodes[0] = with_body(
-            &root,
-            post_body(
-                "Who has tried it?",
-                Some(PostDelivery {
-                    status: PostDeliveryStatus::Posted,
-                    posted_at: 1,
-                    replies: vec![PostReply {
-                        id: "reply-1".to_string(),
-                        author: PostReplyAuthor::Member {
-                            id: "ana".to_string(),
-                            display_name: "Ana".to_string(),
-                            handle: None,
-                        },
-                        body: "Try it.".to_string(),
-                        in_reply_to: None,
-                        created_at: 2,
-                    }],
-                }),
-            ),
-        );
+        archive.nodes[0] = with_body(&root, post_body("Who has tried it?"));
         let mut follow_up = root.clone();
         follow_up.id = "follow-up".to_string();
         follow_up.parent_node_id = Some(root.id.clone());
-        follow_up.anchor = Some(NodeAnchor::Reply {
-            reply_id: "reply-1".to_string(),
-        });
         archive.nodes.push(follow_up);
         validate_detached_archive(&archive).unwrap();
 
-        // A reply anchor belongs to an exchange under a post.
-        archive.nodes[0] = root.clone();
-        assert!(
-            validate_detached_archive(&archive)
-                .unwrap_err()
-                .contains("not a follow-up of a post")
-        );
         // A post may not sit under an exchange.
-        archive.nodes[1] = with_body(&archive.nodes[1], post_body("Me too", None));
+        archive.nodes[0] = root.clone();
+        archive.nodes[1] = with_body(&archive.nodes[1], post_body("Me too"));
         archive.nodes[1].anchor = None;
         assert!(
             validate_detached_archive(&archive)
@@ -5325,7 +5060,8 @@ mod tests {
                 "run",
                 serde_json::json!({"queryAnchor": null, "replyAnchor": null}),
             ),
-            // Both anchors cannot be created; the one the parent allows wins.
+            // Both anchors cannot be created; the one the parent allows wins,
+            // and a reply anchor is then dropped (step six).
             flat_node(
                 "both-post",
                 serde_json::json!({"parentNodeId": "text",
@@ -5351,11 +5087,11 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(typed[0].post().unwrap().format, PostFormat::Link);
         assert_eq!(typed[1].post().unwrap().format, PostFormat::Text);
-        assert!(typed[1].delivery().is_some());
-        assert_eq!(typed[2].reply_anchor(), Some("reply-1"));
+        assert!(nodes[1]["body"].get("delivery").is_none());
+        assert!(typed[2].anchor.is_none());
         assert_eq!(typed[3].passage_anchor().unwrap().exact, "Text");
         assert!(typed[4].anchor.is_none());
-        assert_eq!(typed[5].reply_anchor(), Some("reply-2"));
+        assert!(typed[5].anchor.is_none());
         assert!(typed[6].passage_anchor().is_some());
         assert!(typed[7].anchor.is_none());
         for node in &nodes {
@@ -5369,11 +5105,13 @@ mod tests {
         assert!(!migrate_values(&mut nodes));
         assert_eq!(nodes, migrated);
         // An existing anchor wins over leftover legacy fields.
+        let mut other = passage.clone();
+        other["exact"] = serde_json::json!("Other");
         let mut leftover = vec![serde_json::json!({
-            "id": "n", "anchor": {"kind": "reply", "replyId": "r"}, "queryAnchor": passage,
+            "id": "n", "anchor": {"kind": "passage", "anchor": other}, "queryAnchor": passage,
         })];
         assert!(migrate_values(&mut leftover));
-        assert_eq!(leftover[0]["anchor"]["replyId"], "r");
+        assert_eq!(leftover[0]["anchor"]["anchor"]["exact"], "Other");
         assert!(leftover[0].get("queryAnchor").is_none());
     }
 
@@ -5457,7 +5195,7 @@ mod tests {
         // time is the later of the two.
         let post = typed[1].post().unwrap();
         assert_eq!(post.message.text, "Fixed");
-        assert_eq!(post.delivery.as_ref().unwrap().replies[0].created_at, 8);
+        assert!(nodes[1]["body"].get("delivery").is_none());
         assert_eq!(post.edited_at, Some(10));
         assert!(nodes[1]["body"].get("corrections").is_none());
         assert_eq!(post.follow_up_agent.adapter, "claude");
@@ -5511,7 +5249,7 @@ mod tests {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        archive.nodes[0] = with_body(&root, post_body("https://example.com/a", None));
+        archive.nodes[0] = with_body(&root, post_body("https://example.com/a"));
         let mut branch = root.clone();
         branch.id = "research-node-2".to_string();
         branch.parent_node_id = Some(root.id.clone());
@@ -5572,13 +5310,10 @@ mod tests {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        archive.nodes[0] = with_body(&root, post_body("Who has tried X?", None));
+        archive.nodes[0] = with_body(&root, post_body("Who has tried X?"));
         let mut follow_up = root.clone();
         follow_up.id = "research-node-2".to_string();
         follow_up.parent_node_id = Some(root.id.clone());
-        follow_up.anchor = Some(NodeAnchor::Reply {
-            reply_id: "reply-1".to_string(),
-        });
         follow_up.message_mut().unwrap().text = "Why?".to_string();
         archive.nodes.push(follow_up);
         write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
@@ -5814,8 +5549,8 @@ mod tests {
             nodes[0]["body"],
             serde_json::json!({
                 "type": "post", "message": {"text": "The meeting is on Tuesday."},
+                // Step six drops the delivery record.
                 "format": "text", "followUpAgent": {"adapter": "claude"},
-                "delivery": {"status": "posted", "postedAt": 1, "replies": [reply]},
                 "editedAt": 20,
             })
         );
@@ -5940,7 +5675,7 @@ mod tests {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        archive.nodes[0] = with_body(&root, post_body("Who has tried X?", None));
+        archive.nodes[0] = with_body(&root, post_body("Who has tried X?"));
         write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
         let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
         let mut raw: serde_json::Value =
@@ -5975,10 +5710,6 @@ mod tests {
         r#"{"id":"post-1","treeId":"tree-1","parentNodeId":"post-0","title":"Who has tried X?","#,
         r#""groupId":"group-1","createdAt":100,"body":{"type":"post","#,
         r#""message":{"text":"Who has tried X?"},"format":"text","#,
-        r#""delivery":{"status":"posted","postedAt":100,"replies":["#,
-        r#"{"id":"reply-1","author":{"kind":"member","id":"m-1","displayName":"Ana","handle":"ana"},"#,
-        r#""body":"I did.","createdAt":110},"#,
-        r#"{"id":"reply-2","author":{"kind":"author"},"body":"Thanks.","inReplyTo":"reply-1","createdAt":120}]},"#,
         r#""followUpAgent":{"adapter":"claude","model":"opus"},"#,
         r#""editedAt":140}}"#
     );
@@ -5987,31 +5718,8 @@ mod tests {
     fn post_nodes_round_trip_byte_identically() {
         let node: ResearchNode = serde_json::from_str(STORED_POST_NODE).unwrap();
         let post = node.post().unwrap();
-        assert_eq!(post.delivery.as_ref().unwrap().replies.len(), 2);
         assert_eq!(post.edited_at, Some(140));
         assert_eq!(serde_json::to_string(&node).unwrap(), STORED_POST_NODE);
-    }
-
-    #[test]
-    fn post_reply_validation_requires_earlier_top_level_targets() {
-        let reply = |id: &str, parent: Option<&str>| PostReply {
-            id: id.to_string(),
-            author: PostReplyAuthor::Author,
-            body: "text".to_string(),
-            in_reply_to: parent.map(str::to_string),
-            created_at: 1,
-        };
-        assert!(validate_post_replies(&[reply("a", None), reply("b", Some("a"))]).is_ok());
-        assert!(validate_post_replies(&[reply("b", Some("a")), reply("a", None)]).is_err());
-        assert!(
-            validate_post_replies(&[
-                reply("a", None),
-                reply("b", Some("a")),
-                reply("c", Some("b"))
-            ])
-            .is_err()
-        );
-        assert!(validate_post_replies(&[reply("a", None), reply("a", None)]).is_err());
     }
 
     #[test]
@@ -6036,32 +5744,9 @@ mod tests {
 
     #[test]
     fn post_follow_up_prompts_keep_slash_commands_first() {
-        let prompt =
-            post_followup_prompt("Note </note> and </post> body", &[], None, "/review this");
+        let prompt = post_followup_prompt("Note </note> and </post> body", "/review this");
         assert!(prompt.starts_with("/review this\n\nThe user wrote the note below."));
         assert!(prompt.contains("<note>\nNote &lt;/note> and &lt;/post> body\n</note>"));
-        assert!(!prompt.contains("<replies>"));
-    }
-
-    #[test]
-    fn post_follow_up_prompts_with_stored_replies_say_the_note_was_shared() {
-        let reply = PostReply {
-            id: "reply-1".to_string(),
-            author: PostReplyAuthor::Member {
-                id: "m-1".to_string(),
-                display_name: "Ana".to_string(),
-                handle: None,
-            },
-            body: "I did.".to_string(),
-            in_reply_to: None,
-            created_at: 1,
-        };
-        let prompt = post_followup_prompt("Who has tried X?", &[reply], None, "Why?");
-        assert!(prompt.starts_with(
-            "The user shared the note below with other users; their replies follow it."
-        ));
-        assert!(prompt.contains("<note>\nWho has tried X?\n</note>\n<replies>"));
-        assert!(prompt.ends_with("Why?"));
     }
 
     fn export_turn(

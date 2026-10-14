@@ -32,7 +32,7 @@ export interface ResearchPostThreadHandle {
 
 /** The rows of a note's follow-ups column, oldest first: its follow-ups
  * (child nodes other than documents), AI follow-ups and follow-up notes
- * alike. Stored replies (`delivery.replies`) are not rows. */
+ * alike. */
 export function postThreadEntries(nodes: readonly ResearchNode[], post: ResearchNode): ResearchNode[] {
   return nodes
     .filter((node) => node.parentNodeId === post.id && nodeType(node) !== "document")

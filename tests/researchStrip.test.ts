@@ -330,7 +330,7 @@ test("a pending branch adds the branches column after the level that shows its p
 
 test("a post root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
-    node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
+    node("post", { type: "post" }),
     node("run", { parentNodeId: "post", createdAt: 1 }),
   ];
   const root = researchStrip(nodes, "post", null);
@@ -367,11 +367,10 @@ test("a post root is a post column and its thread column; its follow-ups open as
   assert.equal(sameResearchStrip(root, withRun), false);
 });
 
-test("a network follow-up (a post under a post) opens as a post column and its thread column", () => {
-  const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
+test("a follow-up note (a post under a post) opens as a post column and its thread column", () => {
   const nodes = [
-    node("post", { type: "post", delivery }),
-    node("net", { type: "post", parentNodeId: "post", createdAt: 1, delivery }),
+    node("post", { type: "post" }),
+    node("net", { type: "post", parentNodeId: "post", createdAt: 1 }),
     node("run", { parentNodeId: "net", createdAt: 2 }),
   ];
   const opened = researchStrip(nodes, "net", null);
@@ -439,11 +438,10 @@ test("editing a document root adds the editor column after the root level's colu
 });
 
 test("editing the root note shows the editor column in place of the note column", () => {
-  const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
   const nodes = [
-    node("post", { type: "post", delivery }),
+    node("post", { type: "post" }),
     node("run", { parentNodeId: "post", createdAt: 1 }),
-    node("net", { type: "post", parentNodeId: "post", createdAt: 2, delivery }),
+    node("net", { type: "post", parentNodeId: "post", createdAt: 2 }),
   ];
   const editing = researchStrip(nodes, "post", null, "post");
   assert.deepEqual(ids(editing), ["E0", "T0"]);

@@ -1091,7 +1091,6 @@ mod tests {
                     model: None,
                     effort: None,
                     workspace_id: workspace.id.clone(),
-                    share: true,
                 },
                 Vec::new(),
             )
@@ -1115,7 +1114,6 @@ mod tests {
         let restored_detail = state.research_tree(&restored_trees[0].id).unwrap();
         let post = restored_detail.nodes[0].post().expect("a post");
         assert_eq!(post.message.text, "Who has tried X?");
-        assert!(post.delivery.is_some());
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1145,7 +1143,6 @@ mod tests {
                     model: None,
                     effort: None,
                     workspace_id: workspace.id.clone(),
-                    share: false,
                 },
                 vec![image],
             )

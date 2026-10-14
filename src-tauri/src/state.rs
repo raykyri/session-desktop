@@ -1906,10 +1906,9 @@ impl AppState {
     }
 
     /// Admits a post tree (shown as a note): text, or a single URL saved as
-    /// a link or an X post. Only a `share` request gets a delivery record;
-    /// the desktop app never sends one. Posts have no response and never
-    /// run, so they settle `Complete` at creation and their follow-ups can
-    /// launch immediately.
+    /// a link or an X post. Posts have no response and never run, so they
+    /// settle `Complete` at creation and their follow-ups can launch
+    /// immediately.
     pub fn create_research_post(
         &self,
         request: research::CreateResearchPostRequest,
@@ -1959,8 +1958,6 @@ impl AppState {
                     model: request.model,
                     effort: request.effort,
                 },
-                request.share,
-                now,
             )),
         );
         self.admit_research_root(&tree, &mut node)?;
@@ -1975,8 +1972,7 @@ impl AppState {
     }
 
     /// A follow-up note: a post child of any post (text or saved link). It
-    /// has no delivery record, whatever the parent's, and inherits the
-    /// parent's follow-up agent defaults.
+    /// inherits the parent's follow-up agent defaults.
     pub fn create_research_post_follow_up(
         &self,
         parent_node_id: &str,
@@ -2031,8 +2027,6 @@ impl AppState {
                         attachments,
                     },
                     follow_up_agent,
-                    false,
-                    now,
                 )),
             );
             model.research_nodes.insert(node_id, node.clone());
@@ -2168,32 +2162,22 @@ impl AppState {
         })
     }
 
-    /// The launch prompt for an AI follow-up of a post: the post body (with
-    /// resolved attachments), every reply, and the anchored reply, if any.
+    /// The launch prompt for an AI follow-up of a post: the post body, with
+    /// resolved attachments.
     pub fn research_post_followup_prompt(
         &self,
         parent_node_id: &str,
-        child: &ResearchNode,
         question: &str,
     ) -> Result<String, String> {
         let parent = self.research_node(parent_node_id)?;
         if parent.follow_up_launch() != FollowUpLaunch::Context(FollowUpContext::Post) {
             return Err("the research node is not a note".to_string());
         }
-        let replies = parent
-            .delivery()
-            .map(|delivery| delivery.replies.as_slice())
-            .unwrap_or_default();
-        let anchored = child
-            .reply_anchor()
-            .and_then(|reply_id| replies.iter().find(|reply| reply.id == reply_id));
         let post_body = crate::tweets::prompt_with_research_attachments(
             parent.prompt().to_string(),
             parent.attachments(),
         );
-        Ok(research::post_followup_prompt(
-            &post_body, replies, anchored, question,
-        ))
+        Ok(research::post_followup_prompt(&post_body, question))
     }
 
     /// Import an already completed report through the durable snapshot pipeline.
@@ -2800,15 +2784,6 @@ impl AppState {
                 if inline || matches!(anchor, Some(NodeAnchor::Passage { .. })) {
                     return Err("note follow-ups cannot be inline or passage-anchored".to_string());
                 }
-                if let Some(NodeAnchor::Reply { reply_id }) = &anchor
-                    && !parent.delivery().is_some_and(|delivery| {
-                        delivery.replies.iter().any(|reply| &reply.id == reply_id)
-                    })
-                {
-                    return Err(format!("reply {reply_id} was not found on this note"));
-                }
-            } else if matches!(anchor, Some(NodeAnchor::Reply { .. })) {
-                return Err("only follow-ups of a note can be asked about a reply".to_string());
             }
             // Forked follow-ups require the parent's checkpoint and adapter.
             // Context-based follow-ups start fresh runs. Authored documents use
@@ -5992,11 +5967,7 @@ fn recent_activity_entries(model: &Model, roots: Vec<&ResearchNode>) -> Vec<Rece
             });
             query.children = children
                 .into_iter()
-                .map(|child| {
-                    let mut entry = RecentResearchQuery::from(child);
-                    entry.reply_anchor_author = research::reply_anchor_author(root, child);
-                    entry
-                })
+                .map(RecentResearchQuery::from)
                 .collect();
             query
         })
@@ -6725,60 +6696,14 @@ mod tests {
         })
     }
 
-    fn post_request(body: &str, share: bool) -> research::CreateResearchPostRequest {
+    fn post_request(body: &str) -> research::CreateResearchPostRequest {
         research::CreateResearchPostRequest {
             body: body.to_string(),
             adapter: "claude".to_string(),
             model: Some("opus".to_string()),
             effort: None,
             workspace_id: "group-1".to_string(),
-            share,
         }
-    }
-
-    fn member(name: &str) -> research::PostReplyAuthor {
-        research::PostReplyAuthor::Member {
-            id: name.to_lowercase(),
-            display_name: name.to_string(),
-            handle: None,
-        }
-    }
-
-    /// Appends a reply to a shared post's delivery record, as replies stored by
-    /// older builds load. The app no longer writes replies itself.
-    fn store_post_reply(
-        state: &AppState,
-        node_id: &str,
-        author: research::PostReplyAuthor,
-        in_reply_to: Option<String>,
-        body: &str,
-    ) -> String {
-        let reply_id = state.next_id("post-reply");
-        let now = now_millis();
-        {
-            let mut model = state.inner.model.lock().unwrap();
-            let node = model.research_nodes.get_mut(node_id).unwrap();
-            let tree_id = node.tree_id.clone();
-            let delivery = node
-                .post_mut()
-                .and_then(|post| post.delivery.as_mut())
-                .expect("a shared note");
-            delivery.replies.push(research::PostReply {
-                id: reply_id.clone(),
-                author,
-                body: body.to_string(),
-                in_reply_to,
-                created_at: research::body_millis(now),
-            });
-            research::validate_post_replies(&delivery.replies).unwrap();
-            touch_research_tree_locked(&mut model, &tree_id, now);
-        }
-        state.persist();
-        reply_id
-    }
-
-    fn add_member_reply(state: &AppState, node_id: &str, name: &str, body: &str) -> String {
-        store_post_reply(state, node_id, member(name), None, body)
     }
 
     #[test]
@@ -6797,10 +6722,9 @@ mod tests {
             .unwrap();
         let root_id = detail.tree.root_node_id;
         let post = state
-            .create_research_post(post_request("What should I read?", true), Vec::new())
+            .create_research_post(post_request("What should I read?"), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
-        let ana_reply = add_member_reply(&state, &post_id, "Ana", "Start with the spec.");
         let follow_up_note = state
             .create_research_post_follow_up(&post_id, "And after that?".to_string(), Vec::new())
             .unwrap();
@@ -6846,17 +6770,14 @@ mod tests {
                 .insert(grandchild.id.clone(), grandchild);
             model.research_nodes.insert(reply.id.clone(), reply);
 
-            let mut about_reply = root.clone();
-            about_reply.id = "about-reply".to_string();
-            about_reply.tree_id = post.tree.id.clone();
-            about_reply.parent_node_id = Some(post_id.clone());
-            about_reply.anchor = Some(NodeAnchor::Reply {
-                reply_id: ana_reply.clone(),
-            });
-            about_reply.created_at = 270;
+            let mut ai_follow_up = root.clone();
+            ai_follow_up.id = "ai-follow-up".to_string();
+            ai_follow_up.tree_id = post.tree.id.clone();
+            ai_follow_up.parent_node_id = Some(post_id.clone());
+            ai_follow_up.created_at = 270;
             model
                 .research_nodes
-                .insert(about_reply.id.clone(), about_reply);
+                .insert(ai_follow_up.id.clone(), ai_follow_up);
         }
 
         let ids = |page: &research::RecentActivityPage| {
@@ -6870,7 +6791,6 @@ mod tests {
         let post_query = &first.items[0];
         assert_eq!(post_query.node_type, ResearchNodeType::Post);
         assert_eq!(post_query.format, Some(research::PostFormat::Text));
-        assert_eq!(post_query.reply_count, 1);
         assert_eq!(
             post_query
                 .children
@@ -6879,12 +6799,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 (follow_up_note.id.as_str(), ResearchNodeType::Post),
-                ("about-reply", ResearchNodeType::Exchange),
+                ("ai-follow-up", ResearchNodeType::Exchange),
             ]
-        );
-        assert_eq!(
-            post_query.children[1].reply_anchor_author.as_deref(),
-            Some("Ana")
         );
         let run_query = &first.items[1];
         assert_eq!(run_query.children.len(), 1);
@@ -6982,77 +6898,19 @@ mod tests {
     }
 
     #[test]
-    fn recent_activity_cuts_post_replies_to_the_first_five_threads() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        let post = state
-            .create_research_post(post_request("Question", true), Vec::new())
-            .unwrap();
-        let post_id = post.tree.root_node_id;
-        let mut reply_ids = Vec::new();
-        for index in 0..7 {
-            reply_ids.push(add_member_reply(
-                &state,
-                &post_id,
-                &format!("Member{index}"),
-                "reply",
-            ));
-        }
-        store_post_reply(
-            &state,
-            &post_id,
-            research::PostReplyAuthor::Author,
-            Some(reply_ids[1].clone()),
-            "response",
-        );
-        let page = state.list_recent_activity(10, None).unwrap();
-        let query = &page.items[0];
-        assert_eq!(query.reply_count, 7);
-        let replies = &query.delivery.as_ref().unwrap().replies;
-        assert_eq!(replies.len(), 6);
-        assert_eq!(
-            replies
-                .iter()
-                .filter(|reply| reply.in_reply_to.is_none())
-                .map(|reply| reply.id.clone())
-                .collect::<Vec<_>>(),
-            reply_ids[..5].to_vec()
-        );
-        assert_eq!(
-            replies.last().unwrap().in_reply_to.as_deref(),
-            Some(reply_ids[1].as_str())
-        );
-        // The full node still has everything.
-        assert_eq!(
-            state
-                .research_node(&post_id)
-                .unwrap()
-                .delivery()
-                .unwrap()
-                .replies
-                .len(),
-            8
-        );
-    }
-
-    #[test]
-    fn notes_and_saved_links_are_created_without_delivery() {
+    fn notes_and_saved_links_are_created_as_posts() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
-            .create_research_post(
-                post_request(" https://example.com/page ", false),
-                Vec::new(),
-            )
+            .create_research_post(post_request(" https://example.com/page "), Vec::new())
             .unwrap();
         let link_node = &link.nodes[0];
         assert_eq!(link_node.node_type(), ResearchNodeType::Post);
         assert_eq!(link_node.post().unwrap().format, research::PostFormat::Link);
         assert_eq!(link_node.status(), ResearchNodeStatus::Complete);
         assert_eq!(link_node.prompt(), "https://example.com/page");
-        assert!(link_node.delivery().is_none());
         let note = state
-            .create_research_post(post_request("Who has tried this?", false), Vec::new())
+            .create_research_post(post_request("Who has tried this?"), Vec::new())
             .unwrap();
         assert_eq!(note.tree.title, "Who has tried this?");
         assert_eq!(
@@ -7060,48 +6918,37 @@ mod tests {
             research::PostFormat::Text
         );
         assert_eq!(note.nodes[0].status(), ResearchNodeStatus::Complete);
-        assert!(note.nodes[0].delivery().is_none());
         assert!(
             state
-                .create_research_post(post_request("   ", false), Vec::new())
+                .create_research_post(post_request("   "), Vec::new())
                 .unwrap_err()
                 .contains("note cannot be empty")
         );
-        // A shared note (the request's `share`) gets a delivery record.
-        let shared = state
-            .create_research_post(post_request("Who else?", true), Vec::new())
-            .unwrap();
-        assert_eq!(
-            shared.nodes[0].delivery().as_ref().unwrap().status,
-            research::PostDeliveryStatus::Posted
-        );
     }
 
     #[test]
-    fn the_create_request_reads_the_earlier_ask_network_name_as_share() {
-        let request = |json: serde_json::Value| {
-            serde_json::from_value::<research::CreateResearchPostRequest>(json).unwrap()
-        };
-        let base = serde_json::json!({
-            "body": "Note",
-            "adapter": "claude",
-            "workspaceId": "group-1",
-        });
-        assert!(!request(base.clone()).share);
-        let mut legacy = base.clone();
-        legacy["askNetwork"] = serde_json::json!(true);
-        assert!(request(legacy).share);
-        let mut current = base;
-        current["share"] = serde_json::json!(true);
-        assert!(request(current).share);
+    fn the_create_request_ignores_the_earlier_share_flag() {
+        // Earlier frontends could send `share` (or `askNetwork`) to give a note
+        // a delivery record. The request still parses; the flag has no effect.
+        for key in ["share", "askNetwork"] {
+            let request =
+                serde_json::from_value::<research::CreateResearchPostRequest>(serde_json::json!({
+                    "body": "Note",
+                    "adapter": "claude",
+                    "workspaceId": "group-1",
+                    key: true,
+                }))
+                .unwrap();
+            assert_eq!(request.body, "Note");
+        }
     }
 
     #[test]
-    fn follow_up_notes_attach_to_any_note_without_delivery() {
+    fn follow_up_notes_attach_to_any_note() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
-            .create_research_post(post_request("https://example.com/a", false), Vec::new())
+            .create_research_post(post_request("https://example.com/a"), Vec::new())
             .unwrap();
         let link_id = link.tree.root_node_id.clone();
         let under_link = state
@@ -7113,19 +6960,6 @@ mod tests {
             under_link.post().unwrap().format,
             research::PostFormat::Text
         );
-        assert!(under_link.delivery().is_none());
-        // A follow-up of a shared note is not shared either.
-        let shared = state
-            .create_research_post(post_request("Who has tried this?", true), Vec::new())
-            .unwrap();
-        let under_shared = state
-            .create_research_post_follow_up(
-                &shared.tree.root_node_id,
-                "More detail".to_string(),
-                Vec::new(),
-            )
-            .unwrap();
-        assert!(under_shared.delivery().is_none());
         // Follow-up notes nest.
         let nested = state
             .create_research_post_follow_up(&under_link.id, "And this".to_string(), Vec::new())
@@ -7165,11 +6999,11 @@ mod tests {
     }
 
     #[test]
-    fn a_post_without_replies_takes_new_text_and_is_marked_edited() {
+    fn a_post_takes_new_text_and_is_marked_edited() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("Who has tried this?", true), Vec::new())
+            .create_research_post(post_request("Who has tried this?"), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
         // The editor's expected state must match the post's.
@@ -7214,14 +7048,13 @@ mod tests {
     }
 
     #[test]
-    fn a_post_with_replies_or_follow_ups_takes_new_text() {
+    fn a_post_with_follow_ups_takes_new_text() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("The meeting is on Monday.", true), Vec::new())
+            .create_research_post(post_request("The meeting is on Monday."), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
-        add_member_reply(&state, &post_id, "Ana", "I will be there.");
         let child = state
             .create_research_child_with_attachments(
                 &post_id,
@@ -7244,14 +7077,13 @@ mod tests {
         assert_eq!(edited.node.prompt(), "The meeting is on Tuesday.");
         assert!(edited.node.post().unwrap().edited_at.is_some());
         assert_eq!(edited.tree.title, "The meeting is on Tuesday.");
-        // Replies and follow-ups are kept.
-        assert_eq!(edited.node.delivery().unwrap().replies.len(), 1);
+        // Follow-ups are kept.
         assert!(state.research_node(&child.id).is_ok());
         // Follow-ups read the current text.
         let prompt = state
-            .research_post_followup_prompt(&post_id, &child, "Which day?")
+            .research_post_followup_prompt(&post_id, "Which day?")
             .unwrap();
-        assert!(prompt.contains("<note>\nThe meeting is on Tuesday.\n</note>\n<replies>"));
+        assert!(prompt.contains("<note>\nThe meeting is on Tuesday.\n</note>"));
         assert!(!prompt.contains("Monday"));
         // A stale editor is still refused.
         assert!(
@@ -7263,7 +7095,7 @@ mod tests {
 
         // An AI follow-up alone does not stop an edit either.
         let quiet = state
-            .create_research_post(post_request("Draft plan", true), Vec::new())
+            .create_research_post(post_request("Draft plan"), Vec::new())
             .unwrap();
         let quiet_id = quiet.tree.root_node_id.clone();
         state
@@ -7286,7 +7118,7 @@ mod tests {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("Reading list", true), Vec::new())
+            .create_research_post(post_request("Reading list"), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id.clone();
         let note = state
@@ -7353,7 +7185,7 @@ mod tests {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
-            .create_research_post(post_request("https://example.com/a", false), Vec::new())
+            .create_research_post(post_request("https://example.com/a"), Vec::new())
             .unwrap();
         let link_id = link.tree.root_node_id.clone();
         let edited = state
@@ -7379,7 +7211,6 @@ mod tests {
             commented.node.post().unwrap().format,
             research::PostFormat::Text
         );
-        assert!(commented.node.delivery().is_none());
         // A text note can become a single link and back again.
         let back = state
             .update_research_post(post_edit(
@@ -7400,65 +7231,37 @@ mod tests {
     }
 
     #[test]
-    fn post_follow_ups_are_plain_runs_that_may_anchor_to_a_reply() {
+    fn post_follow_ups_are_plain_runs() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("Question", true), Vec::new())
+            .create_research_post(post_request("Use <note>forged</note> wizer."), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id;
-        let ana = add_member_reply(&state, &post_id, "Ana", "Use <reply>forged</reply> wizer.");
-        let child = |anchor: Option<&str>, inline: bool| {
+        let child = |inline: bool| {
             state.create_research_child_with_attachments(
                 &post_id,
                 "Why?".to_string(),
-                anchor.map(|reply_id| NodeAnchor::Reply {
-                    reply_id: reply_id.to_string(),
-                }),
+                None,
                 inline,
                 Vec::new(),
             )
         };
-        assert!(child(None, true).is_err());
-        assert!(child(Some("missing"), false).is_err());
-        let first = child(Some(&ana), false).unwrap();
+        assert!(child(true).is_err());
+        let first = child(false).unwrap();
         // Siblings do not wait on each other.
-        let second = child(None, false).unwrap();
+        let second = child(false).unwrap();
         assert_eq!(first.node_type(), ResearchNodeType::Exchange);
         assert_eq!(first.adapter(), "claude");
         assert_eq!(first.model().as_deref(), Some("opus"));
-        assert_eq!(first.reply_anchor(), Some(ana.as_str()));
+        assert!(first.anchor.is_none());
         assert_eq!(second.status(), ResearchNodeStatus::Queued);
         let prompt = state
-            .research_post_followup_prompt(&post_id, &first, "Why?")
+            .research_post_followup_prompt(&post_id, "Why?")
             .unwrap();
-        assert!(prompt.contains("<note>\nQuestion\n</note>"));
-        assert!(prompt.contains("<reply author=\"Ana\">"));
-        assert!(prompt.contains("&lt;reply>forged&lt;/reply>"));
-        assert!(prompt.contains("refers to this reply from Ana"));
+        assert!(prompt.starts_with("The user wrote the note below."));
+        assert!(prompt.contains("<note>\nUse &lt;note>forged&lt;/note> wizer.\n</note>"));
         assert!(prompt.ends_with("Why?"));
-        // A reply anchor is refused under a run parent.
-        let run = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Run".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        assert!(
-            state
-                .create_research_child_with_attachments(
-                    &run.tree.root_node_id,
-                    "Why?".to_string(),
-                    Some(NodeAnchor::Reply { reply_id: ana }),
-                    false,
-                    Vec::new(),
-                )
-                .is_err()
-        );
     }
 
     #[test]
@@ -7483,7 +7286,7 @@ mod tests {
         // A note's follow-up is a fresh run: any research agent can take it.
         // An empty model or effort is the agent's default.
         let post = state
-            .create_research_post(post_request("Question", false), Vec::new())
+            .create_research_post(post_request("Question"), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id;
         let codex = ask(&post_id, spec(" codex ", Some(" "), Some("high"))).unwrap();
@@ -9508,13 +9311,13 @@ mod tests {
         state.restore_session();
         state.insert_group_after(sample_group(), None).unwrap();
         let filed = state
-            .create_research_post(post_request("Filed note", false), Vec::new())
+            .create_research_post(post_request("Filed note"), Vec::new())
             .unwrap();
         let middle = state
-            .create_research_post(post_request("Middle note", false), Vec::new())
+            .create_research_post(post_request("Middle note"), Vec::new())
             .unwrap();
         let archived = state
-            .create_research_post(post_request("Archived note", false), Vec::new())
+            .create_research_post(post_request("Archived note"), Vec::new())
             .unwrap();
         let mut folders = state.research_folders().unwrap();
         folders.folders.push(research::ResearchFolder {
@@ -9643,13 +9446,13 @@ mod tests {
         state.restore_session();
         state.insert_group_after(sample_group(), None).unwrap();
         let kept = state
-            .create_research_post(post_request("Kept", false), Vec::new())
+            .create_research_post(post_request("Kept"), Vec::new())
             .unwrap();
         let first = state
-            .create_research_post(post_request("First", false), Vec::new())
+            .create_research_post(post_request("First"), Vec::new())
             .unwrap();
         let second = state
-            .create_research_post(post_request("Second", false), Vec::new())
+            .create_research_post(post_request("Second"), Vec::new())
             .unwrap();
         state.trash_research_tree(&first.tree.id).unwrap();
         state.trash_research_tree(&second.tree.id).unwrap();
@@ -9718,7 +9521,7 @@ mod tests {
         state.restore_session();
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
-            .create_research_post(post_request("Older note", false), Vec::new())
+            .create_research_post(post_request("Older note"), Vec::new())
             .unwrap();
         state.finalize_persistence_for_exit();
         drop(state);
@@ -10103,7 +9906,7 @@ mod tests {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("A note", false), Vec::new())
+            .create_research_post(post_request("A note"), Vec::new())
             .unwrap();
         let document = state
             .create_research_document(CreateResearchDocumentRequest {
@@ -11622,29 +11425,28 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// A state with a shared post (with a member reply and a follow-up
-    /// asked about it), a saved link, a run tree with a branch created from a
-    /// passage of its answer, and an exported terminal conversation.
+    /// A state with a post and an AI follow-up of it, a saved link, a run
+    /// tree with a branch created from a passage of its answer, and an
+    /// exported terminal conversation.
     fn state_with_posts_and_anchors(workspace: &std::path::Path) -> AppState {
         let state = AppState::new(test_config(workspace.to_path_buf()));
         state.restore_session();
         state.insert_group_after(sample_group(), None).unwrap();
         let post = state
-            .create_research_post(post_request("Who has tried X?", true), Vec::new())
+            .create_research_post(post_request("Who has tried X?"), Vec::new())
             .unwrap();
         let post_id = post.tree.root_node_id;
-        let ana = add_member_reply(&state, &post_id, "Ana", "I did.");
         state
             .create_research_child_with_attachments(
                 &post_id,
                 "What did Ana find?".to_string(),
-                Some(NodeAnchor::Reply { reply_id: ana }),
+                None,
                 false,
                 Vec::new(),
             )
             .unwrap();
         let link = state
-            .create_research_post(post_request("https://example.com/a", false), Vec::new())
+            .create_research_post(post_request("https://example.com/a"), Vec::new())
             .unwrap();
         // An edited post keeps its edit time through the migration.
         state
@@ -11745,8 +11547,8 @@ mod tests {
     }
 
     /// Rewrites `raw` (a saved state file) in the shape builds before
-    /// version 8 stored: flat records, notes without a format, separate
-    /// query and reply anchors, and transcripts as conversations.
+    /// version 8 stored: flat records, notes without a format, passage
+    /// anchors as `queryAnchor`, and transcripts as conversations.
     fn rewrite_as_pre_post_state(raw: &mut serde_json::Value, version: u32) {
         rewrite_with_version_nine_keys(raw);
         raw["version"] = serde_json::json!(version);
@@ -11757,14 +11559,8 @@ mod tests {
                 node.insert("kind".into(), serde_json::json!("note"));
                 node.remove("format");
             }
-            match node.remove("anchor") {
-                Some(anchor) if anchor["kind"] == "passage" => {
-                    node.insert("queryAnchor".into(), anchor["anchor"].clone());
-                }
-                Some(anchor) => {
-                    node.insert("replyAnchor".into(), anchor["replyId"].clone());
-                }
-                None => {}
+            if let Some(anchor) = node.remove("anchor") {
+                node.insert("queryAnchor".into(), anchor["anchor"].clone());
             }
         }
     }
@@ -12200,7 +11996,6 @@ mod tests {
         let post = restored.research_node(&post_id).unwrap();
         assert_eq!(post.prompt(), "Who has tried X and Y?");
         assert_eq!(post.post().unwrap().edited_at, Some(9));
-        assert_eq!(post.delivery().unwrap().replies.len(), 1);
         restored.finalize_persistence_for_exit();
         drop(restored);
         let saved: serde_json::Value =
@@ -12216,6 +12011,75 @@ mod tests {
             "Who has tried X and Y?"
         );
         assert_eq!(backup_names(&workspace), vec!["state.v10.bak".to_string()]);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    /// Earlier builds stored a shared-post model that no build transmitted or
+    /// showed: a post's `delivery` record (sharing state and replies) and
+    /// follow-up anchors of kind `reply`. A state file with both loads without
+    /// them (the follow-up has no anchor) and is saved without them; the
+    /// version does not change, so no backup is written.
+    #[test]
+    fn stored_post_deliveries_and_reply_anchors_load_without_them() {
+        let workspace = temp_workspace();
+        let state = state_with_posts_and_anchors(&workspace);
+        let original = research_nodes_by_id(&state);
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let nodes = raw["researchNodes"].as_object().unwrap();
+        let post_id = nodes
+            .iter()
+            .find(|(_, node)| node["body"]["message"]["text"] == "Who has tried X?")
+            .map(|(id, _)| id.clone())
+            .unwrap();
+        let follow_up_id = nodes
+            .iter()
+            .find(|(_, node)| node["parentNodeId"] == serde_json::json!(post_id))
+            .map(|(id, _)| id.clone())
+            .unwrap();
+        raw["researchNodes"][&post_id]["body"]["delivery"] = serde_json::json!({
+            "status": "posted",
+            "postedAt": 1,
+            "replies": [{
+                "id": "reply-1",
+                "author": {"kind": "member", "id": "ana", "displayName": "Ana"},
+                "body": "I did.",
+                "createdAt": 2,
+            }],
+        });
+        raw["researchNodes"][&follow_up_id]["anchor"] =
+            serde_json::json!({"kind": "reply", "replyId": "reply-1"});
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        assert_eq!(research_nodes_by_id(&restored), original);
+        assert!(
+            restored
+                .research_node(&follow_up_id)
+                .unwrap()
+                .anchor
+                .is_none()
+        );
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["version"], persistence::STATE_VERSION);
+        assert!(
+            saved["researchNodes"][&post_id]["body"]
+                .get("delivery")
+                .is_none()
+        );
+        assert!(
+            saved["researchNodes"][&follow_up_id]
+                .get("anchor")
+                .is_none()
+        );
+        assert!(backup_names(&workspace).is_empty());
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

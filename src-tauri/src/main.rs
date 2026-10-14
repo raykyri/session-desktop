@@ -1296,9 +1296,7 @@ fn launch_research_child_run(
             ))
         }
         research::FollowUpLaunch::Context(research::FollowUpContext::Post) => {
-            // Reply text is other people's words, so the builder neutralizes
-            // it; the question (and any anchored reply) is wrapped there too.
-            Some(state.research_post_followup_prompt(&parent.id, child, &question))
+            Some(state.research_post_followup_prompt(&parent.id, &question))
         }
     };
     if let Some(launch_prompt) = context_prompt {

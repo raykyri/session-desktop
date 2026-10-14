@@ -190,8 +190,17 @@ test("a refused question blocks the queue, a stopped tail pauses it, and removin
 
 test("an edited question forks in place of the failed node instead of removing it first", () => {
   const anchor = {
-    kind: "reply",
-    replyId: "reply-1",
+    kind: "passage",
+    anchor: {
+      version: 1,
+      projection: "answer-v1",
+      responseRevision: "revision",
+      start: 0,
+      end: 5,
+      exact: "Quote",
+      prefix: "",
+      suffix: "",
+    },
   } as const satisfies NonNullable<ResearchNode["anchor"]>;
   const failed = node("failed", {
     parentNodeId: "root",

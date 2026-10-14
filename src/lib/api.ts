@@ -241,9 +241,7 @@ export function listRecentActivityForTrees(treeIds: string[]) {
 }
 
 /** Creates a note (a post tree): text, or a single URL saved as a link. The
- * desktop app never sets the backend's `share` flag, so the note has no
- * delivery record. The agent fields are the default for the note's AI
- * follow-ups. */
+ * agent fields are the default for the note's AI follow-ups. */
 export function createResearchPost(request: {
   body: string;
   adapter: string;

@@ -23,8 +23,7 @@ const noop = () => {};
 const postFields = {
   id: "post", treeId: "tree", prompt: "Who ships component-model plugins?",
   adapter: "claude", model: "fable", groupId: "ws", type: "post", format: "text",
-  status: "complete", createdAt: 100, highlights: [],
-  delivery: { status: "posted", postedAt: 100 },} satisfies NodeFixture;
+  status: "complete", createdAt: 100, highlights: [],} satisfies NodeFixture;
 const post = researchNode(postFields);
 
 function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
@@ -52,23 +51,13 @@ test("a note's column uses the turn layout for the note only", () => {
   assert.doesNotMatch(html, /research-composer|post-thread/);
 });
 
-test("a note's column shows no stored replies or follow-ups", () => {
-  const withActivityFields = {
-    ...postFields,
-    delivery: {
-      status: "posted", postedAt: 100,
-      replies: [{
-        id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
-        body: "wit-bindgen doubled our SDK surface.", createdAt: 110,
-      }],
-    },} satisfies NodeFixture;
-  const withActivity = researchNode(withActivityFields);
+test("a note's column shows no follow-ups", () => {
   const followUpFields = {
     ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
   const followUp = researchNode(followUpFields);
-  const html = render([withActivity, followUp]);
+  const html = render([post, followUp]);
   assert.doesNotMatch(html, />Activity|post-group/);
-  assert.doesNotMatch(html, /wit-bindgen doubled|Anyone measured wizer/);
+  assert.doesNotMatch(html, /Anyone measured wizer/);
 });
 
 test("a follow-up note's page links back to its parent note", () => {
@@ -85,8 +74,7 @@ test("a saved link's post column shows the link card", () => {
   const linkFields = {
     ...postFields,
     prompt: "https://example.com/page",
-    format: "link",
-    delivery: null,} satisfies NodeFixture;
+    format: "link",} satisfies NodeFixture;
   const link = researchNode(linkFields);
   const html = render([link]);
   assert.match(html, /post-link-card/);
@@ -105,13 +93,6 @@ test("an edited post shows its text in place and Edited after its time", () => {
     ...postFields,
     prompt: "Who ships wit-bindgen plugins?",
     editedAt: 200,
-    delivery: {
-      status: "posted", postedAt: 100,
-      replies: [{
-        id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
-        body: "We do.", createdAt: 110,
-      }],
-    },
   });
   const html = render([edited]);
   assert.match(html, /Who ships wit-bindgen plugins\?/);
@@ -122,7 +103,7 @@ test("an edited post shows its text in place and Edited after its time", () => {
 });
 
 const followUpNoteFields = {
-  ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140, delivery: null,
+  ...postFields, id: "net", parentNodeId: "post", prompt: "Anyone measured wizer?", createdAt: 140,
 } satisfies NodeFixture;
 const followUpNote = researchNode(followUpNoteFields);
 const followUpDetail: ResearchTreeDetail = {
@@ -203,7 +184,7 @@ test("a follow-up note's menu edits, copies and deletes the note (D); the root n
   assert.deepEqual(await noteMenuOutline("net"), ["Edit note", "Copy note", "|", "Delete note [d]"]);
   // A running AI follow-up under the note prevents deleting the note by itself.
   const running = researchNode({
-    ...postFields, id: "ask", parentNodeId: "net", type: "exchange", status: "running", createdAt: 160, delivery: null,
+    ...postFields, id: "ask", parentNodeId: "net", type: "exchange", status: "running", createdAt: 160,
   });
   assert.deepEqual(
     await noteMenuOutline("net", { nodes: [post, followUpNote, running] }),

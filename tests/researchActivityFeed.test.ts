@@ -507,21 +507,14 @@ test("Home offers report import", () => {
   assert.doesNotMatch(renderFeed({ view: { kind: "drafts" }, onImportReport: asyncNoop }), /Import \.md report/);
 });
 
-test("a network post is an untitled card showing its body", () => {
+test("a post is an untitled card showing its body", () => {
   const html = renderFeed({ items: [{
     nodeId: "post", treeId: "post-tree", parentNodeId: null, inline: false,
     prompt: "Who ships component-model plugins?", adapter: "claude", model: "fable",
     type: "post" as const, status: "complete" as const, createdAt: 100,
-    delivery: {
-      status: "posted", postedAt: 100,
-      replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana Moreau", handle: "ana" }, body: "We moved in March.", createdAt: 110 }],
-    },
-    replyCount: 7,
   }] });
   assert.match(html, /Who ships component-model plugins\?/);
   assert.doesNotMatch(html, /research-feed-card-title/);
-  // Replies open with the post; the card shows only the question.
-  assert.doesNotMatch(html, /We moved in March\.|7 replies/);
 });
 
 test("Archive has no ask box; Home keeps it", () => {

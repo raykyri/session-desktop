@@ -70,16 +70,11 @@ test("follow-ups that fork need the session checkpoint; context launches do not"
   assert.equal(canFollowUpFrom(node({ status: "running", sessionReady: true })), false);
 });
 
-test("a note's follow-up quotes the note's text, not a stored reply", () => {
+test("a note's follow-up quotes the note's text", () => {
   const post = node({
     id: "post",
     type: "post",
     prompt: "Has anyone compared **RLHF** and `DPO`\n on long-horizon tasks?",
-    delivery: {
-      status: "posted",
-      postedAt: 1,
-      replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana" }, body: "We saw a plateau.", createdAt: 2 }],
-    },
   });
   assert.equal(postFollowUpSourceExcerpt(post), "Has anyone compared RLHF and DPO on long-horizon tasks?");
   // Long text is cut at a word boundary, the ellipsis within the limit.

@@ -132,38 +132,8 @@ export type DocumentSource = "imported" | "authored" | "transcript";
 export type PostFormat = "text" | "link";
 
 /** What a follow-up was asked about in its parent: a passage of the parent's
- * answer or document, or a stored reply on the parent post (no longer
- * created; replies are not shown). */
-export type NodeAnchor =
-  | { kind: "passage"; anchor: ResearchHighlightAnchor }
-  | { kind: "reply"; replyId: string };
-
-export type PostReplyAuthor =
-  | { kind: "author" }
-  | { kind: "member"; id: string; displayName: string; handle?: string | null };
-
-export interface PostReply {
-  id: string;
-  author: PostReplyAuthor;
-  /** Markdown. */
-  body: string;
-  /** Set on the post author's response to a member's top-level reply. */
-  inReplyTo?: string | null;
-  createdAt: number;
-}
-
-/** Sharing state of a post. A post with a delivery record is shared with
- * other users; one without is private. The desktop app creates notes without
- * one and does not show replies; posts written by earlier builds with "Post
- * to network" keep theirs. Nothing is transmitted; `posted` records the
- * intent. */
-export interface PostDelivery {
-  status: "posted";
-  postedAt: number;
-  /** Chronological. Omitted by the backend when empty. */
-  replies?: PostReply[];
-}
-
+ * answer or document. */
+export type NodeAnchor = { kind: "passage"; anchor: ResearchHighlightAnchor };
 
 export interface ResearchTweetAttachment {
   kind: "tweet";
@@ -273,8 +243,6 @@ export interface ResearchPostNode extends ResearchNodeBase {
   type: "post";
   message: UserMessage;
   format: PostFormat;
-  /** Only on shared posts (see PostDelivery). */
-  delivery?: PostDelivery | null;
   /** Default agent for AI follow-ups; not provenance. */
   followUpAgent: AgentSpec;
   /** When the text was last replaced by an edit. */
@@ -350,13 +318,6 @@ export interface RecentResearchQuery {
   source?: DocumentSource | null;
   /** A post's format. */
   format?: PostFormat | null;
-  /** A post's sharing state, with replies cut to the first five top-level
-   * threads; `replyCount` is the full top-level count. */
-  delivery?: PostDelivery | null;
-  replyCount?: number;
-  replyAnchor?: string | null;
-  /** Author of the reply `replyAnchor` names, as "Ana" or "You". */
-  replyAnchorAuthor?: string | null;
   status: ResearchNodeStatus;
   /** Why the run failed. */
   error?: string | null;

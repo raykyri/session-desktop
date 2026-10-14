@@ -5,7 +5,6 @@
 import type {
   DocumentSource,
   NodeAnchor,
-  PostDelivery,
   PostFormat,
   ResearchHighlight,
   ResearchMessageAttachment,
@@ -43,7 +42,6 @@ export interface NodeFixture {
   responseSnapshotAt?: number | null;
   sessionReady?: boolean;
   recap?: ResearchRecap | null;
-  delivery?: PostDelivery | null;
   format?: PostFormat;
   editedAt?: number | null;
 }
@@ -74,7 +72,6 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
         type: "post",
         message,
         format: fields.format ?? "text",
-        delivery: fields.delivery ?? null,
         followUpAgent: agent,
         editedAt: fields.editedAt ?? null,
       };
