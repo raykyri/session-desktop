@@ -11,7 +11,7 @@ import type {
   ResearchTreeSummary,
   UserMessage,
 } from "@session/shared";
-import { defaultTitle, sanitizeResearchTitle } from "@session/shared";
+import { defaultTitle, postDefaultTitle, sanitizeResearchTitle } from "@session/shared";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
   RESEARCH_DRAFTS_FOLDER_ID,
@@ -196,9 +196,14 @@ export function admitRoot(
     const treeId = input.treeId ?? newId();
     const nodeId = input.nodeId ?? newId();
     const at = now();
+    // A post's thread is named by its first line (`post_default_title`),
+    // which `posts.updatePost` compares against to decide whether the title
+    // follows an edit.
     const title =
       (input.title === undefined ? undefined : sanitizeResearchTitle(input.title)) ??
-      defaultTitle(message?.text ?? "");
+      (input.type === "post"
+        ? postDefaultTitle(message?.text ?? "")
+        : defaultTitle(message?.text ?? ""));
     // New roots take position 0; everything in the section moves down.
     tx.update(trees)
       .set({ position: sql`${trees.position} + 1` })

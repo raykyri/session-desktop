@@ -52,6 +52,7 @@ export * from "./research/history.js";
 export * from "./research/images.js";
 export * from "./research/navigation.js";
 export * from "./research/order.js";
+export * from "./research/posts.js";
 export * from "./research/preview.js";
 export * from "./research/prompts.js";
 export * from "./research/recap.js";

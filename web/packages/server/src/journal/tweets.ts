@@ -226,7 +226,14 @@ function withCachedImages(deps: TweetHydrationDeps, snapshot: TweetSnapshot): Tw
 export async function resolveTweet(
   deps: TweetHydrationDeps,
   id: string,
-  options: { now?: number; handle?: string | undefined } = {},
+  options: {
+    now?: number;
+    handle?: string | undefined;
+    /** Ask again although a fresh cached row says the post is unavailable:
+     * an explicit retry (`research.hydratePostTweet`). A resolved row is
+     * still reused. */
+    retryUnavailable?: boolean;
+  } = {},
 ): Promise<TweetResolution> {
   const now = options.now ?? Date.now();
   // Every caller derives the id with `tweetIdFromUrl`, but `journal.restore`
@@ -237,7 +244,11 @@ export async function resolveTweet(
     return unavailable("Invalid tweet ID.", false, now);
   }
   const cached = tweets.get(deps.db, id);
-  if (cached && now - cached.fetchedAt < TWEET_CACHE_TTL_MS) {
+  const reuse =
+    cached !== null &&
+    now - cached.fetchedAt < TWEET_CACHE_TTL_MS &&
+    !(options.retryUnavailable === true && cached.status !== "resolved");
+  if (cached && reuse) {
     if (cached.status === "resolved" && cached.snapshot) {
       return {
         status: "resolved",
