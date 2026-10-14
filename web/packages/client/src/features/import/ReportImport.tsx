@@ -14,7 +14,7 @@ import { estimateTokenCount } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Upload } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { importResearchReport } from "../../api/api.js";
@@ -54,6 +54,7 @@ export function ReportImport({
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [report, setReport] = useState<StagedReport | null>(null);
   const [prompt, setPrompt] = useState("");
+  const promptId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,11 +135,7 @@ export function ReportImport({
 
   return (
     <>
-      <IconButton
-        label="Import report"
-        title="Import a Markdown report"
-        onClick={() => inputRef.current?.click()}
-      >
+      <IconButton label="Import .md report" onClick={() => inputRef.current?.click()}>
         <Upload size={14} aria-hidden="true" />
       </IconButton>
       <input
@@ -159,7 +156,6 @@ export function ReportImport({
           if (!open) close();
         }}
         title="Import report"
-        description="The prompt that generated this report will be used as the initial query."
         footer={
           <>
             <BaseDialog.Close className={CONTROL_BUTTON} disabled={busy}>
@@ -198,16 +194,20 @@ export function ReportImport({
           </>
         }
       >
-        <Textarea
-          ref={promptRef}
-          rows={3}
-          value={prompt}
-          disabled={busy}
-          aria-label="Prompt that generated this report"
-          placeholder="Paste the original research prompt…"
-          className="w-full"
-          onChange={(event) => setPrompt(event.currentTarget.value)}
-        />
+        <div className="text-fg-secondary flex flex-col gap-1.5 text-sm">
+          <label htmlFor={promptId}>Prompt that generated this report</label>
+          <Textarea
+            id={promptId}
+            ref={promptRef}
+            rows={3}
+            value={prompt}
+            disabled={busy}
+            required
+            placeholder="Paste the original research prompt…"
+            className="w-full"
+            onChange={(event) => setPrompt(event.currentTarget.value)}
+          />
+        </div>
         {report ? (
           <p className="text-fg-muted mt-2 mb-0 flex justify-between gap-2 text-xs">
             <span className="min-w-0 truncate">{report.name}</span>

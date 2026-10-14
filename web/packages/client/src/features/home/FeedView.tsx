@@ -113,6 +113,7 @@ import {
   treeDeleteDialogProps,
 } from "./TreeMenu.js";
 import { feedText, shortName } from "./feedText.js";
+import { countNewAbove, feedScrollBehavior, FEED_TOP_THRESHOLD } from "./useActivityFeedState.js";
 import { useCardDrag } from "./useCardDrag.js";
 import { commitFolderState, ownTree, useFiling } from "./useFiling.js";
 import { useGroupActions } from "./useGroupActions.js";
@@ -347,6 +348,24 @@ export function FeedView({
         : [],
     [activeTrees, listed, parents, placeOf],
   );
+  // "N new activities": threads that arrived above the list's first row
+  // while the reader was scrolled away from the top (the desktop's
+  // `newActivityCount`); scrolling back to the top or the button clears it.
+  const [newActivityCount, setNewActivityCount] = useState(0);
+  const knownRowIdsRef = useRef<ReadonlySet<string> | null>(null);
+  const previousTopRowRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ids = rows.map((row) => row.tree.id);
+    const known = knownRowIdsRef.current;
+    if (known) {
+      const added = countNewAbove(previousTopRowRef.current, ids, known);
+      if (added > 0 && (scrollRef.current?.scrollTop ?? 0) > FEED_TOP_THRESHOLD) {
+        setNewActivityCount((count) => count + added);
+      }
+    }
+    knownRowIdsRef.current = new Set(ids);
+    previousTopRowRef.current = ids[0] ?? null;
+  }, [rows]);
   const topLevelIdsIn = (place: string): string[] =>
     place === RESEARCH_UNFILED_FOLDER_ID
       ? rows.map((row) => row.tree.id)
@@ -1059,6 +1078,9 @@ export function FeedView({
         ref={scrollRef}
         className="research-reading-surface min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain"
         data-research-scroll=""
+        onScroll={(event) => {
+          if (event.currentTarget.scrollTop <= FEED_TOP_THRESHOLD) setNewActivityCount(0);
+        }}
         onFocus={(event) => {
           const target = event.target as HTMLElement;
           if (!target.matches(FEED_ROW_SELECTOR)) return;
@@ -1069,6 +1091,24 @@ export function FeedView({
       >
         <div className="max-w-feed relative mx-auto flex min-h-full w-full flex-col pb-6">
           {view.kind === "home" ? composerBlock : null}
+          {newActivityCount > 0 && listed ? (
+            <div
+              className="pointer-events-none sticky top-2.5 z-2 flex h-0 justify-center"
+              role="status"
+              aria-live="polite"
+            >
+              <ControlButton
+                size="sm"
+                className="bg-surface-feed-popover text-fg-interactive pointer-events-auto rounded-full shadow-sm"
+                onClick={() => {
+                  setNewActivityCount(0);
+                  scrollRef.current?.scrollTo({ top: 0, behavior: feedScrollBehavior() });
+                }}
+              >
+                {newActivityCount} new {newActivityCount === 1 ? "activity" : "activities"}
+              </ControlButton>
+            </div>
+          ) : null}
           {listed ? (
             <section
               className="mb-2.5 rounded-[10px] border border-transparent"
@@ -1215,6 +1255,11 @@ export function FeedView({
               <IconMenuItem
                 icon={<IndentIncrease size={15} aria-hidden="true" />}
                 disabled={nestCandidates.length === 0}
+                title={
+                  nestCandidates.length === 0
+                    ? "No question, document or post to nest under"
+                    : undefined
+                }
                 closeOnClick={false}
                 onClick={() => setMenu({ ...menu, mode: "nest" })}
               >
@@ -1262,6 +1307,7 @@ export function FeedView({
             <MoveToItems
               currentPlace={placeOf(menuTree)}
               folders={folders}
+              archiveShortcut={view.kind === "home"}
               onMove={(place) => group.moveTree(menuTree.id, place)}
               onNewFolder={() => openNewFolder(menuTree.id, menu.button)}
             />

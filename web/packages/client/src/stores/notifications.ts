@@ -20,6 +20,10 @@ export interface NotificationItem {
   href?: string | undefined;
   /** A button beside the text, such as Undo after a move. */
   action?: { label: string; run: () => void } | undefined;
+  /** `toast`: the status of an action the reader just took (`lib/toast.ts`),
+   * shown one at a time at the bottom centre, as the desktop's feed toast;
+   * otherwise a notification, stacked at the top right. */
+  placement?: "toast" | "notification" | undefined;
 }
 
 export const MAX_NOTIFICATIONS = 20;
@@ -41,7 +45,12 @@ export const useNotificationsStore = create<NotificationsState>()((set) => ({
   push: (item) =>
     set((state) => ({
       items: [
-        ...state.items.filter((existing) => existing.id !== item.id),
+        // A new toast replaces the one on screen, as on the desktop.
+        ...state.items.filter(
+          (existing) =>
+            existing.id !== item.id &&
+            !(item.placement === "toast" && existing.placement === "toast"),
+        ),
         {
           ...item,
           timeoutMs: Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, item.timeoutMs)),

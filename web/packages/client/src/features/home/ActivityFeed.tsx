@@ -1,8 +1,7 @@
-// The web's two feeds beside the workspace's Home (`10-home-feed-journal.md`
-// §2): All Users (every public thread, also the guest catalog) and My
-// Workspaces (the account's threads across its workspaces), newest first.
-// Cards are Home's cards without the controls: the threads are other
-// people's, or filed in other workspaces.
+// The web's All Users feed beside the workspace's Home
+// (`10-home-feed-journal.md` §2): every public thread, newest first, also the
+// guest catalog. Cards are Home's cards without the controls: the threads are
+// other people's.
 //
 // The desktop hand-rolled its virtual canvas — cumulative offsets, a binary
 // search over them, a `ResizeObserver` per row. TanStack Virtual does the same
@@ -19,14 +18,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { useActivityFeed, useTreeSummaries } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import {
-  useNavigationStore,
-  type FeedMode,
-  type FeedScrollAnchor,
-} from "../../stores/navigation.js";
+import { useNavigationStore, type FeedScrollAnchor } from "../../stores/navigation.js";
 import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton } from "../../ui/Button.js";
-import { Menu, MenuItem } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
 
 import { PublicFeedCard } from "./PublicFeedCard.js";
@@ -46,11 +40,6 @@ export function estimateRowHeight(item: RecentActivityItem): number {
 export interface ActivityFeedProps {
   workspaceId: string;
   scope?: RecentActivityScope;
-  scopeSwitcher?: {
-    mode: FeedMode;
-    workspaceTitle: string;
-    onChange: (mode: FeedMode) => void;
-  };
   title: string;
   /** Home's composer and import row, rendered above the feed. */
   header?: React.ReactNode;
@@ -87,7 +76,6 @@ function offsetWithinScroller(scroller: HTMLElement, node: HTMLElement): number 
 export function ActivityFeed({
   workspaceId,
   scope = "workspace",
-  scopeSwitcher,
   title,
   header,
   scrollRef: externalScrollRef,
@@ -293,42 +281,6 @@ export function ActivityFeed({
         <div className="max-w-feed flex w-full flex-col">
           <div className="flex items-center justify-between gap-2 pt-6 pb-4">
             <h1 className="text-title text-fg-heading m-0 font-semibold">{title}</h1>
-            {scopeSwitcher ? (
-              <Menu
-                align="end"
-                size="sm"
-                label="Feed scope"
-                trigger={
-                  <ControlButton
-                    size="sm"
-                    className="max-w-52 gap-1.5"
-                    aria-label={`Feed scope: ${title}`}
-                  >
-                    <span className="truncate">{title}</span>
-                    <ChevronDown size={13} aria-hidden="true" />
-                  </ControlButton>
-                }
-              >
-                <MenuItem
-                  selected={scopeSwitcher.mode === "all"}
-                  onClick={() => scopeSwitcher.onChange("all")}
-                >
-                  All Users
-                </MenuItem>
-                <MenuItem
-                  selected={scopeSwitcher.mode === "workspaces"}
-                  onClick={() => scopeSwitcher.onChange("workspaces")}
-                >
-                  My Workspaces
-                </MenuItem>
-                <MenuItem
-                  selected={scopeSwitcher.mode === "workspace"}
-                  onClick={() => scopeSwitcher.onChange("workspace")}
-                >
-                  {scopeSwitcher.workspaceTitle || "Workspace"}
-                </MenuItem>
-              </Menu>
-            ) : null}
           </div>
 
           {header}
@@ -343,7 +295,7 @@ export function ActivityFeed({
                   scrollToTop();
                 }}
               >
-                {newCount} new {newCount === 1 ? "update" : "updates"}
+                {newCount} new {newCount === 1 ? "activity" : "activities"}
               </ControlButton>
             </div>
           ) : null}

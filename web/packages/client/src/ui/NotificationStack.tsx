@@ -108,10 +108,15 @@ function NotificationCard({
   return (
     <article
       className={cn(
-        "session-notification pointer-events-auto flex w-80 items-center gap-1 rounded-lg border",
+        "session-notification pointer-events-auto flex items-center gap-1 rounded-lg border",
+        notification.placement === "toast" ? "max-w-[calc(100vw-32px)] min-w-64" : "w-80",
         "bg-surface-popover shadow-popover p-3 transition-[opacity,translate] duration-[180ms]",
         TONE_BORDER[notification.tone],
-        phase === "visible" ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0",
+        phase === "visible"
+          ? "translate-x-0 translate-y-0 opacity-100"
+          : notification.placement === "toast"
+            ? "translate-y-2 opacity-0"
+            : "translate-x-2 opacity-0",
       )}
       role="status"
       aria-live={notification.tone === "error" ? "assertive" : "polite"}
@@ -166,7 +171,11 @@ export function NotificationStack({ notifications, onDismiss, onOpen }: Notifica
   const [windowActive, setWindowActive] = useState(
     () => document.visibilityState === "visible" && document.hasFocus(),
   );
-  const visible = notifications.slice(0, MAX_VISIBLE_NOTIFICATIONS);
+  const visible = notifications
+    .filter((item) => item.placement !== "toast")
+    .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+  // One at a time: the store keeps only the newest (`stores/notifications`).
+  const toast = notifications.filter((item) => item.placement === "toast").at(-1) ?? null;
 
   useEffect(() => {
     const update = () =>
@@ -181,24 +190,41 @@ export function NotificationStack({ notifications, onDismiss, onOpen }: Notifica
     };
   }, []);
 
-  if (visible.length === 0) return null;
   return (
-    // A bare `aria-label` on a roleless element is dropped; the landmark is
-    // what gives the label somewhere to live and the stack a name to jump to.
-    <div
-      role="region"
-      aria-label="Notifications"
-      className="pointer-events-none fixed top-4 right-4 z-(--z-toast) flex flex-col gap-2"
-    >
-      {visible.map((notification) => (
-        <NotificationCard
-          key={notification.id}
-          notification={notification}
-          active={windowActive}
-          onDismiss={onDismiss}
-          onOpen={onOpen}
-        />
-      ))}
-    </div>
+    <>
+      {visible.length > 0 ? (
+        // A bare `aria-label` on a roleless element is dropped; the landmark
+        // is what gives the label somewhere to live and the stack a name to
+        // jump to.
+        <div
+          role="region"
+          aria-label="Notifications"
+          className="pointer-events-none fixed top-4 right-4 z-(--z-toast) flex flex-col gap-2"
+        >
+          {visible.map((notification) => (
+            <NotificationCard
+              key={notification.id}
+              notification={notification}
+              active={windowActive}
+              onDismiss={onDismiss}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+      ) : null}
+      {toast ? (
+        // The status of the reader's own last action, bottom centre as the
+        // desktop's feed toast.
+        <div className="pointer-events-none fixed bottom-4 left-1/2 z-(--z-toast) flex -translate-x-1/2 justify-center">
+          <NotificationCard
+            key={toast.id}
+            notification={toast}
+            active={windowActive}
+            onDismiss={onDismiss}
+            onOpen={onOpen}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }

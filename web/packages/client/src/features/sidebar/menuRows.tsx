@@ -25,8 +25,8 @@ export function IconMenuItem({
   children?: ReactNode;
 } & Omit<MenuItemProps, "children">) {
   return (
-    <MenuItem {...props}>
-      <span className="flex min-w-0 items-center gap-2" title={title}>
+    <MenuItem {...props} title={title}>
+      <span className="flex min-w-0 items-center gap-2">
         <span className="text-fg-muted inline-flex shrink-0">{icon}</span>
         <span className="truncate">{label ?? children}</span>
       </span>

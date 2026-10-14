@@ -1,5 +1,5 @@
 // The sidebar's places (the desktop's `ResearchSidebarNav.tsx`): Home,
-// Highlights, Shared with me (web only), then the Folders section (Drafts, the workspace's folders,
+// Highlights, Shared with me and All Users (web only), then the Folders section (Drafts, the workspace's folders,
 // Archive, Trash) with New folder. Rows carry no counts. Every row but
 // Highlights and Trash takes card drops; a folder row has a … menu with
 // Rename and Delete.
@@ -13,12 +13,15 @@ import {
   researchPlaceName,
 } from "@session/shared/lib/researchFolders";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Ellipsis, Highlighter, House, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { Ellipsis, Globe, Highlighter, House, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { formatChord } from "../../lib/platform.js";
+import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
 import { IconButton } from "../../ui/Button.js";
+import { SHORTCUT_HINT } from "../../ui/surfaces.js";
 import { PlaceIcon } from "../home/FeedTray.js";
 import { useFolderDialogStore, useRequestFolderDelete } from "../home/FolderDialogsHost.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
@@ -33,6 +36,8 @@ interface NavEntry {
   icon: ReactNode;
   /** The place a card dropped on the row moves to: Home is Unfiled. */
   drop?: string;
+  /** Web only: the All Users feed is `/` with `?feed=all`. */
+  feed?: "all";
   key: string;
 }
 
@@ -58,8 +63,8 @@ function placeEntries(folders: ResearchFolder[]): NavEntry[] {
 }
 
 /** The place the current route shows, as a row key. */
-function currentKey(pathname: string): string | null {
-  if (pathname === "/") return "home";
+function currentKey(pathname: string, feed: string | null): string | null {
+  if (pathname === "/") return feed === "all" ? "all-users" : "home";
   if (pathname === "/highlights") return "highlights";
   if (pathname === "/shared") return "shared";
   if (pathname === "/drafts" || pathname.startsWith("/drafts/")) return RESEARCH_DRAFTS_FOLDER_ID;
@@ -83,7 +88,15 @@ export function SidebarNav({
   onRetryFoldersLoad?: () => void;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const selected = currentKey(pathname);
+  // Shown beside Home while ⌘ is held (`lib/shortcutHints`).
+  const hintsShown = useShortcutHintsShown();
+  const feed = useRouterState({
+    select: (state) => {
+      const value = (state.location.search as Record<string, unknown>)["feed"];
+      return typeof value === "string" ? value : null;
+    },
+  });
+  const selected = currentKey(pathname, feed);
   const [menu, setMenu] = useState<{ folderId: string; anchor: HTMLElement } | null>(null);
   const openNew = useFolderDialogStore((state) => state.openNew);
   const openRename = useFolderDialogStore((state) => state.openRename);
@@ -115,6 +128,14 @@ export function SidebarNav({
             label: "Shared with me",
             icon: <Users size={14} aria-hidden="true" />,
           },
+          // Web only: every account's public threads (a guest's `/`).
+          {
+            key: "all-users",
+            to: "/" as const,
+            feed: "all" as const,
+            label: "All Users",
+            icon: <Globe size={14} aria-hidden="true" />,
+          },
         ]
       : []),
   ];
@@ -134,12 +155,21 @@ export function SidebarNav({
         <Link
           to={entry.to}
           params={entry.folderId ? { folderId: entry.folderId } : {}}
-          search={search}
+          search={
+            entry.feed
+              ? (previous: Record<string, unknown>) => ({ ...search(previous), feed: entry.feed })
+              : search
+          }
           aria-current={isSelected ? "page" : undefined}
           className={cn(SIDEBAR_ROW, isSelected && SIDEBAR_ROW_SELECTED, entry.folderId && "pr-8")}
         >
           <span className="text-fg-muted inline-flex shrink-0">{entry.icon}</span>
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+          {entry.key === "home" && hintsShown ? (
+            <span className={SHORTCUT_HINT} aria-hidden="true">
+              {formatChord("mod+shift+h")}
+            </span>
+          ) : null}
         </Link>
         {entry.folderId ? (
           <IconButton

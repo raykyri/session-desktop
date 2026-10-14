@@ -47,6 +47,7 @@ export function MoveToItems({
   currentPlace,
   folders,
   shared = false,
+  archiveShortcut = false,
   onMove,
   onNewFolder,
 }: {
@@ -54,6 +55,9 @@ export function MoveToItems({
   folders: ResearchFolder[];
   /** The thread is shared with the reader (web only). */
   shared?: boolean;
+  /** Shows A on the Archive target, when it is not the current place, and
+   * makes it the menu's A key (Home's card menu, as on the desktop). */
+  archiveShortcut?: boolean;
   onMove: (place: string) => void;
   /** New folder…; absent, the item is not offered. */
   onNewFolder?: () => void;
@@ -69,6 +73,11 @@ export function MoveToItems({
               key={target.place}
               disabled={here}
               selected={here}
+              shortcut={
+                archiveShortcut && !here && target.place === RESEARCH_ARCHIVE_FOLDER_ID
+                  ? "A"
+                  : undefined
+              }
               onClick={() => onMove(target.place)}
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -100,7 +109,8 @@ export function MoveToItems({
 }
 
 /** A card's thread actions, the end of its menu: Generate recap and Rename,
- * a separator, then Unarchive (on an archived card) and Delete. */
+ * a separator, then Unarchive (on an archived card) and Delete. D selects
+ * Delete while the menu is open (`AnchoredMenu`). */
 export function TreeLifecycleItems({
   tree,
   archived,
@@ -143,8 +153,9 @@ export function TreeLifecycleItems({
       <IconMenuItem
         icon={<Trash2 size={15} aria-hidden="true" />}
         tone="danger"
+        shortcut="D"
         disabled={running}
-        {...(running ? { hint: "Running" } : {})}
+        title={running ? "Research with active runs cannot be deleted" : undefined}
         onClick={() => onDelete(tree)}
       >
         Delete

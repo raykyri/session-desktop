@@ -1,7 +1,7 @@
 // Home and the place views (`10-home-feed-journal.md` §1, §2), ported from
 // the desktop's `ResearchActivityFeed.tsx`: Unfiled, the trays, nesting, card
-// previews, the card menu and the keyboard; and the web's All Users and My
-// Workspaces feeds.
+// previews, the card menu and the keyboard, Refresh Home and the new
+// activities status; and the web's All Users feed.
 
 import type {
   RecentResearchQuery,
@@ -14,6 +14,8 @@ import test from "ava";
 import { estimateRowHeight } from "../src/features/home/ActivityFeed.js";
 import { archivedFeedTrees, feedRowOpenKey } from "../src/features/home/FeedView.js";
 import { countNewAbove, feedScrollBehavior } from "../src/features/home/useActivityFeedState.js";
+import { REORDER_FAILED_MESSAGE } from "../src/features/home/useFiling.js";
+import { useNotificationsStore } from "../src/stores/notifications.js";
 
 import { summary } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
@@ -352,6 +354,37 @@ test.serial("⌥↓ moves a card down Unfiled and saves the order", async (t) =>
   app.unmount();
 });
 
+test.serial("a refused reorder says the list changed, not which id", async (t) => {
+  useNotificationsStore.getState().clear();
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: {
+      ...homeResponses({
+        trees: [tree("t1", { title: "First" }), tree("t2", { title: "Second" })],
+        roots: [root("t1", { prompt: "First" }), root("t2", { prompt: "Second" })],
+      }),
+      "research.reorderTrees": () => {
+        throw new Error("research tree t9 is not in the requested sidebar section");
+      },
+    },
+  });
+  await waitUntil(t, () => within(unfiled()).queryAllByRole("button").length >= 2, "two cards");
+  const first = card(unfiled(), "^First");
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: "ArrowDown", altKey: true });
+  await waitUntil(
+    t,
+    () =>
+      useNotificationsStore.getState().items.some((item) => item.body === REORDER_FAILED_MESSAGE),
+    "the readable refusal",
+  );
+  t.false(
+    useNotificationsStore.getState().items.some((item) => item.body.includes("t9")),
+    "no id reaches the reader",
+  );
+  app.unmount();
+});
+
 test.serial("Make child of… lists the cards that can hold it and nests under one", async (t) => {
   const app = await renderApp("/", {
     queryClient: testQueryClient(),
@@ -407,34 +440,157 @@ test.serial("Move to Archive archives the thread", async (t) => {
   app.unmount();
 });
 
+test.serial("Make child of… says why it is disabled", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: homeResponses({
+      trees: [tree("t1", { title: "Alone" })],
+      roots: [root("t1", { prompt: "Alone" })],
+    }),
+  });
+  await waitUntil(t, () => within(unfiled()).queryAllByRole("button").length >= 1, "a card");
+  const element = card(unfiled(), "^Alone").closest<HTMLElement>("[data-research-card]");
+  if (!element) throw new Error("no card");
+  fireEvent.click(within(element).getByRole("button", { name: "Thread actions" }));
+  const item = await screen.findByRole("menuitem", { name: /Make child of/ });
+  t.is(item.getAttribute("title"), "No question, document or post to nest under");
+  app.unmount();
+});
+
+test.serial(
+  "the card menu takes A for Archive and D for Delete, with the desktop's titles",
+  async (t) => {
+    const app = await renderApp("/", {
+      queryClient: testQueryClient(),
+      responses: {
+        ...homeResponses({
+          trees: [tree("t1", { title: "First" }), tree("t2", { title: "Busy", runningCount: 1 })],
+          roots: [root("t1", { prompt: "First" }), root("t2", { prompt: "Busy" })],
+        }),
+        "research.archiveTree": { id: "t1", workspaceId: WORKSPACE_ID, archivedAt: 1 },
+      },
+    });
+    await waitUntil(t, () => within(unfiled()).queryAllByRole("button").length >= 2, "cards");
+    const menuOf = (name: string) => {
+      const element = card(unfiled(), name).closest<HTMLElement>("[data-research-card]");
+      if (!element) throw new Error("no card");
+      fireEvent.click(within(element).getByRole("button", { name: "Thread actions" }));
+    };
+
+    menuOf("^Busy");
+    const busyDelete = await screen.findByRole("menuitem", { name: /^Delete/ });
+    t.is(busyDelete.getAttribute("title"), "Research with active runs cannot be deleted");
+    t.is(busyDelete.getAttribute("aria-keyshortcuts"), "D");
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    await waitUntil(t, () => screen.queryByRole("menu") === null, "closed");
+
+    menuOf("^First");
+    const menu = await screen.findByRole("menu");
+    t.is(
+      within(menu)
+        .getByRole("menuitem", { name: /Archive/ })
+        .getAttribute("aria-keyshortcuts"),
+      "A",
+    );
+    // Busy is a question, so First could nest under it; a card alone could not.
+    t.is(
+      within(menu)
+        .getByRole("menuitem", { name: /Make child of/ })
+        .getAttribute("title"),
+      null,
+    );
+    fireEvent.keyDown(menu, { key: "a" });
+    await waitUntil(
+      t,
+      () => app.trpc.calls.some((call) => call.path === "research.archiveTree"),
+      "A archives",
+    );
+    app.unmount();
+  },
+);
+
 /* -------------------------------------------------------------------------
  * The web's other feeds
  * ---------------------------------------------------------------------- */
 
-test.serial("My Workspaces lists the account's roots as cards without controls", async (t) => {
+test.serial("All Users is a sidebar place, and Home has no feed menu", async (t) => {
   const app = await renderApp("/?feed=workspaces", {
     queryClient: testQueryClient(),
     responses: {
-      "workspaces.list": [workspace()],
-      "settings.get": serverSettings(),
-      "research.listTrees": [],
+      ...homeResponses({ trees: [], roots: [] }),
       "feed.recentActivity": activityPage([
         queryItem(researchQuery({ prompt: "Shared question" }), WORKSPACE_ID),
       ]),
     },
   });
 
+  // The removed My Workspaces feed's link opens Home.
+  t.truthy(await screen.findByRole("heading", { name: "Home", level: 1 }));
+  t.is(screen.queryByRole("button", { name: /^Feed/ }), null, "no feed menu");
+  t.truthy(screen.getByRole("button", { name: "Refresh Home" }));
+
+  fireEvent.click(screen.getByRole("link", { name: "All Users" }));
+  t.truthy(await screen.findByRole("heading", { name: "All Users", level: 1 }));
   await waitUntil(
     t,
     () => screen.queryByRole("button", { name: /Shared question/ }) !== null,
     "the card",
   );
-  t.truthy(screen.getByRole("heading", { name: "My Workspaces", level: 1 }));
   t.is(screen.queryByRole("button", { name: "Thread actions" }), null);
   t.deepEqual(app.trpc.calls.find((call) => call.path === "feed.recentActivity")?.input, {
-    scope: "mine",
+    scope: "all",
     before: null,
   });
+  t.is(screen.getByRole("link", { name: "All Users" }).getAttribute("aria-current"), "page");
+  app.unmount();
+});
+
+test.serial("Refresh Home reads the workspace's threads again", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: homeResponses({ trees: [tree("t1")], roots: [root("t1")] }),
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("button", { name: "Refresh Home" }) !== null,
+    "header",
+  );
+  // The desktop's header: Refresh Home, then Import .md report.
+  t.truthy(screen.getByRole("button", { name: "Import .md report" }));
+  const before = app.trpc.calls.filter((call) => call.path === "research.listTrees").length;
+  fireEvent.click(screen.getByRole("button", { name: "Refresh Home" }));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.filter((call) => call.path === "research.listTrees").length > before,
+    "the list refetches",
+  );
+  t.pass();
+  app.unmount();
+});
+
+test.serial("threads that arrive above the reader count as new activities", async (t) => {
+  const queryClient = testQueryClient();
+  const app = await renderApp("/", {
+    queryClient,
+    responses: homeResponses({ trees: [tree("t1")], roots: [root("t1")] }),
+  });
+  await waitUntil(t, () => within(unfiled()).queryAllByRole("button").length > 0, "a card");
+  const scroller = document.querySelector<HTMLElement>("[data-research-scroll]");
+  if (!scroller) throw new Error("no scroller");
+  Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 400, writable: true });
+  scroller.scrollTo = () => {};
+
+  const key = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["trees"] })
+    .map((query) => query.queryKey)[0];
+  if (!key) throw new Error("no tree list");
+  act(() => {
+    queryClient.setQueryData(key, [tree("t2"), tree("t1")]);
+  });
+  const status = await screen.findByRole("button", { name: "1 new activity" });
+  fireEvent.click(status);
+  t.is(screen.queryByRole("button", { name: "1 new activity" }), null, "cleared on return");
   app.unmount();
 });
 

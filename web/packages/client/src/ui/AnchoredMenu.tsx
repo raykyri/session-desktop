@@ -5,7 +5,7 @@
 // menu.
 
 import { Menu as BaseMenu } from "@base-ui/react/menu";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
 
@@ -21,6 +21,20 @@ function anchorFor(anchor: MenuAnchor) {
     getBoundingClientRect: () =>
       DOMRect.fromRect({ x: anchor.x, y: anchor.y, width: 0, height: 0 }),
   };
+}
+
+/** Chooses the row whose `shortcut` letter was pressed (`MenuItem`), as
+ * the desktop's menus do; the thread page's menus do the same
+ * (`ThreadMenu`). */
+export function onMenuShortcutKey(event: KeyboardEvent<HTMLElement>): void {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+  const item = event.currentTarget.querySelector<HTMLElement>(
+    `[data-shortcut="${CSS.escape(event.key.toLowerCase())}"]:not([data-disabled])`,
+  );
+  if (!item) return;
+  event.preventDefault();
+  event.stopPropagation();
+  item.click();
 }
 
 export function AnchoredMenu({
@@ -77,6 +91,7 @@ export function AnchoredMenu({
               finalFocus={
                 anchor instanceof HTMLElement ? () => (anchor.isConnected ? anchor : true) : true
               }
+              onKeyDown={onMenuShortcutKey}
             >
               {children}
             </BaseMenu.Popup>

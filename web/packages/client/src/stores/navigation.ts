@@ -1,5 +1,5 @@
 // Page chrome state that does not belong in the URL (07 §4.3, §8): the
-// sidebar's width and collapsed state, and the feed's mode and scroll
+// sidebar's width and collapsed state, and the feeds' scroll
 // anchors.
 //
 // History is browser history (ADR-7): a thread's selection is its `?sel=`
@@ -12,7 +12,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export const NAVIGATION_STORAGE_KEY = "session.navigation.v2";
 
-export type FeedMode = "all" | "workspaces" | "workspace";
+export type FeedMode = "all" | "workspace";
 
 export const SIDEBAR_MIN_WIDTH = 208;
 export const SIDEBAR_MAX_WIDTH = 420;
@@ -35,13 +35,11 @@ export interface FeedScrollAnchor {
 
 export interface NavigationState {
   feedAnchorByView: Record<string, FeedScrollAnchor>;
-  feedMode: FeedMode;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
 
   recordFeedAnchor: (view: string, anchor: FeedScrollAnchor | null) => void;
   feedAnchorFor: (view: string) => FeedScrollAnchor | null;
-  setFeedMode: (mode: FeedMode) => void;
 
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -56,8 +54,6 @@ export const useNavigationStore = create<NavigationState>()(
   persist(
     (set, get) => ({
       feedAnchorByView: {},
-      // A signed-in account opens on its workspace's Home, as on the desktop.
-      feedMode: "workspace",
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
 
@@ -83,7 +79,6 @@ export const useNavigationStore = create<NavigationState>()(
           return { feedAnchorByView: { ...state.feedAnchorByView, [view]: anchor } };
         }),
       feedAnchorFor: (view) => get().feedAnchorByView[view] ?? null,
-      setFeedMode: (feedMode) => set({ feedMode }),
 
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -95,7 +90,6 @@ export const useNavigationStore = create<NavigationState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         feedAnchorByView: state.feedAnchorByView,
-        feedMode: state.feedMode,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
       }),

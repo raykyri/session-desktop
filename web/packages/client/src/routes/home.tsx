@@ -1,59 +1,51 @@
 // Home (`10-home-feed-journal.md` §1): for a signed-in account, the
 // workspace's Home as on the desktop — the ask box, Unfiled, the trays, and
-// "+ New folder" (`features/home/FeedView.tsx`). The header's feed menu also
-// offers the web's All Users and My Workspaces feeds; a guest sees All Users.
+// "+ New folder" (`features/home/FeedView.tsx`), with Refresh Home and Import
+// .md report in its header. `?feed=all` (the sidebar's All Users place) and a
+// guest show the web's All Users feed of public threads.
 
-import { ChevronDown } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { RotateCw } from "lucide-react";
 import { useRef } from "react";
 
-import { useSignedIn } from "../api/queries.js";
+import { invalidateKeys } from "../api/cache.js";
+import { queryKeys, useSignedIn } from "../api/queries.js";
 import { ResearchQueryComposer } from "../features/composer/ResearchQueryComposer.js";
 import { ActivityFeed } from "../features/home/ActivityFeed.js";
 import { FeedView } from "../features/home/FeedView.js";
 import { useFeedScope } from "../features/home/feedScope.js";
 import { ReportImport } from "../features/import/ReportImport.js";
 import { useWorkspaceScope } from "../features/sidebar/scope.js";
-import type { FeedMode } from "../stores/navigation.js";
-import { ControlButton } from "../ui/Button.js";
-import { Menu, MenuItem } from "../ui/Menu.js";
+import { IconButton } from "../ui/Button.js";
 
-const FEED_TITLES: Record<FeedMode, string> = {
-  workspace: "Home",
-  workspaces: "My Workspaces",
-  all: "All Users",
-};
-
-/** The header menu that switches between Home and the web's two feeds. */
-function FeedModeMenu({ mode, onChange }: { mode: FeedMode; onChange: (mode: FeedMode) => void }) {
+/** Refresh Home: reads the workspace's threads, folders, drafts and Trash
+ * again, and every card's root (the desktop's `refreshResearchNavigation`). */
+function RefreshHomeButton({ workspaceId }: { workspaceId: string }) {
+  const client = useQueryClient();
   return (
-    <Menu
-      align="end"
-      size="sm"
-      label="Feed"
-      trigger={
-        <ControlButton
-          size="sm"
-          className="max-w-52 gap-1.5"
-          aria-label={`Feed: ${FEED_TITLES[mode]}`}
-        >
-          <span className="truncate">{FEED_TITLES[mode]}</span>
-          <ChevronDown size={13} aria-hidden="true" />
-        </ControlButton>
+    <IconButton
+      label="Refresh Home"
+      onClick={() =>
+        invalidateKeys(
+          client,
+          ["trees"],
+          ["shared"],
+          ["feedRoot"],
+          queryKeys.folders(workspaceId),
+          queryKeys.drafts(workspaceId),
+          queryKeys.trash(workspaceId),
+        )
       }
     >
-      {(["workspace", "workspaces", "all"] as const).map((candidate) => (
-        <MenuItem key={candidate} selected={mode === candidate} onClick={() => onChange(candidate)}>
-          {FEED_TITLES[candidate]}
-        </MenuItem>
-      ))}
-    </Menu>
+      <RotateCw size={14} aria-hidden="true" />
+    </IconButton>
   );
 }
 
 export function HomePage() {
   const { workspaceId } = useWorkspaceScope();
   const signedIn = useSignedIn();
-  const feed = useFeedScope(workspaceId, signedIn);
+  const feed = useFeedScope(signedIn);
   // The report drop target is the whole column, so a report can be dropped
   // anywhere on the page (`10` §5).
   const columnRef = useRef<HTMLDivElement | null>(null);
@@ -68,8 +60,8 @@ export function HomePage() {
           composer={<ResearchQueryComposer workspaceId={workspaceId} />}
           headerActions={
             <>
+              <RefreshHomeButton workspaceId={workspaceId} />
               <ReportImport workspaceId={workspaceId} dropTarget={columnRef} />
-              <FeedModeMenu mode={feed.mode} onChange={feed.setMode} />
             </>
           }
         />
@@ -78,14 +70,6 @@ export function HomePage() {
   }
 
   return (
-    <ActivityFeed
-      key={feed.scope === "workspace" ? `ws:${workspaceId}` : feed.scope}
-      workspaceId={workspaceId}
-      scope={feed.scope}
-      title={FEED_TITLES[feed.mode]}
-      scopeSwitcher={
-        signedIn ? { mode: feed.mode, workspaceTitle: "Home", onChange: feed.setMode } : undefined
-      }
-    />
+    <ActivityFeed key={feed.scope} workspaceId={workspaceId} scope={feed.scope} title="All Users" />
   );
 }

@@ -92,6 +92,12 @@ export interface MenuItemProps {
   /** The row is the current value: a leading check in the strong foreground.
    * `undefined` reserves no slot; a boolean reserves it so rows line up. */
   selected?: boolean | undefined;
+  /** A letter that chooses the row while its menu is open, shown at the
+   * right. Only menus that handle the key (`AnchoredMenu`) may pass one;
+   * elsewhere the letter would move Base UI's typeahead highlight instead. */
+  shortcut?: string | undefined;
+  /** Tooltip; on a disabled row, why it is disabled. */
+  title?: string | undefined;
 }
 
 export function MenuItem({
@@ -103,11 +109,16 @@ export function MenuItem({
   className,
   closeOnClick,
   selected,
+  shortcut,
+  title,
 }: MenuItemProps) {
   const size = useContext(MenuSizeContext);
   return (
     <BaseMenu.Item
       disabled={disabled}
+      title={title}
+      data-shortcut={shortcut ? shortcut.toLowerCase() : undefined}
+      aria-keyshortcuts={shortcut ? shortcut.toUpperCase() : undefined}
       {...(closeOnClick === undefined ? {} : { closeOnClick })}
       onClick={onClick ? () => onClick() : undefined}
       aria-checked={selected}
@@ -127,6 +138,11 @@ export function MenuItem({
       {hint === undefined ? null : (
         <span className="text-fg-muted ml-auto shrink-0 text-xs">{hint}</span>
       )}
+      {shortcut ? (
+        <kbd className="text-fg-muted ml-3 shrink-0 font-[inherit] text-xs" aria-hidden="true">
+          {shortcut}
+        </kbd>
+      ) : null}
     </BaseMenu.Item>
   );
 }

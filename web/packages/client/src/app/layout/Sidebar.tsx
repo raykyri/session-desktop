@@ -7,7 +7,8 @@ import { startGitHubSignIn } from "../../api/api.js";
 import { useLogout, useMe } from "../../api/queries.js";
 import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.svg";
 import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
-import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
+import { SidebarBody, SidebarRailBody } from "../../features/sidebar/SidebarBody.js";
+import { SIDEBAR_RAIL_WIDTH } from "../../features/sidebar/SidebarRail.js";
 import { SIDEBAR_ROW } from "../../features/sidebar/rows.js";
 import { workspaceSearch } from "../../features/sidebar/scope.js";
 import { useResolvedAppearance } from "../../lib/appearance.js";
@@ -181,12 +182,15 @@ export function Sidebar() {
     }
   }, []);
 
+  // Collapsed (and always in the narrow layout) the sidebar is its icon
+  // rail, as on the desktop.
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--sidebar-width",
-      collapsed || narrow ? "0px" : `${width}px`,
+      collapsed || narrow ? `${SIDEBAR_RAIL_WIDTH}px` : `${width}px`,
     );
   }, [collapsed, narrow, width]);
+  const rail = <SidebarRailBody onExpand={() => setCollapsed(false)} />;
 
   // Under the breakpoint the column would leave no room for the reading
   // surface, so the same body becomes a dismissable drawer over it (08 §7).
@@ -194,26 +198,29 @@ export function Sidebar() {
   // button and Shift-Cmd-G drive both layouts.
   if (narrow) {
     return (
-      <BaseDialog.Root open={!collapsed} onOpenChange={(open) => setCollapsed(!open)}>
-        <BaseDialog.Portal>
-          <BaseDialog.Backdrop className={DIALOG_BACKDROP} />
-          <BaseDialog.Popup
-            aria-label="Sidebar"
-            className={cn(
-              "border-border-divider bg-surface-sidebar fixed inset-y-0 left-0 z-(--z-dialog)",
-              "shadow-dialog flex w-[min(320px,85vw)] flex-col border-r",
-            )}
-          >
-            <SidebarChrome onHide={() => setCollapsed(true)} />
-            <SidebarBody />
-            <AccountMenu />
-          </BaseDialog.Popup>
-        </BaseDialog.Portal>
-      </BaseDialog.Root>
+      <>
+        {rail}
+        <BaseDialog.Root open={!collapsed} onOpenChange={(open) => setCollapsed(!open)}>
+          <BaseDialog.Portal>
+            <BaseDialog.Backdrop className={DIALOG_BACKDROP} />
+            <BaseDialog.Popup
+              aria-label="Sidebar"
+              className={cn(
+                "border-border-divider bg-surface-sidebar fixed inset-y-0 left-0 z-(--z-dialog)",
+                "shadow-dialog flex w-[min(320px,85vw)] flex-col border-r",
+              )}
+            >
+              <SidebarChrome onHide={() => setCollapsed(true)} />
+              <SidebarBody />
+              <AccountMenu />
+            </BaseDialog.Popup>
+          </BaseDialog.Portal>
+        </BaseDialog.Root>
+      </>
     );
   }
 
-  if (collapsed) return null;
+  if (collapsed) return rail;
 
   return (
     <div

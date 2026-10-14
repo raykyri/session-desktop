@@ -37,8 +37,11 @@ import {
   useWorkspaces,
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
+import { formatChord } from "../../lib/platform.js";
+import { useShortcutHintsShown } from "../../lib/shortcutHints.js";
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
+import { SHORTCUT_HINT } from "../../ui/surfaces.js";
 
 import { AsyncConfirmDialog, NameDialog } from "./dialogs.js";
 import { IconMenuItem } from "./menuRows.js";
@@ -69,6 +72,8 @@ export function WorkspaceSwitcher({
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // Shown beside the switcher while ⌘ is held (`lib/shortcutHints`).
+  const hintsShown = useShortcutHintsShown();
 
   // Cmd-O is resolved by the shell's one chord table and re-dispatched as a
   // window event, because the layer that owns the menu is this component
@@ -143,7 +148,7 @@ export function WorkspaceSwitcher({
         {signedIn ? (
           <IconMenuItem
             icon={<Plus size={13} aria-hidden="true" />}
-            label="New workspace…"
+            label="Add workspace…"
             onClick={() => setCreating(true)}
           />
         ) : null}
@@ -179,25 +184,33 @@ export function WorkspaceSwitcher({
             />
             <IconMenuItem
               icon={<Pencil size={13} aria-hidden="true" />}
-              label={`Rename “${current.name}”`}
+              label={`Rename “${current.name}”…`}
               onClick={() => setRenaming(true)}
             />
             <IconMenuItem
               icon={<Trash2 size={13} aria-hidden="true" />}
-              label={`Delete “${current.name}”`}
+              label="Delete workspace…"
               tone="danger"
               onClick={() => setRemoving(true)}
             />
           </>
         ) : null}
       </Menu>
+      {hintsShown ? (
+        <span
+          className={cn(SHORTCUT_HINT, "absolute top-1/2 right-9 -translate-y-1/2")}
+          aria-hidden="true"
+        >
+          {formatChord("mod+o")}
+        </span>
+      ) : null}
 
       <NameDialog
         open={creating}
-        title="New workspace"
+        title="Add workspace"
         description="Each workspace has separate threads and folders."
         label="Workspace name"
-        confirmLabel="Create"
+        confirmLabel="Add"
         onOpenChange={setCreating}
         onSubmit={(name) => {
           void createResearchWorkspace(name)

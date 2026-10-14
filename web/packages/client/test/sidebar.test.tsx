@@ -11,6 +11,7 @@ import { setTrpcClient } from "../src/api/trpc.js";
 import { useFolderDialogStore } from "../src/features/home/FolderDialogsHost.js";
 import { commitFolderState } from "../src/features/home/useFiling.js";
 import { workspaceRemovalRefusal } from "../src/features/sidebar/WorkspaceSwitcher.js";
+import { useNavigationStore } from "../src/stores/navigation.js";
 
 import { summary } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
@@ -123,7 +124,7 @@ test.serial(
 
     t.deepEqual(
       rows("Research").map((row) => row.textContent),
-      ["Home", "Highlights", "Shared with me"],
+      ["Home", "Highlights", "Shared with me", "All Users"],
     );
     t.deepEqual(
       rows("Folders").map((row) => row.textContent),
@@ -135,6 +136,7 @@ test.serial(
     );
     t.deepEqual(drops, [
       "system:unfiled",
+      null,
       null,
       null,
       "system:drafts",
@@ -283,12 +285,12 @@ test.serial("creating a workspace names it and sends the name", async (t) => {
     "the switcher shows the scoped workspace",
   );
   fireEvent.click(screen.getAllByText("Collective memory")[0] as HTMLElement);
-  fireEvent.click(await screen.findByText("New workspace…"));
+  fireEvent.click(await screen.findByText("Add workspace…"));
   const field = await screen.findByLabelText("Workspace name");
   fireEvent.change(field, { target: { value: "Reading" } });
   const dialog = field.closest<HTMLElement>("[role='dialog']");
   if (!dialog) throw new Error("the name prompt is not a dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
   await waitUntil(
     t,
@@ -318,4 +320,54 @@ test.serial("guests see Home alone", async (t) => {
   );
   t.is(screen.queryByRole("navigation", { name: "Folders" }), null);
   app.unmount();
+});
+
+test.serial("a collapsed sidebar is the desktop's icon rail", async (t) => {
+  useNavigationStore.setState({ sidebarCollapsed: true });
+  try {
+    const app = await renderApp("/", {
+      queryClient: testQueryClient(),
+      responses: sidebarResponses(),
+    });
+    const rail = await screen.findByRole("complementary", { name: "Sidebar" });
+    await waitUntil(
+      t,
+      () => within(rail).queryByRole("link", { name: "Papers" }) !== null,
+      "the folders load",
+    );
+    const names = within(rail)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("aria-label"));
+    t.deepEqual(names, [
+      "Home",
+      "Highlights",
+      "Shared with me",
+      "All Users",
+      "Drafts",
+      "Papers",
+      "Archive",
+      "Trash",
+      "Settings",
+    ]);
+    const papers = within(rail).getByRole("link", { name: "Papers" });
+    t.is(papers.textContent, "P", "a folder shows its first letter");
+    t.is(papers.getAttribute("data-research-drop"), "f1", "and takes card drops");
+    t.is(
+      within(rail).getByRole("link", { name: "Trash" }).getAttribute("data-research-drop"),
+      null,
+    );
+    t.is(within(rail).getByRole("link", { name: "Home" }).getAttribute("aria-current"), "page");
+    t.truthy(within(rail).getByRole("button", { name: "New folder" }));
+
+    fireEvent.click(within(rail).getByRole("button", { name: "Expand sidebar" }));
+    await waitUntil(
+      t,
+      () => screen.queryByRole("button", { name: "Hide sidebar" }) !== null,
+      "the full sidebar is back",
+    );
+    t.false(useNavigationStore.getState().sidebarCollapsed);
+    app.unmount();
+  } finally {
+    useNavigationStore.setState({ sidebarCollapsed: false });
+  }
 });

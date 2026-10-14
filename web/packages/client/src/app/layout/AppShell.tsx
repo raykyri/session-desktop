@@ -1,6 +1,6 @@
 import { appShortcutAllowsRepeat, isEditableTarget, resolveAppShortcut } from "@session/shared";
 import type { AppShortcutCommand } from "@session/shared";
-import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
@@ -12,7 +12,6 @@ import { useOverlaysStore } from "../../stores/overlays.js";
 import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
 import { NotificationStack } from "../../ui/NotificationStack.js";
-import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 import { useUserNotifications } from "../../ui/useUserNotifications.js";
 import { SessionBoot } from "../SessionBoot.js";
 
@@ -54,13 +53,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
-  const sidebarCollapsed = useNavigationStore((state) => state.sidebarCollapsed);
-  const setSidebarCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
   const signedIn = useSignedIn();
   const tabRoutes: readonly string[] = signedIn ? TAB_ROUTES : ["/"];
-  const onResearchDocument = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/r/"),
-  });
   const { notifications, dismiss } = useUserNotifications();
   const { workspaceId } = useWorkspaceScope();
   const trees = useTreeSummaries({ workspaceId });
@@ -178,18 +172,6 @@ export function AppShell() {
     <div className="bg-surface-workspace text-fg-primary flex h-full w-full overflow-hidden">
       <SessionBoot />
       <Sidebar />
-      {/* A slim column rather than a floating control: a document's title sits
-          on the stage's left edge, and a button laid over it would cover it.
-          The research document has a header band that reaches the left edge,
-          so it places the button inside that band instead (`DocumentHeader`). */}
-      {sidebarCollapsed && !onResearchDocument ? (
-        <div className="flex shrink-0 items-start px-1 pt-2">
-          <SidebarRestoreButton
-            className="translate-x-0.5"
-            onRestore={() => setSidebarCollapsed(false)}
-          />
-        </div>
-      ) : null}
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <Outlet />
       </main>

@@ -1,72 +1,30 @@
+// Which feed `/` shows (`10-home-feed-journal.md` §1): the workspace's Home
+// for a signed-in account, or the web's All Users feed of public threads —
+// for a guest always, for an account when the URL says `?feed=all` (the
+// sidebar's All Users place). Older links with `?feed=workspaces` (the
+// removed My Workspaces feed) or a workspace id open Home.
+
 import type { RecentActivityScope } from "@session/shared";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect } from "react";
+import { useRouterState } from "@tanstack/react-router";
 
-import { useNavigationStore, type FeedMode } from "../../stores/navigation.js";
+import type { FeedMode } from "../../stores/navigation.js";
 
-export function parseFeedMode(value: unknown): FeedMode | null {
-  if (value === "all" || value === "workspaces") return value;
-  return typeof value === "string" && value !== "" ? "workspace" : null;
+export function parseFeedMode(value: unknown): FeedMode {
+  return value === "all" ? "all" : "workspace";
 }
 
-export interface FeedScopeControl {
+export interface FeedScope {
   mode: FeedMode;
   scope: RecentActivityScope;
-  setMode: (mode: FeedMode) => void;
 }
 
-export function useFeedScope(workspaceId: string, signedIn: boolean): FeedScopeControl {
-  const navigate = useNavigate();
-  const stored = useNavigationStore((state) => state.feedMode);
-  const setStored = useNavigationStore((state) => state.setFeedMode);
+export function useFeedScope(signedIn: boolean): FeedScope {
   const raw = useRouterState({
     select: (state) => {
       const value = (state.location.search as Record<string, unknown>)["feed"];
       return typeof value === "string" ? value : null;
     },
   });
-  const fromUrl = parseFeedMode(raw);
-  const mode = signedIn ? (fromUrl ?? stored) : "all";
-
-  useEffect(() => {
-    if (signedIn && fromUrl !== null && fromUrl !== stored) setStored(fromUrl);
-  }, [fromUrl, signedIn, stored, setStored]);
-
-  useEffect(() => {
-    if (
-      !signedIn ||
-      mode !== "workspace" ||
-      workspaceId === "" ||
-      typeof raw !== "string" ||
-      raw === workspaceId
-    ) {
-      return;
-    }
-    void navigate({
-      to: ".",
-      search: (previous: Record<string, unknown>) => ({ ...previous, feed: workspaceId }),
-      replace: true,
-    });
-  }, [mode, navigate, raw, signedIn, workspaceId]);
-
-  const setMode = useCallback(
-    (next: FeedMode) => {
-      setStored(next);
-      void navigate({
-        to: ".",
-        search: (previous: Record<string, unknown>) => ({
-          ...previous,
-          feed: next === "workspace" ? workspaceId : next,
-        }),
-        replace: true,
-      });
-    },
-    [navigate, setStored, workspaceId],
-  );
-
-  return {
-    mode,
-    scope: mode === "all" ? "all" : mode === "workspaces" ? "mine" : "workspace",
-    setMode,
-  };
+  const mode = signedIn ? parseFeedMode(raw) : "all";
+  return { mode, scope: mode === "all" ? "all" : "workspace" };
 }
