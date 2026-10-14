@@ -17,10 +17,14 @@ import { cn } from "../../lib/cn.js";
 import { isApplePlatform } from "../../lib/platform.js";
 import { ComposerSubmitShortcutGlyph } from "../../ui/ComposerSubmitShortcut.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import {
+  ModelIcon,
+  QuestionModelPicker,
+  type ModelChoice,
+} from "../composer/QuestionModelPicker.js";
 import { ImageStrip, useImageInput } from "../composer/images.js";
 
 import type { ComposerHandle } from "./ConversationComposer.js";
-import { ModelIcon, ModelPicker, type ModelChoice } from "./ModelPicker.js";
 
 export type AskMode = "ai" | "note";
 
@@ -206,7 +210,7 @@ export function PostFollowUpField({
               </button>
             </div>
             {!asNote && choice ? (
-              <ModelPicker
+              <QuestionModelPicker
                 choice={choice}
                 models={models}
                 disabled={submitting}

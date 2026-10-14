@@ -11,11 +11,11 @@
 // another device finds them.
 
 import type { ResearchImageAttachment, ResearchTreeDetail } from "@session/shared";
-import { DEFAULT_MODEL_ID, findModel, MAX_POST_TEXT_BYTES } from "@session/shared";
+import { DEFAULT_MODEL_ID, MAX_POST_TEXT_BYTES } from "@session/shared";
 import { launcherTabAction } from "@session/shared/lib/launcherKeyboard";
 import { postFormatOf } from "@session/shared/lib/researchNodeTypes";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Bot, FilePen, LoaderCircle, MoreHorizontal } from "lucide-react";
+import { ArrowRight, FilePen, LoaderCircle, MoreHorizontal } from "lucide-react";
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -33,7 +33,6 @@ import { homeDraftKey, markDraftEdited, useDraftsStore } from "../../stores/draf
 import { useSettingsStore } from "../../stores/settings.js";
 import { AnchoredMenu } from "../../ui/AnchoredMenu.js";
 import { isComposerSubmitShortcut } from "../../ui/ComposerSubmitShortcut.js";
-import { GeminiMark } from "../../ui/ModelMark.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 import { IconMenuItem } from "../sidebar/menuRows.js";
 
@@ -41,6 +40,7 @@ import { AskNoteSwitch, type AskMode } from "./AskNoteSwitch.js";
 import {
   askLabelFor,
   composerModels,
+  ModelIcon,
   ModelMenuItems,
   nextComposerModel,
   resolvedEffort,
@@ -73,15 +73,6 @@ export function askBoxCopy(
     placeholder: askPlaceholder,
     submitLabel: submitting ? "Starting research…" : "Start research",
   };
-}
-
-/** The Ask segment's icon: the model family's mark. */
-export function ModelIcon({ modelId }: { modelId: string }) {
-  return findModel(modelId)?.adapter === "gemini" ? (
-    <GeminiMark size={13} />
-  ) : (
-    <Bot size={14} aria-hidden="true" />
-  );
 }
 
 /** Focus inside the composer, or in the menus it opens (portals). */
@@ -448,7 +439,7 @@ export function ResearchQueryComposer({
           >
             <AskNoteSwitch
               askMode={askMode}
-              askIcon={<ModelIcon modelId={modelId} />}
+              askIcon={<ModelIcon modelId={modelId} size={13} />}
               askLabel={askLabel}
               noteLabel="Save as note"
               menuOpen={menuOpen}

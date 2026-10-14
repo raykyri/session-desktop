@@ -37,7 +37,7 @@ element uses `columnSelector`.
 
 | Role | Component | Content |
 | --- | --- | --- |
-| messages | `MessagesColumn` | The level's chain as rows (`MessageRow`), the server's queued follow-ups for the chain (`QueuedFollowup`: Cancel, and Retry for a failed send), and the level's ask box. Level 0's header holds the title, Back/Forward and the thread menu. |
+| messages | `MessagesColumn` | The level's chain as rows (`MessageRow`), the server's queued follow-ups for the chain (`QueuedFollowup`: Cancel, and Retry for a failed send), and the level's ask box. Level 0's header holds the title, Back/Forward and the thread menu; above its rows, the thread's Home group (`GroupPanel`): for a parent, "In this group · N" with a row per child listed under it in Home, for a child, "In “parent”". Opening one of them expands the group in Home (`useThreadFiling`; the reader's own thread only, since a shared thread's nesting is its owner's). |
 | answer | `AnswerColumn` | The selected message's answer (`AnswerPane`): status line, recap, timeline, sources footer, margin markers. `QueuedAnswerColumn` replaces it while a queued item is selected. |
 | branches | `BranchesColumn` | "Branches · N": one group per branch of the previous level's listed messages, in passage order (passages from the top, then whole-answer branches). Each group shows its source quote, its messages and its queue; the selected group also has the ask box. The unsent branch is the group headed "New branch". |
 | note | `NoteColumn` | A post level: the note (`PostColumn`), double-click to edit. |
@@ -49,7 +49,9 @@ messages-side columns (messages, branches, follow-ups) share one width and the
 answer-side columns (answer, note, editor) another; both are automatic (18 %
 and 44 % of the strip, clamped) until a `ColumnResizer` sets them, and a set
 width is stored per browser (`columnWidths.ts`). Wheel deltas on the strip
-scroll it horizontally. The headers of all columns share one height
+scroll it horizontally. A commit never moves the strip: `useFocusRequests`
+reads its `scrollLeft` at render and puts it back after the commit, so only
+an explicit reveal or settle scrolls it, as on the desktop. The headers of all columns share one height
 (`--research-header-height`), so their bottom borders line up. ⌃Tab and
 ⌃⇧Tab cycle the rows of the column last interacted with.
 
@@ -64,8 +66,12 @@ column when one of the row's branches is open.
 Every messages column and the selected branch group have an ask box
 (`ConversationComposer`). ⌘↵ (Ctrl+↵ off Apple platforms) sends; ⇧⌘↵ sends
 the question as a new branch from the selected answer instead. The box has a
-model and effort picker (`ModelPicker`, defaulting to the model of the
-message it continues) and takes pasted or dropped images (`composer/images.tsx`,
+model and effort picker (`QuestionModelPicker` in
+`features/composer/QuestionModelPicker.tsx`, the menu Home's ask box opens
+from its Ask segment: a row per model with its icon, admin-only models for
+admins only, then an Effort submenu with Default and the model's efforts;
+the trigger shows the model and the effort it runs at; it defaults to the
+model of the message it continues) and takes pasted or dropped images (`composer/images.tsx`,
 uploaded to `POST /api/images`; the question sends their ids).
 
 - **Follow-up**: `followups.ask` with the chain's head. The server sends it
@@ -126,6 +132,16 @@ Keyboard (`useThreadKeyboard.ts`):
 Messages are reordered by dragging a row (`useMessageDrag.ts`) or with
 ⌥↑/⌥↓; the order is stored with `research.setChainOrder` and applied
 optimistically.
+
+A horizontal trackpad swipe goes back or forward (`useSwipeNavigation.ts`,
+the desktop's `useResearchSwipeNavigation` with the shared
+`researchSwipeDirection` threshold): a mostly vertical gesture scrolls, a
+gesture over something that scrolls sideways (the strip when its columns do
+not fit, a wide table) scrolls it and never navigates, and one swipe moves
+one step. A swipe history cannot follow is left alone. While the page is
+open the root element has `overscroll-behavior-x: none`, so the browser's
+own swipe navigation does not also run; Safari's system gesture can ignore
+that property.
 
 ## 5. Selection, highlights and branches from a passage
 
@@ -200,7 +216,9 @@ active).
   change. Save writes `research.updateDocument` with the revision it opened;
   a stale revision is refused and the editor stays open. ⌘S saves and stays
   in edit mode with a toast; Cancel asks before discarding changes; Ask as a
-  question starts a new thread with the edited text.
+  question starts a new thread with the edited text on the model and effort
+  chosen beside it (`research.createTree` with `effort`; null is the model's
+  default).
 - **Note**: double-click a note, or Edit note in its menu, to edit it in
   place. A double-click on a note's card on Home opens the thread with
   `?edit=` (a single click on that card waits 250 ms for the second click
@@ -226,8 +244,13 @@ active).
 pointer (right-click). The answer menu holds the message's statistics,
 Branch to right, Copy answer (or Copy conversation), Copy thread, Show full
 transcript, Rerun, Generate recap, Rename…, Edit document and the delete
-item. The note menu holds Edit note, Copy note and Delete note (D). Dialogs
-are centred confirm dialogs (`ThreadDialogs.tsx`):
+item. The note menu holds Edit note, Copy note and Delete note (D). On the
+reader's own thread, the answer menus of the root level and the root note's
+menu end with Move to (Unfiled, Drafts, the workspace's folders, Archive; the
+current place checked) and New folder…, as a feed card's menu
+(`useThreadFiling.ts`, Home's `useFiling` and `useGroupActions`, so archiving
+a parent with children asks first). A member files a shared thread from
+Home. Dialogs are centred confirm dialogs (`ThreadDialogs.tsx`):
 
 - **Rerun**: "Rerun will replace the current answer. Continue?";
   `research.rerunNode`. Refused while the answer, or the answer it follows,
@@ -286,10 +309,7 @@ update live.
 
 ## 9. Not ported
 
-The desktop's swipe navigation, its Home group panel in the strip, Move to
-folder in the thread menu, client-side retries of queued items (the server
-retries), effort on Ask as a question (the model is sent), and restoring the
-strip's horizontal position on return.
+Client-side retries of queued items (the server retries).
 
 ## 10. Tests
 
@@ -297,7 +317,12 @@ strip's horizontal position on return.
   columns, selection history, whole-answer branches, queued follow-ups with
   Cancel, ⌘↵ and ⌘J, Edit question, Rerun, recap, queue position, snapshot
   swap without remount, note columns, double-click edit with a stale-edit
-  refusal, passage quotes.
+  refusal, passage quotes, Move to in the root's menu (not on a shared
+  thread), the Home group panel, Ask as a question with an effort, and links
+  out of the page keeping only `?ws=`.
+- `test/thread.strip.test.tsx`: the strip position kept across a commit,
+  and swipe navigation (one step per swipe, vertical scrolls and sideways
+  scrollers left alone).
 - `test/research.selection.test.ts`: projection, offsets, word expansion,
   capture, paragraph clipping, live selections.
 - `test/research.segment.test.ts`: timeline windowing, status line, run

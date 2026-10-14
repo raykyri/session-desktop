@@ -6,6 +6,7 @@
 // note columns and the editor, the answer menu's Rerun.
 
 import type {
+  ResearchFolderState,
   ResearchFollowupQueueItem,
   ResearchHighlightAnchor,
   ResearchNode,
@@ -23,7 +24,7 @@ import { useDraftsStore } from "../src/stores/drafts.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 import { useOverlaysStore } from "../src/stores/overlays.js";
 
-import { node, tree } from "./fixtures.js";
+import { node, summary, tree } from "./fixtures.js";
 import { renderApp, resetDocumentRoot, waitUntil } from "./helpers.js";
 
 const REVISION = "b".repeat(64);
@@ -406,6 +407,166 @@ test.serial("Rerun asks before replacing a complete answer", async (t) => {
   });
 });
 
+test.serial("the root's answer menu moves the thread to a folder", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const folders: ResearchFolderState = {
+    folders: [{ id: "f1", name: "Papers", workspaceId: "w1" }],
+    membership: {},
+    collapsed: [],
+    parents: {},
+    collapsedGroups: [],
+  };
+  const { trpc } = await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+    responses: {
+      "research.listTrees": [summary({ runningCount: 0, completedCount: 1 })],
+      "folders.get": folders,
+      "folders.set": (input: { state: ResearchFolderState }) => input.state,
+      "research.listTrash": [],
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+  const openMenu = async () => {
+    fireEvent.click(screen.getAllByRole("button", { name: "Answer actions" })[0] as HTMLElement);
+    return waitFor(() => screen.getByRole("menu", { name: "Answer actions" }));
+  };
+  let menu = await openMenu();
+  await waitUntil(
+    t,
+    () => within(menu).queryByRole("group", { name: "Move to" }) !== null,
+    "Move to is listed once the workspace's threads load",
+  );
+  const group = within(menu).getByRole("group", { name: "Move to" });
+  t.deepEqual(
+    within(group)
+      .getAllByRole("menuitem")
+      .map((item) => item.textContent?.trim()),
+    ["Unfiled", "Drafts", "Papers", "Archive"],
+  );
+  t.is(
+    within(group).getByRole("menuitem", { name: "Unfiled" }).getAttribute("aria-checked"),
+    "true",
+  );
+  t.truthy(within(menu).getByRole("menuitem", { name: "New folder…" }));
+  fireEvent.click(within(group).getByRole("menuitem", { name: "Papers" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "folders.set"),
+    "the membership is saved",
+  );
+  const saved = trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    workspaceId: string;
+    state: ResearchFolderState;
+  };
+  t.is(saved.workspaceId, "w1");
+  t.deepEqual(saved.state.membership, { t1: "f1" });
+  menu = await openMenu();
+  await waitUntil(
+    t,
+    () =>
+      within(menu).queryByRole("menuitem", { name: "Papers" })?.getAttribute("aria-checked") ===
+      "true",
+    "the folder is now the current place",
+  );
+});
+
+test.serial("the Home group is listed above the messages and opens its threads", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const folders: ResearchFolderState = {
+    folders: [],
+    membership: {},
+    collapsed: [],
+    parents: { t2: "t1" },
+    collapsedGroups: ["t1"],
+  };
+  const { trpc, router } = await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+    responses: {
+      "research.listTrees": [
+        summary({ runningCount: 0, completedCount: 1 }),
+        summary({ id: "t2", rootNodeId: "m1", title: "A child thread", runningCount: 0 }),
+      ],
+      "folders.get": folders,
+      "folders.set": (input: { state: ResearchFolderState }) => input.state,
+      "research.listTrash": [],
+    },
+  });
+  const panel = await waitFor(() => screen.getByRole("navigation", { name: /In this group/ }));
+  t.is(within(panel).getByRole("heading").textContent, "In this group · 1");
+  fireEvent.click(within(panel).getByRole("button", { name: /A child thread/ }));
+  await waitUntil(t, () => router.state.location.pathname === "/r/t2", "the child opens");
+  // Opening a child from the panel expands its group in Home.
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "folders.set"),
+    "the group is expanded",
+  );
+  const saved = trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    state: ResearchFolderState;
+  };
+  t.deepEqual(saved.state.collapsedGroups, []);
+});
+
+test.serial("a child thread links to its parent", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+    responses: {
+      "research.listTrees": [
+        summary({ id: "t0", rootNodeId: "p1", title: "The parent", runningCount: 0 }),
+        summary({ runningCount: 0, completedCount: 1 }),
+      ],
+      "folders.get": {
+        folders: [],
+        membership: {},
+        collapsed: [],
+        parents: { t1: "t0" },
+        collapsedGroups: [],
+      },
+      "research.listTrash": [],
+    },
+  });
+  const panel = await waitFor(() => screen.getByRole("navigation", { name: "Parent thread" }));
+  t.truthy(within(panel).getByRole("button", { name: "In “The parent”" }));
+});
+
+test.serial("a shared thread's menu has no Move to", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const detail: ResearchTreeDetail = {
+    tree: tree({ role: "commenter", ownerId: "someone-else" }),
+    nodes: [root],
+  };
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+    responses: {
+      "research.getTree": () => detail,
+      "research.markTreeViewed": detail.tree,
+      "research.listTrees": [
+        summary({ runningCount: 0, role: "commenter", ownerId: "someone-else" }),
+      ],
+      "folders.get": {
+        folders: [],
+        membership: {},
+        collapsed: [],
+        parents: {},
+        collapsedGroups: [],
+      },
+      "research.listTrash": [],
+    },
+  });
+  await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+  fireEvent.click(screen.getAllByRole("button", { name: "Answer actions" })[0] as HTMLElement);
+  const menu = await waitFor(() => screen.getByRole("menu", { name: "Answer actions" }));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  t.is(within(menu).queryByRole("group", { name: "Move to" }), null);
+});
+
 test.serial("a recap is shown above the answer it was written for", async (t) => {
   const base = node({ id: "n1", status: "complete" });
   const root = {
@@ -572,6 +733,77 @@ test.serial("?edit= opens a note in the editor and leaves the URL", async (t) =>
     () => (router.state.location.search as { edit?: string }).edit === undefined,
     "the parameter is removed",
   );
+});
+
+test.serial(
+  "links out of the thread page keep the workspace and drop the thread's params",
+  async (t) => {
+    const root = node({ id: "n1", status: "complete" });
+    const { router } = await mount({
+      nodes: [root],
+      contentByNode: { n1: contentFor(root, [assistantTurn("t1", "Root answer.")]) },
+      path: "/r/t1?ws=w1&sel=n1&highlight=h1",
+    });
+    await waitUntil(t, () => screen.queryByText("Root answer.") !== null, "the answer shows");
+    // The account menu's Settings.
+    fireEvent.click(screen.getByRole("button", { name: "raymond" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
+    await waitUntil(t, () => router.state.location.pathname === "/settings", "Settings opens");
+    t.deepEqual(router.state.location.search, { ws: "w1" });
+    // The sidebar's Home and Highlights links.
+    for (const name of ["Home", "Highlights"]) {
+      const href = screen.getByRole("link", { name }).getAttribute("href") ?? "";
+      t.is(new URL(href, "http://localhost").search, "?ws=w1", name);
+    }
+  },
+);
+
+test.serial("Ask as a question sends the chosen model and effort", async (t) => {
+  const note = post();
+  const created: ResearchTreeDetail = {
+    tree: tree({ id: "t9", rootNodeId: "n9" }),
+    nodes: [node({ id: "n9", treeId: "t9" })],
+  };
+  const { trpc } = await mount({
+    nodes: [note],
+    contentByNode: {},
+    path: "/r/t1?node=n1&edit=n1",
+    responses: { "research.createTree": created },
+  });
+  await waitFor(() => screen.getByRole("textbox", { name: "Note text" }));
+  // The ask boxes' picker: the model's icon and name, then the Effort submenu.
+  const trigger = screen.getByTitle("Model for the question");
+  t.is(trigger.getAttribute("aria-label"), "Model: Gemini 3.8 Flash, Medium effort");
+  fireEvent.click(trigger);
+  // Labelled by its trigger.
+  const menu = await screen.findByRole("menu");
+  t.deepEqual(
+    within(menu)
+      .getAllByRole("menuitem")
+      .map((item) => item.textContent?.trim()),
+    ["Gemini 3.8 Flash", "GPT-5.6 Luna", "EffortDefault"],
+  );
+  fireEvent.click(within(menu).getByRole("menuitem", { name: /^Effort/ }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "High" }));
+  await waitUntil(
+    t,
+    () =>
+      screen.getByTitle("Model for the question").getAttribute("aria-label") ===
+      "Model: Gemini 3.8 Flash, High effort",
+    "the effort is chosen",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Ask as a question" }));
+  await waitUntil(
+    t,
+    () => trpc.calls.some((call) => call.path === "research.createTree"),
+    "the question is asked",
+  );
+  t.deepEqual(trpc.calls.find((call) => call.path === "research.createTree")?.input, {
+    prompt: "A note about memory",
+    model: "gemini-flash",
+    effort: "high",
+    workspaceId: "w1",
+  });
 });
 
 /* --------------------------------------------------------- a passage */

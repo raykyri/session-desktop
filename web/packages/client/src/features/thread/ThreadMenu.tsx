@@ -43,6 +43,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useNodeContent } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { POPOVER_SURFACE } from "../../ui/surfaces.js";
+import { MoveToItems } from "../home/TreeMenu.js";
 import { AuthorChip } from "../sharing/AuthorChip.js";
 import { useThreadCollaboration } from "../sharing/context.js";
 import {
@@ -58,6 +59,8 @@ import { ThreadMenuItem, ThreadMenuMeta, ThreadMenuSeparator } from "./ThreadMen
 import { BranchIcon } from "./icons.js";
 import { runActive } from "./runState.js";
 import { buildSegmentView, type SegmentView } from "./segmentView.js";
+import { rowSelector } from "./stripDom.js";
+import type { ThreadTreeMenu } from "./useThreadFiling.js";
 
 /** Where a menu opens: below a button (its trigger, where focus returns), or
  * at a point (a context menu). */
@@ -215,6 +218,40 @@ function ThreadSharingItems({
   );
 }
 
+/** The whole thread's Move to, below the root level's answer menus and the
+ * root note's menu (the desktop's `ResearchTreeMenuItems`). `fallbackFocus`
+ * is where focus returns from the folder dialog when the menu was opened at
+ * a point. */
+function TreeMoveItems({
+  treeMenu,
+  trigger,
+  fallbackFocus,
+  onClose,
+}: {
+  treeMenu: ThreadTreeMenu;
+  trigger: HTMLElement | null;
+  fallbackFocus: () => HTMLElement | null;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <ThreadMenuSeparator />
+      <MoveToItems
+        currentPlace={treeMenu.currentPlace}
+        folders={treeMenu.folders}
+        onMove={(place) => {
+          onClose();
+          treeMenu.onMove(place);
+        }}
+        onNewFolder={() => {
+          onClose();
+          treeMenu.onNewFolder(trigger ?? fallbackFocus());
+        }}
+      />
+    </>
+  );
+}
+
 export function ThreadMenu({
   menu,
   nodes,
@@ -227,6 +264,7 @@ export function ThreadMenu({
   openBranchIds,
   relaunchPending,
   followed = false,
+  treeMenu,
   actions,
 }: {
   menu: ThreadMenuState;
@@ -241,6 +279,9 @@ export function ThreadMenu({
   relaunchPending: boolean;
   /** The reader follows the thread (Notify me is on). */
   followed?: boolean;
+  /** Move to and New folder… for the whole thread (web: the reader's own
+   * thread only). */
+  treeMenu?: ThreadTreeMenu | undefined;
   actions: ThreadMenuActions;
 }) {
   const { permissions } = useThreadCollaboration();
@@ -359,6 +400,14 @@ export function ThreadMenu({
             />
           </>
         ) : null}
+        {treeMenu && isRoot ? (
+          <TreeMoveItems
+            treeMenu={treeMenu}
+            trigger={trigger}
+            fallbackFocus={() => null}
+            onClose={onClose}
+          />
+        ) : null}
       </MenuFrame>
     );
   }
@@ -376,6 +425,7 @@ export function ThreadMenu({
       fullTrace={fullTrace}
       relaunchPending={relaunchPending}
       followed={followed}
+      treeMenu={treeMenu}
       permissions={permissions}
       actions={actions}
     />
@@ -395,6 +445,7 @@ function AnswerMenu({
   fullTrace,
   relaunchPending,
   followed,
+  treeMenu,
   permissions,
   actions,
 }: {
@@ -410,6 +461,7 @@ function AnswerMenu({
   fullTrace: boolean;
   relaunchPending: boolean;
   followed: boolean;
+  treeMenu: ThreadTreeMenu | undefined;
   permissions: ThreadPermissions;
   actions: ThreadMenuActions;
 }) {
@@ -603,6 +655,14 @@ function AnswerMenu({
             }}
           />
         </>
+      ) : null}
+      {treeMenu && chainIds[0] === rootNodeId ? (
+        <TreeMoveItems
+          treeMenu={treeMenu}
+          trigger={trigger}
+          fallbackFocus={() => document.querySelector<HTMLElement>(rowSelector(node.id))}
+          onClose={onClose}
+        />
       ) : null}
     </MenuFrame>
   );

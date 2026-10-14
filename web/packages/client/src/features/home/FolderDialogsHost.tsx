@@ -26,7 +26,14 @@ interface FolderDialogState {
   pendingDelete: string | null;
   /** Where focus returns once the dialog closes. */
   returnFocus: HTMLElement | null;
-  openNew: (moveTreeId?: string | null, trigger?: HTMLElement | null) => void;
+  /** The workspace a new folder goes in when it is not the scoped one: the
+   * thread page's own thread's (its route has no `?ws=`). */
+  workspaceId: string | null;
+  openNew: (
+    moveTreeId?: string | null,
+    trigger?: HTMLElement | null,
+    workspaceId?: string | null,
+  ) => void;
   openRename: (folderId: string, name: string, trigger?: HTMLElement | null) => void;
   closeName: () => void;
   setPendingDelete: (folderId: string | null) => void;
@@ -36,11 +43,16 @@ export const useFolderDialogStore = create<FolderDialogState>()((set) => ({
   nameRequest: null,
   pendingDelete: null,
   returnFocus: null,
-  openNew: (moveTreeId = null, trigger = null) =>
-    set({ nameRequest: { kind: "create", moveTreeId }, returnFocus: trigger }),
+  workspaceId: null,
+  openNew: (moveTreeId = null, trigger = null, workspaceId = null) =>
+    set({ nameRequest: { kind: "create", moveTreeId }, returnFocus: trigger, workspaceId }),
   openRename: (folderId, name, trigger = null) =>
-    set({ nameRequest: { kind: "rename", folderId, name }, returnFocus: trigger }),
-  closeName: () => set({ nameRequest: null }),
+    set({
+      nameRequest: { kind: "rename", folderId, name },
+      returnFocus: trigger,
+      workspaceId: null,
+    }),
+  closeName: () => set({ nameRequest: null, workspaceId: null }),
   setPendingDelete: (pendingDelete) => set({ pendingDelete }),
 }));
 
@@ -63,10 +75,12 @@ export function useRequestFolderDelete(): (folderId: string) => void {
   );
 }
 
-/** Renders the open folder dialog for the scoped workspace. Mounted once, in
- * the shell. */
+/** Renders the open folder dialog for the scoped workspace, or the one the
+ * request names. Mounted once, in the shell. */
 export function FolderDialogsHost() {
-  const { workspaceId } = useWorkspaceScope();
+  const scope = useWorkspaceScope();
+  const requested = useFolderDialogStore((state) => state.workspaceId);
+  const workspaceId = requested ?? scope.workspaceId;
   if (workspaceId === "") return null;
   return <FolderDialogsFor workspaceId={workspaceId} />;
 }

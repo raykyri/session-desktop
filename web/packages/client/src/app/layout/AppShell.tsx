@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
 import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
-import { useWorkspaceScope } from "../../features/sidebar/scope.js";
+import { useWorkspaceScope, workspaceSearch } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
@@ -70,21 +70,21 @@ export function AppShell() {
       switch (command.type) {
         case "focusResearchTab": {
           const path = tabRoutes[command.tabIndex];
-          if (path) void navigate({ to: path });
+          if (path) void navigate({ to: path, search: workspaceSearch });
           return;
         }
         case "focusResearchHome":
-          void navigate({ to: "/" });
+          void navigate({ to: "/", search: workspaceSearch });
           return;
         case "cycleResearchTab": {
           const current = tabRoutes.indexOf(router.state.location.pathname);
           const from = current === -1 ? 0 : current;
           const next = tabRoutes[(from + command.direction + tabRoutes.length) % tabRoutes.length];
-          if (next) void navigate({ to: next });
+          if (next) void navigate({ to: next, search: workspaceSearch });
           return;
         }
         case "openSettings":
-          void navigate({ to: "/settings" });
+          void navigate({ to: "/settings", search: workspaceSearch });
           return;
         case "openCommandPalette":
           setPaletteOpen(true);
@@ -166,11 +166,11 @@ export function AppShell() {
           void navigate({
             to: "/r/$treeId",
             params: { treeId },
-            search: (previous) => ({ ws: (previous as { ws?: string }).ws }),
+            search: workspaceSearch,
           }),
-        openHome: () => void navigate({ to: "/", search: (previous) => previous }),
+        openHome: () => void navigate({ to: "/", search: workspaceSearch }),
         toggleSidebar,
-        openSettings: () => void navigate({ to: "/settings", search: (previous) => previous }),
+        openSettings: () => void navigate({ to: "/settings", search: workspaceSearch }),
       })
     : [];
 

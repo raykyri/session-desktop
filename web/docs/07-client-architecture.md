@@ -103,7 +103,10 @@ parameter.
 
 Search params validated with zod (`validateSearch`). The workspace scope
 `ws` defaults to `settings.defaultWorkspaceId`; changing it calls
-`settings.update`. Cross-page navigation uses router history, so the
+`settings.update`. A link or navigation to another route carries `ws` alone
+(`workspaceSearch` in `features/sidebar/scope.ts`, the sidebar's places,
+the account menu, the palette and the app shortcuts), so the thread page's
+`sel`, `node`, `highlight` and `edit` stay behind. Cross-page navigation uses router history, so the
 desktop's `ResearchWorkspaceHistory` reducer is retired; `HistoryNav` in the
 thread header calls `router.history.back()/forward()` and disables Forward
 using the router's history index and the furthest index this tab reached

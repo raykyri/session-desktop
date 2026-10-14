@@ -18,9 +18,8 @@ import { cn } from "../../lib/cn.js";
 import { isApplePlatform } from "../../lib/platform.js";
 import { ComposerSubmitShortcutGlyph } from "../../ui/ComposerSubmitShortcut.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { QuestionModelPicker, type ModelChoice } from "../composer/QuestionModelPicker.js";
 import { ImageStrip, useImageInput, type ImagesUpdate } from "../composer/images.js";
-
-import { ModelPicker, type ModelChoice } from "./ModelPicker.js";
 
 const NO_IMAGES: readonly ResearchImageAttachment[] = [];
 
@@ -209,7 +208,7 @@ export const ConversationComposer = forwardRef<
         <div className="flex min-w-0 items-center gap-1">
           <div className="min-w-0 flex-1">
             {model ? (
-              <ModelPicker
+              <QuestionModelPicker
                 choice={model.choice}
                 models={model.models}
                 disabled={disabled}

@@ -339,6 +339,7 @@ export function MessagesColumn({
   openSourceId,
   menu,
   source,
+  group = null,
   composer,
   queue,
   onScroll,
@@ -354,6 +355,8 @@ export function MessagesColumn({
   openSourceId: string | null;
   menu: { label: string; open: boolean; onOpen: (trigger: HTMLButtonElement) => void } | null;
   source: BranchSourceProps | null;
+  /** The thread's Home group (`GroupPanel`), above the messages. */
+  group?: ReactNode;
   composer: ReactNode;
   queue: QueueProps;
   onScroll: ((event: UIEvent<HTMLElement>) => void) | undefined;
@@ -385,6 +388,7 @@ export function MessagesColumn({
       <div className={COLUMN_SCROLL} data-research-scroll="" onScroll={onScroll}>
         <div className="research-column-content research-reading-surface">
           {source ? <BranchSource {...source} /> : null}
+          {group}
           <ChainRows
             shared={shared}
             level={level}

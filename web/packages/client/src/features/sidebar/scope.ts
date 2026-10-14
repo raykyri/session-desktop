@@ -23,6 +23,14 @@ export interface WorkspaceScope {
   setScope: (workspaceId: string) => void;
 }
 
+/** The search a link to another route carries: the workspace scope alone.
+ * The current route's own parameters (the thread page's `sel`, `node`,
+ * `highlight`, `edit`) stay behind. */
+export function workspaceSearch(previous: Record<string, unknown>): { ws?: string } {
+  const ws = previous["ws"];
+  return typeof ws === "string" && ws !== "" ? { ws } : {};
+}
+
 /** The raw `?ws=`, read without naming a route: the sidebar renders on every
  * route, including the ones whose search schema has no `ws` at all. */
 export function useWorkspaceSearchParam(): string | null {

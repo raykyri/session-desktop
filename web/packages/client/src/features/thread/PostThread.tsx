@@ -23,12 +23,12 @@ import type { Ref } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import type { ModelChoice } from "../composer/QuestionModelPicker.js";
 import { Avatar, useAuthorName } from "../sharing/AuthorChip.js";
 import { useThreadCollaboration } from "../sharing/context.js";
 import { mayEditText, mayRelaunch } from "../sharing/permissions.js";
 
 import type { ComposerHandle } from "./ConversationComposer.js";
-import type { ModelChoice } from "./ModelPicker.js";
 import { PostFollowUpField } from "./PostFollowUpField.js";
 import { MessageImages } from "./Turn.js";
 import { noteDoubleClickProps } from "./noteDoubleClick.js";

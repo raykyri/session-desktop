@@ -10,12 +10,12 @@ import { NOTE_DOUBLE_CLICK_IGNORE_SELECTOR } from "@session/shared/lib/researchN
 import type { ReactNode, Ref } from "react";
 
 import { cn } from "../../lib/cn.js";
+import type { ModelChoice } from "../composer/QuestionModelPicker.js";
 
 import { PairHeader, type ThreadHistoryNav } from "./ColumnChrome.js";
 import { ColumnResizer } from "./ColumnResizer.js";
 import type { ComposerHandle } from "./ConversationComposer.js";
 import { COLUMN_SCROLL } from "./MessagesColumn.js";
-import type { ModelChoice } from "./ModelPicker.js";
 import { PostColumnBody } from "./PostColumn.js";
 import {
   PostThread,

@@ -37,11 +37,11 @@ import { isApplePlatform } from "../../lib/platform.js";
 import { ControlButton } from "../../ui/Button.js";
 import { ComposerSubmitShortcutGlyph } from "../../ui/ComposerSubmitShortcut.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
+import { QuestionModelPicker, type ModelChoice } from "../composer/QuestionModelPicker.js";
 
 import { PairHeader, type ThreadHistoryNav } from "./ColumnChrome.js";
 import { ColumnResizer } from "./ColumnResizer.js";
 import { COLUMN_SCROLL } from "./MessagesColumn.js";
-import { ModelPicker, type ModelChoice } from "./ModelPicker.js";
 
 /** The root's document, or a note, open in the editor column. */
 export interface EditorSession {
@@ -302,9 +302,10 @@ export function EditorColumn({
             <span>{asking ? "Asking…" : "Ask as a question"}</span>
           </button>
           {choice ? (
-            <ModelPicker
+            <QuestionModelPicker
               choice={choice}
               models={models}
+              title="Model for the question"
               disabled={asking || saving}
               onChange={setChosen}
             />

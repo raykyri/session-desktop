@@ -9,6 +9,7 @@ import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.s
 import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
 import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
 import { SIDEBAR_ROW } from "../../features/sidebar/rows.js";
+import { workspaceSearch } from "../../features/sidebar/scope.js";
 import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
 import { formatChord } from "../../lib/platform.js";
@@ -76,17 +77,13 @@ function AccountMenu() {
       >
         {user.isAdmin ? (
           <>
-            <MenuItem
-              onClick={() => void navigate({ to: "/admin", search: (previous) => previous })}
-            >
+            <MenuItem onClick={() => void navigate({ to: "/admin", search: workspaceSearch })}>
               Admin
             </MenuItem>
             <MenuSeparator />
           </>
         ) : null}
-        <MenuItem
-          onClick={() => void navigate({ to: "/settings", search: (previous) => previous })}
-        >
+        <MenuItem onClick={() => void navigate({ to: "/settings", search: workspaceSearch })}>
           Settings
         </MenuItem>
         <MenuSeparator />

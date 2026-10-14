@@ -2,7 +2,10 @@
 // `useResearchFocusRequests`. A request names what should take focus (a
 // column's selected row, an answer, a composer, the editor, ...) and how the
 // strip follows it; it is honoured on the next frame, or after the next commit
-// that renders its target, within FOCUS_REQUEST_TTL_MS.
+// that renders its target, within FOCUS_REQUEST_TTL_MS. Every commit also
+// puts the strip back at its horizontal position as of the render, as the
+// desktop does: a re-render never moves it, only an explicit reveal or settle
+// does.
 
 import { columnLevelIndex, columnSelector } from "@session/shared/lib/researchColumns";
 import { useCallback, useLayoutEffect, useRef } from "react";
@@ -58,6 +61,12 @@ export function useFocusRequests({
   editorField: () => HTMLElement | null;
 }): RequestFocus {
   const requestRef = useRef<FocusRequest | null>(null);
+  // The strip's horizontal position as of this render, read before React
+  // changes the DOM: a commit that adds or removes columns, or changes their
+  // widths, can move the strip, and the layout effect below moves it back.
+  const stripLeftRef = useRef<number | null>(null);
+  // eslint-disable-next-line react-hooks/refs -- the DOM's state before this commit, read on purpose
+  stripLeftRef.current = rowRef.current?.scrollLeft ?? null;
 
   const column = useCallback(
     (id: string) =>
@@ -167,6 +176,11 @@ export function useFocusRequests({
   );
 
   useLayoutEffect(() => {
+    const strip = rowRef.current;
+    const left = stripLeftRef.current;
+    if (strip && left !== null && Math.abs(strip.scrollLeft - left) > 1) {
+      strip.scrollLeft = left;
+    }
     process();
   });
 

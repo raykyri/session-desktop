@@ -111,6 +111,7 @@ import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
+import { useUsableModels, type ModelChoice } from "../composer/QuestionModelPicker.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { PresenceAvatars } from "../sharing/PresenceAvatars.js";
 import { ShareDialog } from "../sharing/ShareDialog.js";
@@ -141,13 +142,13 @@ import { ThreadPlaceholder, type ThreadHistoryNav } from "./ColumnChrome.js";
 import { Columns, ColumnsLayoutContext } from "./Columns.js";
 import { ConversationComposer, type ComposerHandle } from "./ConversationComposer.js";
 import { EditorColumn, type EditorSession } from "./EditorColumn.js";
+import { GroupPanel } from "./GroupPanel.js";
 import {
   MessagesColumn,
   type BranchSourceProps,
   type ChainRowsShared,
   type QueueProps,
 } from "./MessagesColumn.js";
-import { useUsableModels, type ModelChoice } from "./ModelPicker.js";
 import { FollowUpsColumn, NoteColumn } from "./NoteColumns.js";
 import type { PostActions, PostThreadHandle } from "./PostThread.js";
 import { SelectionToolbar } from "./SelectionToolbar.js";
@@ -178,8 +179,10 @@ import { useColumnScroll } from "./useColumnScroll.js";
 import { useFocusRequests } from "./useFocusRequests.js";
 import { useLatest } from "./useLatest.js";
 import { useMessageDrag } from "./useMessageDrag.js";
+import { useSwipeNavigation } from "./useSwipeNavigation.js";
 import { useTextSelection, isTranscript } from "./useTextSelection.js";
 import { useThreadAnnotations } from "./useThreadAnnotations.js";
+import { useThreadFiling } from "./useThreadFiling.js";
 import { encodeSelection, useThreadHistory } from "./useThreadHistory.js";
 import { useThreadKeyboard } from "./useThreadKeyboard.js";
 
@@ -238,6 +241,12 @@ function ThreadView({ treeId }: { treeId: string }) {
   const viewers = useThreadPresence(treeId);
   const setFollowed = useSetThreadFollowed();
   const [sharing, setSharing] = useState(false);
+  // Move to in the root's menus and the Home group panel: the reader's own
+  // thread, outside the Trash.
+  const filing = useThreadFiling(
+    detailTree,
+    permissions.isOwner && meId !== null && detailTree?.trashedAt == null,
+  );
   const [staleEdit, setStaleEdit] = useState<{ subject: StaleEditSubject } | null>(null);
   const [staleReloading, setStaleReloading] = useState(false);
   const treeTitle = detail?.tree.title ?? "";
@@ -1644,6 +1653,8 @@ function ThreadView({ treeId }: { treeId: string }) {
         const created = await createTreeMutate({
           prompt: session.text.trim(),
           model: choice.model,
+          // Null is the model's default, as the desktop sends it.
+          effort: choice.effort,
           workspaceId,
         });
         setEditor(null);
@@ -1820,6 +1831,16 @@ function ThreadView({ treeId }: { treeId: string }) {
     onBack: history.goBack,
     onForward: history.goForward,
   };
+
+  // Trackpad swipes go back and forward, as on the desktop. The columns'
+  // wrapper exists once the thread has loaded, so the listener attaches then.
+  const hasColumns = Boolean(detail && rootNodeId && levelPath.length > 0);
+  useSwipeNavigation(
+    workspaceRef,
+    history.canGoBack ? history.goBack : undefined,
+    history.canGoForward ? history.goForward : undefined,
+    hasColumns,
+  );
 
   /* ---------------------------------------------------------- render */
 
@@ -2151,6 +2172,11 @@ function ThreadView({ treeId }: { treeId: string }) {
                 ? branchSource(passageAnchor(head), head.parentNodeId, head)
                 : null
             }
+            group={
+              level === 0 && filing.group ? (
+                <GroupPanel group={filing.group} onOpen={filing.openGroupTree} />
+              ) : null
+            }
             composer={chainComposer(headId, level)}
             queue={chainQueue(headId, column.level.chainIds)}
             onScroll={onColumnScroll(column)}
@@ -2323,6 +2349,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             openBranchIds={openBranchIds}
             relaunchPending={retryingNodeId !== null}
             followed={followed}
+            treeMenu={filing.treeMenu}
             actions={{
               onClose: closeMenu,
               ...(me
@@ -2451,6 +2478,7 @@ function ThreadView({ treeId }: { treeId: string }) {
             onClose={() => setDeletingNodeId(null)}
           />
         ) : null}
+        {filing.dialog}
         {sharing ? (
           <ShareDialog
             tree={detail.tree}
