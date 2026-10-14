@@ -131,31 +131,31 @@ Home feed and the highlight feed leave threads in the Trash out.
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
 | `research.rerunNode` | M | `{ nodeId }` → `ResearchTreeDetail` | `rerun_research_node`: a settled exchange, a `complete` one included, is reset in place; the snapshot and recap are deleted, highlights stay. The parent's answer must be complete, except for an inline follow-up of an answer that is active again, which waits in the run queue until that answer settles (`PRECONDITION_FAILED` otherwise) |
 | `research.setChainOrder` | M | `{ headNodeId, nodeIds, expectedOrder? }` → `ResearchNode` (the head, with `chainOrder`) | `set_research_chain_order`: `nodeIds` must be exactly the chain, and `expectedOrder`, when given, the column's current display order (`CONFLICT` "The conversation changed; refresh before reordering its messages." otherwise); display only; the owner's |
-| `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
+| `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node`. Stops a `queued`, `running`, or `interrupted` run with a resume pending (`nodes.stopRun`: status `cancelled`, resume flag and `run_queue` row cleared in one transaction); `PRECONDITION_FAILED` for a settled one |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
 | `research.renameNode` | M | `{ nodeId, title }` → `ResearchNode` | `rename_research_node` |
 | `research.getNodeContent` | Q | `{ nodeId }` → `ResearchNodeContent { node, turns, inFlightText?, seq?, responseRevision?, sourceError?, queuePosition? }` | `get_research_node_content` |
-| `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document` |
+| `research.updateDocument` | M | `UpdateResearchDocumentRequest` → `UpdateResearchDocumentResult` | `update_research_document`. A new body clears the recap and, for an imported report, schedules a new one (as `importReport`) |
 | `research.createPost` | M | `{ body, workspaceId, model, effort?, images?: string[] }` → `ResearchTreeDetail` | `create_research_post` (a note: `format = link` when `body` is one http(s) URL; `model`/`effort` are the default for its AI follow-ups and must be a model the account may use and an effort it takes; X permalinks resolved as for a question; no run, so no admission or daily limit) |
 | `research.createPostFollowUp` | M | `{ parentNodeId, body }` → `ResearchNode` | `create_research_post_follow_up` (a follow-up note; the parent must be a post in a thread that is not archived or in the Trash) |
 | `research.updatePost` | M | `{ nodeId, text, expectedText }` → `UpdateResearchPostResult { tree, node, removedHighlightCount }` | `update_research_post` (`CONFLICT` when the stored text is not `expectedText`; `BAD_REQUEST` for unchanged text or a missing X post link; `PRECONDITION_FAILED` in an archived thread or one in the Trash; highlights re-anchored; the derived root title follows; `02` §5.14) |
 | `research.hydratePostTweet` | M | `{ nodeId }` → `ResearchNode` | — (a commenter's or the owner's, checked before anything is fetched; asks the X providers again for a post's `unavailable` tweet attachments, past a cached failure; `PRECONDITION_FAILED` when none is unavailable; replaces the journal's `hydrateTweet`) |
 | `research.markTreeViewed` | M | `{ treeId }` → `ResearchTree` | `mark_research_tree_viewed` |
-| `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same; the children listed under the tree go with it (`02` §5.10). `PRECONDITION_FAILED` for a tree in the Trash |
-| `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees. For a member it is `sharing.leave` |
-| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId }` → `ResearchTree` | `trash_research_tree` (`PRECONDITION_FAILED` while the tree or a child going with it has an active run), `restore_research_tree_from_trash`; the children listed under the tree go with it |
+| `research.archiveTree` / `restoreTree` | M | `{ treeId }` → `ResearchTree` | same; the children listed under the tree go with it (`02` §5.10). `PRECONDITION_FAILED` for a tree in the Trash, and for a member's `restoreTree` of a thread its owner archived ("This thread was archived by its owner; only they can unarchive it."; `archivedBy: "owner"` marks it) |
+| `research.removeTree` | M | `{ treeId }` → `{ ok, treeIds }` | `remove_research_tree`: Delete now, in or out of the Trash, with the children listed under the tree; `treeIds` are the deleted trees. The members of every deleted tree, children included, and readers who had a deleted public thread open get `research.tree.removed`. For a member it is `sharing.leave` |
+| `research.trashTree` / `restoreTreeFromTrash` | M | `{ treeId, workspaceId? }` / `{ treeId }` → `ResearchTree` | `trash_research_tree` (`PRECONDITION_FAILED` while the tree or a child going with it has an active run), `restore_research_tree_from_trash`; the children listed under the tree go with it. Web: `workspaceId` is the member's workspace whose Trash lists a shared thread they trash (default: their default workspace; another account's is `NOT_FOUND`); `research.trash.changed` names that workspace |
 | `research.listTrash` | Q | `{ workspaceId }` → `ResearchTreeSummary[]` with `trashedAt`, most recently trashed first | `list_research_trash` (one workspace; folders in the Trash are in `folders.get`) |
-| `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction. The shared threads in the caller's own Trash are left as by `sharing.leave` |
+| `research.emptyTrash` | M | `{ workspaceId }` → `{ treeIds, folderIds }` | `empty_research_trash`; also deletes the workspace's folders in the Trash, in the same transaction. The shared threads in the caller's own Trash for that workspace are left as by `sharing.leave`, including one its owner has since moved to their own Trash |
 | `research.removeBranch` | M | `{ nodeId }` → `ResearchBranchRemoval` | `remove_research_branch`. Refused while a run in the branch is active: `queued`, `running`, or `interrupted` with a resume pending (`run.resumePending`); an interrupted node the server stopped resuming is removable like a failed one. The same rule applies to `removeTree` and `workspaces.remove` |
-| `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title` |
+| `research.generateTitle` | M | `{ nodeId }` → `string` | `generate_research_agent_title`. Billed to the requester: their metadata budget (`RATE_LIMITS.metadata`, 30 per 10 min), the metadata model and their daily limits are checked before the run (`TOO_MANY_REQUESTS`, `PRECONDITION_FAILED`) |
 | `research.listActivity` | Q | → `ResearchNode[]` (active nodes) | `list_research_activity` |
-| `research.importReport` | M | `{ markdown, prompt, workspaceId }` → `ResearchTreeDetail` | `import_research_report` (`read_research_report` dropped; browser supplies bytes; recap on `gemini-flash`) |
+| `research.importReport` | M | `{ markdown, prompt, workspaceId }` → `ResearchTreeDetail` | `import_research_report` (`read_research_report` dropped; browser supplies bytes). Schedules the report's recap on `gemini-flash`, billed to the importer, skipped when their daily limits refuse it |
 | `highlights.create` | M | `{ nodeId, anchor }` → `ResearchHighlight` | `create_research_highlight` |
 | `highlights.remove` | M | `{ nodeId, highlightId }` → `ResearchHighlight` | `remove_research_highlight` |
 | `highlights.removeMany` | M | `{ nodeId, highlightIds }` → `ResearchHighlight[]` | `remove_research_highlights` |
-| `highlights.listFeed` | Q | `{ workspaceId? }` → `ResearchHighlightFeedItem[]` | `list_research_highlights` (`workspaceId` filter is new) |
+| `highlights.listFeed` | Q | `{ workspaceId? }` → `ResearchHighlightFeedItem[]` (web: with `authorId` and the reader's `role`) | `list_research_highlights`. Web: the threads the caller owns or is a member of, outside their own Archive and Trash and the owner's Archive and Trash (not public threads they only read); `workspaceId` narrows the caller's own threads, shared threads are listed in every workspace. The owner may remove any highlight, others only their own (`authorId`) |
 | `recaps.defaultInstructions` | Q | → `string` | `research_recap_default_instructions` |
-| `recaps.generateCandidate` | M | `{ nodeId, expectedResponseRevision, instructions (trimmed, non-empty, ≤ 4,000 chars) }` → `ResearchRecapCandidate` (always `gemini-flash`; the desktop's adapter/model picker is dropped) | `generate_research_recap_candidate` |
+| `recaps.generateCandidate` | M | `{ nodeId, expectedResponseRevision, instructions (trimmed, non-empty, ≤ 4,000 chars) }` → `ResearchRecapCandidate` (always `gemini-flash`; the desktop's adapter/model picker is dropped) | `generate_research_recap_candidate`. A completed answer or an imported report (`recapEligible`). Checked as `generateTitle` before the run |
 | `recaps.applyCandidate` | M | `{ nodeId, expectedResponseRevision, expectedCurrentRecapId?, candidate }` → `ResearchNode` | `apply_research_recap_candidate`. Stores the server's own copy of a candidate it generated for the caller (`candidate.id`); `CONFLICT` "This recap is no longer available; generate it again." when it holds none |
 
 ### Collaboration rules on the `research`, `highlights`, `recaps` and `followups` procedures
@@ -198,27 +198,31 @@ createdBy, createdAt, expiresAt }` (`shared/src/types/sharing.ts`).
 
 | Procedure | Kind | Input → Output | Who |
 | --- | --- | --- | --- |
-| `sharing.setVisibility` | M | `{ treeId, visibility: "private" \| "public" }` → `ResearchTree` | owner; emits `research.tree.updated`, `research.sharing.changed` to the audience, and the All Users feed's `feed.item.*` |
-| `sharing.listMembers` | Q | `{ treeId }` → `ThreadMember[]` | anyone who may read the thread |
+| `sharing.setVisibility` | M | `{ treeId, visibility: "private" \| "public" }` → `ResearchTree` | owner; emits `research.tree.updated`, `research.sharing.changed` to the audience, and the All Users feed's `feed.item.*`. Made private: readers who are not members and had it open get `research.sharing.changed` too, and their open-thread declarations are dropped (`EventBus.refreshAudience`) |
+| `sharing.listMembers` | Q | `{ treeId }` → `ThreadMember[]` | anyone who may read the thread. A reader of a public thread who is not a member (or a guest's `research.getTree` `participants`) sees the owner and the members who wrote a node or a highlight, not the rest |
 | `sharing.setRole` | M | `{ treeId, userId, role: "commenter" \| "viewer" }` → `ThreadMember[]` | owner. A member made a viewer loses their queued follow-ups (`research.queue.changed`); their questions already sent run on |
 | `sharing.removeMember` | M | `{ treeId, userId }` → `{ ok }` | owner. The member's nodes and highlights stay; their queued follow-ups are deleted and their queued or running questions cancelled; they get `research.tree.removed`, and the thread's queues dispatch again. Link invitations created before the removal no longer admit them (`invites.accept`); pending login invitations addressed to them are revoked |
 | `sharing.leave` | M | `{ treeId }` → `{ ok }` | a member (the owner is `FORBIDDEN`); as `removeMember` for oneself |
-| `sharing.listShared` | Q | `{ place?: "shared" \| "archive" \| "trash" }` → `ResearchTreeSummary[]` | the threads shared with the caller: outside their Archive and Trash (most recently updated first), in their Archive or archived by the owner, or in their own Trash |
-| `invites.create` | M | `{ treeId, role, githubLogin? }` → `CreatedInvite { invite, token, url }` | owner. A login invitation is accepted once, by that GitHub account, which gets a `notification.requested` (`kind: invite`) and `research.invites.changed`; a link invitation by anyone holding `url` (`/invite/<token>`, the client route `routes/invite.tsx`, `10-home-feed-journal.md` §4b). The token is returned once and stored as its SHA-256. 14 days; at most 50 pending per thread |
+| `sharing.listShared` | Q | `{ place?: "shared" \| "archive" \| "trash", workspaceId? }` → `ResearchTreeSummary[]` | the threads shared with the caller: outside their Archive and Trash (most recently updated first), in their Archive or archived by the owner, or in their own Trash. With `workspaceId`, `trash` lists only the threads trashed from that workspace (a member's Trash is per workspace; `shared` and `archive` ignore it) |
+| `invites.create` | M | `{ treeId, role, githubLogin? }` → `CreatedInvite { invite, token, url }` | owner. A login invitation is accepted once, by that GitHub account, which gets a `notification.requested` (`kind: invite`) and `research.invites.changed`; a link invitation by anyone holding `url` (`/invite/<token>`, the client route `routes/invite.tsx`, `10-home-feed-journal.md` §4b). The token is returned once and stored as its SHA-256. 14 days; at most 50 pending per thread. One pending login invitation per account and thread: inviting the same login again renews it (new token, role and expiry; no second notification). `PRECONDITION_FAILED` "@login already has access to this thread." for a member; `TOO_MANY_REQUESTS` past 100 login invitations a day per inviter |
 | `invites.list` | Q | `{ treeId }` → `ThreadInvite[]` (still usable: links until they expire or are revoked, also after someone joined through them; login invitations until accepted) | owner |
 | `invites.received` | Q | → `ReceivedInvite[]` (pending login invitations to the caller's login) | signed in |
-| `invites.accept` | M | `{ token }` \| `{ inviteId }` → `ResearchTree` (as the caller now sees it) | signed in. `NOT_FOUND` "This invitation was not found, has expired or was revoked." for an unknown, used, expired or revoked one; `FORBIDDEN` for a login invitation to another account, and "You were removed from this thread." for a link created before the owner removed the caller (the removal revoked their pending login invitations; a later link or login invitation admits them); never lowers a role; at most 100 members |
+| `invites.accept` | M | `{ token }` \| `{ inviteId }` → `ResearchTree` (as the caller now sees it) | signed in. `NOT_FOUND` "This invitation was not found, has expired or was revoked." for an unknown, used, expired or revoked one; `FORBIDDEN` for a login invitation to another account, and "You were removed from this thread." for a link created before the owner removed the caller (the removal revoked their pending login invitations; a later link or login invitation admits them); never lowers a role; at most 100 members. Takes the thread out of the caller's own Archive and Trash when they were already a member (`research.sharing.changed` to them) |
 | `invites.revoke` | M | `{ inviteId }` → `ThreadInvite` | owner |
 | `subscriptions.set` | M | `{ treeId, value }` → `ResearchTree` (with `followed`) | anyone signed in who may read the thread. Follow: `notification.requested` for new questions and notes in it |
 
 Wire additions (web only, optional, never sent by the desktop):
-`ResearchTree.ownerId/visibility/role/trashedBy/followed`,
-`ResearchTreeSummary.ownerId/visibility/role`, `ResearchNode*.authorId`,
+`ResearchTree.ownerId/visibility/role/trashedBy/followed/archivedBy`,
+`ResearchTreeSummary.ownerId/visibility/role/archivedBy`,
+`ResearchHighlightFeedItem.authorId/role`, `ResearchNode*.authorId`,
 `ResearchPostNode/ResearchDocumentNode.editedBy`,
 `ResearchHighlight.authorId`, `ResearchTreeDetail.participants:
 ResearchParticipant[]` (`{ id, login, name, avatarUrl }`),
-`ResearchBranchRemoval.removedBy`. A tree's `archivedAt`, `trashedAt`,
-`lastViewedAt`, `role` and `followed` are the reader's own.
+`ResearchBranchRemoval.removedBy`. A tree's `archivedAt`, `archivedBy`,
+`trashedAt`, `lastViewedAt`, `role` and `followed` are the reader's own.
+`archivedBy` is `"owner"` when the owner archived the thread (only they can
+unarchive it) and `"me"` for the reader's own Archive; absent when it is not
+archived for the reader.
 
 ### `followups`
 
@@ -229,7 +233,7 @@ agent, position, createdAt, failedReason }`).
 
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. With nothing queued behind a tail that stopped (failed, cancelled, or interrupted with no resume pending) it is `PRECONDITION_FAILED` with the desktop's ask-box note ("The last answer stopped with an error. Retry it or edit its question to continue." / "The last answer was stopped. Run it again to continue."). `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
+| `followups.ask` | M | `{ headNodeId, prompt, model?, effort?, images?: string[] }` → `{ kind: "sent", node } \| { kind: "queued", item }` | `useResearchChainQueue` + `fork_research_node`. `headNodeId` is any node of the chain. Sent at once as the chain tail's inline follow-up when nothing is queued and the tail is complete; queued otherwise. With nothing queued behind a tail that stopped (failed, cancelled, or interrupted with no resume pending) it is `PRECONDITION_FAILED` with the ask-box note for the caller (`stalledTailNote` in `shared/src/research/stalledChain.ts`): the person who pays for that answer gets the desktop's ("The last answer stopped with an error. Retry it or edit its question to continue." / "The last answer was stopped. Run it again to continue."); anyone else "The last answer stopped. Only <name> can retry it; the owner can delete it. Branch from the answer before it to continue.", the owner "… Only <name> can retry it. Delete it, or branch from the answer before it to continue.", and when the owner pays "… Only <name> can retry or delete it. …". `model`/`effort` default to the chain tail's agent. Checks the model, the effort, the daily limits and the run-queue bound up front; `TOO_MANY_REQUESTS` also when the account already has `SESSION_QUEUED_PER_USER` follow-ups queued `images` are resolved when asked and stored on the queued item, which keeps them attached until it is sent or cancelled; a cancel releases them. |
 | `followups.cancel` | M | `{ itemId }` → the chain's queue after the change | the queue's Remove |
 | `followups.retry` | M | `{ itemId }` → the chain's queue after the change (without the item when it was sent) | the queue's Retry, the author's while they may ask (a viewer is `FORBIDDEN`): clears `failedReason` and dispatches |
 | `followups.list` | Q | `{ treeId }` → `Record<headNodeId, ResearchFollowupQueueItem[]>` | — |
@@ -287,7 +291,7 @@ in phase 2.0.
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
 | `events.subscribe` | subscription | → stream of `SessionEvent` | `listen("session-event")` |
-| `events.setInterest` | M | `{ connectionId, nodeIds, treeIds? }` → `{ applied }` (false when the connection has expired or been terminated on the server) | — (which active nodes this connection wants turn deltas for; with `treeIds`, at most 20, which threads it has open: a public thread's events reach a non-member through this, and it is presence. Ids the caller may not read are dropped. Send again to renew; a declaration lapses after 90 s) |
+| `events.setInterest` | M | `{ connectionId, nodeIds, treeIds? }` → `{ applied }` (false when the connection has expired or been terminated on the server) | — (which active nodes this connection wants turn deltas for; with `treeIds`, at most 20, which threads it has open: a public thread's events reach a non-member through this, and it is presence. Ids the caller may not read are dropped. Send again to renew; a declaration lapses after 90 s. Draws on its own budget, `RATE_LIMITS.interest` (120/min), not the mutation budget) |
 | `events.presence` | Q | `{ treeId }` → `ThreadViewer[]` (`{ userId, login, name, avatarUrl }`) | — (who has the thread open now) |
 
 Dropped without replacement (legacy or native-only): every pane, split,
@@ -331,20 +335,31 @@ recap, document and queue events. Events that carry the tree
 (`research.tree.updated` on a rename, `archived`/`restored` by the owner,
 `research.document.updated`) reach the others without the caller's
 per-person fields (`role`, `lastViewedAt`, `followed`, `archivedAt`,
-`trashedAt`, `trashedBy`; `sharedTree`); a client merges them over its
+`archivedBy`, `trashedAt`, `trashedBy`; `sharedTree`); a client merges them over its
 cached tree, keeping its own values of those fields, and refetches on
 `archived`/`restored`. Per-person state stays with the person:
 drafts, folders, the Trash and Archive of a member, `markTreeViewed`, Follow.
 A change that takes a thread away (its owner's Trash, Delete, removing or
 leaving a member) sends `research.tree.removed { treeId, removedBy }` to the
-people who lose it, read before the change. `feed.item.*` for a public
+people who lose it, read before the change (the members of each child a
+Delete takes with it too), with `trashed: true` when it went to the Trash
+(trashTree, the children going with it included; Restore can bring it back,
+so clients keep its unsent state) and without it for Delete now, Empty Trash
+and leaving. Readers of a public thread who are not members and had it open
+(`setInterest` `treeIds`) get the same `research.tree.removed` for the
+owner's Trash and Delete, and `research.sharing.changed` when it turns
+private; their declarations are then dropped (`EventBus.refreshAudience`),
+as are a departed member's. `feed.item.*` for a public
 thread fans out to every signed-in connection; for a private one to its
 owner only. Guests have no event subscription and get no live updates.
 
 Presence is in memory: a connection's open threads with when it last said
 so, dropped when the connection closes or after 90 s without a renewal
 (swept every 15 s), announced as `research.presence.changed` to the
-thread's audience when the set of people changes.
+thread's audience when the set of people changes. Only people who may read
+the thread now are listed (`EventBus.viewers` checks the audience), so a
+declaration made before the thread turned private or before a removal is
+not presence.
 
 Event types, payloads identical to the desktop (`ParsedResearchEvent` in
 `packages/shared/src/wire/events.ts`)
@@ -355,7 +370,7 @@ unless noted:
 | `research.tree.created` | `{ tree, node }` | createTree, createPost, importReport |
 | `research.tree.updated` | `{ tree }` | rename, viewed, updatePost when the root title followed the text |
 | `research.tree.archived` / `restored` | `{ tree }` | archive/restore, once per tree of the group; `restored` also by restoreTreeFromTrash |
-| `research.tree.removed` | `{ treeId, trashed? }` (web: also `removedBy`); `trashed: true` when the tree moved to the Trash, so a client keeps its unsent drafts, queued questions and selection for Restore and drops them only on deletion (desktop sends it; the parser accepts its absence) | removeTree, trashTree, emptyTrash (once per tree), workspace remove; web: to every member who loses the thread, and to a member who leaves or is removed |
+| `research.tree.removed` | `{ treeId, trashed? }` (web: also `removedBy`); `trashed: true` when the tree moved to the Trash, so a client keeps its unsent drafts, queued questions and selection for Restore and drops them only on deletion (desktop sends it; the parser accepts its absence) | removeTree, trashTree (`trashed: true`, once per tree of the group), emptyTrash (once per tree), workspace remove; web: to every member who loses the thread, to a member who leaves or is removed, and to non-member readers who had a public thread open |
 | `research.trash.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | trashTree, restoreTreeFromTrash, emptyTrash, removeTree of a tree in the Trash; only when something changed |
 | `research.folders.changed` | `{ workspaceId }` (web only; the desktop's is `{}`) | folders.set when the stored state changed, emptyTrash when it deleted folders, workspace remove. Carries no state: clients refetch `folders.get` |
 | `research.node.created` | `{ node }` | forkNode, followups.ask, follow-up dispatch, createPostFollowUp |

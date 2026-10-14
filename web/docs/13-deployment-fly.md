@@ -221,23 +221,38 @@ anyway: `reconcileOnBoot` marks anything still `running` as `interrupted` with
 `resume_pending` and re-queues it. If draining takes too long, the interrupted run must be resumed on the next boot; if SIGKILL terminates the process, the WAL checkpoint cannot be completed.
 
 Startup reconciliation also resolves inconsistent states that can occur if the server crashes between database transactions: a `queued` node with no `run_queue` row
-(re-queued at the back), and a `complete` `document` node with no snapshot
-(failed, so it can be deleted or re-imported).
+(re-queued at the back), and a node whose payer can no longer read its
+thread (a member who left or was removed before their run was stopped),
+which is stopped (`cancelled`) instead of re-queued. Each node is
+reconciled in a savepoint of its own: one that fails is logged ("could not
+reconcile a run from the previous process") and left as it was, and the
+boot goes on. Documents have no run and no status, so boot does not look at
+them.
+
+Boot also starts the document archive check (§6), without waiting for it.
 
 ## 6. Backups and restore
 
 - Litestream replicates continuously to Tigris or S3; retention 30 days;
   snapshot every 6 h (`web/litestream.yml`, copied to `/etc/litestream.yml`).
-- `/data/documents` archived to the same bucket by
+- `/data/documents` (image attachments) archived to the same bucket by
   `web/scripts/backup-documents.sh` (`tar` of files newer than the last run's
   marker, uploaded with `web/scripts/s3-put.mjs`). The archive target is
   `SESSION_DOCUMENTS_REPLICA_URL`, defaulting to
-  `${LITESTREAM_REPLICA_URL}/documents`. The server runs it itself once a day
-  (`main.ts:DAILY_INTERVAL_MS`), skipping it when neither URL is set. In
-  process rather than from an external scheduler because the deployment is one
-  machine holding one volume: a Fly scheduled machine would need the volume
-  this one has, and relying on manual operator cron jobs risks skipped or inconsistent backups. A failed backup is logged and retried on the next scheduled run. The marker
-  advances only after success, so no backup interval is skipped.
+  `${LITESTREAM_REPLICA_URL}/documents`. The server runs it itself
+  (`server/src/backups.ts`), skipping it when neither URL is set: at boot
+  and then every hour (`BACKUP_CHECK_INTERVAL_MS`) it checks the age of the
+  marker the script touches after each successful run,
+  `/data/tmp/documents-backup.stamp`, and runs the script when the marker is
+  missing or a day old (`DAILY_INTERVAL_MS`), one run at a time. A fixed
+  24-hour timer would never fire on a machine restarted at least daily, as
+  every deploy restarts it. In process rather than from an external
+  scheduler because the deployment is one machine holding one volume: a Fly
+  scheduled machine would need the volume this one has, and relying on
+  manual operator cron jobs risks skipped or inconsistent backups. A failed
+  backup is logged and retried at the next hourly check; the marker advances
+  only after success, so nothing is skipped.
+  `session_documents_backup_age_seconds` (§7) reports the marker's age.
 - `/data/documents` holds image attachments (`research_images`,
   `<owner>/<sha256>` plus `<sha256>.thumb.jpg`); uploaded documents were
   removed in phase 2.0. The maintenance interval runs `sweepImages`
@@ -275,7 +290,9 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   `session_volume_free_bytes` (free space on the data volume; alert on it —
   see §6),
   `session_daily_tokens` and `session_daily_cost_usd` per provider for the
-  current UTC day, `session_ready`. The gauges are read out of SQLite at
+  current UTC day, `session_ready`, and, when an archive target is set,
+  `session_documents_backup_age_seconds` (seconds since the last successful
+  document archive, `+Inf` before the first; alert above about 26 hours). The gauges are read out of SQLite at
   scrape time (`packages/server/src/metrics.ts`).
 - Optional Sentry via `SENTRY_DSN`.
 

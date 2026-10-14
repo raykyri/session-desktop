@@ -155,10 +155,14 @@ Rules
 ## 5. Prompts
 
 System prompt (per request): a fixed research system prompt (new; the CLIs
-supplied their own), then the linking instruction, then the user's research
+supplied their own), then the desktop's widget guidance
+(`SESSION_WIDGET_AGENT_GUIDANCE`, `AGENT_GUIDANCE` in
+`research_widgets.rs`) unless the asker turned "Widgets in answers" off
+(`researchInlineWidgets`, read from the asker's preferences at each
+attempt, as the desktop leaves it out), then the user's research
 instruction wrapped and neutralized exactly as the desktop did
-(`research.rs:2321-2453`, `<research-linking>`, `<research-instructions>`,
-4 KiB cap). The user message is the bare question, plus a quoted passage for
+(`research.rs:2321-2453`, `<research-instructions>`, 4 KiB cap). The
+desktop's linking instruction is not sent. The user message is the bare question, plus a quoted passage for
 highlight-anchored follow-ups (`research.rs:2293`), plus tweet reference
 material (`tweets.rs`) — the posts the question links to, resolved at launch
 and stored on the node (`journal/attachments.ts`), carried into the request as
@@ -279,9 +283,17 @@ Titles and recaps use `generateText` with
 effort. Desktop rules kept: recap scheduling predicate and dedupe
 (`research_recap.rs:30-100`), `MIN_RECAP_CHARS` 800 and `MAX_SOURCE_BYTES`
 80 KB for generated runs, imported reports exempt, reject > 1200 chars,
-`research.recap.pending` on every exit path; title sanitization
+`research.recap.pending` on every exit path; recaps on completed answers and
+imported reports (`recapEligible`), scheduled when a run completes, after
+`research.importReport` and after an imported report's body is edited,
+billed to the asker, importer or editor and skipped when their daily limits
+refuse it; title sanitization
 (`sanitize_research_title`, 80 chars). The OpenRouter transport and the CLI metadata path are
-dropped.
+dropped. A title or recap someone asks for and waits on
+(`research.generateTitle`, `recaps.generateCandidate`) is billed to them and
+checked first: their metadata budget (`RATE_LIMITS.metadata`, 30 per
+10 minutes), the metadata model's availability, and their daily limits
+(`admission.assertMetadataAllowed`).
 
 ## 10. Usage and limits
 
@@ -291,7 +303,9 @@ the registry. `usage_events` accumulates per user per day for the rate limits
 that will be added later; the schema exists from day one. Admission
 (`05-run-lifecycle-and-streaming.md` §8): 2 concurrent research runs per user,
 per-provider global caps (`SESSION_RUNS_GEMINI`, `SESSION_RUNS_OPENROUTER`,
-`SESSION_RUNS_ANTHROPIC`, defaults 8/8/2), metadata pool 4. Per-account
+`SESSION_RUNS_ANTHROPIC`, defaults 8/8/2; each cap, `SESSION_RUNS_PER_USER` and
+`SESSION_QUEUED_PER_USER` must be at least 1, or `loadConfig` refuses to start),
+metadata pool 4. Per-account
 daily limits (tokens and runs) are enforced at admission from
 `usage_events` and `user_limits` once enabled (`06-auth-and-users.md` §8).
 

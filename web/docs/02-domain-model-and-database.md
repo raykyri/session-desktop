@@ -349,13 +349,19 @@ Web only; the desktop has one person. Rules in §5.16.
 
 - `tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
   `invited_by`, `created_at`, and the member's own `archived_at`,
-  `trashed_at` and `folder_id`, one of their own folders, `ON DELETE SET
-  NULL`). The owner is `trees.owner_id` and has no row. Indexes (`user_id`)
-  and (`folder_id`).
+  `trashed_at`, `trash_workspace_id` (the member's workspace whose Trash
+  lists the thread: the one they trashed it from; null, or a workspace since
+  deleted, `ON DELETE SET NULL`, is their default workspace) and
+  `folder_id`, one of their own folders, `ON DELETE SET NULL`). The owner is
+  `trees.owner_id` and has no row. Indexes (`user_id`) and (`folder_id`).
 - `tree_invites` (`token_hash` = SHA-256 of the token, which is never
   stored; `role`; `github_login` for an invitation to one account, null for
   a link; `created_by`, `expires_at` (14 days), `accepted_by/at`,
-  `revoked_at`).
+  `revoked_at`). Indexes (`tree_id`), (`created_by`, `created_at`) for the
+  daily cap, and the partial unique `tree_invites_login_pending_uq` on
+  (`tree_id`, `lower(github_login)`) where the invitation is a login one,
+  not accepted and not revoked: one pending login invitation per account
+  and thread (§5.16).
 - `tree_subscriptions` (`user_id`, `tree_id`, `created_at`): Follow.
 - `tree_member_removals` (`tree_id`, `user_id`, `removed_by`, `removed_at`):
   people the owner removed. A link invitation created at or before
@@ -396,6 +402,8 @@ deployed with an earlier history.
   characters). A value that is not a 64-hex revision id is the desktop's
   `invalidParent`: the wire revision has no parent and `unresolvedParent`.
 - Rows are immutable; they go with their node or tree (`repos/widgets.ts`).
+  Index (`node_id`), which the cascade from `nodes` follows: without it every
+  node delete scans the table.
 
 `widget_state`: saved widget inputs per person and revision; `state_json`
 (`{ enabled, value? }`, the value JSON of at most 16 KiB), `updated_at`; PK
@@ -582,9 +590,8 @@ Each item names the desktop source and the enforcing function.
   `unmatchedBranchCount`), and clears the recap. It returns
   `{ tree, node, responseRevision, markdownChanged, removedHighlightCount,
   unmatchedBranchCount }` and, for the server, the moved branches (each
-  announced as `research.node.updated`). Web documents have no recap to
-  regenerate: recaps are refused for non-exchanges (§5.8), so no recap is
-  scheduled after an edit, unlike the desktop's imported reports.
+  announced as `research.node.updated`). The server then schedules a new
+  recap for an imported report (§5.8), as the desktop does.
 - Limits: 10,000 words and 10 MiB (`research.rs:17-20`), checked only for a
   new body, so an imported report over the word limit keeps an editable
   title.
@@ -597,7 +604,20 @@ Each item names the desktop source and the enforcing function.
   shutdown) become `interrupted` with `resume_pending = 1`; every
   `resume_pending` node is re-queued at the head of the queue
   (`05-run-lifecycle-and-streaming.md` §7). Nodes whose snapshot row already
-  has an `outcome` adopt it (the desktop's rule, `state.rs:2405-2506`).
+  has an `outcome` adopt it (the desktop's rule, `state.rs:2405-2506`). A
+  node whose payer can no longer read its thread (a member who left or was
+  removed before their interrupted run was stopped) is stopped instead of
+  re-queued (`stoppedNodeIds`, "Stopped: the person who asked no longer has
+  access to this thread."). Each node is reconciled in a savepoint of its
+  own: one that fails is left as it was and reported (`failures`), and the
+  boot goes on.
+- `nodes.stopRun(nodeId, error?)` stops a run the server still owns
+  (`queued`, `starting`, `running`, or `interrupted` with a resume pending)
+  in one transaction: status `cancelled`, `resume_pending` cleared, the
+  `run_queue` row deleted. `setStatus` refuses `interrupted` → `cancelled`;
+  this is the path out. `research.cancelNode`, a departed member's questions
+  (`afterDeparture`), a claimed row whose payer can no longer read the
+  thread, and boot use it.
 - A claimed node whose parent's answer is not `complete` does not start: its
   parent's conversation is its context. While the parent is active the row
   goes back to the queue with `not_before` up to `PARENT_WAIT_MS` (60 s)
@@ -607,8 +627,14 @@ Each item names the desktop source and the enforcing function.
   answer it follows (§5.3).
 
 ### 5.8 Recaps
+- A recap belongs to a completed exchange or an imported report
+  (`recapEligible` in `shared/src/research/recap.ts`, the desktop's
+  `recap_eligible`); posts, authored documents and transcripts take none.
+  An automatic recap is scheduled when an exchange completes, when a report
+  is imported, and when an imported report's body is edited
+  (`shouldScheduleRecap`; `research_recap::schedule` on the desktop).
 - `recaps.save(nodeId, recap, expectedSnapshotAt)` re-checks that the node
-  is an exchange with `status = complete`, `response_snapshot_at` unchanged, and the snapshot revision equals
+  can carry a recap, `response_snapshot_at` unchanged, and the snapshot revision equals
   `recap.responseRevision`; otherwise no-op (`state.rs:8942`).
 - `recaps.applyCandidate` additionally requires
   `expectedCurrentRecapId === node.recap?.id` and a non-archived tree
@@ -627,9 +653,15 @@ Each item names the desktop source and the enforcing function.
   is clamped to 1..100.
   Source rows are projected after keyset selection; direct research children
   are attached per root in `(created_at, id)` ascending order.
-- `highlights.feed(userId)` returns newest-first items from trees that are
-  neither archived nor in the Trash with `nodeLabel` = node title or prompt, or the tree title for
-  documents (`research.rs:485`).
+- `highlights.feed(userId)` returns newest-first items from the trees the
+  reader owns or is a member of (`treeJoinedBy`, not public threads they
+  only read), outside the reader's Archive and Trash: for a shared thread,
+  the member's own and the owner's. Each item carries the highlight's
+  `authorId` and the reader's `role`. `nodeLabel` = node title or prompt, or the tree title for
+  documents (`research.rs:485`). `workspaceId` narrows the reader's own
+  threads; shared threads are listed in every workspace.
+- `feeds.recentQueries` is driven from the owner's `trees` rows
+  (`CROSS JOIN` keeps that order), each joined to its root by primary key.
 - `trees.summaries` computes `runningCount` (`queued | running`),
   `failedCount`, `completedCount`, `cancelledCount` (`interrupted` is not included in summary count totals and does not trigger attention indicators; it is displayed directly in the activity rail), `hasUnseenUpdate` (latest `completed_at` > the caller's
   `tree_views.last_viewed_at`), `hasUnseenFailure` (latest failed
@@ -879,8 +911,16 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   owner. The owner's Archive also shows the thread as archived to its members
   (`ResearchTree.archivedAt` = the member's own or the owner's) and keeps the
   thread's own write refusals; a member's Archive or Trash locks nothing.
-  `trees.remove` by a member is leaving (`trees.leave`); `trash.empty` by a
-  member leaves every shared thread in their Trash (`leftTreeIds`).
+  `trees.remove` by a member is leaving (`trees.leave`). A member's Trash is
+  per workspace (`tree_members.trash_workspace_id`): `trash.trashTree` files
+  the entry under the workspace named (else the default),
+  `trees.sharedSummaries(…, "trash", { workspaceId })` lists one
+  workspace's, and `trash.empty(workspaceId)` leaves the shared threads in
+  that workspace's Trash (`leftTreeIds`), including one the owner has since
+  moved to their own Trash, whose member row it deletes directly
+  (`trees.removeMembership`). A member's Unarchive of a thread its owner
+  archived is refused (`OWNER_ARCHIVED_MESSAGE`); `archivedBy` (`owner` |
+  `me`) on trees and summaries says who archived it for the reader.
 - Filing: `folders.setState` files a shared thread in one of the caller's
   own folders (`tree_members.folder_id`); `folders.getState` reports it in
   `membership`, and `trees.summaries({ workspaceId })` lists such threads with
@@ -891,7 +931,10 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   null)` (the guest catalog: public threads outside their owner's Archive and
   Trash, newest first, at most 200). Summaries and trees carry `ownerId`,
   `visibility` and the reader's `role`; `trees.detail` adds `participants`
-  (owner, members, then every node and highlight author).
+  (owner, members, then every node and highlight author). A reader who is
+  neither the owner nor a member (a public reader, a guest) is shown only
+  the owner and the authors, in `participants` and in
+  `sharing.listMembers` (`trees.seesMembers`).
 - Feeds: the All Users feed (`scope: all`) reads public threads only;
   `recentQueriesForTrees` reads any thread the caller may read.
 - Images: `images.readable(userId | null, id)` is the uploader, or anyone who
@@ -906,7 +949,12 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   return the same `Departure`; `removeMember` also records the removal in
   `tree_member_removals` and revokes the pending login invitations addressed
   to the member),
-  `createInvite` (token returned once; at most 50 pending per thread),
+  `createInvite` (token returned once; at most 50 pending per thread;
+  inviting a member is refused, "@login already has access to this
+  thread."; one pending login invitation per account and thread, renewed
+  with a new token, role and expiry when the login is invited again
+  (`renewed`); at most `MAX_LOGIN_INVITES_PER_DAY` (100) login invitations
+  a day per inviter),
   `listInvites` (usable ones: a used link stays listed so it can be revoked), `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
   (by token, or by id for a login invitation addressed to the caller; a
   login invitation is used once, a link until it expires or is revoked;
@@ -914,7 +962,8 @@ functions take the caller's id as `userId` (the actor); `null` is a guest.
   thread." (`FORBIDDEN`), a link created at or before the removal, while a
   later link or a later login invitation to them admits them and deletes
   the removal; leaving records nothing; joining never lowers a role; at most
-  100 members), `setFollowing`,
+  100 members; a member who accepts again gets the thread back from their
+  own Archive and Trash, `restored`), `setFollowing`,
   `followers` (those who may still read the thread), `audience` (owner,
   members, public) and `workspaceMembers`.
 

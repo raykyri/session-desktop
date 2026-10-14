@@ -119,7 +119,13 @@ volume — but until an automated procedure is implemented, account deletion mus
 ## 8. Rate limits
 
 Request-level (from launch): per user 60 mutations/min; per user 120 image
-uploads/hour (`POST /api/images`); per IP on `/auth/*` 20/min.
+uploads/hour (`POST /api/images`); per IP on `/auth/*` 20/min. Buckets of
+their own, apart from the mutation budget: `artifacts.*` 600/min per user,
+`events.setInterest` 120/min per user (each open tab renews every 30 s);
+and on top of it, titles and recaps asked for (`research.generateTitle`,
+`recaps.generateCandidate`) 30 per 10 minutes per user, each a billed
+metadata run. Thread invitations by GitHub login: one pending per account
+and thread, at most 100 created per inviter per day.
 In-memory token buckets in Hono middleware (single process).
 
 Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):

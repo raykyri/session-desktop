@@ -1,19 +1,20 @@
 #!/bin/sh
-# Nightly document archive (`docs/13-deployment-fly.md` §6).
+# Document archive (`docs/13-deployment-fly.md` §6).
 #
-# Litestream replicates session.db continuously; `/data/documents` is files on
-# a volume and nothing replicates it, so it is tarred and shipped to the same
+# Litestream replicates session.db continuously; `/data/documents` (image
+# attachments, `<owner_id>/<sha256>` and their thumbnails) is files on a
+# volume and nothing replicates it, so it is tarred and shipped to the same
 # bucket. Content-addressed files are immutable; filtering by modification time
-# relative to the stamp file captures newly added documents.
+# relative to the stamp file captures newly added files.
 #
-# Run it from inside the machine:
+# The server runs this script itself (`packages/server/src/backups.ts`): at
+# boot and every hour it checks the stamp file's age and runs the script when
+# the stamp is missing or a day old. The stamp is touched only after a
+# successful run, so its age is the time since the last good archive
+# (`session_documents_backup_age_seconds`). To force one from inside the
+# machine:
 #
 #   fly ssh console -a session-dev -C "/app/scripts/backup-documents.sh"
-#
-# or nightly from a scheduler that can reach the app (a Fly scheduled machine
-# running the same image with this as its command, or a cron host with
-# `flyctl ssh console -C`). Backups are scheduled externally so the container
-# can retain a single application process.
 
 set -eu
 
