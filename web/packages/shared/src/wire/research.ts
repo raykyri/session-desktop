@@ -59,6 +59,10 @@ export interface ResearchHighlight {
  * `viewer`. */
 export type ResearchTreeRole = "owner" | "commenter" | "viewer";
 
+/** Web only: who archived a thread for the reader. `owner`: its owner did
+ * (only they can unarchive it); `me`: the reader's own Archive. */
+export type ResearchTreeArchivedBy = "owner" | "me";
+
 /** Web only: `public` threads are readable by anyone, guests included, and
  * listed in the All Users feed; `private` threads by their owner and the
  * people they are shared with. */
@@ -130,6 +134,10 @@ export interface ResearchTree {
   role?: ResearchTreeRole;
   /** Web only: who moved the thread to the Trash, while it is there. */
   trashedBy?: string | null;
+  /** Web only, per reader: who archived the thread for them, while it is
+   * archived for them. `owner`: its owner did, and only the owner can
+   * unarchive it; `me`: the reader's own Archive. */
+  archivedBy?: ResearchTreeArchivedBy;
   /** Web only: whether the reader follows the thread (gets notifications
    * for it). */
   followed?: boolean;
@@ -392,6 +400,8 @@ export interface ResearchTreeSummary {
   visibility?: ResearchTreeVisibility;
   /** Web only: the reader's role (`ResearchTree.role`). */
   role?: ResearchTreeRole;
+  /** Web only: `ResearchTree.archivedBy`. */
+  archivedBy?: ResearchTreeArchivedBy;
 }
 
 export interface ResearchTreeDetail {

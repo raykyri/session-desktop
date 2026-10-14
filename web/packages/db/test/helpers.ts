@@ -13,7 +13,16 @@ import { nodeRecap, nodeResponseSnapshotAt } from "@session/shared/lib/researchN
 import type { ExecutionContext } from "ava";
 
 import type { SessionDatabase } from "../src/index.js";
-import { closeDatabase, openDatabase, users, workspaces } from "../src/index.js";
+import {
+  closeDatabase,
+  nodes,
+  openDatabase,
+  sharing,
+  snapshots,
+  trees,
+  users,
+  workspaces,
+} from "../src/index.js";
 
 export interface Fixture {
   db: SessionDatabase;
@@ -113,4 +122,49 @@ export function recapOf(node: ResearchNode | null | undefined): ResearchRecap | 
 /** When a node's answer or body snapshot was last written. */
 export function snapshotAtOf(node: ResearchNode | null | undefined): number | null {
   return node ? nodeResponseSnapshotAt(node) : null;
+}
+
+/** A thread of the fixture's account with a complete answer, shared with
+ * one member per `roles` entry (each a new account that joined through a
+ * link invitation). */
+export interface SharedThreadFixture {
+  fixture: Fixture;
+  treeId: string;
+  rootId: string;
+  revision: string;
+  members: { userId: string; workspaceId: string; login: string }[];
+}
+
+let memberCounter = 0;
+
+export function sharedThreadFixture(
+  t: ExecutionContext,
+  roles: readonly ("commenter" | "viewer")[] = ["commenter"],
+): SharedThreadFixture {
+  const fixture = createFixture(t);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    type: "exchange",
+    workspaceId: fixture.workspaceId,
+    message: { text: "What is a bloom filter?" },
+    agent: { model: "gemini-flash" },
+  });
+  const rootId = detail.tree.rootNodeId;
+  const committed = snapshots.commit(fixture.db, fixture.userId, {
+    nodeId: rootId,
+    turns: [answerTurn(rootId, "A bloom filter is a probabilistic set.")],
+    outcome: { status: "complete" },
+  });
+  nodes.setStatus(fixture.db, fixture.userId, rootId, "complete");
+  const members = roles.map((role) => {
+    memberCounter += 1;
+    const login = `member${memberCounter}`;
+    const member = addUser(fixture.db, login);
+    const link = sharing.createInvite(fixture.db, fixture.userId, {
+      treeId: detail.tree.id,
+      role,
+    });
+    sharing.acceptInvite(fixture.db, { id: member.userId, login }, { token: link.token });
+    return { ...member, login };
+  });
+  return { fixture, treeId: detail.tree.id, rootId, revision: committed.revision, members };
 }

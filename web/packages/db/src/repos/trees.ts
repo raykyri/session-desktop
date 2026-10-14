@@ -49,7 +49,7 @@ import type { MemberRow, TreeAccess, TreeRole } from "./access.js";
 import { forTree as feedItemForTree } from "./feedItems.js";
 import type { FeedItemRemoval } from "./feedItems.js";
 import { markArchived, removeResearchTree, upsertResearchRoot } from "./feedgen.js";
-import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
+import { archivedByFor, toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import type { TreeRow } from "./mappers.js";
 import { activeRun, deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
 
@@ -662,6 +662,7 @@ function summarize(
           ? "owner"
           : "viewer";
     const trashedAt = role === "owner" ? row.trashedAt : (member?.trashedAt ?? null);
+    const archivedBy = archivedByFor(role, row.archivedAt, member?.archivedAt);
     return {
       id: row.id,
       title: row.title,
@@ -674,6 +675,7 @@ function summarize(
       cancelledCount: entry?.cancelled ?? 0,
       updatedAt: row.updatedAt,
       archivedAt: (role === "owner" ? null : member?.archivedAt) ?? row.archivedAt,
+      ...(archivedBy === undefined ? {} : { archivedBy }),
       ...(trashedAt === null ? {} : { trashedAt }),
       hasUnseenUpdate: unseen(entry?.latestSettlement),
       hasUnseenFailure: unseen(entry?.latestFailure),
@@ -958,14 +960,22 @@ export function archive(db: SessionDatabase, userId: string, treeId: string): Re
   return archiveGroup(db, userId, treeId).tree;
 }
 
+/** A member's Unarchive of a thread its owner archived. */
+export const OWNER_ARCHIVED_MESSAGE =
+  "This thread was archived by its owner; only they can unarchive it.";
+
 /** Unarchives the thread and its children in the Archive, the children
  * first, so that the parent ends up at position 0. */
 export function restoreGroup(db: SessionDatabase, userId: string, treeId: string): TreeGroupChange {
   return transact(db, (tx) => {
     if (roleOf(tx, userId, treeId) !== "owner") {
-      // Clears the member's own Archive; a thread its owner archived stays
-      // archived for everyone until the owner restores it.
-      requireMember(tx, userId, treeId);
+      // Clears the member's own Archive. A thread its owner archived stays
+      // archived for everyone until the owner restores it, so a member's
+      // Unarchive is refused then (`archivedBy: "owner"`).
+      const access = requireMember(tx, userId, treeId);
+      if (access.tree.archivedAt !== null) {
+        throw new Error(OWNER_ARCHIVED_MESSAGE);
+      }
       return {
         tree: setMemberFlag(tx, userId, treeId, { archivedAt: null }),
         children: [],

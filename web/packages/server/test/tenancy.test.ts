@@ -8,6 +8,8 @@
 // - `reader`: a signed-in account that is not a member, on a public thread;
 // - `stranger`: a signed-in account that is not a member, on a private
 //   thread;
+// - `removed`: a former member the owner removed, on a private thread: the
+//   same answers as a stranger;
 // - `guest`: no session, on a public thread.
 //
 // The matrix checks access only. "ok" means the call got past the access
@@ -25,11 +27,19 @@ import test from "ava";
 
 import { anchorFor, answerTurn, createHarness, type Caller } from "./helpers.js";
 
-type Role = "owner" | "commenter" | "viewer" | "reader" | "stranger" | "guest";
+type Role = "owner" | "commenter" | "viewer" | "reader" | "stranger" | "removed" | "guest";
 
 type Outcome = "ok" | "FORBIDDEN" | "NOT_FOUND" | "UNAUTHORIZED";
 
-const ROLES: readonly Role[] = ["owner", "commenter", "viewer", "reader", "stranger", "guest"];
+const ROLES: readonly Role[] = [
+  "owner",
+  "commenter",
+  "viewer",
+  "reader",
+  "stranger",
+  "removed",
+  "guest",
+];
 
 interface Seeded {
   treeId: string;
@@ -46,6 +56,7 @@ interface Accounts {
   viewer: User;
   reader: User;
   stranger: User;
+  removed: User;
 }
 
 /** A thread with a complete answer, an owner's highlight and a queued inline
@@ -81,10 +92,14 @@ function seed(db: SessionDatabase, accounts: Accounts, isPublic: boolean): Seede
   for (const [user, role] of [
     [accounts.commenter, "commenter"],
     [accounts.viewer, "viewer"],
+    [accounts.removed, "commenter"],
   ] as const) {
     const invite = sharing.createInvite(db, accounts.owner.id, { treeId: detail.tree.id, role });
     sharing.acceptInvite(db, user, { token: invite.token });
   }
+  // A member who followed the thread, then was removed.
+  sharing.setFollowing(db, accounts.removed.id, detail.tree.id, true);
+  sharing.removeMember(db, accounts.owner.id, detail.tree.id, accounts.removed.id);
   if (isPublic) {
     sharing.setVisibility(db, accounts.owner.id, detail.tree.id, "public");
   }
@@ -101,7 +116,12 @@ function seed(db: SessionDatabase, accounts: Accounts, isPublic: boolean): Seede
 interface Row {
   name: string;
   run: (caller: Caller, seeded: Seeded) => Promise<unknown>;
-  expect: Record<Role, Outcome>;
+  /** A removed member's answers are the stranger's (`expected`). */
+  expect: Record<Exclude<Role, "removed">, Outcome>;
+}
+
+function expected(row: Row, role: Role): Outcome {
+  return role === "removed" ? row.expect.stranger : row.expect[role];
 }
 
 /** Outcomes by role, in `ROLES` order. */
@@ -112,7 +132,7 @@ function by(
   reader: Outcome,
   stranger: Outcome,
   guest: Outcome,
-): Record<Role, Outcome> {
+): Record<Exclude<Role, "removed">, Outcome> {
   return { owner, commenter, viewer, reader, stranger, guest };
 }
 
@@ -324,6 +344,29 @@ const ROWS: readonly Row[] = [
     expect: MEMBER,
   },
   {
+    name: "sharing.listShared",
+    // Lists only threads the caller is a member of: the removed member's is
+    // gone from it, and nothing is refused.
+    run: async (caller, s) => {
+      const listed = await caller.sharing.listShared();
+      if (!listed.some((summary) => summary.id === s.treeId)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "not listed" });
+      }
+    },
+    expect: by("NOT_FOUND", "ok", "ok", "NOT_FOUND", "NOT_FOUND", "UNAUTHORIZED"),
+  },
+  {
+    name: "highlights.listFeed",
+    // The feed lists highlights of threads the caller owns or is a member of.
+    run: async (caller, s) => {
+      const listed = await caller.highlights.listFeed();
+      if (!listed.some((item) => item.highlightId === s.highlightId)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "not listed" });
+      }
+    },
+    expect: by("ok", "ok", "ok", "NOT_FOUND", "NOT_FOUND", "NOT_FOUND"),
+  },
+  {
     name: "sharing.leave",
     run: (caller, s) => caller.sharing.leave({ treeId: s.treeId }),
     expect: by("FORBIDDEN", "ok", "ok", "FORBIDDEN", "NOT_FOUND", "UNAUTHORIZED"),
@@ -352,11 +395,12 @@ for (const row of ROWS) {
       viewer: harness.addUser("matrix-viewer"),
       reader: harness.addUser("matrix-reader"),
       stranger: harness.addUser("matrix-stranger"),
+      removed: harness.addUser("matrix-removed"),
     };
     for (const role of ROLES) {
       const seeded = seed(harness.db, accounts, role === "reader" || role === "guest");
       const caller = harness.caller(role === "guest" ? null : accounts[role]);
-      t.is(await outcomeOf(row.run(caller, seeded)), row.expect[role], `${row.name} as ${role}`);
+      t.is(await outcomeOf(row.run(caller, seeded)), expected(row, role), `${row.name} as ${role}`);
     }
   });
 }

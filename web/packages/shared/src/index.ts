@@ -60,6 +60,7 @@ export * from "./research/revision.js";
 export * from "./research/scope.js";
 export * from "./research/selection.js";
 export * from "./research/snapshots.js";
+export * from "./research/stalledChain.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";

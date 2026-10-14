@@ -50,7 +50,19 @@ export const sharingRouter = router({
       );
       if (change.changed) {
         publishTree(ctx, "research.tree.updated", tree);
-        publishSharingChanged(ctx, tree.id, treeAudienceIds(ctx, tree.id));
+        const audience = treeAudienceIds(ctx, tree.id);
+        publishSharingChanged(ctx, tree.id, audience);
+        if (input.visibility === "private") {
+          // Readers who are not members and had it open lose it now: they
+          // are told, and their open-thread declarations (events, presence)
+          // are dropped.
+          ctx.eventBus.emitToOpenReaders(
+            tree.id,
+            sessionEvent("research.sharing.changed", { treeId: tree.id }),
+            audience,
+          );
+          ctx.eventBus.refreshAudience(tree.id);
+        }
         if (change.after.archivedAt === null && change.after.trashedAt === null) {
           emitFeedVisibilityChanged(ctx, change.after.rootNodeId, input.visibility);
         }
@@ -122,7 +134,10 @@ export const invitesRouter = router({
    * Invites someone, by GitHub login (accepted once, by that account) or by
    * link (accepted by anyone holding it). The owner's. The token is in the
    * answer only: the server stores its hash. Invitations expire after
-   * fourteen days.
+   * fourteen days. Inviting a login that already has a pending invitation
+   * renews it (one per account and thread; the earlier link stops working);
+   * inviting a member is refused (`@login already has access to this
+   * thread.`), as is a hundred login invitations a day.
    */
   create: protectedProcedure
     .input(
@@ -141,7 +156,11 @@ export const invitesRouter = router({
         }),
       );
       if (created.inviteeId !== null) {
-        notifyInvite(ctx, created.inviteeId, input.treeId, ctx.user.login);
+        // A renewed invitation (the same login invited again) updates the
+        // invitee's list without another notification.
+        if (!created.renewed) {
+          notifyInvite(ctx, created.inviteeId, input.treeId, ctx.user.login);
+        }
         ctx.eventBus.emit(
           created.inviteeId,
           sessionEvent("research.invites.changed", { treeId: input.treeId }),
@@ -181,6 +200,9 @@ export const invitesRouter = router({
       );
       if (accepted.joined) {
         publishSharingChanged(ctx, tree.id, treeAudienceIds(ctx, tree.id));
+      } else if (accepted.restored) {
+        // Out of the caller's own Archive or Trash: their lists change.
+        publishSharingChanged(ctx, tree.id, [ctx.user.id]);
       }
       return tree;
     }),

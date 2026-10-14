@@ -48,11 +48,16 @@ const RULES: readonly { pattern: RegExp; code: Code }[] = [
   { pattern: /^This invitation is for another GitHub account/, code: "FORBIDDEN" },
   { pattern: /^You were removed from this thread/, code: "FORBIDDEN" },
   { pattern: /^A thread can (have|be shared with) at most/, code: "PRECONDITION_FAILED" },
+  { pattern: / already has access to this thread\.$/, code: "PRECONDITION_FAILED" },
+  { pattern: /^You can invite at most \d+ people/, code: "TOO_MANY_REQUESTS" },
+  // A member's Unarchive of a thread its owner archived (`trees.restoreGroup`).
+  { pattern: /^This thread was archived by its owner/, code: "PRECONDITION_FAILED" },
   // The follow-up queue's own bound (`followups.ask`).
   { pattern: /follow-ups queued\. Wait/, code: "TOO_MANY_REQUESTS" },
-  // A follow-up asked behind an answer that stopped (`followups.ask`).
+  // A follow-up asked behind an answer that stopped (`followups.ask`,
+  // `followups.STALLED_TAIL_MESSAGES` and `stalledTailMessageFor`).
   {
-    pattern: /^The last answer (stopped with an error|was stopped)\./,
+    pattern: /^The last answer (stopped with an error|was stopped|stopped)\./,
     code: "PRECONDITION_FAILED",
   },
   // Preconditions on the run state machine and on archived content.

@@ -45,6 +45,8 @@ export const researchHighlightSchema = z.object({
 
 export const researchTreeRoleSchema = z.enum(["owner", "commenter", "viewer"]);
 
+export const researchTreeArchivedBySchema = z.enum(["owner", "me"]);
+
 export const researchTreeVisibilitySchema = z.enum(["private", "public"]);
 
 export const researchParticipantSchema = z.object({
@@ -102,6 +104,7 @@ export const researchTreeSchema = z.object({
   visibility: researchTreeVisibilitySchema.optional(),
   role: researchTreeRoleSchema.optional(),
   trashedBy: z.string().nullish(),
+  archivedBy: researchTreeArchivedBySchema.optional(),
   followed: z.boolean().optional(),
 });
 
@@ -283,6 +286,7 @@ export const researchTreeSummarySchema = z.object({
   ownerId: z.string().optional(),
   visibility: researchTreeVisibilitySchema.optional(),
   role: researchTreeRoleSchema.optional(),
+  archivedBy: researchTreeArchivedBySchema.optional(),
 });
 
 export const researchFollowupQueueItemSchema = z.object({

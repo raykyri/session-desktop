@@ -12,7 +12,7 @@ import type {
   ThreadInvite,
   ThreadMember,
 } from "@session/shared";
-import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -49,6 +49,12 @@ export const MAX_PENDING_INVITES = 50;
 /** Most members one thread may have. */
 export const MAX_MEMBERS = 100;
 
+/** Most login invitations one account may create (or send again) in a day,
+ * across its threads. */
+export const MAX_LOGIN_INVITES_PER_DAY = 100;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export const INVITE_MESSAGES = {
   notFound: "This invitation was not found, has expired or was revoked.",
   otherAccount: "This invitation is for another GitHub account.",
@@ -57,7 +63,13 @@ export const INVITE_MESSAGES = {
   tooManyInvites: `A thread can have at most ${MAX_PENDING_INVITES} pending invitations.`,
   tooManyMembers: `A thread can be shared with at most ${MAX_MEMBERS} people.`,
   removed: "You were removed from this thread.",
+  tooManyLoginInvites: `You can invite at most ${MAX_LOGIN_INVITES_PER_DAY} people by GitHub login a day.`,
 } as const;
+
+/** The refusal for inviting someone who already has access. */
+export function alreadyMemberMessage(login: string): string {
+  return `@${login} already has access to this thread.`;
+}
 
 type InviteRow = typeof treeInvites.$inferSelect;
 
@@ -330,6 +342,9 @@ export interface NewInvite {
   token: string;
   /** The account a login invitation names, when it has signed in before. */
   inviteeId: string | null;
+  /** True when a pending login invitation to the same account was renewed
+   * (new token, role and expiry) instead of a second one being created. */
+  renewed: boolean;
 }
 
 function pendingPredicate(at: number) {
@@ -349,6 +364,12 @@ function usablePredicate(at: number) {
  * Invites someone to a thread, by GitHub login or by link. The owner's. A
  * login invitation is accepted once, by that account; a link invitation by
  * anyone who holds the link until it expires or is revoked.
+ *
+ * A thread has at most one pending login invitation per account: inviting
+ * the same login again renews it (a new token, the new role, a new expiry),
+ * and the earlier link stops working. Inviting someone who is already a
+ * member is refused, as is creating more than `MAX_LOGIN_INVITES_PER_DAY`
+ * login invitations in a day.
  */
 export function createInvite(
   db: SessionDatabase,
@@ -359,6 +380,73 @@ export function createInvite(
   return transact(db, (tx) => {
     const tree = requireTreeAccess(tx, userId, input.treeId, "owner").tree;
     const at = now();
+    const invitee =
+      login === ""
+        ? null
+        : (tx
+            .select({ id: users.id, login: users.login })
+            .from(users)
+            .where(sql`lower(${users.login}) = lower(${login})`)
+            .get() ?? null);
+    if (invitee?.id === tree.ownerId) {
+      throw new Error(INVITE_MESSAGES.self);
+    }
+    if (invitee && memberRow(tx, invitee.id, tree.id)) {
+      throw new Error(alreadyMemberMessage(invitee.login));
+    }
+    const token = randomBytes(32).toString("base64url");
+    if (login !== "") {
+      const sentToday = tx
+        .select({ value: sql<number>`count(*)` })
+        .from(treeInvites)
+        .where(
+          and(
+            eq(treeInvites.createdBy, userId),
+            isNotNull(treeInvites.githubLogin),
+            gt(treeInvites.createdAt, at - DAY_MS),
+          ),
+        )
+        .get();
+      if ((sentToday?.value ?? 0) >= MAX_LOGIN_INVITES_PER_DAY) {
+        throw new Error(INVITE_MESSAGES.tooManyLoginInvites);
+      }
+      // One pending login invitation per account and thread
+      // (`tree_invites_login_pending_uq`): an earlier one, expired or not,
+      // is renewed.
+      const pendingForLogin = tx
+        .select()
+        .from(treeInvites)
+        .where(
+          and(
+            eq(treeInvites.treeId, tree.id),
+            sql`lower(${treeInvites.githubLogin}) = lower(${login})`,
+            isNull(treeInvites.acceptedAt),
+            isNull(treeInvites.revokedAt),
+          ),
+        )
+        .get();
+      if (pendingForLogin) {
+        const renewed = tx
+          .update(treeInvites)
+          .set({
+            tokenHash: hashToken(token),
+            role: input.role,
+            githubLogin: login,
+            createdBy: userId,
+            createdAt: at,
+            expiresAt: at + INVITE_TTL_MS,
+          })
+          .where(eq(treeInvites.id, pendingForLogin.id))
+          .returning()
+          .get();
+        return {
+          invite: toInvite(renewed ?? pendingForLogin),
+          token,
+          inviteeId: invitee?.id ?? null,
+          renewed: true,
+        };
+      }
+    }
     const pending = tx
       .select({ value: sql<number>`count(*)` })
       .from(treeInvites)
@@ -367,18 +455,6 @@ export function createInvite(
     if ((pending?.value ?? 0) >= MAX_PENDING_INVITES) {
       throw new Error(INVITE_MESSAGES.tooManyInvites);
     }
-    const invitee =
-      login === ""
-        ? null
-        : (tx
-            .select({ id: users.id })
-            .from(users)
-            .where(sql`lower(${users.login}) = lower(${login})`)
-            .get() ?? null);
-    if (invitee?.id === tree.ownerId) {
-      throw new Error(INVITE_MESSAGES.self);
-    }
-    const token = randomBytes(32).toString("base64url");
     const row = tx
       .insert(treeInvites)
       .values({
@@ -396,7 +472,7 @@ export function createInvite(
       })
       .returning()
       .get();
-    return { invite: toInvite(row), token, inviteeId: invitee?.id ?? null };
+    return { invite: toInvite(row), token, inviteeId: invitee?.id ?? null, renewed: false };
   });
 }
 
@@ -467,12 +543,16 @@ export interface AcceptedInvite {
   role: MemberRole | "owner";
   /** False when the caller already had this role or a higher one. */
   joined: boolean;
+  /** True when the caller was already a member and had the thread in their
+   * own Archive or Trash: accepting takes it out of both. */
+  restored: boolean;
 }
 
 /**
  * Accepts an invitation: by its token (a link, or a login invitation's link),
  * or by id for a login invitation addressed to the caller. Joining keeps a
- * higher role the caller already has. Expired, revoked and used login
+ * higher role the caller already has, and takes the thread out of a
+ * member's own Archive and Trash. Expired, revoked and used login
  * invitations are "not found", as is an unknown token. A person the owner
  * removed is refused a link invitation created at or before the removal;
  * the login invitations addressed to them were revoked by the removal
@@ -510,9 +590,19 @@ export function acceptInvite(
       throw new Error(INVITE_MESSAGES.notFound);
     }
     if (tree.ownerId === user.id) {
-      return { treeId: tree.id, role: "owner", joined: false };
+      return { treeId: tree.id, role: "owner", joined: false, restored: false };
     }
     const existing = memberRow(tx, user.id, tree.id);
+    // Accepting an invitation to a thread the member had archived or moved
+    // to their Trash brings it back to their Shared place.
+    const restored =
+      existing !== null && (existing.archivedAt !== null || existing.trashedAt !== null);
+    if (restored) {
+      tx.update(treeMembers)
+        .set({ archivedAt: null, trashedAt: null, trashWorkspaceId: null })
+        .where(and(eq(treeMembers.treeId, tree.id), eq(treeMembers.userId, user.id)))
+        .run();
+    }
     let joined = false;
     let role: MemberRole = row.role;
     if (!existing) {
@@ -564,7 +654,7 @@ export function acceptInvite(
         .where(eq(treeInvites.id, row.id))
         .run();
     }
-    return { treeId: tree.id, role, joined };
+    return { treeId: tree.id, role, joined, restored };
   });
 }
 

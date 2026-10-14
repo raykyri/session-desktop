@@ -10,6 +10,7 @@ import type {
   ResearchNodeBase,
   ResearchRecap,
   ResearchTree,
+  ResearchTreeArchivedBy,
   ResearchTreeRole,
   UserMessage,
 } from "@session/shared";
@@ -58,6 +59,23 @@ export interface TreeView {
 }
 
 /**
+ * Who archived the thread for this reader (`ResearchTree.archivedBy`): `me`
+ * for the owner's own Archive and a member's own, `owner` when the owner
+ * archived it, which only the owner can undo. Absent when it is not
+ * archived for the reader.
+ */
+export function archivedByFor(
+  role: ResearchTreeRole,
+  treeArchivedAt: number | null,
+  memberArchivedAt: number | null | undefined,
+): ResearchTreeArchivedBy | undefined {
+  if (treeArchivedAt !== null) {
+    return role === "owner" ? "me" : "owner";
+  }
+  return memberArchivedAt != null ? "me" : undefined;
+}
+
+/**
  * A tree as one person sees it. `lastViewedAt` is that person's row in
  * `tree_views`; it is null for a reader who has never opened the thread. A
  * member sees their own Archive and Trash: the thread is archived for them
@@ -69,6 +87,7 @@ export function toResearchTree(
   view: TreeView = { role: "owner" },
 ): ResearchTree {
   const member = view.role === "owner" ? null : (view.member ?? null);
+  const archivedBy = archivedByFor(view.role, row.archivedAt, member?.archivedAt);
   return {
     id: row.id,
     title: row.title,
@@ -82,6 +101,7 @@ export function toResearchTree(
     ownerId: row.ownerId,
     visibility: row.visibility,
     role: view.role,
+    ...(archivedBy === undefined ? {} : { archivedBy }),
     ...(view.role === "owner" && row.trashedAt !== null ? { trashedBy: row.trashedBy } : {}),
     ...(view.followed === undefined ? {} : { followed: view.followed }),
   };

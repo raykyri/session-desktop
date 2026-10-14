@@ -449,7 +449,12 @@ test("invitations: link tokens are hashed, login invitations are for one account
       inviteId: byLogin.invite.id,
     },
   );
-  t.deepEqual(accepted, { treeId: detail.tree.id, role: "commenter", joined: true });
+  t.deepEqual(accepted, {
+    treeId: detail.tree.id,
+    role: "commenter",
+    joined: true,
+    restored: false,
+  });
   // Used: accepting again is "not found".
   t.throws(
     () =>
@@ -576,6 +581,7 @@ test("a removed member cannot rejoin through a link created before the removal",
     treeId: shared.treeId,
     role: "viewer",
     joined: true,
+    restored: false,
   });
   t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
   // Once back in, the older link works for them again (joining never lowers
@@ -605,7 +611,7 @@ test("a login invitation lets a removed member back in", (t) => {
       { id: shared.viewer.userId, login: viewerLogin },
       { inviteId: byLogin.invite.id },
     ),
-    { treeId: shared.treeId, role: "commenter", joined: true },
+    { treeId: shared.treeId, role: "commenter", joined: true, restored: false },
   );
   t.is(access.treeAccess(db, shared.viewer.userId, shared.treeId)?.role, "commenter");
   t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
@@ -614,29 +620,31 @@ test("a login invitation lets a removed member back in", (t) => {
 test("removing a member revokes the login invitations still addressed to them", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
-  const login = `commenter${loginCounter}`;
+  // Invited by login, then joined through a link before accepting it: the
+  // login invitation is still pending when they are removed. (Inviting a
+  // member by login is refused.)
+  const login = `late${loginCounter}`;
+  const late = addUser(db, login);
   const pending = sharing.createInvite(db, shared.fixture.userId, {
     treeId: shared.treeId,
     role: "commenter",
     githubLogin: login,
   });
-  sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.commenter.userId);
+  const link = sharing.createInvite(db, shared.fixture.userId, {
+    treeId: shared.treeId,
+    role: "viewer",
+  });
+  sharing.acceptInvite(db, { id: late.userId, login }, { token: link.token });
+  sharing.removeMember(db, shared.fixture.userId, shared.treeId, late.userId);
   t.throws(
-    () =>
-      sharing.acceptInvite(
-        db,
-        { id: shared.commenter.userId, login },
-        { inviteId: pending.invite.id },
-      ),
+    () => sharing.acceptInvite(db, { id: late.userId, login }, { inviteId: pending.invite.id }),
     { message: sharing.INVITE_MESSAGES.notFound },
   );
-  t.throws(
-    () =>
-      sharing.acceptInvite(db, { id: shared.commenter.userId, login }, { token: pending.token }),
-    { message: sharing.INVITE_MESSAGES.notFound },
-  );
+  t.throws(() => sharing.acceptInvite(db, { id: late.userId, login }, { token: pending.token }), {
+    message: sharing.INVITE_MESSAGES.notFound,
+  });
   t.deepEqual(sharing.receivedInvites(db, login), []);
-  t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
+  t.is(access.treeAccess(db, late.userId, shared.treeId), null);
 });
 
 test("a member made a viewer loses their queued follow-ups and cannot retry one", (t) => {
@@ -750,8 +758,14 @@ test("public threads are listed for everyone; detail names the participants", (t
   t.is(trees.publicSummaries(db, shared.commenter.userId)[0]?.role, "commenter");
   ask(shared, shared.commenter.userId, "Commenter asks");
   const detail = trees.detail(db, null, shared.treeId);
+  // A reader who is not a member sees the owner and the people who wrote
+  // something; the viewer, who wrote nothing, is a member only members see.
   t.deepEqual(
     detail.participants?.map((participant) => participant.id),
+    [shared.fixture.userId, shared.commenter.userId],
+  );
+  t.deepEqual(
+    trees.detail(db, shared.viewer.userId, shared.treeId).participants?.map((p) => p.id),
     [shared.fixture.userId, shared.commenter.userId, shared.viewer.userId],
   );
   t.is(detail.tree.role, "viewer");

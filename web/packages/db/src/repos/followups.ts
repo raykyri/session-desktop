@@ -12,7 +12,13 @@
 // transaction, re-checking that nothing changed in between.
 
 import type { ResearchFollowupQueueItem, ResearchNode, UserMessage } from "@session/shared";
-import { agentSpecFor, findModel, userMessageSchema } from "@session/shared";
+import {
+  STALLED_TAIL_MESSAGES,
+  agentSpecFor,
+  findModel,
+  stalledTailNote,
+  userMessageSchema,
+} from "@session/shared";
 import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
 import { researchQueueAction, researchQueueStep } from "@session/shared/lib/researchBranchView";
 import { inlineChainFor } from "@session/shared/lib/researchChains";
@@ -26,6 +32,7 @@ import { parseWireColumn } from "../json.js";
 import { followupQueue } from "../schema/followups.js";
 import { nodes } from "../schema/nodes.js";
 import { trees } from "../schema/trees.js";
+import { users } from "../schema/users.js";
 import { now } from "../time.js";
 
 import {
@@ -137,17 +144,31 @@ export function countByAuthor(db: SessionDatabase, authorId: string): number {
 }
 
 /** The desktop's ask-box notes for a chain whose last answer stopped
- * (`researchChainComposerState`). */
-export const STALLED_TAIL_MESSAGES = {
-  failed: "The last answer stopped with an error. Retry it or edit its question to continue.",
-  stopped: "The last answer was stopped. Run it again to continue.",
-} as const;
+ * (`researchChainComposerState`), shown to the person who can retry it. */
+export { STALLED_TAIL_MESSAGES };
 
-/** Why a follow-up cannot be asked at the end of the chain `headNodeId`
+/** Who reads a stalled chain's note: the asker and the thread's owner. */
+interface StalledReader {
+  userId: string;
+  ownerId: string;
+}
+
+/**
+ * Why a follow-up cannot be asked at the end of the chain `headNodeId`
  * heads: its last answer stopped (`researchQueueStep` "stalled"), or was
  * interrupted and will not resume (web only: the server gave up resuming
- * it). Null when it can be asked or queued. */
-function stalledTailMessage(treeNodes: readonly ResearchNode[], headNodeId: string): string | null {
+ * it). Null when it can be asked or queued.
+ *
+ * The note depends on the reader (`stalledTailNote`): the person who pays
+ * for the answer is told to retry or edit it, as on the desktop; anyone else
+ * who only that person can retry it, and that the owner can delete it.
+ */
+function stalledTailMessage(
+  db: SessionDatabase,
+  treeNodes: readonly ResearchNode[],
+  headNodeId: string,
+  reader: StalledReader,
+): string | null {
   const chain = inlineChainFor([...treeNodes], headNodeId);
   const tailId = chain[chain.length - 1];
   const tail = treeNodes.find((node) => node.id === tailId) ?? null;
@@ -155,15 +176,30 @@ function stalledTailMessage(treeNodes: readonly ResearchNode[], headNodeId: stri
     return null;
   }
   const status = nodeStatus(tail);
+  let stalled: "failed" | "stopped";
   if (status === "interrupted") {
-    return tail.type === "exchange" && tail.run.resumePending !== true
-      ? STALLED_TAIL_MESSAGES.failed
-      : null;
-  }
-  if (researchQueueStep(tail) !== "stalled") {
+    if (tail.type !== "exchange" || tail.run.resumePending === true) {
+      return null;
+    }
+    stalled = "failed";
+  } else if (researchQueueStep(tail) !== "stalled") {
     return null;
+  } else {
+    stalled = status === "failed" ? "failed" : "stopped";
   }
-  return status === "failed" ? STALLED_TAIL_MESSAGES.failed : STALLED_TAIL_MESSAGES.stopped;
+  const payerId = tail.authorId ?? reader.ownerId;
+  const payer = db
+    .select({ login: users.login, name: users.name })
+    .from(users)
+    .where(eq(users.id, payerId))
+    .get();
+  return stalledTailNote({
+    status: stalled,
+    readerIsPayer: payerId === reader.userId,
+    readerIsOwner: reader.ownerId === reader.userId,
+    payerIsOwner: payerId === reader.ownerId,
+    payerName: payer?.name?.trim() || payer?.login || "the person who asked it",
+  });
 }
 
 /** Whether the author of a queued item may still ask in its thread: they
@@ -298,7 +334,10 @@ export function ask(db: SessionDatabase, userId: string, input: AskInput): AskRe
       // complete on its own; the desktop's ask box refuses it with these
       // words (`researchChainComposerState`). Behind queued items it is
       // queued, as there.
-      const stalled = stalledTailMessage(state.treeNodes, state.headNodeId);
+      const stalled = stalledTailMessage(tx, state.treeNodes, state.headNodeId, {
+        userId,
+        ownerId: state.ownerId,
+      });
       if (stalled !== null) {
         throw new Error(stalled);
       }
