@@ -190,12 +190,19 @@ placement:
 - Rename is not offered; Generate recap only to a commenter.
 - The reader's Archive lists their archived shared threads
   (`sharing.listShared({ place: "archive" })`) with their own; Unarchive
-  restores the reader's copy.
-- The reader's Trash lists the shared threads they moved there, from every
-  workspace (`sharing.listShared({ place: "trash" })`), marked "Shared with
-  you"; Restore brings it back, and Delete now leaves the thread ("Leave
-  “…”?", the owner and the other people keep it). Empty Trash leaves every
-  shared thread in it, which its confirmation says.
+  restores the reader's copy. A thread its owner archived
+  (`archivedBy: "owner"`) has Unarchive and every Move to target disabled
+  with "This thread was archived by its owner; only they can unarchive it."
+- The reader's Trash lists the shared threads they moved there from this
+  workspace (`research.trashTree({ treeId, workspaceId })`,
+  `sharing.listShared({ place: "trash", workspaceId })`), marked "Shared
+  with you"; Restore brings it back, and Delete now leaves the thread
+  ("Leave “…”?", the owner and the other people keep it). Empty Trash leaves
+  the shared threads in this workspace's Trash, which its confirmation says.
+  The thread page's root Delete (offered to a commenter) uses the same two
+  steps (`sharedTreeDeleteSteps`).
+- ⌥↑/⌥↓ on a shared thread's card moves nothing and announces "Shared
+  threads keep their owner’s order."
 
 `/invite/$token` (`routes/invite.tsx`) accepts the token
 (`invites.accept({ token })`) and opens the thread, replacing the history
@@ -271,11 +278,18 @@ root menu as a sibling.
 
 ## 7. Sidebar (`features/sidebar`)
 
-Port of `ResearchSidebarNav.tsx`: the workspace switcher (`WorkspaceSwitcher`,
-unchanged), then the places:
+Port of `ResearchSidebarNav.tsx` and the desktop's `AppSidebar` header: the
+top row has the mark, Settings (⌘,) and the Light/Dark toggle (titles "Dark
+mode"/"Light mode"), and Hide sidebar; then the places, then the workspace
+switcher (`WorkspaceSwitcher`) above the account row, as on the desktop.
+The sidebar is the `Sidebar` landmark; its splitter is a focusable
+`separator` with the width as its value. Signed out, the account row is
+"Sign in with GitHub" (the sign-in page's wording too). The places:
 
 - "Research" navigation: Home (a drop target for Unfiled), Highlights and,
-  web only, Shared with me and All Users (signed in; no drops). While ⌘
+  web only, Shared with me and All Users (signed in; no drops). Shared with
+  me carries a badge with the number of invitations waiting
+  (`invites.received`; its name reads "Shared with me, 2 invitations"). While ⌘
   (Ctrl off Apple platforms) is held, Home shows its chord, and the
   workspace switcher ⌘O, unless "Show keyboard shortcut hints" is off
   (`lib/shortcutHints.ts`).
@@ -286,17 +300,22 @@ unchanged), then the places:
 The tree list, multi-selection, visibility filter and the `filter` search
 parameter of the earlier sidebar are removed; threads are filed and ordered
 from Home. Sidebar resize 208–420 px and collapse (Shift-Cmd-G) persist in
-`navigation`. The workspace switcher's menu reads Add workspace…, Rename
-“W”… and Delete workspace… (the web deletes; the desktop's item is Remove
-workspace…).
+`navigation`. The workspace switcher's trigger reads the workspace's name, or
+"Choose a workspace"; its menu ("Research workspaces") reads Add workspace…,
+Make default workspace (web only: the web opens the default workspace where
+the desktop reopens the last one used), Rename “W”… and Delete workspace…
+(the web deletes; the desktop's item is Remove workspace…). There is no
+reordering, as on the desktop.
 
 Collapsed, the sidebar is the desktop's 52 px icon rail
 (`features/sidebar/SidebarRail.tsx`, ported from `ResearchSidebarRail`):
 Expand sidebar, Home, Highlights, Shared with me, All Users, then Drafts,
 each folder as its first letter (`researchFolderMonogram`, named in the
-tooltip), Archive and Trash, New folder, and Settings at the foot. Home and
-every place but Trash take card drops. Below 900 px the rail stays and Expand
-opens the sidebar as a drawer.
+tooltip), Archive and Trash, New folder, and at the foot the Light/Dark
+toggle and Settings (⌘,). Shared with me shows the invitation badge too. Home
+and every place but Trash take card drops. Below 900 px the rail stays and
+Expand opens the sidebar as a drawer; the rail is inert while the drawer is
+open.
 
 ## 8. Notifications
 
@@ -306,10 +325,12 @@ shows at the bottom centre, one at a time (a new one replaces it), and
 server notifications stack at the top right (`placement` on the store's
 items, `ui/NotificationStack.tsx`). A toast
 may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
-"Undo" action, stays 8 s, and is shown even when notifications are off. Sources:
+"Undo" action and stays 8 s. Client toasts always show; the
+`showNotifications` setting hides server notifications only. The desktop's
+toasts are kept: "Restored.", "Draft deleted.", "Saved to Drafts.", "Sent.
+Moved from Drafts to Unfiled.", "Moved to the Trash." with Undo. Sources:
 client-originated toasts, and the server's `notification.requested` events
 (a run you asked finished or failed, a new question or note in a thread you
 follow, a branch from your answer, an invitation; `03-api-and-events.md`
 §3). A server notification with an `href` opens that path when clicked
-(`AppShell` passes `onOpen` to the stack). Max 20 kept, 3 visible,
-`showNotifications` setting honored.
+(`AppShell` passes `onOpen` to the stack). Max 20 kept, 3 visible.

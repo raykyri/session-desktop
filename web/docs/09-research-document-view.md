@@ -72,7 +72,11 @@ from its Ask segment: a row per model with its icon, admin-only models for
 admins only, then an Effort submenu with Default and the model's efforts;
 the trigger shows the model and the effort it runs at; it defaults to the
 model of the message it continues) and takes pasted or dropped images (`composer/images.tsx`,
-uploaded to `POST /api/images`; the question sends their ids).
+uploaded to `POST /api/images`; the question sends their ids). With images
+attached, Send (and ⌘↵/⇧⌘↵) stays disabled while the chosen model can't read
+images or they total more than 20 MB, and the reason shows under the box
+(`imageBlockReason`, from `researchImageBlockReason`); the note follow-up
+box checks an AI follow-up's images the same way.
 
 - **Follow-up**: `followups.ask` with the chain's head. The server sends it
   at once when the chain's tail is complete and its inline slot is free, and
@@ -95,9 +99,19 @@ uploaded to `POST /api/images`; the question sends their ids).
 - **Queued follow-ups**: a queued item that cannot send (its send was
   refused, or the answer before it stopped: "The last answer stopped; retry
   it, or edit this question.") offers Edit question to its author: the item
-  is cancelled on the server and its text and images go into the chain's ask
-  box, only if that box is empty ("Clear the ask box to edit this
-  question."). Edit question on a failed message also restores its images.
+  is cancelled on the server and, once the cancel succeeded, its text and
+  images go into the chain's ask box, only if that box is empty ("Clear the
+  ask box to edit this question."); a refused cancel leaves the box as it was
+  and shows the error. Edit question on a failed message also restores its
+  images.
+- **Stalled chain**: when a chain's last answer failed or was stopped, the
+  box is disabled with a note for the reader (shared `stalledTailNote`, also
+  the server's `followups.ask` refusal): the person who pays for that answer
+  reads the desktop's sentence; anyone else "The last answer stopped. Only
+  <name> can retry it; the owner can delete it. Branch from the answer before
+  it to continue." (the owner: "… Delete it, or branch from the answer before
+  it to continue."; when the payer is the owner: "Only <name> can retry or
+  delete it.").
 - **Root draft**: the root ask box's text is a draft saved to
   `interfaceDrafts` and read back on open, so a draft from another device or
   tab fills an empty box.
@@ -130,7 +144,16 @@ Per-tree state that is not in the URL is kept in localStorage under
 `session.thread-navigation.v1` (`persistence.ts`): the last selection, column
 scroll offsets (answer, messages, branches; 15-minute TTL), "Show earlier"
 expansions, the unsent branch's passage and text, and a pending highlight
-focus. Entries for deleted nodes are pruned.
+focus. Entries for deleted nodes are pruned. A thread moved to the Trash
+keeps its entry for Restore (`research.tree.removed` with `trashed: true`); a
+deleted or left thread loses it. Tabs share the key: each write merges with
+the stored copy thread by thread (the entry written last wins,
+`lib/tabMerge.ts`), and another tab's write is merged in on its `storage`
+event; the feeds' scroll anchors (`stores/navigation`) merge the same way.
+
+While the detail loads, the header shows the title (or "Note") a cached list
+already has, and Back and Forward stay in place; their titles name the
+browser's chords ("Back (⌘[)", "Forward (⌘])"; Alt+← and Alt+→ off macOS).
 
 Keyboard (`useThreadKeyboard.ts`):
 
@@ -239,7 +262,14 @@ active).
   in edit mode with a toast; Cancel asks before discarding changes; Ask as a
   question starts a new thread with the edited text on the model and effort
   chosen beside it (`research.createTree` with `effort`; null is the model's
-  default).
+  default) in the edited thread's workspace (from a shared thread, the
+  reader's current one), and opens it. For the reader's own thread
+  `DeleteOfferHost` (rendered by the shell) then asks "Delete the original
+  thread?" with the desktop's sentences (`researchTreeContentsSentence`,
+  counted when the question was asked); Keep is focused first; Delete…
+  (disabled while runs are active) opens the thread's delete confirmation
+  with its Home children. Both close when the original is no longer listed
+  or is archived.
 - **Note**: double-click a note, or Edit note in its menu, to edit it in
   place. A double-click on a note's card on Home opens the thread with
   `?edit=` (a single click on that card waits 250 ms for the second click
@@ -300,16 +330,24 @@ Home. Dialogs are centred confirm dialogs (`ThreadDialogs.tsx`):
 | Retry, Rerun | questions they asked | questions they asked | no |
 | Stop | any run | their own | no |
 | Cancel / Retry a queued follow-up | Cancel any; Retry their own | their own | no |
-| Rename the thread, reorder messages, Edit document, delete the thread | yes | no | no |
+| Rename the thread, reorder messages, Edit document | yes | no | no |
+| Delete the thread | yes | their Trash or Leave (Home's member steps) | no |
 | Remove a highlight | any | their own (the selection bar leaves out Highlight when the selection covers someone else's highlight, since merging or removing it deletes it) | no |
 
 An archived thread is read-only for everyone, as on the desktop. A guest
 (signed out, on a public thread) has no event stream, so the page does not
 update live.
 
-- **Thread menu** (the root's answer or note menu): Share… opens
-  `ShareDialog` (anyone signed in); Notify me / Stop notifying me toggles
-  `subscriptions.set` (`ResearchTree.followed`).
+- **Thread menu** (the root's answer or note menu): Share… (the owner) or
+  People… (anyone else signed in; the dialog is then "People in “…”" and a
+  private thread reads "Only its owner and the people it is shared with.")
+  opens `ShareDialog`; Notify me / Stop notifying me toggles
+  `subscriptions.set` (`ResearchTree.followed`). A commenter's root answer
+  menu has Delete research with Home's member steps: their Trash, or Leave.
+- **Unavailable**: when a refetch of the open thread is refused with
+  NOT_FOUND (deleted, moved to the owner's Trash, turned private for a
+  non-member, the reader removed), the page shows "This thread was deleted
+  or is no longer shared with you." instead of the cached copy.
 - **Share dialog** (`features/sharing/ShareDialog.tsx`): "Who can read it"
   (Private: the owner and the people it is shared with; Public: anyone with
   the link, listed in All Users), People (owner first; the owner changes a

@@ -98,7 +98,7 @@ parameter.
 | `/trash` | `TrashPage` | signed in; `TrashList` |
 | `/highlights` | `HighlightsPage` | |
 | `/r/$treeId` | `ThreadPage` | search `?sel=&node=&highlight=&edit=`: `sel` is each column's selection (`09` §4); `key={treeId}` remount |
-| `/settings` | `SettingsPage` | groups: General (the desktop's Require ⌘↵ to send, Widgets in answers), Appearance (Appearance, Color theme, Body font, Text size, Show keyboard shortcut hints, Reduce motion), Notifications, Research defaults, Usage |
+| `/settings` | `SettingsPage` | the desktop's rows in its order: Require ⌘↵ to send ("A thread's question boxes always require ⌘↵. This setting controls the Home ask box, drafts and note follow-ups."), Research instructions (signed in; saved 500 ms after typing stops and on blur, placeholder `DEFAULT_RESEARCH_LAUNCH_INSTRUCTION`, hint "Sent with every research launch"), Widgets in answers, then the web's Default model (signed in; replaces the desktop's agent choice) and Notifications (server notifications only); a separator; Appearance (Dark, Light; a stored `system` shows as what it resolves to), Color theme, Body font, Show keyboard shortcut hints, Reduce motion. Usage is a dialog in the account menu (`features/account/UsageDialog.tsx`); Text size and Default workspace have no row (the workspace switcher's Make default workspace sets the default) |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
 Search params validated with zod (`validateSearch`). The workspace scope
@@ -194,7 +194,18 @@ Per event type:
   `setQueryData` or invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
 - `notification.requested` → `notifications` store, unless
-  `showNotifications` is off (`03-api-and-events.md` §3).
+  `showNotifications` is off (`03-api-and-events.md` §3). The setting
+  applies to these only; client toasts (`lib/toast.ts`) always show.
+- `research.tree.removed` with `trashed: true` keeps the thread's saved page
+  state (`features/thread/persistence.ts`) for Restore; without it (a
+  deletion) the state is forgotten. A reconnect clears the recap spinners
+  (`stores/recapPending`), whose `pending: false` may have been lost.
+- A reader outside a thread's event audience between visits (a signed-in
+  viewer of a public thread) re-reads a cached thread and its presence when
+  the page opens it (`useRefetchThreadOnOpen`); a guest's open thread is
+  re-read on focus and every 15 s while a run is active
+  (`useTreeDetail(…, { eventless })`). A refused refetch (NOT_FOUND) shows
+  the unavailable state even while the cache holds the thread.
 - `research.sharing.changed` → invalidate the tree lists, the shared lists
   (`["shared", place]`), the thread, its members and invitations;
   `research.invites.changed` invalidates `receivedInvites`;
@@ -264,33 +275,29 @@ This replaces `App.tsx:9094-9220`.
 
 ## 5. Keyboard shortcuts and command palette
 
-`shared/app/shortcuts.ts` is the ported `resolveAppShortcut`
-(the desktop's `appShortcuts`, now
-`packages/shared/src/lib/appShortcuts.ts`). `AppShell` registers a single capture-phase keydown listener that is bypassed when a Base UI overlay is active (allowing the library to manage nested dialog and menu dismissals natively), delegating all other key events to the shared shortcut table. Whether
-whether a text field consumes a chord is decided per chord there, not for the listener
-as a whole: users spend most of their time in composer inputs, and shortcuts like Cmd-J ("focus follow-ups") are explicitly intended to be triggered while editing text. Only the chords that
-compete with text editing or with the caret's own navigation require a
-non-editable target — Cmd/Ctrl-1..9, Ctrl-Tab, Shift-Cmd-[ / ], and
-Cmd-Alt-Up/Down. It dispatches:
+`shared/app/shortcuts.ts` is the web's `resolveAppShortcut`: the desktop's
+chord table (`packages/shared/src/lib/appShortcuts.ts`) for the surfaces the
+web has, plus Shift-Cmd-H for Home. `AppShell` registers a single
+capture-phase keydown listener that is bypassed when a Base UI overlay is
+active (allowing the library to manage nested dialog and menu dismissals
+natively), delegating all other key events to the table. Every chord in it
+also works from a text field (Cmd-J, "focus follow-ups", exists to be
+pressed from one), and none repeats while held. It dispatches:
 
-Cmd-1..9 focus tab · Cmd-N/T Home + focus composer · Shift-Cmd-G toggle
-sidebar · Ctrl-Tab / Shift-Cmd-] cycle · Cmd-Alt-Up/Down move item · Cmd-,
-settings · Cmd-K palette · Cmd-J focus the current level's ask box (window
-event consumed by the thread page) · Cmd-O folder menu · Shift-Cmd-E toggle
-artifact panel · Cmd-F DOM search · H/A/E on selection. Back and Forward
-within a thread are the browser's (Cmd-[ / Cmd-], Alt-Left/Right).
+Cmd-N/T and Shift-Cmd-H Home with the caret in its ask box
+(`stores/homeFocus`) · Shift-Cmd-G toggle sidebar · Cmd-, (Ctrl-, off
+macOS) settings · Cmd-K palette · Cmd-J focus the current level's ask box
+(window event consumed by the thread page) · Cmd-O workspace menu. Not app
+chords: Cmd-F DOM search, the bare H/A/E keys on a selection
+(`shared/lib/researchHighlights.ts`), and Back and Forward within a thread,
+which are the browser's (Cmd-[ / Cmd-] on macOS, Alt-Left/Right elsewhere;
+the Back and Forward buttons' titles name them).
 
 Browser conflicts: Cmd-N/T open new windows/tabs in browsers and cannot be
-intercepted, and Cmd-1..9 switch browser tabs on some platforms.
-`resolveAppShortcut` accepts Ctrl as the primary modifier for the digit and
-comma chords only (`packages/shared/src/lib/appShortcuts.ts`); `n`/`t`
-require Meta. The shared port adds Shift-Cmd-H for Home (the documented web
-chord; `RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`) and keeps Ctrl-1..9 for tabs;
-Cmd variants are honored where the browser lets them through. Cmd-F and the
-bare H/A/E keys are not app shortcuts: DOM search and the highlight actions
-handle them (`shared/lib/researchHighlights.ts`). Shift-Cmd-E
-(`toggleArtifactPanel`) was removed with the document preview panel in
-phase 2.0.
+intercepted, hence Shift-Cmd-H (`RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`).
+The web-only digit, tab-cycle and Cmd-Alt-Up/Down chords were removed in
+review round 3; the desktop has none of them. The desktop's Shift-Cmd-E
+(source browser) has no web surface.
 
 Command palette (`features/palette`): Research section (one entry per tree,
 "N running" hint) and Actions section (Home, Toggle sidebar, Settings),
