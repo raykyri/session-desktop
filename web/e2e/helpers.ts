@@ -95,7 +95,10 @@ export async function selectAnswerText(page: Page): Promise<void> {
   await expect(paragraph).toBeVisible();
   const box = await paragraph.boundingBox();
   if (!box) throw new Error("the answer paragraph has no box");
-  const y = box.y + box.height / 2;
+  // The middle of the first line: the paragraph's vertical middle can fall
+  // exactly on a boundary between two lines, where a press starts no
+  // selection.
+  const y = box.y + Math.min(box.height / 2, 8);
   await page.mouse.move(box.x + 4, y);
   await page.mouse.down();
   // Two moves: the first crosses the drag threshold, the second is the one the
