@@ -338,6 +338,36 @@ test("a double-click on a note's card on Home opens the note in the editor", asy
   await expect(page).not.toHaveURL(/edit=/);
 });
 
+test("Ask as a question opens the new thread and offers to delete the original", async ({
+  page,
+}) => {
+  await signIn(page, { login: "e2e-ask-offer" });
+  const workspace = await trpcMutation<{ id: string }>(page, "workspaces.ensureDefault", {});
+  const note = await openNote(page, "Why do tides come twice a day?");
+  const nodeId = note.nodes[0]!.id;
+  await page.goto(`/r/${note.tree.id}?node=${nodeId}&edit=${nodeId}`);
+  await expect(page.getByRole("textbox", { name: "Note text" })).toBeVisible();
+  await page.getByRole("button", { name: "Ask as a question" }).click();
+  const offer = page.getByRole("dialog", { name: "Delete the original thread?" });
+  await expect(offer).toBeVisible();
+  await expect(offer.getByText("It has no follow-ups.")).toBeVisible();
+  await expect(page).not.toHaveURL(new RegExp(`/r/${note.tree.id}`));
+  await offer.getByRole("button", { name: "Delete…" }).click();
+  const confirm = page.getByRole("dialog", { name: /^Delete “/ });
+  await confirm.getByRole("button", { name: "Move to Trash" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const input = encodeURIComponent(JSON.stringify({ workspaceId: workspace.id }));
+      const response = await page.request.get(
+        `${APP_ORIGIN}/api/trpc/research.listTrash?input=${input}`,
+      );
+      const trees = ((await response.json()) as { result: { data: { id: string }[] } }).result.data;
+      return trees.map((tree) => tree.id);
+    })
+    .toContain(note.tree.id);
+});
+
 test("Rerun replaces a complete answer after confirmation", async ({ page }) => {
   await signIn(page, { login: "e2e-rerun" });
   await openThread(page, "What is a bloom filter?");

@@ -5,6 +5,7 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { APP_ORIGIN } from "./constants.js";
 import {
   askBox,
   responseRoot,
@@ -272,6 +273,46 @@ test("persists theme and appearance preferences across page reloads", async ({ p
   await page.reload();
   await expect(html).toHaveAttribute("data-appearance", "light");
   await expect(html).toHaveAttribute("data-color-theme", "orange-blob");
+});
+
+test("the settings page has the desktop's rows; Usage is in the account menu", async ({ page }) => {
+  const user = await signInAndOpenHome(page, { login: "e2e-settings-rows" });
+  // The sidebar header's Settings, as on the desktop.
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(
+    page.getByText(
+      /^A thread's question boxes always require (⌘↵|Ctrl\+↵)\. This setting controls the Home ask box, drafts and note follow-ups\.$/,
+    ),
+  ).toBeVisible();
+  const instructions = page.getByRole("textbox", { name: "Research instructions" });
+  await expect(instructions).toHaveAttribute(
+    "placeholder",
+    "Answer concisely, in a few short paragraphs.",
+  );
+  await expect(page.getByText("Sent with every research launch")).toBeVisible();
+  for (const gone of ["Text size", "Default workspace", "Save instructions"]) {
+    await expect(page.getByText(gone, { exact: true })).toHaveCount(0);
+  }
+  // The instructions save as they are typed.
+  await instructions.fill("Prefer primary sources.");
+  await expect
+    .poll(
+      async () =>
+        (
+          (await (await page.request.get(`${APP_ORIGIN}/api/trpc/settings.get`)).json()) as {
+            result: { data: { researchLaunchInstruction: string | null } };
+          }
+        ).result.data.researchLaunchInstruction,
+    )
+    .toBe("Prefer primary sources.");
+
+  await page.getByRole("button", { name: user.login }).click();
+  await page.getByRole("menuitem", { name: "Usage…" }).click();
+  await expect(page.getByRole("dialog", { name: "Usage" })).toBeVisible();
 });
 
 test("the desktop's Reduce motion and Require ⌘↵ settings take effect and persist", async ({

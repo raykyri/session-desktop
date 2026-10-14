@@ -171,17 +171,19 @@ export function SidebarNav({
               : search
           }
           aria-current={isSelected ? "page" : undefined}
+          aria-label={
+            entry.key === "shared" && invitations > 0
+              ? `${entry.label}, ${invitationCountLabel(invitations)}`
+              : undefined
+          }
           className={cn(SIDEBAR_ROW, isSelected && SIDEBAR_ROW_SELECTED, entry.folderId && "pr-8")}
         >
           <span className="text-fg-muted inline-flex shrink-0">{entry.icon}</span>
           <span className="min-w-0 flex-1 truncate">{entry.label}</span>
           {entry.key === "shared" && invitations > 0 ? (
-            <>
-              <span className={INVITE_BADGE} aria-hidden="true" data-invite-count={invitations}>
-                {invitations}
-              </span>
-              <span className="sr-only">, {invitationCountLabel(invitations)}</span>
-            </>
+            <span className={INVITE_BADGE} aria-hidden="true" data-invite-count={invitations}>
+              {invitations}
+            </span>
           ) : null}
           {entry.key === "home" && hintsShown ? (
             <span className={SHORTCUT_HINT} aria-hidden="true">

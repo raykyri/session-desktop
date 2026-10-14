@@ -157,6 +157,54 @@ test("the owner shares by link; the commenter asks, live for the owner; the view
   }
 });
 
+test("an invitation is counted on Shared with me; a commenter's Delete moves to their Trash or leaves", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-badge-owner");
+  const member = await signedInContext(browser, "e2e-ui-badge-member");
+  try {
+    const prompt = "Who keeps a thread when a member deletes it?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    const { invite } = await mutation<{ invite: { id: string } }>(owner.request, "invites.create", {
+      treeId,
+      role: "commenter",
+      githubLogin: member.user.login,
+    });
+    await member.page.goto("/");
+    const shared = member.page
+      .getByRole("navigation", { name: "Research" })
+      .getByRole("link", { name: "Shared with me, 1 invitation" });
+    await expect(shared).toBeVisible();
+    await mutation(member.request, "invites.accept", { inviteId: invite.id });
+
+    await member.page.goto(`/r/${treeId}`);
+    await expect(member.page.getByText(prompt).first()).toBeVisible();
+    await member.page.getByRole("button", { name: "Thread actions" }).click();
+    await member.page.getByRole("menuitem", { name: "Delete research" }).click();
+    const dialog = member.page.getByRole("dialog", { name: /^Delete “/ });
+    await expect(
+      dialog.getByText(
+        "It moves to your Trash. Its owner and the other people in it still have it.",
+      ),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: "Delete now" }).click();
+    const leave = member.page.getByRole("dialog", { name: /^Leave “/ });
+    await expect(leave.getByRole("button", { name: "Leave" })).toBeVisible();
+    await expect(member.page.getByText("Delete permanently?")).toHaveCount(0);
+    await leave.getByRole("button", { name: "Leave" }).click();
+    await member.page.waitForURL((url) => url.pathname === "/");
+    const left = await member.request.get(
+      `${APP_ORIGIN}/api/trpc/research.getTree?input=${encodeURIComponent(JSON.stringify({ treeId }))}`,
+    );
+    expect(left.ok(), "the member left the thread").toBe(false);
+    // The owner keeps it.
+    await query(owner.request, "research.getTree", { treeId });
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close()]);
+  }
+});
+
 test("a removed member cannot rejoin through an earlier link; a new link lets them back", async ({
   browser,
 }) => {
