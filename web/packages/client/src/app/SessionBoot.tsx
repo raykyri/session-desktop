@@ -68,7 +68,7 @@ function useDraftSync(): void {
     const write = (key: DraftKey, draft: ComposerDraft | null): void => {
       // An empty value is the server's delete.
       void setDraft(key, draft === null ? "" : JSON.stringify(draft)).catch(() => {
-        // Draft sync errors do not trigger notifications; the local draft remains preserved in localStorage and retries on subsequent changes.
+        // Draft sync errors do not trigger notifications; the local draft remains preserved in sessionStorage and retries on subsequent changes.
       });
     };
     setDraftSyncTarget(write);

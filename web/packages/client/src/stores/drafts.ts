@@ -5,10 +5,18 @@
 //
 // Composers restore the server copy on entering their scope. Local edits made
 // in this tab always win over asynchronous restoration.
+//
+// The stored drafts carry the id of the account that wrote them (`owner`).
+// When the session is known (`stores/localAccount.ts`), drafts of another
+// account, or of none, are dropped before anything reads them, and
+// sign-out and an expired session drop them all; writes still waiting for
+// the server go with them.
 
 import type { ResearchImageAttachment } from "@session/shared";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+
+import { ownsLocalState } from "../lib/localOwner.js";
 
 export const DRAFTS_STORAGE_KEY = "session.drafts.v2";
 export const DRAFT_SYNC_DEBOUNCE_MS = 120;
@@ -40,6 +48,10 @@ export type DraftSyncTarget = (key: DraftKey, draft: ComposerDraft | null) => vo
 
 export interface DraftsState {
   byKey: Record<string, ComposerDraft>;
+  /** The account the drafts belong to: a user id, null when signed out,
+   * undefined before a session was known (and in drafts stored before the
+   * field existed). */
+  owner?: string | null | undefined;
   get: (key: DraftKey) => ComposerDraft | undefined;
   setDraft: (key: DraftKey, draft: Omit<ComposerDraft, "updatedAt">) => void;
   clearDraft: (key: DraftKey) => void;
@@ -100,7 +112,9 @@ function flushPending(): void {
     clearTimeout(timer);
     timer = null;
   }
-  if (!syncTarget) {
+  // Another tab signed out or in as someone else: the session these writes
+  // would go out with is no longer this tab's account.
+  if (!syncTarget || !ownsLocalState()) {
     pending.clear();
     return;
   }
@@ -152,7 +166,24 @@ export const useDraftsStore = create<DraftsState>()(
       // Only the drafts are durable. Without this the whole state object is
       // handed to `JSON.stringify`, and it happens to come out right only
       // because functions serialize to nothing.
-      partialize: (state) => ({ byKey: state.byKey }),
+      partialize: (state) => ({ byKey: state.byKey, owner: state.owner }),
     },
   ),
 );
+
+/** Drops every draft and the writes still waiting for the server, and
+ * records `owner` as the drafts' account. */
+export function resetDrafts(owner: string | null | undefined): void {
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  pending.clear();
+  editedKeys.clear();
+  useDraftsStore.setState({ byKey: {}, owner });
+}
+
+/** The session is `owner`'s: drafts of any other account, or stored without
+ * one, are dropped. */
+export function claimDrafts(owner: string | null): void {
+  if (useDraftsStore.getState().owner === owner) return;
+  resetDrafts(owner);
+}

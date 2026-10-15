@@ -11,11 +11,17 @@
 // `pagehide`. Several tabs share the storage key, so a write merges with what
 // is stored tree by tree (the entry written last wins, `lib/tabMerge`), and
 // another tab's write is merged in when its `storage` event arrives.
+//
+// The unsent branches are the account's text: the store is dropped on
+// sign-out, on an expired session and when another account's session is
+// found (`stores/localAccount.ts`), and a tab that is no longer the recorded
+// account's (`lib/localOwner.ts`) does not write it.
 
 import type { ResearchHighlightAnchor } from "@session/shared";
 import { isSavedResearchAnchor, RESEARCH_SCROLL_POSITION_TTL_MS } from "@session/shared";
 import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
 
+import { ownsLocalState } from "../../lib/localOwner.js";
 import { mergeByUpdatedAt, onOtherTabWrite } from "../../lib/tabMerge.js";
 
 export const THREAD_NAVIGATION_KEY = "session.thread-navigation.v1";
@@ -131,6 +137,7 @@ export function flushThreadNavigation(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
   if (!store) return;
+  if (!ownsLocalState()) return;
   store = mergeByUpdatedAt(store, load(), forgotten);
   forgotten.clear();
   const entries = Object.entries(store)
@@ -291,6 +298,21 @@ export function forgetThread(treeId: string): void {
   delete all[treeId];
   forgotten.set(treeId, Date.now());
   flushThreadNavigation();
+}
+
+/** Forgets every tree's state in this tab, and with `stored` the stored copy
+ * too. */
+export function dropThreadNavigation(stored: boolean): void {
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  store = null;
+  forgotten.clear();
+  if (!stored) return;
+  try {
+    localStorage.removeItem(THREAD_NAVIGATION_KEY);
+  } catch {
+    // Storage unavailable: nothing was stored.
+  }
 }
 
 /** For tests: drops the in-memory store so the next read loads storage. */

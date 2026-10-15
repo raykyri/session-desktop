@@ -39,6 +39,7 @@ import {
   SharedPage,
   TrashPage,
 } from "../routes/places.js";
+import { claimLocalAccountState } from "../stores/localAccount.js";
 
 import { RouteErrorPanel, RouteNotFoundPanel, RoutePendingPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
@@ -110,13 +111,29 @@ export function safeRedirectPath(value: string | undefined): string | null {
   return value;
 }
 
+/**
+ * The session, read through the cache. Each answer claims this browser's
+ * unsent drafts and thread state for that account before any view reads them
+ * (`stores/localAccount.ts`); null when signed out, and when the server could
+ * not be asked, which claims nothing.
+ */
+async function loadSession(client: QueryClient) {
+  try {
+    const me = await client.ensureQueryData(meQueryOptions());
+    claimLocalAccountState(me?.id ?? null);
+    return me;
+  } catch {
+    return null;
+  }
+}
+
 /** The login route renders without the application shell. Already-authenticated users visiting /login are redirected to their destination or the root route. */
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
   validateSearch: loginSearchSchema,
   beforeLoad: async ({ context, search }) => {
-    const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+    const me = await loadSession(context.queryClient);
     if (!me) return;
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw redirect({ href: safeRedirectPath(search.redirect) ?? "/" });
@@ -159,7 +176,7 @@ const shellRoute = createRoute({
     // conditioned on the build rather than on the path alone, so a route named
     // `/dev/...` in a production bundle could never opt out of the guard.
     if (isDevelopment && location.pathname.startsWith("/dev/")) return;
-    await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+    await loadSession(context.queryClient);
   },
   loader: ({ context }) => {
     void warmBootQueries(context.queryClient);
@@ -185,7 +202,7 @@ async function requireSignedIn({
   context: RouterContext;
   location: { href: string };
 }): Promise<void> {
-  const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+  const me = await loadSession(context.queryClient);
   if (!me) {
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw redirect({ to: "/login", search: { redirect: location.href } });

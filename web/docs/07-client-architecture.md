@@ -265,7 +265,7 @@ session on to that path.
 | --- | --- | --- |
 | `settings` | `UserSettings` mirror | localStorage `session.settings.v2`; server copy authoritative |
 | `navigation` | `feedMode`, feed scroll anchors, `sidebarCollapsed`, `sidebarWidth` (a thread's selection, scroll offsets and expansions are in `features/thread/persistence.ts`, localStorage `session.thread-navigation.v1`) | localStorage `session.navigation.v2` |
-| `drafts` | home composer drafts (text, model, effort, images), per-node follow-up drafts, targeted asks in progress | sessionStorage + `drafts.set` (debounce 120 ms, flush on `pagehide`) |
+| `drafts` | home composer drafts (text, model, effort, images), per-node follow-up drafts, targeted asks in progress; `owner` = the account that wrote them | sessionStorage `session.drafts.v2` + `interfaceDrafts.set` (debounce 120 ms, flush on `pagehide`) |
 | `overlays` | stack of open dismissable layers with `onEscape` | none |
 | `liveTurns` | `Map<nodeId, { turns, inFlightText, inFlightTurnId, lastSeq, status }>` | none |
 | `lightboxes` | image/diagram lightbox state (ported `useSyncExternalStore` stores) | none |
@@ -275,6 +275,21 @@ session on to that path.
 
 Stores expose selectors; components subscribe to slices. No module-level
 refs mirror state.
+
+Unsent text kept in the browser belongs to one account
+(`stores/localAccount.ts`, `lib/localOwner.ts`). The drafts store records its
+account in `owner`; localStorage `session.local-owner.v1` (`{ userId }`, null
+when signed out) records the account of the thread pages' state
+(`session.thread-navigation.v1`, which holds the unsent branches). Every
+answer of `auth.me` in a route guard claims both for that session before a
+view renders: drafts and thread state of another account, of a signed-out
+tab, or stored before the stamp existed are dropped, with the drafts' writes
+still waiting for the server. Sign-out (`useLogout`) and an expired session
+(the event bridge's sign-out) drop them and record a signed-out browser. When
+another tab records a different account, a tab drops what it holds without
+writing it and reloads; until it does, its thread-state writes and draft
+pushes are skipped, because its requests already go out with the other tab's
+session. The same account keeps its drafts and thread state across reloads.
 
 ### 4.4 Escape and dismissal
 

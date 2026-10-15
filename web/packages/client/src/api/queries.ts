@@ -49,6 +49,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CONNECTION_FALLBACK_DELAY_MS, useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type LiveTurnStatus } from "../stores/liveTurns.js";
+import { clearLocalAccountState } from "../stores/localAccount.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 import {
@@ -1276,6 +1277,8 @@ export function useLogout() {
       // Clear the React Query cache on logout to purge user data from memory.
       client.clear();
       useSettingsStore.getState().reset();
+      // And the unsent drafts and branches this browser kept for the account.
+      clearLocalAccountState();
     },
   });
 }
