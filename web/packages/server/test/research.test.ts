@@ -213,7 +213,7 @@ test("daily limits refuse a launch only when enforcement is on", async (t) => {
     model: "gemini-flash",
     workspaceId: workspace.id,
   });
-  // `daily_runs` counts attempts, which `run_attempts` records; simulate the
+  // `daily_runs` counts attempts started (`runs.startAttempt`); simulate the
   // first attempt starting.
   runsRepo.startAttempt(harness.db, {
     nodeId: detail.nodes[0]?.id ?? "",

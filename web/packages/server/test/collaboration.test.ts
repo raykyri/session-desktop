@@ -2,7 +2,7 @@
 // events, presence, notifications, who pays, stale edits, and images
 // (`03-api-and-events.md` §2–§3, `02-domain-model-and-database.md` §5.16).
 
-import { followups, nodes, schema, snapshots } from "@session/db";
+import { followups, nodes, runs, schema, snapshots } from "@session/db";
 import type { ResearchImageAttachment } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
@@ -216,16 +216,12 @@ test("the asker pays: a commenter's question is queued and limited as theirs", a
     .all()
     .find((candidate) => candidate.nodeId === node.id);
   t.is(row?.userId, thread.commenter.id);
-  harness.db
-    .insert(schema.runAttempts)
-    .values({
-      nodeId: node.id,
-      attempt: 1,
-      kind: "fresh",
-      model: "gemini-flash",
-      startedAt: Date.now(),
-    })
-    .run();
+  runs.startAttempt(harness.db, {
+    nodeId: node.id,
+    attempt: 1,
+    kind: "fresh",
+    model: "gemini-flash",
+  });
   // The commenter has spent their day; the owner has not.
   await t.throwsAsync<TRPCError>(
     harness.caller(thread.commenter).research.forkNode({

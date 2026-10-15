@@ -135,7 +135,9 @@ In-memory token buckets in Hono middleware (single process).
 
 Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):
 per account per UTC day, `daily_tokens` (input + output across all models,
-from `usage_events`) and `daily_runs` (research attempts). `usage_events`
+from `usage_events`) and `daily_runs` (research attempts started, counted
+from the `run` rows of `usage_events`, which deleting the research does not
+remove). `usage_events`
 stores `reasoning_tokens` as a breakdown of `output_tokens` rather than as a
 third bucket — that is how the AI SDK reports it (`04-agent-runtime.md` §13) —
 so the limit does not add it again, and it agrees with the cost estimate

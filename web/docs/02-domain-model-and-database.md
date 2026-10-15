@@ -298,7 +298,8 @@ The parent trees whose nested children a person has hidden. Per person.
   text, `started_at`, `ended_at` null, `outcome` text null, `error_class`
   text null, `steps` integer, `tool_calls` integer, `usage_json` text null
   (input, output, reasoning, cached tokens), `cost_estimate_micros` integer
-  null; PK (`node_id`, `attempt`)
+  null; PK (`node_id`, `attempt`). Deleted with the node, so the daily run
+  limit does not count these (§3.7)
 
 `node_messages` (canonical conversation; `04-agent-runtime.md` §4)
 
@@ -456,9 +457,15 @@ removed with the uploaded-documents feature in phase 2.0.
 `usage_events`
 
 - `id` PK, `user_id` FK, `node_id` text null, `kind` text (`research |
-metadata | search | fetch`), `provider` text, `model` text null,
+metadata | search | fetch | run`), `provider` text, `model` text null,
   `input_tokens`, `output_tokens`, `reasoning_tokens`, `cached_tokens`
   integer, `cost_estimate_micros` integer, `created_at`
+- `node_id` has no foreign key: deleting research keeps the account's usage.
+- `run` rows carry no tokens: `runs.startAttempt` writes one per attempt
+  started, for the person who pays for it, with the id
+  `run:<node_id>:<attempt>` so starting the same attempt again does not count
+  twice. They are what the daily run limit counts, so deleting a thread does
+  not give its runs back.
 - Index (`user_id`, `created_at`). Admission sums the current UTC day per
   user for the daily token and run limits (`06-auth-and-users.md` §8);
   rollups are materialized only if that query becomes slow.

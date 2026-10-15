@@ -3,7 +3,7 @@
 // `docs/02-domain-model-and-database.md` §3.3).
 
 import type { Turn } from "@session/shared";
-import { turnSchema } from "@session/shared";
+import { findModel, turnSchema } from "@session/shared";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
@@ -12,9 +12,11 @@ import type { AttemptUsage } from "../json.js";
 import { parseWireColumn } from "../json.js";
 import { nodes } from "../schema/nodes.js";
 import { runAttempts, runTurns } from "../schema/runs.js";
+import { trees } from "../schema/trees.js";
+import { usageEvents } from "../schema/usage.js";
 import { now } from "../time.js";
 
-import { nodeReadableBy } from "./access.js";
+import { nodeReadableBy, payerOf } from "./access.js";
 
 function requireNode(
   db: SessionDatabase,
@@ -226,8 +228,47 @@ export interface AttemptStart {
   at?: number | undefined;
 }
 
+/** The `usage_events` id of an attempt's `run` record: one per attempt, so
+ * starting the same attempt again does not count a second run. */
+export function runUsageId(nodeId: string, attempt: number): string {
+  return `run:${nodeId}:${attempt}`;
+}
+
+/**
+ * Opens the `run_attempts` row of an attempt and records the run against the
+ * daily limit: a `usage_events` row of kind `run` for the person who pays
+ * for it (`payerOf`). That row has no reference to the node, so deleting the
+ * research does not give the run back (`docs/06-auth-and-users.md` §8);
+ * `usage.dailyTotals` counts it.
+ */
 export function startAttempt(db: SessionDatabase, input: AttemptStart): void {
   const at = input.at ?? now();
+  transact(db, (tx) => {
+    const node = tx
+      .select({ authorId: nodes.authorId, ownerId: trees.ownerId })
+      .from(nodes)
+      .innerJoin(trees, eq(trees.id, nodes.treeId))
+      .where(eq(nodes.id, input.nodeId))
+      .get();
+    if (node) {
+      tx.insert(usageEvents)
+        .values({
+          id: runUsageId(input.nodeId, input.attempt),
+          userId: payerOf({ authorId: node.authorId }, { ownerId: node.ownerId }),
+          nodeId: input.nodeId,
+          kind: "run",
+          provider: findModel(input.model)?.provider ?? input.model,
+          model: input.model,
+          createdAt: at,
+        })
+        .onConflictDoNothing()
+        .run();
+    }
+    writeAttemptRow(tx, input, at);
+  });
+}
+
+function writeAttemptRow(db: SessionDatabase, input: AttemptStart, at: number): void {
   db.insert(runAttempts)
     .values({
       nodeId: input.nodeId,

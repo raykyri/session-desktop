@@ -1,6 +1,6 @@
 import test from "ava";
 
-import { auth, runs, trees, usage } from "../src/index.js";
+import { auth, deletion, runs, trees, usage } from "../src/index.js";
 
 import type { Fixture } from "./helpers.js";
 import { createFixture } from "./helpers.js";
@@ -110,6 +110,42 @@ test("another account's attempts are not counted", (t) => {
   const fixture = createFixture(t);
   attemptAt(fixture, NOON);
   t.is(usage.dailyTotals(fixture.db, "someone-else", NOON).runs, 0);
+});
+
+test("deleting the research does not give its runs back", (t) => {
+  const fixture = createFixture(t);
+  const nodeId = attemptAt(fixture, NOON);
+  attemptAt(fixture, NOON + 1000);
+  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 2);
+  const treeId = fixture.db.$client
+    .prepare("SELECT tree_id AS treeId FROM nodes WHERE id = ?")
+    .get(nodeId) as { treeId: string };
+  // Delete now, then the deletion job removes the rows.
+  deletion.markTreesDeleted(fixture.db, [treeId.treeId]);
+  deletion.drain(fixture.db);
+  t.deepEqual(
+    fixture.db.$client.prepare("SELECT count(*) AS n FROM nodes WHERE id = ?").get(nodeId),
+    { n: 0 },
+  );
+  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 2);
+  const decision = usage.admissionCheck(fixture.db, fixture.userId, {
+    defaults: { dailyRuns: 2 },
+    at: NOON,
+  });
+  t.false(decision.allowed);
+});
+
+test("starting the same attempt twice is one run", (t) => {
+  const fixture = createFixture(t);
+  const nodeId = attemptAt(fixture, NOON);
+  runs.startAttempt(fixture.db, {
+    nodeId,
+    attempt: 1,
+    kind: "fresh",
+    model: "gemini-flash",
+    at: NOON + 5,
+  });
+  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 1);
 });
 
 test("prioritizes account-specific limits over deployment defaults", (t) => {

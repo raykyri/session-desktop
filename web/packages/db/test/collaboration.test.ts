@@ -11,6 +11,7 @@ import {
   highlights,
   nodes,
   posts,
+  runs,
   schema,
   sharing,
   snapshots,
@@ -315,15 +316,7 @@ test("the asker pays: the run queue and the daily runs count the question's auth
     .find((candidate) => candidate.nodeId === sent.node.id);
   t.is(sentRow?.userId, shared.commenter.userId);
   // Attempts count against the payer's daily runs, not the owner's.
-  db.insert(schema.runAttempts)
-    .values({
-      nodeId: question.id,
-      attempt: 2,
-      kind: "fresh",
-      model: "gemini-flash",
-      startedAt: Date.now(),
-    })
-    .run();
+  runs.startAttempt(db, { nodeId: question.id, attempt: 2, kind: "fresh", model: "gemini-flash" });
   t.is(usage.dailyTotals(db, shared.commenter.userId).runs, 1);
   t.is(usage.dailyTotals(db, shared.fixture.userId).runs, 0);
   t.is(runOf(sent.node).status, "queued");

@@ -17,7 +17,9 @@ export const usageEvents = sqliteTable(
      * reference is deliberately absent so deleting a thread does not erase the
      * account's usage history. */
     nodeId: text("node_id"),
-    kind: text("kind", { enum: ["research", "metadata", "search", "fetch"] }).notNull(),
+    /** `run` is one research attempt started, with no tokens: what the
+     * daily run limit counts (`runs.startAttempt`). The others carry usage. */
+    kind: text("kind", { enum: ["research", "metadata", "search", "fetch", "run"] }).notNull(),
     provider: text("provider").notNull(),
     model: text("model"),
     inputTokens: integer("input_tokens").notNull().default(0),

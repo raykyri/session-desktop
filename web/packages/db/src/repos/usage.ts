@@ -7,12 +7,9 @@ import { and, eq, gte, lt, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { newId } from "../ids.js";
-import { nodes } from "../schema/nodes.js";
-import { runAttempts } from "../schema/runs.js";
 import { usageEvents } from "../schema/usage.js";
 import { now, startOfUtcDay } from "../time.js";
 
-import { nodePaidBy } from "./access.js";
 import { getUserLimits } from "./auth.js";
 
 /** Deployment defaults, overridden per account in `user_limits`. */
@@ -21,7 +18,7 @@ export const DEFAULT_DAILY_RUNS = 10;
 
 export interface UsageEventInput {
   nodeId?: string | null | undefined;
-  kind: "research" | "metadata" | "search" | "fetch";
+  kind: "research" | "metadata" | "search" | "fetch" | "run";
   provider: string;
   model?: string | null | undefined;
   inputTokens?: number | undefined;
@@ -60,7 +57,8 @@ export interface DailyTotals {
   reasoningTokens: number;
   cachedTokens: number;
   costEstimateMicros: number;
-  /** Research attempts started that day — what `daily_runs` counts. */
+  /** Research attempts started that day — what `daily_runs` counts. Read
+   * from the `run` usage records, which outlive the research they ran for. */
   runs: number;
 }
 
@@ -86,18 +84,20 @@ export function dailyTotals(db: SessionDatabase, userId: string, at: number = no
       ),
     )
     .get();
-  // One row per attempt, which is what `daily_runs` limits
-  // (`06-auth-and-users.md` §8). Counting `usage_events` of kind `research`
-  // instead would charge an attempt once per usage record it wrote.
+  // One `run` record per attempt (`runs.startAttempt`), which is what
+  // `daily_runs` limits (`06-auth-and-users.md` §8). Counting records of kind
+  // `research` instead would charge an attempt once per usage record it
+  // wrote, and counting `run_attempts` would give a run back when its
+  // research is deleted, since those rows go with the node.
   const runs = db
     .select({ value: sql<number>`count(*)` })
-    .from(runAttempts)
-    .innerJoin(nodes, eq(nodes.id, runAttempts.nodeId))
+    .from(usageEvents)
     .where(
       and(
-        nodePaidBy(userId),
-        gte(runAttempts.startedAt, day),
-        lt(runAttempts.startedAt, day + 86_400_000),
+        eq(usageEvents.userId, userId),
+        eq(usageEvents.kind, "run"),
+        gte(usageEvents.createdAt, day),
+        lt(usageEvents.createdAt, day + 86_400_000),
       ),
     )
     .get();
