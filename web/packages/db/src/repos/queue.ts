@@ -201,6 +201,37 @@ export function release(db: SessionDatabase, nodeId: string): boolean {
   return row !== undefined;
 }
 
+/**
+ * Removes the row only while `attempt` is still the node's current attempt:
+ * how a finished agent attempt releases its claim. A retry or rerun that
+ * replaced a cancelled attempt has moved the attempt number and put its own
+ * row in, which the old attempt must leave alone.
+ */
+export function releaseAttempt(db: SessionDatabase, nodeId: string, attempt: number): boolean {
+  const row = db
+    .delete(runQueue)
+    .where(
+      and(
+        eq(runQueue.nodeId, nodeId),
+        sql`(select ${nodes.attempt} from ${nodes} where ${nodes.id} = ${nodeId}) = ${attempt}`,
+      ),
+    )
+    .returning({ nodeId: runQueue.nodeId })
+    .get();
+  return row !== undefined;
+}
+
+/** Makes an unclaimed row claimable now, clearing its `not_before`. */
+export function clearBackoff(db: SessionDatabase, nodeId: string): boolean {
+  const row = db
+    .update(runQueue)
+    .set({ notBefore: null })
+    .where(and(eq(runQueue.nodeId, nodeId), isNull(runQueue.claimedAt)))
+    .returning({ nodeId: runQueue.nodeId })
+    .get();
+  return row !== undefined;
+}
+
 /** Puts a claimed row back with a delay — the 429 path (5 s, 20 s, 60 s). */
 export function requeueWithBackoff(db: SessionDatabase, nodeId: string, notBefore: number): void {
   db.update(runQueue).set({ claimedAt: null, notBefore }).where(eq(runQueue.nodeId, nodeId)).run();

@@ -853,6 +853,19 @@ export function requeueAfterRateLimit(
 }
 
 /**
+ * The node's current attempt number, or null when the node is gone. Every
+ * path that starts a node over (a retry, a rerun, a resume, a 429 re-queue)
+ * moves it, so an agent attempt compares it with its own number before each
+ * write: a cancelled attempt that is still unwinding must not write into the
+ * attempt that replaced it (`docs/05-run-lifecycle-and-streaming.md` §3). No
+ * access check; for the agent loop.
+ */
+export function attemptOf(db: SessionDatabase, nodeId: string): number | null {
+  const row = db.select({ attempt: nodes.attempt }).from(nodes).where(eq(nodes.id, nodeId)).get();
+  return row?.attempt ?? null;
+}
+
+/**
  * Gives up on auto-resuming a node (`docs/05-run-lifecycle-and-streaming.md`
  * §3). The node keeps its `interrupted` status and its partial output, and the
  * user's Retry is what moves it from here; clearing the flag is what stops

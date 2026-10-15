@@ -123,6 +123,21 @@ Retry (user action) on `failed`, `cancelled`, or `interrupted` starts a
 fresh attempt from the parent's context, discarding the node's own partial
 messages, as the desktop's retry did.
 
+Attempts are fenced by their number. Retry, Rerun, a resume and a 429
+re-queue all move `nodes.attempt` in the transaction that queues the node,
+and the run queue row belongs to the node's current attempt. A cancelled
+attempt can still be unwinding its provider stream when Retry or Rerun
+queues the next one (both can land within the same millisecond). Before
+every write it checks that its number is still the node's
+(`nodes.attemptOf`); once it is not, it writes no turns, status or events,
+closes only its own `run_attempts` row, records its usage, and ends as
+`superseded`. It releases the queue row only while it still owns it
+(`queue.releaseAttempt`). A claim of a node whose previous attempt is still
+active is put back with a 1 s `not_before` (`PREVIOUS_ATTEMPT_WAIT_MS`)
+instead of being dropped, and that attempt's settlement clears the wait. An
+abort that is not a drain is a cancel: the attempt writes `cancelled` if
+nothing else did.
+
 ## 8. Admission and queueing
 
 Owned by the server: 2 concurrent research runs per user, per-provider caps

@@ -135,6 +135,12 @@ export const CLAIM_INTERVAL_MS = 250;
  * is looked at again. The parent's settlement wakes it sooner. */
 export const PARENT_WAIT_MS = 60_000;
 
+/** How long a claimed node waits when its previous attempt is still
+ * unwinding (a retry or rerun right after a cancel). That attempt's
+ * settlement makes it claimable sooner; the delay only bounds a missed
+ * wake-up. */
+export const PREVIOUS_ATTEMPT_WAIT_MS = 1_000;
+
 /** The error of a node whose parent settled without an answer while the
  * node waited for it. */
 export const PARENT_INCOMPLETE = "The answer this question follows did not complete.";
@@ -193,6 +199,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   const active = new Map<string, ActiveRun>();
+  /** Nodes claimed while an earlier attempt of theirs was still active, put
+   * back to wait for it (`begin`). */
+  const deferred = new Set<string>();
   const metadataQueue: MetadataJob[] = [];
   const metadataRunning = new Set<Promise<void>>();
   let draining = false;
@@ -245,9 +254,13 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   /** Last resort for an attempt that threw past the loop's own settlement:
-   * a node no longer being run must not stay `running`. */
-  const settleUnhandled = (nodeId: string, userId: string): void => {
+   * a node no longer being run must not stay `running`. Only while the
+   * attempt that threw is still the node's. */
+  const settleUnhandled = (nodeId: string, userId: string, attempt: number): void => {
     try {
+      if (nodesRepo.attemptOf(deps.db, nodeId) !== attempt) {
+        return;
+      }
       const node = nodesRepo.get(deps.db, userId, nodeId);
       if (!node || nodesRepo.isTerminalStatus(nodeStatus(node))) {
         return;
@@ -308,10 +321,28 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     return active ? "wait" : "fail";
   };
 
+  /**
+   * Starts the claimed node's attempt. Everything the attempt does when it
+   * ends is fenced by its attempt number: once a retry or rerun has replaced
+   * it (Cancel, then Retry, before the cancelled stream finished
+   * unwinding), it releases no queue row, writes no status and sends no
+   * notification, since those belong to the newer attempt now.
+   */
   const begin = (nodeId: string, userId: string, kind: "fresh" | "resume"): void => {
     if (active.has(nodeId)) {
+      // The node's previous attempt has not settled yet. Dropping the claim
+      // would leave the row claimed with nothing running it; it waits
+      // instead, and that attempt's settlement makes it claimable.
+      queueRepo.requeueWithBackoff(deps.db, nodeId, Date.now() + PREVIOUS_ATTEMPT_WAIT_MS);
+      deferred.add(nodeId);
       return;
     }
+    const attempt = nodesRepo.attemptOf(deps.db, nodeId);
+    if (attempt === null) {
+      queueRepo.release(deps.db, nodeId);
+      return;
+    }
+    const owned = (): boolean => nodesRepo.attemptOf(deps.db, nodeId) === attempt;
     const controller = new AbortController();
     const done = runAttempt(loopDeps, {
       userId,
@@ -319,12 +350,16 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       kind,
       signal: controller.signal,
       isDraining: () => draining,
+      attempt,
     })
       .then((result) => {
+        if (result.outcome === "superseded" || !owned()) {
+          return;
+        }
         if (result.outcome === "rate_limited") {
           settleRateLimited(userId, nodeId);
         } else {
-          queueRepo.release(deps.db, nodeId);
+          queueRepo.releaseAttempt(deps.db, nodeId, attempt);
           // The asker hears that their run finished or failed.
           const settled = nodesRepo.get(deps.db, userId, nodeId);
           if (settled) notifyRunFinished(deps, settled);
@@ -341,16 +376,20 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       })
       .catch((error: unknown) => {
         logger.error({ nodeId, error }, "run attempt threw");
-        queueRepo.release(deps.db, nodeId);
+        queueRepo.releaseAttempt(deps.db, nodeId, attempt);
         // The loop completes the node for every expected failure; this is
         // the one it does not. A throw past its own handlers — a SQLite write
         // that failed while the last turn was being committed, most likely —
         // would otherwise leave the node `running` with nothing left to move
         // it, until a restart reconciled it hours later.
-        settleUnhandled(nodeId, userId);
+        settleUnhandled(nodeId, userId, attempt);
       })
       .finally(() => {
         active.delete(nodeId);
+        // A newer attempt claimed while this one was active waits no longer.
+        if (deferred.delete(nodeId)) {
+          queueRepo.clearBackoff(deps.db, nodeId);
+        }
         if (!draining) {
           afterSettle(userId, nodeId);
         }

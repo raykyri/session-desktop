@@ -296,6 +296,64 @@ test.serial("a rate limit re-queues with backoff instead of failing", async (t) 
   t.is(runOf(nodesRepo.get(harness.db, user.id, nodeId)).status, "complete");
 });
 
+for (const relaunch of ["retryNode", "rerunNode"] as const) {
+  test.serial(
+    `${relaunch} at once after a cancel runs; the cancelled attempt writes nothing to it`,
+    async (t) => {
+      setFixtureScenario("abort");
+      const harness = createAgentHarness(t);
+      const { user, caller, nodeId } = await launch(harness, `quick-${relaunch}`);
+      const events = collectEvents(t, harness, user.id, [nodeId]);
+      await harness.agent.tick();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Cancel and relaunch with nothing in between: the cancelled attempt is
+      // still unwinding its stream when the new one is queued.
+      await caller.research.cancelNode({ nodeId });
+      setFixtureScenario("success");
+      await caller.research[relaunch]({ nodeId });
+      const queuedAt = events.length;
+      // A claim round while the old attempt is still active.
+      await harness.agent.tick();
+
+      await harness.agent.idle();
+      const waiting = nodesRepo.get(harness.db, user.id, nodeId);
+      t.not(runOf(waiting).status, "failed", "the old attempt did not fail the new one");
+      t.is(runOf(waiting).attempt, 2);
+      await harness.settle();
+
+      const node = nodesRepo.get(harness.db, user.id, nodeId);
+      t.is(runOf(node).status, "complete", "the relaunched attempt ran");
+      t.is(runOf(node).attempt, 2);
+      t.is(queueRepo.queuedCount(harness.db, user.id), 0);
+      const content = await caller.research.getNodeContent({ nodeId });
+      const text = content.turns
+        .flatMap((turn) => turn.blocks)
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("");
+      t.notRegex(text, /Partial text before the abort/, "no turn of the old attempt is in it");
+      const attempts = runsRepo.listAttempts(harness.db, nodeId);
+      t.deepEqual(
+        attempts.map((attempt) => [attempt.attempt, attempt.outcome]),
+        [
+          [1, "cancelled"],
+          [2, "complete"],
+        ],
+      );
+      // Nothing after the relaunch reports the old attempt failing.
+      t.false(
+        events
+          .slice(queuedAt)
+          .some(
+            (event) =>
+              event.type === "research.run.finished" && event.payload["status"] === "failed",
+          ),
+      );
+    },
+  );
+}
+
 test.serial("cancel aborts the stream and keeps the partial text", async (t) => {
   setFixtureScenario("abort");
   const harness = createAgentHarness(t);

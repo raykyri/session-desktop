@@ -60,7 +60,11 @@ export const CHECKPOINT_INTERVAL_MS = 1_000;
 export const CHECKPOINT_BYTES = 4 * 1024;
 export const PREVIEW_INTERVAL_MS = 500;
 
-export type AttemptOutcome = "complete" | "failed" | "cancelled" | "interrupted" | "rate_limited";
+/** `superseded`: a newer attempt of the node (a retry or rerun after a
+ * cancel) took over while this one was unwinding; this one wrote nothing to
+ * the node and owns no queue row. */
+export type AttemptOutcome =
+  "complete" | "failed" | "cancelled" | "interrupted" | "rate_limited" | "superseded";
 
 export interface AttemptResult {
   outcome: AttemptOutcome;
@@ -92,6 +96,9 @@ export interface RunAttemptInput {
   signal: AbortSignal;
   /** Set by drain so the attempt ends as `interrupted` rather than failing. */
   isDraining: () => boolean;
+  /** The node's attempt number when the service claimed it. When the node
+   * has moved on by the time the attempt starts, it does not run. */
+  attempt?: number | undefined;
 }
 
 /** The markdown of a `document` parent, which has no messages and rides in the
@@ -138,6 +145,18 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   }
   const modelId = node.agent.model ?? DEFAULT_MODEL_ID;
   const attempt = node.run.attempt ?? 1;
+  if (input.attempt !== undefined && input.attempt !== attempt) {
+    return { outcome: "superseded" };
+  }
+  /**
+   * Whether this attempt is still the node's current one. A retry or rerun
+   * moves the attempt number in the same transaction that queues it, so a
+   * cancelled attempt that is still unwinding its stream sees a newer number
+   * and writes nothing more to the node: no turns, no status, no events.
+   * The database is synchronous, so a check followed by a write with no
+   * `await` between them cannot interleave with the retry.
+   */
+  const owned = (): boolean => nodesRepo.attemptOf(db, nodeId) === attempt;
 
   const resolved = deps.providers.resolve(modelId, node.agent.effort);
   if (!resolved) {
@@ -176,8 +195,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     return seq;
   };
-  // A run's events go to everyone reading its thread, and to its asker.
+  // A run's events go to everyone reading its thread, and to its asker; a
+  // superseded attempt's go nowhere.
   const emit = (type: string, payload: Record<string, unknown>): void => {
+    if (!owned()) return;
     eventBus.emitToTree(node.treeId, sessionEvent(type, payload), [userId]);
   };
   const publishNode = (
@@ -185,6 +206,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     extra: Record<string, unknown> = {},
     updateFeed = false,
   ): void => {
+    if (!owned()) return;
     emit("research.node.updated", { node: updated, ...extra });
     if (updateFeed) emitFeedItemUpsertedForNode(deps, updated.id);
   };
@@ -226,6 +248,77 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     ...(deps.toolOverrides?.allowHosts ? { allowHosts: deps.toolOverrides.allowHosts } : {}),
   };
 
+  let usage = attemptUsageOf(undefined);
+  let steps = 0;
+
+  const finishAttempt = (outcome: string, error?: ClassifiedError): void => {
+    runsRepo.finishAttempt(db, {
+      nodeId,
+      attempt: attempt,
+      outcome,
+      errorClass: error?.errorClass ?? null,
+      steps,
+      toolCalls: budget.searches + budget.fetches,
+      usage,
+      // The same estimate `usage_events` carries, from the registry's price
+      // table, so a per-attempt cost is readable without a join.
+      costEstimateMicros: costOf(resolved.entry, usage),
+    });
+  };
+
+  const recordUsage = (): void => {
+    recordAttemptUsage({
+      db,
+      userId,
+      nodeId,
+      entry: resolved.entry,
+      kind: "research",
+      usage,
+    });
+    recordToolUsage(db, userId, nodeId, "search", "search", toolUsage.search);
+    recordToolUsage(db, userId, nodeId, "fetch", "fetch", toolUsage.fetch);
+  };
+
+  /** A newer attempt owns the node: this one closes its own attempt row and
+   * records what it spent, and leaves the node alone. */
+  const settleSuperseded = (): AttemptResult => {
+    finishAttempt("cancelled");
+    recordUsage();
+    return { outcome: "superseded" };
+  };
+
+  /**
+   * Ends a cancelled attempt. `research.cancelNode` (and a departed member's
+   * stop) write `cancelled` before aborting the signal; an abort that is not
+   * a drain is a cancel even when nothing wrote the status, so it is written
+   * here rather than left `running`. The partial stays in `run_turns` so the
+   * document keeps what it produced.
+   */
+  const settleCancelled = (): AttemptResult => {
+    const now = nodesRepo.get(db, userId, nodeId);
+    if (now?.type === "exchange" && now.run.status !== "cancelled") {
+      nodesRepo.stopRun(db, nodeId);
+    }
+    finishAttempt("cancelled");
+    recordUsage();
+    // The cancel wrote the status from outside the loop and took a number
+    // with it. This event carries that number rather than one past it,
+    // which is what keeps the sequence contiguous whether or not the cancel
+    // raced a write of the loop's own.
+    seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
+    emit("research.run.finished", {
+      nodeId,
+      attempt: attempt,
+      seq,
+      status: "cancelled",
+    });
+    const settled = nodesRepo.get(db, userId, nodeId);
+    if (settled) {
+      publishNode(settled, {}, true);
+    }
+    return { outcome: "cancelled" };
+  };
+
   // The asker's preferences: their research instruction, and whether their
   // answers carry widgets.
   const preferences = preferencesRepo.ensure(db, userId);
@@ -265,6 +358,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       "assembled run context",
     );
   } catch (error) {
+    if (!owned()) {
+      return settleSuperseded();
+    }
+    if (input.signal.aborted && !input.isDraining()) {
+      return settleCancelled();
+    }
     const classified = classifyRunError(error);
     settleFailure(deps, userId, nodeId, attempt, classified, seq);
     return { outcome: "failed", error: classified };
@@ -325,8 +424,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       },
       onTurnCommitted: (turn) => {
         flushDelta(true);
+        if (!owned()) return;
         seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
-        const written = runsRepo.commitTurn(db, userId, { nodeId, turn });
+        const written = runsRepo.commitTurn(db, userId, { nodeId, turn, attempt });
         seq = written.seq;
         checkpointedLength = 0;
         lastCheckpointAt = Date.now();
@@ -350,10 +450,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const now = Date.now();
     const stale = now - lastCheckpointAt >= CHECKPOINT_INTERVAL_MS;
     const grown = length - checkpointedLength >= CHECKPOINT_BYTES;
-    if (!force && !stale && !grown) {
+    if ((!force && !stale && !grown) || !owned()) {
       return;
     }
-    runsRepo.checkpointInFlight(db, userId, { nodeId, turn, seq });
+    runsRepo.checkpointInFlight(db, userId, { nodeId, turn, seq, attempt });
     lastCheckpointAt = now;
     checkpointedLength = length;
   };
@@ -389,9 +489,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   let streamError: unknown = null;
   let finishReason: string | undefined;
   let rawFinishReason: string | undefined;
-  let usage = attemptUsageOf(undefined);
   let responseMessages: ModelMessage[] = [];
-  let steps = 0;
 
   try {
     const result = streamText({
@@ -449,36 +547,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const aborted = input.signal.aborted;
   const timedOut = timeout.aborted && !aborted;
   const draining = input.isDraining();
+  // Everything from here to the return is synchronous, so this one check
+  // covers every write below it.
+  if (!owned()) {
+    return settleSuperseded();
+  }
   const current = nodesRepo.get(db, userId, nodeId);
   const cancelled = current?.type === "exchange" && current.run.status === "cancelled";
-
-  const finishAttempt = (outcome: string, error?: ClassifiedError): void => {
-    runsRepo.finishAttempt(db, {
-      nodeId,
-      attempt: attempt,
-      outcome,
-      errorClass: error?.errorClass ?? null,
-      steps,
-      toolCalls: budget.searches + budget.fetches,
-      usage,
-      // The same estimate `usage_events` carries, from the registry's price
-      // table, so a per-attempt cost is readable without a join.
-      costEstimateMicros: costOf(resolved.entry, usage),
-    });
-  };
-
-  const recordUsage = (): void => {
-    recordAttemptUsage({
-      db,
-      userId,
-      nodeId,
-      entry: resolved.entry,
-      kind: "research",
-      usage,
-    });
-    recordToolUsage(db, userId, nodeId, "search", "search", toolUsage.search);
-    recordToolUsage(db, userId, nodeId, "fetch", "fetch", toolUsage.fetch);
-  };
 
   if (draining && !cancelled) {
     checkpoint(true);
@@ -495,27 +570,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return { outcome: "interrupted" };
   }
 
-  if (cancelled) {
-    // The status was already written by `research.cancelNode`; the partial
-    // stays in `run_turns` so the document keeps what it produced.
-    finishAttempt("cancelled");
-    recordUsage();
-    // `research.cancelNode` wrote the status from outside the loop and took a
-    // number with it. This event carries that number rather than one past it,
-    // which is what keeps the sequence contiguous whether or not the cancel
-    // raced a write of the loop's own.
-    seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
-    emit("research.run.finished", {
-      nodeId,
-      attempt: attempt,
-      seq,
-      status: "cancelled",
-    });
-    const settled = nodesRepo.get(db, userId, nodeId);
-    if (settled) {
-      publishNode(settled, {}, true);
-    }
-    return { outcome: "cancelled" };
+  // Past the drain, an aborted signal is a cancel.
+  if (cancelled || aborted) {
+    return settleCancelled();
   }
 
   if (streamError !== null || timedOut) {
@@ -610,6 +667,11 @@ function settleFailure(
   seq?: number,
 ): void {
   const { db, eventBus, logger } = deps;
+  if (nodesRepo.attemptOf(db, nodeId) !== attempt) {
+    // A newer attempt owns the node; this failure is not its to report.
+    logger.info({ nodeId, attempt }, "a superseded attempt ended without writing its failure");
+    return;
+  }
   logger.warn({ nodeId, errorClass: error.errorClass, detail: error.detail }, "run failed");
   let node;
   try {
