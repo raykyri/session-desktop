@@ -6,7 +6,9 @@
 //! gates access. Inert content uses a research-thread token restricted to that thread's
 //! roots (its workspace folder, its runs' directories and the local temporary
 //! directories, where agents commonly write artifacts); executable content receives a
-//! token restricted to its exact source file. The server canonicalizes every requested
+//! token restricted to its exact source file; a thread-token request that resolves to
+//! executable content (HTML, SVG), such as a link followed from rendered Markdown, is
+//! redirected to that file's exact-file token. The server canonicalizes every requested
 //! path. A thread token cannot reach another workspace or Session's private state
 //! directory, an executable preview cannot read sibling files, and `..`/symlinks cannot
 //! escape into other locations such as `~/.ssh/id_rsa`.
@@ -485,9 +487,8 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
     // Resolve thread tokens beneath that thread's roots, while tokens exposed to
     // executable previews can only re-read the exact source file. Unknown tokens and
     // paths outside either capability fail without exposing whether the path exists.
-    if state.owner_for_file_token(token).is_none()
-        && state.exact_file_for_preview_token(token).is_none()
-    {
+    let thread_owner = state.owner_for_file_token(token);
+    if thread_owner.is_none() && state.exact_file_for_preview_token(token).is_none() {
         return Response::error(404, "Not Found");
     }
     let Some(decoded) = percent_decode(encoded_path) else {
@@ -496,6 +497,15 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
     let Some(canonical) = resolve_file_token_path(state, token, Path::new(&decoded)) else {
         return Response::error(403, "Forbidden");
     };
+    // A thread token reaches an executable file when an inert document it
+    // serves (rendered Markdown, for instance) links or refreshes to one. Run
+    // that file under its own exact-file token, as when it is opened directly,
+    // so its scripts never hold the thread token.
+    if let Some(owner_id) = &thread_owner
+        && is_executable_preview_path(&canonical)
+    {
+        return exact_file_redirect(state, owner_id, &canonical, query);
+    }
 
     let Ok(file) = File::open(&canonical) else {
         return Response::error(404, "Not Found");
@@ -721,6 +731,32 @@ fn embedded_font_response(path: &str, is_head: bool) -> Option<Response> {
     Some(response)
 }
 
+/// A 302 to the same file under an exact-file token, keeping the query (the
+/// body font and `codex-inline-vis` flags). The location is origin-relative, so
+/// it stays on the file server.
+fn exact_file_redirect(
+    state: &AppState,
+    owner_id: &str,
+    canonical: &Path,
+    query: Option<&str>,
+) -> Response {
+    let Ok(token) = state.exact_file_preview_token(owner_id, canonical) else {
+        return Response::error(403, "Forbidden");
+    };
+    let mut location = format!(
+        "/{token}{}",
+        percent_encode_path(&canonical.to_string_lossy())
+    );
+    if let Some(query) = query.filter(|query| !query.is_empty()) {
+        location.push('?');
+        location.push_str(query);
+    }
+    let mut response = Response::error(302, "Found");
+    response.header("Location", &location);
+    response.header("Cache-Control", "no-store");
+    response
+}
+
 fn html_preview_scroll_bridge() -> String {
     format!("<script>{HTML_PREVIEW_SCROLL_SCRIPT}</script>")
 }
@@ -732,10 +768,14 @@ fn html_preview_scroll_bridge() -> String {
 /// network egress, and `object-src`/`base-uri`/`form-action` are locked down for good
 /// measure. Inline scripts/styles are permitted because a served report legitimately
 /// carries its own, while the sandbox keeps its opaque origin isolated from session.
+/// `sandbox allow-scripts` applies the overlay iframe's own sandbox flags to the
+/// document itself, so it gets an opaque origin, no popups and no top-level
+/// navigation even when it is loaded some other way.
 fn file_content_csp(port: u16) -> String {
     let origin = format!("http://127.0.0.1:{port}");
     format!(
-        "default-src 'none'; \
+        "sandbox allow-scripts; \
+         default-src 'none'; \
          script-src 'unsafe-inline' {origin}; \
          style-src 'unsafe-inline' {origin}; \
          img-src data: blob: {origin}; \
@@ -757,7 +797,8 @@ fn markdown_page_csp(port: u16) -> String {
     let origin = format!("http://127.0.0.1:{port}");
     let script_hash = STANDARD.encode(Sha256::digest(HTML_PREVIEW_SCROLL_SCRIPT.as_bytes()));
     format!(
-        "default-src 'none'; \
+        "sandbox allow-scripts; \
+         default-src 'none'; \
          script-src 'sha256-{script_hash}'; \
          style-src 'unsafe-inline' {origin}; \
          img-src data: blob: {origin}; \
@@ -1302,6 +1343,7 @@ mod tests {
         assert!(csp.contains("default-src 'none'"), "{csp}");
         assert!(csp.contains("style-src 'unsafe-inline'"), "{csp}");
         assert!(csp.contains("connect-src 'none'"), "{csp}");
+        assert!(csp.starts_with("sandbox allow-scripts;"), "{csp}");
         // The general file-content CSP, by contrast, still permits (contained) inline
         // script for self-hosted reports.
         assert!(file_content_csp(12345).contains("script-src 'unsafe-inline'"));
@@ -1803,8 +1845,8 @@ mod tests {
 
         let (state, owner) = test_state(&root, &base);
         let info = start_file_server(state.clone()).unwrap();
-        let token = state.owner_file_token(&owner).unwrap();
         let page = std::fs::canonicalize(root.join("page.html")).unwrap();
+        let token = state.exact_file_preview_token(&owner, &page).unwrap();
         let (head, body) = http_get_full(info.port, &url_path(info.port, &token, &page), None);
         let body = String::from_utf8(body).unwrap();
 
@@ -2159,6 +2201,92 @@ mod tests {
         assert!(state.owner_for_file_token(&broad).is_none());
         let (status, _) = http_get(info.port, &exact_url, None);
         assert!(status.contains("404"), "status: {status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn broad_tokens_redirect_executable_files_to_an_exact_token() {
+        let base = non_temp_test_dir("broad-executable");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("page.html"),
+            b"<!doctype html><script>alert(1)</script>",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("diagram.svg"),
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>",
+        )
+        .unwrap();
+        std::fs::write(root.join("notes.md"), b"[page](page.html)").unwrap();
+        std::fs::write(root.join("notes.txt"), b"notes").unwrap();
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        state.set_file_server(info.port);
+        let broad = state.owner_file_token(&owner).unwrap();
+
+        for name in ["page.html", "diagram.svg"] {
+            let file = std::fs::canonicalize(root.join(name)).unwrap();
+            let requested = format!(
+                "{}?session-body-font=inter",
+                url_path(info.port, &broad, &file)
+            );
+            let (head, body) = http_get_full(info.port, &requested, None);
+            assert!(head.starts_with("HTTP/1.1 302"), "{name}: {head}");
+            assert!(body.is_empty(), "{name}");
+            assert!(head.contains("Cache-Control: no-store"), "{name}: {head}");
+            let exact = state.exact_file_preview_token(&owner, &file).unwrap();
+            let location = format!(
+                "{}?session-body-font=inter",
+                url_path(info.port, &exact, &file)
+            );
+            assert!(
+                head.contains(&format!("Location: {location}\r\n")),
+                "{name}: {head}"
+            );
+
+            // The exact token serves the file and only the file.
+            let (head, _) = http_get_full(info.port, &location, None);
+            assert!(head.starts_with("HTTP/1.1 200"), "{name}: {head}");
+            let sibling = std::fs::canonicalize(root.join("notes.txt")).unwrap();
+            let (status, _) = http_get(info.port, &url_path(info.port, &exact, &sibling), None);
+            assert!(status.contains("403"), "{name}: {status}");
+        }
+
+        // Inert files are served under the broad token as before.
+        for name in ["notes.md", "notes.txt"] {
+            let file = std::fs::canonicalize(root.join(name)).unwrap();
+            let (status, _) = http_get(info.port, &url_path(info.port, &broad, &file), None);
+            assert!(status.contains("200"), "{name}: {status}");
+        }
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn served_file_content_is_sandboxed_with_scripts_only() {
+        let csp = file_content_csp(12345);
+        assert!(csp.contains("sandbox allow-scripts"), "{csp}");
+        // No flag that would give the document an origin, popups or top-level
+        // navigation.
+        assert!(!csp.contains("allow-same-origin"), "{csp}");
+        assert!(!csp.contains("allow-top-navigation"), "{csp}");
+        assert!(!csp.contains("allow-popups"), "{csp}");
+
+        let base = non_temp_test_dir("html-sandbox");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("page.html"), b"<p>hello</p>").unwrap();
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        state.set_file_server(info.port);
+        let page = std::fs::canonicalize(root.join("page.html")).unwrap();
+        let exact = state.exact_file_preview_token(&owner, &page).unwrap();
+        let (head, _) = http_get_full(info.port, &url_path(info.port, &exact, &page), None);
+        assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
+        assert!(head.contains("sandbox allow-scripts"), "head: {head}");
 
         let _ = std::fs::remove_dir_all(&base);
     }
