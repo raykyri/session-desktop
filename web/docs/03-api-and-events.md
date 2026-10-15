@@ -281,6 +281,12 @@ X posts of questions (`createTree`, `forkNode`) and notes (`createPost`,
 `TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min); `research.hydratePostTweet` passes
 `retryUnavailable` to ask again inside that window.
 
+Upstream bodies are read through `net/readCapped.ts`, which stops at the cap
+and cancels the rest of the body instead of buffering it first: syndication
+1 MiB, oEmbed 256 KiB, an embed image 8 MiB (refused over the cap), and the
+`web_fetch` tool 5 MiB (kept up to the cap). A declared `content-length` over
+the cap is refused before anything is read.
+
 ### `artifacts`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |

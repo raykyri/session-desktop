@@ -17,6 +17,8 @@
 import type { TweetSnapshot, TweetTextRun } from "@session/shared";
 import { storableTweetSnapshot, tweetWebUrl } from "@session/shared";
 
+import { ResponseTooLargeError, readCappedText } from "../net/readCapped.js";
+
 const OEMBED_ENDPOINT = "https://publish.twitter.com/oembed";
 
 /** The endpoint's own cap is far below this; the bound is here so a wrong
@@ -70,16 +72,18 @@ export async function fetchTweetOembed(
     headers: { "User-Agent": "session", Accept: "application/json" },
     signal: AbortSignal.timeout(OEMBED_FETCH_TIMEOUT_MS),
   });
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (declared > MAX_OEMBED_RESPONSE_BYTES) {
-    throw new Error("the oEmbed response exceeds the maximum allowed size");
-  }
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new Error(`the oEmbed request failed with HTTP ${response.status}`);
   }
-  const body = await response.text();
-  if (Buffer.byteLength(body, "utf8") > MAX_OEMBED_RESPONSE_BYTES) {
-    throw new Error("the oEmbed response exceeds the maximum allowed size");
+  let body: string;
+  try {
+    body = await readCappedText(response, MAX_OEMBED_RESPONSE_BYTES);
+  } catch (error) {
+    if (error instanceof ResponseTooLargeError) {
+      throw new Error("the oEmbed response exceeds the maximum allowed size");
+    }
+    throw error;
   }
   try {
     return JSON.parse(body) as OembedPayload;

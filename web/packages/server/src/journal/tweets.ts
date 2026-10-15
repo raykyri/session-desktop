@@ -28,6 +28,7 @@ import {
 
 import { cacheSnapshotImages } from "../embeds/storage.js";
 import type { Logger } from "../logger.js";
+import { ResponseTooLargeError, readCappedText } from "../net/readCapped.js";
 
 import { fetchTweetOembed, tweetSnapshotFromOembed } from "./oembed.js";
 
@@ -109,18 +110,18 @@ export async function fetchTweetJson(
     // Enforces timeout on CDN responses to prevent stalled connections.
     signal: AbortSignal.timeout(TWEET_FETCH_TIMEOUT_MS),
   });
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (declared > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError(OVERSIZED_RESPONSE);
-  }
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new TweetFetchError(`Tweet fetch request failed with HTTP ${response.status}.`);
   }
-  const body = await response.text();
-  if (Buffer.byteLength(body, "utf8") > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError(OVERSIZED_RESPONSE);
+  try {
+    return await readCappedText(response, MAX_TWEET_RESPONSE_BYTES);
+  } catch (error) {
+    if (error instanceof ResponseTooLargeError) {
+      throw new TweetFetchError(OVERSIZED_RESPONSE);
+    }
+    throw error;
   }
-  return body;
 }
 
 /** What a hydration ended with. `failure` is the sentence a card shows and the

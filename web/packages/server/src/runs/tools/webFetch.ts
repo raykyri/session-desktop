@@ -8,6 +8,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { readCapped } from "../../net/readCapped.js";
+
 import type { RunToolContext } from "./context.js";
 import { FETCH_BUDGET_SPENT } from "./context.js";
 import { BlockedUrlError, assertFetchableUrl } from "./ssrf.js";
@@ -33,47 +35,6 @@ export const WEB_FETCH_DESCRIPTION =
 export const webFetchInputSchema = z.object({
   url: z.string().min(1).describe("Absolute http(s) URL of the page to read."),
 });
-
-/** Reads at most `MAX_FETCH_BYTES`, then stops: a `content-length` header is
- * a claim, and a body without one is unbounded until it is read. */
-async function readCapped(response: Response): Promise<Uint8Array> {
-  const declared = Number(response.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > MAX_FETCH_BYTES) {
-    throw new Error(`the page is larger than ${MAX_FETCH_BYTES} bytes`);
-  }
-  const body = response.body;
-  if (!body) {
-    return new Uint8Array(await response.arrayBuffer()).slice(0, MAX_FETCH_BYTES);
-  }
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = (await reader.read()) as {
-      done: boolean;
-      value?: Uint8Array | undefined;
-    };
-    if (done) {
-      break;
-    }
-    if (value) {
-      total += value.byteLength;
-      if (total > MAX_FETCH_BYTES) {
-        chunks.push(value.slice(0, value.byteLength - (total - MAX_FETCH_BYTES)));
-        await reader.cancel();
-        break;
-      }
-      chunks.push(value);
-    }
-  }
-  const out = new Uint8Array(Math.min(total, MAX_FETCH_BYTES));
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
-}
 
 export interface ExtractedPage {
   title?: string;
@@ -208,7 +169,9 @@ export async function fetchReadablePage(
     throw new Error(`Remote server returned HTTP ${response.status}`);
   }
   const contentType = (response.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
-  const bytes = await readCapped(response);
+  // A page past the cap keeps its first `MAX_FETCH_BYTES`; one that declares
+  // a larger length is refused before it is read.
+  const { bytes } = await readCapped(response, MAX_FETCH_BYTES, { overflow: "truncate" });
   let page: ExtractedPage;
   if (contentType === "application/pdf") {
     page = await extractPdf(bytes);

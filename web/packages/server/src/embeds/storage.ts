@@ -23,6 +23,7 @@ import type { SessionDatabase } from "@session/db";
 import type { QuotedTweetSnapshot, TweetSnapshot } from "@session/shared";
 
 import type { Logger } from "../logger.js";
+import { ResponseTooLargeError, readCapped } from "../net/readCapped.js";
 
 type EmbedAsset = embeds.EmbedAsset;
 
@@ -150,19 +151,22 @@ async function fetchAsset(
     headers: { "User-Agent": "session", Accept: "image/*" },
     signal: AbortSignal.timeout(EMBED_FETCH_TIMEOUT_MS),
   });
-  if (!response.ok) {
-    return null;
-  }
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (declared > MAX_EMBED_BYTES) {
-    return null;
-  }
   const contentType = (response.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
-  if (!contentType.startsWith("image/")) {
+  if (!response.ok || !contentType.startsWith("image/")) {
+    await response.body?.cancel().catch(() => undefined);
     return null;
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_EMBED_BYTES) {
+  let bytes: Buffer;
+  try {
+    const read = await readCapped(response, MAX_EMBED_BYTES);
+    bytes = Buffer.from(read.bytes.buffer, read.bytes.byteOffset, read.bytes.byteLength);
+  } catch (error) {
+    if (error instanceof ResponseTooLargeError) {
+      return null;
+    }
+    throw error;
+  }
+  if (bytes.byteLength === 0) {
     return null;
   }
   const path = embedStoragePath(embedsDir, asset.hash);
