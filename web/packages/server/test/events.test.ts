@@ -1,9 +1,11 @@
 // The event bus and the SSE endpoint (`03-api-and-events.md` §3,
 // `05-run-lifecycle-and-streaming.md` §4).
 
+import { auth } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import test from "ava";
 
+import { closeEndedSessionStreams } from "../src/auth/session.js";
 import { EventBus, sessionEvent } from "../src/events/bus.js";
 
 import { createHarness } from "./helpers.js";
@@ -273,4 +275,111 @@ test("presence lists only readers in the audience, and losing access drops the d
     ["research.presence.changed", "research.presence.changed", "research.presence.changed"],
   );
   bus.closeAll();
+});
+
+/** Opens `events.subscribe` over HTTP with `cookie` and reads it as text. */
+async function openStream(harness: ReturnType<typeof createHarness>, cookie: string) {
+  const input = encodeURIComponent(JSON.stringify({ connectionId: `conn-${cookie.slice(0, 8)}` }));
+  const response = await harness.request(`/api/trpc/events.subscribe?input=${input}`, {
+    headers: { Accept: "text/event-stream" },
+    cookie,
+  });
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder();
+  const stream = { text: "", ended: false };
+  let pending: ReturnType<typeof reader.read> | null = null;
+  /** Reads until `predicate` holds, the stream ends, or two seconds pass. */
+  const readUntil = async (predicate: (text: string) => boolean): Promise<string> => {
+    const deadline = Date.now() + 2000;
+    while (!predicate(stream.text) && !stream.ended) {
+      pending ??= reader.read();
+      const remaining = deadline - Date.now();
+      const chunk = await Promise.race([
+        pending,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), Math.max(0, remaining))),
+      ]);
+      if (chunk === null) {
+        break;
+      }
+      pending = null;
+      if (chunk.done) {
+        stream.ended = true;
+        break;
+      }
+      stream.text += decoder.decode(chunk.value, { stream: true });
+    }
+    return stream.text;
+  };
+  await readUntil((text) => text.includes("connection.ready"));
+  return { stream, readUntil, cancel: () => reader.cancel() };
+}
+
+const SESSION_ENDED = (text: string): boolean => text.includes("UNAUTHORIZED");
+
+test("signing out ends the event streams opened with that session", async (t) => {
+  const harness = createHarness(t);
+  const user = harness.addUser("leaver");
+  const laptop = harness.signIn(user);
+  const phone = harness.signIn(user);
+  const closed = await openStream(harness, laptop);
+  const kept = await openStream(harness, phone);
+
+  const logout = await harness.request("/api/trpc/auth.logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+    cookie: laptop,
+  });
+  t.is(logout.status, 200);
+  harness.eventBus.emit(
+    user.id,
+    sessionEvent("research.node.updated", { node: { id: "private-node" } }),
+  );
+
+  const text = await closed.readUntil(SESSION_ENDED);
+  t.true(text.includes("UNAUTHORIZED"), "the stream reports the ended session");
+  await closed.readUntil(() => false);
+  t.true(closed.stream.ended, "the stream is closed");
+  t.false(closed.stream.text.includes("private-node"), "nothing is delivered after sign-out");
+
+  const other = await kept.readUntil((value) => value.includes("private-node"));
+  t.true(other.includes("private-node"), "the account's other session keeps its stream");
+  await kept.cancel();
+});
+
+test("the cookie-clearing sign-out ends the session's streams too", async (t) => {
+  const harness = createHarness(t);
+  const user = harness.addUser("form-leaver");
+  const cookie = harness.signIn(user);
+  const open = await openStream(harness, cookie);
+  const logout = await harness.request("/auth/logout", { method: "POST", cookie });
+  t.is(logout.status, 204);
+  t.true((await open.readUntil(SESSION_ENDED)).includes("UNAUTHORIZED"));
+});
+
+test("a stream whose session expired or was deleted ends at the next check", async (t) => {
+  const harness = createHarness(t);
+  const user = harness.addUser("expiring");
+  const revoked = harness.signIn(user);
+  const expired = harness.signIn(user);
+  const live = harness.signIn(user);
+  const revokedStream = await openStream(harness, revoked);
+  const expiredStream = await openStream(harness, expired);
+  const liveStream = await openStream(harness, live);
+
+  harness.db.$client
+    .prepare("DELETE FROM sessions WHERE id = ?")
+    .run(auth.hashSessionToken(revoked));
+  harness.db.$client
+    .prepare("UPDATE sessions SET expires_at = ? WHERE id = ?")
+    .run(Date.now() - 1, auth.hashSessionToken(expired));
+
+  t.is(closeEndedSessionStreams(harness.deps), 2);
+  t.true((await revokedStream.readUntil(SESSION_ENDED)).includes("UNAUTHORIZED"));
+  t.true((await expiredStream.readUntil(SESSION_ENDED)).includes("UNAUTHORIZED"));
+
+  harness.eventBus.emit(user.id, sessionEvent("research.node.updated", { node: { id: "n-1" } }));
+  t.true((await liveStream.readUntil((text) => text.includes("n-1"))).includes("n-1"));
+  t.false(liveStream.stream.text.includes("UNAUTHORIZED"));
+  await liveStream.cancel();
 });

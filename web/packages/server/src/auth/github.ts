@@ -13,6 +13,7 @@ import { RATE_LIMITS, rateLimitByIp } from "../middleware/rateLimit.js";
 
 import {
   clearSessionCookie,
+  endSession,
   hashClientIp,
   sessionCookieFrom,
   setSessionCookie,
@@ -307,7 +308,7 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
   app.post("/auth/logout", (c) => {
     const token = sessionCookieFrom(c);
     if (token) {
-      auth.deleteSession(deps.db, token);
+      endSession(deps, token);
     }
     clearSessionCookie(c, config);
     return c.body(null, 204);

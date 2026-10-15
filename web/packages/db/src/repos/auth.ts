@@ -89,6 +89,18 @@ export function readSession(db: SessionDatabase, token: string): AuthenticatedSe
   });
 }
 
+/** Whether the session row `sessionId` (a `hashSessionToken`) exists and is
+ * inside both expiries at `at`. Reads only: unlike `readSession`, it neither
+ * refreshes `last_seen_at` nor deletes an expired row. */
+export function sessionIsLive(db: SessionDatabase, sessionId: string, at: number = now()): boolean {
+  const row = db
+    .select({ expiresAt: sessions.expiresAt, lastSeenAt: sessions.lastSeenAt })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .get();
+  return row !== undefined && at < row.expiresAt && at - row.lastSeenAt < SESSION_IDLE_MS;
+}
+
 export function deleteSession(db: SessionDatabase, token: string): boolean {
   const row = db
     .delete(sessions)

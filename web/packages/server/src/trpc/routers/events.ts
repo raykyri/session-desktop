@@ -3,7 +3,9 @@
 
 import { randomUUID } from "node:crypto";
 
+import { auth } from "@session/db";
 import type { SessionEvent, ThreadViewer } from "@session/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { MAX_OPEN_TREES } from "../../events/bus.js";
@@ -16,12 +18,20 @@ export const eventsRouter = router({
    * the client address its own connection in `setInterest`; when it is absent
    * the server mints one and announces it as the first event so a client that
    * did not generate an id can still declare interest.
+   *
+   * The stream belongs to the session it was opened with: signing that
+   * session out, deleting it, or its expiry (checked every
+   * `SESSION_STREAM_CHECK_MS`, `auth/session.ts`) ends it with
+   * `UNAUTHORIZED`, which the client treats as a sign-out.
    */
   subscribe: protectedProcedure
     .input(z.object({ connectionId: z.string().min(1).max(64).optional() }).optional())
     .subscription(async function* ({ ctx, input, signal }) {
       const connectionId = input?.connectionId ?? randomUUID();
-      const subscription = ctx.eventBus.subscribe(ctx.user.id, connectionId, signal);
+      const sessionId = ctx.sessionToken === null ? null : auth.hashSessionToken(ctx.sessionToken);
+      const subscription = ctx.eventBus.subscribe(ctx.user.id, connectionId, signal, {
+        sessionId,
+      });
       try {
         yield {
           type: "connection.ready",
@@ -30,6 +40,9 @@ export const eventsRouter = router({
         } satisfies SessionEvent;
         for await (const event of subscription.events) {
           yield event;
+        }
+        if (subscription.sessionEnded()) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "the session has ended" });
         }
       } finally {
         subscription.close();

@@ -29,8 +29,11 @@ Routes (Hono, not tRPC):
    verifier, fetches `https://api.github.com/user`, upserts `users`, applies
    the allowlist (§3), creates a session, sets the cookie, redirects to
    `return_to` or `/`.
-3. `POST /auth/logout` — deletes the session, clears the cookie. Also exposed
-   as `auth.logout` for the client.
+3. `POST /auth/logout` — deletes the session, clears the cookie, and ends
+   the event streams opened with that session. Also exposed as `auth.logout`
+   for the client. An open event stream is also checked against its session
+   every 60 s, so one whose session expired or was removed ends within a
+   minute (`03-api-and-events.md` §3).
 
 Cookie: `session=<value>; HttpOnly; Secure; SameSite=Lax; Path=/;
 Max-Age=2592000`. In development over `http://localhost` the `Secure` flag is

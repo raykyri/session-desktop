@@ -306,7 +306,7 @@ in phase 2.0.
 ### `events`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `events.subscribe` | subscription | → stream of `SessionEvent` | `listen("session-event")` |
+| `events.subscribe` | subscription | → stream of `SessionEvent`; ends with `UNAUTHORIZED` when the session it was opened with is signed out, deleted or expired (§3) | `listen("session-event")` |
 | `events.setInterest` | M | `{ connectionId, nodeIds, treeIds? }` → `{ applied }` (false when the connection has expired or been terminated on the server) | — (which active nodes this connection wants turn deltas for; with `treeIds`, at most 20, which threads it has open: a public thread's events reach a non-member through this, and it is presence. Ids the caller may not read are dropped. Send again to renew; a declaration lapses after 90 s. Draws on its own budget, `RATE_LIMITS.interest` (120/min), not the mutation budget) |
 | `events.presence` | Q | `{ treeId }` → `ThreadViewer[]` (`{ userId, login, name, avatarUrl }`) | — (who has the thread open now) |
 
@@ -341,6 +341,15 @@ commits. The server has no event buffer or replay mechanism, so reconnecting
 clients invalidate list queries and refetch snapshots for displayed active nodes.
 Each connection has an interest set (`events.setInterest`); `research.turn.*`
 events are delivered only to connections interested in that node.
+
+A connection belongs to the session (`sessions` row) it was opened with.
+`auth.logout` and `POST /auth/logout` end that session's connections at once
+(`EventBus.closeSession`); every 60 s (`SESSION_STREAM_CHECK_MS`) the server
+checks each open connection's session and ends those whose session expired or
+was deleted. An ended connection gets no further events, including any still
+queued for it, and its stream finishes with an `UNAUTHORIZED` error, which the
+client treats as a sign-out (`isUnauthorizedError` in `client/src/api/events.ts`).
+The account's other sessions keep their streams.
 
 A thread's events go to its audience (`EventBus.emitToTree`): every
 connection of its owner and members, plus, for a public thread, the

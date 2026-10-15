@@ -14,6 +14,7 @@ import { serve } from "@hono/node-server";
 import { auth, closeDatabase, nodes, notifications, openDatabase, tweets } from "@session/db";
 
 import { createApp } from "./app.js";
+import { SESSION_STREAM_CHECK_MS, closeEndedSessionStreams } from "./auth/session.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
@@ -298,6 +299,17 @@ export function main(): RunningServer {
     void backups.check();
   }, BACKUP_CHECK_INTERVAL_MS);
   nightly.unref();
+  // An open event stream is checked against its session once a minute, so
+  // one whose session expired or was removed ends (sign-out ends it at once).
+  const sessionStreams = setInterval(() => {
+    try {
+      const closed = closeEndedSessionStreams(deps);
+      if (closed > 0) logger.info({ closed }, "ended event streams of ended sessions");
+    } catch (error) {
+      logger.error({ error }, "the session stream check failed");
+    }
+  }, SESSION_STREAM_CHECK_MS);
+  sessionStreams.unref();
 
   // Migrations ran inside `openDatabase` and the previous process's runs are
   // back in the queue, so the only thing left before the check may pass is the
@@ -321,6 +333,7 @@ export function main(): RunningServer {
     clearInterval(maintenance);
     clearInterval(nightly);
     clearInterval(presence);
+    clearInterval(sessionStreams);
     deletions.stop();
     logger.info({ signal }, "shutting down");
     // Stop admitting first, then let open attempts persist their checkpoint

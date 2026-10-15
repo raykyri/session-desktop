@@ -25,9 +25,19 @@ const MAX_QUEUED_EVENTS = 2048;
 
 export interface Subscription {
   connectionId: string;
-  /** Yields until `close()` or an overflow. */
+  /** Yields until `close()`, an overflow, or the end of its session. */
   events: AsyncIterableIterator<SessionEvent>;
   close(): void;
+  /** True once `closeSession` ended the connection: the session it was
+   * opened with was signed out, deleted or expired. */
+  sessionEnded(): boolean;
+}
+
+export interface SubscribeOptions {
+  /** The `sessions` row the connection was opened with
+   * (`auth.hashSessionToken` of the cookie). `closeSession` ends the
+   * connections of one session; null for a connection that has none. */
+  sessionId?: string | null;
 }
 
 export function sessionEvent(type: string, payload: Record<string, unknown>): SessionEvent {
@@ -64,6 +74,9 @@ export interface TreeDirectory {
 interface Connection {
   id: string;
   userId: string;
+  sessionId: string | null;
+  /** Set when `closeSession` ended it. */
+  sessionEnded: boolean;
   interest: Set<string>;
   /** Threads the connection has open, with when it last said so. */
   openTrees: Map<string, number>;
@@ -122,10 +135,17 @@ export class EventBus {
     }
   }
 
-  subscribe(userId: string, connectionId: string, signal?: AbortSignal): Subscription {
+  subscribe(
+    userId: string,
+    connectionId: string,
+    signal?: AbortSignal,
+    options: SubscribeOptions = {},
+  ): Subscription {
     const connection: Connection = {
       id: connectionId,
       userId,
+      sessionId: options.sessionId ?? null,
+      sessionEnded: false,
       interest: new Set(),
       openTrees: new Map(),
       queue: [],
@@ -172,7 +192,44 @@ export class EventBus {
       },
     };
 
-    return { connectionId, events, close };
+    return { connectionId, events, close, sessionEnded: () => connection.sessionEnded };
+  }
+
+  /** The sessions that have a connection open, for the periodic check that
+   * ends the streams of expired sessions. */
+  openSessionIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const connections of this.#byUser.values()) {
+      for (const connection of connections.values()) {
+        if (connection.sessionId !== null && !connection.closed) ids.add(connection.sessionId);
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Ends every connection opened with `sessionId`: called when that session
+   * is signed out or deleted, and by the periodic check when it expired. The
+   * stream's iterator finishes with `sessionEnded()` true, which
+   * `events.subscribe` turns into `UNAUTHORIZED`. Returns how many
+   * connections it ended.
+   */
+  closeSession(sessionId: string): number {
+    let closed = 0;
+    for (const connections of [...this.#byUser.values()]) {
+      for (const connection of [...connections.values()]) {
+        if (connection.sessionId !== sessionId || connection.closed) continue;
+        connection.sessionEnded = true;
+        // Events queued before the session ended are not delivered either.
+        connection.queue = [];
+        connection.closed = true;
+        this.#unregister(connection);
+        connection.wake?.({ value: undefined, done: true });
+        connection.wake = null;
+        closed += 1;
+      }
+    }
+    return closed;
   }
 
   /**

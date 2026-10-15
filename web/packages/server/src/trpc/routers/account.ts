@@ -6,6 +6,7 @@ import type { User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
 
+import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
@@ -32,10 +33,11 @@ function readSettings(
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }): User | null => ctx.user),
   logout: publicProcedure.mutation(({ ctx }) => {
-    // Deletes the active session database row to immediately invalidate the token.
-    // Other active sessions for the account remain valid.
+    // Deletes this session's row, which invalidates the token at once, and
+    // ends the event streams opened with it. The account's other sessions
+    // remain valid.
     if (ctx.sessionToken !== null) {
-      auth.deleteSession(ctx.db, ctx.sessionToken);
+      endSession(ctx, ctx.sessionToken);
     }
     return { ok: true };
   }),

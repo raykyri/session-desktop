@@ -75,3 +75,36 @@ export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
     await next();
   };
 }
+
+/** How often open event streams are checked against their sessions, so a
+ * stream outlives its session's expiry by at most this long. Sign-out and
+ * deletion end a session's streams at once (`endSession`). */
+export const SESSION_STREAM_CHECK_MS = 60_000;
+
+/**
+ * Deletes the session `token` names and ends the event streams opened with
+ * it. The account's other sessions, and their streams, are left alone.
+ */
+export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: string): void {
+  auth.deleteSession(deps.db, token);
+  deps.eventBus.closeSession(auth.hashSessionToken(token));
+}
+
+/**
+ * Ends the event streams whose session is gone or past either expiry: an
+ * idle or absolute expiry, a sweep, an account removal. Returns how many
+ * connections were closed. The server runs it every
+ * `SESSION_STREAM_CHECK_MS`.
+ */
+export function closeEndedSessionStreams(
+  deps: Pick<ServerDeps, "db" | "eventBus">,
+  at: number = Date.now(),
+): number {
+  let closed = 0;
+  for (const sessionId of deps.eventBus.openSessionIds()) {
+    if (!auth.sessionIsLive(deps.db, sessionId, at)) {
+      closed += deps.eventBus.closeSession(sessionId);
+    }
+  }
+  return closed;
+}
