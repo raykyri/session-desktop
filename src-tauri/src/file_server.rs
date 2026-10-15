@@ -2119,4 +2119,47 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&base);
     }
+
+    #[test]
+    fn exact_preview_tokens_follow_their_thread_through_trash_and_removal() {
+        let base = non_temp_test_dir("exact-owner");
+        let root = base.join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("report.html"), b"<p>report</p>").unwrap();
+        let (state, owner) = test_state(&root, &base);
+        let info = start_file_server(state.clone()).unwrap();
+        let report = std::fs::canonicalize(root.join("report.html")).unwrap();
+        let broad = state.owner_file_token(&owner).unwrap();
+        let exact = state.exact_file_preview_token(&owner, &report).unwrap();
+        let exact_url = url_path(info.port, &exact, &report);
+        let serves = |token: &str| {
+            resolve_tokenized_file_path(&state, &url_path(8123, token, &report)).is_ok()
+        };
+        assert!(serves(&broad) && serves(&exact));
+
+        let tree_id = owner
+            .strip_prefix(crate::state::RESEARCH_THREAD_OWNER_PREFIX)
+            .unwrap();
+        let root_node_id = state.research_tree(tree_id).unwrap().tree.root_node_id;
+        state.cancel_research_node(&root_node_id).unwrap();
+
+        // A thread in the Trash still exists and can be restored, so its open
+        // previews keep working, before and after Restore.
+        state.trash_research_tree(tree_id).unwrap();
+        assert!(serves(&broad) && serves(&exact));
+        state.restore_research_tree_from_trash(tree_id).unwrap();
+        assert!(serves(&broad) && serves(&exact));
+        let (status, _) = http_get(info.port, &exact_url, None);
+        assert!(status.contains("200"), "status: {status}");
+
+        // Deleting the thread revokes both tokens and forgets them.
+        state.remove_research_tree(tree_id).unwrap();
+        assert!(!serves(&broad) && !serves(&exact));
+        assert!(state.exact_file_for_preview_token(&exact).is_none());
+        assert!(state.owner_for_file_token(&broad).is_none());
+        let (status, _) = http_get(info.port, &exact_url, None);
+        assert!(status.contains("404"), "status: {status}");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

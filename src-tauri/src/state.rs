@@ -555,16 +555,45 @@ impl AppState {
         Ok(token)
     }
 
+    /// The owner and file an exact-file token serves, while that owner's
+    /// research thread exists. A thread in the Trash still exists (Restore
+    /// brings it back with its open previews), so its tokens keep serving
+    /// until the thread is deleted.
     pub fn exact_file_for_preview_token(
         &self,
         token: &str,
     ) -> Option<(String, std::path::PathBuf)> {
-        self.inner
+        let (owner_id, path) = self
+            .inner
             .exact_file_tokens
             .lock()
             .unwrap_or_else(|err| err.into_inner())
             .get(token)
-            .cloned()
+            .cloned()?;
+        self.research_tree_for_owner(&owner_id)
+            .is_ok()
+            .then_some((owner_id, path))
+    }
+
+    /// Forgets every file-preview token and grant of a deleted research
+    /// thread. The lookups above also refuse an owner whose thread is gone;
+    /// this keeps the maps from holding entries no request can use.
+    fn forget_owner_file_previews(&self, owner_id: &str) {
+        self.inner
+            .file_tokens
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .remove(owner_id);
+        self.inner
+            .exact_file_tokens
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .retain(|_, (owner, _)| owner != owner_id);
+        self.inner
+            .file_preview_grants
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .remove(owner_id);
     }
 
     /// Adds one exact file to a research thread's read-only preview
@@ -4529,6 +4558,7 @@ impl AppState {
         if !removed {
             return Err(format!("research tree {tree_id} was not found"));
         }
+        self.forget_owner_file_previews(&format!("{RESEARCH_THREAD_OWNER_PREFIX}{tree_id}"));
         crate::research_artifacts::remove_tree(&self.inner.config.workspace_root, tree_id);
         self.persist();
         self.release_research_images_as(&removed_images, images);
