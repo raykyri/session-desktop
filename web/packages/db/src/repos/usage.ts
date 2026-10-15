@@ -163,14 +163,24 @@ export interface AdmissionDecision {
 /**
  * Whether one more research attempt may start today.
  *
- * A node over the limit stays `queued` rather than failing
- * (`06-auth-and-users.md` §8): the day rolls over, or an operator raises the
- * limit, and the work resumes. Admins are exempt.
+ * Admission refuses a launch over the limit, counting the account's queued
+ * questions as `reservedRuns`. A queued node the dispatcher finds over the
+ * limit when its turn comes stays `queued` rather than failing
+ * (`06-auth-and-users.md` §8), held until the next UTC midnight or until an
+ * operator raises the limit, and then runs. Admins are exempt.
  */
 export function admissionCheck(
   db: SessionDatabase,
   userId: string,
-  options: { isAdmin?: boolean; defaults?: LimitDefaults; at?: number } = {},
+  options: {
+    isAdmin?: boolean;
+    defaults?: LimitDefaults;
+    at?: number;
+    /** Runs already committed to but not started: the account's queued
+     * questions, counted at admission so a queue cannot hold more than the
+     * day allows. Zero for the dispatcher's check before a queued run starts. */
+    reservedRuns?: number;
+  } = {},
 ): AdmissionDecision {
   if (options.isAdmin === true) {
     return { allowed: true, remainingTokens: null, remainingRuns: null };
@@ -186,7 +196,9 @@ export function admissionCheck(
   const remainingTokens =
     limits.dailyTokens === null ? null : Math.max(0, limits.dailyTokens - spentTokens);
   const remainingRuns =
-    limits.dailyRuns === null ? null : Math.max(0, limits.dailyRuns - totals.runs);
+    limits.dailyRuns === null
+      ? null
+      : Math.max(0, limits.dailyRuns - totals.runs - (options.reservedRuns ?? 0));
   if (remainingRuns !== null && remainingRuns <= 0) {
     return { allowed: false, remainingTokens, remainingRuns, reason: "runs" };
   }

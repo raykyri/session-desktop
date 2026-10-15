@@ -228,6 +228,9 @@ export function runStatusText(
   const status = nodeStatus(node);
   if (status === "interrupted") return "Interrupted · resuming";
   if (status === "queued") {
+    // The server notes why a queued run waits (the daily limits) as its error.
+    const waiting = nodeRun(node)?.error;
+    if (waiting) return waiting;
     return queuePosition !== undefined && queuePosition > 0
       ? `Queued · ${queuePosition} ahead`
       : "Queued";

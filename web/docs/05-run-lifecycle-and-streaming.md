@@ -152,6 +152,9 @@ that follow their runs; a manual recap is billed to whoever requested it
 audience, not only to the asker (`03-api-and-events.md` §3).
 Provider `429` responses re-queue with exponential backoff (5 s, 20 s, 60 s)
 rather than failing.
+Before a queued node's fresh attempt starts, the dispatcher re-checks its
+payer's daily limits; a refused node stays `queued` until the next UTC
+midnight with the reason as its run's `error` (`06-auth-and-users.md` §8).
 
 ## 9. Client implementation summary
 

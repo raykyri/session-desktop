@@ -24,3 +24,8 @@ export function strictlyAfter(previous: number | null | undefined, candidate: nu
 export function startOfUtcDay(at: number): number {
   return Math.floor(at / 86_400_000) * 86_400_000;
 }
+
+/** The next UTC midnight after `at`, when the daily limits reset. */
+export function nextUtcMidnight(at: number): number {
+  return startOfUtcDay(at) + 86_400_000;
+}

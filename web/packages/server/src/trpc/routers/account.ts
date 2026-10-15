@@ -1,7 +1,7 @@
 // `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { auth, preferences, usage, users, workspaces } from "@session/db";
+import { auth, preferences, queue, usage, users, workspaces } from "@session/db";
 import type { User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
@@ -153,7 +153,14 @@ export const adminRouter = router({
       if (input.dailyRuns !== undefined) {
         patch.dailyRuns = input.dailyRuns;
       }
-      return repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
+      const limits = repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
+      // Runs the dispatcher held for the old limits are looked at again now
+      // rather than at midnight; it holds them again if the new limits still
+      // refuse them.
+      for (const nodeId of repo(() => queue.releaseDailyHolds(ctx.db, input.userId))) {
+        ctx.runs.start(nodeId);
+      }
+      return limits;
     }),
   /** Generates administrative invite codes. Leaves createdBy null so admin codes do not decrement personal invite allowances. */
   createInvites: adminProcedure

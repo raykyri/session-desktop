@@ -613,7 +613,9 @@ export function stopRun(
     tx.update(nodes)
       .set({
         status: "cancelled",
-        error: error ?? node.error,
+        // A queued node's error is only ever the reason it waits
+        // (`noteQueuedWait`), which a stopped question does not keep.
+        error: error ?? (node.status === "queued" ? null : node.error),
         resumePending: false,
         completedAt: node.completedAt ?? at,
         runSeq: sql`${nodes.runSeq} + 1`,
@@ -849,6 +851,29 @@ export function requeueAfterRateLimit(
     touchTree(tx, node.treeId);
     syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
+  });
+}
+
+/**
+ * Records on a `queued` exchange why it is waiting, or clears it with null:
+ * the dispatcher holds a run whose payer has spent the day's limit, and the
+ * reason shows as the run's `error` while it waits. Starting the run clears
+ * it (`setStatus` to `running` with `error: null`). Returns the node as its
+ * thread shows it when it changed, else null. No access check; for the
+ * agent loop.
+ */
+export function noteQueuedWait(
+  db: SessionDatabase,
+  nodeId: string,
+  note: string | null,
+): ResearchNode | null {
+  return transact(db, (tx) => {
+    const row = tx.select().from(nodes).where(eq(nodes.id, nodeId)).get();
+    if (!row || row.type !== "exchange" || row.status !== "queued" || row.error === note) {
+      return null;
+    }
+    tx.update(nodes).set({ error: note }).where(eq(nodes.id, nodeId)).run();
+    return viewUnchecked(tx, nodeId);
   });
 }
 

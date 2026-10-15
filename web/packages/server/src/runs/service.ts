@@ -8,7 +8,13 @@
 // (`04-agent-runtime.md` §2, §9, `05-run-lifecycle-and-streaming.md` §7, §8).
 
 import type { SessionDatabase } from "@session/db";
-import { nodes as nodesRepo, queue as queueRepo, runs as runsRepo } from "@session/db";
+import {
+  nextUtcMidnight,
+  nodes as nodesRepo,
+  queue as queueRepo,
+  runs as runsRepo,
+  users as usersRepo,
+} from "@session/db";
 import type { ResearchNode, ResearchRecapCandidate } from "@session/shared";
 import { nodeStatus } from "@session/shared/lib/researchNodeTypes";
 
@@ -18,6 +24,7 @@ import { sessionEvent } from "../events/bus.js";
 import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
 import { createLogger } from "../logger.js";
+import { dailyLimitWait } from "../research/admission.js";
 import type { FollowupDeps } from "../research/followups.js";
 import { dispatchTree } from "../research/followups.js";
 import { notifyRunFinished } from "../research/notifications.js";
@@ -328,6 +335,37 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
    * unwinding), it releases no queue row, writes no status and sends no
    * notification, since those belong to the newer attempt now.
    */
+  /**
+   * Re-checks the payer's daily limits before a queued node's fresh attempt
+   * starts (`06-auth-and-users.md` §8). Admission checked them, counting the
+   * queue, but the queue can still hold more than the day allows: an
+   * operator lowered the limit, tokens were spent meanwhile, a launch path
+   * that did not count. A refused node stays `queued`, its row held until the
+   * next UTC midnight (or until an operator changes the account's limits,
+   * `admin.setLimits`), with the reason as its run's `error`, which the claim
+   * round's queue positions publish. A 429 re-queue continues an attempt that
+   * already started and is not held; nor is a resume, which never reaches
+   * here.
+   */
+  const heldForDailyLimits = (userId: string, nodeId: string): boolean => {
+    if (!deps.config.limits.enforceDailyLimits) {
+      return false;
+    }
+    if (runsRepo.listAttempts(deps.db, nodeId).at(-1)?.outcome === "rate_limited") {
+      return false;
+    }
+    const payer = usersRepo.findById(deps.db, userId);
+    const wait =
+      payer === null ? null : dailyLimitWait({ config: deps.config, db: deps.db, user: payer });
+    if (wait === null) {
+      return false;
+    }
+    queueRepo.requeueWithBackoff(deps.db, nodeId, nextUtcMidnight(Date.now()));
+    nodesRepo.noteQueuedWait(deps.db, nodeId, wait);
+    logger.info({ nodeId, userId }, "queued run held for the daily limits");
+    return true;
+  };
+
   const begin = (nodeId: string, userId: string, kind: "fresh" | "resume"): void => {
     if (active.has(nodeId)) {
       // The node's previous attempt has not settled yet. Dropping the claim
@@ -583,6 +621,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
             emit(run.userId, "research.node.updated", { node: failed });
             emitFeedItemUpsertedForNode(deps, failed.id);
             afterSettle(run.userId, run.nodeId);
+            continue;
+          }
+          if (heldForDailyLimits(run.userId, run.nodeId)) {
             continue;
           }
           begin(run.nodeId, run.userId, "fresh");

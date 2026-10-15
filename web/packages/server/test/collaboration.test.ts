@@ -2,7 +2,7 @@
 // events, presence, notifications, who pays, stale edits, and images
 // (`03-api-and-events.md` §2–§3, `02-domain-model-and-database.md` §5.16).
 
-import { followups, nodes, runs, schema, snapshots } from "@session/db";
+import { followups, nodes, queue, runs, schema, snapshots } from "@session/db";
 import type { ResearchImageAttachment } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
@@ -230,6 +230,9 @@ test("the asker pays: a commenter's question is queued and limited as theirs", a
     }),
     { message: /daily research limit/ },
   );
+  // The owner's root question is still queued, which counts against their
+  // day; once it leaves the queue they have a run left.
+  queue.release(harness.db, thread.rootId);
   await t.notThrowsAsync(
     harness.caller(thread.owner).research.forkNode({
       parentNodeId: thread.rootId,

@@ -163,6 +163,9 @@ test("the status line says where a run is", (t) => {
   t.is(runStatusText(node({ status: "interrupted" }), false, undefined), "Interrupted · resuming");
   t.is(runStatusText(node({ status: "running" }), false, undefined), "Working");
   t.is(runStatusText(node({ status: "running" }), true, undefined), "Thinking");
+  // A run the server holds for the daily limits says so instead of its place.
+  const held = "Queued until the daily research limit resets at midnight UTC.";
+  t.is(runStatusText(node({ status: "queued", error: held }), false, 1), held);
 });
 
 test("an interrupted run is active while its resume is pending", (t) => {

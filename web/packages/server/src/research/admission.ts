@@ -80,8 +80,19 @@ export function assertEffortAccepted(modelId: string, effort: string | null | un
   }
 }
 
-/** Why the account's daily limits refuse another run, or null. */
-export function dailyLimitRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
+export interface DailyLimitOptions {
+  /** Count the account's queued questions as runs already spent: true at
+   * admission, so the queue cannot hold more than the day allows; false for
+   * the dispatcher's check before a queued run starts, whose own row is
+   * among them. */
+  reserveQueued?: boolean;
+}
+
+/** Which daily limit refuses another run, or null. */
+function dailyLimitReached(
+  ctx: LaunchCheckContext,
+  options: DailyLimitOptions,
+): "runs" | "tokens" | null {
   if (!ctx.config.limits.enforceDailyLimits) {
     return null;
   }
@@ -91,24 +102,53 @@ export function dailyLimitRefusal(ctx: LaunchCheckContext): LaunchRefusal | null
       dailyTokens: ctx.config.limits.dailyTokens,
       dailyRuns: ctx.config.limits.dailyRuns,
     },
+    reservedRuns: options.reserveQueued === true ? queue.queuedCount(ctx.db, ctx.user.id) : 0,
   });
-  if (decision.allowed) {
+  return decision.allowed ? null : (decision.reason ?? "runs");
+}
+
+/** Why the account's daily limits refuse another run, or null. */
+export function dailyLimitRefusal(
+  ctx: LaunchCheckContext,
+  options: DailyLimitOptions = {},
+): LaunchRefusal | null {
+  const reached = dailyLimitReached(ctx, options);
+  if (reached === null) {
     return null;
   }
   return {
     code: "TOO_MANY_REQUESTS",
     message:
-      decision.reason === "runs"
+      reached === "runs"
         ? "You have reached your daily research limit. The limit resets at midnight UTC."
         : "You have reached your daily token limit. The limit resets at midnight UTC.",
   };
 }
 
 /**
- * Daily token and run limits (`06-auth-and-users.md` §8). Usage is tracked unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding the limit are rejected.
+ * Why a queued run may not start now, as its waiting node shows it, or null:
+ * the dispatcher's check of the payer's daily limits before a fresh attempt
+ * (`runs/service.ts`). Worded for every reader of the thread, not only the
+ * payer.
+ */
+export function dailyLimitWait(ctx: LaunchCheckContext): string | null {
+  const reached = dailyLimitReached(ctx, { reserveQueued: false });
+  if (reached === null) {
+    return null;
+  }
+  return reached === "runs"
+    ? "Queued until the daily research limit resets at midnight UTC."
+    : "Queued until the daily token limit resets at midnight UTC.";
+}
+
+/**
+ * Daily token and run limits (`06-auth-and-users.md` §8), with the
+ * account's queued questions counted as spent. Usage is tracked
+ * unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding
+ * the limit are rejected.
  */
 export function assertWithinDailyLimits(ctx: LaunchCheckContext): void {
-  raise(dailyLimitRefusal(ctx));
+  raise(dailyLimitRefusal(ctx, { reserveQueued: true }));
 }
 
 /** Why the account's run queue is full, or null (`assertQueueHasRoom`). */
@@ -143,10 +183,16 @@ export function assertQueueHasRoom(ctx: LaunchCheckContext): void {
   raise(queueRoomRefusal(ctx));
 }
 
+/** The checks that depend on what the account has already queued: the
+ * daily limits with the queue counted as spent, then the queue cap. */
+export function admissionRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
+  return dailyLimitRefusal(ctx, { reserveQueued: true }) ?? queueRoomRefusal(ctx);
+}
+
 /** Every check a launch passes, in the order the procedures apply them: the
  * model, the daily limits, the run queue. */
 export function launchRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
-  return modelRefusal(ctx, modelId) ?? dailyLimitRefusal(ctx) ?? queueRoomRefusal(ctx);
+  return modelRefusal(ctx, modelId) ?? admissionRefusal(ctx);
 }
 
 /** Why a metadata run (a title, a recap) may not be billed to this account

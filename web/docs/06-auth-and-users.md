@@ -143,8 +143,25 @@ third bucket — that is how the AI SDK reports it (`04-agent-runtime.md` §13) 
 so the limit does not add it again, and it agrees with the cost estimate
 recorded beside it. Defaults from env (`SESSION_DAILY_TOKENS=1000000`,
 `SESSION_DAILY_RUNS=10`), overridable per user in `user_limits`; admins exempt.
-Checked at admission (`research.createTree`, `forkNode`, `retryNode`), which
-answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies; because displaying an explicit error in the query composer provides clearer feedback than creating a node that appears queued but cannot execute.
+Checked at admission (`research.createTree`, `forkNode`, `retryNode`,
+`rerunNode`, `followups.ask`, and the follow-up queue's dispatch), which
+answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies, because
+displaying an explicit error in the query composer provides clearer feedback
+than creating a node that appears queued but cannot execute. Admission counts
+the account's queued questions as runs already spent (a reservation), so a
+queue cannot hold more runs than the day has left.
+
+The dispatcher checks the payer's limits once more before a queued node's
+fresh attempt starts, without the reservation: an operator may have lowered
+the limit, or tokens may have been spent, since the node was queued. A node
+refused there stays `queued`; its `run_queue` row is held (`not_before`)
+until the next UTC midnight, and its run's `error` reads "Queued until the
+daily research limit resets at midnight UTC." (or "daily token limit"),
+which the thread shows in place of its queue position. `admin.setLimits`
+releases the account's held rows at once; the dispatcher holds them again if
+the new limits still refuse them. Starting the run clears the note. A 429
+re-queue and a resume continue an attempt that already started and are not
+held.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
 age (`github_created_at`), and sign-up codes as described in §3.

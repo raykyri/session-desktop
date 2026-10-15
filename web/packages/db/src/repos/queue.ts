@@ -9,7 +9,7 @@ import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { nodes } from "../schema/nodes.js";
 import { runQueue } from "../schema/runs.js";
-import { now } from "../time.js";
+import { nextUtcMidnight, now } from "../time.js";
 
 import { nodeReadableBy } from "./access.js";
 
@@ -219,6 +219,31 @@ export function releaseAttempt(db: SessionDatabase, nodeId: string, attempt: num
     .returning({ nodeId: runQueue.nodeId })
     .get();
   return row !== undefined;
+}
+
+/**
+ * Makes `userId`'s rows held until a UTC midnight after `at` claimable now:
+ * the runs the dispatcher held for the daily limits, released when an
+ * operator changes the account's limits. Returns their node ids.
+ */
+export function releaseDailyHolds(
+  db: SessionDatabase,
+  userId: string,
+  at: number = now(),
+): string[] {
+  return db
+    .update(runQueue)
+    .set({ notBefore: null })
+    .where(
+      and(
+        eq(runQueue.userId, userId),
+        isNull(runQueue.claimedAt),
+        sql`${runQueue.notBefore} >= ${nextUtcMidnight(at)}`,
+      ),
+    )
+    .returning({ nodeId: runQueue.nodeId })
+    .all()
+    .map((row) => row.nodeId);
 }
 
 /** Makes an unclaimed row claimable now, clearing its `not_before`. */

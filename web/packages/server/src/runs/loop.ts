@@ -214,6 +214,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const started = nodesRepo.setStatus(db, userId, nodeId, "running", {
     startedAt: Date.now(),
     seq,
+    // A wait reason the dispatcher noted while the node was queued.
+    error: null,
   });
   runsRepo.startAttempt(db, {
     nodeId,
