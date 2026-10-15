@@ -5,7 +5,9 @@
 //! correlated `control_request` / `control_response`.
 
 use crate::adapters::hook_transcript_path_acceptable;
-use crate::headless_process::reconcile_session_id;
+use crate::headless_process::{
+    KILL_GRACE, PipeReader, collect_group_readers, reconcile_session_id,
+};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -66,57 +68,61 @@ pub fn parse_claude_version(output: &str) -> Option<ClaudeVersion> {
     })
 }
 
+/// Runs `<binary> -v` in its own process group, so a timeout can stop
+/// everything it started and a background process it leaves holding the
+/// output pipes cannot delay the result past `VERSION_PROBE_TIMEOUT`.
 pub fn probe_claude_version(binary: &str) -> Result<ClaudeVersion, String> {
     let mut child = Command::new(binary)
         .arg("-v")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
         .map_err(|err| format!("failed to run `{binary} -v`: {err}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| format!("`{binary} -v` stdout was not piped"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| format!("`{binary} -v` stderr was not piped"))?;
-    let stdout_reader = thread::spawn(move || {
-        let mut stdout = stdout;
-        let mut bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut bytes);
-        bytes
-    });
-    let stderr_reader = thread::spawn(move || {
-        let mut stderr = stderr;
-        let mut bytes = Vec::new();
-        let _ = stderr.read_to_end(&mut bytes);
-        bytes
-    });
+    let pid = child.id();
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        terminate_child_after_spawn_failure(&mut child);
+        return Err(format!("`{binary} -v` output was not piped"));
+    };
+    let read_all = |mut pipe: Box<dyn Read + Send>| {
+        move || {
+            let mut bytes = Vec::new();
+            let _ = pipe.read_to_end(&mut bytes);
+            bytes
+        }
+    };
+    let readers = PipeReader::spawn("session-claude-version-stdout", read_all(Box::new(stdout)))
+        .and_then(|stdout_reader| {
+            let stderr_reader =
+                PipeReader::spawn("session-claude-version-stderr", read_all(Box::new(stderr)))?;
+            Ok(vec![stdout_reader, stderr_reader])
+        });
+    let readers = match readers {
+        Ok(readers) => readers,
+        Err(err) => {
+            terminate_child_after_spawn_failure(&mut child);
+            return Err(format!("failed to read `{binary} -v`: {err}"));
+        }
+    };
     let deadline = Instant::now() + VERSION_PROBE_TIMEOUT;
     loop {
-        match child.try_wait() {
+        let failure = match child.try_wait() {
             Ok(Some(_)) => break,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
-                return Err(format!("`{binary} -v` timed out"));
+            Ok(None) if Instant::now() >= deadline => format!("`{binary} -v` timed out"),
+            Ok(None) => {
+                thread::sleep(Duration::from_millis(20));
+                continue;
             }
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
-            Err(err) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
-                return Err(format!("failed to wait for `{binary} -v`: {err}"));
-            }
-        }
+            Err(err) => format!("failed to wait for `{binary} -v`: {err}"),
+        };
+        terminate_child_after_spawn_failure(&mut child);
+        collect_group_readers(pid, readers, Instant::now() + KILL_GRACE);
+        return Err(failure);
     }
-    let mut combined = stdout_reader.join().unwrap_or_default();
-    combined.extend(stderr_reader.join().unwrap_or_default());
+    let mut outputs = collect_group_readers(pid, readers, deadline).into_iter();
+    let mut combined = outputs.next().flatten().unwrap_or_default();
+    combined.extend(outputs.next().flatten().unwrap_or_default());
     let combined = String::from_utf8_lossy(&combined);
     let version = parse_claude_version(&combined)
         .ok_or_else(|| format!("unable to parse Claude Code version from `{binary} -v`"))?;
@@ -435,7 +441,7 @@ pub struct ClaudeSdkSession {
     child: Child,
     stdin: Option<ChildStdin>,
     events: Receiver<Result<SdkMessage, String>>,
-    stderr_reader: Option<thread::JoinHandle<()>>,
+    stderr_reader: Option<PipeReader<()>>,
     request_counter: u64,
     pending: HashMap<String, PendingKind>,
     pub initialized: bool,
@@ -554,10 +560,9 @@ impl ClaudeSdkSession {
             terminate_child_after_spawn_failure(&mut child);
             return Err("Claude Code stderr was not piped".to_string());
         };
-        let stderr_reader = match thread::Builder::new()
-            .name("session-claude-sdk-stderr".into())
-            .spawn(move || copy_bounded_stderr(stderr, stderr_file))
-        {
+        let stderr_reader = match PipeReader::spawn("session-claude-sdk-stderr", move || {
+            copy_bounded_stderr(stderr, stderr_file)
+        }) {
             Ok(reader) => reader,
             Err(err) => {
                 terminate_child_after_spawn_failure(&mut child);
@@ -570,7 +575,7 @@ impl ClaudeSdkSession {
             .spawn(move || read_stdout_lines(stdout, tx))
         {
             terminate_child_after_spawn_failure(&mut child);
-            let _ = stderr_reader.join();
+            collect_group_readers(child.id(), vec![stderr_reader], Instant::now() + KILL_GRACE);
             return Err(format!("failed to start Claude stdout reader: {err}"));
         }
         Ok(Self {
@@ -681,8 +686,12 @@ impl ClaudeSdkSession {
         self.stdin.take();
     }
 
-    pub fn finish_output(&mut self) {
-        self.join_stderr_reader();
+    /// Finishes capturing stderr after Claude Code has exited. Background
+    /// processes it left in its process group are stopped, and the capture
+    /// ends by `deadline` (plus `KILL_GRACE`) even if a process outside the
+    /// group still holds the pipe.
+    pub fn finish_output(&mut self, deadline: Instant) {
+        self.collect_stderr_reader(deadline);
     }
 
     pub fn kill(&mut self) {
@@ -690,7 +699,7 @@ impl ClaudeSdkSession {
         terminate_process_tree(pid);
         let _ = self.child.kill();
         let _ = self.child.wait();
-        self.join_stderr_reader();
+        self.collect_stderr_reader(Instant::now() + KILL_GRACE);
     }
 
     pub fn note_transcript_candidate(&mut self, cwd: &Path) {
@@ -777,9 +786,11 @@ impl ClaudeSdkSession {
             .map_err(|err| format!("failed to flush Claude Code stdin: {err}"))
     }
 
-    fn join_stderr_reader(&mut self) {
+    /// Collects the stderr reader once the leader has exited, within
+    /// `deadline` (see `collect_group_readers`).
+    fn collect_stderr_reader(&mut self, deadline: Instant) {
         if let Some(reader) = self.stderr_reader.take() {
-            let _ = reader.join();
+            collect_group_readers(self.child.id(), vec![reader], deadline);
         }
     }
 }
@@ -789,7 +800,7 @@ impl Drop for ClaudeSdkSession {
         if self.child.try_wait().ok().flatten().is_none() {
             self.kill();
         } else {
-            self.join_stderr_reader();
+            self.collect_stderr_reader(Instant::now() + KILL_GRACE);
         }
     }
 }
@@ -1396,6 +1407,95 @@ time.sleep(8)
         assert!(saw_init_ok);
         assert!(saw_interrupt_ack);
         session.kill();
+        fs::remove_dir_all(dir).ok();
+    }
+
+    fn write_script(dir: &Path, name: &str, body: &str) -> String {
+        let path = dir.join(name);
+        fs::write(&path, body).unwrap();
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&path, perms).unwrap();
+        path.display().to_string()
+    }
+
+    /// Allowance over a cleanup timeout for the final SIGKILL grace,
+    /// `terminate_process_tree`'s pause and scheduling delay.
+    const CLEANUP_MARGIN: Duration = Duration::from_millis(600);
+
+    #[test]
+    fn version_probe_does_not_wait_for_a_background_child_holding_stderr() {
+        let dir = temp_dir();
+        let binary = write_script(
+            &dir,
+            "fake-claude-version",
+            "#!/bin/sh\necho '2.1.240 (Claude Code)'\nsleep 30 >/dev/null &\nexit 0\n",
+        );
+        let started = Instant::now();
+        let version = probe_claude_version(&binary).unwrap();
+        let elapsed = started.elapsed();
+        assert_eq!(version.triple, (2, 1, 240));
+        assert!(
+            elapsed < VERSION_PROBE_TIMEOUT + CLEANUP_MARGIN,
+            "probe took {elapsed:?}"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn version_probe_timeout_terminates_the_process_tree() {
+        let dir = temp_dir();
+        let binary = write_script(
+            &dir,
+            "fake-claude-version-hang",
+            "#!/bin/sh\nsleep 30 &\nsleep 30\n",
+        );
+        let started = Instant::now();
+        let err = probe_claude_version(&binary).unwrap_err();
+        let elapsed = started.elapsed();
+        assert!(err.contains("timed out"), "{err}");
+        assert!(
+            elapsed < VERSION_PROBE_TIMEOUT + CLEANUP_MARGIN,
+            "probe took {elapsed:?}"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn finish_output_does_not_wait_for_a_background_child_holding_stderr() {
+        let dir = temp_dir();
+        let binary = write_script(
+            &dir,
+            "fake-claude-exit",
+            "#!/bin/sh\necho warning >&2\nsleep 30 >/dev/null &\nexit 0\n",
+        );
+        let stderr_log = dir.join("stderr.log");
+        let mut session = ClaudeSdkSession::spawn(ClaudeSdkSpawnSpec {
+            binary,
+            cwd: dir.clone(),
+            model: None,
+            effort: None,
+            resume: None,
+            fork: false,
+            append_system_prompt: None,
+            stderr_log: stderr_log.clone(),
+        })
+        .unwrap();
+        session.end_input();
+        let exit_deadline = Instant::now() + Duration::from_secs(5);
+        while session.try_wait().is_none() {
+            assert!(Instant::now() < exit_deadline, "fake Claude did not exit");
+            thread::sleep(Duration::from_millis(20));
+        }
+        let timeout = Duration::from_secs(1);
+        let started = Instant::now();
+        session.finish_output(started + timeout);
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < timeout + CLEANUP_MARGIN,
+            "finish took {elapsed:?}"
+        );
+        assert!(fs::read_to_string(stderr_log).unwrap().contains("warning"));
         fs::remove_dir_all(dir).ok();
     }
 }

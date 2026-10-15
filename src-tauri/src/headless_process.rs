@@ -64,11 +64,109 @@ pub enum JsonlReceive {
     Eof,
 }
 
+/// How long pipe readers get to reach end of file after their process group
+/// is sent SIGKILL. Past it, a reader is detached: its pipe is held open by a
+/// process outside the group, which no signal here reaches.
+pub(crate) const KILL_GRACE: Duration = Duration::from_millis(100);
+
+/// How long stdout may stay open after the leader exits before the rest of
+/// its process group is sent SIGKILL. SIGTERM is sent as soon as the exit is
+/// seen.
+const STDOUT_AFTER_EXIT_GRACE: Duration = Duration::from_secs(2);
+
+/// A thread that drains one of a child's pipes. Its result is collected with
+/// a deadline rather than an unbounded join, since any process that inherited
+/// the pipe (a background helper of the child) keeps it from reaching end of
+/// file.
+pub(crate) struct PipeReader<T> {
+    handle: thread::JoinHandle<T>,
+    // Disconnects when the reader's closure returns or unwinds.
+    done: Receiver<()>,
+}
+
+impl<T: Send + 'static> PipeReader<T> {
+    pub(crate) fn spawn(
+        name: &str,
+        read: impl FnOnce() -> T + Send + 'static,
+    ) -> std::io::Result<Self> {
+        let (finished, done) = mpsc::channel::<()>();
+        let handle = thread::Builder::new()
+            .name(name.to_string())
+            .spawn(move || {
+                let _finished = finished;
+                read()
+            })?;
+        Ok(Self { handle, done })
+    }
+}
+
+impl<T> PipeReader<T> {
+    /// Waits until the reader finishes or `deadline` passes; true when it
+    /// finished.
+    fn wait_until(&self, deadline: Instant) -> bool {
+        match self.done.try_recv() {
+            Err(mpsc::TryRecvError::Disconnected) => return true,
+            Ok(()) | Err(mpsc::TryRecvError::Empty) => {}
+        }
+        matches!(
+            self.done
+                .recv_timeout(deadline.saturating_duration_since(Instant::now())),
+            Err(RecvTimeoutError::Disconnected)
+        )
+    }
+
+    /// The reader's result when it has finished. A reader still blocked is
+    /// detached: dropping its handle leaves the thread to end with its pipe.
+    fn finish(self) -> Option<T> {
+        if self.wait_until(Instant::now()) {
+            self.handle.join().ok()
+        } else {
+            None
+        }
+    }
+}
+
+/// Sends `signal` to every process in process group `pgid`. Children here are
+/// spawned with `process_group(0)`, so the group id is the leader's pid.
+pub(crate) fn signal_process_group(pgid: u32, signal: libc::c_int) {
+    let Ok(pgid) = libc::pid_t::try_from(pgid) else {
+        return;
+    };
+    if pgid > 0 {
+        let _ = unsafe { libc::kill(-pgid, signal) };
+    }
+}
+
+/// Collects the pipe readers of a child whose group leader has exited. Other
+/// members of its process group may still hold the pipes open, so the group
+/// is sent SIGTERM first; readers still running at `deadline` get the group
+/// SIGKILLed and `KILL_GRACE` more, after which they are detached. Returns
+/// each reader's result in order, `None` for a detached reader.
+pub(crate) fn collect_group_readers<T>(
+    pgid: u32,
+    readers: Vec<PipeReader<T>>,
+    deadline: Instant,
+) -> Vec<Option<T>> {
+    signal_process_group(pgid, libc::SIGTERM);
+    if !readers.iter().all(|reader| reader.wait_until(deadline)) {
+        signal_process_group(pgid, libc::SIGKILL);
+        let grace = Instant::now() + KILL_GRACE;
+        for reader in &readers {
+            reader.wait_until(grace);
+        }
+    }
+    readers.into_iter().map(PipeReader::finish).collect()
+}
+
 pub struct JsonlProcess {
     child: Child,
     events: Option<Receiver<Result<Value, String>>>,
-    stdout_reader: Option<thread::JoinHandle<()>>,
-    stderr_reader: Option<thread::JoinHandle<()>>,
+    stdout_reader: Option<PipeReader<()>>,
+    stderr_reader: Option<PipeReader<()>>,
+    // When the leader's exit was first seen while stdout was still open, and
+    // whether the rest of its group has been sent SIGKILL since.
+    leader_exited_at: Option<Instant>,
+    group_killed: bool,
 }
 
 impl JsonlProcess {
@@ -143,13 +241,25 @@ impl JsonlProcess {
         })?;
         let (tx, events) = mpsc::sync_channel(MAX_PENDING_EVENTS);
         let stdout_label = label.to_string();
-        let stdout_reader = thread::spawn(move || read_jsonl(stdout, tx, &stdout_label));
-        let stderr_reader = thread::spawn(move || copy_bounded(stderr, log));
+        let readers = PipeReader::spawn("session-jsonl-stdout", move || {
+            read_jsonl(stdout, tx, &stdout_label)
+        })
+        .and_then(|stdout_reader| {
+            let stderr_reader =
+                PipeReader::spawn("session-jsonl-stderr", move || copy_bounded(stderr, log))?;
+            Ok((stdout_reader, stderr_reader))
+        });
+        let (stdout_reader, stderr_reader) = readers.map_err(|err| {
+            terminate_after_setup_failure(&mut child);
+            format!("failed to start {label} research output readers: {err}")
+        })?;
         Ok(Self {
             child,
             events: Some(events),
             stdout_reader: Some(stdout_reader),
             stderr_reader: Some(stderr_reader),
+            leader_exited_at: None,
+            group_killed: false,
         })
     }
 
@@ -157,16 +267,45 @@ impl JsonlProcess {
         self.child.id()
     }
 
-    pub fn recv_timeout(&self, timeout: Duration) -> Result<JsonlReceive, String> {
+    pub fn recv_timeout(&mut self, timeout: Duration) -> Result<JsonlReceive, String> {
         let Some(events) = self.events.as_ref() else {
             return Ok(JsonlReceive::Eof);
         };
         match events.recv_timeout(timeout) {
             Ok(Ok(value)) => Ok(JsonlReceive::Value(value)),
             Ok(Err(err)) => Err(err),
+            Err(RecvTimeoutError::Timeout) if self.stdout_held_after_exit() => {
+                // Lines already read were delivered before this timeout.
+                self.events.take();
+                Ok(JsonlReceive::Eof)
+            }
             Err(RecvTimeoutError::Timeout) => Ok(JsonlReceive::Timeout),
             Err(RecvTimeoutError::Disconnected) => Ok(JsonlReceive::Eof),
         }
+    }
+
+    /// Whether stdout should be treated as closed although the reader has
+    /// not seen end of file: the leader has exited and the processes that
+    /// inherited its stdout did not exit after SIGTERM, then SIGKILL. Called
+    /// on each receive timeout; it signals the leader's process group along
+    /// the way.
+    fn stdout_held_after_exit(&mut self) -> bool {
+        let exited_at = match self.leader_exited_at {
+            Some(exited_at) => exited_at,
+            None => {
+                if !matches!(self.child.try_wait(), Ok(Some(_))) {
+                    return false;
+                }
+                signal_process_group(self.child.id(), libc::SIGTERM);
+                *self.leader_exited_at.insert(Instant::now())
+            }
+        };
+        let waited = exited_at.elapsed();
+        if waited >= STDOUT_AFTER_EXIT_GRACE && !self.group_killed {
+            signal_process_group(self.child.id(), libc::SIGKILL);
+            self.group_killed = true;
+        }
+        waited >= STDOUT_AFTER_EXIT_GRACE + KILL_GRACE
     }
 
     pub fn finish(&mut self, timeout: Duration) -> Result<ExitStatus, String> {
@@ -189,7 +328,7 @@ impl JsonlProcess {
                 }
             }
         };
-        self.join_readers();
+        self.collect_readers(deadline);
         Ok(status)
     }
 
@@ -197,18 +336,21 @@ impl JsonlProcess {
         crate::claude_sdk::terminate_process_tree(self.child.id());
         let _ = self.child.kill();
         let _ = self.child.wait();
-        self.join_readers();
+        self.collect_readers(Instant::now() + KILL_GRACE);
     }
 
-    fn join_readers(&mut self) {
+    /// Collects the output readers once the leader has exited, within
+    /// `deadline` (see `collect_group_readers`).
+    fn collect_readers(&mut self, deadline: Instant) {
         // Dropping the receiver also releases a stdout reader blocked on the
         // bounded queue when a run is cancelled or its owner is dropped.
         self.events.take();
-        if let Some(reader) = self.stdout_reader.take() {
-            let _ = reader.join();
-        }
-        if let Some(reader) = self.stderr_reader.take() {
-            let _ = reader.join();
+        let readers = [self.stdout_reader.take(), self.stderr_reader.take()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if !readers.is_empty() {
+            collect_group_readers(self.child.id(), readers, deadline);
         }
     }
 }
@@ -218,7 +360,7 @@ impl Drop for JsonlProcess {
         if self.child.try_wait().ok().flatten().is_none() {
             self.kill();
         } else {
-            self.join_readers();
+            self.collect_readers(Instant::now() + KILL_GRACE);
         }
     }
 }
@@ -445,6 +587,140 @@ mod tests {
         assert_eq!(source.position(), (MAX_STDERR_LOG_BYTES + 8192) as u64);
         assert!(target.len() < MAX_STDERR_LOG_BYTES + 128);
         assert!(target.ends_with(b"session: stderr log truncated at 4 MB\n"));
+    }
+
+    fn test_dir(label: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "session-jsonl-{label}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_script(dir: &Path, body: &str) -> String {
+        let script = dir.join("fake-jsonl");
+        fs::write(&script, body).unwrap();
+        let mut permissions = fs::metadata(&script).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&script, permissions).unwrap();
+        script.display().to_string()
+    }
+
+    fn receive_until_eof(process: &mut JsonlProcess, within: Duration) -> Vec<Value> {
+        let deadline = Instant::now() + within;
+        let mut values = Vec::new();
+        while Instant::now() < deadline {
+            match process.recv_timeout(Duration::from_millis(50)).unwrap() {
+                JsonlReceive::Value(value) => values.push(value),
+                JsonlReceive::Timeout => {}
+                JsonlReceive::Eof => return values,
+            }
+        }
+        panic!("stdout did not reach end of file within {within:?}");
+    }
+
+    /// Allowance over a cleanup timeout for the final SIGKILL grace and
+    /// scheduling delay.
+    const CLEANUP_MARGIN: Duration = Duration::from_millis(600);
+
+    #[test]
+    fn finish_does_not_wait_for_a_background_child_holding_stderr() {
+        let dir = test_dir("stderr-holder");
+        let script = write_script(
+            &dir,
+            "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"ok\"}'\nprintf '%s\\n' warning >&2\nsleep 30 >/dev/null &\nexit 0\n",
+        );
+        let log = dir.join("stderr.log");
+        let mut process = JsonlProcess::spawn(&script, &[], &dir, &log, "test").unwrap();
+        let values = receive_until_eof(&mut process, Duration::from_secs(5));
+        assert_eq!(values.len(), 1);
+
+        let timeout = Duration::from_secs(1);
+        let started = Instant::now();
+        assert!(process.finish(timeout).unwrap().success());
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < timeout + CLEANUP_MARGIN,
+            "finish took {elapsed:?}"
+        );
+        assert!(fs::read_to_string(log).unwrap().contains("warning"));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn finish_kills_a_background_child_that_ignores_sigterm_at_the_deadline() {
+        let dir = test_dir("stderr-holder-term");
+        let script = write_script(
+            &dir,
+            "#!/bin/sh\nprintf '%s\\n' warning >&2\n(trap '' TERM; exec sleep 30) >/dev/null &\nexit 0\n",
+        );
+        let log = dir.join("stderr.log");
+        let mut process = JsonlProcess::spawn(&script, &[], &dir, &log, "test").unwrap();
+        receive_until_eof(&mut process, Duration::from_secs(5));
+
+        let timeout = Duration::from_secs(1);
+        let started = Instant::now();
+        assert!(process.finish(timeout).unwrap().success());
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < timeout + CLEANUP_MARGIN,
+            "finish took {elapsed:?}"
+        );
+        assert!(fs::read_to_string(log).unwrap().contains("warning"));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn finish_detaches_a_reader_held_open_outside_the_process_group() {
+        let dir = test_dir("stderr-holder-escaped");
+        let pid_file = dir.join("escaped.pid");
+        let script = write_script(
+            &dir,
+            &format!(
+                "#!/bin/sh\nperl -e 'setpgrp(0, 0); exec \"sleep\", \"30\"' >/dev/null &\necho $! > '{}'\nexit 0\n",
+                pid_file.display()
+            ),
+        );
+        let log = dir.join("stderr.log");
+        let mut process = JsonlProcess::spawn(&script, &[], &dir, &log, "test").unwrap();
+        receive_until_eof(&mut process, Duration::from_secs(5));
+
+        let timeout = Duration::from_secs(1);
+        let started = Instant::now();
+        let status = process.finish(timeout);
+        let elapsed = started.elapsed();
+        if let Some(pid) = fs::read_to_string(&pid_file)
+            .ok()
+            .and_then(|pid| pid.trim().parse::<libc::pid_t>().ok())
+        {
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+        assert!(status.unwrap().success());
+        assert!(
+            elapsed < timeout + CLEANUP_MARGIN,
+            "finish took {elapsed:?}"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn stdout_ends_when_the_leader_exits_and_a_background_child_holds_it() {
+        let dir = test_dir("stdout-holder");
+        let script = write_script(
+            &dir,
+            "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"ok\"}'\nsleep 30 &\nexit 0\n",
+        );
+        let log = dir.join("stderr.log");
+        let mut process = JsonlProcess::spawn(&script, &[], &dir, &log, "test").unwrap();
+        let values = receive_until_eof(&mut process, Duration::from_secs(2));
+        assert_eq!(values.len(), 1);
+        assert!(process.finish(Duration::from_secs(1)).unwrap().success());
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]

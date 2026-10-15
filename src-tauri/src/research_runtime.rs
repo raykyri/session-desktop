@@ -1304,7 +1304,7 @@ fn run_session(
                 if session.try_wait().is_none() {
                     session.kill();
                 }
-                session.finish_output();
+                session.finish_output(wait_until);
                 session.note_transcript_candidate(&workspace_dir);
                 let _ = state.record_research_sdk_session(
                     &node_id,
