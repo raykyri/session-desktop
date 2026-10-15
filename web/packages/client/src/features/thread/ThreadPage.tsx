@@ -446,7 +446,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const clearDraft = useDraftsStore((state) => state.clearDraft);
   useEffect(() => {
     if (!rootNodeId) return;
-    const saved = useDraftsStore.getState().byKey[rootDraftKey]?.text;
+    const saved = useDraftsStore.getState().get(rootDraftKey)?.text;
     if (!saved) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setComposerText((current) =>

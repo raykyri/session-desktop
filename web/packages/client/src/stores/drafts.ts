@@ -8,9 +8,10 @@
 //
 // The stored drafts carry the id of the account that wrote them (`owner`).
 // When the session is known (`stores/localAccount.ts`), drafts of another
-// account, or of none, are dropped before anything reads them, and
-// sign-out and an expired session drop them all; writes still waiting for
-// the server go with them.
+// account, or of none, are dropped before anything reads them, and sign-out
+// drops them all; writes still waiting for the server go with them. While the
+// tab is signed out (an expired session), the drafts are kept but hidden:
+// nothing reads or writes them until their account signs in again.
 
 import type { ResearchImageAttachment } from "@session/shared";
 import { create } from "zustand";
@@ -52,6 +53,9 @@ export interface DraftsState {
    * undefined before a session was known (and in drafts stored before the
    * field existed). */
   owner?: string | null | undefined;
+  /** Signed out with another account's drafts kept: reads return nothing and
+   * writes are ignored. Not stored. */
+  hidden?: boolean | undefined;
   get: (key: DraftKey) => ComposerDraft | undefined;
   setDraft: (key: DraftKey, draft: Omit<ComposerDraft, "updatedAt">) => void;
   clearDraft: (key: DraftKey) => void;
@@ -76,7 +80,7 @@ export function markDraftEdited(key: DraftKey): void {
 }
 
 export function restoreServerDraft(key: DraftKey, raw: string | null): ComposerDraft | null {
-  if (raw === null || editedKeys.has(key)) return null;
+  if (raw === null || editedKeys.has(key) || useDraftsStore.getState().hidden) return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
@@ -140,14 +144,16 @@ export const useDraftsStore = create<DraftsState>()(
   persist(
     (set, get) => ({
       byKey: {},
-      get: (key) => get().byKey[key],
+      get: (key) => (get().hidden ? undefined : get().byKey[key]),
       setDraft: (key, draft) => {
+        if (get().hidden) return;
         markDraftEdited(key);
         const stored: ComposerDraft = { ...draft, updatedAt: Date.now() };
         set((state) => ({ byKey: { ...state.byKey, [key]: stored } }));
         schedule(key, stored);
       },
       clearDraft: (key) => {
+        if (get().hidden) return;
         markDraftEdited(key);
         set((state) => {
           if (!(key in state.byKey)) return state;
@@ -178,12 +184,25 @@ export function resetDrafts(owner: string | null | undefined): void {
   timer = null;
   pending.clear();
   editedKeys.clear();
-  useDraftsStore.setState({ byKey: {}, owner });
+  useDraftsStore.setState({ byKey: {}, owner, hidden: false });
 }
 
 /** The session is `owner`'s: drafts of any other account, or stored without
  * one, are dropped. */
 export function claimDrafts(owner: string | null): void {
-  if (useDraftsStore.getState().owner === owner) return;
+  if (useDraftsStore.getState().owner === owner) {
+    if (useDraftsStore.getState().hidden) useDraftsStore.setState({ hidden: false });
+    return;
+  }
   resetDrafts(owner);
+}
+
+/** Signed out without signing out (an expired session): the drafts stay
+ * stored for their account and are hidden until it signs in again. Writes
+ * still waiting for the server are dropped; they would be refused. */
+export function hideDrafts(): void {
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  pending.clear();
+  useDraftsStore.setState({ hidden: true });
 }

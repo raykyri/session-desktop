@@ -150,8 +150,9 @@ deleted or left thread loses it. Tabs share the key: each write merges with
 the stored copy thread by thread (the entry written last wins,
 `lib/tabMerge.ts`), and another tab's write is merged in on its `storage`
 event; the feeds' scroll anchors (`stores/navigation`) merge the same way.
-The state belongs to the signed-in account: sign-out, an expired session and
-another account's session drop it (`07-client-architecture.md` §4.3).
+The state belongs to the signed-in account: sign-out and another account's
+session drop it; an expired session keeps it hidden until the same account
+signs in again (`07-client-architecture.md` §4.3).
 
 While the detail loads, the header shows the title (or "Note") a cached list
 already has, and Back and Forward stay in place; their titles name the

@@ -45,7 +45,7 @@ import { notifyManager, type QueryClient } from "@tanstack/react-query";
 import { forgetThread } from "../features/thread/persistence.js";
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
-import { clearLocalAccountState } from "../stores/localAccount.js";
+import { hideLocalAccountState } from "../stores/localAccount.js";
 import { useNotificationsStore } from "../stores/notifications.js";
 import { useRecapPendingStore } from "../stores/recapPending.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
@@ -854,9 +854,9 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const signOut = (): void => {
     if (signedOut) return;
     signedOut = true;
-    // The account's unsent drafts and branches go with the session, before
-    // the page is left for the sign-in.
-    clearLocalAccountState();
+    // The account's unsent drafts and branches stay stored for it and are
+    // hidden until it signs in again (`stores/localAccount.ts`).
+    hideLocalAccountState();
     onUnauthorized();
   };
 

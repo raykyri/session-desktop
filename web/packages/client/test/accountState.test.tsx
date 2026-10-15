@@ -1,8 +1,8 @@
 // Unsent text kept in this browser belongs to the account that wrote it: the
 // composer drafts (`stores/drafts.ts`, sessionStorage) and the thread pages'
 // unsent branches (`features/thread/persistence.ts`, localStorage) go on
-// sign-out and when the session expires, and a different account signing in
-// finds none of them.
+// sign-out; an expired session keeps them hidden for the same account; a
+// different account signing in, or a guest, finds none of them.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
@@ -178,7 +178,17 @@ test.serial("a guest after the previous account finds none of its drafts", async
     responses: homeResponses,
   });
   await sleep(20);
-  assertNoAccountAText(t, "as a guest");
+  t.is(
+    useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)),
+    undefined,
+    "no Home draft as a guest",
+  );
+  t.is(
+    useDraftsStore.getState().get(nodeDraftKey("tree:t1")),
+    undefined,
+    "no thread draft as a guest",
+  );
+  t.is(savedPendingBranch("t1", "n1"), null, "no unsent branch as a guest");
   guest.unmount();
 });
 
@@ -193,23 +203,42 @@ test.serial("the same account keeps its drafts across a reload", async (t) => {
   second.unmount();
 });
 
-test.serial("an expired session drops the unsent drafts and branches", async (t) => {
-  const app = await openHome(t);
-  writeAccountADrafts();
-  app.unmount();
-  const stub = createTrpcStub();
-  let signedOut = 0;
-  const bridge = connectEventBridge({
-    queryClient: testQueryClient(),
-    client: stub.client,
-    setInterest: () => Promise.resolve(undefined),
-    onUnauthorized: () => (signedOut += 1),
-  });
-  for (const observer of stub.observers) observer.onError?.({ data: { code: "UNAUTHORIZED" } });
-  t.is(signedOut, 1);
-  assertNoAccountAText(t, "after the session expired");
-  bridge.close();
-});
+test.serial(
+  "an expired session keeps the unsent drafts and branches for the same account",
+  async (t) => {
+    const app = await openHome(t);
+    writeAccountADrafts();
+    app.unmount();
+    const stub = createTrpcStub();
+    let signedOut = 0;
+    const bridge = connectEventBridge({
+      queryClient: testQueryClient(),
+      client: stub.client,
+      setInterest: () => Promise.resolve(undefined),
+      onUnauthorized: () => (signedOut += 1),
+    });
+    for (const observer of stub.observers) observer.onError?.({ data: { code: "UNAUTHORIZED" } });
+    t.is(signedOut, 1);
+    // Hidden while signed out: nothing reads or writes them.
+    t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)), undefined);
+    t.is(savedPendingBranch("t1", "n1"), null);
+    t.true(
+      (sessionStorage.getItem(DRAFTS_STORAGE_KEY) ?? "").includes(HOME_DRAFT),
+      "the drafts stay stored",
+    );
+    t.true(
+      (localStorage.getItem(THREAD_NAVIGATION_KEY) ?? "").includes(BRANCH_DRAFT),
+      "the branch stays stored",
+    );
+    bridge.close();
+    // The same account signs in again and gets its unsent text back.
+    const again = await openHome(t);
+    t.is(screen.getByRole<HTMLTextAreaElement>("textbox", { name: FIELD }).value, HOME_DRAFT);
+    t.is(useDraftsStore.getState().get(nodeDraftKey("tree:t1"))?.text, ROOT_DRAFT);
+    t.is(savedPendingBranch("t1", "n1")?.text, BRANCH_DRAFT);
+    again.unmount();
+  },
+);
 
 test.serial(
   "when another tab signs in as someone else, this tab writes none of its drafts and reloads",

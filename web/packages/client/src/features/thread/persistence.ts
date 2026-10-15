@@ -128,7 +128,9 @@ function parse(text: string | null): Record<string, ThreadNavigation> {
 
 /** The store, loaded on first use. */
 export function threadNavigationStore(): Record<string, ThreadNavigation> {
-  store ??= load();
+  // A signed-out tab, or one whose account no longer matches the recorded
+  // one, starts from nothing rather than reading another account's state.
+  store ??= ownsLocalState() ? load() : {};
   return store;
 }
 

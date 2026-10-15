@@ -282,10 +282,13 @@ account in `owner`; localStorage `session.local-owner.v1` (`{ userId }`, null
 when signed out) records the account of the thread pages' state
 (`session.thread-navigation.v1`, which holds the unsent branches). Every
 answer of `auth.me` in a route guard claims both for that session before a
-view renders: drafts and thread state of another account, of a signed-out
-tab, or stored before the stamp existed are dropped, with the drafts' writes
-still waiting for the server. Sign-out (`useLogout`) and an expired session
-(the event bridge's sign-out) drop them and record a signed-out browser. When
+view renders: drafts and thread state of another account, or stored before
+the stamp existed, are dropped, with the drafts' writes still waiting for the
+server. Sign-out (`useLogout`) drops them and records a signed-out browser.
+An expired session (the event bridge's sign-out) or a page loaded with no
+session keeps them recorded for their account but hidden: reads return
+nothing and writes are skipped, so the same account signing in again gets
+its unsent text back and a different account drops it. When
 another tab records a different account, a tab drops what it holds without
 writing it and reloads; until it does, its thread-state writes and draft
 pushes are skipped, because its requests already go out with the other tab's

@@ -6,7 +6,10 @@
 //   anything renders: another account's state, or state stored without an
 //   account, is dropped, so neither a reload, a sign-in after an expired
 //   session nor a guest finds it.
-// - Sign-out and an expired session drop it.
+// - Sign-out drops it. A signed-out tab (an expired session, the sign-in
+//   page) keeps it for its account without showing or writing it, so the
+//   same account signing in again gets its unsent text back, and a different
+//   account signing in drops it.
 // - When another tab records a different account, this tab drops what it
 //   holds without writing it and reloads, because its requests now go out
 //   with that tab's session.
@@ -22,19 +25,40 @@ import {
   type LocalOwner,
 } from "../lib/localOwner.js";
 
-import { claimDrafts, resetDrafts } from "./drafts.js";
+import { claimDrafts, hideDrafts, resetDrafts } from "./drafts.js";
 
 /** The session is `userId`'s (null: signed out). */
 export function claimLocalAccountState(userId: LocalOwner): void {
+  if (userId === null) {
+    hideLocalAccountState();
+    return;
+  }
+  const previous = localStateOwner();
   setLocalStateOwner(userId);
   if (storedLocalOwner() !== userId) {
     dropThreadNavigation(true);
     writeLocalOwner(userId);
+  } else if (previous === null) {
+    // The tab was signed out and started from nothing (it wrote nothing
+    // meanwhile); read the account's stored state afresh.
+    dropThreadNavigation(false);
   }
   claimDrafts(userId);
 }
 
-/** Sign-out or an expired session: nothing of the account stays. */
+/**
+ * Signed out without a sign-out: an expired session, or a page loaded with no
+ * session. The stored state stays recorded as its account's; this tab neither
+ * shows nor writes it (`ownsLocalState` is false for a signed-out tab while
+ * another account is recorded).
+ */
+export function hideLocalAccountState(): void {
+  setLocalStateOwner(null);
+  hideDrafts();
+  dropThreadNavigation(false);
+}
+
+/** Sign-out: nothing of the account stays. */
 export function clearLocalAccountState(): void {
   setLocalStateOwner(null);
   resetDrafts(null);
