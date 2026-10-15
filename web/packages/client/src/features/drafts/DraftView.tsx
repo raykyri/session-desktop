@@ -4,6 +4,8 @@
 // view closes, and an added or removed image saves at once when the draft has
 // text (otherwise with the next text edit); once a send starts nothing more is
 // saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows a toast.
+// Text or images whose save failed stay unsaved, so ⌘S and closing save them
+// again.
 // Send starts the research with the Home ask box's model and effort and
 // removes the draft; a failed send keeps the view open with the error.
 
@@ -66,6 +68,10 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
     researchImages(draft.attachments),
   );
   const imagesRef = useRef(images);
+  const valueRef = useRef(value);
+  // The images as last saved; an image change saves at once, and stays
+  // unsaved until a save of it succeeds.
+  const savedImagesRef = useRef<readonly ResearchImageAttachment[]>(images);
   const [sending, setSending] = useState(false);
   const requireCmdEnter = useRequireCmdEnterToSend();
   const [error, setError] = useState<string | null>(null);
@@ -74,14 +80,27 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
   const saveRef = useRef(saveDraft.mutateAsync);
   useLayoutEffect(() => {
     imagesRef.current = images;
+    valueRef.current = value;
     saveRef.current = saveDraft.mutateAsync;
   });
 
   // The saver and its autosave are made once per mounted draft (the route
   // keys this view by the draft's id) and flushed when the view closes.
   const saverRef = useRef<DraftSaver | null>(null);
+  /** Saves images whose last save failed, or that changed while the text was
+   * empty, with the current text. Null when there is nothing to save. */
+  const saveUnsavedImages = (saver: DraftSaver): Promise<void> | null => {
+    const current = imagesRef.current;
+    if (current === savedImagesRef.current || sendingRef.current || !valueRef.current.trim())
+      return null;
+    const saving = saver.save(valueRef.current, current);
+    saving.catch((failure: unknown) => {
+      if (!sendingRef.current) setError(errorMessage(failure));
+    });
+    return saving;
+  };
   useEffect(() => {
-    const save = createResearchDraftImageSave<ResearchImageAttachment>(
+    const saveChanged = createResearchDraftImageSave<ResearchImageAttachment>(
       imagesRef.current,
       (prompt, changed) =>
         saveRef.current({
@@ -91,15 +110,20 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
           ...(changed ? { images: changed.map((image) => image.id) } : {}),
         }),
     );
+    const save = async (prompt: string, current: readonly ResearchImageAttachment[]) => {
+      await saveChanged(prompt, current);
+      savedImagesRef.current = current;
+    };
     const autosave = createResearchDraftAutosave({
       initial: draft.prompt,
       delayMs: SAVE_DELAY_MS,
       save: (prompt) => save(prompt, imagesRef.current),
       onError: setError,
     });
-    saverRef.current = { save, autosave };
+    const saver = { save, autosave };
+    saverRef.current = saver;
     return () => {
-      autosave.flush();
+      if (!autosave.flush()) void saveUnsavedImages(saver)?.catch(() => undefined);
       saverRef.current = null;
     };
     // One saver per draft; the stored prompt it starts from is the one the
@@ -110,16 +134,10 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
   useEffect(() => saverRef.current?.autosave.edit(value), [value]);
   // Images save with the current text; with no text, the next text edit
   // saves them.
-  const shownImagesRef = useRef(images);
   useEffect(() => {
     const saver = saverRef.current;
-    if (!saver || images === shownImagesRef.current || sendingRef.current || !value.trim()) return;
-    shownImagesRef.current = images;
-    void saver.save(value, images).catch((failure: unknown) => {
-      if (!sendingRef.current) setError(errorMessage(failure));
-    });
+    if (saver) void saveUnsavedImages(saver)?.catch(() => undefined);
     // Saves on image changes only; text edits go through the autosave.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images]);
 
   useLayoutEffect(() => {
@@ -188,13 +206,23 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
     if (sendingRef.current) return;
     const saver = saverRef.current;
     if (!saver) return;
-    saver.autosave.saveNow().then(
-      (wrote) => {
-        if (wrote) pushToast({ title: "Draft saved." });
-      },
-      // The autosave's onError shows the failure under the box.
-      () => undefined,
-    );
+    saver.autosave
+      .saveNow()
+      .then(async (wrote) => {
+        if (wrote) return true;
+        const saving = saveUnsavedImages(saver);
+        if (!saving) return false;
+        await saving;
+        return true;
+      })
+      .then(
+        (wrote) => {
+          if (wrote) pushToast({ title: "Draft saved." });
+        },
+        // The autosave's onError, or the image save, shows the failure under
+        // the box.
+        () => undefined,
+      );
   };
 
   const title = draft.prompt.trim() || "Draft";

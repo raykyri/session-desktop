@@ -19,8 +19,9 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
  * and an added or removed image saves at once when the draft has text
  * (otherwise with the next text edit); once a send starts nothing more is
  * saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows
- * a toast; with nothing to save it does nothing. A failed send keeps the view
- * open with the error. Delete is in the draft's … menu in the feed. */
+ * a toast; with nothing to save it does nothing. Text or images whose save
+ * failed stay unsaved, so ⌘S and closing save them again. A failed send
+ * keeps the view open with the error. Delete is in the draft's … menu in the feed. */
 export default function ResearchDraftView({
   draft,
   requireCmdEnterToSend,
@@ -40,17 +41,26 @@ export default function ResearchDraftView({
   const [images, setImages] = useState(() => researchImages(draft.attachments));
   const imagesRef = useRef(images);
   imagesRef.current = images;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  // The images as last saved; an image change saves at once, and stays
+  // unsaved until a save of it succeeds.
+  const savedImagesRef = useRef(images);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const composerRef = useRef<ResearchComposerHandle | null>(null);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const sendingRef = useRef(false);
-  const [save] = useState(() =>
-    createResearchDraftImageSave(images, (prompt, changed) =>
+  const [save] = useState(() => {
+    const saveChanged = createResearchDraftImageSave(images, (prompt, changed) =>
       onSaveRef.current(prompt, changed ? [...changed] : undefined),
-    ),
-  );
+    );
+    return async (prompt: string, current: ResearchImageAttachment[]) => {
+      await saveChanged(prompt, current);
+      savedImagesRef.current = current;
+    };
+  });
   const [autosave] = useState(() =>
     createResearchDraftAutosave({
       initial: draft.prompt,
@@ -60,17 +70,28 @@ export default function ResearchDraftView({
     }),
   );
 
-  useEffect(() => autosave.edit(value), [autosave, value]);
-  useEffect(() => () => autosave.flush(), [autosave]);
-  // Images save with the current text; with no text, the next text edit
-  // saves them.
-  const shownImagesRef = useRef(images);
-  useEffect(() => {
-    if (images === shownImagesRef.current || sendingRef.current || !value.trim()) return;
-    shownImagesRef.current = images;
-    void save(value, images).catch((err: unknown) => {
+  /** Saves images whose last save failed, or that changed while the text
+   * was empty, with the current text. Null when there is nothing to save. */
+  const saveUnsavedImages = () => {
+    const current = imagesRef.current;
+    if (current === savedImagesRef.current || sendingRef.current || !valueRef.current.trim()) return null;
+    const saving = save(valueRef.current, current);
+    saving.catch((err: unknown) => {
       if (!sendingRef.current) setError(errorMessage(err));
     });
+    return saving;
+  };
+  useEffect(() => autosave.edit(value), [autosave, value]);
+  useEffect(
+    () => () => {
+      if (!autosave.flush()) void saveUnsavedImages()?.catch(() => {});
+    },
+    [autosave],
+  );
+  // Images save with the current text; with no text, the next text edit
+  // saves them.
+  useEffect(() => {
+    void saveUnsavedImages()?.catch(() => {});
     // Saves on image changes only; text edits go through autosave.
   }, [images]);
 
@@ -97,13 +118,22 @@ export default function ResearchDraftView({
     // does not run.
     event.preventDefault();
     if (sendingRef.current) return;
-    autosave.saveNow().then(
-      (wrote) => {
-        if (wrote) onToast?.("Draft saved.");
-      },
-      // The autosave's onError shows the failure under the box.
-      () => {},
-    );
+    autosave
+      .saveNow()
+      .then(async (wrote) => {
+        if (wrote) return true;
+        const saving = saveUnsavedImages();
+        if (!saving) return false;
+        await saving;
+        return true;
+      })
+      .then(
+        (wrote) => {
+          if (wrote) onToast?.("Draft saved.");
+        },
+        // The autosave's onError shows the failure under the box.
+        () => {},
+      );
   };
 
   const title = draft.prompt.trim() || "Draft";

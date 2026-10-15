@@ -150,7 +150,9 @@ Drafts are listed in the Drafts tray and at `/drafts`, reordered by drag
 (`drafts.reorder`) and deleted from their menu (Open, Delete). `DraftView`
 (`/drafts/$draftId`) shows a "Draft question" field that saves 500 ms after
 the last edit (`lib/researchDraftAutosave.ts`, ported from the desktop), saves
-at once on ⌘S ("Draft saved.") and flushes on close. Send asks the question
+at once on ⌘S ("Draft saved.") and flushes on close. An added or removed
+image saves at once with the text. Text or images whose save failed stay
+unsaved, so ⌘S and closing save them again. Send asks the question
 with the Home composer's model and effort (`research.createTree`), deletes the
 draft and opens the thread. `drafts.changed` invalidates `["drafts", ws]`.
 

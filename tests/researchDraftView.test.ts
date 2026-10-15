@@ -8,6 +8,8 @@ import { researchCardRefocus } from "../src/components/research/ResearchFeedCard
 import { createResearchDraftAutosave, createResearchDraftImageSave } from "../src/lib/researchDraftAutosave";
 import { withWidgetDom } from "./widgetDom";
 
+type DomWindow = Parameters<Parameters<typeof withWidgetDom>[0]>[0];
+
 const noop = () => {};
 const asyncNoop = async () => {};
 
@@ -242,4 +244,196 @@ test("a draft save sends its images only when they changed since the last save",
   await save("Text, edited", changed);
   await save("Text, edited again", changed);
   assert.deepEqual(sent, [undefined, changed, changed, undefined]);
+});
+
+test("a failed save leaves the text unsaved, so ⌘S and closing save it again", async (t) => {
+  const { autosave, saves, errors, failSave } = autosaveHarness(t);
+  failSave("Disk full.");
+  autosave.edit("Draft 2");
+  t.mock.timers.tick(500);
+  await settle();
+  assert.deepEqual(errors, ["Disk full."]);
+  assert.equal(await autosave.saveNow(), true, "⌘S saves the same text again");
+  assert.deepEqual(saves, ["Draft 2", "Draft 2"]);
+  assert.equal(await autosave.saveNow(), false, "saved now");
+
+  failSave("Disk full.");
+  autosave.edit("Draft 3");
+  await assert.rejects(autosave.saveNow(), /Disk full/);
+  autosave.flush();
+  assert.deepEqual(saves, ["Draft 2", "Draft 2", "Draft 3", "Draft 3"], "closing saves it");
+});
+
+test("a failed save leaves the text saved when a newer save started and succeeded", async () => {
+  const pending: {
+    prompt: string;
+    resolve: () => void;
+    reject: (err: Error) => void;
+  }[] = [];
+  const autosave = createResearchDraftAutosave({
+    initial: "Draft",
+    delayMs: 500,
+    save: (prompt) => new Promise<void>((resolve, reject) => pending.push({ prompt, resolve, reject })),
+    onError: noop,
+  });
+  autosave.edit("Draft 1");
+  autosave.flush();
+  autosave.edit("Draft 2");
+  autosave.flush();
+  pending[1]!.resolve();
+  pending[0]!.reject(new Error("offline"));
+  await settle();
+  assert.equal(await autosave.saveNow(), false, "Draft 2 is stored");
+  assert.deepEqual(
+    pending.map((save) => save.prompt),
+    ["Draft 1", "Draft 2"],
+  );
+});
+
+/** Renders a draft with one image whose `onSave` fails `failures()` times. */
+async function withDraftView(
+  run: (view: {
+    window: DomWindow;
+    container: HTMLElement;
+    saves: [string, string[] | undefined][];
+    toasts: string[];
+    failNext: () => void;
+    press: () => Promise<void>;
+    type: (value: string) => Promise<void>;
+    unmount: () => Promise<void>;
+  }) => Promise<void>,
+) {
+  await withWidgetDom(async (window) => {
+    const { createRoot } = await import("react-dom/client");
+    const computedStyle = Object.getOwnPropertyDescriptor(globalThis, "getComputedStyle");
+    Object.defineProperty(globalThis, "getComputedStyle", {
+      value: window.getComputedStyle.bind(window),
+      configurable: true,
+      writable: true,
+    });
+    const saves: [string, string[] | undefined][] = [];
+    const toasts: string[] = [];
+    let failures = 0;
+    const container = window.document.createElement("div");
+    window.document.body.append(container);
+    const root = createRoot(container);
+    const image = {
+      kind: "image" as const,
+      id: "img1",
+      mimeType: "image/png",
+      byteSize: 10,
+    };
+    await act(async () =>
+      root.render(
+        createElement(ResearchDraftView, {
+          draft: {
+            id: "d1",
+            workspaceId: "ws",
+            prompt: "Draft",
+            attachments: [image],
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          requireCmdEnterToSend: true,
+          onSave: async (prompt, images) => {
+            saves.push([prompt, images?.map((saved) => saved.id)]);
+            if (failures > 0) {
+              failures -= 1;
+              throw new Error("Disk full.");
+            }
+          },
+          onSend: asyncNoop,
+          onToast: (message) => toasts.push(message),
+        }),
+      ),
+    );
+    const field = container.querySelector("textarea")!;
+    let mounted = true;
+    const unmount = async () => {
+      if (!mounted) return;
+      mounted = false;
+      await act(async () => root.unmount());
+    };
+    try {
+      await run({
+        window,
+        container,
+        saves,
+        toasts,
+        failNext: () => (failures += 1),
+        press: async () => {
+          await act(async () => {
+            field.dispatchEvent(
+              new window.KeyboardEvent("keydown", {
+                key: "s",
+                metaKey: true,
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+          });
+        },
+        type: async (value) => {
+          await act(async () => {
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
+            field.dispatchEvent(new window.Event("input", { bubbles: true }));
+          });
+        },
+        unmount,
+      });
+    } finally {
+      await unmount();
+      if (computedStyle) Object.defineProperty(globalThis, "getComputedStyle", computedStyle);
+      else Reflect.deleteProperty(globalThis, "getComputedStyle");
+    }
+  });
+}
+
+const removeImage = async (window: DomWindow, container: HTMLElement) => {
+  const remove = container.querySelector<HTMLButtonElement>('button[title="Remove image"]');
+  assert.ok(remove, "the image has a remove button");
+  await act(async () => {
+    remove.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  });
+};
+
+test("⌘S in a draft retries a failed save of the text or of an image removal", async () => {
+  await withDraftView(async ({ window, container, saves, toasts, failNext, press, type }) => {
+    const alertText = () => container.querySelector('[role="alert"]')?.textContent ?? null;
+    failNext();
+    await type("Draft, edited");
+    await press();
+    assert.equal(alertText(), "Disk full.");
+    assert.deepEqual(toasts, []);
+    await press();
+    assert.deepEqual(
+      saves.map(([prompt]) => prompt),
+      ["Draft, edited", "Draft, edited"],
+    );
+    assert.deepEqual(toasts, ["Draft saved."]);
+
+    // Removing the image saves at once; when that fails, ⌘S saves it again.
+    failNext();
+    await removeImage(window, container);
+    assert.deepEqual(saves[2], ["Draft, edited", []]);
+    assert.equal(alertText(), "Disk full.");
+    await press();
+    assert.deepEqual(saves[3], ["Draft, edited", []]);
+    assert.deepEqual(toasts, ["Draft saved.", "Draft saved."]);
+    await press();
+    assert.equal(saves.length, 4, "nothing left to save");
+  });
+});
+
+test("closing a draft after a failed image save saves the images again", async () => {
+  await withDraftView(async ({ window, container, saves, failNext, unmount }) => {
+    failNext();
+    await removeImage(window, container);
+    assert.deepEqual(saves, [["Draft", []]]);
+    await unmount();
+    assert.deepEqual(saves, [
+      ["Draft", []],
+      ["Draft", []],
+    ]);
+  });
 });

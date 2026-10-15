@@ -4,7 +4,7 @@
 
 import type { ResearchDraft } from "@session/shared";
 import { fireEvent, screen } from "@testing-library/react";
-import test from "ava";
+import test, { type ExecutionContext } from "ava";
 
 import {
   createResearchDraftAutosave,
@@ -116,6 +116,44 @@ test("a draft save sends its images only when they changed", async (t) => {
   t.deepEqual(sent, [undefined, second, undefined]);
 });
 
+test("a failed save leaves the text unsaved, so ⌘S and closing save it again", async (t) => {
+  const { autosave, saves, errors, fail, tick } = autosaveHarness();
+  fail("offline");
+  autosave.edit("Edited");
+  tick();
+  await Promise.resolve();
+  await Promise.resolve();
+  t.deepEqual(errors, ["offline"]);
+  t.true(await autosave.saveNow(), "⌘S saves the same text again");
+  t.deepEqual(saves, ["Edited", "Edited"]);
+  t.false(await autosave.saveNow(), "saved now");
+  fail("offline");
+  autosave.edit("Edited again");
+  await t.throwsAsync(autosave.saveNow(), { message: "offline" });
+  t.true(autosave.flush(), "closing saves it");
+  t.deepEqual(saves, ["Edited", "Edited", "Edited again", "Edited again"]);
+});
+
+test("a failed save leaves the text saved when a newer save started and succeeded", async (t) => {
+  const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  const autosave = createResearchDraftAutosave({
+    initial: "Draft",
+    delayMs: 500,
+    save: () => new Promise<void>((resolve, reject) => pending.push({ resolve, reject })),
+    onError: () => undefined,
+  });
+  autosave.edit("Draft 1");
+  autosave.flush();
+  autosave.edit("Draft 2");
+  autosave.flush();
+  pending[1]?.resolve();
+  pending[0]?.reject(new Error("offline"));
+  await Promise.resolve();
+  await Promise.resolve();
+  t.false(await autosave.saveNow(), "Draft 2 is stored");
+  t.is(pending.length, 2);
+});
+
 /* -------------------------------------------------------------------------
  * The views
  * ---------------------------------------------------------------------- */
@@ -218,6 +256,99 @@ test.serial("an edit saves after a pause, and ⌘S saves at once", async (t) => 
     prompt: "What is a radix trie?",
   });
   app.unmount();
+});
+
+/** The draft view over a `drafts.save` that fails `failNext()` times. */
+async function openFailingDraft(t: ExecutionContext) {
+  let failures = 0;
+  const image = { kind: "image" as const, id: "img1", mimeType: "image/png", byteSize: 10 };
+  const app = await renderApp("/drafts/d1", {
+    queryClient: testQueryClient(),
+    responses: {
+      ...draftResponses(),
+      "drafts.list": [draft({ attachments: [image] })],
+      "drafts.save": (input: { prompt: string }) => {
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error("The draft couldn't be saved.");
+        }
+        return draft({ prompt: input.prompt });
+      },
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("textbox", { name: "Draft question" }) !== null,
+    "the draft's view",
+  );
+  const saves = () =>
+    app.trpc.calls
+      .filter((call) => call.path === "drafts.save")
+      .map((call) => call.input as { prompt: string; images?: string[] });
+  return {
+    app,
+    saves,
+    failNext: () => {
+      failures += 1;
+    },
+    field: screen.getByRole("textbox", { name: "Draft question" }),
+  };
+}
+
+test.serial("⌘S retries a failed save of the text or of an image removal", async (t) => {
+  useNotificationsStore.getState().clear();
+  const { app, saves, failNext, field } = await openFailingDraft(t);
+  failNext();
+  fireEvent.change(field, { target: { value: "What is a radix trie?" } });
+  fireEvent.keyDown(field, { key: "s", metaKey: true });
+  await waitUntil(
+    t,
+    () => screen.queryByText("The draft couldn't be saved.") !== null,
+    "the failure shows",
+  );
+  fireEvent.keyDown(field, { key: "s", metaKey: true });
+  await waitUntil(t, () => saves().length === 2, "⌘S saves the same text again");
+  t.is(saves()[1]?.prompt, "What is a radix trie?");
+  await waitUntil(
+    t,
+    () => useNotificationsStore.getState().items.some((item) => item.title === "Draft saved."),
+    "and says so",
+  );
+
+  failNext();
+  fireEvent.click(screen.getByRole("button", { name: /^Remove image/ }));
+  await waitUntil(t, () => saves().length === 3, "the removal saves at once");
+  t.deepEqual(saves()[2]?.images, []);
+  await waitUntil(
+    t,
+    () => screen.queryByText("The draft couldn't be saved.") !== null,
+    "the failure shows",
+  );
+  fireEvent.keyDown(field, { key: "s", metaKey: true });
+  await waitUntil(t, () => saves().length === 4, "⌘S saves the removal again");
+  t.deepEqual(saves()[3]?.images, []);
+  fireEvent.keyDown(field, { key: "s", metaKey: true });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  t.is(saves().length, 4, "nothing left to save");
+  app.unmount();
+});
+
+test.serial("closing a draft after a failed save saves the text again", async (t) => {
+  const { app, saves, failNext, field } = await openFailingDraft(t);
+  failNext();
+  fireEvent.change(field, { target: { value: "What is a radix trie?" } });
+  fireEvent.keyDown(field, { key: "s", metaKey: true });
+  await waitUntil(
+    t,
+    () => screen.queryByText("The draft couldn't be saved.") !== null,
+    "the failure shows",
+  );
+  app.unmount();
+  await waitUntil(t, () => saves().length === 2, "closing saves it again");
+  t.deepEqual(
+    saves().map((save) => save.prompt),
+    ["What is a radix trie?", "What is a radix trie?"],
+  );
 });
 
 test.serial("Send asks the question, removes the draft and opens the thread", async (t) => {
