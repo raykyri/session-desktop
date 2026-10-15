@@ -127,3 +127,24 @@ test("per-user limits default to absent and round-trip", (t) => {
     dailyRuns: null,
   });
 });
+
+test("setting one limit keeps the other, and an explicit null resets it", (t) => {
+  const fixture = createFixture(t);
+  auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 5, dailyRuns: 3 });
+  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyRuns: 7 }), {
+    dailyTokens: 5,
+    dailyRuns: 7,
+  });
+  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 9 }), {
+    dailyTokens: 9,
+    dailyRuns: 7,
+  });
+  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: null }), {
+    dailyTokens: null,
+    dailyRuns: 7,
+  });
+  t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, {}), {
+    dailyTokens: null,
+    dailyRuns: 7,
+  });
+});

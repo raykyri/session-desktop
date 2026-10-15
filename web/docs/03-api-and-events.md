@@ -71,7 +71,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `interfaceDrafts.get` / `interfaceDrafts.set` | Q/M | `{ key }` / `{ key, value }` (an empty value deletes) | `interface_draft_get/set` |
 | `usage.summary` | Q | no input → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
 | `admin.listUsers` | Q (admin) | → `User[]` with usage totals and limits | — (new) |
-| `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }` | — (new) |
+| `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }`: changes only the limits given; null puts one back to the deployment default | — (new) |
 | `admin.createInvites` | M (admin) | `{ count }` → sign-up codes (admin page "Sign-up codes"; each lets one new account in through `/login?signup=<code>`, which the client passes to `/auth/github?invite=<code>`; `/login?invite=<code>` is still read) | — (new; also grants `invites_remaining` to users later) |
 
 ### `drafts`

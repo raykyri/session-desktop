@@ -255,12 +255,20 @@ export function getUserLimits(db: SessionDatabase, userId: string): UserDailyLim
   return row ? { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns } : null;
 }
 
+/**
+ * Changes the limits named in `limits` and leaves the others as stored. A
+ * limit given as null goes back to the deployment default; one left out
+ * keeps its override.
+ */
 export function setUserLimits(
   db: SessionDatabase,
   userId: string,
   limits: Partial<UserDailyLimits>,
 ): UserDailyLimits {
   const at = now();
+  const changed: Partial<UserDailyLimits> & { updatedAt: number } = { updatedAt: at };
+  if (limits.dailyTokens !== undefined) changed.dailyTokens = limits.dailyTokens;
+  if (limits.dailyRuns !== undefined) changed.dailyRuns = limits.dailyRuns;
   const row = db
     .insert(userLimits)
     .values({
@@ -269,14 +277,7 @@ export function setUserLimits(
       dailyRuns: limits.dailyRuns ?? null,
       updatedAt: at,
     })
-    .onConflictDoUpdate({
-      target: userLimits.userId,
-      set: {
-        dailyTokens: limits.dailyTokens ?? null,
-        dailyRuns: limits.dailyRuns ?? null,
-        updatedAt: at,
-      },
-    })
+    .onConflictDoUpdate({ target: userLimits.userId, set: changed })
     .returning()
     .get();
   return { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns };
