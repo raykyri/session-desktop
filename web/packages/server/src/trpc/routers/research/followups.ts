@@ -13,6 +13,7 @@ import { z } from "zod";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import { requireNodeRole } from "../../../research/access.js";
 import {
+  admitWithinLimits,
   assertEffortAccepted,
   assertModelUsable,
   assertQueueHasRoom,
@@ -82,16 +83,20 @@ export const followupProcedures = {
         )),
         ...images,
       ];
-      const result = repo(() =>
-        followups.ask(ctx.db, ctx.user.id, {
-          headNodeId: input.headNodeId,
-          message: {
-            text: input.prompt,
-            ...(attachments.length === 0 ? {} : { attachments }),
-          },
-          agent: { model, effort },
-          ...(ctx.user.isAdmin ? {} : { maxQueued: ctx.config.limits.queuedPerUser }),
-        }),
+      // Checked again with the write: other launches may have been admitted
+      // while the attachments resolved.
+      const result = admitWithinLimits(ctx, (db) =>
+        repo(() =>
+          followups.ask(db, ctx.user.id, {
+            headNodeId: input.headNodeId,
+            message: {
+              text: input.prompt,
+              ...(attachments.length === 0 ? {} : { attachments }),
+            },
+            agent: { model, effort },
+            ...(ctx.user.isAdmin ? {} : { maxQueued: ctx.config.limits.queuedPerUser }),
+          }),
+        ),
       );
       if (result.kind === "sent") {
         publishAdmittedFollowup(ctx, ctx.user.id, result.node);

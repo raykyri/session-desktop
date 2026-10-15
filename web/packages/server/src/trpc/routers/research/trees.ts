@@ -11,12 +11,13 @@ import { sessionEvent } from "../../../events/bus.js";
 import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import {
+  admitWithinLimits,
   assertEffortAccepted,
   assertModelUsable,
   assertQueueHasRoom,
   assertWithinDailyLimits,
-  enqueueRun,
   queuePositionOf,
+  queueRun,
   scheduleDocumentRecap,
 } from "../../../research/admission.js";
 import { assertModelReadsImages, resolveImageAttachments } from "../../../research/images.js";
@@ -111,20 +112,26 @@ export const treeProcedures = {
         )),
         ...images,
       ];
-      const detail = repo(() =>
-        trees.admitRoot(ctx.db, ctx.user.id, {
-          workspaceId: input.workspaceId,
-          type: "exchange",
-          message: {
-            text: input.prompt,
-            ...(attachments.length === 0 ? {} : { attachments }),
-          },
-          agent: { model: input.model, effort: input.effort ?? null },
-          ...(input.title === undefined ? {} : { title: input.title }),
-        }),
-      );
-      const node = required(detail.nodes[0], "the new thread has no root node");
-      enqueueRun(ctx, node.id, input.model);
+      // The limits are checked again with the write: other launches may have
+      // been admitted while the attachments resolved.
+      const { detail, node } = admitWithinLimits(ctx, (db) => {
+        const admitted = repo(() =>
+          trees.admitRoot(db, ctx.user.id, {
+            workspaceId: input.workspaceId,
+            type: "exchange",
+            message: {
+              text: input.prompt,
+              ...(attachments.length === 0 ? {} : { attachments }),
+            },
+            agent: { model: input.model, effort: input.effort ?? null },
+            ...(input.title === undefined ? {} : { title: input.title }),
+          }),
+        );
+        const root = required(admitted.nodes[0], "the new thread has no root node");
+        queueRun(db, ctx.user.id, root.id, input.model);
+        return { detail: admitted, node: root };
+      });
+      ctx.runs.start(node.id);
       publish(ctx, "research.tree.created", { tree: detail.tree, node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
       emitFeedItemUpsertedForNode(ctx, node.id);

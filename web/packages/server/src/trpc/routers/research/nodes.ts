@@ -19,14 +19,15 @@ import { emitFeedItemUpsertedForNode } from "../../../events/feed.js";
 import { resolveMessageAttachments } from "../../../journal/attachments.js";
 import { requireNodeRole } from "../../../research/access.js";
 import {
+  admitWithinLimits,
   assertEffortAccepted,
   assertMetadataAllowed,
   assertModelUsable,
   assertQueueHasRoom,
   assertWithinDailyLimits,
-  enqueueRun,
   nodeContent,
   queuePositionOf,
+  queueRun,
   scheduleDocumentRecap,
 } from "../../../research/admission.js";
 import { publishQueue } from "../../../research/followups.js";
@@ -92,21 +93,27 @@ export const nodeProcedures = {
         )),
         ...images,
       ];
-      const admitted = repo(() =>
-        nodes.admitChildDetailed(ctx.db, ctx.user.id, {
-          parentNodeId: input.parentNodeId,
-          message: {
-            text: input.prompt,
-            ...(attachments.length === 0 ? {} : { attachments }),
-          },
-          agent: { model, effort },
-          ...(input.inline === undefined ? {} : { inline: input.inline }),
-          ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
-          ...(input.replacesNodeId === undefined ? {} : { replacesNodeId: input.replacesNodeId }),
-        }),
-      );
+      // Checked again with the write: other launches may have been admitted
+      // while the attachments resolved.
+      const admitted = admitWithinLimits(ctx, (db) => {
+        const child = repo(() =>
+          nodes.admitChildDetailed(db, ctx.user.id, {
+            parentNodeId: input.parentNodeId,
+            message: {
+              text: input.prompt,
+              ...(attachments.length === 0 ? {} : { attachments }),
+            },
+            agent: { model, effort },
+            ...(input.inline === undefined ? {} : { inline: input.inline }),
+            ...(input.anchor === undefined ? {} : { anchor: input.anchor }),
+            ...(input.replacesNodeId === undefined ? {} : { replacesNodeId: input.replacesNodeId }),
+          }),
+        );
+        queueRun(db, ctx.user.id, child.node.id, model);
+        return child;
+      });
       const node = admitted.node;
-      enqueueRun(ctx, node.id, model);
+      ctx.runs.start(node.id);
       if (admitted.replacedNodeId !== null) {
         publishToTree(ctx, node.treeId, "research.node.removed", {
           treeId: node.treeId,
@@ -141,14 +148,14 @@ export const nodeProcedures = {
       );
       const model = input.model ?? nodeModelId(existing);
       assertModelUsable(ctx, model);
-      assertWithinDailyLimits(ctx);
-      assertQueueHasRoom(ctx);
-      // `resetForRetry` enqueues inside its own transaction, so the run is
-      // queued the moment the status flips.
-      const node = repo(() =>
-        input.model === undefined
-          ? nodes.resetForRetry(ctx.db, ctx.user.id, input.nodeId)
-          : nodes.resetForRetry(ctx.db, ctx.user.id, input.nodeId, input.model),
+      // `resetForRetry` enqueues in the same transaction as the limit check,
+      // so the run is queued the moment the status flips.
+      const node = admitWithinLimits(ctx, (db) =>
+        repo(() =>
+          input.model === undefined
+            ? nodes.resetForRetry(db, ctx.user.id, input.nodeId)
+            : nodes.resetForRetry(db, ctx.user.id, input.nodeId, input.model),
+        ),
       );
       ctx.runs.start(node.id);
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
@@ -172,9 +179,9 @@ export const nodeProcedures = {
         `research node ${input.nodeId} was not found`,
       );
       assertModelUsable(ctx, nodeModelId(existing));
-      assertWithinDailyLimits(ctx);
-      assertQueueHasRoom(ctx);
-      const node = repo(() => nodes.resetForRerun(ctx.db, ctx.user.id, input.nodeId));
+      const node = admitWithinLimits(ctx, (db) =>
+        repo(() => nodes.resetForRerun(db, ctx.user.id, input.nodeId)),
+      );
       ctx.runs.start(node.id);
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
       emitFeedItemUpsertedForNode(ctx, node.id);

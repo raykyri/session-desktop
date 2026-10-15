@@ -149,7 +149,11 @@ answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies, because
 displaying an explicit error in the query composer provides clearer feedback
 than creating a node that appears queued but cannot execute. Admission counts
 the account's queued questions as runs already spent (a reservation), so a
-queue cannot hold more runs than the day has left.
+queue cannot hold more runs than the day has left. The check, together with
+the queued-per-account cap (`SESSION_QUEUED_PER_USER`), runs again inside the
+transaction that admits and queues the node (`admitWithinLimits`), with
+nothing awaited in between, so concurrent requests that all passed the early
+checks before resolving a linked post cannot all be admitted.
 
 The dispatcher checks the payer's limits once more before a queued node's
 fresh attempt starts, without the reservation: an operator may have lowered

@@ -100,7 +100,8 @@ Rate limits and invite restrictions are enabled in production. Because the hoste
   Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
   `TOO_MANY_REQUESTS`; admins are exempt; enforced whatever
   `SESSION_ENFORCE_LIMITS` says, because it bounds the queue itself rather
-  than the day's spend.
+  than the day's spend. Checked again inside the transaction that admits the
+  node, so concurrent launches cannot pass it together.
 
 Per-account overrides for the daily limits live in `user_limits` and are set
 from `/admin`, so raising one account's ceiling does not mean turning

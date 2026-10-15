@@ -3,7 +3,7 @@
 // `05-run-lifecycle-and-streaming.md` §8, `06-auth-and-users.md` §8).
 
 import type { SessionDatabase } from "@session/db";
-import { nodes, queue, runs as runsRepo, snapshots, usage } from "@session/db";
+import { nodes, queue, runs as runsRepo, snapshots, transact, usage } from "@session/db";
 import type { ResearchNodeContent, User } from "@session/shared";
 import { METADATA_MODEL_ID, canUseModel, findModel } from "@session/shared";
 import { nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
@@ -195,6 +195,23 @@ export function launchRefusal(ctx: LaunchCheckContext, modelId: string): LaunchR
   return modelRefusal(ctx, modelId) ?? admissionRefusal(ctx);
 }
 
+/**
+ * Admits a run: checks the daily limits and the queue cap again and runs
+ * `admit` (the repository write that creates or relaunches the node and puts
+ * it in `run_queue`) in one transaction. Nothing is awaited between the check
+ * and the write, so two requests that both passed the procedure's early
+ * checks before an `await` (resolving a linked post) cannot both be
+ * admitted past the cap. The early checks stay so that a launch that will be
+ * refused does not spend a fetch. Call `ctx.runs.start` after it returns,
+ * outside the transaction.
+ */
+export function admitWithinLimits<T>(ctx: LaunchContext, admit: (db: SessionDatabase) => T): T {
+  return transact(ctx.db, (tx) => {
+    raise(admissionRefusal({ config: ctx.config, db: tx, user: ctx.user }));
+    return admit(tx);
+  });
+}
+
 /** Why a metadata run (a title, a recap) may not be billed to this account
  * now, or null: the metadata model must be usable on this deployment and the
  * account's daily limits must allow another run. */
@@ -229,12 +246,17 @@ export function scheduleDocumentRecap(ctx: LaunchContext, nodeId: string): void 
   ctx.runs.enqueueMetadata({ kind: "recap", userId: ctx.user.id, nodeId });
 }
 
-/** Puts an admitted node in the run queue and wakes the agent loop. The
- * database row persists across restarts; `runs.start` only starts processing. */
-export function enqueueRun(ctx: LaunchContext, nodeId: string, modelId: string): void {
+/** Puts an admitted node in the run queue, inside `admitWithinLimits`. The
+ * row persists across restarts; `runs.start`, called once the transaction
+ * has committed, only wakes the agent loop. */
+export function queueRun(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  modelId: string,
+): void {
   const provider = findModel(modelId)?.provider ?? modelId;
-  repo(() => queue.enqueue(ctx.db, ctx.user.id, { nodeId, pool: "research", provider }));
-  ctx.runs.start(nodeId);
+  repo(() => queue.enqueue(db, userId, { nodeId, pool: "research", provider }));
 }
 
 /** 1-based place in the queue while the node waits, absent once it is
