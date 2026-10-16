@@ -37,7 +37,7 @@ final class NativeSupportHostTests: XCTestCase {
     }
 
     @MainActor
-    func testPeerConnectionsAreDisabledForTheAppWebViewOnly() {
+    func testPeerConnectionsAreDisabledForTheAppWebViewOnly() async throws {
         let host = NativeSupportHost.shared
         defer { host.shutdown() }
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
@@ -56,19 +56,21 @@ final class NativeSupportHostTests: XCTestCase {
         XCTAssertTrue(enabled(other), "other web views keep their own preferences")
 
         // Frames loaded afterwards, including about:blank children, have no
-        // RTCPeerConnection constructor.
-        let loaded = expectation(description: "page evaluated")
+        // RTCPeerConnection constructor. Poll until the page and its child
+        // frame exist: a fixed delay can end before a slow runner loads them.
         webView.loadHTMLString("<iframe></iframe>", baseURL: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            webView.evaluateJavaScript(
-                "[typeof RTCPeerConnection, typeof webkitRTCPeerConnection, typeof frames[0].RTCPeerConnection].join()"
-            ) { result, error in
-                XCTAssertNil(error)
-                XCTAssertEqual(result as? String, "undefined,undefined,undefined")
-                loaded.fulfill()
-            }
+        var ready = false
+        for _ in 0..<40 where !ready {
+            try await Task.sleep(nanoseconds: 250_000_000)
+            ready = (try? await webView.evaluateJavaScript(
+                "document.readyState === 'complete' && frames.length === 1"
+            )) as? Bool == true
         }
-        wait(for: [loaded], timeout: 10)
+        XCTAssertTrue(ready, "the page and its child frame did not load within 10 seconds")
+        let result = try await webView.evaluateJavaScript(
+            "[typeof RTCPeerConnection, typeof webkitRTCPeerConnection, typeof frames[0].RTCPeerConnection].join()"
+        )
+        XCTAssertEqual(result as? String, "undefined,undefined,undefined")
     }
 
     @MainActor
