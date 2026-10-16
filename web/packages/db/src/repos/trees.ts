@@ -79,7 +79,7 @@ export interface AdmitRootInput {
   title?: string | undefined;
   /** Exchanges only: `queued` for a run to be admitted (the default). */
   status?: ResearchNodeStatus | undefined;
-  /** Supplied only by tests and by an importer that minted ids beforehand. */
+  /** Supplied only by tests and by an importer that generated ids beforehand. */
   treeId?: string | undefined;
   nodeId?: string | undefined;
 }

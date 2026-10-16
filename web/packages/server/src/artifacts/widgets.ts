@@ -281,7 +281,7 @@ export function widgetRoutes(deps: ServerDeps) {
         "Cache-Control": "no-store",
       });
     }
-    // A run token is refused while scripts are off, however it was minted
+    // A run token is refused while scripts are off, however it was generated
     // (the policy is fixed per process; this is defence in depth).
     store.previews.delete(entry.key);
     store.previews.set(entry.key, page);

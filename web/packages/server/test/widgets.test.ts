@@ -70,7 +70,7 @@ test("widget pages serve only widgets of stored answers the caller can read", as
     harness.caller(null).artifacts.prepareWidget({ nodeId, sha256: sha256(STORED_WIDGET) }),
     { code: "UNAUTHORIZED" },
   );
-  // HTML that is not a complete widget block of the answer is never minted.
+  // HTML that is not a complete widget block of the answer is never issued.
   for (const html of ["<p>client supplied</p>", "<p>unclosed</p>"])
     await t.throwsAsync(caller.artifacts.prepareWidget({ nodeId, sha256: sha256(html) }), {
       code: "NOT_FOUND",
@@ -202,7 +202,7 @@ test("an artifact origin on the app's site turns widget scripts off", async (t) 
   const { caller, nodeId } = await threadWithAnswer(harness, `\`\`\`session-html\n${html}\n\`\`\``);
   const minted = await caller.artifacts.prepareWidget({ nodeId, sha256: sha256(html) });
   t.is(minted.runUrl, null);
-  // A run token is refused while scripts are off, however it was minted.
+  // A run token is refused while scripts are off, however it was issued.
   const forged = mintWidgetPreview(harness.db, "u", html, { scripts: true });
   const artifactHost = { Host: "artifacts.session.dev", "Sec-Fetch-Dest": "iframe" };
   t.is(

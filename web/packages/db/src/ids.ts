@@ -1,6 +1,6 @@
 // Row identifiers. ULIDs rather than UUIDs because every ordering in the
 // domain is `(created_at, id)` (`docs/02-domain-model-and-database.md` §5.1):
-// a ULID's first 48 bits are the millisecond timestamp, so ids minted in one
+// a ULID's first 48 bits are the millisecond timestamp, so ids generated in one
 // millisecond still sort in creation order and a keyset cursor over
 // `(created_at, id)` never ties ambiguously.
 
@@ -9,7 +9,7 @@ import { monotonicFactory } from "ulid";
 const nextUlid = monotonicFactory();
 
 /** Longest id the repositories accept. A ULID is 26 characters; the slack is
- * for ids minted elsewhere (invite codes). */
+ * for ids generated elsewhere (invite codes). */
 export const MAX_ID_LENGTH = 64;
 
 /** A new monotonic ULID. Uppercase Crockford base32, as the spec defines. */

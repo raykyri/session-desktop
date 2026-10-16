@@ -28,7 +28,7 @@ type EmbedAsset = embeds.EmbedAsset;
 const EMBED_HOSTS = new Set(["pbs.twimg.com", "abs.twimg.com", "video.twimg.com"]);
 
 /** The public path a rewritten snapshot carries. Relative, so a stored
- * snapshot does not bake in the origin it was hydrated on. */
+ * snapshot does not persist the origin on which it was hydrated. */
 export const EMBED_PATH_PREFIX = "/embeds/";
 
 /** Per-asset size ceiling. Limits single-response downloads to prevent

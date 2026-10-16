@@ -29,7 +29,7 @@ export function isEmptyResearchFolderState(state: ResearchFolderState): boolean 
   );
 }
 
-/** Folder ids are minted client-side: a folder is an organizational value, not
+/** Folder ids are generated client-side: a folder is an organizational value, not
  * a row the server has to allocate. `crypto` is optional in the platform
  * globals, so a time-and-random fallback keeps id generation total. */
 function generateFolderId(): string {

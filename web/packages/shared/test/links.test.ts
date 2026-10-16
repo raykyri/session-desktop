@@ -31,7 +31,7 @@ test("safeHref resolves a protocol-relative href before allowing it", (t) => {
 
 // On the web an absolute filesystem path names nothing the browser can open,
 // and file: URLs are not navigable from a page. Both are non-destinations
-// rather than local previews, unlike the desktop, which minted a session-file:
+// rather than local previews, unlike the desktop, which generated a session-file:
 // href and served the bytes over a loopback port.
 test("safeHref rejects filesystem paths and file: URLs", (t) => {
   t.is(safeHref("/Users/raymond/Code/session/dev/report.html"), undefined);
