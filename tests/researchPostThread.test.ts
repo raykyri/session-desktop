@@ -10,7 +10,7 @@ import type { ResearchLaunchChoice } from "../src/components/research/ResearchQu
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { withWidgetDom } from "./widgetDom";
 
-// Registered before the thread is pulled in, since its composer shows
+// Registered before the thread is imported, since its composer shows
 // adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
 const { default: ResearchPostThread, postThreadEntries } = await import(
@@ -340,7 +340,7 @@ test("the follow-up box's Ask segment shows the agent's icon and opens the model
     assert.equal(askSegment().querySelector(".lucide-sparkles"), null);
     assert.ok(askSegment().querySelector(".new-research-switch-chevron"));
 
-    // A press on the selected Ask segment opens the Home ask box's model menu.
+    // A press on the selected Ask segment opens the Home composer's model menu.
     await act(async () => askSegment().click());
     const listbox = window.document.querySelector('[role="listbox"][aria-label="Model"]');
     assert.ok(listbox);

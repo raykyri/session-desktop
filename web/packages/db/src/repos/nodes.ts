@@ -56,9 +56,8 @@ import { activeRun, deleteNodesInOrder, subtreeIdsDepthFirst } from "./subtrees.
 import type { NodeAgentInput } from "./trees.js";
 import { touchTree } from "./trees.js";
 
-/** Statuses a node cannot be moved out of by `setStatus`. `interrupted` is
- * one of them: it leaves only through `resumeAttempt` or `resetForRetry`,
- * which both open a new attempt. */
+/** Terminal statuses that cannot be transitioned out of via `setStatus`.
+ * Transitioning requires `resumeAttempt` or `resetForRetry`, which start a new attempt. */
 const TERMINAL_STATUSES: readonly ResearchNodeStatus[] = [
   "complete",
   "failed",
@@ -74,8 +73,8 @@ export function isTerminalStatus(status: ResearchNodeStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
-/** The run status of an exchange row. Posts and documents have no run, so a
- * status change on one is a caller error. */
+/** Returns the run status of an exchange node. Throws if the node is not an exchange
+ * or has no run. */
 function runStatus(node: NodeRow): ResearchNodeStatus {
   if (node.type !== "exchange" || node.status === null) {
     throw new Error(`research node ${node.id} is a ${node.type} and has no run`);
@@ -83,7 +82,7 @@ function runStatus(node: NodeRow): ResearchNodeStatus {
   return node.status;
 }
 
-/** The registry model a row runs on or defaults its follow-ups to. */
+/** Returns the model configured for a node, or the default model. */
 function rowModel(node: Pick<NodeRow, "model">): string {
   return node.model ?? DEFAULT_MODEL_ID;
 }
@@ -91,7 +90,7 @@ function rowModel(node: Pick<NodeRow, "model">): string {
 export interface AdmitChildInput {
   parentNodeId: string;
   /** `exchange` (the default) asks a question; `post` adds a follow-up note,
-   * which only a post can take. */
+   * which is valid only under a post. */
   type?: "exchange" | "post" | undefined;
   message: UserMessage;
   /** Defaults to the parent's agent. The caller checks the user may use it. */
@@ -99,33 +98,30 @@ export interface AdmitChildInput {
   inline?: boolean | undefined;
   anchor?: NodeAnchor | null | undefined;
   nodeId?: string | undefined;
-  /** Who asked, when it is not `userId`: the author of a queued follow-up
-   * (`followups.ts`). */
+  /** Author ID when different from `userId` (such as the author of a queued follow-up in `followups.ts`). */
   authorId?: string | undefined;
-  /** A failed or stopped question this one replaces (an edited question,
-   * the desktop's `create_research_child_replacing`). It must be a child of
-   * the same parent with the same `inline`, settled without a pending resume,
-   * and have no children. It is deleted in the same transaction, and the new
-   * node takes its place in the chain's stored order. */
+  /** A failed or cancelled question replaced by this node (such as when editing a question via
+   * `create_research_child_replacing`). The target must be a childless node under the same parent
+   * with matching `inline` status, settled without a pending resume. It is deleted atomically
+   * and the replacement inherits its position in chain ordering. */
   replacesNodeId?: string | undefined;
 }
 
 export interface AdmittedChild {
   node: ResearchNode;
-  /** The replaced question, deleted in the same transaction. */
+  /** The replaced question ID, deleted in the same transaction. */
   replacedNodeId: string | null;
   /** The chain head whose stored order now lists the new node in place of the
-   * replaced one; null when nothing was reordered. */
+   * replaced node; null when ordering is unchanged. */
   reorderedHead: ResearchNode | null;
-  /** Whether follow-ups queued behind the replaced branch question moved to
-   * the new one, which heads their chain now. */
+  /** Whether queued follow-ups were transferred from the replaced branch node to
+   * the new replacement node. */
   movedQueue: boolean;
 }
 
 type LoadedNode = NodeAccess;
 
-/** A node and its thread, for a caller with at least `minimum` there. The
- * run pipeline acts as the run's asker, who can read the thread. */
+/** Loads node access for a user with at least `minimum` role in the thread. */
 function loadNode(
   db: SessionDatabase,
   userId: string,
@@ -148,7 +144,7 @@ function relationsFor(db: SessionDatabase, node: NodeRow, tree: TreeRow) {
   };
 }
 
-/** The node, when `userId` (null: a guest) may read its thread. */
+/** Retrieves a research node if `userId` (or null for public access) has read permissions. */
 export function get(
   db: SessionDatabase,
   userId: string | null,
@@ -177,9 +173,7 @@ function reload(db: SessionDatabase, userId: string, nodeId: string): ResearchNo
   return node;
 }
 
-/** The message the desktop showed when the inline slot was taken. Mapped from
- * the partial unique index so the check is atomic rather than a read followed
- * by a write two requests can interleave. */
+/** Error message returned when attempting to create a second inline follow-up under the same parent node. */
 export const INLINE_SLOT_TAKEN =
   "Cannot create inline follow-up: an inline follow-up already exists for this answer.";
 
@@ -195,13 +189,12 @@ function isInlineSlotConflict(error: unknown): boolean {
 }
 
 /**
- * Creates a follow-up under `parentNodeId` (`docs/02` §5.4): an exchange, or
- * a follow-up note under a post.
+ * Creates a follow-up node under `parentNodeId` (`docs/02` §5.4): an exchange,
+ * or a follow-up note under a post.
  *
- * The parent must have finished — a follow-up's context is the parent's
- * answer — and the thread must be neither archived nor in the Trash. One
- * inline child per parent, whatever its status: a failed continuation stays
- * in the thread until it is deliberately removed, which reopens the slot.
+ * The parent node must have completed execution, and the thread must not be
+ * archived or trashed. Exactly one inline child is permitted per parent node
+ * regardless of status; removing a failed continuation re-enables inline creation.
  */
 export function admitChild(
   db: SessionDatabase,
@@ -211,8 +204,7 @@ export function admitChild(
   return admitChildDetailed(db, userId, input).node;
 }
 
-/** The node at the top of `node`'s inline chain: walk up while the node is
- * inline (`inlineChainFor` in the shared `researchChains`). */
+/** Traverses inline parent links to find the root node of the inline chain containing `node`. */
 function chainHeadRow(db: SessionDatabase, node: NodeRow): NodeRow {
   let current = node;
   const seen = new Set([current.id]);
@@ -227,8 +219,7 @@ function chainHeadRow(db: SessionDatabase, node: NodeRow): NodeRow {
   return current;
 }
 
-/** The ids of the inline chain that starts at `headId`, oldest first: the
- * head, then each node's oldest inline child. */
+/** Returns IDs in the inline chain starting at `headId` ordered from ancestor to descendant. */
 export function chainIdsFrom(db: SessionDatabase, headId: string): string[] {
   const chain = [headId];
   const seen = new Set(chain);
@@ -249,13 +240,9 @@ export function chainIdsFrom(db: SessionDatabase, headId: string): string[] {
 }
 
 /**
- * The nodes the shared chain rules (`inlineChainFor`, `researchQueueAction`)
- * read for the inline chain `nodeId` belongs to: its inline ancestors up to
- * the chain's head, and every inline descendant of those, duplicates
- * included. Read by one recursive query over `nodes_parent_idx`, in the
- * thread's node order, without the rest of the thread or highlights: the
- * follow-up queue decides on these alone (`followups.ts`). Access is the
- * caller's to check. Empty for an unknown node.
+ * Retrieves all nodes belonging to the inline chain of `nodeId` (including inline
+ * ancestors up to chain root and all inline descendants) via a single recursive CTE.
+ * Highlight and thread relations are omitted. Caller is responsible for access validation.
  */
 export function chainNodes(
   db: SessionDatabase,
@@ -291,8 +278,8 @@ export function chainNodes(
     .map((row) => toResearchNode(row, { workspaceId, highlights: [] }));
 }
 
-/** Whether an exchange's run is settled and no longer the server's: any
- * terminal status except an `interrupted` run with a resume pending. */
+/** Whether an exchange node is in a settled state: any terminal status except
+ * an interrupted run with resume pending. */
 function runSettled(node: NodeRow): boolean {
   if (node.status === null || !isTerminalStatus(node.status)) {
     return false;
@@ -300,8 +287,7 @@ function runSettled(node: NodeRow): boolean {
   return node.status !== "interrupted" || !node.resumePending;
 }
 
-/** As `admitChild`, also reporting what a replacement removed and
- * reordered. */
+/** Variant of `admitChild` that returns details on replaced and reordered nodes. */
 export function admitChildDetailed(
   db: SessionDatabase,
   userId: string,
@@ -349,8 +335,7 @@ export function admitChildDetailed(
         tx.select({ id: nodes.id }).from(nodes).where(eq(nodes.parentNodeId, replaced.id)).get() ===
           undefined;
       if (replaced) {
-        // Editing a question is changing its text: its author's, while
-        // nobody else has replied under it.
+        // Text edits are restricted to the author and require that no child nodes exist.
         assertMayEditText(tx, { ...access, node: replaced }, userId);
       }
       if (
@@ -364,9 +349,8 @@ export function admitChildDetailed(
       ) {
         throw new Error("Only a failed or stopped question with no follow-ups can be edited.");
       }
-      // An inline question is deleted before the insert: the partial unique
-      // index would refuse the new inline child while it exists. Both happen
-      // in this transaction, so a refused insert keeps the replaced question.
+      // Delete the existing inline question prior to insertion to avoid violating
+      // the partial unique index. Both operations occur within the transaction.
       if (inline) {
         deleteNodesInOrder(tx, [replaced.id]);
       }
@@ -412,8 +396,7 @@ export function admitChildDetailed(
     setRefs(tx, { kind: "node", id: nodeId, treeId: parent.treeId }, message.attachments, at);
     let movedQueue = false;
     if (replacedNodeId !== null && !inline) {
-      // A branch question heads its own chain: follow-ups queued behind it
-      // move to the question that replaces it.
+      // A branch question heads its own chain; transfer queued follow-ups to the replacement node.
       movedQueue =
         tx
           .update(followupQueue)
@@ -424,8 +407,7 @@ export function admitChildDetailed(
     }
     let reorderedHead: ResearchNode | null = null;
     if (replacedNodeId !== null && inline) {
-      // The edited question takes the replaced one's place in its column's
-      // stored order (`create_research_child_replacing` in `state.rs`).
+      // Replace the target node ID with the new node ID in the chain ordering.
       const head = chainHeadRow(tx, parent);
       const order = storedChainOrder(head);
       const slot = order?.indexOf(replacedNodeId) ?? -1;
@@ -447,20 +429,17 @@ function storedChainOrder(node: NodeRow): string[] | null {
 }
 
 /**
- * Stores the display order of the messages column whose inline chain starts
- * at `headNodeId` (`set_research_chain_order` in `state.rs`). `nodeIds` must
- * list exactly the chain's current nodes; a chain that changed since the
- * caller read it is refused. The inline links are unchanged, so a follow-up
- * still continues the chain's last node. Returns the head and whether the
- * stored order changed.
+ * Sets the explicit display order of the inline chain starting at `headNodeId`.
+ * `nodeIds` must match the complete set of current chain nodes; concurrent modifications
+ * are rejected. Inline parent/child relationships remain unchanged. Returns the head node
+ * and whether ordering was modified.
  */
 export function setChainOrder(
   db: SessionDatabase,
   userId: string,
   headNodeId: string,
   nodeIds: readonly string[],
-  /** The display order the caller reordered from; another person's reorder
-   * since is refused. Absent: not checked. */
+  /** Expected previous display order for optimistic concurrency control. */
   expectedOrder?: readonly string[],
 ): { node: ResearchNode; changed: boolean } {
   return transact(db, (tx) => {
@@ -483,7 +462,7 @@ export function setChainOrder(
     }
     const current = storedChainOrder(head);
     if (expectedOrder !== undefined) {
-      // The column as the caller saw it: the stored order, or oldest first.
+      // The display order as observed by the caller: explicit stored order, or creation order.
       const shown = current ?? chain;
       if (
         shown.length !== expectedOrder.length ||
@@ -513,12 +492,12 @@ export interface StatusPatch {
   completedAt?: number | null | undefined;
   responsePreview?: string | null | undefined;
   /**
-   * The sequence number a run has already reached. Set by the agent loop,
-   * which manages the counter for the duration of an attempt: a status write that
-   * publishes no `seq`-carrying event must record that number rather than
-   * allocate a fresh one, or the client sees its sequence jump and refetches
-   * (`docs/03-api-and-events.md` §3, `docs/05` §5). Unset — every caller
-   * outside a run — keeps the allocating bump.
+   * Sequence number already reached by the run. Managed by the agent loop
+   * during an attempt: status updates without sequence-bearing events must
+   * record this value rather than allocating a new sequence number, avoiding
+   * sequence gaps that trigger client refetches (`docs/03-api-and-events.md` §3,
+   * `docs/05` §5). When omitted outside an active run attempt, the sequence
+   * number is incremented.
    */
   seq?: number | undefined;
 }
@@ -569,9 +548,8 @@ export function setStatus(
   });
 }
 
-/** A node as its thread shows it, read without an access check: for the
- * server's own changes (`stopRun`), made for a caller already checked or for
- * nobody in particular. */
+/** Returns a node and its relations without access checks; for internal server operations
+ * where access was verified previously. */
 function viewUnchecked(db: SessionDatabase, nodeId: string): ResearchNode | null {
   const row = db.select().from(nodes).where(eq(nodes.id, nodeId)).get();
   const tree = row ? db.select().from(trees).where(eq(trees.id, row.treeId)).get() : undefined;
@@ -579,17 +557,12 @@ function viewUnchecked(db: SessionDatabase, nodeId: string): ResearchNode | null
 }
 
 /**
- * Stops a question's run for good while the server still owns it: `queued`,
- * `starting`, `running`, or `interrupted` with a resume pending. In one
- * transaction the status becomes `cancelled` (with `error`, when given), the
- * resume flag is cleared and the `run_queue` row is deleted, so neither the
- * claim loop nor the next boot picks it up again. `setStatus` refuses
- * `interrupted` → `cancelled`; this is the path that leaves it.
+ * Cancels an active or interrupted question run (`queued`, `starting`, `running`,
+ * or `interrupted` with `resumePending`). Updates status to `cancelled`, clears
+ * `resumePending`, and removes the corresponding `run_queue` entry.
  *
- * No access check: the callers decide who may stop a run
- * (`research.cancelNode`) or stop it for the server (a member who left, whose
- * questions nobody can pay for any more). Returns null, changing nothing,
- * for a node that is not an exchange or whose run has already settled.
+ * Performs no access check; callers are responsible for authorization. Returns null
+ * if the node is not an exchange or has already settled.
  */
 export function stopRun(
   db: SessionDatabase,
@@ -613,8 +586,7 @@ export function stopRun(
     tx.update(nodes)
       .set({
         status: "cancelled",
-        // A queued node's error is only ever the reason it waits
-        // (`noteQueuedWait`), which a stopped question does not keep.
+        // Clear wait reasons (`noteQueuedWait`) on queued nodes when cancelling.
         error: error ?? (node.status === "queued" ? null : node.error),
         resumePending: false,
         completedAt: node.completedAt ?? at,
@@ -629,10 +601,8 @@ export function stopRun(
   });
 }
 
-/** The queue row a node put back to `queued` needs, written in the same
- * transaction as the status change so a node is never `queued` with nothing to
- * admit it (`docs/02` §5.7). `enqueuedAt` 0 is the head of the queue, which is
- * where a resume goes; a retry takes its place at the back. */
+/** Inserts a run queue row when moving a node to `queued`. `enqueuedAt` 0 places
+ * resumed runs at the front of the queue; new retries use current timestamp. */
 function enqueueForRun(
   tx: SessionDatabase,
   userId: string,
@@ -651,10 +621,8 @@ function enqueueForRun(
   });
 }
 
-/** Puts a settled exchange back to `queued` with nothing of its own left:
- * the snapshot, the recap, the live turns and the stored messages go, the
- * attempt number moves, and the node is re-queued at the back. Highlights
- * stay; the client re-anchors them by quote against the new answer. */
+/** Resets an exchange to `queued` for a new attempt. Clears existing snapshots,
+ * recaps, turns, and messages, increments the attempt counter, and enqueues the node. */
 function relaunch(
   tx: SessionDatabase,
   userId: string,
@@ -682,7 +650,7 @@ function relaunch(
     })
     .where(eq(nodes.id, node.id))
     .run();
-  // The question's author pays for every attempt of it.
+  // Attribute the run attempt to the node's author or thread payer.
   enqueueForRun(tx, tree ? payerOf(node, tree) : userId, node.id, model ?? rowModel(node), at);
   touchTree(tx, node.treeId, at);
   syncFeedItem(tx, node);
@@ -690,12 +658,8 @@ function relaunch(
 }
 
 /**
- * A fresh attempt after a failure, a cancel, or an interruption: the node goes
- * back to `queued` with nothing of its own left, so the next run starts from
- * the parent's context (`docs/05` §7).
- *
- * The node is re-queued at the back: a retry is new work, and jumping the line
- * ahead of questions that have been waiting would be the wrong trade.
+ * Resets a failed, cancelled, or interrupted node to `queued` status for a new attempt.
+ * Retries are enqueued at the end of the queue.
  */
 export function resetForRetry(
   db: SessionDatabase,
@@ -718,20 +682,14 @@ export function resetForRetry(
   });
 }
 
-/** Whether an exchange's run is still the server's responsibility. */
+/** Whether an exchange's run is still active. */
 function runActive(node: NodeRow): boolean {
   return node.type === "exchange" && node.status !== null && !runSettled(node);
 }
 
 /**
- * Reruns a settled exchange in place (`rerun_research_node`): as
- * `resetForRetry`, but a complete answer is accepted too and replaced. The
- * snapshot and the recap go; highlights stay and re-anchor by quote.
- *
- * The answer it follows must be complete. The exception is an inline
- * follow-up whose parent is still active (itself being rerun): the rerun is
- * admitted and waits in the run queue until the parent settles
- * (`runs/service.ts`), as the desktop's client-side retry queue waits.
+ * Reruns a settled exchange in place (`rerun_research_node`), allowing replacement
+ * of complete answers. Parent node must be complete unless it is an active inline rerun.
  */
 export function resetForRerun(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
@@ -764,13 +722,9 @@ export function resetForRerun(db: SessionDatabase, userId: string, nodeId: strin
 }
 
 /**
- * Continues an interrupted attempt. The committed turns are real exchanges and
- * stay as context — carried onto the new attempt number so the live window
- * still shows them — while the in-flight checkpoint, which the model never
- * finished, is dropped.
- *
- * The node returns to the front of the queue so a server restart does not
- * penalize an active run.
+ * Resumes an interrupted attempt. Committed turns are retained under the new
+ * attempt number, uncommitted in-flight checkpoints are discarded, and the run
+ * is prioritized at the front of the queue.
  */
 export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
@@ -806,19 +760,8 @@ export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: strin
 }
 
 /**
- * Puts a rate-limited attempt back in the queue
- * (`docs/05-run-lifecycle-and-streaming.md` §8).
- *
- * The attempt number moves, which is what makes the 429 survive a restart:
- * `run_attempts` is keyed by `(node_id, attempt)`, so a re-queue that reused
- * the number would have the retry overwrite the `rate_limited` row the backoff
- * is counted from. The queue row itself is left to
- * `queue.requeueWithBackoff`, which keeps the node's place in the admission
- * order rather than sending it to the back.
- *
- * The partial output of the rate-limited attempt goes: the retry starts from
- * the parent's context, and rows left under the old attempt number would be
- * invisible to `liveWindow` and never collected.
+ * Re-queues a rate-limited attempt with an incremented attempt counter.
+ * Discards uncommitted turns so the subsequent attempt starts cleanly from parent context.
  */
 export function requeueAfterRateLimit(
   db: SessionDatabase,
@@ -840,10 +783,9 @@ export function requeueAfterRateLimit(
         attempt: node.attempt + 1,
         error: null,
         startedAt: null,
-        // Not reset to zero the way a retry does: a client watching this node
-        // has already applied sequence numbers from the attempt that was
-        // throttled, and rewinding the counter would make every event after
-        // the backoff look like a replay.
+        // Sequence numbers are preserved rather than reset to zero: clients observing this node
+        // have already applied sequence numbers from the throttled attempt, and
+        // rewinding the counter would cause subsequent events after backoff to appear as replays.
         runSeq: sql`${nodes.runSeq} + 1`,
       })
       .where(eq(nodes.id, nodeId))
@@ -855,12 +797,9 @@ export function requeueAfterRateLimit(
 }
 
 /**
- * Records on a `queued` exchange why it is waiting, or clears it with null:
- * the dispatcher holds a run whose payer has spent the day's limit, and the
- * reason shows as the run's `error` while it waits. Starting the run clears
- * it (`setStatus` to `running` with `error: null`). Returns the node as its
- * thread shows it when it changed, else null. No access check; for the
- * agent loop.
+ * Updates or clears the wait reason stored in `error` for a queued exchange.
+ * Used when a run is deferred due to rate or quota limits. Returns the updated node,
+ * or null if unchanged. Performs no access check.
  */
 export function noteQueuedWait(
   db: SessionDatabase,
@@ -878,12 +817,8 @@ export function noteQueuedWait(
 }
 
 /**
- * The node's current attempt number, or null when the node is gone. Every
- * path that starts a node over (a retry, a rerun, a resume, a 429 re-queue)
- * moves it, so an agent attempt compares it with its own number before each
- * write: a cancelled attempt that is still unwinding must not write into the
- * attempt that replaced it (`docs/05-run-lifecycle-and-streaming.md` §3). No
- * access check; for the agent loop.
+ * Returns the current attempt number for `nodeId`, or null if the node does not exist.
+ * Used by the agent loop to avoid writing into superseded attempts. Performs no access check.
  */
 export function attemptOf(db: SessionDatabase, nodeId: string): number | null {
   const row = db.select({ attempt: nodes.attempt }).from(nodes).where(eq(nodes.id, nodeId)).get();
@@ -891,11 +826,8 @@ export function attemptOf(db: SessionDatabase, nodeId: string): number | null {
 }
 
 /**
- * Gives up on auto-resuming a node (`docs/05-run-lifecycle-and-streaming.md`
- * §3). The node keeps its `interrupted` status and its partial output, and the
- * user's Retry is what moves it from here; clearing the flag is what stops
- * every subsequent boot from re-queueing a node the runtime has already
- * decided not to resume.
+ * Clears `resumePending` on an interrupted node and removes it from the run queue,
+ * preventing automatic resumption across restarts.
  */
 export function clearResumePending(db: SessionDatabase, userId: string, nodeId: string): void {
   transact(db, (tx) => {
@@ -935,40 +867,30 @@ export function markInterrupted(
 }
 
 export interface BootReconciliation {
-  /** Nodes whose snapshot already carried a terminal outcome, adopted. */
+  /** Node IDs transitioned to a terminal state matching their snapshot outcome. */
   adoptedNodeIds: string[];
-  /** `running` nodes with no outcome: a crash without a shutdown. */
+  /** Node IDs transitioned from running to interrupted due to ungraceful shutdown. */
   interruptedNodeIds: string[];
-  /** Everything put back at the head of the queue. */
+  /** Interrupted node IDs re-enqueued at the front of the queue with resumePending. */
   requeuedNodeIds: string[];
-  /** `queued` nodes that had no `run_queue` row, given one. */
+  /** Queued node IDs missing run_queue entries that were re-enqueued. */
   reenqueuedNodeIds: string[];
-  /** Nodes whose payer can no longer read their thread (they left it or
-   * were removed while it was interrupted): stopped with
-   * `ASKER_GONE_ERROR` instead of re-queued. */
+  /** Interrupted node IDs cancelled because the author lost thread access. */
   stoppedNodeIds: string[];
-  /** Nodes that could not be reconciled, left as they were. Each is handled
-   * in a savepoint of its own, so one bad row does not stop the boot. */
+  /** Unhandled reconciliation failures isolated by savepoints. */
   failures: { nodeId: string; message: string }[];
 }
 
-/** The error a question shows when it was stopped because the person who
- * asked it, who pays for it, can no longer read its thread. */
+/** Error message assigned when cancelling a run whose author no longer has thread access. */
 export const ASKER_GONE_ERROR =
   "Stopped: the person who asked no longer has access to this thread.";
 
 /**
- * Reconciles what the last process left behind (`docs/02` §5.7).
+ * Reconciles node and run queue state during server startup (`docs/02` §5.7).
  *
- * A node whose snapshot row already holds a terminal outcome adopts it — the
- * answer landed, only the node row did not. Whatever is still `running` was
- * cut mid-attempt and becomes `interrupted` with `resume_pending`. `queued`
- * nodes stay queued. Every `resume_pending` node, including ones marked by a
- * clean `SIGTERM`, is re-queued ahead of new work.
- *
- * Boot is also the only place that can repair a state no caller can reach
- * afterwards: a `queued` node with no queue row, which a crash between the
- * admission and enqueue transactions leaves behind.
+ * Synchronizes terminal outcomes from response snapshots, transitions orphaned
+ * `running` nodes to `interrupted` with `resumePending = true`, re-enqueues
+ * pending resumes at queue priority, and repairs queued nodes lacking `run_queue` records.
  */
 export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
   return transact(db, (tx) => {
@@ -980,8 +902,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       stoppedNodeIds: [],
       failures: [],
     };
-    /** One node's step in a savepoint: a failure rolls back that node alone
-     * and is reported, and the boot goes on. */
+    /** Executes a reconciliation step inside a savepoint so individual errors do not abort startup. */
     const each = (nodeId: string, step: (sp: SessionDatabase) => void): void => {
       try {
         transact(tx, step);
@@ -1036,9 +957,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         }
       });
     }
-    /** Re-queues a node for its payer, or stops it when the payer can no
-     * longer read the thread: nobody else may be billed for it, and
-     * `queue.enqueue` refuses a payer who cannot read the node. */
+    /** Re-enqueues a node for its payer, or cancels it if the payer lost thread access. */
     const requeue = (
       node: { id: string; treeId: string; userId: string; model: string | null },
       enqueuedAt: number,
@@ -1055,16 +974,13 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         into.push(node.id);
       });
     };
-    // A `queued` node with no `run_queue` row. The node row and its queue row
-    // are separate transactions under `synchronous = NORMAL`
-    // (`routers/research/trees.ts`, `createTree` then
-    // `enqueueRun`), so a crash between them produces exactly this. Re-queued
-    // at the back rather than the head: the node is new work, not a resume.
+    // Re-enqueue queued nodes lacking run_queue rows (created if a process terminated
+    // between node creation and queue insertion transactions).
     const orphanedQueued = tx
       .select({
         id: nodes.id,
         treeId: nodes.treeId,
-        // The asker pays (`access.payerOf`).
+        // Attribute usage to the question author or thread owner (`access.payerOf`).
         userId: sql<string>`coalesce(${nodes.authorId}, ${trees.ownerId})`,
         model: nodes.model,
         createdAt: nodes.createdAt,
@@ -1085,9 +1001,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       requeue(node, node.createdAt, result.reenqueuedNodeIds);
     }
 
-    // Every pending resume goes back to the head of the queue: `enqueued_at`
-    // 0 sorts ahead of any real timestamp, and the ULID tie-break keeps the
-    // original order among them.
+    // Prioritize pending resumes by setting `enqueuedAt` to 0.
     const pending = tx
       .select({
         id: nodes.id,
@@ -1131,8 +1045,8 @@ export function rename(
   });
 }
 
-/** Active nodes across the threads the account owns or is a member of, for
- * the activity rail. */
+/** Returns active nodes across threads owned by or shared with the account, for
+ * display in the activity rail. */
 export function listActive(db: SessionDatabase, userId: string): ResearchNode[] {
   const rows = db
     .select()
@@ -1151,8 +1065,7 @@ export function listActive(db: SessionDatabase, userId: string): ResearchNode[] 
   });
 }
 
-/** Removes a follow-up and everything under it. The root is not removable
- * this way: deleting a thread's root is `trees.remove`. */
+/** Removes a subtree starting at `nodeId`. Deleting a thread root requires `trees.remove`. */
 export function removeBranch(
   db: SessionDatabase,
   userId: string,

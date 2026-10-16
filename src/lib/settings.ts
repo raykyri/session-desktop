@@ -91,8 +91,8 @@ export const APPEARANCE_OPTIONS: { id: Appearance; label: string }[] = [
 
 /**
  * Byte cap on the research launch instruction, mirroring
- * MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES on the backend (which refuses larger
- * values), so the dialog can never hold a value the backend won't persist.
+ * MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES on the backend (which rejects larger
+ * values), so the dialog cannot store a value exceeding the backend limit.
  */
 export const RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES = 4 * 1024;
 
@@ -107,7 +107,7 @@ export const DEFAULT_RESEARCH_LAUNCH_INSTRUCTION =
 /**
  * Trims a research launch instruction to the backend's byte cap at a code-point
  * boundary. The cap counts UTF-8 bytes — the unit the backend validates — not
- * UTF-16 length, so a multi-byte instruction cannot pass here yet be refused
+ * UTF-16 length, so a multi-byte instruction cannot pass validation here yet be rejected
  * on save.
  */
 export function clampResearchLaunchInstruction(value: string): string {

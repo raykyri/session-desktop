@@ -1,5 +1,5 @@
 // Tweet snapshots as the desktop backend resolves them into research message
-// attachments (src-tauri/src/tweets.rs). Rendering lives in the desktop's
+// attachments (src-tauri/src/tweets.rs). Rendering is implemented in the desktop's
 // TweetEmbed component.
 
 export interface TweetMedia {

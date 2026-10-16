@@ -1,21 +1,18 @@
-// What a thread page keeps per tree across visits and reloads
-// (`09-research-document-view.md` §4), ported from the desktop
-// `researchNavigation.ts` store and `researchThreadPersistence.ts`. The
-// selection itself is in the URL (`?sel=`); the store keeps the last one so a
-// thread opened without it opens where it was left, and the per-column scroll
-// offsets, "Show earlier" expansions and the unsent branch, which do not
-// belong in the URL.
+// Persisted per-tree navigation state across visits and page reloads
+// (`09-research-document-view.md` §4), adapted from desktop
+// `researchNavigation.ts` and `researchThreadPersistence.ts`. Selection state
+// is encoded in the URL query (`?sel=`); this store caches the last known selection
+// path when a thread is opened without explicit query parameters, alongside per-column
+// scroll offsets, "Show earlier" expansion states, and unsubmitted pending branches.
 //
-// One module-level store per page, so every thread page mount and the pruning
-// on removal mutate the same object; writes share one debounce and a flush on
-// `pagehide`. Several tabs share the storage key, so a write merges with what
-// is stored tree by tree (the entry written last wins, `lib/tabMerge`), and
-// another tab's write is merged in when its `storage` event arrives.
+// A module-level store coordinates mutations across thread page mounts and node pruning.
+// Storage writes share a 250 ms debounce and flush on `pagehide`. Cross-tab writes
+// sharing the storage key merge on a per-tree basis using last-write-wins timestamps
+// (`lib/tabMerge.js`) upon receiving `storage` events.
 //
-// The unsent branches are the account's text: the store is dropped on
-// sign-out, on an expired session and when another account's session is
-// found (`stores/localAccount.ts`), and a tab that is no longer the recorded
-// account's (`lib/localOwner.ts`) does not write it.
+// Pending branch drafts belong to the authenticated user. The store is cleared on
+// sign-out, session expiration, or account mismatch (`stores/localAccount.ts`), and tabs
+// without valid ownership (`lib/localOwner.ts`) do not persist changes.
 
 import type { ResearchHighlightAnchor } from "@session/shared";
 import { isSavedResearchAnchor, RESEARCH_SCROLL_POSITION_TTL_MS } from "@session/shared";
@@ -26,7 +23,7 @@ import { mergeByUpdatedAt, onOtherTabWrite } from "../../lib/tabMerge.js";
 
 export const THREAD_NAVIGATION_KEY = "session.thread-navigation.v1";
 const SAVE_DEBOUNCE_MS = 250;
-/** How many trees the store keeps; the least recently written go first. */
+/** Maximum number of trees retained in storage; least recently updated entries are evicted. */
 const MAX_TREES = 200;
 
 interface SavedScroll {
@@ -46,17 +43,17 @@ export interface ThreadNavigation {
   scroll: Record<ResearchScrollKind, Record<string, SavedScroll>>;
   /** Answers whose "Show earlier" window was expanded. */
   expandedByNode?: Record<string, true>;
-  /** The unsent branch on a passage, keyed by its parent message. */
+  /** Unsubmitted pending branch drafts anchored to a passage, keyed by parent node ID. */
   pendingBranches?: Record<string, SavedPendingBranch>;
-  /** A highlight to reveal on the next visit (opened from Highlights). */
+  /** Highlight identifier to reveal on subsequent visits (navigated from Highlights view). */
   focusHighlight?: { nodeId: string; highlightId: string };
   updatedAt: number;
 }
 
 let store: Record<string, ThreadNavigation> | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
-/** Trees this tab forgot, with when, until the next write: a stored copy
- * older than that is not merged back. */
+/** Tree IDs deleted in this tab with deletion timestamps, preventing resurrection
+ * during cross-tab merge until written. */
 const forgotten = new Map<string, number>();
 
 const emptyScroll = (): ThreadNavigation["scroll"] => ({ answer: {}, messages: {}, branches: {} });
@@ -126,15 +123,15 @@ function parse(text: string | null): Record<string, ThreadNavigation> {
   }
 }
 
-/** The store, loaded on first use. */
+/** Returns the in-memory store, initializing from localStorage on first access. */
 export function threadNavigationStore(): Record<string, ThreadNavigation> {
-  // A signed-out tab, or one whose account no longer matches the recorded
-  // one, starts from nothing rather than reading another account's state.
+  // Unauthenticated tabs or tabs mismatched with stored account ownership
+  // initialize with empty state to prevent cross-account data leaks.
   store ??= ownsLocalState() ? load() : {};
   return store;
 }
 
-/** Writes the store now, merged with what other tabs stored meanwhile. */
+/** Persists navigation state to localStorage immediately, merging concurrent cross-tab updates. */
 export function flushThreadNavigation(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
@@ -148,12 +145,11 @@ export function flushThreadNavigation(): void {
   try {
     localStorage.setItem(THREAD_NAVIGATION_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {
-    // Storage unavailable or full: the state lasts until the page reloads.
+    // Storage unavailable or full; state is retained in memory until page reload.
   }
 }
 
-/** `pagehide` writes a save the debounce still holds: the timer would not
- * fire once the page is unloading or entering the back/forward cache. */
+/** Flushes debounced writes during `pagehide` before page unload or back-forward cache entry. */
 export function flushPendingThreadNavigation(): void {
   if (timer !== null) flushThreadNavigation();
 }
@@ -162,7 +158,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPendingThreadNavigation);
 }
 
-// Another tab wrote: its newer entries replace this tab's.
+// Synchronize updates written by other tabs.
 onOtherTabWrite(THREAD_NAVIGATION_KEY, (value) => {
   if (store) store = mergeByUpdatedAt(store, parse(value), forgotten);
 });
@@ -172,7 +168,7 @@ function scheduleSave(): void {
   timer = setTimeout(flushThreadNavigation, SAVE_DEBOUNCE_MS);
 }
 
-/** The tree's entry, created on first write. */
+/** Retrieves or initializes the navigation state entry for a tree. */
 export function threadNavigation(treeId: string): ThreadNavigation {
   const all = threadNavigationStore();
   const entry = (all[treeId] ??= { scroll: emptyScroll(), updatedAt: Date.now() });
@@ -244,7 +240,7 @@ export function clearPendingBranch(treeId: string, nodeId: string): void {
   flushThreadNavigation();
 }
 
-/** Asks the next visit to `treeId` to reveal a highlight. */
+/** Requests highlight focus for the next navigation to `treeId`. */
 export function requestHighlightFocus(treeId: string, nodeId: string, highlightId: string): void {
   touched(treeId).focusHighlight = { nodeId, highlightId };
   flushThreadNavigation();
@@ -261,7 +257,7 @@ export function clearHighlightFocus(treeId: string): void {
   flushThreadNavigation();
 }
 
-/** Drops per-node state for messages no longer in the tree. */
+/** Removes navigation state entries for node IDs no longer present in the tree. */
 export function pruneThreadNavigation(treeId: string, validNodeIds: ReadonlySet<string>): void {
   const entry = threadNavigationStore()[treeId];
   if (!entry) return;
@@ -293,7 +289,7 @@ export function pruneThreadNavigation(treeId: string, validNodeIds: ReadonlySet<
   if (changed) scheduleSave();
 }
 
-/** Forgets a tree (it was deleted). */
+/** Deletes navigation state for a removed tree. */
 export function forgetThread(treeId: string): void {
   const all = threadNavigationStore();
   if (!all[treeId]) return;
@@ -302,8 +298,7 @@ export function forgetThread(treeId: string): void {
   flushThreadNavigation();
 }
 
-/** Forgets every tree's state in this tab, and with `stored` the stored copy
- * too. */
+/** Clears in-memory navigation state for all trees, optionally clearing localStorage. */
 export function dropThreadNavigation(stored: boolean): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
@@ -313,11 +308,11 @@ export function dropThreadNavigation(stored: boolean): void {
   try {
     localStorage.removeItem(THREAD_NAVIGATION_KEY);
   } catch {
-    // Storage unavailable: nothing was stored.
+    // Storage unavailable; no persisted state to remove.
   }
 }
 
-/** For tests: drops the in-memory store so the next read loads storage. */
+/** Resets the in-memory store for test isolation so subsequent calls reload from storage. */
 export function resetThreadNavigationForTests(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;

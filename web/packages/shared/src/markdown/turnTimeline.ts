@@ -234,7 +234,7 @@ export function timelineItemsAfterLastToolCall(items: MessageItem[]) {
 // entries are tombstoned in a shared `resolved` set rather than spliced out of
 // an array, and a head cursor skips past dead entries, so a transcript with N
 // tool calls and N results is processed in O(N) instead of O(N²). The same
-// entry can live in more than one queue (by id and by status); the shared
+// entry can exist in more than one queue (by id and by status); the shared
 // tombstone keeps every queue consistent.
 class PendingToolQueue {
   private readonly items: ToolEntry[] = [];
@@ -356,7 +356,7 @@ export function buildTimelineItems(turns: Turn[], showActivityDetail = true): Me
       previous.activities.length === 0
     ) {
       // Back-to-back turns from the same speaker with nothing between them are
-      // one card to the reader, so the block joins the existing item rather
+      // rendered as a single card in the interface, so the block joins the existing item rather
       // than opening a new one.
       previous.blocks.push(block);
       previous.blockSourceTurnIds.push(sourceTurnId);
@@ -492,10 +492,10 @@ export function buildTimelineItems(turns: Turn[], showActivityDetail = true): Me
     // A keyed result belongs to its own call: try id+status first, then id
     // alone — a call/result pair can straddle a status boundary (an
     // interruption marks only one side), and the id is authoritative across
-    // it. What a keyed result must never do is take over a DIFFERENT call:
+    // it. What a keyed result must never do is match an unrelated call:
     // with no id match at all (its call fell out of the visible turn window),
     // a status-only fallback would show the stray payload as that call's
-    // result and strand the call's real result as a duplicate orphan row below
+    // result and leave the call's real result as an unmatched row below
     // it. Only an id-less result falls back to the oldest same-status pending
     // call.
     let matched: ToolEntry | null = null;
@@ -696,7 +696,7 @@ export function assistantGroupTimestamp(items: MessageItem[], endIndex: number):
  * Timestamp footers are attached to the last item in one of these runs. Focus
  * mode stores that item's key, then resolves the full run again on every
  * transcript update so a continued response can grow without dropping out of
- * the reader.
+ * view.
  */
 export function assistantRunForItemKey(items: MessageItem[], itemKey: string): MessageItem[] {
   const itemIndex = items.findIndex((item) => item.key === itemKey);

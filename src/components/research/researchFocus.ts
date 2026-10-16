@@ -116,7 +116,7 @@ export function useResearchDialogReturnFocus(
   const openerRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   // Read during render: the dialog's autofocus moves focus during the
-  // commit, before any effect could see the opener.
+  // commit, before any effect observes the opener.
   if (open && !wasOpenRef.current) {
     openerRef.current = researchFocusOrigin();
   }

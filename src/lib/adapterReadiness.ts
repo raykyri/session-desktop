@@ -14,8 +14,8 @@ export function researchReadyAdaptersFirst(adapters: readonly AgentAdapterMetada
   );
 }
 
-/** Honors a remembered choice only while it remains usable, then prefers the
- * configured default when ready and finally the first ready provider. */
+/** Applies the remembered choice while usable, otherwise selecting the
+ * configured default when ready or the first ready provider. */
 export function preferredResearchAdapter(
   adapters: readonly AgentAdapterMetadata[],
   preferredId?: string | null,

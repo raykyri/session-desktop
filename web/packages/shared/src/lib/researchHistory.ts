@@ -248,7 +248,7 @@ function collapseResearchVisits(
  * itself to keep it unchanged) or null to remove it. With `keepCurrent`,
  * the visit on screen stays as it is even when `update` changes it: the
  * caller is still showing it and navigates away itself. When the visit on
- * screen is removed, the cursor moves to the nearest surviving visit before
+ * screen is removed, the cursor moves to the nearest remaining visit before
  * it (or the first one after). Visits that become adjacent duplicates merge.
  * Returns `history` itself when nothing changed. */
 export function mapResearchVisits(

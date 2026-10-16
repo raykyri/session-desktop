@@ -111,7 +111,7 @@ export function renameResearchFolder(
 }
 
 /** Drops individual trees out of whatever folder holds them. Folder records
- * survive independently so deleting their last member leaves a reusable empty
+ * persist independently so deleting their last member leaves a reusable empty
  * folder. */
 export function removeTreesFromResearchFolderMembership(
   state: ResearchFolderState,

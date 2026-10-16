@@ -2,7 +2,7 @@
 // The token arrives as the URL fragment, is removed from the address bar
 // before anything is requested, and waits in this tab's `sessionStorage`
 // (`lib/pendingInvite.ts`). Signed in, the invitation is accepted and the
-// thread opens. Signed out, the reader signs in and comes back to `/invite`,
+// thread opens. Signed out, the reader signs in and returns to `/invite`,
 // which reads the stored token. An unknown, used, expired or revoked
 // invitation, or one addressed to another GitHub account, shows the server's
 // reason.

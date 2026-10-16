@@ -12,8 +12,8 @@
 //! The lookup in one text:
 //!   1. Every occurrence of the quote is a candidate.
 //!   2. Candidates whose prefix and suffix both agree (the last and first
-//!      `CONTEXT_CHARS` characters of each side) win; the one nearest the
-//!      expected offset is chosen, ties going to the earlier one.
+//!      `CONTEXT_CHARS` characters of each side) take precedence; the candidate nearest
+//!      the expected offset is chosen, ties resolved to the earlier offset.
 //!   3. Otherwise a single candidate that keeps one side is chosen.
 //!   4. Otherwise there is no match.
 //!
@@ -140,7 +140,7 @@ fn locate(
     }
 }
 
-/// Where `anchor` goes when `old_text` is replaced by `new_text`.
+/// Computes the updated position of `anchor` when `old_text` is replaced by `new_text`.
 pub fn reanchor(anchor: &ResearchHighlightAnchor, old_text: &str, new_text: &str) -> AnchorOutcome {
     let quote = normalized(&anchor.exact);
     if quote.is_empty() {
@@ -202,8 +202,8 @@ pub fn apply_outcome(
     }
 }
 
-/// The highlights that still match after the edit (moved where they moved),
-/// and the number removed.
+/// The highlights that still match after the edit (with offsets updated for any
+/// moved text), and the number removed.
 pub fn reanchor_highlights(
     highlights: &[ResearchHighlight],
     old_text: &str,

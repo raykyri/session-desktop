@@ -1,6 +1,6 @@
 // Reordering a messages column by drag (`09-research-document-view.md` §3),
 // the message-row part of the desktop `useResearchCardDrag`. A press on a
-// row that can move starts a drag once the pointer has travelled a few
+// row that can move starts a drag once the pointer has moved a few
 // pixels; while it moves, the row is marked as dragged and the row it would
 // land before or after is marked with an insertion line; on release the new
 // position is reported. The click that ends a drag does not select the row.

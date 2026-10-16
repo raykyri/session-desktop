@@ -302,7 +302,7 @@ test("the frame state machine runs only on request and drops a frame that naviga
   state = sessionWidgetFrameReducer(state, { type: "reload" });
   assert.equal(state.phase, "ready");
   assert.equal(state.loads, 0);
-  assert.equal(sessionWidgetFrameUrl(state), urls.runUrl, "reload keeps the reader's run choice");
+  assert.equal(sessionWidgetFrameUrl(state), urls.runUrl, "reload retains the executed run URL");
   // Without a run URL (scripts not allowed) Run is a no-op, even if the
   // widget had been run before.
   const noRun = { staticUrl: urls.staticUrl, runUrl: null };

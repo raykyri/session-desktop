@@ -12,7 +12,7 @@ Reviewed on October 11, 2026:
 - [T3 Code source](https://github.com/pingdotgg/t3code/tree/8d199b4f7b918079161d5f43e0146c099301be08) at `8d199b4f7b918079161d5f43e0146c099301be08`.
 - T3's public site and repository, followed by implementation inspection. Features below describe that source snapshot; they are not guarantees about every released build.
 
-The comparison is a source review, not a clean-machine usability test. No provider accounts were connected, credentials changed, or applications installed. Runtime behavior, installation success, and migration feasibility remain validation work. Local source references are relative to this document and refer to the Session revision above.
+The comparison is a source review, not a clean-environment usability test. No provider accounts were connected, credentials changed, or applications installed. Runtime behavior, installation success, and migration feasibility remain validation work. Local source references are relative to this document and refer to the Session revision above.
 
 Session has two materially different execution models. [Desktop](../README.md) uses existing Claude Code, Codex, and Grok CLIs and their credentials. [Hosted web](../web/packages/server/src/runs/providers.ts) constructs API clients using deployment credentials and runs Session's own agent loop. A web user signs into Session; that does not install or authenticate a provider CLI. These flows should share terminology, but require different setup actions and maintenance owners.
 
@@ -62,7 +62,7 @@ A second mismatch no longer applies: remote probing reported general readiness w
 
 **P1. Desktop defect and recovery gap.**
 
-[research_runtime.rs](../src-tauri/src/research_runtime.rs) and [claude_sdk.rs](../src-tauri/src/claude_sdk.rs) now tell users to run the provider's login command in Terminal, the macOS application, rather than a terminal tab. Failed turns already expose [Retry](../src/components/research/ResearchTurn.tsx), but the error is not a structured route through provider repair and verification.
+[research_runtime.rs](../src-tauri/src/research_runtime.rs) and [claude_sdk.rs](../src-tauri/src/claude_sdk.rs) now direct users to run the provider's login command in Terminal, the macOS application, rather than a terminal tab. Failed turns already expose [Retry](../src/components/research/ResearchTurn.tsx), but the error is not a structured route through provider repair and verification.
 
 **Done when:** authentication and version failures offer the relevant provider's setup action, retain the question and failed research node, refresh its status, then offer Retry. Instructions name the correct login command and external application when needed. No terminal renderer or general shell surface is restored.
 
@@ -82,7 +82,7 @@ T3's [maintenance resolver](https://github.com/pingdotgg/t3code/blob/8d199b4f7b9
 
 Session [metadata](../src/types.ts) already includes configured/resolved binary, version, auth state, check time, and local/remote target. [AgentSetupGuide](../src/components/AgentSetupGuide.tsx) does not display most of them. T3's [provider card](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/settings/ProviderInstanceCard.tsx) displays status, account, version, and maintenance details.
 
-**Done when:** a details view explains where research runs, which installation/account supplies it where known, when it was checked, and who can fix it. Desktop offers sanitized diagnostic copying. Hosted users see service availability and an administrator repair route; deployment credentials and account secrets remain administrative. If managed installation is later added, clearly distinguish it from an existing external CLI.
+**Done when:** a details view explains where research runs, which installation/account supplies it where known, when it was checked, and the corresponding repair procedure. Desktop offers sanitized diagnostic copying. Hosted users see service availability and an administrator repair route; deployment credentials and account secrets remain administrative. If managed installation is later added, clearly distinguish it from an existing external CLI.
 
 ### G6 Make model and research capability compatibility explicit
 
@@ -110,7 +110,7 @@ Separately, [runtime model availability](../web/packages/server/src/trpc/routers
 
 [Runtime configuration](../web/packages/server/src/trpc/routers/system.ts) exposes `webSearch`, and the [search tool](../web/packages/server/src/runs/tools/webSearch.ts) is absent without a vendor key. The composer does not explain this degradation. A working model can therefore look like a fully functioning web-research agent.
 
-**Done when:** the composer states when web search is unavailable and what still works, with an administrative repair route. Explain consequential differences in document/image handling and available research tools without showing implementation trivia. Successful model access must not imply every research capability is available.
+**Done when:** the composer states when web search is unavailable and what still works, with an administrative repair route. Explain consequential differences in document/image handling and available research tools without exposing internal implementation details. Successful model access must not imply every research capability is available.
 
 ### G9 Make quota recovery predictable
 
@@ -140,7 +140,7 @@ Session currently relies on external CLI credentials, so account changes occur o
 
 **P2. Optional product investment, not a defect in the current external-CLI contract.**
 
-Manual installation, authentication, and returning to refresh remain work for the desktop user. T3 has a [managed Codex installer](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/CodexInstallation.ts) with a pinned version, integrity checks, progress/cancellation, and leases guarding removal.
+Manual installation, authentication, and manual status refresh require user intervention. T3 has a [managed Codex installer](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/CodexInstallation.ts) with a pinned version, integrity checks, progress/cancellation, and leases guarding removal.
 
 **Done when, if chosen:** a fresh Mac can install one supported runtime with progress, cancellation, repair, and post-install verification, while existing users can keep their own CLI. Establish precedence between managed and external binaries. A limited setup operation can provide this benefit without reintroducing terminal tabs. Managed credentials are a separate decision from managed binaries.
 
@@ -177,7 +177,7 @@ Prefer selective adoption: implement G1–G5 and G7–G8 in Session, then evalua
 
 Before choosing a full or server-only fork, require these concrete demonstrations:
 
-1. A Session-branded clean-machine install → sign-in → first research → restart → successful follow-up, with accurate readiness and no unintended upstream service dependence.
+1. A Session-branded clean-environment install → sign-in → first research → restart → successful follow-up, with accurate readiness and no unintended upstream service dependence.
 2. Independent verification of managed ChatGPT authorization, plus a working supported alternative.
 3. Account change and runtime update during an investigation, with explicit user impact and preserved provenance.
 4. Migration of a representative research tree, followed by history inspection and correct continuation.

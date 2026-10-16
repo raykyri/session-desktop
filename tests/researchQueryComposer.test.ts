@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentAdapterMetadata } from "../src/types";
 
-// Registered before the composer is pulled in, since it reaches adapter icons.
+// Registered before the composer is imported, since it imports adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
@@ -243,7 +243,7 @@ test("a LauncherSelect opened from another control renders no trigger of its own
   assert.equal(anchored, "");
 });
 
-test("the Home ask box keeps a non-default agent, model, or effort after its text is cleared", () => {
+test("the Home composer retains a non-default agent, model, or effort after its text is cleared", () => {
   const fresh = { prompt: "", adapter: "claude", modelChoice: null, customModel: "", effortChoice: "" };
   assert.equal(homeComposerDraftToStore(fresh, "claude"), null);
   // A send clears only the text; each kind of choice keeps the draft stored.
@@ -271,7 +271,7 @@ test("returning from Agent Setup selects the agent and keeps the question", () =
   const adapters = [adapter("claude"), codex, missing];
 
   // The chosen agent is selected; text and options are untouched (a model or
-  // effort that does not apply falls back when the box resolves the launch).
+  // effort that does not apply falls back when the composer resolves the launch).
   assert.deepEqual(applyComposerFocusRequest(draft, { seq: 1, adapterId: "codex" }, adapters), {
     ...draft,
     adapter: "codex",

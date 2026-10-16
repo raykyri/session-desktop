@@ -69,11 +69,11 @@ pub fn kill_all_sessions() {
     }
 }
 
-/// Starts a research run. `guidance` is an instruction block delivered through
-/// each agent's system-level channel rather than the prompt (see
-/// [`crate::research_widgets::AGENT_GUIDANCE`]). The images attached to the
-/// node's own message go with the prompt; earlier messages' images reach a
-/// follow-up through the forked session's history.
+/// Starts a research run. `guidance` is an instruction block delivered via
+/// each agent's system-level channel rather than user prompt text (see
+/// [`crate::research_widgets::AGENT_GUIDANCE`]). Attachments for the current
+/// node accompany the prompt; earlier attachments are preserved via forked
+/// session history.
 pub fn launch(
     state: &AppState,
     node: &ResearchNode,
@@ -398,7 +398,7 @@ fn launch_jsonl(
             ),
             image_flags,
         ),
-        // `launch` refuses images for Grok, which has no image input.
+        // `launch` rejects images for Grok because it does not accept image input.
         JsonlFlavor::Grok => build_grok_headless_args(
             &cwd,
             &prompt,
@@ -408,7 +408,7 @@ fn launch_jsonl(
             fork,
             grok_session_id
                 .as_deref()
-                .expect("Grok session id was minted"),
+                .expect("Grok session id was generated"),
             guidance,
         ),
     };
@@ -486,10 +486,8 @@ fn build_codex_exec_args(
         ]);
     }
     // Codex's `developer_instructions` config key adds a developer message to
-    // the session, the channel the interactive Codex adapter also uses. Codex
-    // (0.162.1, session/mod.rs) injects it only with the full initial context,
-    // which a fork skips while its reconstructed history has a context
-    // baseline, so passing it again on `exec fork` does not repeat it.
+    // the session. Codex (0.162.1) injects it only during initial context setup;
+    // forked sessions restore context baseline and do not duplicate instructions.
     if let Some(guidance) = guidance {
         args.extend([
             "-c".to_string(),
@@ -505,9 +503,8 @@ fn build_codex_exec_args(
     args
 }
 
-/// One `--image=<path>` per image. `codex exec` splits an `--image` value
-/// at commas, so a path containing one is refused rather than sent as two
-/// missing files.
+/// Generates `--image=<path>` flags. Paths containing commas are rejected
+/// because `codex exec` splits image arguments on commas.
 fn codex_image_flags(
     images: &[crate::research_images::LaunchImage],
 ) -> Result<Vec<String>, String> {
@@ -525,9 +522,8 @@ fn codex_image_flags(
         .collect()
 }
 
-/// Puts the image flags just before the `--` that delimits the prompt,
-/// after `exec fork`'s session id, so the variadic `--image` of `codex exec`
-/// cannot take the id or the prompt as a file.
+/// Inserts image flags immediately before the `--` prompt delimiter and
+/// after any `exec fork` session ID to prevent argument misparsing.
 fn with_codex_images(mut args: Vec<String>, image_flags: Vec<String>) -> Vec<String> {
     let separator = args
         .iter()
@@ -1545,7 +1541,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn jsonl_sign_in_failures_name_the_login_command_and_no_terminal_tab() {
+    fn jsonl_sign_in_failures_name_the_login_command_without_terminal_tab() {
         let no_stderr = PathBuf::from("/nonexistent/session-research-stderr.log");
         let codex = map_jsonl_error(
             JsonlFlavor::Codex,
@@ -2306,7 +2302,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
     }
 
     #[test]
-    fn codex_images_go_before_the_prompt_separator() {
+    fn codex_images_precede_prompt_separator() {
         let image = |path: &str| crate::research_images::LaunchImage {
             path: PathBuf::from(path),
             format: crate::research_images::ImageFormat::Png,
@@ -2327,8 +2323,8 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             ]
         );
 
-        // `exec fork` takes the session id positionally; the images follow it
-        // so the variadic `--image` cannot consume it as a file.
+        // In `exec fork`, image flags follow the positional session ID to
+        // prevent argument misparsing.
         let fork = with_codex_images(
             build_codex_exec_args("branch", None, None, Some("parent-1"), true, None),
             flags,
@@ -2354,7 +2350,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
     }
 
     #[test]
-    fn widget_guidance_reaches_codex_and_grok_through_their_system_channels() {
+    fn widget_guidance_is_configured_via_system_channels_for_codex_and_grok() {
         let guidance = crate::research_widgets::AGENT_GUIDANCE;
         for fork in [false, true] {
             let args =

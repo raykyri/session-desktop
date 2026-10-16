@@ -1,9 +1,9 @@
-// The owned `web_fetch` tool (`04-agent-runtime.md` §6).
+// The `web_fetch` tool (`04-agent-runtime.md` §6).
 //
-// Reads one public page and returns it as text the model can quote. The three
-// things that make it safe rather than a proxy for the machine's own network
-// are in `ssrf.ts` (address policy), here (redirect re-checking, byte and time
-// caps), and in the absence of any credential on the outbound request.
+// Fetches a public web page and extracts readable text. Protections against
+// SSRF and unauthorized network access include IP address validation
+// (`ssrf.ts`), redirect re-validation, response size and timeout limits, and
+// omitting credentials on outbound requests.
 
 import { tool } from "ai";
 import { z } from "zod";
@@ -45,9 +45,9 @@ export interface ExtractedPage {
  * The shapes this module uses out of `linkedom` and `@mozilla/readability`.
  *
  * Both packages type themselves against the DOM library, which this package
- * does not load (it is a Node server; `lib` is ES2022). Rather than pull the
- * whole DOM into the build for three property reads, the two dynamic imports
- * are narrowed to what is actually called.
+ * does not load (it is a Node server; `lib` is ES2022). Rather than pulling
+ * DOM types into the build for three property reads, the dynamic imports
+ * are narrowed to the required interfaces.
  */
 interface ReadableElement {
   textContent: string | null;
@@ -68,9 +68,9 @@ interface ReadabilityArticle {
 
 type ReadabilityConstructor = new (document: unknown) => { parse(): ReadabilityArticle | null };
 
-/** HTML to the prose a reader would see. Readability over a `linkedom`
- * document, with a tag-stripping fallback: a page Readability cannot parse
- * (a bare `<pre>`, a framed document) still has text worth quoting. */
+/** Extracts readable text content from HTML using Readability over a
+ * `linkedom` document, with a tag-stripping fallback for pages that
+ * Readability cannot parse (such as a bare `<pre>` or framed document). */
 export async function extractHtml(html: string, url: string): Promise<ExtractedPage> {
   try {
     const [linkedom, readability] = await Promise.all([
@@ -80,13 +80,12 @@ export async function extractHtml(html: string, url: string): Promise<ExtractedP
     const { parseHTML } = linkedom as { parseHTML: ParseHtml };
     const { Readability } = readability as { Readability: ReadabilityConstructor };
     const { document } = parseHTML(html, { location: url });
-    // Readability mutates the document it is given, so the whole-page fallback
-    // is taken first: a page it declines to parse would otherwise be read back
-    // as the empty body it left behind.
+    // Readability mutates the input document DOM, so fallback text is extracted
+    // first: unparseable pages would otherwise yield an empty body.
     const title = document.querySelector("title")?.textContent?.trim();
     const bodyText = document.body?.textContent ?? "";
-    // A fragment without `<html>`/`<body>` keeps its text on the root element;
-    // `linkedom` does not insert the implied tags a browser would.
+    // HTML fragments lacking `<html>` or `<body>` retain text on the root element;
+    // `linkedom` does not insert implied elements.
     const whole = bodyText.trim() === "" ? (document.documentElement?.textContent ?? "") : bodyText;
     const article = new Readability(document).parse();
     const articleText = article?.textContent ?? "";
@@ -118,9 +117,9 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractedPage> {
   return { text: text.trim() };
 }
 
-/** One hop at a time so every `Location` passes the address policy before it
- * is followed — a public host that redirects to `127.0.0.1` is the standard
- * way around a guard that only checks the URL it was handed. */
+/** Follows redirects iteratively, validating each `Location` target against
+ * the SSRF address policy before issuing the request to prevent redirect-based
+ * access to restricted IP addresses. */
 async function fetchFollowingRedirects(
   ctx: RunToolContext,
   start: URL,
@@ -169,8 +168,8 @@ export async function fetchReadablePage(
     throw new Error(`Remote server returned HTTP ${response.status}`);
   }
   const contentType = (response.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
-  // A page past the cap keeps its first `MAX_FETCH_BYTES`; one that declares
-  // a larger length is refused before it is read.
+  // Responses exceeding the limit are truncated to `MAX_FETCH_BYTES`; responses
+  // declaring a Content-Length exceeding the limit are rejected before reading.
   const { bytes } = await readCapped(response, MAX_FETCH_BYTES, { overflow: "truncate" });
   let page: ExtractedPage;
   if (contentType === "application/pdf") {
@@ -195,10 +194,8 @@ export async function fetchReadablePage(
   };
 }
 
-/** The cache key for a URL. Case in the scheme and host and a trailing `#`
- * fragment do not change what the server sends, and a model that writes the
- * same page two ways in one run should pay for it once. An unparsable string is
- * its own key; `fetchReadablePage` is what rejects it. */
+/** Normalizes a URL into a cache key by removing hash fragments.
+ * Unparsable strings are retained as raw keys and rejected during fetch. */
 export function fetchCacheKey(raw: string): string {
   try {
     const url = new URL(raw);

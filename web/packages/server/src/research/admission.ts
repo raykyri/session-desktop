@@ -18,17 +18,17 @@ export interface LaunchContext extends AppContext {
   user: NonNullable<AppContext["user"]>;
 }
 
-/** What the launch checks read: the deployment's configuration, the
- * database, and the account that pays for the run. A procedure passes its
- * context; the follow-up queue passes the queued item's author. */
+/** Inputs for launch admission checks: deployment configuration, database,
+ * and requesting user. Procedures supply request context; the follow-up
+ * queue supplies the author of the queued item. */
 export interface LaunchCheckContext {
   config: Config;
   db: SessionDatabase;
   user: Pick<User, "id" | "isAdmin">;
 }
 
-/** A refused launch: the tRPC code a procedure throws, and the message the
- * follow-up queue stores as the item's `failedReason`. */
+/** Admission refusal details: the tRPC code thrown by procedures and stored
+ * as `failedReason` for queued items. */
 export interface LaunchRefusal {
   code: "PRECONDITION_FAILED" | "TOO_MANY_REQUESTS";
   message: string;
@@ -40,7 +40,7 @@ function raise(refusal: LaunchRefusal | null): void {
   }
 }
 
-/** Why this account may not launch on this model, or null. */
+/** Returns a refusal reason if the user or deployment cannot use this model, or null. */
 export function modelRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
   const model = findModel(modelId);
   if (!model || !canUseModel(ctx.user, modelId)) {
@@ -56,8 +56,8 @@ export function modelRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRe
 }
 
 /**
- * Whether this account may launch on this model, and whether the deployment
- * can reach it at all. Returns PRECONDITION_FAILED when an unavailable or unconfigured model is requested, indicating client state needs refreshing.
+ * Asserts that the requested model is accessible to the account and configured
+ * on the deployment. Throws PRECONDITION_FAILED if unavailable or unconfigured
  * (`04-agent-runtime.md` §1).
  */
 export function assertModelUsable(ctx: LaunchCheckContext, modelId: string): string {
@@ -65,8 +65,7 @@ export function assertModelUsable(ctx: LaunchCheckContext, modelId: string): str
   return findModel(modelId)?.provider ?? modelId;
 }
 
-/** Refuses an effort the model does not accept (`ModelEntry.efforts`). Null
- * and absent mean the model's default. */
+/** Validates that the reasoning effort is supported by the model (`ModelEntry.efforts`). */
 export function assertEffortAccepted(modelId: string, effort: string | null | undefined): void {
   if (effort === null || effort === undefined) {
     return;
@@ -81,14 +80,14 @@ export function assertEffortAccepted(modelId: string, effort: string | null | un
 }
 
 export interface DailyLimitOptions {
-  /** Count the account's queued questions as runs already spent: true at
-   * admission, so the queue cannot hold more than the day allows; false for
-   * the dispatcher's check before a queued run starts, whose own row is
-   * among them. */
+  /** When true, accounts for queued runs against the daily limit during
+   * admission. When false, checks limits without reserving for currently
+   * queued runs (used by the dispatcher). */
   reserveQueued?: boolean;
 }
 
-/** Which daily limit refuses another run, or null. */
+/** Determines whether daily run or token limits have been reached, returning
+ * the exceeded limit type or null. */
 function dailyLimitReached(
   ctx: LaunchCheckContext,
   options: DailyLimitOptions,
@@ -107,7 +106,7 @@ function dailyLimitReached(
   return decision.allowed ? null : (decision.reason ?? "runs");
 }
 
-/** Why the account's daily limits refuse another run, or null. */
+/** Returns a refusal if daily run or token limits are exceeded, or null. */
 export function dailyLimitRefusal(
   ctx: LaunchCheckContext,
   options: DailyLimitOptions = {},
@@ -126,10 +125,8 @@ export function dailyLimitRefusal(
 }
 
 /**
- * Why a queued run may not start now, as its waiting node shows it, or null:
- * the dispatcher's check of the payer's daily limits before a fresh attempt
- * (`runs/service.ts`). Worded for every reader of the thread, not only the
- * payer.
+ * Returns a status message displayed on waiting nodes when limits prevent a
+ * queued run from starting, or null (`runs/service.ts`).
  */
 export function dailyLimitWait(ctx: LaunchCheckContext): string | null {
   const reached = dailyLimitReached(ctx, { reserveQueued: false });
@@ -142,16 +139,16 @@ export function dailyLimitWait(ctx: LaunchCheckContext): string | null {
 }
 
 /**
- * Daily token and run limits (`06-auth-and-users.md` §8), with the
- * account's queued questions counted as spent. Usage is tracked
- * unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding
- * the limit are rejected.
+ * Asserts that usage falls within daily token and run limits
+ * (`06-auth-and-users.md` §8), accounting for queued requests as consumed quota.
+ * Usage is tracked unconditionally; SESSION_ENFORCE_LIMITS controls whether
+ * requests exceeding the limit are rejected.
  */
 export function assertWithinDailyLimits(ctx: LaunchCheckContext): void {
   raise(dailyLimitRefusal(ctx, { reserveQueued: true }));
 }
 
-/** Why the account's run queue is full, or null (`assertQueueHasRoom`). */
+/** Checks if the user's queued run limit has been reached (`assertQueueHasRoom`). */
 export function queueRoomRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
   if (ctx.user.isAdmin) {
     return null;
@@ -167,43 +164,33 @@ export function queueRoomRefusal(ctx: LaunchCheckContext): LaunchRefusal | null 
 }
 
 /**
- * A ceiling on what one account may have *waiting* (`06-auth-and-users.md`
- * §8). The per-user concurrency cap (`SESSION_RUNS_PER_USER`) bounds how many
- * of an account's runs hold a provider stream at once, and the daily limits
- * bound the day; between them nothing bounds the queue, and a queued node is
- * spend the deployment has already committed to — a script that submits a
- * thousand questions is admitted a thousand times and billed for all of them
- * two at a time.
- *
- * Applies whatever `SESSION_ENFORCE_LIMITS` says, unlike the daily limits: the
- * daily ceilings are a billing policy an operator opts into, this is a
- * structural bound on the queue itself. Admins are exempt, as they are there.
+ * Enforces a maximum queue size per user (`SESSION_QUEUED_PER_USER`). While
+ * concurrency limits control simultaneous executions and daily limits bound
+ * total daily usage, the queue limit bounds pending workload. Unlike daily
+ * usage limits, queue limits apply regardless of `SESSION_ENFORCE_LIMITS`.
+ * Admins are exempt.
  */
 export function assertQueueHasRoom(ctx: LaunchCheckContext): void {
   raise(queueRoomRefusal(ctx));
 }
 
-/** The checks that depend on what the account has already queued: the
- * daily limits with the queue counted as spent, then the queue cap. */
+/** Evaluates admission checks that account for currently queued runs: daily
+ * limits followed by queue capacity. */
 export function admissionRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
   return dailyLimitRefusal(ctx, { reserveQueued: true }) ?? queueRoomRefusal(ctx);
 }
 
-/** Every check a launch passes, in the order the procedures apply them: the
- * model, the daily limits, the run queue. */
+/** Evaluates all launch admission checks in sequence: model availability,
+ * daily limits, and queue capacity. */
 export function launchRefusal(ctx: LaunchCheckContext, modelId: string): LaunchRefusal | null {
   return modelRefusal(ctx, modelId) ?? admissionRefusal(ctx);
 }
 
 /**
- * Admits a run: checks the daily limits and the queue cap again and runs
- * `admit` (the repository write that creates or relaunches the node and puts
- * it in `run_queue`) in one transaction. Nothing is awaited between the check
- * and the write, so two requests that both passed the procedure's early
- * checks before an `await` (resolving a linked post) cannot both be
- * admitted past the cap. The early checks stay so that a launch that will be
- * refused does not spend a fetch. Call `ctx.runs.start` after it returns,
- * outside the transaction.
+ * Admits a run: checks daily limits and queue capacity and executes `admit`
+ * (creating or relaunching the node in `run_queue`) within a single transaction.
+ * Synchronous transaction execution prevents concurrent requests from
+ * exceeding queue limits. Call `ctx.runs.start` after this transaction commits.
  */
 export function admitWithinLimits<T>(ctx: LaunchContext, admit: (db: SessionDatabase) => T): T {
   return transact(ctx.db, (tx) => {
@@ -212,18 +199,15 @@ export function admitWithinLimits<T>(ctx: LaunchContext, admit: (db: SessionData
   });
 }
 
-/** Why a metadata run (a title, a recap) may not be billed to this account
- * now, or null: the metadata model must be usable on this deployment and the
- * account's daily limits must allow another run. */
+/** Validates eligibility for metadata runs (title, recap), ensuring the model
+ * is configured and daily limits are not exceeded. */
 export function metadataRefusal(ctx: LaunchCheckContext): LaunchRefusal | null {
   return modelRefusal(ctx, METADATA_MODEL_ID) ?? dailyLimitRefusal(ctx);
 }
 
 /**
- * The checks before a metadata run someone asked for and waits on
- * (`research.generateTitle`, `recaps.generateCandidate`): the account's
- * metadata budget (`RATE_LIMITS.metadata`), then `metadataRefusal`. The
- * requester pays for the run.
+ * Validates rate limits and quota before executing an interactive metadata
+ * request (`research.generateTitle`, `recaps.generateCandidate`).
  */
 export function assertMetadataAllowed(ctx: LaunchContext): void {
   takeBudget(ctx, "metadata", "Too many titles and recaps requested; try again in a few minutes.");
@@ -231,13 +215,10 @@ export function assertMetadataAllowed(ctx: LaunchContext): void {
 }
 
 /**
- * Schedules the automatic recap of an imported report: after the import and
- * after an edit of its body, which clears its recap (the desktop's
- * `research_recap::schedule` in `import_research_report` and
- * `update_research_document`). Billed to the person who imported or edited
- * it, and skipped without a word when their metadata model or daily limits
- * refuse it, as an automatic recap is. The metadata runner checks the node
- * again (`shouldScheduleRecap`) when the job runs.
+ * Schedules automatic recap generation for an imported or edited document
+ * (`import_research_report`, `update_research_document`). Attributed to the
+ * authoring user; silently skipped if the user's account exceeds daily limits
+ * or cannot access the metadata model.
  */
 export function scheduleDocumentRecap(ctx: LaunchContext, nodeId: string): void {
   if (metadataRefusal(ctx) !== null) {
@@ -246,9 +227,9 @@ export function scheduleDocumentRecap(ctx: LaunchContext, nodeId: string): void 
   ctx.runs.enqueueMetadata({ kind: "recap", userId: ctx.user.id, nodeId });
 }
 
-/** Puts an admitted node in the run queue, inside `admitWithinLimits`. The
- * row persists across restarts; `runs.start`, called once the transaction
- * has committed, only wakes the agent loop. */
+/** Enqueues an admitted node in `run_queue`. Called within `admitWithinLimits`.
+ * The record persists across restarts; `runs.start`, called after transaction
+ * commit, notifies the execution loop. */
 export function queueRun(
   db: SessionDatabase,
   userId: string,
@@ -259,9 +240,8 @@ export function queueRun(
   repo(() => queue.enqueue(db, userId, { nodeId, pool: "research", provider }));
 }
 
-/** 1-based place in the queue while the node waits, absent once it is
- * claimed. Whoever pays for the run; the caller has checked that `ctx.user`
- * may read the node. */
+/** Returns the 1-based position of a node in the queue, or undefined once claimed.
+ * Callers must verify user read access. */
 export function queuePositionOf(
   ctx: { db: AppContext["db"]; user: { id: string } | null },
   nodeId: string,
@@ -271,10 +251,9 @@ export function queuePositionOf(
 }
 
 /**
- * Everything one node needs to render (`03-api-and-events.md` §4). Source
- * preference follows the desktop's `main.rs:1843`: the durable snapshot, then
- * the live window from `run_turns`, then an explanation for a finished node
- * that produced nothing readable.
+ * Loads all data needed to render a research node (`03-api-and-events.md` §4).
+ * Resolution order: durable snapshot, live window from `run_turns`, and fallback
+ * error messages for completed nodes with no readable content.
  */
 export function nodeContent(
   ctx: { db: AppContext["db"]; user: { id: string } | null },
@@ -286,9 +265,8 @@ export function nodeContent(
     repo(() => nodes.get(ctx.db, userId, nodeId)),
     `research node ${nodeId} was not found`,
   );
-  // The snapshot is read first so `seq`, read with the live window, is never
-  // older than the turns returned beside it: a snapshot committed between the
-  // two reads costs the client a refetch, not a silently stale sequence.
+  // Reads the snapshot prior to the live window so `seq` is monotonically
+  // consistent with returned turns and avoids races with concurrent snapshot commits.
   const snapshot = repo(() => snapshots.read(ctx.db, userId, nodeId));
   const live = repo(() => runsRepo.liveWindow(ctx.db, userId, nodeId));
 

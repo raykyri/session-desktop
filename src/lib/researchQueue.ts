@@ -1,7 +1,7 @@
-// The thread page's view of the follow-up queues the backend holds
+// Thread page state for backend follow-up queues
 // (src-tauri/src/state/research_followups.rs): `research.queue.changed`
 // events, which useResearchEvents receives and the open thread applies, and
-// the one-time handover of the queues earlier builds kept in localStorage.
+// the one-time migration of queues earlier builds kept in localStorage.
 
 import type { QueuedResearchFollowup } from "@session/shared/lib/researchBranchView";
 import type { ParsedResearchEvent } from "@session/shared/lib/researchEvents";
@@ -12,7 +12,7 @@ type ResearchQueueChangedEvent = Extract<ParsedResearchEvent, { type: "research.
 
 const listeners = new Set<(event: ResearchQueueChangedEvent) => void>();
 
-/** Hands a chain's new queue to the open thread pages. */
+/** Dispatches an updated chain queue to active thread subscribers. */
 export function publishResearchQueueChanged(event: ResearchQueueChangedEvent): void {
   for (const listener of listeners) {
     listener(event);
@@ -43,11 +43,9 @@ export function queuedResearchFollowup(item: ResearchFollowupQueueItem): QueuedR
   };
 }
 
-/** Hands the queued follow-ups earlier builds stored in localStorage to the
- * backend, once: the stored copy is removed after the backend accepted
- * them. The backend skips ids it already holds, so a repeated handover
- * (another window, a request that failed after the backend stored them)
- * queues nothing twice. */
+/** Migrates queued follow-ups stored in localStorage to the backend;
+ * clears local entries once accepted. The backend ignores existing item IDs,
+ * so duplicate import attempts do not duplicate queue entries. */
 export async function migrateLegacyResearchQueues(
   importFollowups: (
     items: {

@@ -54,7 +54,7 @@ export function conversationActivityToolCalls(activity: ActivityItem): number | 
 
 export function conversationToolCallLabel(count: number) {
   if (count === 0) {
-    // A marker whose count did not survive (malformed archive data) still
+    // A marker whose count was not preserved (malformed archive data) still
     // records that activity happened.
     return "tool activity";
   }

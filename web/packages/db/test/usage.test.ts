@@ -8,9 +8,9 @@ import { createFixture } from "./helpers.js";
 const DAY = 86_400_000;
 const NOON = Math.floor(1_700_000_000_000 / DAY) * DAY + DAY / 2;
 
-/** One research attempt started at `at`. `daily_runs` counts `run_attempts`
- * rows rather than `usage_events`, so an attempt that reports its usage in
- * several records is still one run. */
+/** Creates a research attempt started at `at`. `daily_runs` counts `run_attempts`
+ * rows rather than `usage_events`, so an attempt reporting usage across
+ * multiple records counts as one run. */
 function attemptAt(fixture: Fixture, at: number): string {
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     type: "exchange",
@@ -47,7 +47,7 @@ test("daily totals sum one UTC day and count research attempts as runs", (t) => 
     outputTokens: 5,
     at: NOON + 1000,
   });
-  // Yesterday and tomorrow are outside the window.
+  // Records outside the one-day window are excluded.
   usage.record(fixture.db, fixture.userId, {
     kind: "research",
     provider: "vertex",
@@ -61,7 +61,7 @@ test("daily totals sum one UTC day and count research attempts as runs", (t) => 
     at: NOON + DAY,
   });
 
-  // One attempt today, one on each neighbouring day.
+  // One attempt today, one on each adjacent day.
   attemptAt(fixture, NOON);
   attemptAt(fixture, NOON - DAY);
   attemptAt(fixture, NOON + DAY);
@@ -112,7 +112,7 @@ test("another account's attempts are not counted", (t) => {
   t.is(usage.dailyTotals(fixture.db, "someone-else", NOON).runs, 0);
 });
 
-test("deleting the research does not give its runs back", (t) => {
+test("deleting research does not restore daily run quota", (t) => {
   const fixture = createFixture(t);
   const nodeId = attemptAt(fixture, NOON);
   attemptAt(fixture, NOON + 1000);
@@ -120,7 +120,7 @@ test("deleting the research does not give its runs back", (t) => {
   const treeId = fixture.db.$client
     .prepare("SELECT tree_id AS treeId FROM nodes WHERE id = ?")
     .get(nodeId) as { treeId: string };
-  // Delete now, then the deletion job removes the rows.
+  // Mark deleted; the deletion job removes the rows.
   deletion.markTreesDeleted(fixture.db, [treeId.treeId]);
   deletion.drain(fixture.db);
   t.deepEqual(
@@ -231,7 +231,7 @@ test("admins are exempt", (t) => {
   });
 });
 
-test("the summary carries the day's counts and the limits in force", (t) => {
+test("summary includes daily usage totals and active limits", (t) => {
   const fixture = createFixture(t);
   attemptAt(fixture, NOON);
   usage.record(fixture.db, fixture.userId, {

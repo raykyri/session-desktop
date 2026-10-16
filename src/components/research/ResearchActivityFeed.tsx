@@ -823,8 +823,8 @@ function ResearchActivityFeed({
     menu?.kind === "draft" ? (drafts.find((draft) => draft.id === menu.draftId) ?? null) : null;
   const menuStateRef = useRef(menu);
   menuStateRef.current = menu;
-  // Escape returns focus itself; an item that keeps the user on the card
-  // (Move to) returns it to the … button.
+  // Escape returns focus itself; an action that leaves the card open
+  // (Move to) returns focus to the … button.
   const closeMenu = useCallback((restoreFocus = false) => {
     const current = menuStateRef.current;
     setMenu(null);
@@ -850,7 +850,7 @@ function ResearchActivityFeed({
     const active = document.activeElement;
     if (!hit || (active !== hit && active !== null && active !== document.body)) return;
     // Scrolls only when the card regains focus or first renders moved, so
-    // a later user scroll is not undone.
+    // subsequent manual scrolling is not undone.
     if (active === hit && moved.revealed) return;
     moved.revealed = true;
     if (active !== hit) hit.focus({ preventScroll: true });

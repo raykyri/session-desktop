@@ -72,53 +72,55 @@ from its Ask segment: a row per model with its icon, admin-only models for
 admins only, then an Effort submenu with Default and the model's efforts;
 the trigger shows the model and the effort it runs at; it defaults to the
 model of the message it continues) and takes pasted or dropped images (`composer/images.tsx`,
-uploaded to `POST /api/images`; the question sends their ids). With images
-attached, Send (and ⌘↵/⇧⌘↵) stays disabled while the chosen model can't read
-images or they total more than 20 MB, and the reason shows under the box
-(`imageBlockReason`, from `researchImageBlockReason`); the note follow-up
-box checks an AI follow-up's images the same way.
+uploaded to `POST /api/images`; the question sends their ids). When images are
+attached, submission is disabled if the selected model lacks image support or
+total image payload exceeds 20 MB; the validation reason is displayed below
+the composer (`imageBlockReason`, from `researchImageBlockReason`). Follow-up
+note composers validate attached images identically.
 
 - **Follow-up**: `followups.ask` with the chain's head. The server sends it
   at once when the chain's tail is complete and its inline slot is free, and
-  queues it otherwise (`05-run-lifecycle-and-streaming.md`). The page reads
-  the queue from `detail.queues` and `research.queue.changed`; while the
-  tail runs, the box reads "Queue a follow-up" and its button "Queue".
+  queues it otherwise (`05-run-lifecycle-and-streaming.md`). The client reads
+  queue state from `detail.queues` and `research.queue.changed`; while the
+  tail executes, the input placeholder displays "Queue a follow-up" and the
+  action button displays "Queue".
 - **Branch**: `research.forkNode` with `inline: false` and the passage
   anchor, if any.
-- **Edited failed question**: Edit question on a failed or stopped message
-  fills the ask box with its text; sending forks with `replacesNodeId`, so the
-  new question takes the failed one's place (`researchEditedQuestionFork`).
+- **Edited failed question**: selecting Edit question on a failed or stopped
+  message populates the ask box with its text; submitting issues a fork with
+  `replacesNodeId`, replacing the previous question node
+  (`researchEditedQuestionFork`).
 - **Note follow-up**: the follow-ups column's field uses Home's Ask/Note
   switch (`composer/AskNoteSwitch`); a press on the selected Ask segment
   ("Ask {model}") opens the model menu (`ModelMenuItems` in an
   `AnchoredMenu`). A follow-up note (`research.createPostFollowUp`) is not
-  sent to any agent; its placeholder reads "Add a note (not visible to
-  agent)". Send is titled "Ask {model} (⌘↵)" or "Add note (⌘↵)"; this box,
-  unlike the columns' ask boxes, follows the "Require ⌘↵ to send" setting
-  (off: ↵ sends).
-- **Queued follow-ups**: a queued item that cannot send (its send was
-  refused, or the answer before it stopped: "The last answer stopped; retry
-  it, or edit this question.") offers Edit question to its author: the item
-  is cancelled on the server and, once the cancel succeeded, its text and
-  images go into the chain's ask box, only if that box is empty ("Clear the
-  ask box to edit this question."); a refused cancel leaves the box as it was
-  and shows the error. Edit question on a failed message also restores its
-  images.
-- **Stalled chain**: when a chain's last answer failed or was stopped, the
-  box is disabled with a note for the reader (shared `stalledTailNote`, also
-  the server's `followups.ask` refusal): the person who pays for that answer
-  reads the desktop's sentence; anyone else "The last answer stopped. Only
-  <name> can retry it; the owner can delete it. Branch from the answer before
-  it to continue." (the owner: "… Delete it, or branch from the answer before
-  it to continue."; when the payer is the owner: "Only <name> can retry or
+  sent to any agent; its placeholder is "Add a note (not visible to
+  agent)". The action button is labeled "Ask {model} (⌘↵)" or "Add note (⌘↵)";
+  unlike column composers, this input respects the "Require ⌘↵ to send" user
+  setting (when disabled, Enter submits).
+- **Queued follow-ups**: queued items that cannot execute (due to admission
+  refusal or prerequisite failure: "The last answer stopped; retry it, or edit
+  this question.") provide an Edit question option to their author. Selecting
+  this cancels the queued item on the server and loads its text and attachments
+  into the composer once cancellation succeeds, provided the input is empty
+  ("Clear the ask box to edit this question."). If cancellation fails, composer
+  content is preserved and the error is displayed. Editing a failed message
+  similarly restores its attached images.
+- **Stalled chain**: when the final answer in a chain fails or stops, the
+  input is disabled and displays a contextual explanation (shared
+  `stalledTailNote`, matching the server's `followups.ask` precondition error).
+  The paying author receives the standard remediation copy; other users
+  receive "The last answer stopped. Only <name> can retry it; the owner can
+  delete it. Branch from the answer before it to continue." (the thread owner
+  receives "… Delete it, or branch from the answer before it to continue.";
+  when the payer is also the owner, the notice displays "Only <name> can retry or
   delete it.").
-- **Root draft**: the root ask box's text is a draft saved to
-  `interfaceDrafts` and read back on open, so a draft from another device or
-  tab fills an empty box.
+- **Root draft**: root composer content is synchronized to `interfaceDrafts`,
+  restoring unsent drafts across devices and tabs into empty inputs.
 
 Run controls read `runActive` and `runRetryable` (`runState.ts`): an
 `interrupted` run counts as active while `run.resumePending` is not `false`
-(the server resumes it) and shows Retry once the server has given up.
+(the server resumes it) and shows Retry once automatic resume attempts are exhausted.
 
 ## 4. Selection and history
 
@@ -129,7 +131,7 @@ Forward are the browser's; the header's Back/Forward buttons call
 visit carry over:
 
 - User navigation pushes an entry: selecting a message, opening a branch,
-  clearing a column. Selecting what is already shown adds nothing.
+  clearing a column. Selecting what is already shown creates no history record.
 - A selection the page makes itself replaces the entry: the one restored on
   opening (from the URL, else the per-tree store, else the root), a path cut
   to what the tree contains, and the selection after messages are removed
@@ -145,14 +147,14 @@ Per-tree state that is not in the URL is kept in localStorage under
 scroll offsets (answer, messages, branches; 15-minute TTL), "Show earlier"
 expansions, the unsent branch's passage and text, and a pending highlight
 focus. Entries for deleted nodes are pruned. A thread moved to the Trash
-keeps its entry for Restore (`research.tree.removed` with `trashed: true`); a
-deleted or left thread loses it. Tabs share the key: each write merges with
-the stored copy thread by thread (the entry written last wins,
-`lib/tabMerge.ts`), and another tab's write is merged in on its `storage`
-event; the feeds' scroll anchors (`stores/navigation`) merge the same way.
-The state belongs to the signed-in account: sign-out and another account's
-session drop it; an expired session keeps it hidden until the same account
-signs in again (`07-client-architecture.md` §4.3).
+preserves navigation state for restoration (`research.tree.removed` with
+`trashed: true`); permanently deleted or departed threads discard it. Concurrent
+tabs synchronize via localStorage: writes merge per thread (last-write-wins
+resolution via `lib/tabMerge.ts`), and external updates merge on `storage` events;
+feed scroll positions (`stores/navigation`) merge using the same pattern. State is
+scoped to the authenticated user: signing out or switching accounts clears local
+state; expired sessions retain entries in storage without exposing them until
+re-authentication (`07-client-architecture.md` §4.3).
 
 While the detail loads, the header shows the title (or "Note") a cached list
 already has, and Back and Forward stay in place; their titles name the
@@ -174,11 +176,11 @@ Messages are reordered by dragging a row (`useMessageDrag.ts`) or with
 optimistically.
 
 A horizontal trackpad swipe goes back or forward (`useSwipeNavigation.ts`,
-the desktop's `useResearchSwipeNavigation` with the shared
-`researchSwipeDirection` threshold): a mostly vertical gesture scrolls, a
-gesture over something that scrolls sideways (the strip when its columns do
-not fit, a wide table) scrolls it and never navigates, and one swipe moves
-one step. A swipe history cannot follow is left alone. While the page is
+equivalent to desktop `useResearchSwipeNavigation` with `researchSwipeDirection`
+thresholding): vertical gestures scroll content; gestures over horizontally
+scrolling containers (unfitted column strips, wide tables) scroll the container
+without triggering navigation; each swipe advances exactly one history step.
+Swipes exceeding available history bounds trigger no action. While the page is
 open the root element has `overscroll-behavior-x: none`, so the browser's
 own swipe navigation does not also run; Safari's system gesture can ignore
 that property.
@@ -219,8 +221,7 @@ The algorithms are in `shared` (`researchSelection.ts`,
 7. Margin markers (`useThreadAnnotations.ts`, `MarkerButton`): one per
    paragraph that has branches, level with it, and one in the answer's foot
    for whole-answer branches. A marker opens its branch, or a menu when there
-   are several; its label says how many branches it has and whether one is
-   open.
+   are several; its label indicates the branch count and active status.
 
 ## 6. Answers
 
@@ -230,14 +231,14 @@ the live turns while the run is active, `05-run-lifecycle-and-streaming.md`
 the collapsed answer is the text after the last tool call, the full trace
 shows everything, and at most 100 timeline items are rendered
 (`TIMELINE_ITEM_RENDER_WINDOW`, with "Show N earlier response items"). The
-live tail keeps its timeline key when the snapshot replaces it, so the answer
-does not remount. A running answer shows its tool calls and reasoning open
+streaming timeline items retain their component keys when replaced by snapshots,
+avoiding remounting. A running answer shows its tool calls and reasoning open
 (the desktop's `expandActivities`); an imported report's text has its
-citation handles removed (`stripImportedReportCitations`). A thread that
-answers NOT_FOUND (deleted, in its owner's Trash, or no longer shared) reads
-"This thread was deleted or is no longer shared with you."; a failed action
-on something in the thread that is gone says "It was deleted or is no longer
-shared with you." instead of the server's message with its id.
+citation handles removed (`stripImportedReportCitations`). A thread request
+returning NOT_FOUND (deleted, in its owner's Trash, or no longer shared)
+displays "This thread was deleted or is no longer shared with you."; a failed
+action on a removed entity displays "It was deleted or is no longer shared
+with you." instead of the server error containing its ID.
 
 While a run is active a status line replaces the footer: "Queued · N ahead",
 "Starting…", "Thinking" or "Working", or "Interrupted · resuming", with the
@@ -260,25 +261,24 @@ active).
 
 - **Document**: Edit document (the root's answer menu) opens the editor
   column after the root's answer. The answer column shows a preview of the
-  change. Save writes `research.updateDocument` with the revision it opened;
-  a stale revision is refused and the editor stays open. ⌘S saves and stays
-  in edit mode with a toast; Cancel asks before discarding changes; Ask as a
-  question starts a new thread with the edited text on the model and effort
-  chosen beside it (`research.createTree` with `effort`; null is the model's
-  default) in the edited thread's workspace (from a shared thread, the
-  reader's current one), and opens it. For the reader's own thread
-  `DeleteOfferHost` (rendered by the shell) then asks "Delete the original
-  thread?" with the desktop's sentences (`researchTreeContentsSentence`,
-  counted when the question was asked); Keep is focused first; Delete…
-  (disabled while runs are active) opens the thread's delete confirmation
-  with its Home children. Both close when the original is no longer listed
+  change. Saving invokes `research.updateDocument` referencing the opened revision;
+  stale revisions are rejected with conflict errors while preserving editor contents.
+  ⌘S saves changes and displays a confirmation toast; Cancel prompts for confirmation
+  before discarding edits. Ask as a question creates a new thread containing the
+  modified content using the selected model and effort (`research.createTree`
+  with `effort`; null defaults to model configuration) in the target workspace
+  (defaulting to the reader's current workspace for shared threads).
+  For the reader's own thread `DeleteOfferHost` (rendered by the shell) then asks
+  "Delete the original thread?" with the desktop's sentences
+  (`researchTreeContentsSentence`, counted when the question was asked); Keep is
+  focused first; Delete… (disabled while runs are active) opens the thread's delete
+  confirmation with its Home children. Both close when the original is no longer listed
   or is archived.
 - **Note**: double-click a note, or Edit note in its menu, to edit it in
   place. A double-click on a note's card on Home opens the thread with
-  `?edit=` (a single click on that card waits 250 ms for the second click
-  before opening the thread, since Home is its own route on the web). Save writes `research.updatePost` with `expectedText`; when the
-  note changed meanwhile the server refuses and the editor shows the message
-  with the text kept.
+  `?edit=` (single clicks defer navigation by 250 ms to detect double-click gestures).
+  Saving invokes `research.updatePost` with `expectedText`; concurrent modifications
+  are rejected as conflicts while retaining unsaved editor text.
 - **Stale edits (web only)**: a `CONFLICT` from `updatePost` or
   `updateDocument` opens "This note changed" / "This document changed"
   (`features/sharing/StaleEditDialog.tsx`) with the reader's text, read-only
@@ -297,16 +297,13 @@ active).
 `ThreadMenu` is one Base UI menu anchored to the clicked button or the
 pointer (right-click). The answer menu holds the message's statistics,
 Branch to right, Copy answer (or Copy conversation), Copy thread, Show full
-transcript, Rerun, Generate recap, Rename…, Edit document and the delete
-item. The note menu holds Edit note, Copy note and Delete note (D); the
-root note's menu has no Delete, as on the desktop (the thread is deleted from
-Home). On the
+transcript, Rerun, Generate recap, Rename…, Edit document and Delete. On the
 reader's own thread, the answer menus of the root level and the root note's
 menu end with Move to (Unfiled, Drafts, the workspace's folders, Archive; the
-current place checked) and New folder…, as a feed card's menu
-(`useThreadFiling.ts`, Home's `useFiling` and `useGroupActions`, so archiving
-a parent with children asks first). A member files a shared thread from
-Home. Dialogs are centred confirm dialogs (`ThreadDialogs.tsx`):
+current place checked) and New folder…, matching feed card menu options
+(`useThreadFiling.ts`, Home's `useFiling` and `useGroupActions`, prompting
+before archiving parent threads with children). Members manage filing for
+shared threads from Home. Confirmations use centered modal dialogs (`ThreadDialogs.tsx`):
 
 - **Rerun**: "Rerun will replace the current answer. Continue?";
   `research.rerunNode`. Refused while the answer, or the answer it follows,
@@ -335,7 +332,7 @@ Home. Dialogs are centred confirm dialogs (`ThreadDialogs.tsx`):
 | Cancel / Retry a queued follow-up | Cancel any; Retry their own | their own | no |
 | Rename the thread, reorder messages, Edit document | yes | no | no |
 | Delete the thread | yes | their Trash or Leave (Home's member steps) | no |
-| Remove a highlight | any | their own (the selection bar leaves out Highlight when the selection covers someone else's highlight, since merging or removing it deletes it) | no |
+| Remove a highlight | any | their own (the selection bar omits Highlight when the selection covers a highlight authored by another user, because merging or removing it would delete that highlight) | no |
 
 An archived thread is read-only for everyone, as on the desktop. A guest
 (signed out, on a public thread) has no event stream, so the page does not
@@ -343,11 +340,12 @@ update live.
 
 - **Thread menu** (the root's answer or note menu): Share… (the owner) or
   People… (anyone else signed in; the dialog is then "People in “…”" and a
-  private thread reads "Only its owner and the people it is shared with.")
+  private thread displays "Only its owner and the people it is shared with.")
   opens `ShareDialog`; Notify me / Stop notifying me toggles
   `subscriptions.set` (`ResearchTree.followed`; the owner and members who
   joined through an invitation start with it on). A commenter's root answer
-  menu has Delete research with Home's member steps: their Trash, or Leave.
+  menu displays Delete research with standard member options (move to member
+  Trash, or leave thread).
 - **Unavailable**: when a refetch of the open thread is refused with
   NOT_FOUND (deleted, moved to the owner's Trash, turned private for a
   non-member, the reader removed), the page shows "This thread was deleted
@@ -359,7 +357,7 @@ update live.
   while link invitations are pending it notes "Links you’ve shared still let
   new people join; revoke them to stop that."), Invite (by GitHub
   username, or Copy invitation link, each with a role; the created link,
-  `/invite#<token>`, is shown so it can be copied by hand), and Pending
+  `/invite#<token>`, is displayed so it can be copied manually), and Pending
   invitations with Revoke. Making a public thread private is confirmed in
   the footer (`10-home-feed-journal.md` §4b). The owner's root Delete adds
   the member sentences (`10` §1, Delete, Archive, Trash). Anyone
@@ -373,7 +371,7 @@ update live.
   on notes and documents, from `editedBy`).
 - **Presence**: the thread is declared open while the page is mounted
   (`useThreadInterest`, renewed by the event bridge, `07` §4.2); the root
-  header shows the other people who have it open (`PresenceAvatars`, up to
+  header shows other active viewers (`PresenceAvatars`, up to
   four, "Also viewing: …"), from `events.presence` and
   `research.presence.changed`.
 

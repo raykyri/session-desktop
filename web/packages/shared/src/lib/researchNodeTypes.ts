@@ -1,4 +1,4 @@
-// Readers for the node union (src/types.ts ResearchNode, the backend's
+// Accessor helpers for the node union (src/types.ts ResearchNode, the backend's
 // ResearchNodeView). They mirror ResearchNode::node_type, follow_up_launch
 // and recap_eligible in research.rs, and read the fields only some node
 // types carry with one answer for the others.
@@ -23,7 +23,7 @@ export function nodeType(node: Typed): ResearchNodeType {
   return node.type ?? "exchange";
 }
 
-/** What a person wrote, as the node's row in the messages column. */
+/** User-authored message text, as the node's row in the messages column. */
 interface ResearchUserMessage {
   /** Markdown, or a single URL when the post is a link. */
   text: string;

@@ -33,7 +33,7 @@ export interface ResearchDeleteDialogProps {
   onClose: () => void;
 }
 
-/** A delete confirmation over a scrim, centred like the other confirm
+/** A delete confirmation over a scrim, centered like the other confirm
  * dialogs. Focus returns to the control that opened it, else to
  * `fallbackFocus`. */
 export function ResearchDeleteDialog({

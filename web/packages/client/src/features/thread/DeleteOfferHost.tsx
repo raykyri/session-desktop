@@ -2,8 +2,8 @@
 // `ResearchTreeDeleteOfferDialog` in `ResearchTreeMenu.tsx`, opened from
 // `App.tsx` `askResearchEditorQuestion`): once the new thread exists, a
 // dialog asks whether to delete the edited thread, stating what deleting it
-// also deletes, counted from its nodes as they were when the question was
-// asked. Keep (focused first; also Escape) closes it; Delete… hands over to
+// also deletes, counted from its nodes at the time the question was
+// asked. Keep (focused first; also Escape) closes it; Delete… transitions to
 // the thread's delete confirmation (Move to Trash with Undo, or Delete now),
 // with the children listed under it in Home.
 //

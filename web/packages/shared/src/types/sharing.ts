@@ -25,7 +25,7 @@ export interface ThreadMember {
   joinedAt: number;
 }
 
-/** A pending invitation, as its thread's owner sees it. */
+/** A pending invitation as presented to the thread owner. */
 export interface ThreadInvite {
   id: string;
   treeId: string;

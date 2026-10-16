@@ -103,7 +103,7 @@ test("canRerunResearchNode extends canRetryResearchNode to complete exchanges", 
   assert.equal(canRerunResearchNode(node("doc", { type: "document" })), false);
 });
 
-test("Rerun asks first only for a complete answer; a failed or cancelled run is retried at once", () => {
+test("Rerun requires confirmation only for a complete answer; a failed or cancelled run retries immediately", () => {
   assert.equal(researchRerunConfirms(node("q")), true);
   for (const status of ["failed", "cancelled"] as const) {
     assert.equal(researchRerunConfirms(node("q", { status })), false);

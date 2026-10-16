@@ -15,7 +15,7 @@ import {
 } from "../src/lib/agentSetup";
 import type { AgentAdapterMetadata } from "../src/types";
 
-// The guide reaches the adapter icons, which Node loads through this stub.
+// The guide imports adapter icons, which Node loads through this stub.
 register("./svgStubLoader.mjs", import.meta.url);
 const { default: AgentSetupGuide } = await import("../src/components/AgentSetupGuide");
 
@@ -77,7 +77,7 @@ test("a research-incompatible version is not reported as ready", () => {
   assert.equal(steps[0].command, "claude update");
 });
 
-test("probe errors ask the user to resolve the reported issue", () => {
+test("probe errors present steps to resolve the reported issue", () => {
   const failed = adapter("claude", "error");
   failed.message = "The version check failed.";
 
@@ -210,7 +210,7 @@ test("unknown sign-in after a completed probe is not reported as signed in", () 
   );
 });
 
-test("a definitive sign-out asks for the provider's sign-in command", () => {
+test("a definitive sign-out provides the provider's sign-in command", () => {
   const signedOut: AgentAdapterMetadata = {
     ...checked("codex", "needsAuth"),
     auth: "unauthenticated",
@@ -364,7 +364,7 @@ test("without a chosen agent the guide opens on the first incomplete one", () =>
 
 test("an update without a known updater names no command", () => {
   // Nothing establishes which package manager or installer supplied the
-  // executable, so no command is invented for it.
+  // executable, so no command is generated for it.
   const outdated: AgentAdapterMetadata = {
     ...checked("codex", "unsupportedVersion"),
     updateCommand: null,

@@ -1,8 +1,8 @@
-// Unsent text kept in this browser belongs to the account that wrote it: the
-// composer drafts (`stores/drafts.ts`, sessionStorage) and the thread pages'
-// unsent branches (`features/thread/persistence.ts`, localStorage) go on
-// sign-out; an expired session keeps them hidden for the same account; a
-// different account signing in, or a guest, finds none of them.
+// Unsent browser draft state is scoped to the author account: composer drafts
+// (`stores/drafts.ts`, sessionStorage) and unsent branches
+// (`features/thread/persistence.ts`, localStorage) are cleared on sign-out,
+// hidden during session expiration for the same account, and isolated from
+// guest sessions and other authenticated accounts.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
@@ -60,8 +60,7 @@ const homeResponses: Record<string, unknown> = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Account A's unsent text: the Home box, a shared thread's root ask box and
- * a passage branch on it. */
+/** Populates Account A draft data in home composer, thread root composer, and branch state. */
 function writeAccountADrafts(): void {
   const drafts = useDraftsStore.getState();
   drafts.setDraft(homeDraftKey(WORKSPACE_ID), { text: HOME_DRAFT });
@@ -109,7 +108,7 @@ test.beforeEach(() => {
 // A failed test leaves its app mounted; the next one starts without it.
 test.afterEach.always(() => cleanup());
 
-test.serial("signing out drops the unsent drafts and branches kept in this browser", async (t) => {
+test.serial("signing out clears unsent drafts and branches in local storage", async (t) => {
   const app = await openHome(t);
   writeAccountADrafts();
   await sleep(DRAFT_SYNC_DEBOUNCE_MS + 20);
@@ -124,14 +123,14 @@ test.serial("signing out drops the unsent drafts and branches kept in this brows
   await waitUntil(
     t,
     () => Object.keys(useDraftsStore.getState().byKey).length === 0,
-    "the drafts go",
+    "drafts store is empty",
   );
   assertNoAccountAText(t, "after signing out");
   app.unmount();
 });
 
 test.serial(
-  "another account signing in finds none of the previous account's drafts, and its own server draft is not shadowed",
+  "authenticating as a different account isolates previous drafts and loads server drafts without shadowing",
   async (t) => {
     const first = await openHome(t);
     writeAccountADrafts();
@@ -150,7 +149,7 @@ test.serial(
       () =>
         screen.getByRole<HTMLTextAreaElement>("textbox", { name: FIELD }).value ===
         "Account B's saved question",
-      "account B's own draft shows",
+      "account B server draft is displayed",
     );
     await sleep(DRAFT_SYNC_DEBOUNCE_MS + 20);
     t.false(sentAccountAText(second.trpc.calls), "A's drafts are not written to B's account");
@@ -160,7 +159,7 @@ test.serial(
           localStorage.getItem(THREAD_NAVIGATION_KEY) ?? ""
         }`.includes(text),
       ),
-      "nothing of A's is left in storage",
+      "account A drafts are removed from storage",
     );
     t.is(savedPendingBranch("t1", "n1"), null, "A's unsent branch is gone");
     t.is(useDraftsStore.getState().get(nodeDraftKey("tree:t1")), undefined);
@@ -168,7 +167,7 @@ test.serial(
   },
 );
 
-test.serial("a guest after the previous account finds none of its drafts", async (t) => {
+test.serial("guest session does not access previous account drafts", async (t) => {
   const first = await openHome(t);
   writeAccountADrafts();
   first.unmount();
@@ -204,7 +203,7 @@ test.serial("the same account keeps its drafts across a reload", async (t) => {
 });
 
 test.serial(
-  "an expired session keeps the unsent drafts and branches for the same account",
+  "expired session preserves unsent drafts and branches for re-authentication by the same account",
   async (t) => {
     const app = await openHome(t);
     writeAccountADrafts();
@@ -219,7 +218,7 @@ test.serial(
     });
     for (const observer of stub.observers) observer.onError?.({ data: { code: "UNAUTHORIZED" } });
     t.is(signedOut, 1);
-    // Hidden while signed out: nothing reads or writes them.
+    // Inactive while signed out: inaccessible to reads and writes.
     t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)), undefined);
     t.is(savedPendingBranch("t1", "n1"), null);
     t.true(
@@ -231,7 +230,7 @@ test.serial(
       "the branch stays stored",
     );
     bridge.close();
-    // The same account signs in again and gets its unsent text back.
+    // Re-authenticating as the same account restores access to unsent drafts.
     const again = await openHome(t);
     t.is(screen.getByRole<HTMLTextAreaElement>("textbox", { name: FIELD }).value, HOME_DRAFT);
     t.is(useDraftsStore.getState().get(nodeDraftKey("tree:t1"))?.text, ROOT_DRAFT);
@@ -241,15 +240,14 @@ test.serial(
 );
 
 test.serial(
-  "when another tab signs in as someone else, this tab writes none of its drafts and reloads",
+  "when another tab changes authenticated user, current tab discards pending draft writes and reloads",
   async (t) => {
     const app = await openHome(t);
     // Unsent edits still inside their debounce.
     useDraftsStore.getState().setDraft(homeDraftKey(WORKSPACE_ID), { text: HOME_DRAFT });
     recordPendingBranch("t1", "n1", ANCHOR, BRANCH_DRAFT);
 
-    // The other tab claims the browser for account B before this tab hears
-    // of it: it records B and keeps its own thread state.
+    // Another tab updates local owner to account B before storage event sync occurs.
     const recorded = JSON.stringify({ userId: "u2" });
     localStorage.setItem(LOCAL_OWNER_KEY, recorded);
     const othersState = JSON.stringify({ t2: { scroll: {}, updatedAt: 1 } });
@@ -258,7 +256,7 @@ test.serial(
     flushThreadNavigation();
     useDraftsStore.getState().flush();
     t.is(localStorage.getItem(THREAD_NAVIGATION_KEY), othersState, "the branch is not written");
-    t.false(sentAccountAText(app.trpc.calls), "nor the draft, to the other account");
+    t.false(sentAccountAText(app.trpc.calls), "draft is not synced to different account");
 
     let reloads = 0;
     onLocalOwnerChanged(recorded, () => (reloads += 1));
@@ -271,14 +269,17 @@ test.serial(
   },
 );
 
-test.serial("another tab recording this tab's own account changes nothing", async (t) => {
-  const app = await openHome(t);
-  writeAccountADrafts();
-  let reloads = 0;
-  onLocalOwnerChanged(JSON.stringify({ userId: "u1" }), () => (reloads += 1));
-  onLocalOwnerChanged(null, () => (reloads += 1));
-  t.is(reloads, 0);
-  t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID))?.text, HOME_DRAFT);
-  t.is(savedPendingBranch("t1", "n1")?.text, BRANCH_DRAFT);
-  app.unmount();
-});
+test.serial(
+  "storage event for current account ID does not trigger reload or state changes",
+  async (t) => {
+    const app = await openHome(t);
+    writeAccountADrafts();
+    let reloads = 0;
+    onLocalOwnerChanged(JSON.stringify({ userId: "u1" }), () => (reloads += 1));
+    onLocalOwnerChanged(null, () => (reloads += 1));
+    t.is(reloads, 0);
+    t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID))?.text, HOME_DRAFT);
+    t.is(savedPendingBranch("t1", "n1")?.text, BRANCH_DRAFT);
+    app.unmount();
+  },
+);

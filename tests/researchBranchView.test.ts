@@ -175,7 +175,7 @@ test("after a send the queue waits until the new child is in the tree, then foll
   assert.deepEqual(researchQueueAction(complete, "h", rest, "c"), { kind: "send", item: queued("q2"), tailId: "c" });
 });
 
-test("a refused question blocks the queue, a stopped tail pauses it, and removing the head clears it", () => {
+test("a rejected question blocks the queue, a stopped tail pauses it, and removing the head clears it", () => {
   const chain = [node("h"), node("t", { parentNodeId: "h", inline: true })];
   assert.deepEqual(researchQueueAction(chain, "h", [queued("q1", "refused"), queued("q2")], undefined), {
     kind: "wait",
@@ -209,7 +209,7 @@ test("an edited question forks in place of the failed node instead of removing i
     anchor,
   });
   // One request: the backend admits the new question, then removes the
-  // failed node. A refused send leaves the failed turn and its partial answer.
+  // failed node. A rejected send leaves the failed turn and its partial answer.
   assert.deepEqual(researchEditedQuestionFork(failed, "Edited"), {
     parentNodeId: "root",
     prompt: "Edited",

@@ -91,7 +91,7 @@ inside `tokens.css`).
 Naming rule: no literal colors in components. ESLint's
 `no-restricted-syntax` rule flags `#hex`/`rgb(` inside `className` strings
 and `style` props; the two documented exceptions (image scrims,
-`::highlight()` pseudos) live in `prose.css` with the `appearance-invariant`
+`::highlight()` pseudos) are defined in `prose.css` with the `appearance-invariant`
 / `highlight-pseudo-literal` comment markers.
 
 ## 3. Scoped CSS that stays CSS
@@ -101,7 +101,7 @@ and `style` props; the two documented exceptions (image scrims,
   math containers, `--transcript-font-delta` /
   `--transcript-line-height-delta`, `.research-summary-text`. Markdown output
   cannot carry utilities.
-- `tweet.css`: `.journal-tweet` recipe (`research-surface.css`), 540 px
+- `tweet.css`: `.journal-tweet` component styles (`research-surface.css`), 540 px
   `--research-feed-max-width`, media grid, quote, card, stats.
 - `::highlight(session-search)` and `::highlight(session-search-active)` for
   the CSS Custom Highlight API used by DOM search.
@@ -190,7 +190,7 @@ intents:
 5. DM Sans half-pixel: `--fs-*` are `calc(… var(--font-ui-size-offset))`;
    code does not reference the offset — unchanged over `tokens.css` and
    `prose.css`.
-6. Tweet recipe independence: `.journal-tweet` defined in `tweet.css` only;
+6. Tweet component styling isolation: `.journal-tweet` defined in `tweet.css` only;
    Home components do not redefine it (grep over `features/home`).
 
 ## 7. Accessibility and responsive behavior

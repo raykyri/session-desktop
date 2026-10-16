@@ -122,7 +122,7 @@ One attempt of one node:
 7. Cancel: `AbortController.abort()`; partial text stays in `run_turns` for
    display under `cancelled`.
 
-The loop is provider-neutral. Provider quirks live in `providers.ts`
+The loop is provider-neutral. Provider-specific implementations are isolated in `providers.ts`
 (construction, `providerOptions`, retention and safety settings) and in the
 mapper (reasoning block shapes, tool-call id formats).
 
@@ -229,7 +229,7 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
   Sources footer render uniformly. Before the mapper sees a `source` part or
   a step's `groundingChunks`, the run loop resolves each
   `vertexaisearch.cloud.google.com/grounding-api-redirect/…` link to the
-  page it stands for with one HEAD request (`runs/groundingRedirects.ts`,
+  target page with one HEAD request (`runs/groundingRedirects.ts`,
   memoized per run, 4 s timeout, the redirect link kept on failure), so the
   stored turns, the Sources footer, copied answers and later context windows
   carry real URLs.
@@ -265,7 +265,7 @@ Uploaded documents as run context (`documents`, `document_text`,
 file parts built from them) were removed in phase 2.0 of the desktop parity
 plan.
 
-Image attachments (`POST /api/images`, `03-api-and-events.md` §5) ride in the
+Image attachments (`POST /api/images`, `03-api-and-events.md` §5) are included in the
 user message of the attempt whose node carries them: `buildMessages` appends
 one AI SDK `image` part per image after the question text
 (`messages.ts:imageParts`), read from the volume. The stored conversation
@@ -289,7 +289,7 @@ imported reports (`recapEligible`), scheduled when a run completes, after
 billed to the asker, importer or editor and skipped when their daily limits
 refuse it; title sanitization
 (`sanitize_research_title`, 80 chars). The OpenRouter transport and the CLI metadata path are
-dropped. A title or recap someone asks for and waits on
+dropped. An explicitly requested title or recap
 (`research.generateTitle`, `recaps.generateCandidate`) is billed to them and
 checked first: their metadata budget (`RATE_LIMITS.metadata`, 30 per
 10 minutes), the metadata model's availability, and their daily limits

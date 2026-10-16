@@ -64,20 +64,18 @@ pub enum JsonlReceive {
     Eof,
 }
 
-/// How long pipe readers get to reach end of file after their process group
-/// is sent SIGKILL. Past it, a reader is detached: its pipe is held open by a
-/// process outside the group, which no signal here reaches.
+/// Grace period for pipe readers to reach EOF after SIGKILL is sent to the
+/// process group. After this duration, the reader is detached if an
+/// un-signaled process outside the group continues to hold the pipe open.
 pub(crate) const KILL_GRACE: Duration = Duration::from_millis(100);
 
-/// How long stdout may stay open after the leader exits before the rest of
-/// its process group is sent SIGKILL. SIGTERM is sent as soon as the exit is
-/// seen.
+/// Duration stdout may remain open after process exit before SIGKILL is sent
+/// to the remaining process group. SIGTERM is sent immediately upon process exit.
 const STDOUT_AFTER_EXIT_GRACE: Duration = Duration::from_secs(2);
 
 /// A thread that drains one of a child's pipes. Its result is collected with
-/// a deadline rather than an unbounded join, since any process that inherited
-/// the pipe (a background helper of the child) keeps it from reaching end of
-/// file.
+/// a deadline rather than an unbounded join, since child processes inheriting
+/// the file descriptor can prevent EOF.
 pub(crate) struct PipeReader<T> {
     handle: thread::JoinHandle<T>,
     // Disconnects when the reader's closure returns or unwinds.
@@ -115,8 +113,9 @@ impl<T> PipeReader<T> {
         )
     }
 
-    /// The reader's result when it has finished. A reader still blocked is
-    /// detached: dropping its handle leaves the thread to end with its pipe.
+    /// Returns the reader's result when finished. A blocked reader is
+    /// detached: dropping the handle allows the thread to terminate when
+    /// the pipe closes.
     fn finish(self) -> Option<T> {
         if self.wait_until(Instant::now()) {
             self.handle.join().ok()
@@ -137,11 +136,11 @@ pub(crate) fn signal_process_group(pgid: u32, signal: libc::c_int) {
     }
 }
 
-/// Collects the pipe readers of a child whose group leader has exited. Other
-/// members of its process group may still hold the pipes open, so the group
-/// is sent SIGTERM first; readers still running at `deadline` get the group
-/// SIGKILLed and `KILL_GRACE` more, after which they are detached. Returns
-/// each reader's result in order, `None` for a detached reader.
+/// Collects pipe readers after the process leader has exited. Because other
+/// processes in the process group may retain open file descriptors, SIGTERM
+/// is sent first. If readers do not finish by `deadline`, SIGKILL is sent to
+/// the process group and readers are given `KILL_GRACE` before being detached.
+/// Returns each reader's result in order, or `None` if detached.
 pub(crate) fn collect_group_readers<T>(
     pgid: u32,
     readers: Vec<PipeReader<T>>,
@@ -163,8 +162,8 @@ pub struct JsonlProcess {
     events: Option<Receiver<Result<Value, String>>>,
     stdout_reader: Option<PipeReader<()>>,
     stderr_reader: Option<PipeReader<()>>,
-    // When the leader's exit was first seen while stdout was still open, and
-    // whether the rest of its group has been sent SIGKILL since.
+    // Timestamp when leader exit was detected with stdout still open, and
+    // whether SIGKILL has been sent to the process group.
     leader_exited_at: Option<Instant>,
     group_killed: bool,
 }
@@ -180,7 +179,7 @@ impl JsonlProcess {
         Self::spawn_with_stdin(binary, args, cwd, stderr_log, label, None)
     }
 
-    /// A file-backed stdin keeps large report prompts out of the OS argument limit.
+    /// Uses file-backed stdin to avoid OS argument length limits for large prompts.
     pub fn spawn_with_stdin(
         binary: &str,
         args: &[String],
@@ -284,11 +283,10 @@ impl JsonlProcess {
         }
     }
 
-    /// Whether stdout should be treated as closed although the reader has
-    /// not seen end of file: the leader has exited and the processes that
-    /// inherited its stdout did not exit after SIGTERM, then SIGKILL. Called
-    /// on each receive timeout; it signals the leader's process group along
-    /// the way.
+    /// Determines whether stdout should be treated as closed when EOF has not
+    /// been reached after the leader process exited and descendant processes
+    /// did not terminate following SIGTERM and SIGKILL signals. Invoked on
+    /// each receive timeout to signal the process group.
     fn stdout_held_after_exit(&mut self) -> bool {
         let exited_at = match self.leader_exited_at {
             Some(exited_at) => exited_at,
@@ -459,8 +457,8 @@ fn process_parent_snapshot() -> Vec<(u32, u32)> {
 }
 
 /// Pre-order walk (each process before its own descendants) so callers can
-/// reverse the list for a deepest-first teardown. The `seen` guard keeps a
-/// cyclic snapshot — possible if a pid was recycled mid-`ps` — from looping.
+/// reverse the list for bottom-up termination. The `seen` set prevents
+/// infinite loops if PID recycling during `ps` creates cycles.
 fn descendants_from_parent_pairs(root: u32, parent_pairs: &[(u32, u32)]) -> Vec<u32> {
     let mut children_by_parent: HashMap<u32, Vec<u32>> = HashMap::new();
     for (pid, ppid) in parent_pairs {
@@ -488,13 +486,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn descendant_walk_follows_parent_pairs_and_survives_cycles() {
-        // 1 → {2, 3}, 2 → {4}, plus an unrelated 9→10 subtree and a stale
-        // cycle (4 → 1) a mid-snapshot pid reuse could produce.
+    fn descendant_walk_follows_parent_pairs_and_handles_cycles() {
+        // 1 → {2, 3}, 2 → {4}, plus an unrelated 9→10 subtree and a cycle
+        // (4 → 1) that could result from PID reuse during snapshotting.
         let pairs = vec![(2, 1), (3, 1), (4, 2), (10, 9), (1, 4)];
         let mut descendants = descendants_from_parent_pairs(1, &pairs);
         // Each process must appear before its own descendants so a reversed
-        // walk kills deepest-first; sibling order is unspecified.
+        // walk terminates bottom-up; sibling order is unspecified.
         let position = |pid: u32| {
             descendants
                 .iter()
@@ -629,7 +627,7 @@ mod tests {
     const CLEANUP_MARGIN: Duration = Duration::from_millis(600);
 
     #[test]
-    fn finish_does_not_wait_for_a_background_child_holding_stderr() {
+    fn finish_does_not_block_on_background_child_retaining_stderr() {
         let dir = test_dir("stderr-holder");
         let script = write_script(
             &dir,
@@ -653,7 +651,7 @@ mod tests {
     }
 
     #[test]
-    fn finish_kills_a_background_child_that_ignores_sigterm_at_the_deadline() {
+    fn finish_terminates_background_child_ignoring_sigterm_at_deadline() {
         let dir = test_dir("stderr-holder-term");
         let script = write_script(
             &dir,
@@ -709,7 +707,7 @@ mod tests {
     }
 
     #[test]
-    fn stdout_ends_when_the_leader_exits_and_a_background_child_holds_it() {
+    fn stdout_closes_after_leader_exits_despite_descendant_retaining_pipe() {
         let dir = test_dir("stdout-holder");
         let script = write_script(
             &dir,

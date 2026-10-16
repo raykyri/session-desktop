@@ -2,16 +2,13 @@
 //
 // One `events.subscribe` subscription for the app's lifetime. Incoming events
 // are queued and flushed on a 16 ms trailing timer, and a flush runs inside
-// `notifyManager.batch` so a burst of twenty patches yields one render rather
-// than twenty.
+// `notifyManager.batch` so batched patches yield a single render.
 //
 // Event routing is defined once, here: run events go to the `liveTurns`
-// store and never touch the query cache (a run at 30 events/s would invalidate
-// list queries thirty times a second), everything else is a targeted
-// `setQueryData` through the reducers in `@session/shared`, and anything the
-// parser calls `malformed` or `unsupported` becomes a scoped invalidation, so
-// an event the client cannot apply still triggers a refetch instead of
-// leaving the cache stale.
+// store and never touch the query cache (high-frequency run events would
+// repeatedly invalidate list queries), everything else is a targeted
+// `setQueryData` through the reducers in `@session/shared`, and malformed or
+// unsupported events trigger scoped invalidations to refetch affected caches.
 
 import type {
   ParsedSessionEvent,
@@ -80,18 +77,18 @@ import { trpc, type SessionTrpcClient } from "./trpc.js";
 /** Matches the desktop's `useSessionEvents.ts:37-51`. */
 export const EVENT_COALESCE_MS = 16;
 
-/** The interest set is published on a trailing timer: opening five documents
- * in a row is one call, not five (`03-api-and-events.md` §3). */
+/** The interest set is published on a trailing debounce timer to coalesce
+ * rapid document opens (`03-api-and-events.md` §3). */
 export const INTEREST_DEBOUNCE_MS = 200;
 
-/** How often the open threads are declared again while one stays open. The
- * server drops a declaration after 90 s (`PRESENCE_TTL_MS`); a background
- * tab's timers may run up to a minute late, so this leaves room for that. */
+/** Interval to renew open-thread declarations. Server declarations expire after
+ * 90 s (`PRESENCE_TTL_MS`), so this renewal interval accounts for delayed timer
+ * execution in background tabs. */
 export const TREE_INTEREST_RENEW_MS = 30_000;
 
-/** After this long without a declaration the server may have dropped an open
- * thread, and with it, for a reader of a public thread who is not a member,
- * the thread's events: the thread refetches when the tab is shown again. */
+/** Duration after which an undeclared open thread declaration lapses on the
+ * server. If elapsed, non-member public thread readers refetch the thread when
+ * the tab becomes visible. */
 export const TREE_INTEREST_LAPSE_MS = 90_000;
 
 /** The first event of every connection (`routers/events.ts`). */
@@ -135,15 +132,15 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
   switch (event.type) {
     case "research.tree.created": {
       const detail: ResearchTreeDetail = { tree: event.tree, nodes: [event.node] };
-      // A redelivery must not replace a detail that has moved on since.
+      // A redelivery must not overwrite existing detail that has already updated.
       if (client.getQueryData(queryKeys.tree(event.tree.id)) === undefined) {
         client.setQueryData(queryKeys.tree(event.tree.id), detail);
       }
-      // Only the reader's own lists for the thread's workspace gain the row.
+      // Only the current user's lists for the workspace receive the new summary.
       writeDetailSummary(client, detail, { insert: true, keepExisting: true });
       patchActiveNodes(client, event.node);
-      // The new thread's Home card reads its root from here, so it shows
-      // without a round trip.
+      // Populate the feed root cache so the thread's card renders without an
+      // additional request.
       const root = recentResearchQueryFromNode(event.node, true);
       if (root && client.getQueryData(queryKeys.feedRoot(event.tree.id)) === undefined) {
         client.setQueryData(queryKeys.feedRoot(event.tree.id), { ...root, children: [] });
@@ -155,24 +152,19 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     case "research.tree.archived":
     case "research.tree.restored": {
       invalidateHighlightLabels(client, cachedTreeTitle(client, event.tree.id), event.tree.title);
-      // Another person's change arrives without the reader's own fields
-      // (role, last view, Follow, Archive and Trash); those keep the values
-      // the cache holds.
+      // Remote updates omit user-specific fields (role, last view, Follow,
+      // Archive, and Trash); preserve existing cached values.
       mapSummaries(client, (summary) => patchSummaryFromTreeEvent(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) =>
         patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree)),
       );
       if (event.type !== "research.tree.updated") {
-        // What another person's Archive or restore means for the reader's
-        // copy (the owner's Archive shows to members) is the server's answer.
+        // When remote archive or restore events omit user-specific state, refetch
+        // the thread detail from the server.
         if (treeEventOmitsOwnState(event.tree)) invalidate(client, queryKeys.tree(event.tree.id));
-        // Archiving moves the thread between the `includeArchived` scopes,
-        // and which list it belongs to is the server's answer, not a patch's.
-        // The highlights feed reads from unarchived threads only
-        // (`db/repos/highlights.ts:feed`), so archiving retires this thread's
-        // rows and restoring brings them back (`10` §4). A restored thread
-        // (from the Archive or the Trash) has a Home card again, and an
-        // archived one has none.
+        // Archiving changes the `includeArchived` scope of a thread. Invalidate
+        // tree lists, shared lists, the highlights feed (which includes
+        // unarchived threads only), and the feed root.
         invalidate(
           client,
           ["trees"],
@@ -185,23 +177,19 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "research.tree.removed": {
-      // Sent for a thread deleted and for one moved to the Trash (`trashed`):
-      // either way it leaves every list but the Trash's, which
-      // `research.trash.changed` refetches. The thread's saved page state
-      // (selection, unsent branches, scroll) is kept for Restore and goes
-      // only with a deletion, as on the desktop.
+      // Emitted when a thread is permanently deleted or moved to Trash (`trashed`).
+      // The thread is removed from all non-trash lists. Saved navigation state
+      // is retained if trashed, or cleared if permanently deleted.
       if (!event.trashed) forgetThread(event.treeId);
       eachTreeList(client, (summaries) => {
         const next = summaries.filter((summary) => summary.id !== event.treeId);
         return next.length === summaries.length ? summaries : next;
       });
-      // A shared thread the reader left, was removed from or lost to its
-      // owner's Trash leaves the shared lists too; a member's own Trash lists
-      // it again through `research.trash.changed`.
+      // Remove the thread from shared lists if the user left, was removed,
+      // or the owner moved it to Trash.
       dropFromSharedLists(client, new Set([event.treeId]));
-      // A thread page that has it open re-reads it, so a reader who lost it
-      // gets the unavailable state (a removed query would leave the page
-      // showing the copy it holds); a cached copy nobody shows is dropped.
+      // Invalidate active thread queries to display the unavailable state, and
+      // remove inactive queries.
       client.removeQueries({ queryKey: queryKeys.tree(event.treeId), type: "inactive" });
       void client.invalidateQueries({ queryKey: queryKeys.tree(event.treeId) });
       client.removeQueries({ queryKey: queryKeys.feedRoot(event.treeId) });
@@ -222,16 +210,14 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       return;
 
     case "research.drafts.changed":
-      // Drafts are per person; the event names the workspace whose list
-      // changed, and that list refetches.
+      // Drafts are user-scoped; invalidate the drafts list for the specified
+      // workspace.
       invalidate(client, queryKeys.drafts(event.workspaceId));
       return;
 
     case "research.node.created": {
-      // A summary count is a delta, so it is added once per node: the tab that
-      // forked has already counted it through `useForkResearchNode`, and a
-      // redelivery after a reconnect must not count it again. Knowing the node
-      // is what tells the two apart (07 §4.1).
+      // Check whether the node is already cached to avoid duplicate count
+      // increments on redelivery (07 §4.1).
       const known = cachedNode(client, event.node.treeId, event.node.id) !== undefined;
       patchDetail(client, event.node.treeId, (detail) =>
         patchResearchDetailNode(detail, event.node),
@@ -302,8 +288,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
         const withTree = patchResearchDetailTree(detail, mergeTreeEvent(detail?.tree, event.tree));
         return patchResearchDetailNode(withTree, event.node);
       });
-      // The markdown itself is not on the event, so the open document refetches,
-      // and so does its Home card's preview.
+      // The event payload does not include markdown content; refetch the
+      // node content and feed root preview.
       invalidate(client, queryKeys.nodeContent(event.node.id), queryKeys.feedRoot(event.tree.id));
       if (event.removedHighlightCount > 0) invalidate(client, ["highlightsFeed"]);
       return;
@@ -342,8 +328,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "research.folders.changed":
-      // The event carries no state, as on the desktop: the workspace's folder
-      // state refetches.
+      // The event payload carries no folder state; refetch the workspace folder
+      // state.
       invalidate(
         client,
         event.workspaceId === undefined ? ["folders"] : queryKeys.folders(event.workspaceId),
@@ -351,16 +337,14 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       return;
 
     case "research.recap.pending":
-      // A viewer hint with no cache behind it: the recap itself arrives as a
-      // node update, which is what the summary and the document render from.
-      // This only decides whether the answer shows a spinner in the recap's
-      // slot while the job runs (09 §2).
+      // Transient UI state without cache persistence: indicates whether the recap
+      // generation job is in progress while awaiting the node update (09 §2).
       useRecapPendingStore.getState().set(event.nodeId, event.pending);
       return;
 
     case "research.queue.changed":
-      // The event carries the chain's whole queue, so it replaces the cached
-      // one rather than patching it.
+      // The event payload contains the complete chain queue, replacing the cached
+      // queue.
       patchDetailQueue(client, event.treeId, event.headNodeId, event.items);
       return;
 
@@ -372,12 +356,9 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
     }
 
     case "notification.requested": {
-      // The server stored it in the inbox, which refetches whatever the
-      // setting says.
+      // Invalidate the notifications inbox query.
       invalidate(client, ["notifications"]);
-      // The bridge is the only ingress for server notifications, so the
-      // `showNotifications` preference, which governs the toast only, is
-      // enforced here.
+      // Enforce the `showNotifications` preference for client toasts at the event ingress.
       if (!useSettingsStore.getState().settings.showNotifications) return;
       const { id, title, body, tone, timeoutMs, createdAt, href } = event.notification;
       useNotificationsStore.getState().push({
@@ -398,8 +379,8 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       return;
 
     case "research.sharing.changed":
-      // Access, members or visibility changed: the lists, the thread and its
-      // sharing state refetch.
+      // Invalidate tree lists, shared lists, thread detail, members, invites,
+      // and feed root queries when sharing settings change.
       invalidate(
         client,
         ["trees"],
@@ -412,12 +393,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedSessionEvent): voi
       return;
 
     case "research.invites.changed":
-      // A login invitation to the reader was created.
+      // Invalidate received invitations when an invitation for the user is created.
       invalidate(client, queryKeys.receivedInvites());
       return;
 
     case "research.presence.changed":
-      // The event carries the thread's whole viewer list.
+      // The event payload contains the full list of active thread viewers.
       client.setQueryData(queryKeys.presence(event.treeId), event.viewers);
       return;
 
@@ -509,9 +490,7 @@ function applyFeedItemUpserted(client: QueryClient, payload: Record<string, unkn
     }
     if (!patchActivityFeedItem(client, key, item)) invalidate(client, key);
   }
-  // The item is the thread's root entry with its follow-ups: what a Home card
-  // that loaded its root on its own shows (a note's edited text, a new
-  // follow-up).
+  // Update cached feed root if the item is a thread root entry with follow-ups.
   const rootKey = queryKeys.feedRoot(item.query.treeId);
   if (client.getQueryData(rootKey) !== undefined && item.query.parentNodeId == null) {
     client.setQueryData(rootKey, item.query);
@@ -554,8 +533,8 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
           if (!workspaces) return workspaces;
           const index = workspaces.findIndex((existing) => existing.id === workspace.id);
           if (index === -1) {
-            // A workspace created in another tab arrives without its tree
-            // count; the list refetches rather than displaying a guess.
+            // A newly created workspace event lacks tree count metadata;
+            // refetch the workspaces list.
             invalidate(client, queryKeys.workspaces());
             return workspaces;
           }
@@ -585,7 +564,7 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
       const settings = payload["settings"];
       if (typeof settings !== "object" || settings === null) return;
       client.setQueryData(queryKeys.settings(), settings);
-      // Another tab changed them; the mirror follows the server (06 §6).
+      // Synchronize the local settings store with the updated server settings (06 §6).
       useSettingsStore.getState().replace(normalizeSettings(settings));
       return;
     }
@@ -599,7 +578,7 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
  * The batch
  * ---------------------------------------------------------------------- */
 
-/** The lists a reconnect refetches: everything events keep fresh (07 §4.2). */
+/** Query keys refetched upon reconnect to restore event-maintained state (07 §4.2). */
 const RECONNECT_KEYS: readonly (readonly unknown[])[] = eventPatchedListKeys.map((scope) => [
   scope,
 ]);
@@ -633,7 +612,7 @@ export function applyEventBatch(events: readonly SessionEvent[], client: QueryCl
   }
 }
 
-/** The caches an unparseable event of this type could have changed. */
+/** Cache keys potentially affected by an unparseable event of the given type. */
 function scopeFor(type: string): readonly (readonly unknown[])[] {
   if (type.startsWith("models.")) return [queryKeys.runtimeConfig()];
   return [
@@ -652,11 +631,11 @@ function scopeFor(type: string): readonly (readonly unknown[])[] {
  * Interest
  * ---------------------------------------------------------------------- */
 
-/** Mounted document views, by node id, with a count so two views of one node
- * do not cancel each other's interest on unmount. */
+/** Reference count of mounted document views by node id to retain interest
+ * while any view remains mounted. */
 const interest = new Map<string, number>();
-/** Open threads, by tree id, counted the same way (web only: presence, and a
- * public thread's events for a reader who is not a member). */
+/** Reference count of open threads by tree id for presence tracking and
+ * non-member event subscriptions. */
 const treeInterest = new Map<string, number>();
 let interestTimer: ReturnType<typeof setTimeout> | null = null;
 let publishInterest: ((nodeIds: string[], treeIds: string[]) => void) | null = null;
@@ -674,8 +653,8 @@ function scheduleInterest(): void {
 }
 
 /** Registers a thread as open. Returns the release function. While a thread
- * is open the bridge declares the set again every `TREE_INTEREST_RENEW_MS`
- * and when the tab is shown again. */
+ * is open, the bridge renews interest every `TREE_INTEREST_RENEW_MS` and when
+ * tab visibility is restored. */
 export function addTreeInterest(treeId: string): () => void {
   treeInterest.set(treeId, (treeInterest.get(treeId) ?? 0) + 1);
   scheduleInterest();
@@ -713,7 +692,7 @@ export function interestedNodeIds(): string[] {
   return [...interest.keys()];
 }
 
-/** Test helper: drops the registry and any pending publish. */
+/** Test helper: clears active interest tracking and any pending publish timer. */
 export function resetNodeInterest(): void {
   interest.clear();
   treeInterest.clear();
@@ -726,9 +705,9 @@ export function resetNodeInterest(): void {
  * ---------------------------------------------------------------------- */
 
 export interface EventBridgeHandle {
-  /** The id the server assigned this connection, once it announced it. */
+  /** The connection ID assigned by the server once announced. */
   connectionId: () => string | null;
-  /** Publishes the interest set now rather than on the trailing timer. */
+  /** Publishes the interest set immediately rather than waiting for the trailing timer. */
   flushInterest: () => void;
   close: () => void;
 }
@@ -738,21 +717,21 @@ export interface EventBridgeOptions {
   client?: SessionTrpcClient;
   /** Replaced in tests; defaults to `events.setInterest`. */
   setInterest?: (connectionId: string, nodeIds: string[], treeIds: string[]) => Promise<unknown>;
-  /** How often open threads are declared again; replaced in tests. Defaults
+  /** How often open thread interest is renewed; overridden in tests. Defaults
    * to `TREE_INTEREST_RENEW_MS`. */
   renewIntervalMs?: number;
-  /** What to do when the stream reports that the session is gone. Defaults to
-   * a full navigation to `/login`. */
+  /** Action invoked when the event stream reports an expired or invalid
+   * session. Defaults to navigation to `/login`. */
   onUnauthorized?: () => void;
 }
 
 /**
- * Whether a subscription error is the server saying the session is gone.
+ * Determines whether a subscription error indicates an expired or invalid session.
  *
  * `TRPCClientError` includes the formatter's `data.code`; the raw shape is read
- * too, because an error that crossed the SSE framing keeps `shape` and not
- * always `data`. Only an explicit unauthorized code signs the tab out; a
- * transient connection drop instead goes through the link's own reconnect.
+ * as well, because an error that crossed the SSE framing retains `shape` and not
+ * always `data`. Only an explicit unauthorized code initiates sign-out; a
+ * transient connection drop triggers normal reconnection.
  */
 export function isUnauthorizedError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
@@ -763,10 +742,10 @@ export function isUnauthorizedError(error: unknown): boolean {
   return candidate.data?.code === "UNAUTHORIZED" || candidate.shape?.data?.code === "UNAUTHORIZED";
 }
 
-/** The default `onUnauthorized`: a real navigation, not a router push, so
- * every in-memory store and query cache is reinitialized on the way back to
- * `/login`. The path being left is handed to `/login` the same way the route
- * guard hands it over. */
+/** The default `onUnauthorized`: a window navigation, not a router transition,
+ * so every in-memory store and query cache reinitializes upon navigating to
+ * `/login`. The current path is passed to `/login` matching route guard
+ * redirect behavior. */
 function redirectToLogin(): void {
   const here = `${window.location.pathname}${window.location.search}`;
   const target = here === "/login" ? "/login" : `/login?redirect=${encodeURIComponent(here)}`;
@@ -774,10 +753,10 @@ function redirectToLogin(): void {
 }
 
 /**
- * Opens the subscription and keeps it open for the app's lifetime. The link
- * reconnects on its own with backoff; every (re)connect invalidates the
- * event-patched lists and re-seeds the snapshot of every displayed active
- * node, because the stream has no replay buffer
+ * Opens and maintains the event subscription for the application lifetime.
+ * The transport reconnects automatically with backoff. Each reconnection
+ * invalidates event-patched lists and re-seeds snapshots for displayed active
+ * nodes, as the stream maintains no replay buffer
  * (`05-run-lifecycle-and-streaming.md` §4).
  */
 export function connectEventBridge(options: EventBridgeOptions): EventBridgeHandle {
@@ -788,11 +767,11 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const connection = useConnectionStore.getState();
 
   let connectionId: string | null = null;
-  /** The sign-out is announced once; the link keeps retrying until the
-   * navigation takes effect. */
+  /** Tracks whether sign-out has been initiated to prevent repeated triggers
+   * while awaiting navigation. */
   let signedOut = false;
-  /** Reset on every `connection.ready`, so one lost session is checked once
-   * per disconnection rather than once per retry. */
+  /** Reset on each `connection.ready` event so session validity is verified
+   * once per disconnection. */
   let sessionChecked = false;
   let queue: SessionEvent[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -827,10 +806,9 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   };
   publishInterest = publisher;
 
-  // Open threads are declared again before the server's 90 s lapse, and at
-  // once when the tab is shown again (a hidden tab's timers can run late). A
-  // thread whose declaration may have lapsed refetches: a reader of a public
-  // thread who is not a member got its events only through it.
+  // Renew open thread declarations before server expiration (90 s) and
+  // immediately upon tab visibility. If a declaration may have expired,
+  // refetch the thread and presence queries.
   const renewTimer = setInterval(() => {
     if (treeInterest.size > 0 && publishInterest === publisher) publishNow();
   }, options.renewIntervalMs ?? TREE_INTEREST_RENEW_MS);
@@ -854,18 +832,17 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const signOut = (): void => {
     if (signedOut) return;
     signedOut = true;
-    // The account's unsent drafts and branches stay stored for it and are
-    // hidden until it signs in again (`stores/localAccount.ts`).
+    // Preserve unsent local account drafts and branches in storage while
+    // hiding them from active state until re-authentication (`stores/localAccount.ts`).
     hideLocalAccountState();
     onUnauthorized();
   };
 
   /**
-   * One session check per disconnection. A subscription error does not say why
-   * the stream ended — a native `EventSource` reports a refused 401 and a
-   * dropped connection the same way — so the session itself is asked. Only a
-   * successful `null` signs the tab out; a failed check is a network problem,
-   * which is what the link's own reconnect is for.
+   * Verify the authentication session once per disconnection. Because transport-level
+   * subscription errors do not distinguish between 401 Unauthorized and network drops,
+   * query `auth.me` directly. A response returning null confirms session expiration and
+   * triggers sign-out; network errors rely on client reconnection.
    */
   const verifySession = (): void => {
     if (signedOut || sessionChecked) return;
@@ -878,16 +855,14 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
         if (user === null) signOut();
       })
       .catch(() => {
-        // Unreachable server: the stream's own retry is the recovery.
+        // Unreachable server: transport reconnection handles recovery.
         sessionChecked = false;
       });
   };
 
   const resynchronize = (): void => {
-    // A `research.recap.pending: false` sent while disconnected is lost, and
-    // nothing refetched carries the flag, so the spinners go: a recap that
-    // finished meanwhile arrives with the refetched nodes, and one still
-    // running shows when its node update arrives.
+    // Clear transient pending recap states on reconnect; completed or running
+    // recap states synchronize via refetched node queries and subsequent updates.
     useRecapPendingStore.getState().clear();
     for (const key of RECONNECT_KEYS) void queryClient.invalidateQueries({ queryKey: key });
     for (const nodeId of interest.keys()) {
@@ -930,8 +905,8 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
     onError: (error) => {
       if (closed) return;
       useConnectionStore.getState().setStatus("connecting");
-      // Stop reconnecting after session expiry to avoid a loop while the user
-      // is signed out.
+      // Stop reconnecting after session expiration to prevent reconnect loops
+      // during sign-out.
       if (isUnauthorizedError(error)) signOut();
       else verifySession();
     },
@@ -958,8 +933,8 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
       queue = [];
-      // Only clear the shared callback if it is still this instance's; a
-      // newly mounted bridge may have already installed its own.
+      // Only clear the shared callback if it belongs to this instance; a
+      // newly mounted bridge may have installed its own.
       if (publishInterest === publisher) publishInterest = null;
       subscription.unsubscribe();
       useConnectionStore.getState().setStatus("closed");

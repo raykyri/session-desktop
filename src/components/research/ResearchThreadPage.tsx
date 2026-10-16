@@ -759,9 +759,9 @@ function ResearchThreadPage({
     });
   }, []);
 
-  // Counts the selections applyVisit shows (user navigation, and Back and
-  // Forward), so a send that resolves after the user moved elsewhere leaves
-  // the selection and focus where they are.
+  // Counts the selections applyVisit shows (navigation, Back, and Forward),
+  // so a send that resolves after navigation leaves selection and focus
+  // unchanged.
   const navigationSeqRef = useRef(0);
 
   /** Shows `target` (see `selection`) without touching history. A path
@@ -1673,8 +1673,8 @@ function ResearchThreadPage({
         .filter((node): node is ResearchNode => Boolean(node));
       const tail = chain[chain.length - 1] ?? null;
       const editingId = editingByHeadRef.current[headId];
-      // The new message is selected (and its ask box focused) only when the
-      // user has not navigated since the send started and the chain is still
+      // The new message is selected (and its ask box focused) only when no
+      // navigation occurred since the send started and the chain is still
       // open: a follow-up sent from a column that was cleared since then does
       // not reopen it. An edited first message replaces the head, which may
       // already be gone.

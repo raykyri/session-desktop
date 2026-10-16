@@ -94,8 +94,8 @@ function canonicalValue(value: unknown): string | undefined {
 
 /**
  * The exact text hashed by {@link responseRevision}. Exported so a caller that
- * needs to compare two turn lists, or to debug a revision mismatch, can see
- * the bytes the hash was taken over.
+ * needs to compare two turn lists, or to debug a revision mismatch, can inspect
+ * the bytes over which the hash was computed.
  */
 export function canonicalTurnsJson(turns: readonly Turn[]): string {
   return canonicalArray(turns);

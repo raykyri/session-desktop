@@ -219,7 +219,7 @@ fn validated_human_url(app: &AppHandle, state: &AppState, raw: &str) -> Result<U
         && let Ok(app_url) = main.url()
         && same_origin(&url, &app_url)
     {
-        return Err("refusing to navigate the human browser to session's app origin".to_string());
+        return Err("refusing to navigate the human browser to Session's app origin".to_string());
     }
     Ok(url)
 }
@@ -615,7 +615,7 @@ pub struct HumanBrowserHideAllRequest {
 /// Collapse every native child. Used when React state already marks the overlay
 /// as closed but an AppKit hide was dropped, leaving a white WKWebView square
 /// over the app. Views stay in the map so a still-open owner can show
-/// again; destroy retires them when the overlay is actually closed.
+/// again; destroy removes them when the overlay is actually closed.
 #[tauri::command]
 pub fn human_browser_hide_all(
     request: HumanBrowserHideAllRequest,

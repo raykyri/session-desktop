@@ -235,7 +235,7 @@ const NOTIFICATION_TONES = new Set(["info", "success", "warning", "error"]);
 const NOTIFICATION_KINDS = new Set(["runFinished", "followUp", "branch", "invite"]);
 
 /** Narrows a `notification.requested` payload. Anything missing a required
- * field is refused rather than shown as a half-empty toast. */
+ * field is rejected rather than shown as an incomplete toast. */
 function notificationOf(payload: Record<string, unknown>): NotificationPayload | null {
   const { id, title, body, tone, timeoutMs, createdAt, href, kind, treeId } = payload;
   if (

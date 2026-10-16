@@ -1,6 +1,5 @@
-// Upstream bodies are read up to their cap and no further: the oEmbed and
-// syndication responses, the embed image fetch, and the shared reader they
-// use (`src/net/readCapped.ts`).
+// Enforces maximum response body byte limits on oEmbed, syndication,
+// embed images, and shared HTTP reader responses (`src/net/readCapped.ts`).
 
 import { embeds } from "@session/db";
 import test from "ava";
@@ -47,7 +46,7 @@ test("the reader stops at the cap and cancels the body", async (t) => {
   t.true(body.pulled() <= 256 * 1024 + CHUNK, `read ${body.pulled()} bytes`);
 });
 
-test("the reader can keep the first bytes instead of refusing", async (t) => {
+test("the reader truncates to the cap when overflow is set to truncate", async (t) => {
   const body = meteredBody(1024 * 1024);
   const read = await readCapped(new Response(body.stream), 100_000, { overflow: "truncate" });
   t.is(read.bytes.byteLength, 100_000);
@@ -58,14 +57,14 @@ test("the reader can keep the first bytes instead of refusing", async (t) => {
   t.false(small.truncated);
 });
 
-test("a declared length over the cap is refused before the body is read", async (t) => {
+test("a declared content-length over the cap is rejected before reading the body", async (t) => {
   const body = meteredBody(1024 * 1024);
   const response = new Response(body.stream, { headers: { "content-length": "1048576" } });
   await t.throwsAsync(readCapped(response, 1000), { instanceOf: ResponseTooLargeError });
   t.is(body.pulled(), 0);
 });
 
-test("an oversized oEmbed body is refused after the cap, not after the whole body", async (t) => {
+test("an oversized oEmbed body is aborted at the byte cap", async (t) => {
   const body = meteredBody(8 * 1024 * 1024);
   const doFetch: typeof globalThis.fetch = () => Promise.resolve(new Response(body.stream));
   await t.throwsAsync(fetchTweetOembed(doFetch, "1599367266448994304"), {
@@ -74,7 +73,7 @@ test("an oversized oEmbed body is refused after the cap, not after the whole bod
   t.true(body.pulled() <= MAX_OEMBED_RESPONSE_BYTES + CHUNK, `read ${body.pulled()} bytes`);
 });
 
-test("an oversized syndication body is refused after the cap", async (t) => {
+test("an oversized syndication body is aborted at the byte cap", async (t) => {
   const body = meteredBody(8 * 1024 * 1024);
   const doFetch: typeof globalThis.fetch = () => Promise.resolve(new Response(body.stream));
   await t.throwsAsync(fetchTweetJson(doFetch, "1599367266448994304", "4c2mmul6mnh"));

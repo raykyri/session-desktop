@@ -49,7 +49,7 @@ packages/client/
       app.css                @import "tailwindcss"; @theme inline; @custom-variant; layers
       tokens.css             copied verbatim from src/styles/tokens.css
       prose.css              .research-prose, code, tables (from transcript.css/research-surface.css)
-      tweet.css              .journal-tweet recipe (from research-surface.css)
+      tweet.css              .journal-tweet component styles (from research-surface.css)
       fonts.css              @font-face (from tokens.css:1-133)
     assets/fonts/ brand/
   test/                      AVA + global-jsdom + Testing Library
@@ -82,11 +82,11 @@ The sign-in page extracts the error parameter returned in the redirect URL
 (`/login?error=not_allowed|invite_required|invite_invalid|expired_state|
 missing_code|exchange_failed|profile_failed`, `server/src/auth/github.ts`) and
 sends `return_to` back through `/auth/github`, with a sign-up code from
-`/login?signup=<code>` (or the earlier `?invite=<code>`) as `invite`. The two
-`invite_*` refusals are about sign-up codes and say so ("A sign-up code is
-required to create an account. Open the sign-up link you received.", "This
-sign-up code is invalid or has already been used."); thread invitations are
-a separate thing (`10-home-feed-journal.md` §4b). If a deployment has no GitHub credentials, the server returns a 503 page for
+`/login?signup=<code>` (or the earlier `?invite=<code>`) as `invite`.
+The two `invite_*` error conditions correspond to sign-up codes ("A sign-up code
+is required to create an account. Open the sign-up link you received.", "This
+sign-up code is invalid or has already been used."), distinguishing them from
+thread invitations (`10-home-feed-journal.md` §4b). If a deployment has no GitHub credentials, the server returns a 503 page for
 that route instead of redirecting, so the sign-in page receives no error
 parameter.
 
@@ -111,14 +111,14 @@ Search params validated with zod (`validateSearch`). The workspace scope
 `settings.update`. A link or navigation to another route carries `ws` alone
 (`workspaceSearch` in `features/sidebar/scope.ts`, the sidebar's places,
 the account menu, the palette and the app shortcuts), so the thread page's
-`sel`, `node`, `highlight` and `edit` stay behind. Cross-page navigation uses router history, so the
-desktop's `ResearchWorkspaceHistory` reducer is retired; `HistoryNav` in the
+`sel`, `node`, `highlight` and `edit` are omitted. Cross-page navigation uses router history,
+replacing the desktop's `ResearchWorkspaceHistory` reducer; `HistoryNav` in the
 thread header calls `router.history.back()/forward()` and disables Forward
 using the router's history index and the furthest index this tab reached
 (sessionStorage). Within a thread the selection is the `?sel=` parameter, so
 browser history is also the thread's visit history (`09` §4).
 
-Synthetic tab ids for Cmd-1..9 and cycling (the desktop's `sidebarMode`, now `packages/shared/src/lib/sidebarMode.ts`) stay;
+Synthetic tab IDs for Cmd-1..9 and cycling (the desktop's `sidebarMode`, now `packages/shared/src/lib/sidebarMode.ts`) are retained;
 they resolve to routes.
 
 ## 4. State management (ADR-6)
@@ -149,7 +149,7 @@ Query keys (factory in `api/queries.ts`):
 The factory is defined in `api/cache.ts` and re-exported from `api/queries.ts`,
 which is the import path the rest of the client uses: the cache writers the
 bridge and the mutations share need the keys, and the hooks need the writers,
-so the keys sit below both rather than beside one of them.
+placing the keys beneath both layers rather than alongside either.
 
 Defaults: `staleTime: Infinity` for event-patched lists (events keep them
 fresh), `refetchOnWindowFocus: false`, `retry: 1`. `usage.summary` and
@@ -170,13 +170,13 @@ the same in the other order: it counts the node only when no cache held it,
 since its event may arrive before the response. A created highlight is added
 only when its event has not added it already. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
 
-A mutation that answers with a whole detail (create, retry, a new note)
-writes its summary with `writeDetailSummary` (`cache.ts`): a list that holds
-the thread gets the recomputed counts merged over its own row, which keeps
-the list's workspace, `trashedAt` and the reader's role; a list that does not
-hold it gains it only for a created thread, and only in the reader's own
-lists for the thread's workspace (never for someone else's thread). The
-`research.tree.created` event follows the same rule.
+A mutation that returns complete detail objects (create, retry, a new note)
+writes its summary using `writeDetailSummary` (`cache.ts`): existing entries in
+summary queries receive recomputed counts merged into the cached item,
+preserving workspace association, `trashedAt`, and reader role; threads not
+present in the cache are added only upon creation, and solely within the reader's
+own listings for that workspace (never for threads owned by other users). The
+`research.tree.created` event follows the same pattern.
 
 ### 4.2 Event bridge (`api/events.ts`)
 
@@ -203,8 +203,8 @@ Per event type:
   applies to these only; client toasts (`lib/toast.ts`) always show.
 - `research.tree.removed` with `trashed: true` keeps the thread's saved page
   state (`features/thread/persistence.ts`) for Restore; without it (a
-  deletion) the state is forgotten. A reconnect clears the recap spinners
-  (`stores/recapPending`), whose `pending: false` may have been lost.
+  deletion) the state is forgotten. Reconnection resets recap pending state
+  (`stores/recapPending`) in case completion events were missed.
 - A reader outside a thread's event audience between visits (a signed-in
   viewer of a public thread, or a guest) re-reads a cached thread and its
   presence when the page opens it (`useRefetchThreadOnOpen`); a guest's open
@@ -221,17 +221,16 @@ Per event type:
   list it carries). `research.tree.removed` also drops the thread from the
   shared lists, and re-reads the thread's detail when a page has it open (a
   member removed or a thread moved to its owner's Trash: the refusal shows
-  the unavailable state) instead of dropping it, which would leave the page
-  on its copy.
-- Tree events from someone else's change (`research.tree.updated`,
-  `archived`, `restored`, `research.document.updated`) leave out the reader's
-  own `role`, `lastViewedAt`, `followed`, `archivedAt`, `trashedAt` and
-  `trashedBy`; `mergeTreeEvent` (`cache.ts`) keeps the cached values of the
-  fields an event omits instead of replacing the cached tree, and
-  `patchSummaryFromTreeEvent` keeps a summary's `archivedAt` the same way.
-  What another person's Archive or restore means for the reader's own copy
-  (the owner's Archive shows to members) is read back: such an event
-  invalidates the thread's detail as well as the lists.
+  the unavailable state) instead of dropping it, which would leave stale cached
+  data displayed.
+- Tree events originating from other users (`research.tree.updated`,
+  `archived`, `restored`, `research.document.updated`) omit user-scoped
+  fields (`role`, `lastViewedAt`, `followed`, `archivedAt`, `trashedAt`, `trashedBy`);
+  `mergeTreeEvent` (`cache.ts`) preserves cached values for omitted fields
+  rather than overwriting the cached tree, and `patchSummaryFromTreeEvent`
+  preserves `archivedAt` similarly. Because state changes by other users
+  (such as an owner archiving a thread) can affect member views, these events
+  invalidate both the thread detail and summary lists to trigger a refetch.
 - On (re)connect: `invalidateQueries()` for list queries and a snapshot
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps
@@ -240,11 +239,11 @@ Per event type:
   registry the mounted document views join through `useNodeInterest`. The
   open thread joins a second registry through `useThreadInterest` (the
   `treeIds` of the call: presence, and a public thread's events for a
-  reader who is not a member); while one is open the bridge declares the set
-  again every 30 s (`TREE_INTEREST_RENEW_MS`, inside the server's 90 s
-  lapse) and when the tab becomes visible, and refetches the thread when the
-  last declaration is older than 90 s. Guests have no stream, so no live
-  updates and no presence.
+  reader who is not a member); while open, the bridge renews the interest
+  declaration every 30 s (`TREE_INTEREST_RENEW_MS`, within the server's 90 s
+  expiration window) and upon tab visibility, refetching thread state if the
+  prior declaration lapsed past 90 s. Unauthenticated guests do not establish
+  an event stream, receiving no live updates or presence tracking.
 - The first event of every connection is `connection.ready`, with the
   `connectionId` that `events.setInterest` addresses; a second one means the
   link reconnected, which is what triggers the invalidation and the snapshot
@@ -256,8 +255,9 @@ the 10 s grace in `connection.shouldPollSnapshots` has passed
 (`05-run-lifecycle-and-streaming.md` §9). A subscription error that names
 `UNAUTHORIZED`, or one after which `auth.me` answers `null`, is the session
 ending rather than the network dropping: the bridge navigates to `/login` with
-the current path on `?redirect=`, to prevent the client from repeatedly attempting to reconnect with invalid session credentials. `/login` sends a tab that already has a
-session on to that path.
+the current path on `?redirect=` to prevent repeated reconnection attempts
+with invalid session credentials. Tabs possessing an active session are redirected
+back to the target path.
 
 ### 4.3 UI state — Zustand
 
@@ -285,14 +285,14 @@ answer of `auth.me` in a route guard claims both for that session before a
 view renders: drafts and thread state of another account, or stored before
 the stamp existed, are dropped, with the drafts' writes still waiting for the
 server. Sign-out (`useLogout`) drops them and records a signed-out browser.
-An expired session (the event bridge's sign-out) or a page loaded with no
-session keeps them recorded for their account but hidden: reads return
-nothing and writes are skipped, so the same account signing in again gets
-its unsent text back and a different account drops it. When
-another tab records a different account, a tab drops what it holds without
-writing it and reloads; until it does, its thread-state writes and draft
-pushes are skipped, because its requests already go out with the other tab's
-session. The same account keeps its drafts and thread state across reloads.
+An expired session (triggered by event bridge sign-out) or an unauthenticated
+page load preserves these entries on disk while suppressing access: reads return
+empty and writes are skipped, allowing the same account to recover unsent text
+upon re-authenticating while discarding it if a different account signs in. If
+another tab switches accounts, the active tab discards local state without writing
+to disk and reloads; pending the reload, local state writes and draft sync are
+suspended because outbound requests already carry the other session. The same
+account retains drafts and thread state across page reloads.
 
 ### 4.4 Escape and dismissal
 
@@ -310,8 +310,8 @@ web has, plus Shift-Cmd-H for Home. `AppShell` registers a single
 capture-phase keydown listener that is bypassed when a Base UI overlay is
 active (allowing the library to manage nested dialog and menu dismissals
 natively), delegating all other key events to the table. Every chord in it
-also works from a text field (Cmd-J, "focus follow-ups", exists to be
-pressed from one), and none repeats while held. It dispatches:
+operates within focused text inputs (such as Cmd-J to focus follow-ups), and
+repeat events on held keys are ignored. It dispatches:
 
 Cmd-N/T and Shift-Cmd-H Home with the caret in its ask box
 (`stores/homeFocus`) · Shift-Cmd-G toggle sidebar · Cmd-, (Ctrl-, off
@@ -322,8 +322,8 @@ chords: Cmd-F DOM search, the bare H/A/E keys on a selection
 which are the browser's (Cmd-[ / Cmd-] on macOS, Alt-Left/Right elsewhere;
 the Back and Forward buttons' titles name them).
 
-Browser conflicts: Cmd-N/T open new windows/tabs in browsers and cannot be
-intercepted, hence Shift-Cmd-H (`RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`).
+Because browser-reserved shortcuts (Cmd-N, Cmd-T) cannot be overridden,
+Shift-Cmd-H (`RESEARCH_HOME_SHORTCUT_LABEL`: `⇧⌘H`) is used for Home navigation.
 The web-only digit, tab-cycle and Cmd-Alt-Up/Down chords were removed in
 review round 3; the desktop has none of them. The desktop's Shift-Cmd-E
 (source browser) has no web surface.
@@ -382,11 +382,11 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   scheme is unsupported on the web because web agents cannot access a local
   filesystem (`11-artifacts-and-browser.md` §1). External links open with
   `target="_blank" rel="noopener noreferrer"`.
-- Remote images in Markdown stay blocked (`BlockedMarkdownImage`). Tweet media
-  is served from this origin: a snapshot hydrated by the server points at
-  `/embeds/<hash>` (`03-api-and-events.md` §5), so a rendered card makes no
-  request to X. The twimg hosts stay in `img-src` for snapshots stored before
-  the cache existed.
+- Remote Markdown images remain blocked (`BlockedMarkdownImage`). Tweet
+  media is served locally: hydrated snapshots reference `/embeds/<hash>`
+  (`03-api-and-events.md` §5) to prevent direct requests to X. External
+  image domains remain in `img-src` to support legacy snapshots created before
+  embed caching.
 - Diagram SVG passes through DOMPurify's SVG profile with the
   `afterSanitizeAttributes` hook (`DiagramBlock.tsx:106-166`).
 
@@ -411,8 +411,8 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   fetches (entry and its static imports) from 1,379.6 kB to 967.2 kB; the
   thread chunk is 410.4 kB (129.6 kB gzip).
 - MathJax, mermaid and viz are lazy chunks within the thread page's.
-- Feed virtualization with TanStack Virtual (replaces the hand-rolled canvas
-  in `ResearchActivityFeed.tsx`).
+- Feed virtualization with TanStack Virtual (replaces the custom canvas
+  implementation in `ResearchActivityFeed.tsx`).
 - `OversizedMarkdownPolicy` retained; react-markdown re-parses on each render,
   so the timeline memoizes per turn id + revision.
 - `liveTurns` deltas update one component subtree; list queries are not

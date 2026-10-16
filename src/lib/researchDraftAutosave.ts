@@ -5,21 +5,19 @@ interface ResearchDraftAutosaveOptions {
   initial: string;
   delayMs: number;
   save: (prompt: string) => Promise<unknown>;
-  /** A failed save, unless a send or delete started since. */
+  /** Callback invoked on save failure unless cancelled. */
   onError: (message: string) => void;
   setTimer?: (callback: () => void, ms: number) => unknown;
   clearTimer?: (timer: unknown) => void;
 }
 
-/** Saves edits after `delayMs` without further input, unless the text is
- * empty or already stored. `flush` saves a pending edit immediately when
- * closing the view; `saveNow` does too (⌘S) and resolves true once that save
- * succeeds, or false at once when nothing needed saving. A failed save
- * leaves the text unsaved again, unless a newer save started since, so ⌘S,
- * `flush` and the next pause save it again. `finish` stops
- * saves and ignores pending save errors when sending or deleting, preventing
- * the draft from being recreated. `resume` allows saves again if sending or
- * deleting fails. */
+/** Manages debounced draft persistence. Debounces writes by `delayMs`,
+ * skipping empty or unchanged text. `flush` triggers an immediate write
+ * during unmount. `saveNow` triggers an immediate write, resolving true if
+ * changes were written or false if unchanged. Failed saves retain unpersisted
+ * state so subsequent attempts retry persistence unless superseded by newer
+ * writes. `finish` halts autosave and ignores pending errors during submission
+ * or deletion. `resume` re-enables autosave if submission or deletion fails. */
 export function createResearchDraftAutosave({
   initial,
   delayMs,
@@ -58,8 +56,8 @@ export function createResearchDraftAutosave({
         if (latestFailed) saved = stored;
       },
       (err: unknown) => {
-        // A newer write supersedes this one; otherwise the text is unsaved
-        // again and the next save retries it.
+        // If not superseded by a newer write, restore last stored text so
+        // the next save retries.
         if (id === writes) {
           latestFailed = true;
           saved = stored;
@@ -80,14 +78,14 @@ export function createResearchDraftAutosave({
         if (needsSave()) write(latest);
       }, delayMs);
     },
-    /** Returns whether it started a save. */
+    /** Returns whether a write was initiated. */
     flush(): boolean {
       cancel();
       if (!needsSave()) return false;
       void write(latest);
       return true;
     },
-    /** Rejects when the save fails, after `onError` reported it. */
+    /** Triggers an immediate write. Rejects if the save fails. */
     async saveNow(): Promise<boolean> {
       cancel();
       if (!needsSave()) return false;
@@ -104,10 +102,9 @@ export function createResearchDraftAutosave({
   };
 }
 
-/** Wraps `save` so it receives the draft's images only when the array
- * differs (by identity) from the one last saved successfully, and undefined
- * otherwise, which keeps the stored images; text autosaves then do not make
- * the backend read every image file again. */
+/** Wraps `save` to pass images only when the array reference differs from
+ * the last successfully saved value, passing undefined otherwise to
+ * preserve existing stored images and avoid redundant image reads. */
 export function createResearchDraftImageSave<Image>(
   initial: readonly Image[],
   save: (prompt: string, images: readonly Image[] | undefined) => Promise<unknown>,

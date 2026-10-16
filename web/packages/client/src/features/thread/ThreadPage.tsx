@@ -1,14 +1,13 @@
-// A research thread as paired columns (`09-research-document-view.md`),
-// ported from the desktop `ResearchThreadPage.tsx`. The strip is the shared
-// `researchStrip` of the tree's nodes, each column's selection (the `?sel=`
-// search parameter, `useThreadHistory`), the unsent branch and the editor:
-// a level's messages column and its answer column, the branches column after
-// a level, a note's column and its follow-ups column, and the editor.
+// Renders a research thread as paired columnar views (`09-research-document-view.md`),
+// adapted from desktop `ResearchThreadPage.tsx`. The horizontal strip layout is computed
+// via `researchStrip` across tree nodes, column selection state (`?sel=` search parameter,
+// `useThreadHistory`), pending branches, and editor sessions. It includes message/answer
+// column pairs for each depth level, branch columns, note/follow-up pairs, and editor panes.
 //
-// The page owns what crosses columns: the selection and history, the unsent
-// branch, the ask boxes, the editor session, menus and dialogs. Each answer
-// column loads its own content and reports it (`PublishedAnswer`), which the
-// annotations, the menus and the editor read.
+// ThreadPage coordinates cross-column state: selection paths, pending branches,
+// input composers, active editor sessions, menus, and dialogs. Individual answer columns
+// query and publish their content (`PublishedAnswer`), which is consumed by annotations,
+// action menus, and editor sessions.
 
 import type {
   ResearchFollowupQueueItem,
@@ -206,9 +205,9 @@ const NO_QUEUE: ResearchFollowupQueueItem[] = [];
 const NO_IMAGES: ResearchImageAttachment[] = [];
 const NO_MARKERS: never[] = [];
 
-/** The unsent branch: a group in the branches column after its parent's
- * level. `selectionKey` is the selection it was opened with: any other
- * selection (navigation, Back, Forward) discards it. */
+/** Unsubmitted pending branch state positioned after the parent level.
+ * `selectionKey` tracks the active selection path when initiated; any navigation
+ * change discards the pending branch. */
 interface PendingBranch {
   parentNodeId: string;
   anchor: ResearchHighlightAnchor | null;
@@ -217,8 +216,7 @@ interface PendingBranch {
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** The route entry. The thread view is keyed per tree: everything it holds
- * belongs to one tree. */
+/** Thread page route component, keying `ThreadView` by tree ID to reset state between trees. */
 export function ThreadPage() {
   const { treeId } = useParams({ from: "/_shell/r/$treeId" });
   return (
@@ -233,8 +231,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const routerNavigate = useNavigate();
   const search = useSearch({ strict: false });
   const me = useMe().data ?? null;
-  // A guest gets no events; the detail is re-read on focus and while a run
-  // is active.
+  // Guests do not receive realtime events; tree details are refetched on focus and while runs are active.
   const detailQuery = useTreeDetail(treeId, { eventless: me === null });
   const detail = detailQuery.data;
   const settings = useSettings().data;
@@ -243,8 +240,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const rootNodeId = detail?.tree.rootNodeId ?? null;
   const archived = Boolean(detail?.tree.archivedAt);
 
-  // Collaboration (web only): what the reader may do here, who wrote what,
-  // and who else has the thread open. A viewer or a guest reads only.
+  // Permissions, contributor attribution, and presence for active participants. Viewers and guests have read-only access.
   const queryClient = useQueryClient();
   const meId = me?.id ?? null;
   const detailTree = detail?.tree;
@@ -254,9 +250,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const collaboration = useMemo(() => ({ permissions, people }), [people, permissions]);
   const permissionsRef = useLatest(permissions);
   const readOnly = !permissions.canContribute;
-  // A public thread read by someone who may not be a member (a viewer) gets
-  // its events only while open, and a guest gets none, so a cached copy is
-  // re-read on opening.
+  // Refetches thread details on mount for guests and viewers without persistent event subscriptions.
   useRefetchThreadOnOpen(
     treeId,
     detailTree !== undefined &&
@@ -267,8 +261,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const setFollowed = useSetThreadFollowed();
   const { workspaceId: scopeWorkspaceId } = useWorkspaceScope();
   const [sharing, setSharing] = useState(false);
-  // Move to in the root's menus and the Home group panel: the reader's own
-  // thread, outside the Trash.
+  // Workspace move action for owned threads not in the Trash.
   const filing = useThreadFiling(
     detailTree,
     permissions.isOwner && meId !== null && detailTree?.trashedAt == null,
@@ -300,7 +293,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const recapPendingNodeIds = useRecapPendingStore((state) => state.nodeIds);
 
   const toast = useCallback((title: string) => pushToast({ title, tone: "info" }), []);
-  // The ⌘J hint in the current column's ask box (`lib/shortcutHints`).
+  // Controls shortcut hint display in composer inputs (`lib/shortcutHints`).
   const hintsShown = useShortcutHintsShown();
   const fail = useCallback(
     (title: string, error: unknown) =>
@@ -326,8 +319,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [editor?.nodeId, history.selection, nodes, pending],
   );
   const stripRef = useLatest(strip);
-  // The levels keep their identity while they show the same chains and
-  // selections, so what depends on them is not recomputed on every update.
+  // Preserves level object identity when chain structures and selections remain unchanged to avoid downstream recomputations.
   const levelsKey = strip.levels
     .map((level) =>
       [
@@ -355,14 +347,13 @@ function ThreadView({ treeId }: { treeId: string }) {
     [branchesByParent, nodes],
   );
 
-  // Every node's parent as last seen, kept after it is removed, so a removed
-  // selection can fall back to the message its branch came from.
+  // Retains last-known parent node IDs across deletions so fallback navigation can target branch origins.
   const parentByIdRef = useRef(new Map<string, string | null>());
   useEffect(() => {
     for (const node of nodes) parentByIdRef.current.set(node.id, node.parentNodeId ?? null);
   }, [nodes]);
 
-  // Unread branches: complete since the thread opened, not opened since.
+  // Tracks branches that reached complete status after mount and have not yet been navigated to.
   const firstSeenCompleteRef = useRef(new Map<string, boolean>());
   const [openedNodeIds, setOpenedNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
@@ -399,8 +390,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const [menu, setMenu] = useState<ThreadMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null);
-  // The owner's root Delete says what happens to the people it is shared
-  // with.
+  // Member count displayed in owner delete confirmation dialogs.
   const deletingMemberCount = useOwnerMemberCount(
     treeId,
     permissions.isOwner && deletingNodeId !== null && deletingNodeId === rootNodeId,
@@ -439,8 +429,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const threadHandlesRef = useRef(new Map<number, PostThreadHandle>());
   const rowRef = useLatest<HTMLElement | null>(layout?.row ?? null);
 
-  // The root composer's text is a draft that follows the person across
-  // reloads and devices (`stores/drafts.ts`).
+  // Root composer drafts are synchronized across reloads and devices (`stores/drafts.ts`).
   const rootDraftKey = nodeDraftKey(`tree:${treeId}`);
   const setDraft = useDraftsStore((state) => state.setDraft);
   const clearDraft = useDraftsStore((state) => state.clearDraft);
@@ -453,8 +442,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       current[rootNodeId] ? current : { ...current, [rootNodeId]: saved },
     );
   }, [rootDraftKey, rootNodeId]);
-  // The saved copy on the server, for a draft written on another device or
-  // before the local one was cleared; an edit made here first wins.
+  // Synchronizes remote composer draft state, giving precedence to local edits in the active tab.
   useRemoteComposerDraft(rootDraftKey, (draft) => {
     if (!rootNodeId || !draft.text) return;
     setComposerText((current) =>
@@ -489,7 +477,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     );
   }, []);
   useEffect(() => {
-    // Answers that left the screen are forgotten.
+    // Evicts published answer state for nodes no longer in the active level path.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnswers((current) => {
       const stale = Object.keys(current).filter((id) => !levelPath.includes(id));
@@ -556,7 +544,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   /* ------------------------------------------------------------ focus */
 
-  // The column holding keyboard focus makes its level current.
+  // Tracks which depth level currently holds keyboard focus.
   const [focusedColumnId, setFocusedColumnId] = useState<ResearchColumnId | null>(null);
   useEffect(() => {
     const row = layout?.row;
@@ -581,7 +569,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   /* ------------------------------------------------------- navigation */
 
-  /** Discards the unsent branch (its stored text too). */
+  /** Clears the pending branch and its persisted draft text. */
   const dropPending = useCallback(() => {
     const current = pendingRef.current;
     if (!current) return;
@@ -590,8 +578,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     setComposerText((text) => withoutKeys(text, [`pending:${current.parentNodeId}`]));
   }, [pendingRef, treeId]);
 
-  /** User navigation: shows `target` (a path, or one message's source path)
-   * and records it in history. */
+  /** Navigates to `target` (a selection path or source message path) and updates thread history. */
   const navigate = useCallback(
     (target: string | readonly string[], mode: "push" | "replace" = "push") => {
       const shown = historyRef.current.visit(target, mode);
@@ -608,14 +595,13 @@ function ThreadView({ treeId }: { treeId: string }) {
     [historyRef, nodesRef, pendingRef, dropPending, markOpened],
   );
 
-  // Back and Forward change the selection without this page navigating: an
-  // unsent branch opened under another selection is discarded.
+  // Discards pending branches when browser history navigation changes selection state.
   useEffect(() => {
     const current = pendingRef.current;
     if (current && selectionKey && current.selectionKey !== selectionKey) dropPending();
   }, [pendingRef, dropPending, selectionKey]);
 
-  /** The selection with `nodeId` selected in the column that lists it. */
+  /** Returns the selection path with `nodeId` selected in its corresponding column. */
   const selectionWith = useCallback(
     (nodeId: string, created?: ResearchNode) => {
       const nodesNow = nodesRef.current;
@@ -628,7 +614,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [levelPathRef, nodesRef],
   );
 
-  // Per chain head: the message last selected in it.
+  // Tracks the last selected node ID for each chain head.
   const chainMemoryRef = useRef(new Map<string, string>());
   useEffect(() => {
     for (const level of levels) chainMemoryRef.current.set(level.headId, level.selectedId);
@@ -697,8 +683,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [levelPathRef, navigate],
   );
 
-  /** Opens branch `headId` from level `level`, focuses its selected message
-   * and brings the passage it came from into view. */
+  /** Opens branch `headId` at `level`, focuses the selected node, and scrolls the source anchor passage into view. */
   const goBranch = useCallback(
     (level: number, headId: string, end?: "first" | "last") => {
       openBranch(level, headId, end);
@@ -719,9 +704,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [branchRangesRef, openBranch, requestFocus, segmentRoot],
   );
 
-  /** Opens a new branch on `anchor` (a passage) or on the whole answer of
-   * `parentNodeId`, as a group in the branches column after the parent's
-   * level; its ask box takes focus. */
+  /** Opens a pending branch anchored to `anchor` or the entire answer of `parentNodeId`, focusing its composer. */
   const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null, text = "") => {
       if (readOnly) return;
@@ -751,8 +734,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [historyRef, levelPathRef, nodesRef, pendingRef, readOnly, requestFocus, selectionWith, treeId],
   );
 
-  // A widget's "Ask for changes" opens a branch from its answer with the
-  // change request in the branch's composer, as on the desktop.
+  // Handles widget change requests by opening a pending branch populated with change prompts.
   const widgetChange = useMemo<WidgetChangeHandler | null>(
     () =>
       readOnly
@@ -785,8 +767,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     if (level >= 0) requestFocus({ kind: "answer", level }, "settle");
   }, [levelPathRef, pendingRef, dropPending, requestFocus]);
 
-  // A passage branch saved on a previous visit reopens on its answer once
-  // that answer is on screen, if the deepest selection is its parent.
+  // Reopens persisted pending branches once the parent node answer is rendered.
   const restoredPendingRef = useRef(false);
   useEffect(() => {
     if (restoredPendingRef.current || levelPath.length === 0) return;
@@ -801,8 +782,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     if (!pendingRef.current) openPendingBranch(deepest, saved.anchor, saved.text);
   }, [pendingRef, levelPath, openPendingBranch, revisionByNode, treeId]);
 
-  // The URL's `?highlight=` (from the Highlights view): the reveal runs once
-  // the highlight's answer is on screen, and the parameter goes.
+  // Reveals the highlight specified by `?highlight=` query parameter once rendered, then clears the parameter.
   useEffect(() => {
     const highlightId = search.highlight;
     if (!highlightId || !detail) return;
@@ -823,9 +803,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.highlight, Boolean(detail)]);
 
-  // Removed messages: the selection falls back to the nearest surviving
-  // source or preceding message (replacing the history entry), a removed
-  // parent discards the unsent branch, and stored per-node state goes.
+  // Handles deleted nodes: falls back selection to surviving ancestors, discards invalidated pending branches, and prunes navigation state.
   useEffect(() => {
     if (!detail || levelPath.length === 0) return;
     const valid = new Set(detail.nodes.map((node) => node.id));
@@ -854,7 +832,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     treeId,
   ]);
 
-  // Clear unread status on arrival and when a run completes while open.
+  // Marks the thread viewed on mount and when execution runs complete.
   const completedCount = nodes.filter((node) => nodeStatus(node) === "complete").length;
   const viewedMutate = markViewed.mutate;
   useEffect(() => {
@@ -877,8 +855,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   );
   const retryMutate = retryNode.mutateAsync;
   const rerunMutate = rerunNode.mutateAsync;
-  /** Relaunches a settled node in place: a retry of a failed or stopped run,
-   * a rerun (which replaces the answer) of a complete one. */
+  /** Relaunches execution for a settled node: retries failed/stopped runs or reruns completed ones. */
   const handleRetry = useCallback(
     (nodeId: string) => {
       if (retryingNodeId !== null) return;
@@ -933,7 +910,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (next.length === displayIds.length && next.every((id, index) => id === displayIds[index]))
         return null;
       chainOrderMutate(
-        // The order the column showed: a change made since is refused.
+        // Optimistic concurrency check: server rejects reordering if display order changed.
         { headNodeId: headId, nodeIds: next, expectedOrder: [...displayIds] },
         {
           onError: (error) => {
@@ -1009,9 +986,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     onError: (message) => pushToast({ title: message, tone: "error" }),
   });
 
-  /** A plain click on a tinted passage selects its branch in the next
-   * column (or clears that column when it is the branch open there); with
-   * several branches or a highlight, it opens the passage menu. */
+  /** Clicking an annotated passage selects its branch or toggles the next column; opens passage menu if ambiguous. */
   const clearSelectionAction = textSelection.clearAction;
   const openAnnotationAtPoint = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -1062,8 +1037,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     moveFocusedMessage,
   });
 
-  /** A row's branch indicator: selects the message's first branch in the
-   * next column, or clears that column when one of its branches is open. */
+  /** Toggles branch selection in the adjacent column for a message row. */
   const toggleBranches = useCallback(
     (nodeId: string, level: number) => {
       const current = stripRef.current;
@@ -1089,9 +1063,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   /* -------------------------------------------------------- composers */
 
-  /** The model a chain's ask box sends with until its picker chooses
-   * another: the chain's last message's model and effort, else the
-   * account's default. */
+  /** Resolves default model configuration for a chain composer from tail message settings or account defaults. */
   const defaultChoiceFor = useCallback(
     (node: ResearchNode | undefined): ModelChoice | null => {
       const own = node ? nodeModelId(node) : "";
@@ -1135,7 +1107,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [setComposerValue],
   );
 
-  /** Replaces an ask box's images (an edited question's own). */
+  /** Updates image attachments for a composer. */
   const replaceComposerImages = useCallback(
     (key: string, images: readonly ResearchImageAttachment[]) =>
       setComposerImages((current) =>
@@ -1146,10 +1118,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   const forkMutate = fork.mutateAsync;
   const askMutate = ask.mutateAsync;
-  /** Sends a chain's ask box: continues the chain through the server's
-   * follow-up queue (sent now, or queued behind the running answer), forks
-   * a new branch with ⇧⌘↵, or replaces the failed question being edited. A
-   * sent question becomes its column's selection. */
+  /** Submits a follow-up prompt: queues behind active runs, forks into a branch, or replaces a failed prompt. */
   const submitComposer = useCallback(
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
       const currentDetail = detailRef.current;
@@ -1248,8 +1217,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     ],
   );
 
-  /** Sends the unsent branch's first question: the branch is created with
-   * it and becomes the next level. */
+  /** Submits the pending branch prompt, creating the branch node and navigating to the resulting level. */
   const submitPendingBranch = useCallback(async () => {
     const current = pendingRef.current;
     if (!current) return;
@@ -1306,7 +1274,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       const headId = inlineChainFor(nodesRef.current, nodeId)[0] ?? nodeId;
       setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
       setComposerValue(headId, nodePrompt(node));
-      // The question's images go back into the ask box with its text.
+      // Populates the composer with prompt text and image attachments from the question being edited.
       replaceComposerImages(headId, researchImages(nodeAttachments(node)));
       requestFocus({ kind: "composer", key: headId }, "reveal");
     },
@@ -1328,12 +1296,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [fail, queuedMutate, requestFocus, treeId],
   );
 
-  /** Edit question on a queued follow-up that cannot send (it failed, or the
-   * answer before it stopped), as on the desktop: the item leaves the queue
-   * and its text and images go into the chain's ask box. Only into an empty
-   * one; the ask box is shown first when the chain's group is not. The text
-   * moves once the server has cancelled the item: a refused cancel leaves the
-   * ask box as it was and shows why. */
+  /** Moves an unexecutable queued follow-up item out of the queue and into the composer for editing. */
   const queuedMutateAsync = queuedAction.mutateAsync;
   const editQueued = useCallback(
     async (headId: string, item: ResearchFollowupQueueItem, tailId: string | null) => {
@@ -1392,7 +1355,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (!text) return;
       writeClipboardText(text)
         .then(() => toast(view.conversationCopyText ? "Conversation copied." : "Answer copied."))
-        .catch(() => toast("Couldn't copy."));
+        .catch(() => toast("Could not copy."));
     },
     [toast],
   );
@@ -1403,7 +1366,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (!text) return;
       writeClipboardText(text)
         .then(() => toast("Note copied."))
-        .catch(() => toast("Couldn't copy."));
+        .catch(() => toast("Could not copy."));
     },
     [nodesRef, toast],
   );
@@ -1441,7 +1404,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (parts.length === 0) return;
       writeClipboardText(parts.join("\n\n---\n\n"))
         .then(() => toast("Thread copied."))
-        .catch(() => toast("Couldn't copy."));
+        .catch(() => toast("Could not copy."));
     },
     [answersRef, nodesRef, fail, toast],
   );
@@ -1456,9 +1419,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [editor?.nodeId, editor?.kind, editor?.initialText, editorText],
   );
 
-  /** Opens the editor column for the root's document or for a note. A
-   * document's editor follows the root level's columns; a note's editor
-   * takes its note column's place. */
+  /** Opens the editor column for a root document or note node. */
   const startEditing = useCallback(
     (nodeId: string, returnFocus: HTMLElement | null) => {
       const node = nodesRef.current.find((candidate) => candidate.id === nodeId);
@@ -1466,7 +1427,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if (!node || !currentDetail || archived) return;
       const isRoot = nodeId === currentDetail.tree.rootNodeId;
       if (!isRoot && nodeType(node) !== "post") return;
-      // A document is the owner's to edit; a note its author's (web only).
+      // Document editing is restricted to tree owners; note editing is restricted to authors.
       const allowed =
         nodeType(node) === "post"
           ? mayEditText(permissionsRef.current, nodesRef.current, node)
@@ -1547,8 +1508,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     ],
   );
 
-  /** A double-click on a note edits it, unless the editor is busy or the
-   * note is already in it. */
+  /** Handles double-click events on note cards to initiate editing sessions. */
   const editNoteOnDoubleClick = useCallback(
     (nodeId: string, returnFocus: HTMLElement | null) => {
       if (editorSaving || editorAsking || editorRef.current?.nodeId === nodeId) return;
@@ -1557,8 +1517,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [editorRef, editorAsking, editorSaving, startEditing],
   );
 
-  // The URL's `?edit=` (a double-click on a note's card on Home): the note
-  // opens in the editor once the tree has loaded, and the parameter goes.
+  // Opens note editor when initialized with `?edit=` query parameter, then clears the parameter.
   const startEditingRef = useLatest(startEditing);
   useEffect(() => {
     const nodeId = search.edit;
@@ -1601,10 +1560,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   const updateDocumentMutate = updateDocument.mutateAsync;
   const updatePostMutate = updatePost.mutateAsync;
-  /** Saves the editor (Save, ⌘↵), then closes it; with `keepOpen` (⌘S) it
-   * stays open with the saved text as the one the field is compared with,
-   * and a toast says it saved. A refusal (a stale edit) keeps the editor
-   * open with the server's message. */
+  /** Persists editor contents; optionally closes the editor or keeps it open for continued editing. */
   const saveEditor = useCallback(
     async ({ keepOpen = false }: { keepOpen?: boolean } = {}) => {
       const session = editorRef.current;
@@ -1657,8 +1613,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       } catch (error) {
         setEditorError(errorText(error));
         setEditorSaving(false);
-        // Someone saved a newer version first: offer to reload it, keeping
-        // the text in the field.
+        // Version conflict detected: prompt to reload latest server content while preserving unsaved input.
         if (isConflictError(error)) {
           setStaleEdit({ subject: session.kind === "post" ? "note" : "document" });
         }
@@ -1667,10 +1622,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     [editorRef, closeEditor, editorSaving, toast, updateDocumentMutate, updatePostMutate],
   );
 
-  /** After a stale-edit refusal: the editor's base becomes the latest saved
-   * version (what the next save expects the server to hold, and what the
-   * preview compares with); the field keeps the reader's text. A refused
-   * reorder refetches the thread. */
+  /** Reloads the latest document version from the server to resolve version conflicts while preserving user text. */
   const reloadLatest = useCallback(async () => {
     const subject = staleEdit?.subject;
     const session = editorRef.current;
@@ -1684,7 +1636,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       if ((subject === "note" || subject === "document") && session) {
         const node = fresh.nodes.find((candidate) => candidate.id === session.nodeId);
         if (!node) {
-          setEditorError("This was deleted while you were editing it.");
+          setEditorError("This item was deleted while being edited.");
         } else if (session.kind === "post") {
           const latest = nodePrompt(node);
           setEditor((current) =>
@@ -1747,11 +1699,7 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   const createTreeMutate = createTree.mutateAsync;
   const showDeleteOffer = useDeleteOfferStore((state) => state.show);
-  // "Ask as a question": a new thread with the edited text in the edited
-  // thread's workspace (from a shared thread, the reader's current
-  // workspace), which opens. For the reader's own thread a dialog then offers
-  // to delete the edited thread, counted from its nodes as they were when the
-  // question was asked (`DeleteOfferHost`).
+  // Forks editor contents into a new research thread prompt, optionally offering to delete the original thread.
   const askEditorAsQuestion = useCallback(
     async (choice: ModelChoice) => {
       const session = editorRef.current;
@@ -1765,7 +1713,7 @@ function ThreadView({ treeId }: { treeId: string }) {
         const created = await createTreeMutate({
           prompt: session.text.trim(),
           model: choice.model,
-          // Null is the model's default, as the desktop sends it.
+          // Null preserves default model reasoning effort.
           effort: choice.effort,
           workspaceId,
         });
@@ -1821,8 +1769,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   const removeBranchMutate = removeBranch.mutateAsync;
   const removeTreeMutate = removeTree.mutateAsync;
   const trashTreeMutate = trashTree.mutateAsync;
-  // Deleting the thread or leaving it forgets its saved page state; moving
-  // it to the Trash keeps it for Restore.
+  // Cleans up navigation state when permanently deleting or leaving a thread.
   const leaveTree = useCallback(
     (options: { keepState?: boolean } = {}) => {
       if (!options.keepState) forgetThread(treeId);
@@ -1975,8 +1922,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     onForward: history.goForward,
   };
 
-  // Trackpad swipes go back and forward, as on the desktop. The columns'
-  // wrapper exists once the thread has loaded, so the listener attaches then.
+  // Attaches trackpad swipe gestures for horizontal history navigation once columns mount.
   const hasColumns = Boolean(detail && rootNodeId && levelPath.length > 0);
   useSwipeNavigation(
     workspaceRef,
@@ -1987,13 +1933,10 @@ function ThreadView({ treeId }: { treeId: string }) {
 
   /* ---------------------------------------------------------- render */
 
-  // The thread went away while open: deleted, moved to its owner's Trash, or
-  // no longer readable (a public thread turned private, a removed member).
-  // The refetch is refused, and the copy the cache still holds is not shown.
+  // Renders placeholder or error state when thread is inaccessible or loading.
   const unavailable = detailQuery.isError && trpcErrorCode(detailQuery.error) === "NOT_FOUND";
   if (unavailable || !detail || !rootNodeId || levelPath.length === 0) {
-    // While the detail loads, the header shows what a list already holds, as
-    // the desktop's placeholder does.
+    // Displays thread header placeholder while detail data loads.
     const title = threadPlaceholderTitle(queryClient, treeId, detail);
     return (
       <ThreadPlaceholder title={title} history={historyNav}>
@@ -2061,7 +2004,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       },
       canCancel: (item) => mayCancelQueued(permissions, item),
       canRetry: (item) => mayRetryQueued(permissions, item),
-      // Into the reader's own ask box, so only the item's author edits it.
+      // Permits editing only if the user has contribution rights and authored the queued item.
       canEdit: (item) => permissions.canContribute && mayRetryQueued(permissions, item),
       onCancel: (item) => cancelQueued(headId, item),
       onEdit: (item) => void editQueued(headId, item, tail?.id ?? null),
@@ -2102,7 +2045,7 @@ function ThreadView({ treeId }: { treeId: string }) {
       menu.anchor.element.hasAttribute("data-research-head-menu"),
     onOpen: (trigger: HTMLButtonElement) => openAnswerMenu(trigger, headId),
   });
-  // The root header shows who else has the thread open.
+  // Displays presence indicators for active viewers in the root header.
   const presence = <PresenceAvatars viewers={viewers} meId={meId} />;
   const modelControl = (key: string, node: ResearchNode | undefined) => {
     const choice = choiceFor(key, node);
@@ -2115,8 +2058,7 @@ function ThreadView({ treeId }: { treeId: string }) {
         }
       : null;
   };
-  /** Why the images of the ask box keyed `key` cannot be sent with its
-   * model, or null (`researchImageBlockReason`). */
+  /** Determines whether image attachments are unsupported by the chosen model (`researchImageBlockReason`). */
   const imageBlockFor = (key: string, node: ResearchNode | undefined) => {
     const choice = choiceFor(key, node);
     const model = choice
@@ -2131,14 +2073,14 @@ function ThreadView({ treeId }: { treeId: string }) {
         return next.length === 0 ? withoutKeys(current, [key]) : { ...current, [key]: next };
       });
 
-  /** The ask box of the chain headed by `headId` (none for a note's chain). */
+  /** Renders the follow-up composer for the chain headed by `headId`. */
   const chainComposer = (headId: string, level: number) => {
     const chain = inlineChainFor(nodes, headId)
       .map((id) => nodeById.get(id))
       .filter((node): node is ResearchNode => Boolean(node));
     const head = chain[0];
     const tail = chain[chain.length - 1];
-    // A viewer or a guest has no ask boxes.
+    // Composers are hidden for guests, viewers, and note chains.
     if (!head || !tail || nodeType(head) === "post" || !me || !permissions.contributor) return null;
     const editing = Boolean(editingByHead[headId]);
     const queued = (detail.queues?.[headId] ?? NO_QUEUE).length > 0;
@@ -2156,8 +2098,7 @@ function ThreadView({ treeId }: { treeId: string }) {
           ? stalledChainNote(
               {
                 authorId: tail.authorId,
-                // An interrupted answer that will not resume ended with an
-                // error.
+                // Stalled execution state for interrupted nodes.
                 status: nodeStatus(tail) === "cancelled" ? "stopped" : "failed",
               },
               permissions,
@@ -2471,7 +2412,7 @@ function ThreadView({ treeId }: { treeId: string }) {
     }
   };
 
-  // ⌘F searches every open column, left to right.
+  // In-page search bar scanning rendered columns.
   const searchBar = (
     <DomSearchBar active placeholder="Find in research" rootRef={workspaceRef} resetKey={treeId} />
   );
@@ -2527,8 +2468,8 @@ function ThreadView({ treeId }: { treeId: string }) {
                           onSuccess: (tree) =>
                             toast(
                               tree.followed
-                                ? "You’ll get a notification for new questions and notes here."
-                                : "Notifications for this thread are off.",
+                                ? "Notifications enabled for new questions and notes in this thread."
+                                : "Notifications disabled for this thread.",
                             ),
                           onError: (error) => fail("Notifications could not be changed", error),
                         },
@@ -2675,7 +2616,7 @@ function ThreadView({ treeId }: { treeId: string }) {
   );
 }
 
-/** The recap dialog for an answer, once its content has loaded. */
+/** Renders recap summary dialog once answer node content is available. */
 function ThreadRecapDialog({
   nodeId,
   onClose,
@@ -2690,8 +2631,7 @@ function ThreadRecapDialog({
   return <RecapDialog open content={content} onClose={onClose} onApplied={onApplied} />;
 }
 
-/** The level whose column holds focus reads as current; until something is
- * focused, the deepest level does. */
+/** Resolves the active depth level based on column focus, defaulting to the deepest visible level. */
 function focusedLevel(id: ResearchColumnId | null, lastLevel: number): number {
   const level = columnLevelIndex(id);
   return level !== null && level <= lastLevel ? level : lastLevel;

@@ -15,23 +15,23 @@ import { now } from "../time.js";
 export const SESSION_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
 /** Maximum session lifetime regardless of user activity. */
 export const SESSION_ABSOLUTE_MS = 90 * 24 * 60 * 60 * 1000;
-/** `Minimum interval between updates to `last_seen_at` to throttle write frequency during active reads. */
+/** Minimum interval between updates to `last_seen_at` to throttle write frequency during active reads. */
 export const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
-/** An OAuth state is single-use and short-lived. */
+/** Time-to-live for single-use OAuth state parameters. */
 export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-/** The cookie value: 32 random bytes, base64url. Never stored. */
+/** Generates a 32-byte base64url session token for the cookie value. Never persisted in plaintext. */
 export function newSessionToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-/** What the `sessions` table stores in place of the cookie. */
+/** Computes the SHA-256 hash of a session token for storage in the `sessions` table. */
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
 
 export interface CreatedSession {
-  /** The row id — the hash. The caller sets the cookie to `token`. */
+  /** The session ID (SHA-256 token hash). The caller sets the cookie to `token`. */
   id: string;
   token: string;
   expiresAt: number;
@@ -66,7 +66,7 @@ export interface AuthenticatedSession {
 }
 
 /**
- * Resolves a session by cookie value, checking idle and absolute expiration and refreshing activity timestamps. Expired sessions are deleted immediately inline upon lookup.
+ * Resolves a session by cookie value, checking idle and absolute expiration and refreshing activity timestamps. Expired sessions are deleted inline during lookup.
  */
 export function readSession(db: SessionDatabase, token: string): AuthenticatedSession | null {
   const id = hashSessionToken(token);
@@ -89,9 +89,11 @@ export function readSession(db: SessionDatabase, token: string): AuthenticatedSe
   });
 }
 
-/** Whether the session row `sessionId` (a `hashSessionToken`) exists and is
- * inside both expiries at `at`. Reads only: unlike `readSession`, it neither
- * refreshes `last_seen_at` nor deletes an expired row. */
+/**
+ * Checks whether session `sessionId` exists and is within both idle and
+ * absolute expiration limits at `at`. Read-only: does not update
+ * `last_seen_at` or delete expired rows.
+ */
 export function sessionIsLive(db: SessionDatabase, sessionId: string, at: number = now()): boolean {
   const row = db
     .select({ expiresAt: sessions.expiresAt, lastSeenAt: sessions.lastSeenAt })
@@ -115,7 +117,7 @@ export function deleteUserSessions(db: SessionDatabase, userId: string): number 
     .length;
 }
 
-/** Sweeps rows past either expiry. Safe to run at any time. */
+/** Deletes sessions that have exceeded either idle or absolute expiration limits. */
 export function deleteExpiredSessions(db: SessionDatabase, at: number = now()): number {
   return db
     .delete(sessions)
@@ -155,7 +157,7 @@ export function consumeOAuthState(
   });
 }
 
-/** Drops handshake rows abandoned past the TTL. */
+/** Deletes expired OAuth state records exceeding the TTL. */
 export function deleteExpiredOAuthStates(db: SessionDatabase, at: number = now()): number {
   return db
     .delete(oauthStates)
@@ -202,9 +204,11 @@ export function createInvites(
   });
 }
 
-/** Marks a code used by `userId`. Returns false when the code is unknown or
- * already spent; the update's `used_by IS NULL` predicate makes the check and
- * the claim one statement. */
+/**
+ * Marks an invite code as redeemed by `userId`. Returns false if the code
+ * is invalid or already redeemed; atomically verifies and updates the
+ * record in a single statement.
+ */
 export function redeemInvite(db: SessionDatabase, code: string, userId: string): boolean {
   const row = db
     .update(invites)
@@ -233,11 +237,10 @@ export function recordSignupAttempt(
     .run();
 }
 
-/** How long a sign-up attempt is kept: long enough to read back an abuse
- * pattern, not forever. */
+/** Retention duration for sign-up attempt records used in abuse detection. */
 export const SIGNUP_ATTEMPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Deletes sign-up attempts recorded before `before`; returns how many. */
+/** Deletes sign-up attempts recorded before timestamp `before`, returning the count of deleted rows. */
 export function deleteSignupAttemptsBefore(db: SessionDatabase, before: number): number {
   return db
     .delete(signupAttempts)
@@ -246,7 +249,7 @@ export function deleteSignupAttemptsBefore(db: SessionDatabase, before: number):
     .all().length;
 }
 
-/** Attempts from one IP since `since`, the input to per-IP throttling. */
+/** Returns the count of sign-up attempts from `ipHash` since timestamp `since` for rate-limiting. */
 export function countSignupAttempts(db: SessionDatabase, ipHash: string, since: number): number {
   const row = db
     .select({ value: count() })
@@ -261,16 +264,15 @@ export interface UserDailyLimits {
   dailyRuns: number | null;
 }
 
-/** Per-account overrides, or null when the deployment defaults apply. */
+/** Returns user daily limit overrides, or null if deployment defaults apply. */
 export function getUserLimits(db: SessionDatabase, userId: string): UserDailyLimits | null {
   const row = db.select().from(userLimits).where(eq(userLimits.userId, userId)).get();
   return row ? { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns } : null;
 }
 
 /**
- * Changes the limits named in `limits` and leaves the others as stored. A
- * limit given as null goes back to the deployment default; one left out
- * keeps its override.
+ * Updates specified user daily limits. Passing null resets a limit to
+ * deployment defaults, while undefined preserves existing overrides.
  */
 export function setUserLimits(
   db: SessionDatabase,

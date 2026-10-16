@@ -156,10 +156,10 @@ status update. Backups use Litestream (WAL streaming) rather than file copies.
 Requirement: user management for a web app whose desktop predecessor was
 single-user; GitHub identity already exists in the product.
 
-Options: Auth.js, better-auth, Lucia-style hand-rolled sessions with `arctic`
+Options: Auth.js, better-auth, Lucia-style custom sessions with `arctic`
 for OAuth, Clerk/Auth0 (hosted).
 
-Choice: hand-rolled sessions (`sessions` table, 32-byte random id, HttpOnly
+Choice: custom sessions (`sessions` table, 32-byte random id, HttpOnly
 Secure SameSite=Lax cookie, sliding expiry: 30 days idle, 90 days absolute) with `arctic` performing
 the GitHub authorization-code + PKCE exchange. Sign-up is open to any GitHub account; `users.is_admin` is a
 manually set database flag that gates the expensive models
@@ -183,7 +183,7 @@ open node, persisted navigation and drafts, many independent slices.
 
 Options considered
 1. Redux Toolkit (+ RTK Query).
-2. Zustand alone with hand-rolled fetch caching.
+2. Zustand alone with custom fetch caching.
 3. Jotai atoms.
 4. TanStack Query for server state + Zustand for UI state.
 5. XState stores.
@@ -216,7 +216,7 @@ suppressed (`notifyManager.batch`).
 Requirement: the desktop app has no URLs; the web app must support reload,
 deep links, back/forward, multiple tabs.
 
-Options: React Router 7, TanStack Router, hand-rolled history like today.
+Options: React Router 7, TanStack Router, custom history implementation as currently used.
 
 Choice: TanStack Router (code-based route tree, not file-based, to keep the
 route list reviewable in one file).
@@ -244,7 +244,7 @@ Options
 1. Rewrite all 12k lines of CSS as utilities.
 2. Keep all CSS as-is and add Tailwind only for new code.
 3. Keep `tokens.css` verbatim, map tokens into `@theme inline`, port component
-   styles to utilities, keep prose and a few recipes as scoped CSS.
+   styles to utilities, keep prose and specific component styles as scoped CSS.
 
 Choice: option 3.
 
@@ -270,7 +270,7 @@ the desktop's hand-ordered Escape dispatcher (`App.tsx:9094-9220`).
 
 Options: Radix Primitives, Base UI (`@base-ui-components/react`), React Aria
 Components, shadcn/ui (Radix + Tailwind copy-in), headless UI, keep native
-`<dialog>` and hand-rolled menus.
+`<dialog>` and custom menus.
 
 Choice: Base UI, wrapped once per primitive in `packages/client/src/ui/`.
 
@@ -341,7 +341,7 @@ providers, ESLint 9 flat config with typescript-eslint (strict, type-checked),
 `prettier-plugin-tailwindcss`, `tsc -b` for type checking.
 
 Why AVA: the desktop's tests are plain `node:test` files with `node:assert`;
-AVA keeps that flavor (isolated processes per file, no globals, `t.is`/`t.deepEqual`,
+AVA provides equivalent conventions (isolated processes per file, no globals, `t.is`/`t.deepEqual`,
 first-class TypeScript through `--import=tsx`) and its per-file process
 isolation suits tests that open temp SQLite files and run fixture providers. The
 desktop's `tests/svgStubLoader.mjs` loader hook is reused unchanged for

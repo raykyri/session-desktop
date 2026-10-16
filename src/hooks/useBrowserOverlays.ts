@@ -23,8 +23,8 @@ import { canRenderInInternalBrowser, isFileServerUrl, pathFromSessionFileHref, r
 import type { ResearchTreeSummary } from "../types";
 
 // Browser-overlay / link-action owner for a research tree's thread page. Keyed
-// per tree so an overlay opened from one tree's links doesn't follow the user
-// into another tree. Mirrors `RESEARCH_THREAD_OWNER_PREFIX` in the backend.
+// per tree so an overlay opened from one tree's links is not retained when switching
+// to another tree. Mirrors `RESEARCH_THREAD_OWNER_PREFIX` in the backend.
 const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 export function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;

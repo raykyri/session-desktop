@@ -146,15 +146,16 @@ activities" counter. The scroll anchor is saved under `all-users`.
 ## 3. Drafts
 
 The composer's More actions → "Save draft" saves a draft (`drafts.save`).
-Drafts are listed in the Drafts tray and at `/drafts`, reordered by drag
-(`drafts.reorder`) and deleted from their menu (Open, Delete). `DraftView`
-(`/drafts/$draftId`) shows a "Draft question" field that saves 500 ms after
-the last edit (`lib/researchDraftAutosave.ts`, ported from the desktop), saves
-at once on ⌘S ("Draft saved.") and flushes on close. An added or removed
-image saves at once with the text. Text or images whose save failed stay
-unsaved, so ⌘S and closing save them again. Send asks the question
-with the Home composer's model and effort (`research.createTree`), deletes the
-draft and opens the thread. `drafts.changed` invalidates `["drafts", ws]`.
+Drafts are listed in the Drafts tray and at `/drafts`, reordered via drag
+operations (`drafts.reorder`) and deleted from their context menu. `DraftView`
+(`/drafts/$draftId`) provides an auto-saving input that persists changes 500 ms
+after typing stops (`lib/researchDraftAutosave.ts`), saves immediately on ⌘S
+("Draft saved."), and flushes pending writes on unmount. Image additions or
+removals persist alongside text. Failed saves remain pending, retrying on
+subsequent manual save or close events. Sending submits the question using
+current model and effort settings (`research.createTree`), deletes the draft,
+and opens the resulting thread. Events for `drafts.changed` invalidate cached
+drafts (`["drafts", ws]`).
 
 ## 4. Trash (`TrashList`)
 
@@ -180,7 +181,7 @@ optimistic and serialized per workspace (`commitFolderState` in
 
 ## 4b. Shared with me (`/shared`, web only)
 
-The threads other people share with the reader (`sharing.listShared`,
+Threads shared with the user (`sharing.listShared`,
 `["shared", "shared"]`), most recently updated first, as cards in the
 `shared` view of `FeedView`; above them, the invitations addressed to the
 reader's GitHub login (`invites.received`, `features/sharing/ReceivedInvites.tsx`),
@@ -188,15 +189,15 @@ each with Accept (`invites.accept({ inviteId })`, then the thread opens).
 `research.invites.changed` refetches them; an invitation also arrives as a
 `notification.requested` toast that opens the Shared place.
 
-A shared thread is the owner's in order and nesting, and the reader's in
-placement:
+Shared threads reflect the owner's ordering and nesting hierarchy, while
+placement is scoped to the individual member:
 
 - Move to (card menu) and a drag onto a sidebar folder file it in one of the
   reader's own folders (`folders.set` membership; the thread is then also
-  listed with that workspace's threads); "Shared with me" takes it out of
-  them; Archive moves it to the reader's own Archive. Drafts and New folder…
-  are not offered. Shared cards are neither nest targets nor nestable (⌥→
-  and a drop on a card announce "Shared threads can’t be nested."), and
+  listed with that workspace's threads); "Shared with me" removes the folder
+  assignment; Archive moves it to the reader's own Archive. Drafts and New
+  folder… are not offered. Shared cards are neither nest targets nor nestable
+  (⌥→ and a drop on a card announce "Shared threads can’t be nested."), and
   `research.reorderTrees` is sent with the reader's own threads only
   (`ownTree` in `useFiling.ts`).
 - Rename is not offered; Generate recap only to a commenter.
@@ -208,37 +209,37 @@ placement:
 - The reader's Trash lists the shared threads they moved there from this
   workspace (`research.trashTree({ treeId, workspaceId })`,
   `sharing.listShared({ place: "trash", workspaceId })`), marked "Shared
-  with you"; Restore brings it back, and Delete now leaves the thread
-  ("Leave “…”?", the owner and the other people keep it). Empty Trash leaves
-  the shared threads in this workspace's Trash, which its confirmation says.
+  with you"; Restore returns it to the workspace, and Delete now leaves the thread
+  ("Leave “…”?", retaining access for the owner and remaining members). Empty Trash leaves
+  shared threads in this workspace's Trash, as indicated by the confirmation dialog.
   The thread page's root Delete (offered to a commenter) uses the same two
   steps (`sharedTreeDeleteSteps`).
 - ⌥↑/⌥↓ on a shared thread's card moves nothing and announces "Shared
   threads keep their owner’s order."
 
 An invitation link is `/invite#<token>` (`invites.create`'s `url`). The
-token is the URL fragment, so no request carries it. On a page load,
-`app/captureInvite.ts` (imported first by `main.tsx`, before the router
-module and any request) reads it, replaces the address with `/invite`
-(`history.replaceState`, keeping the entry's state) and keeps the token in
-this tab's `sessionStorage` (`lib/pendingInvite.ts`,
-`session.pending-invite.v1`, dropped after an hour; in memory when storage is
-blocked). `/invite` (`routes/invite.tsx`) then accepts it
-(`invites.accept({ token })`), forgets it, and opens the thread, replacing
-the history entry. Signed out, it navigates to `/login?redirect=/invite`: the
-redirect, the GitHub round trip and the history hold only `/invite`, and the
-token waits in `sessionStorage` until the reader is back. Another invitation
-link opened on the same page changes only the fragment; `hashchange` starts
-over with it. `/invite/$token`, the form of earlier links, stores its token
-the same way in the route's `beforeLoad` and redirects to `/invite`. With no
-token, the page reads "This invitation link is incomplete. Open the whole
-link you were sent again." An unknown, used, expired or revoked invitation,
+token is carried in the URL fragment, preventing transmission across HTTP request
+headers. On initial load, `app/captureInvite.ts` (imported before router
+initialization in `main.tsx`) extracts the fragment, normalizes the location to
+`/invite` via `history.replaceState` preserving navigation state, and stores
+the token in tab `sessionStorage` (`lib/pendingInvite.ts`,
+`session.pending-invite.v1` with a one-hour expiration, falling back to memory
+if storage is unavailable). `/invite` (`routes/invite.tsx`) accepts the invitation
+(`invites.accept({ token })`), clears the stored token, and navigates to the thread,
+replacing the history entry. Unauthenticated requests redirect to
+`/login?redirect=/invite`: the redirect target and OAuth callback preserve only
+the `/invite` route while retaining the token in `sessionStorage` until authentication
+completes. Another invitation link opened on the same page changes only the fragment;
+the `hashchange` handler processes the new token. `/invite/$token`, the form of earlier
+links, stores its token the same way in the route's `beforeLoad` and redirects to
+`/invite`. With no token, the page displays "This invitation link is incomplete. Open the
+whole link you were sent again." An unknown, used, expired or revoked invitation,
 or one addressed to another GitHub account, shows "This invitation can’t be
 used" with the server's reason.
 
 Accepting an invitation follows the thread ("Notify me" in the thread menu
-turns it off), as the owner follows their own threads; an unfollow stays
-(`03-api-and-events.md` §2 `subscriptions.set`).
+turns it off), matching the owner's default subscription state; unsubscriptions
+persist (`03-api-and-events.md` §2 `subscriptions.set`).
 
 The owner's Share dialog confirms making a public thread private in its
 footer: "Make it private? People who aren’t in it lose access, and it leaves
@@ -259,7 +260,7 @@ cache first) and navigates to its `href`; a toast opened from the stack
 marks its inbox entry read too (same id). The header has "Mark all as read"
 (`notifications.markAllRead`; disabled with nothing unread) and Refresh
 Notifications; older pages load with "Show older notifications". The empty
-inbox reads "No notifications."; a failed load shows the error with Retry.
+inbox displays "No notifications."; a failed load shows the error with Retry.
 `notification.requested` and `notifications.read` refetch the list and the
 unread count (`["notifications", "unread"]`), whatever the Notifications
 setting (which governs toasts only); `notifications` is a reconnect key.
@@ -274,14 +275,13 @@ thread under the thread's title (thread order from the feed, each group
 oldest first); a row is the highlighted message's label and the passage
 inside up to 60 characters of its paragraph, cut at a word and marked "…"
 (`highlightExcerptContext`). The header has Refresh Highlights; the empty
-page reads "No highlights. Select text in an answer and choose Highlight.";
+page displays "No highlights. Select text in an answer and choose Highlight.";
 a failed load shows the error with Retry. Each row has a × "Remove
 highlight" (`highlights.removeMany`), shown on hover and focus; focus then
-moves to the next row, the last one, or Refresh. The feed lists the
-reader's own threads, whose owner may remove any highlight; a row whose
-thread a cached list shows the reader does not own has no × (the feed row
-does not name the highlight's author). Click →
-`/r/$treeId?node=<nodeId>&highlight=<id>`, which scrolls to it once
+moves to the next row, the last one, or Refresh. The feed displays highlights from the reader's accessible threads. Owners
+may remove any highlight; a row whose thread a cached list shows the reader
+does not own has no × (the feed row does not name the highlight's author).
+Click → `/r/$treeId?node=<nodeId>&highlight=<id>`, which scrolls to it once
 (`09-research-document-view.md` §5). Events `research.highlight.*` patch the
 list; `research.tree.archived` removes that tree's items.
 
@@ -304,16 +304,16 @@ schedules the recap (imported reports bypass the length cutoffs) and emits
 `ResearchQueryComposer`: the "New question" field in the form "New research".
 
 - The Ask/Note switch (`AskNoteSwitch`, a radio group). In Ask mode the field
-  reads "Ask a question" and sends `research.createTree`, then opens the
-  thread; in Note mode it reads "Write a note, or paste a link to save" and
+  placeholder is "Ask a question" and sends `research.createTree`, then opens the
+  thread; in Note mode the placeholder is "Write a note, or paste a link to save" and
   sends `research.createPost` (a bare URL saves a link post, which the server
-  hydrates) and stays on Home. The send button reads Start research, Save
+  hydrates) and stays on Home. The send button label is Start research, Save
   note or Save link.
 - Clicking the selected Ask segment opens the model menu
   (`QuestionModelPicker`): the launchable models of the registry (gated
   models only for admins) and an Effort submenu (Default, Low, Medium, High,
   and Extra or Max where the model has them). ⌃Tab cycles the model. The Ask
-  segment's label reads "Ask with <model> (<effort>)".
+  segment's label displays "Ask with <model> (<effort>)".
 - More actions → "Save draft".
 - Images: paste, drop or the picker attach PNG, JPEG, GIF or WebP images,
   uploaded at once (`POST /api/images`) and shown as thumbnails with remove
@@ -344,7 +344,7 @@ The sidebar is the `Sidebar` landmark; its splitter is a focusable
 - "Research" navigation: Home (a drop target for Unfiled), Highlights and,
   web only, Shared with me, Notifications and All Users (signed in; no
   drops). Shared with me carries a badge with the number of invitations
-  waiting (`invites.received`; its name reads "Shared with me, 2
+  waiting (`invites.received`; its accessible name is "Shared with me, 2
   invitations"), Notifications one with the unread count
   (`notifications.unreadCount`; "Notifications, 3 unread"; 99+ above 99). While ⌘
   (Ctrl off Apple platforms) is held, Home shows its chord, and the
@@ -357,8 +357,8 @@ The sidebar is the `Sidebar` landmark; its splitter is a focusable
 The tree list, multi-selection, visibility filter and the `filter` search
 parameter of the earlier sidebar are removed; threads are filed and ordered
 from Home. Sidebar resize 208–420 px and collapse (Shift-Cmd-G) persist in
-`navigation`. The workspace switcher's trigger reads the workspace's name, or
-"Choose a workspace"; its menu ("Research workspaces") reads Add workspace…,
+`navigation`. The workspace switcher trigger displays the workspace name, or
+"Choose a workspace"; its menu ("Research workspaces") contains Add workspace…,
 Make default workspace (web only: the web opens the default workspace where
 the desktop reopens the last one used), Rename “W”… and Delete workspace…
 (the web deletes; the desktop's item is Remove workspace…). There is no
@@ -371,7 +371,7 @@ then Drafts, each folder as its first letter (`researchFolderMonogram`,
 named in the tooltip), Archive and Trash, New folder, and at the foot the
 Light/Dark toggle and Settings (⌘,). Shared with me and Notifications show
 their badges too. Home
-and every place but Trash take card drops. Below 900 px the rail stays and
+and all place targets except Trash accept dropped cards. Below 900 px the rail stays and
 Expand opens the sidebar as a drawer; the rail is inert while the drawer is
 open.
 
@@ -388,8 +388,8 @@ may carry one action (`action: { label, run }`); `toast(…, { undo })` adds an
 toasts are kept: "Restored.", "Draft deleted.", "Saved to Drafts.", "Sent.
 Moved from Drafts to Unfiled.", "Moved to the Trash." with Undo. Sources:
 client-originated toasts, and the server's `notification.requested` events
-(a run you asked finished or failed, a new question or note in a thread you
-follow, a branch from your answer, an invitation; `03-api-and-events.md`
+(run completion or failure, new questions or notes in followed threads,
+non-inline follow-ups to authored answers, invitations; `03-api-and-events.md`
 §3). A server notification with an `href` opens that path when clicked
 (`AppShell` passes `onOpen` to the stack, which also marks the inbox entry
 read). Max 20 kept, 3 visible. Every server notification is also stored in

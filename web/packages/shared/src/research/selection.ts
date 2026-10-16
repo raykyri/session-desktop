@@ -3,7 +3,7 @@
 // Ported from an earlier desktop `src/lib/researchSelection.ts` (its current
 // version is `lib/researchSelection.ts` in this package). Every function here
 // takes plain rect objects and flat offsets, so it holds no reference to the
-// DOM: the client measures, this module decides.
+// DOM: the client measures coordinates, and this module computes selection bounds.
 
 export interface SnappedResearchSelection {
   start: number;
@@ -251,7 +251,7 @@ function trailingUnit(units: SelectionUnit[], offset: number): SelectionUnit | n
 }
 
 /** Includes punctuation attached to the outside of a snapped passage without
- * swallowing punctuation that joins it to another word. Whitespace and hard
+ * absorbing punctuation that joins it to another word. Whitespace and hard
  * projection boundaries define attachment: selecting `“quoted.”` keeps both
  * quotation marks, while selecting `state-of-the` does not pull in the hyphen
  * before `art`. */

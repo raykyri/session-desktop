@@ -1,5 +1,5 @@
-// Shared threads in the repositories: roles, invitations, per-person Archive,
-// Trash and filing, attribution, who pays, and stale-revision refusals
+// Shared threads: permissions, invitations, member-specific archive/trash/folders,
+// billing attribution, and optimistic concurrency control
 // (`docs/02-domain-model-and-database.md` §5.16).
 
 import test from "ava";
@@ -98,7 +98,7 @@ function ask(shared: Shared, userId: string, text: string, parentNodeId = shared
   });
 }
 
-test("treeAccess gives each person their role, and nobody else anything", (t) => {
+test("resolves tree roles by user permissions and excludes unauthorized access", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const role = (userId: string | null) =>
@@ -111,7 +111,7 @@ test("treeAccess gives each person their role, and nobody else anything", (t) =>
   sharing.setVisibility(db, shared.fixture.userId, shared.treeId, "public");
   t.is(role(shared.stranger.userId), "viewer");
   t.is(role(null), "viewer");
-  // The owner's Trash hides the thread from everyone else.
+  // Trashing by the owner revokes access for members.
   trash.trashTree(db, shared.fixture.userId, shared.treeId);
   t.is(role(shared.commenter.userId), null);
   t.is(role(null), null);
@@ -120,7 +120,7 @@ test("treeAccess gives each person their role, and nobody else anything", (t) =>
   t.is(role(shared.commenter.userId), "commenter");
 });
 
-test("only the owner changes visibility, members and invitations", (t) => {
+test("restricts visibility, membership, and invitation updates to thread owners", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   for (const userId of [shared.commenter.userId, shared.viewer.userId]) {
@@ -147,7 +147,7 @@ test("only the owner changes visibility, members and invitations", (t) => {
   );
 });
 
-test("a viewer cannot ask, note or highlight; a commenter can", (t) => {
+test("restricts question, note, and highlight creation to commenters and owners", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   t.throws(() => ask(shared, shared.viewer.userId, "Can I ask?"), {
@@ -172,9 +172,9 @@ test("a viewer cannot ask, note or highlight; a commenter can", (t) => {
     anchorFor(shared.revision, "bloom filter", 2),
   );
   t.is(highlight.authorId, shared.commenter.userId);
-  // Highlights are shared: everyone who reads the thread sees them.
+  // Highlights are visible to all users with read access.
   t.is(highlights.listForNode(db, shared.viewer.userId, shared.rootId).length, 1);
-  // A commenter removes only their own; the owner any.
+  // Commenters can remove only their own highlights; owners can remove any highlight.
   const ownerHighlight = highlights.create(
     db,
     shared.fixture.userId,
@@ -189,7 +189,7 @@ test("a viewer cannot ask, note or highlight; a commenter can", (t) => {
   t.is(highlights.listForNode(db, shared.fixture.userId, shared.rootId).length, 0);
 });
 
-test("a commenter changes only their own nodes, and only while nobody else replied", (t) => {
+test("restricts commenter node modifications to author's nodes without replies", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const ownerQuestion = ask(shared, shared.fixture.userId, "Owner's branch");
@@ -201,20 +201,20 @@ test("a commenter changes only their own nodes, and only while nobody else repli
   });
   const own = ask(shared, shared.commenter.userId, "Commenter's branch");
   nodes.rename(db, shared.commenter.userId, own.id, "Renamed by its author");
-  // Someone else replies under it: it is no longer the commenter's to change.
+  // A reply prevents further modifications by the original author.
   nodes.setStatus(db, shared.fixture.userId, own.id, "complete");
   const reply = ask(shared, shared.fixture.userId, "Owner replies", own.id);
   nodes.setStatus(db, shared.fixture.userId, reply.id, "complete");
   t.throws(() => nodes.removeBranch(db, shared.commenter.userId, own.id), {
     message: /Someone else has replied/,
   });
-  // The owner may delete anyone's branch.
+  // Thread owners can delete any branch.
   const removal = nodes.removeBranch(db, shared.fixture.userId, own.id);
   t.is(removal.removedBy, shared.fixture.userId);
   t.is(removal.removedNodeIds.length, 2);
 });
 
-test("notes are edited by their author, who is recorded as the editor", (t) => {
+test("restricts note edits to authors and updates editedBy", (t) => {
   const fixture = createFixture(t);
   const commenter = addUser(fixture.db, "note-commenter");
   const detail = posts.admitPost(fixture.db, fixture.userId, {
@@ -248,7 +248,7 @@ test("notes are edited by their author, who is recorded as the editor", (t) => {
       }),
     { instanceOf: access.TreeAccessError },
   );
-  // Only the author edits a note's text, the owner included.
+  // Note text editing is restricted to the note author.
   t.throws(
     () =>
       posts.updatePost(fixture.db, fixture.userId, {
@@ -264,7 +264,7 @@ test("notes are edited by their author, who is recorded as the editor", (t) => {
     expectedText: "Commenter's note",
   });
   t.is(edited.node.type === "post" ? edited.node.editedBy : null, commenter.userId);
-  // A stale edit is refused.
+  // Rejects concurrent edits when expectedText mismatches.
   t.throws(
     () =>
       posts.updatePost(fixture.db, commenter.userId, {
@@ -276,11 +276,11 @@ test("notes are edited by their author, who is recorded as the editor", (t) => {
   );
 });
 
-test("the asker pays: the run queue and the daily runs count the question's author", (t) => {
+test("attributes queue entries and daily run usage to the question author", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const question = ask(shared, shared.commenter.userId, "Paid by the commenter");
-  // A failed question's retry is its author's to start, and theirs to pay.
+  // Retrying a failed question is restricted to the author and attributed to their usage.
   nodes.setStatus(db, shared.commenter.userId, question.id, "failed", { error: "boom" });
   t.throws(() => nodes.resetForRetry(db, shared.fixture.userId, question.id), {
     instanceOf: access.TreeAccessError,
@@ -292,8 +292,7 @@ test("the asker pays: the run queue and the daily runs count the question's auth
     .all()
     .find((candidate) => candidate.nodeId === question.id);
   t.is(row?.userId, shared.commenter.userId);
-  // The queued follow-up of a commenter is sent billed to them, whoever
-  // dispatches it.
+  // Queued follow-up runs are billed to the author regardless of who dispatches them.
   nodes.setStatus(db, shared.commenter.userId, question.id, "running");
   const queued = followups.ask(db, shared.commenter.userId, {
     headNodeId: question.id,
@@ -315,14 +314,14 @@ test("the asker pays: the run queue and the daily runs count the question's auth
     .all()
     .find((candidate) => candidate.nodeId === sent.node.id);
   t.is(sentRow?.userId, shared.commenter.userId);
-  // Attempts count against the payer's daily runs, not the owner's.
+  // Run attempts count toward the author's daily limit, not the thread owner's.
   runs.startAttempt(db, { nodeId: question.id, attempt: 2, kind: "fresh", model: "gemini-flash" });
   t.is(usage.dailyTotals(db, shared.commenter.userId).runs, 1);
   t.is(usage.dailyTotals(db, shared.fixture.userId).runs, 0);
   t.is(runOf(sent.node).status, "queued");
 });
 
-test("a member's Archive and Trash are their own; the owner's Trash hides it from them", (t) => {
+test("isolates member archive and trash states while owner trash revokes member access", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const listed = (userId: string, place: trees.SharedPlace) =>
@@ -333,7 +332,7 @@ test("a member's Archive and Trash are their own; the owner's Trash hides it fro
   trees.archive(db, shared.commenter.userId, shared.treeId);
   t.deepEqual(listed(shared.commenter.userId, "shared"), []);
   t.deepEqual(listed(shared.commenter.userId, "archive"), [shared.treeId]);
-  // Nothing changed for the owner or the other member.
+  // Archiving by a member does not affect other members or the owner.
   t.is(trees.get(db, shared.fixture.userId, shared.treeId)?.archivedAt, null);
   t.deepEqual(listed(shared.viewer.userId, "shared"), [shared.treeId]);
   trees.restore(db, shared.commenter.userId, shared.treeId);
@@ -342,13 +341,13 @@ test("a member's Archive and Trash are their own; the owner's Trash hides it fro
   t.deepEqual(listed(shared.commenter.userId, "trash"), [shared.treeId]);
   t.deepEqual(listed(shared.commenter.userId, "shared"), []);
   t.is(trees.get(db, shared.fixture.userId, shared.treeId)?.trashedAt, null);
-  // A member's Trash does not lock the thread: they can still ask in it.
+  // Trashing by a member does not revoke write permissions.
   const fromTrash = ask(shared, shared.commenter.userId, "Asked from the Trash");
   nodes.setStatus(db, shared.commenter.userId, fromTrash.id, "cancelled");
   trash.restoreTree(db, shared.commenter.userId, shared.treeId);
   t.deepEqual(listed(shared.commenter.userId, "shared"), [shared.treeId]);
 
-  // The owner's Trash hides it from every member until the owner restores it.
+  // Trashing by the owner hides the thread from all members until restored.
   const ownerTrash = trash.trashTree(db, shared.fixture.userId, shared.treeId);
   t.is(ownerTrash.tree.trashedBy, shared.fixture.userId);
   t.deepEqual(listed(shared.viewer.userId, "shared"), []);
@@ -356,7 +355,7 @@ test("a member's Archive and Trash are their own; the owner's Trash hides it fro
   trash.restoreTree(db, shared.fixture.userId, shared.treeId);
   t.deepEqual(listed(shared.viewer.userId, "shared"), [shared.treeId]);
 
-  // Emptying a member's Trash leaves the thread; it stays for the others.
+  // Emptying trash as a member removes membership without affecting other users.
   trash.trashTree(db, shared.viewer.userId, shared.treeId);
   const emptied = trash.empty(db, shared.viewer.userId, shared.viewer.workspaceId);
   t.deepEqual(emptied.leftTreeIds, [shared.treeId]);
@@ -364,7 +363,7 @@ test("a member's Archive and Trash are their own; the owner's Trash hides it fro
   t.truthy(trees.get(db, shared.fixture.userId, shared.treeId));
 });
 
-test("a member files a shared thread in their own folder; the owner's filing is untouched", (t) => {
+test("maintains separate folder membership per user for shared threads", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const memberState = folders.getState(db, shared.commenter.userId, shared.commenter.workspaceId);
@@ -402,7 +401,7 @@ test("a member files a shared thread in their own folder; the owner's filing is 
   );
 });
 
-test("invitations: link tokens are hashed, login invitations are for one account", (t) => {
+test("hashes invitation link tokens and restricts login invitations to targeted account", (t) => {
   const fixture = createFixture(t);
   const invitee = addUser(fixture.db, "Invitee");
   const other = addUser(fixture.db, "someone-else");
@@ -448,7 +447,7 @@ test("invitations: link tokens are hashed, login invitations are for one account
     joined: true,
     restored: false,
   });
-  // Used: accepting again is "not found".
+  // Re-accepting a redeemed invitation returns not found.
   t.throws(
     () =>
       sharing.acceptInvite(
@@ -460,7 +459,7 @@ test("invitations: link tokens are hashed, login invitations are for one account
       ),
     { message: /^This invitation was not found/ },
   );
-  // A revoked link no longer works.
+  // Revoked invitation links are rejected.
   const link = sharing.createInvite(fixture.db, fixture.userId, {
     treeId: detail.tree.id,
     role: "viewer",
@@ -489,7 +488,7 @@ test("invitations: link tokens are hashed, login invitations are for one account
   );
 });
 
-test("removing a member drops their queued follow-ups and names their active runs", (t) => {
+test("removes queued follow-ups and reports active runs when removing a member", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const running = ask(shared, shared.commenter.userId, "Running question");
@@ -509,9 +508,9 @@ test("removing a member drops their queued follow-ups and names their active run
   t.deepEqual(departure.changedHeadNodeIds, [running.id]);
   t.is(departure.removedFollowupIds.length, 1);
   t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
-  // Their question stays in the thread, attributed to them.
+  // Authored nodes remain in the thread with existing attribution.
   t.is(nodes.get(db, shared.fixture.userId, running.id)?.authorId, shared.commenter.userId);
-  // A viewer leaves on their own.
+  // Members can leave threads independently.
   sharing.leave(db, shared.viewer.userId, shared.treeId);
   t.deepEqual(
     sharing.listMembers(db, shared.fixture.userId, shared.treeId).map((member) => member.role),
@@ -519,14 +518,14 @@ test("removing a member drops their queued follow-ups and names their active run
   );
 });
 
-/** Waits until the clock moves past `at`, so the next write is later. */
+/** Spins until the system clock advances past `at` so subsequent writes have later timestamps. */
 function after(at: number): void {
   while (Date.now() <= at) {
     // spin; at most a millisecond
   }
 }
 
-test("a removed member cannot rejoin through a link created before the removal", (t) => {
+test("prevents removed member from rejoining through a link created before the removal", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const commenterLogin = (
@@ -545,12 +544,12 @@ test("a removed member cannot rejoin through a link created before the removal",
     removal.map((row) => [row.treeId, row.userId, row.removedBy]),
     [[shared.treeId, shared.commenter.userId, shared.fixture.userId]],
   );
-  // The link they joined with and a link pending at the removal both refuse them.
+  // Previously issued invitation links reject removed members.
   t.throws(() => sharing.acceptInvite(db, commenter, { token: oldLink.token }), {
     message: "You were removed from this thread.",
   });
   t.is(access.treeAccess(db, shared.commenter.userId, shared.treeId), null);
-  // The same links still admit someone else.
+  // Existing invitation links remain valid for other users.
   const newcomer = addUser(db, `newcomer${loginCounter}`);
   t.true(
     sharing.acceptInvite(
@@ -559,12 +558,11 @@ test("a removed member cannot rejoin through a link created before the removal",
       { token: oldLink.token },
     ).joined,
   );
-  // A used link stays listed, so the owner can still revoke it; the used
-  // login invitation from the fixture does not.
+  // Link invitations remain listed after use to allow revocation; redeemed user-specific invites are deleted.
   const listed = sharing.listInvites(db, shared.fixture.userId, shared.treeId);
   t.true(listed.some((invite) => invite.id === oldLink.invite.id));
   t.false(listed.some((invite) => invite.githubLogin !== null));
-  // A link created after the removal lets them back in and clears it.
+  // Invitations created after removal allow rejoining and clear removal records.
   after(removal[0]?.removedAt ?? 0);
   const newLink = sharing.createInvite(db, shared.fixture.userId, {
     treeId: shared.treeId,
@@ -577,12 +575,11 @@ test("a removed member cannot rejoin through a link created before the removal",
     restored: false,
   });
   t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
-  // Once back in, the older link works for them again (joining never lowers
-  // a role, and they are a member).
+  // Once membership is re-established, previous links are accepted without lowering role.
   t.true(sharing.acceptInvite(db, commenter, { token: oldLink.token }).role === "viewer");
 });
 
-test("a login invitation lets a removed member back in", (t) => {
+test("allows removed members to rejoin via targeted login invitation", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const viewerLogin = (
@@ -591,8 +588,8 @@ test("a login invitation lets a removed member back in", (t) => {
       .find((member) => member.userId === shared.viewer.userId) ?? { login: "" }
   ).login;
   sharing.removeMember(db, shared.fixture.userId, shared.treeId, shared.viewer.userId);
-  // Created in the same millisecond as the removal or later: a login
-  // invitation names them, so it admits them either way.
+  // A targeted login invitation explicitly identifies the user account,
+  // granting access whether issued concurrently with or after the removal.
   const byLogin = sharing.createInvite(db, shared.fixture.userId, {
     treeId: shared.treeId,
     role: "commenter",
@@ -610,12 +607,11 @@ test("a login invitation lets a removed member back in", (t) => {
   t.deepEqual(db.select().from(schema.treeMemberRemovals).all(), []);
 });
 
-test("removing a member revokes the login invitations still addressed to them", (t) => {
+test("revokes pending login invitations when removing a member", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
-  // Invited by login, then joined through a link before accepting it: the
-  // login invitation is still pending when they are removed. (Inviting a
-  // member by login is refused.)
+  // When a user invited by login joins via link instead, the pending login
+  // invitation is revoked upon member removal.
   const login = `late${loginCounter}`;
   const late = addUser(db, login);
   const pending = sharing.createInvite(db, shared.fixture.userId, {
@@ -640,7 +636,7 @@ test("removing a member revokes the login invitations still addressed to them", 
   t.is(access.treeAccess(db, late.userId, shared.treeId), null);
 });
 
-test("a member made a viewer loses their queued follow-ups and cannot retry one", (t) => {
+test("clears queued follow-ups and prevents retries when demoting a member to viewer", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const running = ask(shared, shared.commenter.userId, "Running question");
@@ -667,14 +663,13 @@ test("a member made a viewer loses their queued follow-ups and cannot retry one"
   });
   t.deepEqual(followups.listForHead(db, shared.fixture.userId, running.id), []);
   t.false(followups.authorMayAsk(db, queued.item));
-  // Promoting drops nothing.
+  // Promoting member role does not affect queued follow-ups.
   t.deepEqual(
     sharing.setRole(db, shared.fixture.userId, shared.treeId, shared.commenter.userId, "commenter")
       .dropped,
     { removedFollowupIds: [], changedHeadNodeIds: [] },
   );
-  // An item they still had (written past the role change) cannot be retried
-  // once they are a viewer again.
+  // Existing queue items cannot be retried once a user is demoted to viewer.
   sharing.setRole(db, shared.fixture.userId, shared.treeId, shared.commenter.userId, "viewer");
   db.insert(schema.followupQueue)
     .values({
@@ -695,7 +690,7 @@ test("a member made a viewer loses their queued follow-ups and cannot retry one"
   });
 });
 
-test("a member's Delete and Empty Trash leave as leaving does", (t) => {
+test("treats member deletion and emptying trash as leaving the thread", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const running = ask(shared, shared.commenter.userId, "Running question");
@@ -715,7 +710,7 @@ test("a member's Delete and Empty Trash leave as leaving does", (t) => {
   });
   t.deepEqual(followups.listForHead(db, shared.fixture.userId, running.id), []);
 
-  // The viewer queues nothing, but Empty Trash reports their departure too.
+  // Emptying trash reports departure for members without queued items.
   trash.trashTree(db, shared.viewer.userId, shared.treeId);
   const emptied = trash.empty(db, shared.viewer.userId, shared.viewer.workspaceId);
   t.deepEqual(emptied.leftTreeIds, [shared.treeId]);
@@ -723,7 +718,7 @@ test("a member's Delete and Empty Trash leave as leaving does", (t) => {
   t.is(access.treeAccess(db, shared.viewer.userId, shared.treeId), null);
 });
 
-test("leaving is not a removal: a link still lets the person back in", (t) => {
+test("permits users who voluntarily left to rejoin via invitation link", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const link = sharing.createInvite(db, shared.fixture.userId, {
@@ -738,7 +733,7 @@ test("leaving is not a removal: a link still lets the person back in", (t) => {
   );
 });
 
-test("public threads are listed for everyone; detail names the participants", (t) => {
+test("lists public threads publicly and includes contributing participants in detail", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   t.deepEqual(trees.publicSummaries(db, null), []);
@@ -751,8 +746,8 @@ test("public threads are listed for everyone; detail names the participants", (t
   t.is(trees.publicSummaries(db, shared.commenter.userId)[0]?.role, "commenter");
   ask(shared, shared.commenter.userId, "Commenter asks");
   const detail = trees.detail(db, null, shared.treeId);
-  // A reader who is not a member sees the owner and the people who wrote
-  // something; the viewer, who wrote nothing, is a member only members see.
+  // Public detail view includes the owner and contributing authors; non-contributing
+  // viewers are visible only to members.
   t.deepEqual(
     detail.participants?.map((participant) => participant.id),
     [shared.fixture.userId, shared.commenter.userId],
@@ -765,7 +760,7 @@ test("public threads are listed for everyone; detail names the participants", (t
   t.is(detail.tree.ownerId, shared.fixture.userId);
 });
 
-test("Follow subscribes a reader; a follower who loses access is dropped", (t) => {
+test("manages thread followers and unsubscribes users who lose access", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   sharing.setFollowing(db, shared.viewer.userId, shared.treeId, true);
@@ -785,7 +780,7 @@ test("Follow subscribes a reader; a follower who loses access is dropped", (t) =
   });
 });
 
-test("reordering a chain from a stale order is refused", (t) => {
+test("rejects chain reordering when expected order is stale", (t) => {
   const shared = sharedThread(t);
   const { db } = shared.fixture;
   const first = nodes.admitChild(db, shared.fixture.userId, {

@@ -63,7 +63,7 @@ export function ResearchFeedHeader({
   );
 }
 
-/** Bottom-centred status for feed and folder actions, with Undo for moves.
+/** Bottom-centered status for feed and folder actions, with Undo for moves.
  * The live region stays mounted so screen readers announce each new message;
  * the toast's timer pauses while the pointer or focus is on it. */
 export function ResearchFeedToast({

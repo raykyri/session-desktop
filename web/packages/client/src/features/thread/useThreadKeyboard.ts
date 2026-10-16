@@ -67,7 +67,7 @@ export function useThreadKeyboard({
   branchesByParentRef: Ref<ReadonlyMap<string, ResearchNode[]>>;
   editorRef: Ref<{ kind: "document" | "post" } | null>;
   threadHandlesRef: Ref<Map<number, PostThreadHandle>>;
-  /** A menu, popover or dialog of the page is open: Esc is theirs. */
+  /** A menu, popover or dialog of the page is open: Esc belongs to that overlay. */
   anyOverlayOpenRef: Ref<boolean>;
   /** The unsent branch, whose ask box follows the deepest level. */
   pendingRef: Ref<{ parentNodeId: string } | null>;

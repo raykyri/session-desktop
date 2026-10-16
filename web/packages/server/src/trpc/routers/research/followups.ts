@@ -1,8 +1,7 @@
-// The follow-up queue (`followups.*`): questions asked at the end of an
-// inline chain, sent at once when the chain can take them and queued on the
-// server otherwise, then sent in order as the chain frees up
-// (`research/followups.ts`). It replaces the desktop's client-side queue, so a
-// question asked while an answer is still running is no longer refused.
+// The follow-up queue (`followups.*`): follow-up questions submitted at the end
+// of a conversation chain. Questions execute immediately if the chain is idle or
+// are queued on the server and processed sequentially as preceding runs complete
+// (`research/followups.ts`).
 
 import type { SessionDatabase } from "@session/db";
 import { followups, trees } from "@session/db";
@@ -29,9 +28,9 @@ import { dispatchFollowups } from "./common.js";
 export type AskFollowupResult =
   { kind: "sent"; node: ResearchNode } | { kind: "queued"; item: ResearchFollowupQueueItem };
 
-/** The last node of the chain `nodeId` belongs to: the node a follow-up sent
- * now would continue, and whose agent an unspecified one inherits. Reads the
- * chain alone (`followups.chainTail`), not the thread's detail. */
+/** The terminal node of the chain containing `nodeId`, which a new follow-up
+ * continues and from which unspecified agent settings are inherited. Queries
+ * only the chain (`followups.chainTail`) rather than full thread detail. */
 function chainTail(ctx: { db: SessionDatabase }, userId: string, nodeId: string): ResearchNode {
   return required(
     repo(() => followups.chainTail(ctx.db, userId, nodeId)),
@@ -41,11 +40,10 @@ function chainTail(ctx: { db: SessionDatabase }, userId: string, nodeId: string)
 
 export const followupProcedures = {
   /**
-   * Asks a follow-up at the end of the chain `headNodeId` belongs to. Sent at
-   * once when nothing is queued for the chain and its last answer is
-   * complete; queued otherwise. `model` and `effort` default to the chain's
-   * last node's agent; a different model without an effort runs at that
-   * model's default effort.
+   * Submits a follow-up question at the end of the chain identified by
+   * `headNodeId`. Executes immediately if the queue is empty and the preceding
+   * answer is complete; queued otherwise. Inherits the preceding node's agent
+   * settings when omitted.
    */
   ask: protectedProcedure
     .input(
@@ -60,7 +58,7 @@ export const followupProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }): Promise<AskFollowupResult> => {
-      // A viewer cannot ask; refused before anything is resolved or charged.
+      // Viewers cannot submit follow-ups; rejected before resolving attachments or verifying limits.
       requireNodeRole(ctx, input.headNodeId, "commenter");
       const tail = chainTail(ctx, ctx.user.id, input.headNodeId);
       const model = input.model ?? nodeModelId(tail);
@@ -83,8 +81,8 @@ export const followupProcedures = {
         )),
         ...images,
       ];
-      // Checked again with the write: other launches may have been admitted
-      // while the attachments resolved.
+      // Verify limits again in the write transaction in case concurrent runs
+      // were admitted while attachments resolved.
       const result = admitWithinLimits(ctx, (db) =>
         repo(() =>
           followups.ask(db, ctx.user.id, {
@@ -107,20 +105,19 @@ export const followupProcedures = {
       return { kind: "queued", item: result.item };
     }),
 
-  /** Removes a queued follow-up. Returns the chain's queue after it. */
+  /** Removes a queued follow-up and returns the updated chain queue. */
   cancel: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .mutation(({ ctx, input }): ResearchFollowupQueueItem[] => {
       const item = repo(() => followups.cancel(ctx.db, ctx.user.id, input.itemId));
       publishQueue(ctx, ctx.user.id, item.treeId, item.headNodeId);
-      // The cancelled item may have been a refused one the queue waited on.
+      // The cancelled item may have been blocking subsequent queued follow-ups.
       dispatchFollowups(ctx, item.treeId);
       return repo(() => followups.listForHead(ctx.db, ctx.user.id, item.headNodeId));
     }),
 
-  /** Clears a refused follow-up's reason and tries to send the queue again.
-   * Returns the chain's queue after it; the item is gone from it when it was
-   * sent. */
+  /** Clears a rejected follow-up's error state and retries queue processing.
+   * Returns the updated chain queue. */
   retry: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .mutation(({ ctx, input }): ResearchFollowupQueueItem[] => {
@@ -130,7 +127,7 @@ export const followupProcedures = {
       return repo(() => followups.listForHead(ctx.db, ctx.user.id, item.headNodeId));
     }),
 
-  /** A thread's queues, keyed by chain head, each in send order. */
+  /** Returns queued follow-ups for a thread, grouped by chain head in execution order. */
   list: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .query(({ ctx, input }): Record<string, ResearchFollowupQueueItem[]> => {

@@ -14,7 +14,7 @@ import { researchSelectionActionPlacement } from "@session/shared/lib/researchSe
 // items, plus the note line when one shows).
 const SELECTION_ACTIONS_SIZE = { width: 290, height: 40 };
 
-/** Where the action bar sits for a selection: centred 8px above it. */
+/** Where the action bar sits for a selection: centered 8px above it. */
 function highlightActionPlacement(range: Range, size = SELECTION_ACTIONS_SIZE) {
   return researchSelectionActionPlacement({
     boundingRect: range.getBoundingClientRect(),
@@ -47,7 +47,7 @@ function secondaryPressOnSelection(event: MouseEvent) {
 type Placement = ReturnType<typeof highlightActionPlacement>;
 
 /** The Branch to right / Highlight / Copy bar over a text selection in an answer.
- * It owns its placement: it is measured and centred over the selection when
+ * It owns its placement: it is measured and centered over the selection when
  * the selection changes, and follows it across scrolls and resizes, so only
  * the bar re-renders while the selection moves. A press outside the bar, Esc,
  * or the selection going away dismisses it; A branches, H (or E) highlights. */
@@ -70,13 +70,13 @@ export function ResearchSelectionToolbar({
   onDismiss: () => void;
 }) {
   const barRef = useRef<HTMLDivElement | null>(null);
-  // The bar's measured size, for centring it.
+  // The bar's measured size, for centering it.
   const sizeRef = useRef(SELECTION_ACTIONS_SIZE);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const handlersRef = useRef({ saving, onBranch, onHighlight, onDismiss });
   handlersRef.current = { saving, onBranch, onHighlight, onDismiss };
 
-  // Centring needs the bar's own size, which depends on its note line: after
+  // Centering needs the bar's own size, which depends on its note line: after
   // it renders for a new selection, measure it and place it over the
   // selection.
   useLayoutEffect(() => {

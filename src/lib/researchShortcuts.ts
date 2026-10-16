@@ -8,7 +8,7 @@
 const FOCUS_FOLLOWUPS_EVENT = "session:research-focus-followups";
 const TOGGLE_WORKSPACE_MENU_EVENT = "session:research-toggle-workspace-menu";
 
-/** Asks the mounted thread page to bring its follow-up composer into
+/** Requests the mounted thread page to bring its follow-up composer into
  * view and focus it. No-op when no thread is on the research stage. */
 export function requestResearchFollowupsFocus() {
   window.dispatchEvent(new CustomEvent(FOCUS_FOLLOWUPS_EVENT));
@@ -22,7 +22,7 @@ export function listenToResearchFollowupsFocus(onFocus: () => void): () => void 
   return () => window.removeEventListener(FOCUS_FOLLOWUPS_EVENT, handler);
 }
 
-/** Asks the research sidebar's workspace switcher to toggle its dropdown menu.
+/** Requests the research sidebar's workspace switcher to toggle its dropdown menu.
  * No-op outside research mode, where the switcher is unmounted. */
 export function requestResearchWorkspaceMenuToggle() {
   window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_MENU_EVENT));

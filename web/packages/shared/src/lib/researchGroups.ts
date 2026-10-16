@@ -13,7 +13,7 @@ import type { ResearchRowState } from "./researchRowGlyph.js";
 // filed elsewhere) is listed on its own.
 
 /** Questions, documents and posts (text notes, link posts and X posts) can
- * hold children; a tree whose type isn't known cannot. */
+ * hold children; a tree whose type is unrecognized cannot. */
 export function researchTreeHoldsChildren(type: ResearchNodeType | undefined): boolean {
   return type === "exchange" || type === "document" || type === "post";
 }
@@ -176,7 +176,7 @@ export type ResearchCardHit =
     }
   | { card: "group-exit"; parentId: string };
 
-/** Where a drop puts the dragged tree: nowhere, refused with a reason, under
+/** Where a drop puts the dragged tree: nowhere, rejected with a reason (kind "refuse"), under
  * a parent (before one of its children, or at the end for null), or at the
  * top level before a top-level card or after its group. `onCard` marks a
  * nest from the middle band of the parent's card. */

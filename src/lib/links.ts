@@ -44,7 +44,7 @@ export function safeHref(href: unknown): string | undefined {
   }
   // Return the resolved absolute URL, not the raw href: a protocol-relative
   // ("//host") href passes the protocol check once resolved against the base,
-  // but handing the raw string downstream would let it resolve unpredictably.
+  // but passing the raw string downstream would let it resolve unpredictably.
   // Normalizing here means openLink always receives a fully qualified
   // http(s)/mailto URL (or a session-file: local path).
   return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:"
@@ -265,7 +265,7 @@ export function canRenderInInternalBrowser(url: string): boolean {
 
 // A token-bearing file-server URL (see file_server.rs): its path is
 // `/<64-hex-token>/<file path>` on the loopback file-server port. Such URLs must always
-// load sandboxed (opaque origin) and must never be handed to the OS browser — an
+// load sandboxed (opaque origin) and must never be passed to the OS browser — an
 // unsandboxed same-origin load would let served content read the token and fetch every
 // sibling file under the pane's roots. Detection: loopback http on the known file-server
 // port, OR (as a fallback before the port is known) a loopback http URL whose first path

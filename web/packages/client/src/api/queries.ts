@@ -135,7 +135,7 @@ import { addNodeInterest, addTreeInterest, interestedTreeIds } from "./events.js
 
 export { queryKeys, eventPatchedListKeys } from "./cache.js";
 
-/** Query client defaults: lists the event bridge keeps fresh never auto-expire, so a background refetch cannot race an event-driven update. */
+/** Query client defaults: lists maintained by the event bridge do not auto-expire, preventing background refetches from conflicting with event-driven updates. */
 export const queryClientDefaults = {
   queries: {
     staleTime: Number.POSITIVE_INFINITY,
@@ -156,8 +156,8 @@ export const meQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.me(),
     queryFn: () => getMe(),
-    // The guard runs on every navigation; a signed-out tab must find out
-    // within a session, not within a page load.
+    // Checked on navigation; stale time bounds how long authentication state
+    // is cached without refetching.
     staleTime: 30_000,
     retry: false,
   });
@@ -220,14 +220,13 @@ export function useTreeSummaries(scope: { workspaceId: string; includeArchived?:
   return useQuery(treesQueryOptions(scope));
 }
 
-/** How often a guest's open thread is re-read while a run in it is active:
- * guests get no events. */
+/** Polling interval for guest viewers of active runs when real-time events are
+ * unavailable. */
 export const GUEST_THREAD_POLL_MS = 15_000;
 
-/** A thread's detail. Events keep it fresh for the owner, the members and a
- * signed-in reader who has it open; a guest (`eventless`) gets none, so the
- * detail is re-read when the tab regains focus and, while a run is active,
- * every `GUEST_THREAD_POLL_MS`. */
+/** Fetches thread detail. For authenticated users, detail is updated via
+ * server events; for unauthenticated guests (`eventless`), it refetches on
+ * window focus and polls at `GUEST_THREAD_POLL_MS` while runs are active. */
 export function useTreeDetail(treeId: string | undefined, options: { eventless?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.tree(treeId ?? ""),
@@ -246,12 +245,9 @@ export function useTreeDetail(treeId: string | undefined, options: { eventless?:
 }
 
 /**
- * Re-reads a cached thread and its presence when the page opens it, for a
- * reader outside its event audience between visits (a public thread's
- * reader who is not a member: the server sends its events only while it is
- * declared open, `useThreadInterest`). Not when another view of this tab
- * kept it open meanwhile. Call before `useThreadInterest`, whose declaration
- * this checks for.
+ * Refetches cached thread detail and presence when opened by a non-member
+ * viewer of a public thread, unless another mounted view currently maintains
+ * open interest. Must be invoked before `useThreadInterest`.
  */
 export function useRefetchThreadOnOpen(treeId: string, outsideAudience: boolean): void {
   const client = useQueryClient();
@@ -309,8 +305,7 @@ export function useResearchDrafts(workspaceId: string) {
   });
 }
 
-/** The workspace's threads in the Trash, most recently trashed first. Its
- * folders in the Trash are in the folder state. */
+/** Lists trashed threads in the workspace in reverse chronological order. */
 export function useResearchTrash(workspaceId: string) {
   const signedIn = useSignedIn();
   return useQuery({
@@ -324,12 +319,11 @@ export function useResearchTrash(workspaceId: string) {
  * Sharing (web only)
  * ---------------------------------------------------------------------- */
 
-/** Threads shared with the reader: outside their Archive and Trash
- * (`shared`), in their Archive, or in their Trash. */
+/** Queries threads shared with the current user in the active (`shared`),
+ * archived, or trashed state. */
 export function useSharedTrees(
   place: "shared" | "archive" | "trash" = "shared",
-  /** The workspace whose Trash is listed (a member's Trash is per
-   * workspace). */
+  /** Workspace scope when filtering member trash. */
   workspaceId?: string,
 ) {
   const signedIn = useSignedIn();
@@ -340,7 +334,7 @@ export function useSharedTrees(
   });
 }
 
-/** A thread's owner and members. Anyone signed in who may read it. */
+/** Fetches thread members and owner. */
 export function useThreadMembers(treeId: string, enabled = true) {
   const signedIn = useSignedIn();
   return useQuery({
@@ -350,7 +344,7 @@ export function useThreadMembers(treeId: string, enabled = true) {
   });
 }
 
-/** A thread's pending invitations; only its owner may list them. */
+/** Lists pending thread invitations for the thread owner. */
 export function useThreadInvites(treeId: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.invites(treeId),
@@ -359,7 +353,7 @@ export function useThreadInvites(treeId: string, enabled: boolean) {
   });
 }
 
-/** Invitations addressed to the signed-in account's GitHub login. */
+/** Lists pending thread invitations addressed to the authenticated user. */
 export function useReceivedInvites() {
   const signedIn = useSignedIn();
   return useQuery({
@@ -369,9 +363,8 @@ export function useReceivedInvites() {
   });
 }
 
-/** The reader's notification inbox, newest first, a page at a time
- * (`notifications.list`). `notification.requested` and `notifications.read`
- * refetch it (`api/events.ts`). */
+/** Paginated query for the user's notification inbox in reverse chronological
+ * order (`notifications.list`). */
 export function useNotificationInbox(enabled = true) {
   const signedIn = useSignedIn();
   return useInfiniteQuery({
@@ -383,7 +376,7 @@ export function useNotificationInbox(enabled = true) {
   });
 }
 
-/** How many notifications the reader has not read, for the sidebar badge. */
+/** Queries unread notification count for badge display. */
 export function useUnreadNotificationCount() {
   const signedIn = useSignedIn();
   return useQuery({
@@ -397,7 +390,7 @@ export function useUnreadNotificationCount() {
 type InboxPages = InfiniteData<InboxNotificationPage, string | null>;
 
 /** Marks the cached inbox entries `ids` (all when null) read at `at`, and
- * lowers the cached unread count by as many as changed. */
+ * decrements the cached unread count by the number of updated entries. */
 function markInboxRead(client: QueryClient, ids: ReadonlySet<string> | null, at: number): void {
   let changed = 0;
   client.setQueryData<InboxPages>(queryKeys.notifications(), (data) =>
@@ -438,8 +431,8 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
-/** Who has the thread open, kept current by `research.presence.changed`.
- * Guests have no event stream, so no presence. */
+/** Queries active thread viewers. Synchronized via `research.presence.changed`
+ * for authenticated users; guests do not transmit presence. */
 export function useThreadPresence(treeId: string): ThreadViewer[] {
   const signedIn = useSignedIn();
   return (
@@ -454,10 +447,9 @@ export function useThreadPresence(treeId: string): ThreadViewer[] {
 const NO_VIEWERS: ThreadViewer[] = [];
 
 /**
- * Declares the thread open on this connection while the component is
- * mounted (`events.setInterest` `treeIds`): presence, and for a public
- * thread read by someone who is not a member, its events. The bridge renews
- * the declaration before the server lets it lapse.
+ * Registers active interest in the thread while mounted (`events.setInterest`).
+ * Maintains presence tracking and event delivery for non-member viewers of public
+ * threads.
  */
 export function useThreadInterest(treeId: string | undefined, enabled = true): void {
   useEffect(() => {
@@ -507,7 +499,7 @@ export function useRemoveThreadMember() {
   });
 }
 
-/** Leaves a thread shared with the caller: it goes from every list. */
+/** Leaves a shared thread and removes it from cached lists. */
 export function useLeaveThread() {
   const client = useQueryClient();
   return useMutation({
@@ -544,8 +536,7 @@ export function useRevokeThreadInvite() {
   });
 }
 
-/** Accepts an invitation by its link's token or, for one addressed to the
- * caller's login, by id. Answers with the thread as the caller now sees it. */
+/** Accepts a thread invitation by token or invitation id, returning the updated thread. */
 export function useAcceptThreadInvite() {
   const client = useQueryClient();
   return useMutation({
@@ -564,7 +555,7 @@ export function useAcceptThreadInvite() {
   });
 }
 
-/** Notify me: notifications for new questions and notes in the thread. */
+/** Updates notification subscription preference for new questions and notes in the thread. */
 export function useSetThreadFollowed() {
   const client = useQueryClient();
   return useMutation({
@@ -574,15 +565,15 @@ export function useSetThreadFollowed() {
   });
 }
 
-/** Feed roots requested in the same tick, read with one call. */
+/** Pending feed root requests queued within the current event loop turn for
+ * batch retrieval. */
 let pendingFeedRoots: {
   ids: Set<string>;
   result: Promise<Map<string, RecentResearchQuery>>;
 } | null = null;
 
-/** Reads one thread's root entry, batched with the other cards that ask in
- * the same tick (the desktop's `onLoadTrees`, which loads the visible cards'
- * roots together). */
+/** Fetches a thread's root entry, coalescing concurrent calls in the same
+ * event loop turn into a single batch request. */
 export function loadFeedRoot(treeId: string): Promise<RecentResearchQuery | null> {
   if (!pendingFeedRoots) {
     const ids = new Set<string>();
@@ -612,8 +603,7 @@ export const feedRootQueryOptions = (treeId: string) =>
     queryFn: () => loadFeedRoot(treeId),
   });
 
-/** A Home card's root entry, unless `enabled` is false (the card already has
- * one from a feed page). */
+/** Fetches the thread's root query for card preview display. */
 export function useFeedRoot(treeId: string, enabled = true) {
   return useQuery({ ...feedRootQueryOptions(treeId), enabled: enabled && treeId !== "" });
 }
@@ -656,14 +646,9 @@ export interface NodeContentView {
 }
 
 /**
- * Whether the snapshot poll is on: the stream has been down for the grace
- * period the connection store keeps (`05-run-lifecycle-and-streaming.md` §9).
- *
- * The rule is a deadline rather than a status, so a status change alone cannot
- * drive it — a tab that loses the stream and changes nothing else has to start
- * polling when the grace elapses. The timer is what re-reads the store then;
- * it is shared by every mounted document view, which is why the state is
- * derived here and not inside `useNodeContent`'s poll effect.
+ * Determines whether snapshot polling fallback is active after the stream connection
+ * has been disconnected beyond the configured grace period (`05-run-lifecycle-and-streaming.md` §9).
+ * Re-evaluates on timer expiration when the grace deadline passes without intermediate state changes.
  */
 function useSnapshotPollFallback(): boolean {
   const disconnectedSince = useConnectionStore((state) =>
@@ -674,8 +659,8 @@ function useSnapshotPollFallback(): boolean {
     if (disconnectedSince === null) return;
     const remaining = disconnectedSince + CONNECTION_FALLBACK_DELAY_MS - Date.now();
     if (remaining <= 0) return;
-    // Nothing in the store changes when a deadline passes, so the deadline is
-    // what asks for the re-render that reads the rule again.
+    // Store state does not change when the deadline passes; the timer triggers
+    // a re-render to re-evaluate fallback eligibility.
     const timer = setTimeout(() => retest((count) => count + 1), remaining);
     return () => clearTimeout(timer);
   }, [disconnectedSince]);
@@ -683,15 +668,14 @@ function useSnapshotPollFallback(): boolean {
 }
 
 /**
- * The streaming protocol's client half (`05-run-lifecycle-and-streaming.md`
- * §4, §9).
+ * Client implementation of the streaming protocol
+ * (`05-run-lifecycle-and-streaming.md` §4, §9).
  *
- * The snapshot seeds the live buffer with the sequence number it was taken at,
- * and the bridge applies only the next delta in sequence, refetching the
- * snapshot on a gap rather than rendering content with a piece missing. When
- * the run completes, the buffer is dropped in the same pass that installs the
- * durable snapshot, so the timeline does not flash: both paths produce the
- * same `Turn[]`.
+ * The snapshot seeds the live buffer with its corresponding sequence number,
+ * and the bridge applies subsequent deltas in order, refetching the snapshot
+ * on sequence gaps rather than rendering incomplete content. When the run
+ * completes, the live buffer is cleared as the durable snapshot is applied,
+ * preventing visual flicker as both produce identical `Turn[]` structures.
  */
 export function useNodeContent(nodeId: string | undefined): NodeContentView {
   const id = nodeId ?? "";
@@ -704,8 +688,8 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     queryKey: queryKeys.nodeContent(id),
     queryFn: () => getResearchNodeContent(id),
     enabled: id !== "",
-    // Mount, focus and reconnect all have to reach the server: the stream has
-    // no replay buffer, so a stale snapshot is missing text, not merely old.
+    // Refetch on mount, focus, and reconnect because the stream lacks a replay
+    // buffer; snapshots must be authoritative.
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -715,18 +699,15 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
   // keyed on it would re-subscribe on every render.
   const { data: content, dataUpdatedAt, refetch } = query;
   const active = content ? isActiveResearchStatus(nodeStatus(content.node)) : false;
-  // What the buffer is waiting for: the durable snapshot the terminal
-  // `research.node.updated` stamps (`05-run-lifecycle-and-streaming.md` §4).
-  // A run that ends `failed`, `cancelled` or `interrupted` never writes one,
-  // and `getNodeContent` falls back to `run_turns` for it (`03` §4), so for
-  // those the terminal status is itself the signal.
+  // Indicates whether the durable snapshot is ready. Completed runs persist a final
+  // response snapshot on `research.node.updated` (`05-run-lifecycle-and-streaming.md` §4),
+  // while failed, cancelled, or interrupted runs rely directly on their terminal node status.
   const durableReady =
     content !== undefined &&
     !active &&
     (nodeResponseSnapshotAt(content.node) !== null || nodeStatus(content.node) !== "complete");
 
-  // Only while the stream is down, and only for a node that is still working:
-  // polling a finished node would re-read a snapshot that cannot change.
+  // Polls active nodes only while the stream is disconnected.
   const shouldPoll = pollWhileDown && active;
   useEffect(() => {
     if (!shouldPoll || id === "") return;
@@ -736,12 +717,10 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
 
   useNodeInterest(active ? id : undefined);
 
-  // Seeding is keyed on the snapshot's sequence number, so an identical
-  // refetch does not reset a buffer that has already moved past it. It runs on
-  // `dataUpdatedAt` rather than on `content` alone because structural sharing
-  // hands back the very same object when a refetch finds nothing new, and the
-  // refetch a gap asks for is exactly that case: without re-seeding from it the
-  // buffer would stay frozen on its gap flag.
+  // Buffer seeding is keyed on sequence numbers to prevent resetting a buffer
+  // that has advanced beyond the snapshot. Tracking `dataUpdatedAt` ensures
+  // gap-recovery refetches re-evaluate even when structural sharing returns
+  // an unchanged content reference.
   const seededSeq = useRef<number | null>(null);
   useEffect(() => {
     if (id === "" || !content || !active) return;
@@ -750,9 +729,8 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     if (seededSeq.current === seq && buffered && !buffered.gap) return;
     if (buffered && !buffered.gap && buffered.lastSeq > seq) return;
     seededSeq.current = seq;
-    // The snapshot carries every committed turn of the attempt, so re-seeding
-    // after a gap restores the turns already on screen rather than dropping
-    // them (`05-run-lifecycle-and-streaming.md` §2, §4).
+    // The snapshot includes committed turns for the attempt, preserving
+    // previously rendered turns upon gap recovery (`05-run-lifecycle-and-streaming.md` §2, §4).
     seed(id, {
       turns: content.turns,
       inFlightText: content.inFlightText ?? "",
@@ -761,8 +739,8 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     });
   }, [id, content, dataUpdatedAt, active, seed]);
 
-  // A gap means the buffer froze rather than render a hole; the snapshot is
-  // the only way back to a consistent view.
+  // A sequence gap halts stream delta application until refetching the full
+  // snapshot restores sequence continuity.
   const gap = live?.gap === true;
   useEffect(() => {
     if (!gap || id === "") return;
@@ -789,9 +767,8 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     });
   }, [id, finished, durableReady, clear, refetch]);
 
-  // The buffer stays in charge until it is dropped. Between `run.finished` and
-  // the durable refetch the cached content is still the pre-finish read, and
-  // switching to it there is the flash §4 rules out.
+  // The live buffer remains authoritative until cleared to prevent visual flicker
+  // between `run.finished` and the final committed snapshot refetch (§4).
   const useLive = live !== undefined && (active || live.status === "finished");
   return {
     content,
@@ -806,9 +783,8 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
 }
 
 /**
- * Declares a node as displayed, so the server sends its turn deltas to this
- * connection (`events.setInterest`). The registry is reference counted and the
- * publish is debounced, so opening a document and its parent is one call.
+ * Registers interest in a displayed node to receive turn deltas over SSE
+ * (`events.setInterest`). Debounced and reference-counted.
  */
 export function useNodeInterest(nodeId: string | undefined): void {
   useEffect(() => {
@@ -821,17 +797,14 @@ export function useNodeInterest(nodeId: string | undefined): void {
  * Mutations
  * ---------------------------------------------------------------------- */
 
-/** A tree row the server just returned: patch every list that holds it and the
- * detail the user may be looking at. */
+/** Updates cached tree summaries and detail with newly returned tree data. */
 function writeTree(client: QueryClient, tree: ResearchTree): void {
   mapSummaries(client, (summary) => patchResearchSummaryTree(summary, tree));
   patchDetail(client, tree.id, (detail) => patchResearchDetailTree(detail, tree));
 }
 
-/** A whole detail: the authoritative shape, so the summary's counts are
- * recomputed from it rather than patched field by field. `insert` adds the
- * thread to the reader's own lists for its workspace when they do not hold it
- * (a thread just created); a retry only updates the lists that do. */
+/** Writes full thread detail to cache and recomputes summary counts. `insert`
+ * adds newly created threads to the user's workspace lists. */
 function writeDetail(
   client: QueryClient,
   detail: ResearchTreeDetail,
@@ -842,8 +815,7 @@ function writeDetail(
   for (const node of detail.nodes) patchActiveNodes(client, node);
 }
 
-/** A new thread's Home card entry, from its detail, so the card shows without
- * a round trip. */
+/** Populates feed root cache from thread detail for initial card display. */
 function writeFeedRoot(client: QueryClient, detail: ResearchTreeDetail): void {
   const root = detail.nodes.find((node) => node.id === detail.tree.rootNodeId);
   const entry = root ? recentResearchQueryFromNode(root, true) : null;
@@ -857,16 +829,16 @@ export function useCreateResearchTree() {
     onSuccess: (detail) => {
       writeDetail(client, detail, { insert: true });
       writeFeedRoot(client, detail);
-      // A new root question is a new feed row, and the feed is keyset
-      // paginated: there is no correct place to splice it in by hand.
+      // Invalidate activity feed queries to include the newly created root question
+      // in paginated results.
       invalidateKeys(client, ["activity"]);
     },
   });
 }
 
-/** A node a mutation just created. The summary counts are a delta, so they
- * move only when no cache held the node yet: the `research.node.created`
- * event may have arrived before the response and counted it already. */
+/** Patches cache with a newly created node. Summary counts update only if
+ * the node was not already recorded by a preceding `research.node.created`
+ * event. */
 function writeCreatedNode(client: QueryClient, node: ResearchNode): void {
   const known = cachedNode(client, node.treeId, node.id) !== undefined;
   patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
@@ -884,16 +856,15 @@ export function useForkResearchNode() {
     mutationFn: forkResearchNode,
     onSuccess: (node) => {
       writeCreatedNode(client, node);
-      // A follow-up question is a new feed row, and the feed is keyset
-      // paginated: there is no correct place to splice it in by hand.
+      // Invalidate activity feed queries to integrate the follow-up question
+      // into paginated results.
       invalidateKeys(client, ["activity"]);
     },
   });
 }
 
-/** Asks a follow-up at the end of a chain (`followups.ask`). A follow-up
- * sent at once is patched in as `useForkResearchNode` patches one; a queued
- * one is added to the chain's queue in the cached detail. */
+/** Appends a follow-up query to a chain (`followups.ask`), immediately
+ * patching the node or appending it to the cached chain queue. */
 export function useAskResearchFollowup() {
   const client = useQueryClient();
   return useMutation({
@@ -915,8 +886,8 @@ export function useAskResearchFollowup() {
   });
 }
 
-/** Cancels or retries a queued follow-up; both answer with the chain's
- * queue after the change. */
+/** Cancels or retries a queued follow-up, updating cached queue state from
+ * the response. */
 export function useQueuedFollowupAction() {
   const client = useQueryClient();
   return useMutation({
@@ -944,7 +915,7 @@ export function useRetryResearchNode() {
       retryResearchNode(input.nodeId, input.model),
     onSuccess: (detail, input) => {
       writeRelaunch(client, { detail });
-      // The retried node starts a fresh attempt from sequence zero.
+      // Invalidate node content query to reset stream buffer state for retry attempt.
       invalidateKeys(client, queryKeys.nodeContent(input.nodeId));
     },
   });
@@ -973,8 +944,8 @@ export function useMarkTreeViewed() {
     mutationFn: markResearchTreeViewed,
     onSuccess: (tree) => {
       writeTree(client, tree);
-      // The attention flags are derived from `lastViewedAt`, which the summary
-      // patch deliberately leaves alone.
+      // Clear unviewed update and failure flags in cached summaries when marking
+      // a tree as viewed.
       mapSummaries(client, (summary) =>
         summary.id === tree.id
           ? { ...summary, hasUnseenUpdate: false, hasUnseenFailure: false }
@@ -991,14 +962,13 @@ export function useArchiveResearchTree() {
       input.archived ? archiveResearchTree(input.treeId) : restoreResearchTree(input.treeId),
     onSuccess: (tree) => {
       writeTree(client, tree);
-      // A member's Archive is their own list (`sharing.listShared`).
+      // Invalidate tree lists and shared lists when archiving or restoring.
       invalidateKeys(client, ["trees"], ["shared"]);
     },
   });
 }
 
-/** Drops threads that left every list but the Trash's (moved to the Trash or
- * deleted) from the caches that hold them. */
+/** Removes deleted or trashed threads from local query caches. */
 function dropTrees(client: QueryClient, treeIds: readonly string[]): void {
   const gone = new Set(treeIds);
   eachTreeList(client, (summaries) => {
@@ -1013,8 +983,7 @@ function dropTrees(client: QueryClient, treeIds: readonly string[]): void {
   dropActiveNodes(client, (node) => gone.has(node.treeId));
 }
 
-/** Deletes a thread now, in or out of the Trash, with the children listed
- * under it (Delete now). */
+/** Permanently deletes a thread and descendant subtrees. */
 export function useRemoveResearchTree() {
   const client = useQueryClient();
   return useMutation({
@@ -1026,16 +995,16 @@ export function useRemoveResearchTree() {
   });
 }
 
-/** Moves a thread, and the children listed under it, to the Trash. The
- * server refuses while one of them has an active run. */
+/** Moves a thread and its descendant subtrees to Trash. Fails if active runs
+ * exist in the subtree. */
 export function useTrashResearchTree() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: trashResearchTree,
     onSuccess: (tree) => {
       dropTrees(client, [tree.id]);
-      // The children moved with it arrive as `research.tree.removed` events.
-      // A member's Trash is their own list (`sharing.listShared`).
+      // Descendant removals are propagated via `research.tree.removed` events;
+      // invalidate trash and activity queries.
       invalidateKeys(
         client,
         queryKeys.trash(tree.workspaceId),
@@ -1047,7 +1016,7 @@ export function useTrashResearchTree() {
   });
 }
 
-/** Takes a thread, and its children in the Trash, out of the Trash. */
+/** Restores a thread and its descendant subtrees from Trash. */
 export function useRestoreResearchTreeFromTrash() {
   const client = useQueryClient();
   return useMutation({
@@ -1074,7 +1043,7 @@ export function useEmptyResearchTrash() {
     onSuccess: (result, workspaceId) => {
       dropTrees(client, result.treeIds);
       client.setQueryData<ResearchTreeSummary[]>(queryKeys.trash(workspaceId), []);
-      // The shared threads in this workspace's Trash were left.
+      // Reset trashed shared thread cache for the workspace.
       client.setQueryData<ResearchTreeSummary[]>(queryKeys.shared("trash", workspaceId), []);
       invalidateKeys(client, queryKeys.shared("trash"));
       if (result.folderIds.length > 0) invalidateKeys(client, queryKeys.folders(workspaceId));
@@ -1111,7 +1080,8 @@ export function useCreateResearchPostFollowUp() {
   });
 }
 
-/** Replaces a note's text; a stale `expectedText` is refused with CONFLICT. */
+/** Updates note text; rejects with CONFLICT if `expectedText` does not match
+ * server state. */
 export function useUpdateResearchPost() {
   const client = useQueryClient();
   return useMutation({
@@ -1129,7 +1099,7 @@ export function useUpdateResearchPost() {
   });
 }
 
-/** Asks again for a note's unavailable X posts. */
+/** Retries hydration for unavailable embedded posts. */
 export function useHydrateResearchPostTweet() {
   const client = useQueryClient();
   return useMutation({
@@ -1145,8 +1115,8 @@ export function useHydrateResearchPostTweet() {
  * Saved drafts
  * ---------------------------------------------------------------------- */
 
-/** Creates (no id) or updates a draft. An update to a draft no longer listed
- * (sent or deleted meanwhile) does not bring it back. */
+/** Creates or updates a research draft. Does not re-insert drafts deleted
+ * or submitted during editing. */
 export function useSaveResearchDraft() {
   const client = useQueryClient();
   return useMutation({
@@ -1163,7 +1133,7 @@ export function useSaveResearchDraft() {
   });
 }
 
-/** Deletes a draft; the list drops it at once and gets it back on a failure. */
+/** Optimistically removes a draft from cache, reverting on mutation failure. */
 export function useDeleteResearchDraft() {
   const client = useQueryClient();
   return useMutation({
@@ -1184,7 +1154,7 @@ export function useDeleteResearchDraft() {
   });
 }
 
-/** Moves a draft before `beforeId`, or to the end for null. */
+/** Moves a draft before `beforeId`, or appends to the end when null. */
 export function useMoveResearchDraft() {
   const client = useQueryClient();
   return useMutation({
@@ -1217,12 +1187,9 @@ export function useRemoveResearchBranch() {
     mutationFn: removeResearchBranch,
     onSuccess: (removal) => {
       const removed = new Set(removal.removedNodeIds);
-      // The counts a removal subtracts are read off the cached rows, so they
-      // are read before the detail loses them, and the detail is patched here
-      // rather than invalidated: the `research.node.removed` that follows then
-      // finds no removed rows left and subtracts nothing a second time. With
-      // no cached detail, there is nothing to read or patch, so the counts
-      // stay as they are.
+      // Node counts are decremented using cached node rows prior to updating detail.
+      // Modifying detail directly prevents duplicate decrements when the subsequent
+      // `research.node.removed` event arrives.
       const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(removal.treeId));
       const removedNodes = (detail?.nodes ?? []).filter((node) => removed.has(node.id));
       patchDetail(client, removal.treeId, (current) =>
@@ -1277,7 +1244,7 @@ export function useLogout() {
       // Clear the React Query cache on logout to purge user data from memory.
       client.clear();
       useSettingsStore.getState().reset();
-      // And the unsent drafts and branches this browser kept for the account.
+      // Clear locally stored unsent drafts and thread branch navigation state.
       clearLocalAccountState();
     },
   });
@@ -1295,9 +1262,8 @@ export function useCreateInvites() {
   return useMutation({ mutationFn: createInvites });
 }
 
-/** The server's settings, applied to the local mirror. Exported for the boot
- * sequence and the tests; `06-auth-and-users.md` §6 makes the server's copy
- * authoritative on load. */
+/** Server settings applied to the local store. Authoritative on load per
+ * `06-auth-and-users.md` §6; exported for boot initialization and tests. */
 export type ServerSettings = UserSettings & {
   researchLaunchInstruction: string | null;
   defaultWorkspaceId: string | null;

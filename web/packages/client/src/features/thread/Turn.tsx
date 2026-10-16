@@ -1,8 +1,6 @@
-// One message and its answer in a thread (`09-research-document-view.md`
-// §3, §7), ported from the desktop `ResearchTurn.tsx`: the answer pane an
-// answer column shows, its timeline items, and the message row a messages
-// column lists. Message text is clamped to 12 lines with Show more; posts it
-// links to (tweets) and its images follow the clamped text.
+// Message row and answer pane rendering for research thread turns (`09-research-document-view.md`
+// §3, §7; desktop `ResearchTurn.tsx`). Renders timeline items, clamped message text with expand
+// controls, and linked media attachments.
 
 import type {
   MessageBlock,
@@ -91,15 +89,14 @@ function MessageBlockView({
   imported: boolean;
 }) {
   if (block.type === "text") {
-    // A conversation transcript's user messages are content, not leakage.
+    // User messages in conversation transcripts are rendered as content.
     if (role === "assistant" || conversation) {
       return (
         <ResearchMarkdown
           widgetNodeId={role === "assistant" ? nodeId : undefined}
-          // An imported report keeps the citation handles of the tool that
-          // wrote it, which point nowhere here.
+          // Strip source citation handles from imported reports as external references do not resolve in this context.
           markdown={imported ? stripImportedReportCitations(block.text) : block.text}
-          // Imported in full: it is the document itself.
+          // Render imported documents in full without truncation policy.
           {...(imported ? {} : { oversized: OVERSIZED_MARKDOWN_POLICY })}
         />
       );
@@ -115,9 +112,8 @@ function MessageBlockView({
   );
 }
 
-/** The answer a widget in this timeline item belongs to: what its "Ask for
- * changes" quotes, the key its revisions are recorded under, and why a branch
- * cannot be asked from it now. */
+/** Provides widget answer context for change requests, revision tracking keys,
+ * and branch creation preconditions. */
 function WidgetAnswerScope({
   node,
   item,
@@ -144,9 +140,9 @@ function WidgetAnswerScope({
   return <WidgetAnswerContext.Provider value={value}>{children}</WidgetAnswerContext.Provider>;
 }
 
-/** One item of an answer's timeline: its message blocks, then its tool calls
- * and thinking. Memoized on the item, whose identity follows the node's
- * content: a streaming sibling does not re-parse this item's Markdown. */
+/** Renders a timeline entry containing message blocks, tool activity, and reasoning
+ * output. Memoized by message item to prevent redundant markdown parsing during
+ * streaming updates. */
 export const TimelineItem = memo(function TimelineItem({
   item,
   nodeId,
@@ -157,10 +153,9 @@ export const TimelineItem = memo(function TimelineItem({
   item: MessageItem;
   nodeId: string;
   conversation?: boolean;
-  /** An imported report (`documentSource`), whose citation handles are
-   * removed. */
+  /** Whether the item is an imported document report with stripped citation handles. */
   imported?: boolean;
-  /** Tool calls and reasoning start open: the answer is still running. */
+  /** Whether tool invocations and reasoning blocks are expanded by default while streaming. */
   expandActivities?: boolean;
 }) {
   const unexpected = !conversation && item.role !== "assistant" && item.blocks.length > 0;
@@ -218,8 +213,8 @@ export const TimelineItem = memo(function TimelineItem({
 
 /* -------------------------------------------------------------- answer pane */
 
-/** The status line of an active run: its place in the admission queue while
- * it waits behind others, then what it is doing. */
+/** Constructs the status string for active runs, indicating queue position or
+ * current activity. */
 export function runStatusText(
   node: ResearchNode,
   thinking: boolean,
@@ -228,7 +223,7 @@ export function runStatusText(
   const status = nodeStatus(node);
   if (status === "interrupted") return "Interrupted · resuming";
   if (status === "queued") {
-    // The server notes why a queued run waits (the daily limits) as its error.
+    // Queued runs hold queue-delay reasons (such as rate limits) in the error field.
     const waiting = nodeRun(node)?.error;
     if (waiting) return waiting;
     return queuePosition !== undefined && queuePosition > 0
@@ -249,7 +244,7 @@ const TURN_BUTTON_GHOST =
   "disabled:text-fg-disabled " +
   FOCUS_RING;
 
-/** The elapsed time of a running answer, ticking in its own leaf. */
+/** Renders elapsed execution time for an active run. */
 function ElapsedClock({ since }: { since: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -281,10 +276,8 @@ export interface AnswerPaneHandlers {
   onRootMouseLeave: () => void;
 }
 
-/** The answer column's content for one message: under a status line with
- * the elapsed time and Stop while it runs, the recap, the answer, and its
- * sources. A failed answer ends in "Error." and the error, with Retry and
- * Edit question; a stopped one in "Stopped after …" with Run again. */
+/** Renders the answer column pane for a message, including execution status,
+ * elapsed time, cancellation controls, recap summary, response body, and citations. */
 export const AnswerPane = memo(function AnswerPane({
   view,
   node,
@@ -313,7 +306,7 @@ export const AnswerPane = memo(function AnswerPane({
   canRetry: boolean;
   retrying: boolean;
   canEditQuestion: boolean;
-  /** The reader may stop the run (web only: its asker or the owner). */
+  /** Whether the current user has permission to cancel the run. */
   canCancel?: boolean;
   handlers: AnswerPaneHandlers;
 }) {
@@ -322,7 +315,7 @@ export const AnswerPane = memo(function AnswerPane({
   const run = nodeRun(node);
   const nodeId = node.id;
   const register = handlers.registerSegmentElement;
-  // Stable, so React does not detach and reattach the root on every render.
+  // Memoized callback to avoid detaching the root DOM element across renders.
   const rootCallback = useCallback(
     (element: HTMLDivElement | null) => register(nodeId, "root", element),
     [nodeId, register],
@@ -451,7 +444,7 @@ export const AnswerPane = memo(function AnswerPane({
             ? "The run was interrupted and could not resume. The answer is incomplete."
             : run?.startedAt
               ? `Stopped after ${formatRunDuration((run.completedAt ?? run.startedAt) - run.startedAt)}. The answer is incomplete.`
-              : "Stopped before it started."}
+              : "Stopped before execution started."}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">{retryButton("Run again")}</div>
       </>
@@ -501,8 +494,7 @@ export const AnswerPane = memo(function AnswerPane({
               {view.hiddenTimelineItemCount === 1 ? "" : "s"}
             </button>
           ) : null}
-          {/* The selection root: the `answer-v1` projection is this element's
-              text (09 §5). */}
+          {/* Root container for text range selection and annotation indexing (09 §5). */}
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={rootCallback}
@@ -551,21 +543,21 @@ export const AnswerPane = memo(function AnswerPane({
 
 /* -------------------------------------------------------------- message row */
 
-/** A message's run state for its row's glyph. */
+/** Determines the execution state for message row status glyphs. */
 export function messageRowState(node: ResearchNode): ResearchRowState {
   const status: ResearchNodeStatus = nodeStatus(node);
   if (status === "interrupted") return runActive(node) ? "running" : "stopped";
   return researchRowState(status);
 }
 
-/** The states the row's meta line also names in words. */
+/** Returns text labels for states displayed in the message metadata line. */
 export function messageStateWord(state: ResearchRowState): string | null {
   if (state === "queued") return "Queued";
   if (state === "stopped") return "Stopped";
   return null;
 }
 
-// One observer for every clamped row.
+// Shared ResizeObserver instance for clamped message rows.
 let clampObserver: ResizeObserver | null = null;
 const clampMeasures = new WeakMap<Element, () => void>();
 
@@ -582,9 +574,8 @@ function observeSize(element: Element, measure: () => void): () => void {
   };
 }
 
-/** The 12-line clamp of a row's text: `ref` and `id` go on the clamp box,
- * and `overflows` says whether the text is longer, so the row shows Show
- * more. Expanded text is not measured: the row keeps Show less. */
+/** Manages 12-line clamp measurement for message row text and determines whether
+ * expansion controls are displayed. */
 export function useTileClamp(expanded: boolean) {
   const id = useId();
   const [element, setElement] = useState<HTMLElement | null>(null);
@@ -593,7 +584,7 @@ export function useTileClamp(expanded: boolean) {
   useLayoutEffect(() => {
     expandedRef.current = expanded;
     if (element && !expanded) {
-      // Measured after layout: the clamp box's size decides.
+      // Measured after layout using clamp container dimensions.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOverflows(researchTileOverflows(element.scrollHeight, element.clientHeight));
     }
@@ -614,7 +605,7 @@ export function useTileClamp(expanded: boolean) {
   };
 }
 
-/** Show more or Show less below a clamped row's text. */
+/** Toggle button to expand or collapse clamped message text. */
 export function TileToggle({
   controls,
   expanded,
@@ -645,8 +636,7 @@ export function TileToggle({
   );
 }
 
-/** A row's drag handle and … button in one pill in its top-right corner,
- * shown on hover, on focus within the row and while its menu is open. */
+/** Action rail providing drag handle and context menu trigger for message rows. */
 export function RowRail({
   grip,
   menuLabel,
@@ -702,7 +692,7 @@ export function RowRail({
   );
 }
 
-/** The images attached to a message, as thumbnails that open full size. */
+/** Thumbnail strip for image attachments on a message. */
 export function MessageImages({
   attachments,
   tabIndex,
@@ -739,9 +729,7 @@ export function MessageImages({
   );
 }
 
-/** A message's text with the posts it links to embedded below it: a
- * permalink that trailed the text is dropped from it, since the card
- * replaces it. `renderPrompt` wraps the text (the clamp box). */
+/** Renders message text and associated embedded post cards and image attachments. */
 export function MessageBody({
   prompt,
   attachments,
@@ -755,7 +743,7 @@ export function MessageBody({
   lead?: ReactNode;
   imageTabIndex?: number;
   renderPrompt?: (content: ReactNode) => ReactNode;
-  /** `prose` reads at the answer's size (a note's own column). */
+  /** Markdown typography scale variant. */
   variant?: "compact" | "prose";
 }) {
   const text = visibleResearchPrompt(prompt, attachments);
@@ -790,11 +778,8 @@ export interface MessageRowActions {
   onDragStart: MessageDragStart;
 }
 
-/** One message in a messages column: its text (or a document's title), a
- * meta line when there is something to say (Imported, Queued, Stopped), the
- * branch indicator at the end of its first line when its answer has
- * branches, and the … pill. One button under the content selects the
- * message; only the selected row is in the tab order. */
+/** Renders a message row in the messages column, including prompt text, status badges,
+ * branch indicators, and row action controls. */
 export const MessageRow = memo(function MessageRow({
   node,
   level,
@@ -814,7 +799,7 @@ export const MessageRow = memo(function MessageRow({
   node: ResearchNode;
   level: number;
   label: string;
-  /** Documents and conversations carry no question: the row shows `label`. */
+  /** Whether prompt text is displayed; false for documents and conversations that show title labels. */
   showPrompt: boolean;
   selected: boolean;
   focusable?: boolean;
@@ -824,7 +809,7 @@ export const MessageRow = memo(function MessageRow({
   branchUnread: boolean;
   answerMenuOpen: boolean;
   expanded?: boolean;
-  /** The drop place the row reorders in; null when it does not move. */
+  /** Target drop container identifier during drag reordering; null when not draggable. */
   dragPlace?: string | null;
   actions: MessageRowActions;
 }) {
@@ -1025,7 +1010,7 @@ export const MessageRow = memo(function MessageRow({
   );
 });
 
-/** Whether a node's answer can take Retry from its answer pane. */
+/** Determines whether an answer can be retried from its answer pane. */
 export function answerRetryable(node: ResearchNode, archived: boolean): boolean {
   return !archived && runRetryable(node);
 }

@@ -1,7 +1,7 @@
 // Account-scoped wire types introduced by the web app: the signed-in user,
 // workspaces (the desktop's research-scoped `GroupInfo`), user settings, the
 // per-day usage summary, and the model registry
-// entries as the client sees them (`04-agent-runtime.md` §1).
+// entries as returned to the client (`04-agent-runtime.md` §1).
 
 import { z } from "zod";
 

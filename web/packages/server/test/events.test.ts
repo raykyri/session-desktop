@@ -152,7 +152,7 @@ test("an anonymous subscription carries an error rather than a stream", async (t
   t.true(text.includes("UNAUTHORIZED"));
 });
 
-test("a reused connection id replaces the older stream rather than unseating the new one", async (t) => {
+test("a reused connection id replaces the older stream rather than terminating the new stream", async (t) => {
   const bus = new EventBus();
   const first = bus.subscribe("user-1", "same");
   const ended = first.events.next();
@@ -171,7 +171,7 @@ test("a reused connection id replaces the older stream rather than unseating the
   t.is(bus.connectionCount("user-1"), 0);
 });
 
-test("emitToTree reaches the owner, the members and declared public readers", async (t) => {
+test("emitToTree reaches the owner, members, and declared public readers", async (t) => {
   let isPublic = true;
   let now = 1_000;
   const bus = new EventBus(
@@ -191,7 +191,7 @@ test("emitToTree reaches the owner, the members and declared public readers", as
     bus.viewers("tree-1").map((viewer) => viewer.userId),
     ["reader", "watcher"],
   );
-  // A declaration that is not renewed lapses; renewing keeps it.
+  // An unrenewed presence declaration expires; renewal maintains it.
   now += 60_000;
   bus.setInterest("reader", "r", [], ["tree-1"]);
   now += 40_000;
@@ -210,9 +210,9 @@ test("emitToTree reaches the owner, the members and declared public readers", as
   const readerEvents = drain(reader, 3);
   bus.emitToTree("tree-1", sessionEvent("research.tree.updated", { tree: { id: "tree-1" } }));
 
-  // Presence changes (two arrivals, one lapse) reached the audience before
-  // the node update; the reader got the presence after their own arrival,
-  // and nothing while the thread was private.
+  // Presence updates (two joins, one expiration) preceded the node update;
+  // the reader received presence after joining, and no events while the thread
+  // was private.
   t.deepEqual(
     (await ownerEvents).map((event) => event.type),
     [
@@ -230,7 +230,7 @@ test("emitToTree reaches the owner, the members and declared public readers", as
   bus.closeAll();
 });
 
-test("presence lists only readers in the audience, and losing access drops the declaration", async (t) => {
+test("presence lists only audience members, and access loss clears registration", async (t) => {
   let isPublic = true;
   const bus = new EventBus({
     audience: () => ({ ownerId: "owner", memberIds: ["member"], public: isPublic }),
@@ -245,14 +245,14 @@ test("presence lists only readers in the audience, and losing access drops the d
     bus.viewers("tree-1").map((viewer) => viewer.userId),
     ["member", "reader"],
   );
-  // The thread turns private: the reader is no longer presence at once,
-  // before any declaration lapses.
+  // When visibility changes to private, the reader is removed from presence
+  // immediately without waiting for timeout.
   isPublic = false;
   t.deepEqual(
     bus.viewers("tree-1").map((viewer) => viewer.userId),
     ["member"],
   );
-  // They are told, and their declaration is dropped.
+  // A sharing change event is emitted, and the presence registration is cleared.
   const told = drain(reader, 3);
   bus.emitToOpenReaders("tree-1", sessionEvent("research.sharing.changed", { treeId: "tree-1" }), [
     "owner",
@@ -267,7 +267,7 @@ test("presence lists only readers in the audience, and losing access drops the d
   t.deepEqual(
     bus.viewers("tree-1").map((viewer) => viewer.userId),
     ["member"],
-    "the dropped declaration does not come back with the thread",
+    "cleared registration is not restored when the thread becomes public",
   );
   const ownerEvents = drain(owner, 3);
   t.deepEqual(

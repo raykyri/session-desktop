@@ -92,7 +92,7 @@ export const postProcedures = {
   createPostFollowUp: protectedProcedure
     .input(z.object({ parentNodeId: z.string(), body: z.string().min(1) }))
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
-      // A viewer is refused before the note's links are fetched.
+      // Viewer role is rejected before the note's links are fetched.
       requireNodeRole(ctx, input.parentNodeId, "commenter");
       const tweets = await resolveMessageAttachments(
         { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
@@ -130,8 +130,8 @@ export const postProcedures = {
   hydratePostTweet: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
-      // The write below is a commenter's; a viewer is refused before the
-      // server fetches anything from X for them.
+      // The write below requires commenter role; a viewer is rejected before
+      // the server fetches anything from X.
       requireNodeRole(ctx, input.nodeId, "commenter");
       const message = repo(() => posts.message(ctx.db, ctx.user.id, input.nodeId));
       const unavailable = (message.attachments ?? []).flatMap((attachment) =>

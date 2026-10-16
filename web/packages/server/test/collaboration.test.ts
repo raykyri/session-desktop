@@ -17,7 +17,7 @@ import { anchorFor, answerTurn, createHarness } from "./helpers.js";
 import type { Thread } from "./threadHelpers.js";
 import { listen, settle, sharedThread } from "./threadHelpers.js";
 
-test("an invitation by login notifies its account, and accepting it tells the owner", async (t) => {
+test("an invitation by login notifies the recipient account, and accepting it notifies the owner", async (t) => {
   const harness = createHarness(t);
   const owner = harness.addUser("invite-owner");
   const invitee = harness.addUser("invite-target");
@@ -63,7 +63,7 @@ test("an invitation by login notifies its account, and accepting it tells the ow
   );
 });
 
-test("a thread's events reach its audience and nobody else", async (t) => {
+test("thread events reach the audience and no other connections", async (t) => {
   const thread = await sharedThread(t);
   const { harness } = thread;
   const owner = listen(harness, thread.owner);
@@ -82,7 +82,7 @@ test("a thread's events reach its audience and nobody else", async (t) => {
     t.true(connection.types().includes("research.node.created"));
   }
   t.false(stranger.types().some((type) => type.startsWith("research.")));
-  // A private thread's feed card is the owner's alone.
+  // A private thread's feed card is delivered to the owner alone.
   t.false(stranger.types().includes("feed.item.upserted"));
 
   // Run deltas still go only to connections interested in the node.
@@ -95,14 +95,14 @@ test("a thread's events reach its audience and nobody else", async (t) => {
   t.true(viewer.types().includes("research.turn.delta"));
   t.false(owner.types().includes("research.turn.delta"));
 
-  // Per-person state stays with the person.
+  // Per-user state remains scoped to each user.
   for (const connection of [owner, commenter, viewer, stranger]) connection.clear();
   await harness.caller(thread.viewer).research.markTreeViewed({ treeId: thread.treeId });
   await settle();
   t.true(viewer.types().includes("research.tree.updated"));
   t.false(owner.types().includes("research.tree.updated"));
 
-  // A thread-level rename reaches everyone, without the owner's own fields.
+  // A thread-level rename is delivered to all participants without user-scoped fields.
   await harness.caller(thread.owner).research.renameTree({ treeId: thread.treeId, title: "Bloom" });
   await settle();
   const renamed = commenter.of("research.tree.updated")[0]?.payload["tree"] as
@@ -110,7 +110,7 @@ test("a thread's events reach its audience and nobody else", async (t) => {
   t.is(renamed?.["title"], "Bloom");
   t.false(renamed !== undefined && "role" in renamed);
 
-  // A public thread reaches a signed-in reader who opened it, and only then.
+  // A public thread delivers events to a signed-in reader only after declaring interest.
   await harness.caller(thread.owner).sharing.setVisibility({
     treeId: thread.treeId,
     visibility: "public",
@@ -154,7 +154,7 @@ test("presence lists who has a thread open and drops a closed connection", async
     ),
     [thread.commenter.id],
   );
-  // A thread the caller may not read is not declared open.
+  // A thread the caller cannot read is not declared open.
   const stranger = listen(harness, thread.stranger);
   await harness.caller(thread.stranger).events.setInterest({
     connectionId: stranger.connectionId,
@@ -172,7 +172,7 @@ test("presence lists who has a thread open and drops a closed connection", async
   stranger.close();
 });
 
-test("followers, the parent's author and the asker are notified", async (t) => {
+test("followers, the parent author, and the question author receive notifications", async (t) => {
   const thread = await sharedThread(t);
   const { harness } = thread;
   const owner = listen(harness, thread.owner);
@@ -189,8 +189,12 @@ test("followers, the parent's author and the asker are notified", async (t) => {
   await settle();
   t.is(owner.of("notification.requested")[0]?.payload["kind"], "branch");
   t.is(viewer.of("notification.requested")[0]?.payload["kind"], "followUp");
-  t.is(commenter.of("notification.requested").length, 0, "nobody hears of their own question");
-  // The asker hears that their run finished.
+  t.is(
+    commenter.of("notification.requested").length,
+    0,
+    "no notification is sent for one's own question",
+  );
+  // The author is notified that the run finished.
   const settled = {
     ...node,
     run: { ...(node.type === "exchange" ? node.run : {}), status: "complete" },
@@ -203,7 +207,7 @@ test("followers, the parent's author and the asker are notified", async (t) => {
   for (const connection of [owner, viewer, commenter]) connection.close();
 });
 
-test("the asker pays: a commenter's question is queued and limited as theirs", async (t) => {
+test("payer attribution: a commenter's question is queued and limited under their quota", async (t) => {
   const thread = await sharedThread(t, { SESSION_ENFORCE_LIMITS: "1", SESSION_DAILY_RUNS: "1" });
   const { harness } = thread;
   const node = await harness.caller(thread.commenter).research.forkNode({
@@ -222,7 +226,7 @@ test("the asker pays: a commenter's question is queued and limited as theirs", a
     kind: "fresh",
     model: "gemini-flash",
   });
-  // The commenter has spent their day; the owner has not.
+  // The commenter has exhausted their daily run quota; the owner has not.
   await t.throwsAsync<TRPCError>(
     harness.caller(thread.commenter).research.forkNode({
       parentNodeId: thread.rootId,
@@ -230,8 +234,7 @@ test("the asker pays: a commenter's question is queued and limited as theirs", a
     }),
     { message: /daily research limit/ },
   );
-  // The owner's root question is still queued, which counts against their
-  // day; once it leaves the queue they have a run left.
+  // The owner's root question remains queued and consumes allowance; releasing it restores available runs.
   queue.release(harness.db, thread.rootId);
   await t.notThrowsAsync(
     harness.caller(thread.owner).research.forkNode({
@@ -256,7 +259,7 @@ test("stale edits of shared content are CONFLICT", async (t) => {
     prompt: "Inline",
     inline: true,
   });
-  // Someone reordered the column since the caller read it.
+  // Chain order was updated after the caller fetched the column.
   await ownerCaller.research.setChainOrder({
     headNodeId: thread.rootId,
     nodeIds: [note.id, thread.rootId],
@@ -357,7 +360,7 @@ test("the owner's Trash hides the thread from members until Restore", async (t) 
   commenter.close();
 });
 
-test("removing a member stops their running question and tells them", async (t) => {
+test("removing a member cancels their running question and emits removal events", async (t) => {
   const thread = await sharedThread(t);
   const { harness } = thread;
   const node = await harness.caller(thread.commenter).research.forkNode({
@@ -477,7 +480,7 @@ test("tree events carry no per-person fields to the rest of the audience", async
   });
   const link = await ownerCaller.invites.create({ treeId: detail.tree.id, role: "commenter" });
   await harness.caller(member).invites.accept({ token: link.token });
-  // The member's own Archive is theirs.
+  // Member archive state is scoped to the individual member.
   await harness.caller(member).research.archiveTree({ treeId: detail.tree.id });
   const ownerEvents = listen(harness, owner);
   const memberEvents = listen(harness, member);
@@ -503,7 +506,7 @@ test("tree events carry no per-person fields to the rest of the audience", async
     true,
     "the rest of the payload is the same",
   );
-  // The branch asked about the passage moved with it, and everyone hears so.
+  // The branch passage anchor updated, and the update is emitted to the audience.
   const moved = memberEvents
     .of("research.node.updated")
     .map((event) => event.payload["node"] as { id: string; anchor?: { anchor: { start: number } } })
@@ -546,11 +549,11 @@ test("a member's Empty Trash leaves the way Delete does", async (t) => {
   t.deepEqual(emptied.treeIds, [thread.treeId]);
   t.true(harness.runs.cancelled.includes(running.id));
   t.deepEqual(await harness.caller(thread.owner).followups.list({ treeId: thread.treeId }), {});
-  t.is(commenter.of("research.tree.removed").length, 1, "told once that the thread is gone");
+  t.is(commenter.of("research.tree.removed").length, 1, "removal event is emitted once");
   commenter.close();
 });
 
-test("removing a member sends the follow-ups their refused item held up", async (t) => {
+test("removing a member dispatches subsequent follow-ups that were blocked", async (t) => {
   const thread = await sharedThread(t);
   const { harness } = thread;
   const { running, item } = await commenterQueue(thread);
@@ -563,7 +566,7 @@ test("removing a member sends the follow-ups their refused item held up", async 
   followups.markFailed(harness.db, item.id, "refused");
   complete(harness, thread.commenter.id, running.id);
   await ownerCaller.sharing.removeMember({ treeId: thread.treeId, userId: thread.commenter.id });
-  // The commenter's item went with them; the owner's was sent.
+  // The commenter's item was removed upon member deletion; the owner's item was dispatched.
   t.deepEqual(await ownerCaller.followups.list({ treeId: thread.treeId }), {});
   const detail = await ownerCaller.research.getTree({ treeId: thread.treeId });
   const sent = detail.nodes.find(
@@ -588,8 +591,7 @@ test("a member made a viewer loses their queue, and dispatch refuses a viewer's 
   t.deepEqual(await ownerCaller.followups.list({ treeId: thread.treeId }), {});
   t.deepEqual(owner.of("research.queue.changed").at(-1)?.payload["items"], []);
   owner.close();
-  // An item of theirs that is still there (written past the role change) is
-  // refused when its turn comes, not sent on their account.
+  // Queued items remaining after role demotion are rejected during dispatch.
   harness.db
     .insert(schema.followupQueue)
     .values({

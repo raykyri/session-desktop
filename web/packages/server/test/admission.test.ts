@@ -1,6 +1,6 @@
-// Admission under the daily limits and the queued-per-account cap: checked
-// again right before the node is admitted, so concurrent launches cannot
-// pass together, and again by the dispatcher before a queued run starts
+// Admission under daily limits and the queued-per-account cap: checked
+// immediately prior to node admission to prevent concurrent requests from
+// exceeding limits, and re-evaluated by the dispatcher before a queued run starts
 // (`06-auth-and-users.md` §8, `05-run-lifecycle-and-streaming.md` §8).
 
 import { nodes as nodesRepo, queue as queueRepo, snapshots } from "@session/db";
@@ -15,8 +15,7 @@ import { collectEvents, createAgentHarness } from "./runsHelpers.js";
 
 const DAY = 86_400_000;
 
-/** A root question whose answer is complete, so follow-ups can be sent at
- * once. */
+/** Creates a completed root question to allow immediate follow-up creation. */
 async function answeredRoot(harness: Harness, caller: ReturnType<Harness["caller"]>, n: number) {
   const workspace = await caller.workspaces.ensureDefault();
   const detail = await caller.research.createTree({
@@ -118,14 +117,14 @@ test("queued questions count against the daily run limit at admission", async (t
   await launch("first");
   await launch("second");
   await t.throwsAsync(launch("third"), { message: /daily research limit/ });
-  // A question that leaves the queue without running gives its run back.
+  // A question cancelled before execution restores its daily run allocation.
   const trees = await caller.research.listTrees({ workspaceId: workspace.id });
   await caller.research.cancelNode({ nodeId: trees[0]?.rootNodeId ?? "" });
   await t.notThrowsAsync(launch("fourth"));
 });
 
 test.serial(
-  "the dispatcher holds a queued run until midnight when the payer's day is spent",
+  "the dispatcher holds a queued run until midnight when the payer's daily quota is exhausted",
   async (t) => {
     setFixtureScenario("success");
     const harness = createAgentHarness(t, {
@@ -178,7 +177,7 @@ test.serial(
             (event.payload["node"] as { run?: { error?: string } }).run?.error ?? "",
           ),
       ),
-      "readers are told why it waits",
+      "notifies readers of the hold reason",
     );
 
     // Raising the limit releases it without waiting for midnight.

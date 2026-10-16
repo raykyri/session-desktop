@@ -229,7 +229,7 @@ test("pathFromFileServerUrl recovers the encoded filesystem path", () => {
 
 test("answer widget pages are file-server URLs that name no file", () => {
   const widget = `http://127.0.0.1:9000/__session/widget/${"b".repeat(64)}/${"c".repeat(64)}.html`;
-  // Sandboxed and never handed to the OS browser, even before the port is known.
+  // Sandboxed and never passed to the OS browser, even before the port is known.
   assert.equal(isFileServerUrl(widget, null), true);
   assert.equal(isFileServerUrl(widget, 9000), true);
   assert.equal(pathFromFileServerUrl(widget, 9000), undefined);

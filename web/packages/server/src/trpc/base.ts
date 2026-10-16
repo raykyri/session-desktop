@@ -60,8 +60,8 @@ export function createAppContext(
 
 const t = initTRPC.context<AppContext>().create({
   // Heartbeat comments keep proxies from closing an idle stream, and the
-  // client's inactivity timeout is what turns a dead connection into a
-  // reconnect-and-refetch (`05-run-lifecycle-and-streaming.md` §4).
+  // client's inactivity timeout triggers a reconnect-and-refetch
+  // (`05-run-lifecycle-and-streaming.md` §4).
   sse: {
     ping: { enabled: true, intervalMs: 20_000 },
     client: { reconnectAfterInactivityMs: 60_000 },

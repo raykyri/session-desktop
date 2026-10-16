@@ -41,8 +41,7 @@ export const treeProcedures = {
         .optional(),
     )
     .query(({ ctx, input }): ResearchTreeSummary[] => {
-      // A guest's list is the public catalog: every account's public
-      // threads.
+      // Unauthenticated requests receive the public catalog of shared threads.
       if (ctx.user === null) {
         return repo(() =>
           trees.publicSummaries(ctx.db, null, { workspaceId: input?.workspaceId ?? null }),
@@ -71,8 +70,7 @@ export const treeProcedures = {
   getTree: publicProcedure
     .input(z.object({ treeId: z.string() }))
     .query(({ ctx, input }): ResearchTreeDetail => {
-      // Anyone who may read the thread: its owner, its members, and anyone,
-      // guests included, for a public thread (`access.treeAccess`).
+      // Accessible by the owner, members, or any user for public threads (`access.treeAccess`).
       const userId = ctx.user?.id ?? null;
       required(
         repo(() => trees.get(ctx.db, userId, input.treeId)),
@@ -87,7 +85,7 @@ export const treeProcedures = {
         prompt: z.string().min(1),
         title: z.string().optional(),
         model: z.string(),
-        /** A reasoning effort the model accepts; absent or null, its default. */
+        /** Reasoning effort accepted by the model; defaults to null if omitted. */
         effort: z.string().nullish(),
         workspaceId: z.string(),
         /** Ids from `POST /api/images`. */
@@ -101,10 +99,9 @@ export const treeProcedures = {
       assertQueueHasRoom(ctx);
       const images = resolveImageAttachments(ctx.db, ctx.user.id, input.images);
       assertModelReadsImages(input.model, images);
-      // The posts the question links to are resolved before the node exists,
-      // so the snapshot is on the row the run and every later reader see
-      // (`journal/attachments.ts`). Admission is checked first: a launch that
-      // is going to be refused should not spend a fetch.
+      // Resolve linked post attachments before node creation so snapshots are
+      // recorded on the initial row (`journal/attachments.ts`). Check admission
+      // limits first to avoid unnecessary fetch operations if rejected.
       const attachments = [
         ...(await resolveMessageAttachments(
           { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
@@ -112,8 +109,8 @@ export const treeProcedures = {
         )),
         ...images,
       ];
-      // The limits are checked again with the write: other launches may have
-      // been admitted while the attachments resolved.
+      // Re-verify limits in the write transaction in case concurrent requests
+      // were admitted during attachment resolution.
       const { detail, node } = admitWithinLimits(ctx, (db) => {
         const admitted = repo(() =>
           trees.admitRoot(db, ctx.user.id, {
@@ -148,22 +145,21 @@ export const treeProcedures = {
     )
     .mutation(({ ctx, input }): ResearchTreeDetail => {
       const markdown = stripImportedReportCitations(input.markdown);
-      // Inside `repo` so an oversized report is a `BAD_REQUEST` with its own
-      // message rather than an unhandled `INTERNAL_SERVER_ERROR`.
+      // Handled via `repo` to convert validation errors into `BAD_REQUEST`.
       const detail = repo(() =>
         researchDocuments.importReport(ctx.db, ctx.user.id, {
           workspaceId: input.workspaceId,
           prompt: input.prompt,
           markdown,
-          // Nothing generated the report here. Its follow-ups default to the
-          // metadata model, which also writes its summary.
+          // Reports are imported externally. Follow-up runs use the metadata model
+          // by default, which also generates the summary.
           agent: { model: METADATA_MODEL_ID },
         }),
       );
       const root = required(detail.nodes[0], "the imported thread has no root node");
       publish(ctx, "research.tree.created", { tree: detail.tree, node: root });
       emitFeedItemUpsertedForNode(ctx, root.id);
-      // The report's recap, as the desktop schedules one after an import.
+      // Schedule a recap generation for the imported document.
       scheduleDocumentRecap(ctx, root.id);
       return detail;
     }),
@@ -184,13 +180,13 @@ export const treeProcedures = {
       return tree;
     }),
 
-  /** Archives the thread with the children listed under it. */
+  /** Archives the thread and its descendant child threads. */
   archiveTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
       const change = repo(() => trees.archiveGroup(ctx.db, ctx.user.id, input.treeId));
       for (const tree of [...change.children, change.tree]) {
-        // The owner's Archive is the thread's; a member's is their own.
+        // Archiving by owner archives the thread globally; archiving by a member archives only their view.
         if (tree.role === "owner") publishTree(ctx, "research.tree.archived", tree);
         else publish(ctx, "research.tree.archived", { tree });
       }
@@ -198,7 +194,7 @@ export const treeProcedures = {
       return change.tree;
     }),
 
-  /** Unarchives the thread with its children in the Archive. */
+  /** Restores the archived thread and its descendant child threads. */
   restoreTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }): ResearchTree => {
@@ -210,29 +206,28 @@ export const treeProcedures = {
         }
         publishTree(ctx, "research.tree.restored", tree);
         emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
-        // Queues wait while their thread is archived.
+        // Dispatch queued follow-ups when a thread is restored.
         dispatchFollowups(ctx, tree.id);
       }
       return change.tree;
     }),
 
-  /** Deletes the thread now, in or out of the Trash, with the children
-   * listed under it. For a member, Delete leaves the thread instead: it
-   * stays for everyone else. */
+  /** Deletes the thread permanently, including child threads. For non-owner
+   * members, this operation leaves the shared thread rather than deleting it
+   * for other users. */
   removeTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
       const removed = repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
-      // The threads are hidden now; their rows go in the background.
+      // Threads are hidden immediately; background deletion cleans up remaining records.
       if (!removed.departure) ctx.deletions.kick();
       if (removed.departure) {
-        // A member left: their queued follow-ups are gone and their running
-        // questions stop, as for `sharing.leave`.
+        // When a member leaves, cancel their queued follow-ups and active runs,
+        // matching `sharing.leave` behavior.
         afterDeparture(ctx, removed.departure);
       } else {
-        // The members of every deleted tree, the children that went with
-        // it included, were read before the delete took their access; the
-        // other readers who had a deleted public thread open are told too.
+        // Notify thread members and active viewers of thread deletion before
+        // access records are removed.
         for (const treeId of removed.treeIds) {
           const event = sessionEvent("research.tree.removed", {
             treeId,

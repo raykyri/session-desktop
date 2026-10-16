@@ -28,7 +28,7 @@ export type ResearchNodeType = "post" | "exchange" | "document";
 /** Where a document's content came from. */
 export type DocumentSource = "imported" | "authored" | "transcript";
 
-/** How a post renders, decided by the backend when its text is written:
+/** How a post renders, determined by the backend when its text is written:
  * "link" when the whole text is one http(s) URL (a saved link, or an X post
  * with its tweet attachment), "text" otherwise. */
 export type PostFormat = "text" | "link";
@@ -88,7 +88,7 @@ export interface ResearchTweetAttachment {
   placement: "inline" | "trailing";
   /** `xSyndication` is the full payload (media, quotes, cards, counts).
    * `xOembed` is the reduced one the web server falls back to when
-   * syndication refuses a post: author, text and date only. The desktop only
+   * syndication rejects a post: author, text and date only. The desktop only
    * produces `xSyndication`. */
   provider: "xSyndication" | "xOembed";
   status: "resolved" | "unavailable";
@@ -181,8 +181,8 @@ export interface RunState {
   attempt?: number;
   /** Web only: the opening of the answer, for compact cards. */
   responsePreview?: string | null;
-  /** Web only, on an `interrupted` run: true while the server still intends
-   * to resume it, false once it gave up. An interrupted run that will not be
+  /** Web only, on an `interrupted` run: true while the server is attempting
+   * to resume it, false once resume attempts have ceased. An interrupted run that will not be
    * resumed is settled for every purpose except its status name: it can be
    * retried, rerun, or deleted like a failed run. */
   resumePending?: boolean;
@@ -416,9 +416,9 @@ export interface ResearchTreeDetail {
   participants?: ResearchParticipant[];
 }
 
-/** A follow-up asked at the end of an inline chain while the chain could
- * not take it (its last answer was still running), stored by the web server
- * or the desktop backend and sent in order as the chain frees up. */
+/** A follow-up queued at the end of an inline chain while the chain's
+ * last answer was still running, stored by the web server
+ * or the desktop backend and sent in sequence as preceding runs finish. */
 export interface ResearchFollowupQueueItem {
   id: string;
   treeId: string;
@@ -432,7 +432,7 @@ export interface ResearchFollowupQueueItem {
   agent: AgentSpec;
   position: number;
   createdAt: number;
-  /** Why the server refused the last send (a daily limit, a model that is no
+  /** Why the server rejected the last send (a daily limit, a model that is no
    * longer available). The chain's queue waits on this item until it is
    * retried or cancelled. */
   failedReason: string | null;

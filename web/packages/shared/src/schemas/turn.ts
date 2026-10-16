@@ -7,16 +7,16 @@
 
 import { z } from "zod";
 
-// Every schema in this module is `.loose()`, and that is load-bearing rather
-// than laxity. A zod object strips unknown keys, and these objects are parsed
-// on the way out of the `response_snapshots` and `run_turns` JSON columns —
-// the same values `research/revision.ts` hashes. A field written by a newer
-// server, or provider metadata the mapper starts carrying, would be dropped
-// silently on read, and the canonical JSON of the stripped turns no longer
-// hashes to the revision that was committed with them. A record that is
-// content-addressed by its own bytes has to round-trip whatever it was stored
-// with; the named fields below are the parts this build understands, not the
-// whole of what a turn may contain.
+// Every schema in this module is `.loose()`, and that is required for
+// compatibility rather than laxity. A zod object strips unknown keys, and
+// these objects are parsed on the way out of the `response_snapshots` and
+// `run_turns` JSON columns — the same values `research/revision.ts` hashes. A
+// field written by a newer server, or provider metadata the mapper starts
+// carrying, would be dropped silently on read, and the canonical JSON of the
+// stripped turns no longer hashes to the revision that was committed with
+// them. A record that is content-addressed by its own bytes has to round-trip
+// whatever it was stored with; the named fields below are the parts this
+// build defines, not the whole of what a turn may contain.
 
 export const turnBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }).loose(),
@@ -75,12 +75,9 @@ export const turnSchema = z
 /**
  * Whether `value` is a well-formed turn.
  *
- * The one predicate for this question. There were three checks of the same
- * shape in the package — `turnSchema` plus two hand-written validators reading
- * disjoint field sets, so an event stream and a streamed payload disagreed
- * about what a turn is — and the schema is the definition, so the predicate is
- * the schema. Callers that hold an already-typed `Turn` do not need it; it is
- * for values arriving over the wire.
+ * Validates arbitrary inputs against `turnSchema`. Callers that hold an
+ * already-typed `Turn` do not need this check; it is intended for values
+ * arriving over the wire or deserialized from untrusted payloads.
  */
 export function isTurn(value: unknown): value is z.output<typeof turnSchema> {
   return turnSchema.safeParse(value).success;

@@ -13,7 +13,7 @@ import type { ResearchNode, ResearchTreeDetail } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { withWidgetDom } from "./widgetDom";
 
-// Registered before the note columns are pulled in, since the follow-ups
+// Registered before the note columns are imported, since the follow-ups
 // column's composer shows adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
 const { ResearchNoteColumn } = await import("../src/components/research/ResearchNoteColumns");

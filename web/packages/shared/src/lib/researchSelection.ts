@@ -214,7 +214,7 @@ function trailingUnit(units: SelectionUnit[], offset: number) {
 }
 
 /** Includes punctuation attached to the outside of an expanded passage without
- * swallowing punctuation that joins it to another word. Whitespace and hard
+ * absorbing punctuation that joins it to another word. Whitespace and hard
  * projection boundaries define attachment: selecting `“quoted.”` keeps both
  * quotation marks, while selecting `state-of-the` does not pull in the hyphen
  * before `art`. */

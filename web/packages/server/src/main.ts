@@ -1,10 +1,9 @@
-// Boot and shutdown (`13-deployment-fly.md` §5,
+// Boot and shutdown lifecycle (`13-deployment-fly.md` §5,
 // `05-run-lifecycle-and-streaming.md` §7).
 //
-// Order matters: the environment is validated before anything opens a file,
-// the Vertex credential is on disk before a provider is constructed, and the
-// runs interrupted by the previous process are back in the queue before the
-// port is listening.
+// Startup sequence: validate configuration, initialize credentials on disk,
+// recover and requeue interrupted runs from previous processes, and begin
+// listening on the configured port.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -32,18 +31,14 @@ import { createRunsService } from "./runs/service.js";
 import { sweepImages } from "./uploads/storage.js";
 
 /**
- * Writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to a file and points
- * `GOOGLE_APPLICATION_CREDENTIALS` at it: the Google auth library reads a path,
- * and Fly secrets hold strings (`04-agent-runtime.md` §11).
+ * Writes Google Cloud service account credentials from configuration to a temporary
+ * file and sets `GOOGLE_APPLICATION_CREDENTIALS` for SDK authentication
+ * (`04-agent-runtime.md` §11).
  */
 /**
- * `packages/db/migrations`, passed explicitly rather than taken from
- * `@session/db`'s own default. The server ships as one esbuild bundle at
- * `packages/server/dist/server.mjs`, which inlines the database package, so a
- * path the database module resolves against its own `import.meta.url` would
- * land next to the bundle instead. Both this module and the bundle sit one
- * directory below `packages/server`, so this URL is the same in development,
- * in the test runner, and in the image.
+ * Path to database migrations directory. Specified explicitly because the bundled
+ * server inlines `@session/db`, which alters relative path resolution from
+ * `import.meta.url`.
  */
 export const MIGRATIONS_DIRECTORY = fileURLToPath(new URL("../../db/migrations", import.meta.url));
 
@@ -66,11 +61,10 @@ export function prepareDataDirectories(config: Config): void {
 }
 
 /**
- * Re-queues what the previous process left behind. `reconcileOnBoot` adopts
- * snapshots that landed before the crash, marks orphaned `running` nodes
- * `interrupted`, and puts every `resume_pending` node at the head of the
- * queue; the returned ids are what the agent loop picks up. Then the
- * follow-up queues send what their chains can take.
+ * Re-enqueues incomplete runs from prior processes. `reconcileOnBoot` commits
+ * completed snapshots, marks orphaned `running` nodes as `interrupted`, and
+ * places `resume_pending` nodes at the front of the queue for the agent loop
+ * to resume. Queued follow-ups are then dispatched.
  */
 export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
   const reconciliation = nodes.reconcileOnBoot(deps.db);
@@ -91,14 +85,14 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
     );
   }
   for (const failure of reconciliation.failures) {
-    // Left as it was; the rest of the boot goes on.
+    // Boot sequence continues despite individual run reconciliation failure.
     logger.error(failure, "could not reconcile a run from the previous process");
   }
   for (const nodeId of [...reconciliation.requeuedNodeIds, ...reconciliation.reenqueuedNodeIds]) {
     deps.runs.start(nodeId);
   }
-  // Follow-ups whose chain freed up while no process was there to send them:
-  // a crash between a run settling and its dispatch.
+  // Dispatches pending follow-ups queued when previous execution stopped
+  // after run completion.
   const sent = dispatchAll({ ...deps, logger });
   if (sent.length > 0) {
     logger.info({ sent: sent.length }, "sent queued follow-ups on boot");
@@ -108,7 +102,7 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
 /** Interval for removing expired sessions and state records. */
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 
-/** How often presence drops open-thread declarations that were not renewed
+/** Interval for pruning unrenewed open-thread presence declarations
  * (`EventBus.expirePresence`). */
 const PRESENCE_SWEEP_MS = 15_000;
 
@@ -122,11 +116,8 @@ export {
 } from "./backups.js";
 
 /**
- * Rows and buckets that expire on their own clock: nothing reads them again,
- * so without this they are kept forever — one rate-limit bucket per address
- * seen, one `sessions` row per sign-in, one `tweet_cache` row per post ever
- * linked, one `signup_attempts` row per sign-in attempt, one `notifications`
- * row per notification sent.
+ * Prunes expired rate limit buckets, user sessions, OAuth states, cached tweet
+ * payloads, signup attempts, and notification records.
  */
 export function sweepExpired(
   deps: ServerDeps,
@@ -138,8 +129,7 @@ export function sweepExpired(
     buckets: limiter.sweep(),
     sessions: auth.deleteExpiredSessions(deps.db),
     oauthStates: auth.deleteExpiredOAuthStates(deps.db),
-    // A cached post older than its lifetime is never served again
-    // (`journal/tweets.ts`); the next request fetches it anew.
+    // Prunes cached tweet responses older than TTL (`journal/tweets.ts`).
     tweets: tweets.prune(deps.db, at - TWEET_CACHE_TTL_MS),
     signupAttempts: auth.deleteSignupAttemptsBefore(deps.db, at - auth.SIGNUP_ATTEMPT_RETENTION_MS),
     // Read notifications after 30 days, and each inbox beyond its cap.
@@ -148,8 +138,8 @@ export function sweepExpired(
   logger.debug(swept, "swept expired state");
 }
 
-/** One maintenance tick: the expiries above, the embed cache sweep, and the
- * image attachment sweep. */
+/** Executes periodic maintenance tasks: state expiration sweeps, embed asset cache
+ * eviction, and unreferenced image cleanup. */
 export async function runMaintenance(
   deps: ServerDeps,
   limiter: RateLimiter,
@@ -177,22 +167,15 @@ export async function runMaintenance(
   }
 }
 
-/** How long the drain is given before the process stops waiting for it. Fly's
- * `kill_timeout` is 30s and SIGKILL follows it, so the deadline is short
- * enough that the WAL checkpoint and the close still fit inside the budget
- * (`13-deployment-fly.md` §5). */
+/** Maximum duration to wait for running tasks to drain before proceeding with shutdown.
+ * Ensures sufficient time remains within Fly's 30-second `kill_timeout` for WAL
+ * checkpointing and database closing (`13-deployment-fly.md` §5). */
 export const SHUTDOWN_DEADLINE_MS = 20_000;
 
 /**
- * The drain, raced against its deadline. `true` when it finished on its own.
- *
- * Awaiting the drain outright is what makes `kill_timeout` a SIGKILL: a
- * provider that has stopped sending without closing its stream holds it open
- * past thirty seconds, the WAL checkpoint below never runs, and the next boot
- * opens a database with an unclean log. What the deadline cuts short is
- * recovered on boot — `reconcileOnBoot` marks anything still `running` as
- * `interrupted` with `resume_pending` and re-queues it — so a drain that runs
- * long costs a resume, while a SIGKILL costs the checkpoint.
+ * Waits for the drain function up to `deadlineMs`, returning `true` if completed
+ * within the deadline. Prevents stalled upstream streams from delaying shutdown
+ * beyond the SIGKILL window and blocking WAL checkpoint execution.
  */
 export async function drainWithin(
   drain: () => Promise<void>,
@@ -215,10 +198,9 @@ export async function drainWithin(
 }
 
 /**
- * Says at boot whether widget scripts run. Scripts are off, and widgets show
- * only their static page, when the artifact origin is the app's site
- * (`artifacts/site.ts`); that is a configuration to fix, so it is logged at
- * error level with the variable to change.
+ * Logs the widget script execution policy during startup. Logs an error if
+ * widget scripts are disabled due to shared artifact and application origins
+ * (`artifacts/site.ts`).
  */
 export function logWidgetScriptPolicy(config: Config, logger: Logger): void {
   if (config.widgetScripts.allowed) {
@@ -253,9 +235,8 @@ export function main(): RunningServer {
     eventBus.expirePresence();
   }, PRESENCE_SWEEP_MS);
   presence.unref();
-  // The agent loop is constructed before reconciliation so the nodes the last
-  // process left behind are picked up by the claim loop as soon as they are
-  // back in the queue (`05-run-lifecycle-and-streaming.md` §7).
+  // Creates the runs service prior to reconciliation so recovered nodes are
+  // immediately available to the execution claim loop (`05-run-lifecycle-and-streaming.md` §7).
   const runs = createRunsService({
     config,
     db,
@@ -270,8 +251,7 @@ export function main(): RunningServer {
   });
   // Fixture providers answer the procedures' own requests (an X post a saved
   // link names) in process too.
-  // Deletes what earlier Delete now, Empty Trash and workspace removals
-  // marked; kicked here so a restart resumes where the last process stopped.
+  // Deletions background job for items marked by deletion requests or workspace removals.
   const deletions = createDeletionJob({ db, logger });
   const deps: ServerDeps = {
     config,
@@ -290,17 +270,15 @@ export function main(): RunningServer {
     void runMaintenance(deps, limiter, logger);
   }, MAINTENANCE_INTERVAL_MS);
   maintenance.unref();
-  // The document archive runs when the last successful one is a day old:
-  // checked at boot and every hour, since a machine restarted at least daily
-  // would never reach a 24-hour timer (`backups.ts`).
+  // Evaluated at startup and hourly so execution proceeds despite frequent process restarts.
   const backups = createDocumentBackupScheduler(config, logger);
   void backups.check();
   const nightly = setInterval(() => {
     void backups.check();
   }, BACKUP_CHECK_INTERVAL_MS);
   nightly.unref();
-  // An open event stream is checked against its session once a minute, so
-  // one whose session expired or was removed ends (sign-out ends it at once).
+  // Checks open event streams periodically against their sessions so streams with
+  // expired or removed sessions are terminated.
   const sessionStreams = setInterval(() => {
     try {
       const closed = closeEndedSessionStreams(deps);
@@ -311,9 +289,8 @@ export function main(): RunningServer {
   }, SESSION_STREAM_CHECK_MS);
   sessionStreams.unref();
 
-  // Migrations ran inside `openDatabase` and the previous process's runs are
-  // back in the queue, so the only thing left before the check may pass is the
-  // listen itself (`13-deployment-fly.md` §5).
+  // Marks readiness as ready once the HTTP server begins listening
+  // (`13-deployment-fly.md` §5).
   const readiness = createReadiness("starting");
   const app = createApp({ ...deps, limiter, readiness });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
@@ -327,8 +304,8 @@ export function main(): RunningServer {
       return;
     }
     closing = true;
-    // Fails `/healthz` before anything else happens, so Fly stops routing to
-    // this machine while the open attempts persist their checkpoints.
+    // Marks readiness as draining so load balancers stop routing traffic while
+    // active runs persist checkpoints.
     readiness.drain();
     clearInterval(maintenance);
     clearInterval(nightly);
@@ -336,17 +313,13 @@ export function main(): RunningServer {
     clearInterval(sessionStreams);
     deletions.stop();
     logger.info({ signal }, "shutting down");
-    // Stop admitting first, then let open attempts persist their checkpoint
-    // and mark themselves `interrupted` with `resume_pending`.
+    // Halts admission and allows active runs to persist checkpoints and mark
+    // status as interrupted.
     //
-    // Raced against a deadline rather than awaited outright. Fly sends SIGKILL
-    // `kill_timeout` (30s) after SIGTERM, and a provider that has stopped
-    // sending without closing its stream would hold the drain past it — the
-    // WAL checkpoint below would then never run and the next boot would open a
-    // database with an unclean log. Twenty seconds leaves ten for the close
-    // and the checkpoint. What the deadline cuts short is recovered on boot:
-    // `reconcileOnBoot` marks anything still `running` as `interrupted` with
-    // `resume_pending` and re-queues it (`13-deployment-fly.md` §5).
+    // Enforces a drain deadline to guarantee database close and WAL checkpoint
+    // completion before Fly sends SIGKILL (30s after SIGTERM). Any runs interrupted
+    // by the deadline are re-enqueued on subsequent startup via `reconcileOnBoot`
+    // (`13-deployment-fly.md` §5).
     const drained = await drainWithin(() => deps.runs.drain(), SHUTDOWN_DEADLINE_MS);
     if (!drained) {
       logger.warn(

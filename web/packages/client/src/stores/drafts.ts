@@ -1,17 +1,15 @@
-// Composer drafts (07 §4.3, §8). A draft is local-first so typing never waits
-// on the network, mirrored to `sessionStorage` so a reload in the same tab
-// keeps it, and pushed to the server's `interface_drafts` on a 120 ms debounce
-// with a flush on `pagehide` so it remains available on a new device.
+// Composer drafts (07 §4.3, §8). Draft state is stored locally first, mirrored to
+// `sessionStorage` to persist across reloads within the same tab, and synchronized
+// to the server `interface_drafts` with a 120 ms debounce and a `pagehide` flush.
 //
-// Composers restore the server copy on entering their scope. Local edits made
-// in this tab always win over asynchronous restoration.
+// Composers restore remote draft copies when mounting. Local edits within the active tab
+// take precedence over asynchronous remote restoration.
 //
-// The stored drafts carry the id of the account that wrote them (`owner`).
-// When the session is known (`stores/localAccount.ts`), drafts of another
-// account, or of none, are dropped before anything reads them, and sign-out
-// drops them all; writes still waiting for the server go with them. While the
-// tab is signed out (an expired session), the drafts are kept but hidden:
-// nothing reads or writes them until their account signs in again.
+// Persisted drafts record the author account ID (`owner`). Once session identity
+// resolves (`stores/localAccount.ts`), drafts belonging to other accounts or unauthenticated
+// sessions are discarded, and sign-out clears all drafts along with pending writes.
+// When an unauthenticated state is encountered due to session expiration, drafts are retained
+// but hidden, disabling reads and writes until the account re-authenticates.
 
 import type { ResearchImageAttachment } from "@session/shared";
 import { create } from "zustand";
@@ -24,17 +22,16 @@ export const DRAFT_SYNC_DEBOUNCE_MS = 120;
 
 export interface ComposerDraft {
   text: string;
-  /** Registry model id the composer will launch with. */
+  /** Model registry identifier configured for the composer. */
   model?: string | undefined;
-  /** The chosen effort; absent for the model's default. */
+  /** Configured reasoning effort level; undefined uses the model default. */
   effort?: string | undefined;
-  /** Images uploaded for the question, not yet sent. */
+  /** Image attachments staged for the prompt. */
   images?: ResearchImageAttachment[] | undefined;
   updatedAt: number;
 }
 
-/** Draft scopes, keyed so one flat record holds them all: the Home composer
- * per workspace, and a follow-up composer per node. */
+/** Draft scope keys indexing workspace root composers and per-node follow-up composers. */
 export type DraftKey = `home:${string}` | `node:${string}`;
 
 export function homeDraftKey(workspaceId: string): DraftKey {
@@ -49,18 +46,14 @@ export type DraftSyncTarget = (key: DraftKey, draft: ComposerDraft | null) => vo
 
 export interface DraftsState {
   byKey: Record<string, ComposerDraft>;
-  /** The account the drafts belong to: a user id, null when signed out,
-   * undefined before a session was known (and in drafts stored before the
-   * field existed). */
+  /** Account ID owning the stored drafts; null for unauthenticated, undefined prior to session resolution. */
   owner?: string | null | undefined;
-  /** Signed out with another account's drafts kept: reads return nothing and
-   * writes are ignored. Not stored. */
+  /** When true, draft reads return undefined and writes are ignored (e.g. during session expiration). Not persisted. */
   hidden?: boolean | undefined;
   get: (key: DraftKey) => ComposerDraft | undefined;
   setDraft: (key: DraftKey, draft: Omit<ComposerDraft, "updatedAt">) => void;
   clearDraft: (key: DraftKey) => void;
-  /** Sends every pending debounced write immediately. Called from `pagehide`,
-   * where a timer would never fire. */
+  /** Flushes debounced synchronization writes immediately, such as during `pagehide`. */
   flush: () => void;
 }
 
@@ -69,12 +62,12 @@ const pending = new Map<DraftKey, ComposerDraft | null>();
 const editedKeys = new Set<DraftKey>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Forgets which keys were edited in this tab (tests share the module). */
+/** Resets the set of edited draft keys for test isolation. */
 export function resetEditedDraftKeysForTests(): void {
   editedKeys.clear();
 }
 
-/** Marks a key as edited in this tab, so a later server restore does not replace it. */
+/** Records that a draft key was edited in this tab, preventing subsequent server restores from overwriting it. */
 export function markDraftEdited(key: DraftKey): void {
   editedKeys.add(key);
 }
@@ -106,7 +99,7 @@ export function restoreServerDraft(key: DraftKey, raw: string | null): ComposerD
   return draft;
 }
 
-/** Installs the server writer. Until one is set, drafts are local only. */
+/** Configures the remote synchronization callback. Drafts remain local-only when null. */
 export function setDraftSyncTarget(target: DraftSyncTarget | null): void {
   syncTarget = target;
 }
@@ -116,8 +109,7 @@ function flushPending(): void {
     clearTimeout(timer);
     timer = null;
   }
-  // Another tab signed out or in as someone else: the session these writes
-  // would go out with is no longer this tab's account.
+  // Discard pending writes if remote sync target is absent or tab ownership no longer matches local state.
   if (!syncTarget || !ownsLocalState()) {
     pending.clear();
     return;
@@ -126,10 +118,7 @@ function flushPending(): void {
   pending.clear();
 }
 
-// `pagehide` is the last event a navigating or bfcached tab reliably gets;
-// `beforeunload` does not fire on mobile Safari and `unload` cancels the
-// in-flight request it would start. A 120 ms timer left pending at that point
-// never fires, so the debounce is collapsed here instead.
+// Flush pending writes on `pagehide` so synchronization completes before navigation or bfcache entry.
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", () => flushPending());
 }
@@ -169,16 +158,13 @@ export const useDraftsStore = create<DraftsState>()(
       name: DRAFTS_STORAGE_KEY,
       version: 2,
       storage: createJSONStorage(() => sessionStorage),
-      // Only the drafts are durable. Without this the whole state object is
-      // handed to `JSON.stringify`, and it happens to come out right only
-      // because functions serialize to nothing.
+      // Persist only draft entries and owner identity to storage.
       partialize: (state) => ({ byKey: state.byKey, owner: state.owner }),
     },
   ),
 );
 
-/** Drops every draft and the writes still waiting for the server, and
- * records `owner` as the drafts' account. */
+/** Clears all in-memory and pending drafts, setting `owner` as the active account. */
 export function resetDrafts(owner: string | null | undefined): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;
@@ -187,8 +173,7 @@ export function resetDrafts(owner: string | null | undefined): void {
   useDraftsStore.setState({ byKey: {}, owner, hidden: false });
 }
 
-/** The session is `owner`'s: drafts of any other account, or stored without
- * one, are dropped. */
+/** Associates stored drafts with `owner`, unhiding them if previously hidden or clearing mismatched drafts. */
 export function claimDrafts(owner: string | null): void {
   if (useDraftsStore.getState().owner === owner) {
     if (useDraftsStore.getState().hidden) useDraftsStore.setState({ hidden: false });
@@ -197,9 +182,7 @@ export function claimDrafts(owner: string | null): void {
   resetDrafts(owner);
 }
 
-/** Signed out without signing out (an expired session): the drafts stay
- * stored for their account and are hidden until it signs in again. Writes
- * still waiting for the server are dropped; they would be refused. */
+/** Hides stored drafts and aborts pending remote sync operations upon session expiration. */
 export function hideDrafts(): void {
   if (timer !== null) clearTimeout(timer);
   timer = null;

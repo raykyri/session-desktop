@@ -19,7 +19,7 @@ export const ACTIVE_RESEARCH_TREE_KEY = "session.active-research-tree.v1";
 export function useResearchData() {
   const [researchTrees, setResearchTrees] = useState<ResearchTreeSummary[]>([]);
   const [archivedResearchTrees, setArchivedResearchTrees] = useState<ResearchTreeSummary[]>([]);
-  // Read by mark-viewed acknowledgment (a stable callback) to decide whether
+  // Read by mark-viewed acknowledgment (a stable callback) to determine whether
   // any attention badge was actually lit without threading the lists through
   // its dependencies.
   const researchTreesRef = useRef(researchTrees);
@@ -33,7 +33,7 @@ export function useResearchData() {
   const recentActivityItemsRef = useRef(recentActivityItems);
   recentActivityItemsRef.current = recentActivityItems;
   // Runs whose background summary job is in flight. Held only for the session:
-  // the jobs die with the process, so a restart correctly shows no spinner.
+  // the jobs terminate when the process exits, so a restart correctly shows no spinner.
   const [recapPendingNodeIds, setRecapPendingNodeIds] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );

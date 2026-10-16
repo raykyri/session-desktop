@@ -33,9 +33,9 @@ function readSettings(
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }): User | null => ctx.user),
   logout: publicProcedure.mutation(({ ctx }) => {
-    // Deletes this session's row, which invalidates the token at once, and
-    // ends the event streams opened with it. The account's other sessions
-    // remain valid.
+    // Deletes the current session record, invalidating the session token
+    // and terminating associated event streams. Other sessions for the account
+    // remain active.
     if (ctx.sessionToken !== null) {
       endSession(ctx, ctx.sessionToken);
     }
@@ -59,16 +59,15 @@ export const settingsRouter = router({
         patch.settings = input.settings;
       }
       if (input.researchLaunchInstruction !== undefined) {
-        // The 4 KiB cap belongs to `shared` so the composer and the server
-        // agree on where the text is cut (`06-auth-and-users.md` §6).
+        // The 4 KiB limit is defined in `shared` so the composer and the server
+        // maintain identical length bounds (`06-auth-and-users.md` §6).
         patch.researchLaunchInstruction =
           input.researchLaunchInstruction === null
             ? null
             : clampResearchLaunchInstruction(input.researchLaunchInstruction);
       }
       if (input.defaultWorkspaceId !== undefined) {
-        // `workspaces.setDefault` checks ownership; this path has to as well,
-        // or a preference could point at another account's workspace.
+        // Validate workspace ownership before updating the default preference.
         if (input.defaultWorkspaceId !== null) {
           required(
             repo(() => workspaces.get(ctx.db, ctx.user.id, input.defaultWorkspaceId ?? "")),
@@ -154,9 +153,8 @@ export const adminRouter = router({
         patch.dailyRuns = input.dailyRuns;
       }
       const limits = repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
-      // Runs the dispatcher held for the old limits are looked at again now
-      // rather than at midnight; it holds them again if the new limits still
-      // refuse them.
+      // Re-evaluate runs held under previous limits immediately; runs are
+      // re-queued if limits are still exceeded.
       for (const nodeId of repo(() => queue.releaseDailyHolds(ctx.db, input.userId))) {
         ctx.runs.start(nodeId);
       }
@@ -166,7 +164,7 @@ export const adminRouter = router({
   createInvites: adminProcedure
     .input(z.object({ count: z.number().int().min(1).max(100) }))
     .mutation(({ ctx, input }) => {
-      ctx.logger.info({ adminId: ctx.user.id, count: input.count }, "minted invite codes");
+      ctx.logger.info({ adminId: ctx.user.id, count: input.count }, "created invite codes");
       return { codes: repo(() => auth.createInvites(ctx.db, null, input.count)) };
     }),
 });

@@ -1,18 +1,17 @@
-// Keeps the unsent text this browser holds with the account that wrote it
-// (`lib/localOwner.ts`): the composer drafts and the thread pages' unsent
-// branches, with the rest of the per-thread state stored beside them.
+// Associates browser draft state with the authenticated account that authored it
+// (`lib/localOwner.ts`), including composer drafts, unsubmitted branches, and
+// per-thread local state.
 //
-// - The route guards claim the state for the session they find, before
-//   anything renders: another account's state, or state stored without an
-//   account, is dropped, so neither a reload, a sign-in after an expired
-//   session nor a guest finds it.
-// - Sign-out drops it. A signed-out tab (an expired session, the sign-in
-//   page) keeps it for its account without showing or writing it, so the
-//   same account signing in again gets its unsent text back, and a different
-//   account signing in drops it.
-// - When another tab records a different account, this tab drops what it
-//   holds without writing it and reloads, because its requests now go out
-//   with that tab's session.
+// - Route guards associate state with the authenticated session before initial
+//   render. State belonging to a different account or unauthenticated state is
+//   cleared so it is not accessible across sessions or to guests.
+// - Explicit sign-out clears local state. An unauthenticated tab (such as one
+//   with an expired session or on the sign-in page) preserves storage under the
+//   prior account key without rendering or writing it; re-authenticating as the
+//   same account restores access, whereas authenticating as a different account
+//   discards it.
+// - When another tab switches accounts, the current tab discards in-memory state without
+//   persisting and reloads to synchronize with the new session.
 
 import { dropThreadNavigation } from "../features/thread/persistence.js";
 import {
@@ -27,7 +26,7 @@ import {
 
 import { claimDrafts, hideDrafts, resetDrafts } from "./drafts.js";
 
-/** The session is `userId`'s (null: signed out). */
+/** Associates local account state with `userId` (null if signed out). */
 export function claimLocalAccountState(userId: LocalOwner): void {
   if (userId === null) {
     hideLocalAccountState();
@@ -39,18 +38,18 @@ export function claimLocalAccountState(userId: LocalOwner): void {
     dropThreadNavigation(true);
     writeLocalOwner(userId);
   } else if (previous === null) {
-    // The tab was signed out and started from nothing (it wrote nothing
-    // meanwhile); read the account's stored state afresh.
+    // The session was unauthenticated with no active state in memory; reload the
+    // account's stored state.
     dropThreadNavigation(false);
   }
   claimDrafts(userId);
 }
 
 /**
- * Signed out without a sign-out: an expired session, or a page loaded with no
- * session. The stored state stays recorded as its account's; this tab neither
- * shows nor writes it (`ownsLocalState` is false for a signed-out tab while
- * another account is recorded).
+ * Handles unauthenticated state when no explicit sign-out occurred (for example,
+ * an expired session or initial load with no session). Stored state remains
+ * associated with its account; the current tab neither renders nor writes it
+ * (`ownsLocalState` is false when unauthenticated while another account is recorded).
  */
 export function hideLocalAccountState(): void {
   setLocalStateOwner(null);
@@ -58,7 +57,7 @@ export function hideLocalAccountState(): void {
   dropThreadNavigation(false);
 }
 
-/** Sign-out: nothing of the account stays. */
+/** Clears all stored state associated with the local account on sign-out. */
 export function clearLocalAccountState(): void {
   setLocalStateOwner(null);
   resetDrafts(null);
@@ -67,10 +66,9 @@ export function clearLocalAccountState(): void {
 }
 
 /**
- * Another tab recorded `raw` as the account. When that is not this tab's, the
- * drafts and thread state this tab holds are dropped unwritten (the other tab
- * already dropped the shared copies) and the page reloads for the session it
- * now has.
+ * Handles account change notifications from another tab. When `raw` does not
+ * match the current tab's active owner, local drafts and in-memory thread state
+ * are discarded without writing to storage, and the page reloads using the updated session.
  */
 export function onLocalOwnerChanged(
   raw: string | null,

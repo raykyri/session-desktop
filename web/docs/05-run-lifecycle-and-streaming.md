@@ -97,13 +97,14 @@ connections.
 
 ## 6. Execution topology: one process
 
-Runs are open HTTPS streams to provider APIs plus a few KB of state; there
+Runs are open HTTPS streams to provider APIs with minimal in-memory state; there
 are no child processes. They execute inside the single web server process on
 the single Fly machine. The earlier plan's separate runner app was justified
-by CLI processes dying on deploy; with owned conversation state a deploy is
-handled by resuming (§7), so one app suffices. If provider streams ever need
-to outlive the web process, the run loop module has no dependency on HTTP
-request context and can move behind a queue later.
+by CLI processes terminating during deployments; with owned conversation state,
+a deployment is handled by resuming (§7), making a single application process
+sufficient. If provider streams ever need to outlive the web process, the run
+loop module has no dependency on HTTP request context and can move behind a
+queue later.
 
 ## 7. Interruption and resume
 
@@ -112,12 +113,12 @@ persisting their last checkpoint, marks their nodes `interrupted` with
 `resume_pending = 1`, closes SSE connections, and exits. On boot, after
 migrations, the server re-queues every `resume_pending` node at the head of
 the queue. Resume re-issues the attempt from the node's persisted context:
-the interrupted attempt's committed tool exchanges are kept as context (they
-are real messages), the in-flight partial assistant text is discarded, and
-the model continues from the last committed step. `attempt` increments and
-the new `run_attempts` row records `kind = "resume"`, which is also what the
-auto-resume cap counts. The user sees the status flip to
-`running` and text resume; the discarded partial is replaced.
+the interrupted attempt's committed tool exchanges are kept as context
+(persisted as canonical ModelMessage records), the in-flight partial assistant
+text is discarded, and the model continues from the last committed step.
+`attempt` increments and the new `run_attempts` row records `kind = "resume"`,
+which is also what the auto-resume cap counts. The status transitions to
+`running` and streaming resumes, replacing the discarded partial text.
 
 Retry (user action) on `failed`, `cancelled`, or `interrupted` starts a
 fresh attempt from the parent's context, discarding the node's own partial
@@ -126,14 +127,14 @@ messages, as the desktop's retry did.
 Attempts are fenced by their number. Retry, Rerun, a resume and a 429
 re-queue all move `nodes.attempt` in the transaction that queues the node,
 and the run queue row belongs to the node's current attempt. A cancelled
-attempt can still be unwinding its provider stream when Retry or Rerun
-queues the next one (both can land within the same millisecond). Before
+attempt can still be aborting its provider stream when Retry or Rerun
+queues the next one (both can arrive within the same millisecond). Before
 every write it checks that its number is still the node's
-(`nodes.attemptOf`); once it is not, it writes no turns, status or events,
+(`nodes.attemptOf`); if the attempt number no longer matches, it writes no turns, status or events,
 closes only its own `run_attempts` row, records its usage, and ends as
 `superseded`. It releases the queue row only while it still owns it
 (`queue.releaseAttempt`). A claim of a node whose previous attempt is still
-active is put back with a 1 s `not_before` (`PREVIOUS_ATTEMPT_WAIT_MS`)
+active is re-queued with a 1 s `not_before` (`PREVIOUS_ATTEMPT_WAIT_MS`)
 instead of being dropped, and that attempt's settlement clears the wait. An
 abort that is not a drain is a cancel: the attempt writes `cancelled` if
 nothing else did.
@@ -143,13 +144,13 @@ nothing else did.
 Owned by the server: 2 concurrent research runs per user, per-provider caps
 (`04-agent-runtime.md` §10), FIFO by user then time, metadata pool separate.
 `queuePosition` is included in `research.node.updated` while `queued`.
-The user a run is queued, capped and billed under (`run_queue.user_id`,
-usage events, the daily limits) is the question's author, not the thread's
-owner: a commenter in a shared thread pays for their own questions, their
-queued follow-ups when dispatch sends them, and the title and recap jobs
-that follow their runs; a manual recap is billed to whoever requested it
+The user under whom a run is queued, capped, and billed (`run_queue.user_id`,
+usage events, daily limits) is the question author, not the thread owner:
+a commenter in a shared thread is billed for their questions, queued follow-ups
+upon dispatch, and any automatic title or recap jobs triggered by those runs;
+manual recap generation is billed to the requesting user
 (`02-domain-model-and-database.md` §5.16). Run events go to the thread's
-audience, not only to the asker (`03-api-and-events.md` §3).
+audience, not only to the author (`03-api-and-events.md` §3).
 Provider `429` responses re-queue with exponential backoff (5 s, 20 s, 60 s)
 rather than failing.
 Before a queued node's fresh attempt starts, the dispatcher re-checks its
@@ -173,7 +174,7 @@ midnight with the reason as its run's `error` (`06-auth-and-users.md` §8).
 | --- | --- | --- |
 | Client disconnects | Deltas missed | Snapshot refetch per displayed active node on reconnect |
 | Server deploy or crash | Streams cut | `interrupted` → auto-resume on boot from persisted context; ≤ 1 s of text re-sent |
-| Provider stream error mid-answer | Attempt ends | Classified: `rate_limited` re-queues with backoff; others `failed` with copy; partial text kept |
+| Provider stream error mid-answer | Attempt ends | Classified: `rate_limited` re-queues with backoff; other provider errors marked `failed` with user-facing error messages; partial text kept |
 | Provider refusal (Fable) | `failed` with category | User retries or picks another model |
 | Context too long | `failed` | Context budget rules (`04` §4) make this rare; message suggests a new thread |
 | Tool vendor outage | Tool returns error results | Model continues without; run completes with fewer sources; vendor errors logged |

@@ -2,9 +2,9 @@
 // `05-run-lifecycle-and-streaming.md` §4, §5).
 //
 // Load the node's context, open the provider stream, map its parts into turns,
-// persist them as they settle, publish what a client needs to follow along,
-// and settle the node. The module is provider-neutral: everything a particular
-// provider needs is already in the `ResolvedModel` it is handed.
+// persist them as they complete, publish required events to subscribers,
+// and finalize the node state. The module is provider-neutral: all required
+// provider configuration is contained in `ResolvedModel`.
 //
 // Two rules shape persistence. Committed turns and the node sequence counter
 // update in one transaction, so sequence *n* identifies the turns persisted
@@ -61,15 +61,15 @@ export const CHECKPOINT_BYTES = 4 * 1024;
 export const PREVIEW_INTERVAL_MS = 500;
 
 /** `superseded`: a newer attempt of the node (a retry or rerun after a
- * cancel) took over while this one was unwinding; this one wrote nothing to
- * the node and owns no queue row. */
+ * cancel) began while this attempt was terminating; this attempt wrote nothing
+ * to the node and holds no queue row. */
 export type AttemptOutcome =
   "complete" | "failed" | "cancelled" | "interrupted" | "rate_limited" | "superseded";
 
 export interface AttemptResult {
   outcome: AttemptOutcome;
   error?: ClassifiedError;
-  /** Set on `complete`: the metadata jobs the run earned. */
+  /** Set on `complete`: the metadata jobs scheduled for the completed run. */
   scheduleTitle?: boolean;
   scheduleRecap?: boolean;
 }
@@ -92,17 +92,17 @@ export interface RunAttemptInput {
   nodeId: string;
   /** A resume replays the interrupted attempt's committed exchanges. */
   kind: "fresh" | "resume";
-  /** Aborted by cancel and by drain; which one is told apart by `reason`. */
+  /** Aborted by cancel or drain, distinguished by `reason`. */
   signal: AbortSignal;
   /** Set by drain so the attempt ends as `interrupted` rather than failing. */
   isDraining: () => boolean;
-  /** The node's attempt number when the service claimed it. When the node
-   * has moved on by the time the attempt starts, it does not run. */
+  /** The node's attempt number when the service claimed it. If the attempt
+   * number changed before the attempt starts, it does not run. */
   attempt?: number | undefined;
 }
 
-/** The markdown of a `document` parent, which has no messages and rides in the
- * child's prompt instead (`04-agent-runtime.md` §4). */
+/** The markdown of a `document` parent, which has no messages and is included
+ * in the child's prompt instead (`04-agent-runtime.md` §4). */
 function parentDocumentOf(
   db: SessionDatabase,
   userId: string,
@@ -126,9 +126,9 @@ function parentDocumentOf(
 /**
  * Runs one attempt to its end and updates the node's final state.
  *
- * Returns rather than throws: every failure mode here is a state the node has
- * to end up in, and the caller (`service.ts`) needs to know which one to
- * decide between releasing the queue row and re-queueing it.
+ * Returns rather than throws: each failure mode represents a terminal or
+ * intermediate state that the caller (`service.ts`) inspects to decide between
+ * releasing the queue row and re-queueing it.
  */
 export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promise<AttemptResult> {
   const { db, eventBus, logger } = deps;
@@ -149,12 +149,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return { outcome: "superseded" };
   }
   /**
-   * Whether this attempt is still the node's current one. A retry or rerun
-   * moves the attempt number in the same transaction that queues it, so a
-   * cancelled attempt that is still unwinding its stream sees a newer number
-   * and writes nothing more to the node: no turns, no status, no events.
-   * The database is synchronous, so a check followed by a write with no
-   * `await` between them cannot interleave with the retry.
+   * Whether this attempt is still the node's current attempt. A retry or rerun
+   * increments the attempt number in the queue transaction, so a cancelled
+   * attempt whose stream is still terminating observes the newer attempt number
+   * and writes nothing further to the node: no turns, status, or events.
+   * Because database operations are synchronous, a check followed by a write
+   * without an intervening `await` cannot interleave with the retry.
    */
   const owned = (): boolean => nodesRepo.attemptOf(db, nodeId) === attempt;
 
@@ -172,14 +172,15 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   // ── sequence bookkeeping ────────────────────────────────────────────────
   // The counter remains here between writes: deltas are forwarded and consume a
   // sequence number without writing a row, and `advanceSeq` carries the value
-  // back into the node before the next write bumps it.
+  // back into the node before the next write increments it.
   //
-  // The loop manages the counter for the length of the attempt, so every number
-  // it spends is carried by an event: `advanceSeq` and `commitTurn` are the
-  // only allocators, and the writes that publish nothing with a `seq` — the
-  // in-flight checkpoint and the status transitions — are handed the current
-  // value to record. A number allocated but never emitted is a hole, and the
-  // client freezes its buffer and refetches on one (`stores/liveTurns.ts`).
+  // The loop manages the counter for the duration of the attempt, so every
+  // allocated sequence number is emitted with an event: `advanceSeq` and
+  // `commitTurn` are the only allocators, and writes that publish no event with
+  // a `seq` — the in-flight checkpoint and status transitions — record the
+  // current sequence value. An allocated sequence number that is never emitted
+  // creates a sequence gap, causing the client to pause its buffer and
+  // refetch (`stores/liveTurns.ts`).
   let seq = runsRepo.advanceSeq(db, userId, nodeId, 0);
   const nextSeq = (): number => {
     seq += 1;
@@ -189,14 +190,14 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
    * The sequence number assigned to a terminal event, persisted and emitted.
    * Every other number remains only in this variable until a write stores it in the
    * row; the last one has no write after it, so a resume or a second attempt
-   * would read the node back one short and hand the same number out twice.
+   * would read an outdated sequence number and emit duplicate sequence values.
    */
   const finishSeq = (): number => {
     seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     return seq;
   };
-  // A run's events go to everyone reading its thread, and to its asker; a
-  // superseded attempt's go nowhere.
+  // Run events are emitted to thread viewers and the requesting user;
+  // superseded attempt events are dropped.
   const emit = (type: string, payload: Record<string, unknown>): void => {
     if (!owned()) return;
     eventBus.emitToTree(node.treeId, sessionEvent(type, payload), [userId]);
@@ -214,7 +215,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const started = nodesRepo.setStatus(db, userId, nodeId, "running", {
     startedAt: Date.now(),
     seq,
-    // A wait reason the dispatcher noted while the node was queued.
+    // Wait reason recorded while the node was queued.
     error: null,
   });
   runsRepo.startAttempt(db, {
@@ -262,8 +263,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       steps,
       toolCalls: budget.searches + budget.fetches,
       usage,
-      // The same estimate `usage_events` carries, from the registry's price
-      // table, so a per-attempt cost is readable without a join.
+      // The estimated cost recorded in `usage_events`, allowing per-attempt
+      // cost lookups without a join.
       costEstimateMicros: costOf(resolved.entry, usage),
     });
   };
@@ -281,8 +282,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     recordToolUsage(db, userId, nodeId, "fetch", "fetch", toolUsage.fetch);
   };
 
-  /** A newer attempt owns the node: this one closes its own attempt row and
-   * records what it spent, and leaves the node alone. */
+  /** A newer attempt is active for the node: this attempt closes its attempt
+   * record and records usage without modifying the node. */
   const settleSuperseded = (): AttemptResult => {
     finishAttempt("cancelled");
     recordUsage();
@@ -290,11 +291,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   };
 
   /**
-   * Ends a cancelled attempt. `research.cancelNode` (and a departed member's
-   * stop) write `cancelled` before aborting the signal; an abort that is not
-   * a drain is a cancel even when nothing wrote the status, so it is written
-   * here rather than left `running`. The partial stays in `run_turns` so the
-   * document keeps what it produced.
+   * Ends a cancelled attempt. Explicit cancellation updates status before
+   * aborting the signal; an abort that is not a drain is treated as a cancellation
+   * even if status was not pre-written, ensuring it does not remain `running`.
+   * Partial turns remain in `run_turns` to preserve generated output.
    */
   const settleCancelled = (): AttemptResult => {
     const now = nodesRepo.get(db, userId, nodeId);
@@ -303,10 +303,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     }
     finishAttempt("cancelled");
     recordUsage();
-    // The cancel wrote the status from outside the loop and took a number
-    // with it. This event carries that number rather than one past it,
-    // which is what keeps the sequence contiguous whether or not the cancel
-    // raced a write of the loop's own.
+    // Cancellation updated status externally and allocated a sequence number.
+    // Emitting this event with the current sequence number maintains
+    // contiguous sequencing even if cancellation interleaved with a loop write.
     seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     emit("research.run.finished", {
       nodeId,
@@ -321,22 +320,19 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return { outcome: "cancelled" };
   };
 
-  // The asker's preferences: their research instruction, and whether their
-  // answers carry widgets.
+  // User preferences: the research launch instruction and widget display settings.
   const preferences = preferencesRepo.ensure(db, userId);
   const system = researchSystemPrompt(preferences.researchLaunchInstruction, {
     widgets: preferences.settings.researchInlineWidgets,
   });
   const parentDocument = parentDocumentOf(db, userId, node);
 
-  // A resume keeps the interrupted attempt's committed exchanges: they are
-  // real messages, already paid for (`05` §7).
+  // Resumed attempts retain committed turns from the interrupted attempt (`05` §7).
   const live = runsRepo.liveWindow(db, userId, nodeId);
   const priorTurns: Turn[] = input.kind === "resume" ? [...live.turns] : [];
   const priorMessages: ModelMessage[] = messagesFromCommittedTurns(priorTurns);
 
-  // The question this attempt asks, kept so it can be stored as the node's own
-  // first message.
+  // User prompt text preserved to store as the node's initial message.
   const userText = researchUserText({ node, parentDocument });
 
   let messages: ModelMessage[];
@@ -519,7 +515,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
         break;
       }
       // Grounded citations arrive as Google redirect links; the mapper commits
-      // the step with the pages they stand for (`groundingRedirects.ts`).
+      // the step with the resolved target URLs (`groundingRedirects.ts`).
       mapper.handle(await resolveGroundingRedirects(part, groundingRedirects));
       if (part.type === "text-delta") {
         checkpoint(false);
@@ -572,7 +568,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return { outcome: "interrupted" };
   }
 
-  // Past the drain, an aborted signal is a cancel.
+  // After draining, an aborted signal represents a cancellation.
   if (cancelled || aborted) {
     return settleCancelled();
   }
@@ -627,11 +623,11 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return { outcome: "failed", error: classified };
   }
 
-  // The conversation is appended only now: `node_messages` is append-only and
-  // only a completed node's exchanges belong in the thread's history. The
-  // question must come first because descendants replay this node as one
-  // exchange, and providers such as Anthropic require alternating user and
-  // assistant turns.
+  // Conversation messages are appended only upon completion: `node_messages`
+  // is append-only and only a completed node's exchanges belong in the thread's
+  // history. The question must come first because descendants replay this node
+  // as one exchange, and providers such as Anthropic require alternating user
+  // and assistant turns.
   const askedMessage: ModelMessage = { role: "user", content: userText };
   messagesRepo.appendMessages(
     db,
@@ -657,9 +653,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   return { outcome: "complete", scheduleTitle: settled?.title == null, scheduleRecap: true };
 }
 
-/** Writes a failure onto the node and publishes it. The partial turns are left
- * in `run_turns`: a failed answer is still readable, which is what the desktop
- * did and what makes a retry an informed choice. */
+/** Writes a failure status to the node and emits the event. Partial turns remain
+ * in `run_turns` so incomplete output can be inspected before retrying. */
 function settleFailure(
   deps: LoopDeps,
   userId: string,
@@ -670,7 +665,7 @@ function settleFailure(
 ): void {
   const { db, eventBus, logger } = deps;
   if (nodesRepo.attemptOf(db, nodeId) !== attempt) {
-    // A newer attempt owns the node; this failure is not its to report.
+    // A newer attempt is active for the node; discard this failure report.
     logger.info({ nodeId, attempt }, "a superseded attempt ended without writing its failure");
     return;
   }
@@ -679,13 +674,12 @@ function settleFailure(
   try {
     node = nodesRepo.setStatus(db, userId, nodeId, "failed", {
       error: error.message,
-      // Inside a run the loop manages the counter and the `research.run.finished`
-      // below is what spends the next number; outside one (a model that will
-      // not resolve) this write is the allocator.
+      // Inside a run, `research.run.finished` allocates the sequence number;
+      // outside a run (such as unresolvable model errors), this write allocates it.
       ...(seq === undefined ? {} : { seq }),
     });
   } catch {
-    // Already terminal: a cancel landed between the failure and this write.
+    // Already terminal: a cancellation occurred between the failure and this write.
     node = nodesRepo.get(db, userId, nodeId);
   }
   const next = runsRepo.advanceSeq(db, userId, nodeId, (seq ?? 0) + 1);

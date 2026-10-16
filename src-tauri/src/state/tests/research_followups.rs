@@ -96,8 +96,7 @@ fn follow_ups_queue_behind_a_running_answer_and_send_in_order() {
     let root_id = detail.tree.root_node_id.clone();
     state.take_emitted_events();
 
-    // The root is still queued: both questions wait, in order, on the
-    // root's agent.
+    // The root is still queued: both questions remain queued in order.
     let first = queued(
         state
             .ask_research_followup(&root_id, " First ".to_string(), Vec::new(), None)
@@ -128,7 +127,7 @@ fn follow_ups_queue_behind_a_running_answer_and_send_in_order() {
     assert!(state.dispatch_research_followups(Some(&tree_id)).is_empty());
 
     // The answer completes: the first question becomes its inline child and
-    // leaves the queue; the second waits for that answer.
+    // leaves the queue; the second remains queued for that answer.
     settle_research_node(&state, &root_id);
     let sent = state.dispatch_research_followups(Some(&tree_id));
     assert_eq!(sent.len(), 1);
@@ -186,7 +185,7 @@ fn a_follow_up_to_a_free_chain_is_sent_at_once_and_a_stalled_chain_refuses_it() 
     assert!(node.inline);
     assert!(state.research_followups(&tree_id).unwrap().is_empty());
 
-    // Asked from any message of the chain, a question joins the chain's
+    // Sent from any message of the chain, a question joins the chain's
     // queue under its head.
     let item = queued(
         state
@@ -224,7 +223,7 @@ fn a_follow_up_to_a_free_chain_is_sent_at_once_and_a_stalled_chain_refuses_it() 
         "The last answer was stopped. Run it again to continue."
     );
 
-    // Archived and trashed threads refuse questions.
+    // Archived and trashed threads reject questions.
     state.remove_research_branch(&node.id).unwrap();
     state.archive_research_tree(&tree_id).unwrap();
     assert!(
@@ -265,13 +264,13 @@ fn a_refused_send_waits_until_retried_and_archived_or_trashed_threads_wait() {
     );
     settle_research_node(&state, &root_id);
 
-    // An archived thread's queue waits; unarchiving dispatches it.
+    // An archived thread's queue does not dispatch; unarchiving dispatches it.
     state.archive_research_tree(&tree_id).unwrap();
     assert!(state.dispatch_research_followups(None).is_empty());
     state.take_emitted_events();
 
-    // The workspace folder is gone: the send is refused, the reason is
-    // recorded on the item, and the queue waits on it.
+    // The workspace folder is gone: the send is rejected, the reason is
+    // recorded on the item, and subsequent queue items remain blocked.
     let missing_dir = {
         let mut model = state.inner.model.lock().unwrap();
         let group = model.groups.get_mut("group-1").unwrap();
@@ -302,7 +301,7 @@ fn a_refused_send_waits_until_retried_and_archived_or_trashed_threads_wait() {
     assert!(queue_events(&state).last().unwrap()["items"][0]["failedReason"].is_string());
     assert!(state.dispatch_research_followups(None).is_empty());
 
-    // The folder is back: Retry clears the reason and the item is sent.
+    // The folder is restored: Retry clears the reason and the item is sent.
     std::fs::create_dir_all(&missing_dir).unwrap();
     let after_retry = state.retry_research_followup(&first.id).unwrap();
     assert_eq!(after_retry[0].failed_reason, None);
@@ -310,7 +309,7 @@ fn a_refused_send_waits_until_retried_and_archived_or_trashed_threads_wait() {
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].prompt(), "First");
 
-    // A thread in the Trash waits too, and Retry is refused there.
+    // A thread in the Trash does not dispatch, and Retry is rejected there.
     settle_research_node(&state, &sent[0].id);
     state.trash_research_tree(&tree_id).unwrap();
     assert!(state.dispatch_research_followups(None).is_empty());
@@ -367,7 +366,7 @@ fn queued_images_stay_stored_until_cancelled_and_the_next_item_moves_up() {
     );
 
     // Cancel releases the image (back to pending: it is younger than a day)
-    // and the next question moves up.
+    // and the next question advances in the queue.
     let queue = state.cancel_research_followup(&first.id).unwrap();
     assert_eq!(queue.len(), 1);
     assert_eq!(queue[0].message.text, "Next");
@@ -375,7 +374,7 @@ fn queued_images_stay_stored_until_cancelled_and_the_next_item_moves_up() {
     assert!(pending(&id) && !stored(&id));
     assert!(state.cancel_research_followup(&first.id).is_err());
 
-    // A sent question hands its image to the node.
+    // A sent question transfers its image to the node.
     let image = png_image(&workspace);
     let id = image_id(&image);
     state
@@ -412,8 +411,8 @@ fn removing_a_chain_head_drops_its_queue_and_an_edited_branch_head_keeps_it() {
             .unwrap(),
     );
 
-    // The branch's question fails and is edited: the new question heads the
-    // branch and takes its queue.
+    // The branch question fails and is edited: the replacement question heads the
+    // branch and retains its queue.
     state
         .fail_research_node(&branch.id, "boom".to_string())
         .unwrap();
@@ -496,7 +495,7 @@ fn queues_survive_a_restart_and_startup_dispatch_sends_them() {
             .ask_research_followup(&root_id, "After restart".to_string(), vec![image], None)
             .unwrap(),
     );
-    // The root completed but the app quit before the queue sent.
+    // The root completed, but the app exited before the queue dispatched.
     settle_research_node(&state, &root_id);
     state.persist_now();
     state.finalize_persistence_for_exit();
@@ -511,7 +510,7 @@ fn queues_survive_a_restart_and_startup_dispatch_sends_them() {
         json!("After restart")
     );
 
-    // A queue whose head is gone is dropped at load.
+    // A queue whose head node no longer exists is dropped at load.
     let mut edited = saved.clone();
     edited["researchFollowups"]["research-node-missing"] =
         saved["researchFollowups"][&root_id].clone();
@@ -624,7 +623,7 @@ fn legacy_queues_from_the_webview_are_imported_once() {
         3
     );
 
-    // The imported queue sends once the chain frees up.
+    // The imported queue sends once the previous turn completes.
     settle_research_node(&state, &first.id);
     let sent = state.run_scheduled_research_followup_dispatches();
     assert_eq!(sent.len(), 1);

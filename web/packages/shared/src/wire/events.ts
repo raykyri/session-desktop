@@ -40,7 +40,7 @@ export interface ResearchNodeEvent {
   type: "research.node.created" | "research.node.updated";
   node: ResearchNode;
   /** Web only: 1-based place in the admission queue while the node is
-   * `queued`, so a waiting reader's position advances without a refetch.
+   * `queued`, so a waiting client's position advances without a refetch.
    * Absent once the run is claimed. */
   queuePosition?: number;
   timestamp: number;
@@ -118,9 +118,9 @@ export interface ResearchTrashChangedEvent {
 }
 
 /** The follow-up queue of one inline chain changed (an item was queued,
- * sent, cancelled, retried, or refused), on the web server or the desktop
+ * sent, cancelled, retried, or rejected), on the web server or the desktop
  * backend. `items` is the chain's whole queue after the change, in send
- * order; empty once it drained. */
+ * order; empty once drained. */
 export interface ResearchQueueChangedEvent {
   type: "research.queue.changed";
   treeId: string;

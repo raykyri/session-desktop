@@ -57,7 +57,7 @@ export function useResearchContentLoader({
   contentByNodeRef.current = contentByNode;
   const contentErrorByNodeRef = useRef(contentErrorByNode);
   contentErrorByNodeRef.current = contentErrorByNode;
-  // The stamp each cached content was fetched under, so the loader can tell
+  // The stamp each cached content was fetched under, so the loader can distinguish
   // a cache hit from a stale entry without refetching unchanged answers every
   // time the open levels recompute.
   const fetchStampByNodeRef = useRef(new Map<string, string>());

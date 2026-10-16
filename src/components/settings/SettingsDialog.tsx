@@ -164,7 +164,7 @@ export default function SettingsDialog({
                     shortcut.message ? " is-error" : ""
                   }`}
                 >
-                  {shortcut.saving ? "Saving shortcut..." : shortcut.message}
+                  {shortcut.saving ? "Saving shortcut…" : shortcut.message}
                 </p>
               ) : null}
               {shortcut.conflictLabel ? (

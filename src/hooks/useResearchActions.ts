@@ -95,8 +95,8 @@ export function useResearchActions(
         return;
       }
       try {
-        // Generation spans a network/model round trip; skip if the user
-        // renamed the tree in the meantime.
+        // Generation spans a network/model round trip; skip if the tree was
+        // renamed in the meantime.
         const current = await getResearchTree(treeId);
         if (current.tree.title !== originalTitle) {
           return;
@@ -115,8 +115,8 @@ export function useResearchActions(
         return;
       }
       try {
-        // Follow-up title generation is asynchronous too. Preserve a title the
-        // user supplied while this model request was in flight.
+        // Follow-up title generation is asynchronous too. Preserve a title
+        // set while this model request was in flight.
         const current = await getResearchTree(treeId);
         if (current.nodes.find((node) => node.id === nodeId)?.title) {
           return;

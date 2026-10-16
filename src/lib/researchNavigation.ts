@@ -52,8 +52,8 @@ export interface SavedResearchNavigation {
    * Highlights feed unit is opened). Cleared after the thread page selects it. */
   focusHighlight?: { nodeId: string; highlightId: string };
   /** Queued follow-ups per chain, keyed by the chain's head node, as builds
-   * before the backend held the queue stored them. Read once at startup to
-   * hand them to the backend (`migrateLegacyResearchQueues`), then removed. */
+   * before backend queue persistence stored them. Read once at startup to
+   * migrate them to the backend (`migrateLegacyResearchQueues`), then removed. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
   /** Each level's messages column scroll offset, keyed by the head node of
    * the conversation or branch it shows. (`scrollByNode` stores the answer
@@ -63,8 +63,8 @@ export interface SavedResearchNavigation {
   /** Each branches column's scroll offset, keyed by the head node of its
    * first branch. */
   branchesScrollBySource?: Record<string, SavedResearchScrollPosition>;
-  /** The images in the thread's ask boxes, keyed as the page keys their
-   * text, so they survive a restart with the text. They are pending images,
+  /** The images in the thread's composers, keyed as the page keys their
+   * text, so they persist across restarts with the text. They are pending images,
    * which the backend removes after a day, so they are not restored after
    * that. */
   composerImages?: {
@@ -254,7 +254,7 @@ function load(): Record<string, SavedResearchNavigation> {
 }
 
 /** The well-formed queued follow-ups of a stored tree, keyed by chain head.
- * An item's `failed` reason is dropped, so the backend tries it again. */
+ * An item's `failed` reason is dropped to retry dispatch on backend import. */
 function storedQueuedFollowups(value: unknown): Record<string, QueuedResearchFollowup[]> {
   if (!value || typeof value !== "object") {
     return {};
@@ -292,7 +292,7 @@ function storedQueuedFollowups(value: unknown): Record<string, QueuedResearchFol
 }
 
 /** The queued follow-ups earlier builds stored, with the tree and chain
- * head of each, for the backend to take over. */
+ * head of each, for migration to the backend. */
 export function legacyResearchQueuedFollowups(): {
   treeId: string;
   headNodeId: string;
@@ -305,7 +305,7 @@ export function legacyResearchQueuedFollowups(): {
   );
 }
 
-/** Removes the stored queued follow-ups once the backend holds them. */
+/** Removes the stored queued follow-ups once migrated to the backend. */
 export function clearLegacyResearchQueuedFollowups(): void {
   let changed = false;
   for (const navigation of Object.values(researchNavigationStore())) {
@@ -319,8 +319,8 @@ export function clearLegacyResearchQueuedFollowups(): void {
   }
 }
 
-/** The well-formed image attachments of a stored queued question or ask
- * box. The backend checks each image again when the question is sent. */
+/** The well-formed image attachments of a stored queued question or composer.
+ * The backend revalidates each image when the question is sent. */
 function storedImages(value: unknown): ResearchImageAttachment[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry: unknown) => {
@@ -410,7 +410,7 @@ export function recordResearchFollowupDraft(
   return true;
 }
 
-/** The images a tree's ask boxes held, unless they were saved more than
+/** The images stored for a tree's composers, unless saved more than
  * a day ago. */
 export function savedResearchComposerImages(
   treeId: string,
@@ -420,7 +420,7 @@ export function savedResearchComposerImages(
   return saved && now - saved.updatedAt < RESEARCH_COMPOSER_IMAGES_TTL_MS ? saved.images : {};
 }
 
-/** Stores the images in a tree's ask boxes; an empty record removes the
+/** Stores the images in a tree's composers; an empty record removes the
  * stored entry. */
 export function recordResearchComposerImages(
   treeId: string,

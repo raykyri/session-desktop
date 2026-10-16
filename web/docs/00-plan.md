@@ -150,8 +150,8 @@ Spec: `04-agent-runtime.md`, `05-run-lifecycle-and-streaming.md`.
   caps, usage recording, metadata runs on `gemini-flash`, fixture providers.
 - Spike first: Fable 5.1 through `@ai-sdk/anthropic` (effort, refusal,
   append-only history, long turns); decide whether a direct provider adapter is needed.
-- Exit: Phase 3 suite passes against fixture providers; kill and restart the
-  server mid-run and see it resume; a manual run on each real provider
+- Exit: Phase 3 suite passes against fixture providers; terminate and restart the
+  server mid-run to verify resumption; a manual run on each real provider
   produces a document with sources, a recap, and a title.
 
 ### Phase 5 — Client foundation (medium)
@@ -379,7 +379,7 @@ specs under `e2e/`.
 
 ### Cost and access controls
 
-Enforcement is **on** in the shipped configuration. `web/fly.toml` sets
+Enforcement is **on** in the default deployment configuration. `web/fly.toml` sets
 `SESSION_ENFORCE_LIMITS = "1"`, so the per-account daily token and run limits
 refuse rather than merely record, and `SESSION_REQUIRE_INVITE = "1"`, so an
 account is created only against a code an admin minted
@@ -388,7 +388,7 @@ account is created only against a code an admin minted
 
 `SESSION_QUEUED_PER_USER` (default 20) caps what one account may have waiting.
 The concurrency cap limits only active executions, whereas queued runs represent committed resource expenditure and are capped regardless of the `SESSION_ENFORCE_LIMITS` setting.
-Per-account overrides for the daily ceilings live in `user_limits` and are set
+Per-account overrides for the daily ceilings are stored in `user_limits` and are set
 from `/admin`, so raising one account's limit is not the same as switching
 enforcement off (`13-deployment-fly.md` §2).
 

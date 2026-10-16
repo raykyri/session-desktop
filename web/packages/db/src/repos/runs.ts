@@ -34,7 +34,7 @@ function requireNode(
   return row;
 }
 
-/** Text of a turn's `text` blocks, which is what the live tail renders. */
+/** Extracts text content from text blocks within a turn for streaming tail display. */
 function turnText(turn: Turn): string {
   return turn.blocks
     .filter(
@@ -70,30 +70,24 @@ export interface TurnWriteResult {
 
 export interface CheckpointWrite extends TurnWrite {
   /**
-   * The sequence number the run has already reached. A checkpoint publishes no
-   * event, so it must *record* the loop's counter rather than allocate a new
-   * one: allocating would leave a number no event ever carries, and the client
-   * requires the sequence it applies to be contiguous
-   * (`docs/03-api-and-events.md` §3). `advanceSeq` and the committed-turn path
-   * are the only allocators.
+   * Sequence number of the run reached at this checkpoint. Checkpoints do not
+   * emit events, so this records the existing sequence counter without allocating a new
+   * sequence number, maintaining contiguous sequence numbers for clients.
    */
   seq: number;
 }
 
 /**
- * Persists a finished turn and bumps `run_seq` in the same transaction, so a
- * client that has seen sequence `n` has seen exactly the turns written up to
- * it (`docs/05` §5). Re-writing the same `turn_id` replaces the in-flight
- * checkpoint the turn was streaming into.
+ * Persists a committed turn and increments `run_seq` atomically.
+ * Writing a committed turn replaces any existing uncommitted checkpoint with matching `turn_id`.
  */
 export function commitTurn(db: SessionDatabase, userId: string, input: TurnWrite): TurnWriteResult {
   return writeTurn(db, userId, input, true);
 }
 
 /**
- * Writes the in-flight checkpoint: the assistant text produced since the last
- * committed turn, at most one second or 4 KiB stale. One uncommitted row per
- * attempt, replaced in place.
+ * Writes an uncommitted streaming checkpoint for an attempt, replacing any
+ * previous uncommitted checkpoint for that attempt in place.
  */
 export function checkpointInFlight(
   db: SessionDatabase,
@@ -114,10 +108,7 @@ function writeTurn(
     const node = requireNode(tx, userId, input.nodeId);
     const attempt = input.attempt ?? node.attempt;
     if (!committed) {
-      // One uncommitted row per attempt (`docs/05` §5). When the runtime moves
-      // on to a new turn without committing the last checkpoint, the old row
-      // would otherwise survive and `liveWindow` would read whichever of the
-      // two happened to sort last.
+      // Maintain at most one uncommitted checkpoint row per attempt.
       tx.delete(runTurns)
         .where(
           and(
@@ -141,9 +132,7 @@ function writeTurn(
       )
       .get();
     const position = input.position ?? existing?.position ?? nextPosition(tx, node.id, attempt);
-    // `recordSeq` writes a number the caller already manages; without one this is
-    // the allocator for a committed turn, whose event carries the number it
-    // takes here.
+    // Use caller-provided sequence if specified; otherwise increment run sequence.
     const seq = recordSeq === undefined ? node.runSeq + 1 : Math.max(recordSeq, node.runSeq);
     const at = now();
     tx.update(nodes).set({ runSeq: seq }).where(eq(nodes.id, node.id)).run();
@@ -178,7 +167,7 @@ export interface LiveWindow {
   attempt: number;
 }
 
-/** The snapshot half of the streaming protocol for an active node
+/** Returns the snapshot state of the streaming protocol for an active node
  * (`docs/05` §4). */
 export function liveWindow(db: SessionDatabase, userId: string | null, nodeId: string): LiveWindow {
   const node = requireNode(db, userId, nodeId);
@@ -208,8 +197,7 @@ export function liveWindow(db: SessionDatabase, userId: string | null, nodeId: s
   };
 }
 
-/** Drops every live row for a node. The snapshot commit does this as part of
- * its transaction; this is for the paths that discard an attempt. */
+/** Deletes all turn records for `nodeId`, returning the count of deleted rows. */
 export function clearRunTurns(db: SessionDatabase, nodeId: string): number {
   return db
     .delete(runTurns)
@@ -223,23 +211,19 @@ export interface AttemptStart {
   attempt: number;
   kind: "fresh" | "resume";
   model: string;
-  /** Defaults to the current time. `run_attempts.started_at` is what the daily
-   * run limit counts, so a test pins it rather than the wall clock. */
+  /** Timestamp recorded for daily run limit tracking; defaults to current time,
+   * or a fixed timestamp in tests. */
   at?: number | undefined;
 }
 
-/** The `usage_events` id of an attempt's `run` record: one per attempt, so
- * starting the same attempt again does not count a second run. */
+/** Generates a deterministic usage event ID for an attempt run. */
 export function runUsageId(nodeId: string, attempt: number): string {
   return `run:${nodeId}:${attempt}`;
 }
 
 /**
- * Opens the `run_attempts` row of an attempt and records the run against the
- * daily limit: a `usage_events` row of kind `run` for the person who pays
- * for it (`payerOf`). That row has no reference to the node, so deleting the
- * research does not give the run back (`docs/06-auth-and-users.md` §8);
- * `usage.dailyTotals` counts it.
+ * Creates or updates the `run_attempts` record and logs a corresponding `run`
+ * usage event for quota tracking. Usage records persist independently of node deletions.
  */
 export function startAttempt(db: SessionDatabase, input: AttemptStart): void {
   const at = input.at ?? now();
@@ -330,19 +314,10 @@ export function listAttempts(
 }
 
 /**
- * Raises `nodes.run_seq` to at least `toAtLeast` and returns the value it
- * settled on.
+ * Monotonically advances `nodes.run_seq` to at least `toAtLeast`, returning the updated value.
  *
- * The runtime emits more run events than it writes rows: text deltas are
- * forwarded, not persisted, and every one of them consumes a sequence number
- * the client orders by (`docs/03-api-and-events.md` §3). The counter therefore
- * remains in the loop's memory between writes, and this call writes it back
- * into the row before the next write bumps it again — without which a
- * `getNodeContent` taken after a burst of deltas would report a sequence lower
- * than the client has already applied, and every further delta would look like
- * a replay.
- *
- * Monotonic: a value at or below the stored one leaves the row alone.
+ * Synchronizes the persisted sequence counter with in-memory streaming event counters,
+ * ensuring snapshot reads do not regress sequence numbers observed by clients.
  */
 export function advanceSeq(
   db: SessionDatabase,

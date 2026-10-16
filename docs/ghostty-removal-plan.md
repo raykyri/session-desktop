@@ -294,7 +294,7 @@ confirming no web or retained native consumer; keep relevant web fonts and licen
 Specifically, the four `IoskeleyMonoTerm-*.ttf` files are included by native font
 registration; `IoskeleyMono-*.woff2` is used by CSS and must not be bundled into
 the same deletion. Preserve `TerminalPointerRouting.swift` only if a real remaining
-consumer is found: its current triple-click helper exists for Ghostty and can go.
+consumer is found: its current triple-click helper exists for Ghostty and can be removed.
 
 ### Build simplification
 

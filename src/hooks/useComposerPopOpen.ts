@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FocusEvent, RefObject } from "react";
 
 /** Focus tracking for a composer that is one line until it is focused, and
- * shows its controls while focused. `inside` decides whether a node belongs to
+ * shows its controls while focused. `inside` determines whether a node belongs to
  * the composer; pass it when the composer owns a portal (a menu).
  *
  * The composer stays open while focus is inside it, and closes on a press
@@ -50,7 +50,7 @@ export function useComposerPopOpen(
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [focused, rootRef]);
 
-  /** A focused button that becomes disabled (Send while it works) loses focus
+  /** A focused button that becomes disabled (Send while submitting) loses focus
    * without a blur event; call this afterwards to close the composer as after
    * a press elsewhere, if focus has left it. */
   const collapseIfFocusLeft = () => {

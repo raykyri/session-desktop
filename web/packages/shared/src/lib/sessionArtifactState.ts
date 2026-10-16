@@ -12,7 +12,7 @@ import type {
 /** `restore` counts the times the stored inputs replaced what the widget
  * shows: the first load and every completed Remember/Forget, Reset and Copy
  * parent inputs. Saves of the widget's own input never change it, so the
- * widget is not sent its own (possibly older) value back while the reader
+ * widget is not sent its own (possibly older) value back while the user
  * types. */
 export interface ArtifactStateEntry {
   config: ResearchArtifactState | null;

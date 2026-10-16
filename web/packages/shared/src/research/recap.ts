@@ -1,11 +1,11 @@
 // Answer recaps: the one-or-two-sentence summary shown under a settled
-// research answer, and the rules that decide when one is worth generating.
+// research answer, and the rules that determine when one is generated.
 //
 // Ported from `src-tauri/src/research_recap.rs`. The scheduling predicate and
 // the dedupe key are the pure parts of `schedule` (`research_recap.rs:30-100`);
 // the thread spawn, the job set, and the `research.recap.pending` emit belong
 // to the server's metadata runner (`04-agent-runtime.md` §9), which calls these
-// to decide whether to run at all. The desktop also required the node's
+// to determine whether to run. The desktop also required the node's
 // adapter to be one of the three CLIs that could summarize; every web model
 // can, so that clause is gone.
 //
@@ -97,7 +97,7 @@ function inlinePlainText(line: string): string {
 }
 
 function plainText(markdown: string): string {
-  // `[[Term]]` markers are renderer machinery; the summarizer sees words.
+  // `[[Term]]` markers are renderer machinery; the summarizer processes plain words.
   const lines = stripWikilinks(stripSessionWidgetBlocks(markdown)).split("\n");
   const parts: string[] = [];
   let inFence = false;

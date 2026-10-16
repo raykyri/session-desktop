@@ -1,4 +1,4 @@
-// The session cookie and the middleware that turns it into `ctx.user`
+// Session cookie management and authentication middleware
 // (`06-auth-and-users.md` §1, §4).
 
 import { createHmac, randomBytes } from "node:crypto";
@@ -13,13 +13,13 @@ import type { AppEnv, ServerDeps } from "../deps.js";
 
 export const SESSION_COOKIE = "session";
 
-/** 30 days, matching the idle expiry the `sessions` row enforces. */
+/** 30-day session cookie lifetime, matching idle expiry enforced by `sessions` records. */
 const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 export function setSessionCookie(c: Context<AppEnv>, config: Config, token: string): void {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
-    // Plain `http://localhost` in development would drop a `Secure` cookie.
+    // In development, non-TLS `http://localhost` rejects `Secure` cookies.
     secure: config.isProduction,
     sameSite: "Lax",
     path: "/",
@@ -41,12 +41,10 @@ export function sessionCookieFrom(c: Context<AppEnv>): string | null {
 }
 
 /**
- * Salted so the `signup_attempts` table holds no addresses. The salt has to be
- * secret: the IPv4 space is small enough to enumerate against an unsalted or
- * publicly-salted digest. The OAuth client secret is the one per-deployment
- * secret every sign-in path already requires; a deployment without it cannot
- * sign anyone in through GitHub, so the random fallback only has to be
- * unguessable, not stable.
+ * Hashes client IP addresses stored in `signup_attempts`. Uses the deployment's
+ * GitHub client secret as HMAC salt to prevent rainbow table and enumeration
+ * attacks against IPv4 space. If GitHub credentials are not configured, falls
+ * back to an ephemeral process-level random salt.
  */
 const FALLBACK_IP_SALT = randomBytes(32).toString("hex");
 
@@ -76,14 +74,14 @@ export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   };
 }
 
-/** How often open event streams are checked against their sessions, so a
- * stream outlives its session's expiry by at most this long. Sign-out and
- * deletion end a session's streams at once (`endSession`). */
+/** Interval for checking open event streams against sessions, ensuring a
+ * stream exceeds its session expiry by at most this duration. Sign-out and
+ * deletion terminate a session's streams immediately (`endSession`). */
 export const SESSION_STREAM_CHECK_MS = 60_000;
 
 /**
- * Deletes the session `token` names and ends the event streams opened with
- * it. The account's other sessions, and their streams, are left alone.
+ * Deletes the session identified by `token` and closes associated event
+ * streams. Other sessions and streams for the account remain unchanged.
  */
 export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: string): void {
   auth.deleteSession(deps.db, token);
@@ -91,9 +89,8 @@ export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: str
 }
 
 /**
- * Ends the event streams whose session is gone or past either expiry: an
- * idle or absolute expiry, a sweep, an account removal. Returns how many
- * connections were closed. The server runs it every
+ * Closes event streams whose session no longer exists or has exceeded idle or
+ * absolute expiry. Returns the number of closed connections. Runs every
  * `SESSION_STREAM_CHECK_MS`.
  */
 export function closeEndedSessionStreams(

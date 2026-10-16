@@ -487,8 +487,7 @@ export default function ResearchQueryComposer({
       setError(null);
       storeDraft("", []);
     } catch (err) {
-      // Surfaced here, where the user is looking, with every field intact for
-      // the retry.
+      // Surfaced in the composer, with every field intact for retry.
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);

@@ -36,8 +36,8 @@ use research_followups::{
 const MAX_TURNS_PER_AGENT: usize = 200;
 
 /// How long the persister thread lets a burst of mutations settle before taking
-/// its snapshot. Long enough to fold an agent's status-hook storm (or a window
-/// resize) into one write, short enough that a crash loses at most a blink of
+/// its snapshot. Long enough to coalesce an agent's status-hook burst (or a window
+/// resize) into one write, short enough that a crash loses at most minimal
 /// bookkeeping.
 const PERSIST_DEBOUNCE: Duration = Duration::from_millis(200);
 
@@ -83,7 +83,7 @@ fn preview_token() -> Result<String, String> {
         }
     }
     Err(format!(
-        "OS CSPRNG unavailable; cannot mint a preview token: {}",
+        "OS CSPRNG unavailable; cannot generate a preview token: {}",
         last_err
             .map(|err| err.to_string())
             .unwrap_or_else(|| "unknown error".to_string())
@@ -130,7 +130,7 @@ struct AppStateInner {
     research_document_lock: Mutex<()>,
     // Debounced persistence. Mutations only mark this dirty flag and wake the
     // dedicated writer thread, which coalesces a burst of mutations (agent
-    // status hooks, transcript appends, resize storms) into one snapshot+write
+    // status hooks, transcript appends, resize bursts) into one snapshot+write
     // instead of a full-state serialize+fsync per mutation — the snapshot clone
     // runs under the model lock, so synchronous persists lengthened every lock
     // hold the input path contends with. A clean exit still writes its final
@@ -140,10 +140,10 @@ struct AppStateInner {
     persist_wake: Condvar,
     persister_spawned: AtomicBool,
     // Why restore_session had to fall back or drop entries, held until startup
-    // surfaces it in a GUI dialog — a Finder launch never shows stderr, and a
-    // silently discarded session looks like the app ate the user's tabs.
+    // surfaces it in a GUI dialog — a Finder launch does not display stderr, and a
+    // silently discarded session would appear as lost tabs.
     recovery_warning: Mutex<Option<String>>,
-    // The state-file bytes the startup preflight already read, handed to
+    // The state-file bytes the startup preflight already read, transferred to
     // restore_session so hydration doesn't read and parse the same file a
     // second time. Taken (and dropped) on first use.
     preflighted_state: Mutex<Option<Vec<u8>>>,
@@ -159,9 +159,9 @@ struct AppStateInner {
     /// not a full Session restart. Kept outside Model so persistence snapshots
     /// never make them durable.
     interface_drafts: Mutex<HashMap<String, String>>,
-    /// Held while the follow-up queues decide and admit a send, so two
-    /// dispatches (or an ask and a dispatch) cannot both send from one
-    /// chain. Lock order: this lock, then the workspace mutation lock, then
+    /// Held while follow-up queues determine and execute dispatch, preventing
+    /// concurrent dispatches from sending from the same chain.
+    /// Lock order: this lock, then the workspace mutation lock, then
     /// the image store lock, then the model lock.
     research_followup_lock: Mutex<()>,
     /// Starts the run of a follow-up the queue admitted. Set at startup;
@@ -231,7 +231,7 @@ fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut
             // Builds that assigned agents thread ids before thread records
             // existed wrote graphs to <worktree>/.session/threads/<id>.json and
             // persisted no record, so the startup migration (which walks only
-            // persisted records) never sees them. Minting a fresh global
+            // persisted records) never sees them. Generating a fresh global
             // record here would silently shadow that history behind an empty
             // graph — adopt the legacy worktree snapshot and migrate it into
             // global storage through the same machinery instead.
@@ -555,10 +555,9 @@ impl AppState {
         Ok(token)
     }
 
-    /// The owner and file an exact-file token serves, while that owner's
-    /// research thread exists. A thread in the Trash still exists (Restore
-    /// brings it back with its open previews), so its tokens keep serving
-    /// until the thread is deleted.
+    /// Returns the owner ID and canonical path for an exact-file token if
+    /// the owner's research thread exists. Trashed threads retain token
+    /// validity until permanently deleted.
     pub fn exact_file_for_preview_token(
         &self,
         token: &str,
@@ -575,9 +574,8 @@ impl AppState {
             .then_some((owner_id, path))
     }
 
-    /// Forgets every file-preview token and grant of a deleted research
-    /// thread. The lookups above also refuse an owner whose thread is gone;
-    /// this keeps the maps from holding entries no request can use.
+    /// Removes file-preview tokens and grants associated with a deleted
+    /// research thread.
     fn forget_owner_file_previews(&self, owner_id: &str) {
         self.inner
             .file_tokens
@@ -918,7 +916,7 @@ impl AppState {
             );
             // Nodes (trashed trees' included) and drafts are every
             // reference the backend holds. Composers and a thread's queue
-            // hold pending images the backend cannot see; those age out
+            // hold pending images that are not yet persisted; those age out
             // after the pending lifetime.
             let referenced_images = research_image_ids(
                 persisted.research_nodes.values(),
@@ -1046,11 +1044,11 @@ impl AppState {
     /// Best-effort either way: a failed write is logged but never propagated, so
     /// it cannot break a mutation.
     fn persist(&self) {
-        // Cheap early-out while persistence is disabled (hydration, bare test
+        // Early return while persistence is disabled (hydration, bare test
         // states). The writer re-checks the flag under `persist_lock`, so this
         // unlocked read can never race `finalize_persistence_for_exit` into
-        // clobbering the final snapshot — at worst a mutation made while
-        // disabled marks nothing, which is today's behavior too.
+        // overwriting the final snapshot — at worst a mutation made while
+        // disabled marks nothing, which is also the current behavior.
         if !self.inner.persist_enabled.load(Ordering::Relaxed) {
             return;
         }
@@ -1100,7 +1098,7 @@ impl AppState {
                     *dirty = false;
                 }
                 // Coalescing window: let the rest of the burst (status hooks,
-                // transcript appends, a resize storm) complete before snapshotting.
+                // transcript appends, resize events) complete before snapshotting.
                 std::thread::sleep(PERSIST_DEBOUNCE);
                 // Absorb marks made during the window — the snapshot below will
                 // include them, so they must not schedule another write.
@@ -1137,7 +1135,7 @@ impl AppState {
         // `finalize_persistence_for_exit` writes the final snapshot and clears the
         // flag, then wake and snapshot a model that `kill_all_panes` has since
         // stripped — overwriting the final state with the tabs deleted. Reading the
-        // flag here means such a persist observes the cleared flag and bails.
+        // flag here means such a persist observes the cleared flag and returns early.
         if !self.inner.persist_enabled.load(Ordering::Relaxed) {
             return false;
         }
@@ -1195,13 +1193,13 @@ impl AppState {
         persistence::save(&self.inner.config.workspace_root, &snapshot)
     }
 
-    /// Called once when the process is really exiting, before research sessions
-    /// are killed. Commits a final snapshot, then disables persistence for good,
+    /// Called once when the process is exiting, before research sessions
+    /// are terminated. Commits a final snapshot, then permanently disables persistence,
     /// so state changes made while those processes exit are not written.
     ///
     /// The final snapshot and the flag clear happen together under `persist_lock`, so
     /// any other persist either ran fully before this (its snapshot superseded here) or
-    /// blocks on the lock and, on waking, sees the cleared flag and bails — it can
+    /// blocks on the lock and, on waking, sees the cleared flag and returns — it can
     /// never commit a later snapshot over this one.
     pub fn finalize_persistence_for_exit(&self) {
         let _persist_guard = self
@@ -2600,8 +2598,8 @@ impl AppState {
     ///
     /// A targeted ask's quoted passage is wrapped around `prompt` here rather
     /// than by the caller: the passage is conversation content, so it must
-    /// carry the same tag neutralization as the serialized turns it travels
-    /// with, and keeping that choice next to the serializer is what stops a
+    /// carry the same tag neutralization as the serialized turns included in
+    /// the prompt, and keeping that choice next to the serializer is what stops a
     /// caller from reaching for the verbatim [`research::query_followup_prompt`]
     /// the other node types use.
     pub fn research_snapshot_followup_prompt(
@@ -2965,7 +2963,7 @@ impl AppState {
                 }
             }
             // An edited question that replaces a branch's first message
-            // heads the branch from now on, and takes over its queue.
+            // heads the branch from now on, and retains its queue.
             let moved_queue_from = replaces.filter(|_| !inline).and_then(|replaced_id| {
                 let queue = model.research_followups.remove(replaced_id)?;
                 model.research_followups.insert(node_id.clone(), queue);
@@ -4279,7 +4277,7 @@ impl AppState {
             None,
             json!({ "tree": tree }),
         ));
-        // Queues wait while the thread is archived.
+        // Queues do not dispatch while the thread is archived.
         self.schedule_research_followup_dispatch(Some(tree_id));
         Ok(tree)
     }
@@ -4368,7 +4366,7 @@ impl AppState {
                 json!({ "tree": tree }),
             ));
             self.emit_research_trash_changed();
-            // Queues wait while the thread is in the Trash.
+            // Queues do not dispatch while the thread is in the Trash.
             self.schedule_research_followup_dispatch(Some(tree_id));
         }
         Ok(tree)
@@ -4451,7 +4449,7 @@ impl AppState {
     }
 
     /// Removes a tree whose root run failed to launch. Its images go back to
-    /// pending whatever their age: the composer that sent them keeps them
+    /// pending regardless of age: the composer that sent them keeps them
     /// for another try.
     pub fn remove_unlaunched_research_tree(&self, tree_id: &str) -> Result<(), String> {
         self.remove_research_tree_as(tree_id, ImageRelease::Rollback)
@@ -4603,7 +4601,7 @@ impl AppState {
     }
 
     /// Removes a just-created question whose send is being rolled back. Its
-    /// images go back to pending whatever their age, for the composer that
+    /// images go back to pending regardless of age, for the composer that
     /// still holds them.
     pub fn remove_unsent_research_branch(
         &self,
@@ -5621,9 +5619,9 @@ impl AppState {
             }
             let changed = *node != before;
             // Recency (and with it the sidebar sort) moves only on lifecycle
-            // transitions. Preview/session churn arrives several times a
-            // second while streaming, and bumping updated_at for each made
-            // concurrently-running trees swap positions under the cursor.
+            // transitions. Streaming updates arrive several times a second,
+            // and updating updated_at on each event caused concurrently running
+            // trees to swap positions under the cursor.
             let lifecycle_changed = node.run().map(|run| (run.status, run.completed_at))
                 != before.run().map(|run| (run.status, run.completed_at));
             let node = node.clone();
@@ -7409,7 +7407,7 @@ mod tests {
                 Some(agent),
             )
         };
-        // A note's follow-up is a fresh run: any research agent can take it.
+        // A note's follow-up is a fresh run: any research agent can run it.
         // An empty model or effort is the agent's default.
         let post = state
             .create_research_post(post_request("Question"), Vec::new())
@@ -8012,7 +8010,7 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// Sets a run complete with a recorded session, so it takes follow-ups.
+    /// Sets a run complete with a recorded session, enabling follow-ups.
     fn settle_research_node(state: &AppState, node_id: &str) {
         let mut model = state.inner.model.lock().unwrap();
         let node = model.research_nodes.get_mut(node_id).unwrap();
@@ -9154,12 +9152,12 @@ mod tests {
         state.append_turn(answer).unwrap();
         assert!(
             !state.list_research_trees().unwrap()[0].has_unseen_update,
-            "streaming transcript churn must not raise settlement attention"
+            "streaming transcript updates must not mark unseen update"
         );
         assert_eq!(
             state.list_research_trees().unwrap()[0].updated_at,
             updated_at_before_answer,
-            "streaming transcript churn must not resort the sidebar"
+            "streaming transcript updates must not reorder the sidebar"
         );
         std::fs::remove_dir_all(workspace).ok();
     }
@@ -9860,7 +9858,7 @@ mod tests {
         assert!(state.agent("sdk-agent").unwrap().is_none());
     }
 
-    /// A tree whose root ran to Complete and whose pane has retired, with a
+    /// A tree whose root ran to Complete and whose pane has closed, with a
     /// saved answer.
     fn completed_research_root(state: &AppState, workspace: &std::path::Path) -> (String, String) {
         state.insert_group_after(sample_group(), None).unwrap();
@@ -12864,7 +12862,7 @@ mod tests {
             let record = model
                 .threads
                 .get("thread-research")
-                .expect("run minted a thread record");
+                .expect("run generated a thread record");
             record.snapshot_path.clone()
         };
 
@@ -12912,7 +12910,7 @@ mod tests {
             model
                 .threads
                 .get("thread-research")
-                .expect("run minted a thread record")
+                .expect("run generated a thread record")
                 .snapshot_path
                 .clone()
         };

@@ -37,8 +37,7 @@ export interface SegmentView {
   editableDocumentMarkdown: string | null;
 }
 
-/** How many timeline items an answer renders until the reader asks for the
- * rest. */
+/** Maximum timeline items rendered before expanding remaining items. */
 export const TIMELINE_ITEM_RENDER_WINDOW = 100;
 
 /** Content-derived render state for one answer. */

@@ -153,7 +153,7 @@ test("the branches column stacks the document's and the answer's branches, each 
   const whole = html.slice(html.indexOf('data-research-branch-group="aw"'));
   assert.match(whole, /lucide-corner-down-right[^]*research-branch-source-from[^>]*>What do these thresholds leave out\?<\/span><span class="research-branch-source-quote"><\/span>/);
   assert.doesNotMatch(html, /The whole answer/);
-  // No group holds a selection: no ask box, and no … menu in the groups.
+  // No group holds a selection: no composer, and no … menu in the groups.
   assert.doesNotMatch(html, /test-composer/);
   assert.doesNotMatch(html, /aria-label="Branch actions"/);
   // Nothing is selected, and the first row is in the tab order.
@@ -162,7 +162,7 @@ test("the branches column stacks the document's and the answer's branches, each 
   assert.match(html, /data-node-id="a1" aria-labelledby="[^"]+" tabindex="-1"/);
 });
 
-test("only the group that holds the column's selection has the ask box, after its messages", () => {
+test("only the group that holds the column's selection has the composer, after its messages", () => {
   const { html, column } = render("a1f");
   assert.equal(column.level?.headId, "a1");
   assert.match(html, /class="research-pair-messages is-branches is-current"/);
@@ -245,7 +245,7 @@ test("a row with branches shows an indicator: accent when one is selected in the
   assert.match(html, /data-research-branch-trigger="a1f"[^>]*>(?:(?!<\/button>).)*lucide-arrow-up-right/);
 });
 
-test("an unsent branch is a group at its source's position, with its first question's ask box", () => {
+test("an unsent branch is a group at its source's position, with its first question's composer", () => {
   const { html } = render("doc", { parentNodeId: "doc", anchor: anchor("thresholds", 30) });
   assert.deepEqual(groupsOf(html), ["d1", "pending:doc", "a1", "aw"]);
   assert.match(html, /class="research-branch-group is-pending" data-research-branch-group="pending:doc" aria-label="New branch"/);

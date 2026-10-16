@@ -69,7 +69,7 @@ export function useColumnScroll({
     });
   }, [answerScroller, levelPath, queuedAnswerId, settledAnswers, treeId]);
 
-  // Messages and branches columns: the offset comes back as the column
+  // Messages and branches columns: the scroll offset is restored as the column
   // mounts, then its selected message is brought fully into view.
   useLayoutEffect(() => {
     const shown = columns.flatMap((column) => {

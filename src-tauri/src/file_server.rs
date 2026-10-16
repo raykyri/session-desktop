@@ -13,8 +13,8 @@
 //! directory, an executable preview cannot read sibling files, and `..`/symlinks cannot
 //! escape into other locations such as `~/.ssh/id_rsa`.
 //!
-//! Hand-rolled GET/HEAD + Range over `TcpListener` to keep the dependency posture of
-//! the rest of the backend (cf. the hand-rolled base64 in events.rs). Each connection
+//! Custom GET/HEAD + Range implementation over `TcpListener` to maintain the dependency
+//! posture of the rest of the backend (cf. base64 in events.rs). Each connection
 //! serves one request then closes (`Connection: close`).
 
 use crate::connection_limit::ConnectionLimiter;
@@ -30,12 +30,12 @@ use std::thread;
 use std::time::Duration;
 
 const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(15);
-/// Cap on the bytes consumed for a request's start line + headers, so a client can't
-/// stream an unbounded request head into memory within the read-timeout window.
-/// Generous next to any real percent-encoded file path.
+/// Cap on the bytes consumed for a request's start line + headers, preventing a client
+/// from streaming an unbounded request head into memory within the read-timeout window.
+/// Sufficient for percent-encoded file paths.
 const MAX_REQUEST_HEAD_BYTES: u64 = 64 * 1024;
-/// Cap on a single full-file (non-range) response so a giant file can't balloon
-/// memory; browsers fetch large media via Range anyway.
+/// Cap on a single full-file (non-range) response so a large file does not exhaust
+/// memory; browsers fetch large media via Range requests.
 const MAX_INLINE_BYTES: u64 = 64 * 1024 * 1024;
 /// The Codex visualization contract caps fragments at 2 MB. Keeping that cap
 /// here prevents a malformed directive from turning the wrapper render into an
@@ -45,11 +45,11 @@ const HTML_PREVIEW_SCROLL_SCRIPT: &str = r#"(()=>{let f=0;addEventListener('scro
 /// Cap on concurrent connection-handler threads. Each connection serves one
 /// request then closes, so this bounds in-flight requests; 64 covers
 /// a browser overlay fetching a page full of assets in parallel while keeping a
-/// connection-spamming local process from exhausting threads/FDs. At the cap the
-/// accept loop blocks and excess connections wait in the kernel listen backlog.
+/// connection-flooding local process from exhausting threads or file descriptors. At
+/// the cap the accept loop blocks and excess connections wait in the kernel listen backlog.
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
-/// Backoff after a failed accept, so persistent accept errors (e.g. EMFILE under
-/// FD exhaustion) can't spin the accept loop hot.
+/// Backoff after a failed accept, preventing persistent accept errors (e.g. EMFILE under
+/// file descriptor exhaustion) from consuming excessive CPU in the accept loop.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
 const DM_SANS_ROMAN_LATIN_PATH: &str = "/__session/fonts/DMSans-Variable-Latin.woff2";
 const DM_SANS_ROMAN_LATIN_EXT_PATH: &str = "/__session/fonts/DMSans-Variable-LatinExt.woff2";
@@ -406,8 +406,8 @@ fn read_request_head(stream: &TcpStream) -> Option<RequestHead> {
 
 /// Whether a `Host` header names a loopback address. A DNS-rebinding attack from a
 /// remote page reaches the loopback port with the *attacker's* hostname in `Host`,
-/// so rejecting a non-loopback host is cheap defense-in-depth on top of the token.
-/// Legit overlay/curl requests use `127.0.0.1:<port>` or `localhost:<port>`.
+/// so rejecting a non-loopback host provides defense-in-depth on top of the token.
+/// Standard overlay or curl requests use `127.0.0.1:<port>` or `localhost:<port>`.
 fn is_loopback_host_header(host: &str) -> bool {
     // Strip the port, honoring the [ipv6]:port bracket form.
     let host = if let Some(after_bracket) = host.strip_prefix('[') {
@@ -497,10 +497,9 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
     let Some(canonical) = resolve_file_token_path(state, token, Path::new(&decoded)) else {
         return Response::error(403, "Forbidden");
     };
-    // A thread token reaches an executable file when an inert document it
-    // serves (rendered Markdown, for instance) links or refreshes to one. Run
-    // that file under its own exact-file token, as when it is opened directly,
-    // so its scripts never hold the thread token.
+    // If a request using a thread token resolves to an executable file (e.g. via links
+    // or redirects from rendered Markdown), redirect to an exact-file token so that
+    // executed scripts cannot access directory-scoped thread tokens.
     if let Some(owner_id) = &thread_owner
         && is_executable_preview_path(&canonical)
     {
@@ -731,9 +730,9 @@ fn embedded_font_response(path: &str, is_head: bool) -> Option<Response> {
     Some(response)
 }
 
-/// A 302 to the same file under an exact-file token, keeping the query (the
-/// body font and `codex-inline-vis` flags). The location is origin-relative, so
-/// it stays on the file server.
+/// Returns an HTTP 302 redirect to the requested file under an exact-file token,
+/// preserving query parameters (such as font and visualization flags).
+/// The location is origin-relative.
 fn exact_file_redirect(
     state: &AppState,
     owner_id: &str,
@@ -763,14 +762,14 @@ fn html_preview_scroll_bridge() -> String {
 
 /// CSP applied to every served file. Served files always come back from
 /// `http://127.0.0.1:<port>` (see `file_url`), so passive subresources are pinned to
-/// that exact origin. Pane-wide tokens let inert documents load sibling resources;
+/// that exact origin. Thread-scoped tokens allow inert documents to load sibling resources;
 /// executable reports use exact-file tokens. `connect-src 'none'` blocks all scripted
-/// network egress, and `object-src`/`base-uri`/`form-action` are locked down for good
-/// measure. Inline scripts/styles are permitted because a served report legitimately
-/// carries its own, while the sandbox keeps its opaque origin isolated from session.
-/// `sandbox allow-scripts` applies the overlay iframe's own sandbox flags to the
-/// document itself, so it gets an opaque origin, no popups and no top-level
-/// navigation even when it is loaded some other way.
+/// network egress, and `object-src`/`base-uri`/`form-action` are also restricted to 'none'.
+/// Inline scripts/styles are permitted because a served report legitimately
+/// carries its own, while the sandbox keeps its opaque origin isolated from Session.
+/// `sandbox allow-scripts` applies iframe sandbox restrictions to the
+/// document itself, enforcing an opaque origin and preventing popups or
+/// top-level navigation regardless of how the document is loaded.
 fn file_content_csp(port: u16) -> String {
     let origin = format!("http://127.0.0.1:{port}");
     format!(
@@ -821,7 +820,7 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     // sandboxes file content into an opaque origin — see BrowserOverlay.)
     head.push_str("X-Content-Type-Options: nosniff\r\n");
     head.push_str("Referrer-Policy: no-referrer\r\n");
-    // One request per connection keeps the hand-rolled server simple and correct.
+    // One request per connection keeps the custom server implementation simple and correct.
     head.push_str("Connection: close\r\n\r\n");
     stream.write_all(head.as_bytes())?;
     if !response.body.is_empty() {
@@ -999,8 +998,8 @@ fn render_codex_inline_visualization_page(
 ///   height instead of resizing the answer continuously.
 const WIDGET_HEIGHT_SCRIPT: &str = r#"(()=>{let h=-1,gap=-1,repeats=0,cap=Infinity,floor=0,dir=0,flips=[],last=0,timer=0;const send=()=>{timer=0;const b=document.body;if(!b)return;const vh=innerHeight;let n=Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height));if(n>vh&&vh===h&&n-vh===gap){if(++repeats>=2)cap=Math.min(cap,vh)}else{repeats=0}gap=n>vh?n-vh:-1;n=Math.max(Math.min(n,cap),floor);if(n===h)return;const d=n>h?1:-1,t=Date.now();if(h>=0&&dir&&d!==dir){flips=flips.filter((x)=>t-x<2000);flips.push(t);if(flips.length>=3){floor=Math.max(h,n);n=floor}}dir=d;if(n===h)return;h=n;last=t;parent.postMessage({type:'session-widget-height',height:n},'*')};const queue=()=>{if(!timer)timer=setTimeout(send,Math.max(0,250-(Date.now()-last)))};const start=()=>{new ResizeObserver(queue).observe(document.body);send()};if(document.body)start();else document.addEventListener('DOMContentLoaded',start);addEventListener('load',queue)})();"#;
 
-/// Keeps the widget page from navigating itself and lets the embedding answer
-/// notice when it did anyway. Runs first on the static and run pages, before
+/// Prevents the widget page from navigating itself and detects unhandled
+/// navigation attempts. Runs first on the static and run pages, before
 /// any widget code:
 /// - cancels link and area activations (`click`, also from the keyboard) whose
 ///   target is not a `#fragment`, so a click inside the widget sends nothing;
@@ -1008,7 +1007,7 @@ const WIDGET_HEIGHT_SCRIPT: &str = r#"(()=>{let h=-1,gap=-1,repeats=0,cap=Infini
 ///   through the parent captured at startup. A replacement document
 ///   widget page (`location = …` on the run page, which no script can cancel:
 ///   the Navigation API's navigate event is disabled for opaque origins) does
-///   not answer, including one whose response never completes and so never
+///   not respond, including one whose response never completes and so never
 ///   fires `load`; the answer then removes the frame;
 /// - tells the answer when the document unloads (`session-widget-unload`, from
 ///   `pagehide`), where the engine delivers that message.
@@ -1114,11 +1113,10 @@ fn render_widget_page(source: &str, body_font_id: Option<&str>, mode: WidgetMode
 }
 
 /// Inline stylesheet for rendered Markdown. Background and text colors are set
-/// explicitly per scheme (not left to UA defaults): the overlay loads this page in a
-/// sandboxed iframe whose canvas is transparent, so UA-default dark-scheme text would
-/// float over whatever backdrop the app has — white-on-white in practice. Translucent
-/// grays handle the accents in both themes, and the file CSP already allows inline
-/// styles.
+/// explicitly per scheme (not left to user-agent defaults): the overlay loads this page in a
+/// sandboxed iframe with a transparent canvas, so default dark-scheme text would
+/// render over an arbitrary application background without contrast. Translucent
+/// grays handle accents in both themes, and the file CSP allows inline styles.
 const MARKDOWN_PAGE_CSS: &str = "\
 __SESSION_FONT_FACE__\
 :root { color-scheme: light dark; }\
@@ -1744,13 +1742,13 @@ mod tests {
                 .contains(WIDGET_ERROR_SCRIPT)
         );
 
-        // A bogus token or an unknown hash reveals nothing.
-        let bogus = format!(
+        // An invalid token or an unknown hash reveals nothing.
+        let invalid_token = format!(
             "{}{}/{hash}.html",
             research_widgets::URL_PREFIX,
             "0".repeat(64)
         );
-        let (status, _) = http_get(info.port, &bogus, None);
+        let (status, _) = http_get(info.port, &invalid_token, None);
         assert!(status.contains("404"), "{status}");
         let missing = path_of(&run_url).replace(&hash, &"a".repeat(64));
         let (status, _) = http_get(info.port, &missing, None);
@@ -2185,8 +2183,7 @@ mod tests {
         let root_node_id = state.research_tree(tree_id).unwrap().tree.root_node_id;
         state.cancel_research_node(&root_node_id).unwrap();
 
-        // A thread in the Trash still exists and can be restored, so its open
-        // previews keep working, before and after Restore.
+        // Previews remain valid while a thread is in Trash and after restoration.
         state.trash_research_tree(tree_id).unwrap();
         assert!(serves(&broad) && serves(&exact));
         state.restore_research_tree_from_trash(tree_id).unwrap();
@@ -2194,7 +2191,7 @@ mod tests {
         let (status, _) = http_get(info.port, &exact_url, None);
         assert!(status.contains("200"), "status: {status}");
 
-        // Deleting the thread revokes both tokens and forgets them.
+        // Deleting the thread revokes both tokens.
         state.remove_research_tree(tree_id).unwrap();
         assert!(!serves(&broad) && !serves(&exact));
         assert!(state.exact_file_for_preview_token(&exact).is_none());
@@ -2255,7 +2252,7 @@ mod tests {
             assert!(status.contains("403"), "{name}: {status}");
         }
 
-        // Inert files are served under the broad token as before.
+        // Inert files continue to be served under the thread token.
         for name in ["notes.md", "notes.txt"] {
             let file = std::fs::canonicalize(root.join(name)).unwrap();
             let (status, _) = http_get(info.port, &url_path(info.port, &broad, &file), None);
@@ -2269,8 +2266,8 @@ mod tests {
     fn served_file_content_is_sandboxed_with_scripts_only() {
         let csp = file_content_csp(12345);
         assert!(csp.contains("sandbox allow-scripts"), "{csp}");
-        // No flag that would give the document an origin, popups or top-level
-        // navigation.
+        // Flags allowing origin persistence, popups, or top-level
+        // navigation are omitted.
         assert!(!csp.contains("allow-same-origin"), "{csp}");
         assert!(!csp.contains("allow-top-navigation"), "{csp}");
         assert!(!csp.contains("allow-popups"), "{csp}");

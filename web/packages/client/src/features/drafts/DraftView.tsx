@@ -1,13 +1,8 @@
-// An unsent draft, open in its own view (the desktop's `ResearchDraftView.tsx`):
-// the question as the header's title, then its ask box labelled "Draft".
-// Opening a draft never focuses the box. Edits save as you type and when the
-// view closes, and an added or removed image saves at once when the draft has
-// text (otherwise with the next text edit); once a send starts nothing more is
-// saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows a toast.
-// Text or images whose save failed stay unsaved, so ⌘S and closing save them
-// again.
-// Send starts the research with the Home ask box's model and effort and
-// removes the draft; a failed send keeps the view open with the error.
+// Dedicated view for editing an unsent research draft (`ResearchDraftView.tsx`).
+// Draft text and image attachments autosave on change and when unmounting.
+// Keyboard shortcut ⌘S / Ctrl+S saves immediately and displays a status toast.
+// Submitting launches the research run using configured model and effort settings,
+// then deletes the draft upon success.
 
 import type { ResearchDraft, ResearchImageAttachment } from "@session/shared";
 import { DEFAULT_MODEL_ID } from "@session/shared";
@@ -69,8 +64,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
   );
   const imagesRef = useRef(images);
   const valueRef = useRef(value);
-  // The images as last saved; an image change saves at once, and stays
-  // unsaved until a save of it succeeds.
+  // Tracks image attachments from the last successful save.
   const savedImagesRef = useRef<readonly ResearchImageAttachment[]>(images);
   const [sending, setSending] = useState(false);
   const requireCmdEnter = useRequireCmdEnterToSend();
@@ -84,11 +78,9 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
     saveRef.current = saveDraft.mutateAsync;
   });
 
-  // The saver and its autosave are made once per mounted draft (the route
-  // keys this view by the draft's id) and flushed when the view closes.
+  // Instantiate autosave handler once per draft id; flush changes on unmount.
   const saverRef = useRef<DraftSaver | null>(null);
-  /** Saves images whose last save failed, or that changed while the text was
-   * empty, with the current text. Null when there is nothing to save. */
+  /** Persists pending image changes alongside current draft text. Returns null if no changes require saving. */
   const saveUnsavedImages = (saver: DraftSaver): Promise<void> | null => {
     const current = imagesRef.current;
     if (current === savedImagesRef.current || sendingRef.current || !valueRef.current.trim())
@@ -126,18 +118,15 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
       if (!autosave.flush()) void saveUnsavedImages(saver)?.catch(() => undefined);
       saverRef.current = null;
     };
-    // One saver per draft; the stored prompt it starts from is the one the
-    // view opened with.
+    // Initialize autosave instance once per draft id using the initial prompt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.id]);
 
   useEffect(() => saverRef.current?.autosave.edit(value), [value]);
-  // Images save with the current text; with no text, the next text edit
-  // saves them.
+  // Persist attachment updates when image selection changes.
   useEffect(() => {
     const saver = saverRef.current;
     if (saver) void saveUnsavedImages(saver)?.catch(() => undefined);
-    // Saves on image changes only; text edits go through the autosave.
   }, [images]);
 
   useLayoutEffect(() => {
@@ -153,7 +142,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
     onImagesChange: (update) => setImages((current) => update(current)),
   });
 
-  // The question goes with the Home ask box's model and effort.
+  // Resolve model configuration from draft settings or defaults.
   const models = composerModels(runtimeConfig.data?.models, me.data?.isAdmin === true);
   const modelId = homeDraft?.model ?? defaultModel ?? DEFAULT_MODEL_ID;
   const model = models.find((candidate) => candidate.id === modelId) ?? models[0] ?? null;
@@ -175,13 +164,13 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
         workspaceId: draft.workspaceId,
         ...(images.length > 0 ? { images: images.map((image) => image.id) } : {}),
       });
-      // The draft is gone once its question is asked; a failure to remove it
-      // leaves it listed rather than failing the send.
+      // Delete the draft upon successful run creation; failure to delete
+      // does not abort the run.
       void deleteResearchDraft(draft.id).then(
         () => pushToast({ title: "Sent. Moved from Drafts to Unfiled." }),
         (failure: unknown) =>
           pushToast({
-            title: `The question was sent, but its draft couldn't be deleted. ${errorMessage(failure)}`,
+            title: `The question was sent, but the draft could not be deleted. ${errorMessage(failure)}`,
             tone: "error",
           }),
       );
@@ -200,8 +189,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!isSaveShortcut(event)) return;
-    // Handled even when there is nothing to save, so the browser's own ⌘S
-    // does not run.
+    // Prevent browser default save action even when no changes are pending.
     event.preventDefault();
     if (sendingRef.current) return;
     const saver = saverRef.current;
@@ -219,8 +207,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
         (wrote) => {
           if (wrote) pushToast({ title: "Draft saved." });
         },
-        // The autosave's onError, or the image save, shows the failure under
-        // the box.
+        // Autosave error handler displays failure messages below the editor.
         () => undefined,
       );
   };
@@ -228,7 +215,7 @@ export function DraftView({ draft, workspaceId }: { draft: ResearchDraft; worksp
   const title = draft.prompt.trim() || "Draft";
   const canSend = value.trim() !== "" && !sending && !imageBlock && imageInput.saving === 0;
   return (
-    // ⌘S is taken anywhere in the view, as the desktop's draft column does.
+    // Handle ⌘S / Ctrl+S shortcut globally across the draft view.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       className="bg-surface-feed flex h-full min-h-0 flex-col"

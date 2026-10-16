@@ -1,4 +1,4 @@
-// Recorded provider usage and the daily limits it feeds
+// Recorded provider usage and daily quota tracking
 // (`docs/02-domain-model-and-database.md` §3.7, `docs/06-auth-and-users.md`
 // §8, `docs/04-agent-runtime.md` §10).
 
@@ -57,14 +57,11 @@ export interface DailyTotals {
   reasoningTokens: number;
   cachedTokens: number;
   costEstimateMicros: number;
-  /** Research attempts started that day — what `daily_runs` counts. Read
-   * from the `run` usage records, which outlive the research they ran for. */
+  /** Number of research attempts started during the day. */
   runs: number;
 }
 
-/** Sums one UTC day for one account. The limits count input, output, and
- * reasoning tokens; cached tokens are reported but not charged, since the
- * account did not pay full price for them. */
+/** Computes aggregate token and run usage for a user on the UTC day of `at`. */
 export function dailyTotals(db: SessionDatabase, userId: string, at: number = now()): DailyTotals {
   const day = startOfUtcDay(at);
   const row = db
@@ -84,11 +81,7 @@ export function dailyTotals(db: SessionDatabase, userId: string, at: number = no
       ),
     )
     .get();
-  // One `run` record per attempt (`runs.startAttempt`), which is what
-  // `daily_runs` limits (`06-auth-and-users.md` §8). Counting records of kind
-  // `research` instead would charge an attempt once per usage record it
-  // wrote, and counting `run_attempts` would give a run back when its
-  // research is deleted, since those rows go with the node.
+  // Count `run` usage events, which persist independently of node deletions.
   const runs = db
     .select({ value: sql<number>`count(*)` })
     .from(usageEvents)
@@ -117,8 +110,8 @@ export interface LimitDefaults {
   dailyRuns?: number | null | undefined;
 }
 
-/** The limits in force for one account: the per-account override when set,
- * otherwise the deployment default. */
+/** Returns the effective limits for an account: per-account overrides when defined,
+ * falling back to deployment defaults. */
 export function effectiveLimits(
   db: SessionDatabase,
   userId: string,
@@ -161,13 +154,10 @@ export interface AdmissionDecision {
 }
 
 /**
- * Whether one more research attempt may start today.
+ * Validates whether an account has sufficient token and run quota to admit or start a run.
  *
- * Admission refuses a launch over the limit, counting the account's queued
- * questions as `reservedRuns`. A queued node the dispatcher finds over the
- * limit when its turn comes stays `queued` rather than failing
- * (`06-auth-and-users.md` §8), held until the next UTC midnight or until an
- * operator raises the limit, and then runs. Admins are exempt.
+ * Compares current day usage against effective limits, taking into account `reservedRuns`.
+ * Administrators are exempt from quota limits.
  */
 export function admissionCheck(
   db: SessionDatabase,
@@ -176,9 +166,7 @@ export function admissionCheck(
     isAdmin?: boolean;
     defaults?: LimitDefaults;
     at?: number;
-    /** Runs already committed to but not started: the account's queued
-     * questions, counted at admission so a queue cannot hold more than the
-     * day allows. Zero for the dispatcher's check before a queued run starts. */
+    /** Queued runs awaiting execution to include against the daily run limit. */
     reservedRuns?: number;
   } = {},
 ): AdmissionDecision {
@@ -188,10 +176,8 @@ export function admissionCheck(
   const at = options.at ?? now();
   const totals = dailyTotals(db, userId, at);
   const limits = effectiveLimits(db, userId, options.defaults ?? {});
-  // `reasoning_tokens` is a breakdown of `output_tokens`, not a third bucket —
-  // the SDK reports `outputTokens.total` as text plus reasoning and the runtime
-  // stores both — so adding it here would charge thinking twice and disagree
-  // with the cost estimate recorded beside it.
+  // `reasoningTokens` is a subset of `outputTokens`, not a separate allocation;
+  // total tokens is calculated as inputTokens + outputTokens.
   const spentTokens = totals.inputTokens + totals.outputTokens;
   const remainingTokens =
     limits.dailyTokens === null ? null : Math.max(0, limits.dailyTokens - spentTokens);

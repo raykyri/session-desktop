@@ -13,7 +13,7 @@ import { protectedProcedure, router } from "../base.js";
 import { repo } from "../errors.js";
 
 /** Tells the caller's connections, this tab included, to refetch the inbox
- * and its count. */
+ * and update the count. */
 function publishRead(ctx: { eventBus: EventBus; user: { id: string } }): void {
   ctx.eventBus.emit(ctx.user.id, sessionEvent("notifications.read", {}));
 }

@@ -359,8 +359,7 @@ export const fixtureLookup = (): Promise<{ address: string; family: number }[]> 
 /**
  * What `RunToolContext.fetch` is under fixture providers: the fixture page for
  * the URL the fixtures name, and a 404 for anything else — a scenario that
- * reaches for a page nobody recorded should read as a dead link rather than
- * silently succeed.
+ * requests an unrecorded page returns a 404 rather than silently succeeding.
  */
 export const fixturePageFetch: typeof globalThis.fetch = (input) => {
   const url =

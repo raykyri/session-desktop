@@ -1,7 +1,6 @@
-// The content-derived half of an answer column (`09-research-document-view.md`
-// §7): which turns become the answer, what an active run's status line says,
-// which controls a run's state offers, and what the Sources footer reads out
-// of the recorded tool results.
+// Segment view content projection (`09-research-document-view.md` §7):
+// turn-to-answer projection, run status formatting, run control state,
+// and source extraction from tool results.
 
 import type { Turn } from "@session/shared";
 import test from "ava";
@@ -156,14 +155,14 @@ test("the word count counts the answer, not the trace", (t) => {
 
 /* ------------------------------------------------------------- run state */
 
-test("the status line says where a run is", (t) => {
+test("formats status line text for run states and queue positions", (t) => {
   t.is(runStatusText(node({ status: "queued" }), false, undefined), "Queued");
   t.is(runStatusText(node({ status: "queued" }), false, 2), "Queued · 2 ahead");
   t.is(runStatusText(node({ status: "queued" }), false, 0), "Queued");
   t.is(runStatusText(node({ status: "interrupted" }), false, undefined), "Interrupted · resuming");
   t.is(runStatusText(node({ status: "running" }), false, undefined), "Working");
   t.is(runStatusText(node({ status: "running" }), true, undefined), "Thinking");
-  // A run the server holds for the daily limits says so instead of its place.
+  // Runs held for daily limits display hold reason instead of queue position.
   const held = "Queued until the daily research limit resets at midnight UTC.";
   t.is(runStatusText(node({ status: "queued", error: held }), false, 1), held);
 });
@@ -173,7 +172,7 @@ test("an interrupted run is active while its resume is pending", (t) => {
   t.true(runActive(node({ status: "queued" })));
   t.true(runActive(node({ status: "interrupted" })));
   t.false(runRetryable(node({ status: "interrupted" })));
-  // The server stopped resuming: the run offers Retry instead of Stop.
+  // When resume is no longer pending, run transitions from active to retryable.
   const abandoned = node({ status: "interrupted", resumePending: false });
   t.false(runActive(abandoned));
   t.true(runRetryable(abandoned));
@@ -253,11 +252,11 @@ test("unsafe or non-HTTP source URLs are filtered out of the citations footer", 
     sources.map((source) => source.url),
     ["https://ok.example/"],
   );
-  // With no title the domain stands in.
+  // Falls back to domain when title is missing.
   t.is(sources[0]?.title, "ok.example");
 });
 
-test("a grounded search contributes its titles and its entry point", (t) => {
+test("extracts title and search entry point from grounded search results", (t) => {
   const { sources, searchEntryPoints } = researchSources([
     toolTurn(
       "t1",

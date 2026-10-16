@@ -51,8 +51,8 @@ export class ResearchDocumentWordLimitExceeded extends Error {
 }
 
 /** Counts without retaining the matches. When a limit is supplied, stop at
- * the first word over it so a dense 10 MB value cannot monopolize or exhaust
- * the renderer merely to establish that submission is disabled. */
+ * the first word over it so a dense 10 MB value cannot consume excessive
+ * processing time merely to establish that submission is disabled. */
 export function countResearchDocumentWords(
   markdown: string,
   limit = Number.POSITIVE_INFINITY,
@@ -93,7 +93,7 @@ export function deriveResearchDocumentTitle(markdown: string): string {
     if (line) {
       // Normalize only as far as the title can display. The old split/spread
       // path materialized a full-line token array and then a full code-point
-      // array, which made a permitted single-line 10 MB file hazardous.
+      // array, which caused performance degradation on single-line 10 MB files.
       const characters: string[] = [];
       let pendingSpace = false;
       for (const character of line) {

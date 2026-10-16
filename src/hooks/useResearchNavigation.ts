@@ -354,7 +354,7 @@ export function useResearchNavigation(
     } catch (err) {
       // Surfaced inside the thread page (with a working Retry) rather than as a
       // global banner: without detail the thread page has no node to load, so
-      // the error and its recovery belong where the user is looking.
+      // the error and its retry action are displayed in the thread page.
       if (
         researchDetailRequestSeqRef.current === requestSeq &&
         activeResearchTreeIdRef.current === treeId

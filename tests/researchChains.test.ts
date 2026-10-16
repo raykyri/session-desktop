@@ -240,7 +240,7 @@ test("a follow-up continues the chain's last message, wherever it lists", () => 
   const chain = inlineChainFor(nodes, "root");
   assert.deepEqual(chain, ["root", "c1", "c2"]);
   assert.deepEqual(chainDisplayOrder(chain, nodes[0].chainOrder), ["c2", "root", "c1"]);
-  // The ask box sends from the chain's tail, c2, not from the bottom row.
+  // The composer sends from the chain's tail, c2, not from the bottom row.
   const tail = nodes.find((candidate) => candidate.id === chain[chain.length - 1])!;
   assert.equal(tail.id, "c2");
   assert.equal(canContinueChain(nodes, tail), true);

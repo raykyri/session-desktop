@@ -1,13 +1,11 @@
-// Reading an upstream response body under a byte cap.
+// Reads an upstream response body up to a specified byte limit.
 //
-// `response.text()` and `response.arrayBuffer()` buffer the whole body before
-// the caller can look at its size, so a cap checked afterwards bounds nothing:
-// an upstream that sends 40 MB has had 40 MB read into memory by then. This
-// reader stops at the cap and cancels the rest of the body. A
-// `content-length` header is a claim; a body without one is unbounded until
-// it is read, so both are checked.
+// Standard methods like `response.text()` and `response.arrayBuffer()` buffer
+// the entire response into memory before size validation. This reader checks
+// the `content-length` header and streams the response up to `maxBytes`,
+// cancelling the body stream if the limit is exceeded.
 
-/** The body is larger than the cap. */
+/** Error thrown when a response body exceeds the maximum byte limit. */
 export class ResponseTooLargeError extends Error {
   readonly maxBytes: number;
 
@@ -19,20 +17,19 @@ export class ResponseTooLargeError extends Error {
 }
 
 export interface ReadCappedOptions {
-  /** `reject` (the default) throws `ResponseTooLargeError` once the body
-   * passes the cap; `truncate` keeps the first `maxBytes` bytes. A declared
-   * `content-length` over the cap is refused either way, before the body is
-   * read. */
+  /** `reject` (the default) throws `ResponseTooLargeError` when the body
+   * exceeds `maxBytes`; `truncate` retains the first `maxBytes` bytes. A declared
+   * `content-length` exceeding `maxBytes` is rejected immediately prior to reading. */
   overflow?: "reject" | "truncate";
 }
 
 export interface CappedBody {
   bytes: Uint8Array;
-  /** True when `overflow: "truncate"` cut the body short. */
+  /** True when `overflow: "truncate"` truncated the body at `maxBytes`. */
   truncated: boolean;
 }
 
-/** Reads at most `maxBytes` of `response`'s body, then cancels the rest. */
+/** Reads at most `maxBytes` of `response`'s body and cancels remaining bytes. */
 export async function readCapped(
   response: Response,
   maxBytes: number,

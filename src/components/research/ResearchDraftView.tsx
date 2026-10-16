@@ -12,16 +12,12 @@ const SAVE_DELAY_MS = 500;
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** An unsent draft, open beside the feed as a messages column: the
- * question as the header's title, then its ask box labelled "Draft", which
- * gives the text the full width with Send on its own row. Opening a draft
- * never focuses the box. Edits save as you type and when the view closes,
- * and an added or removed image saves at once when the draft has text
- * (otherwise with the next text edit); once a send starts nothing more is
- * saved. ⌘S (Ctrl+S) saves an edit not yet saved at once and shows
- * a toast; with nothing to save it does nothing. Text or images whose save
- * failed stay unsaved, so ⌘S and closing save them again. A failed send
- * keeps the view open with the error. Delete is in the draft's … menu in the feed. */
+/** Unsent draft view displayed alongside the feed. Edits are autosaved after
+ * an input debounce delay and on unmount. Image changes save immediately when the
+ * draft contains text, or defer to the next text edit. Keyboard shortcut
+ * ⌘S (Ctrl+S) triggers an immediate save. Failed saves retain unpersisted
+ * state so subsequent saves and unmounts retry persistence. If sending
+ * fails, the view remains open and displays the error. */
 export default function ResearchDraftView({
   draft,
   requireCmdEnterToSend,
@@ -31,10 +27,10 @@ export default function ResearchDraftView({
 }: {
   draft: ResearchDraft;
   requireCmdEnterToSend: boolean;
-  /** `images` replaces the draft's images; omitted, they are kept. */
+  /** When provided, `images` replaces the draft's image attachments; otherwise existing images are kept. */
   onSave: (prompt: string, images?: ResearchImageAttachment[]) => Promise<void>;
   onSend: (prompt: string, images: ResearchImageAttachment[]) => Promise<void>;
-  /** Shows the toast after a ⌘S save. */
+  /** Displays a toast notification after a ⌘S save. */
   onToast?: (message: string) => void;
 }) {
   const [value, setValue] = useState(draft.prompt);
@@ -43,8 +39,7 @@ export default function ResearchDraftView({
   imagesRef.current = images;
   const valueRef = useRef(value);
   valueRef.current = value;
-  // The images as last saved; an image change saves at once, and stays
-  // unsaved until a save of it succeeds.
+  // Images from the last successful save. Unsaved changes persist across retry attempts.
   const savedImagesRef = useRef(images);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +65,8 @@ export default function ResearchDraftView({
     }),
   );
 
-  /** Saves images whose last save failed, or that changed while the text
-   * was empty, with the current text. Null when there is nothing to save. */
+  /** Persists pending image changes with the current prompt text.
+   * Returns null when no changes are pending. */
   const saveUnsavedImages = () => {
     const current = imagesRef.current;
     if (current === savedImagesRef.current || sendingRef.current || !valueRef.current.trim()) return null;
@@ -88,8 +83,8 @@ export default function ResearchDraftView({
     },
     [autosave],
   );
-  // Images save with the current text; with no text, the next text edit
-  // saves them.
+  // Persist image changes with the current prompt; if prompt is empty,
+  // persistence is deferred to text autosave.
   useEffect(() => {
     void saveUnsavedImages()?.catch(() => {});
     // Saves on image changes only; text edits go through autosave.
@@ -114,8 +109,7 @@ export default function ResearchDraftView({
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!isSaveShortcut(event)) return;
-    // Handled even when there is nothing to save, so the webview's own ⌘S
-    // does not run.
+    // Prevent default browser save behavior even when no changes are pending.
     event.preventDefault();
     if (sendingRef.current) return;
     autosave
@@ -131,7 +125,7 @@ export default function ResearchDraftView({
         (wrote) => {
           if (wrote) onToast?.("Draft saved.");
         },
-        // The autosave's onError shows the failure under the box.
+        // Save errors are reported via onError.
         () => {},
       );
   };

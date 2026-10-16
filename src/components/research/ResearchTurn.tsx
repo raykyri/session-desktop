@@ -49,7 +49,7 @@ import {
 const MARKDOWN_CHAR_LIMIT = 100_000;
 const PLAINTEXT_DISPLAY_CHAR_LIMIT = 1_000_000;
 const ACTIVITY_PAYLOAD_CHAR_LIMIT = 200_000;
-// Hoisted so the memoized markdown renderer sees a stable prop identity — an
+// Hoisted so the memoized markdown renderer receives a stable prop identity — an
 // inline object literal would defeat its render cache on every poll.
 const OVERSIZED_MARKDOWN_POLICY = {
   maxCharacters: MARKDOWN_CHAR_LIMIT,

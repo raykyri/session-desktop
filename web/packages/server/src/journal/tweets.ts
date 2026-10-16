@@ -1,17 +1,16 @@
-// The tweet pipeline (`03-api-and-events.md` §2, `journal.rs:142-187`).
+// Tweet hydration pipeline (`03-api-and-events.md` §2, `journal.rs:142-187`).
 //
-// Every hydration on the web goes through here: a journal entry someone saved,
-// and the posts a research question links to (`attachments.ts`). The fetch is
-// the server's because the browser cannot make it — the syndication CDN's CORS
-// admits `platform.twitter.com` and nothing else — and because one cache in
-// front of it serves every reader of a public card.
+// Performs server-side tweet fetching for journal entries and research post
+// links (`attachments.ts`). The syndication CDN CORS policy allows only
+// `platform.twitter.com`, requiring server-side fetching and centralized caching.
 //
-// Two providers, in order. `cdn.syndication.twimg.com` first: it returns the
-// whole post, which is what the card renders (media, quoted post, link card,
-// counts). `publish.twitter.com/oembed` second (`oembed.ts`), which keeps
-// answering for posts syndication has stopped serving but returns only author,
-// text and date. Which one answered is stored, so a reduced card is
-// recognizable as one rather than looking like a post that lost its media.
+// Attempts resolution in two stages:
+// 1. `cdn.syndication.twimg.com`: returns full post data (media, quoted posts,
+//    link cards, interaction counts).
+// 2. `publish.twitter.com/oembed` (`oembed.ts`): fallback for posts no longer
+//    served by syndication, returning author, text, and date without media.
+// The resolved provider is recorded to distinguish intentionally reduced
+// representations from missing assets.
 
 import { tweets } from "@session/db";
 import type { SessionDatabase } from "@session/db";
@@ -34,26 +33,21 @@ import { fetchTweetOembed, tweetSnapshotFromOembed } from "./oembed.js";
 
 const SYNDICATION_ENDPOINT = "https://cdn.syndication.twimg.com/tweet-result";
 
-/** The desktop's cap, kept: `tweet_cache.payload_json` is bounded at 1 MiB. */
+/** Maximum response payload size (1 MiB), matching `tweet_cache.payload_json` limits. */
 export const MAX_TWEET_RESPONSE_BYTES = 1024 * 1024;
 
 /** Syndication CDN fetch timeout in milliseconds. */
 export const TWEET_FETCH_TIMEOUT_MS = 10_000;
 
-/** A cached payload this new is reused rather than refetched. */
+/** Cache TTL for successful or definite resolution responses. */
 export const TWEET_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const OVERSIZED_RESPONSE = "Tweet response exceeds maximum allowed size";
 
-/** How long a failed fetch that said nothing about the post (a timeout, a
- * network error) is reused: long enough that a card rendered by many
- * readers at once asks once, short enough that the next reader asks again. */
+/** TTL for transient errors (timeouts, network errors) to prevent stampedes while permitting retries. */
 export const TWEET_TRANSIENT_FAILURE_TTL_MS = 60 * 1000;
 
-/** How long a cached row is reused. A post X answered about (resolved, not
- * found, withheld) and a response over the size cap keep for
- * `TWEET_CACHE_TTL_MS`; a timeout or network failure for
- * `TWEET_TRANSIENT_FAILURE_TTL_MS`. */
+/** Returns the cache TTL for a cached row based on resolution status and failure classification. */
 function cacheLifetime(cached: { status: string; failure: string | null }): number {
   if (cached.status === "resolved") {
     return TWEET_CACHE_TTL_MS;
@@ -72,7 +66,7 @@ export class TweetFetchError extends Error {
   }
 }
 
-/** A status id, as every permalink parser produces one. */
+/** Matches numeric status IDs of up to 25 digits. */
 const TWEET_ID = /^[0-9]{1,25}$/;
 
 export function validateTweetFetchArgs(id: string, token: string): void {
@@ -96,9 +90,8 @@ export function syndicationUrl(id: string, token: string): string {
   return url.toString();
 }
 
-/** Fetches the raw syndication body, refusing anything over the cap before it
- * is buffered when the response declares a length, and while reading when it
- * does not. */
+/** Fetches raw syndication response text, rejecting responses that exceed
+ * the maximum byte limit. */
 export async function fetchTweetJson(
   doFetch: typeof globalThis.fetch,
   id: string,
@@ -124,9 +117,9 @@ export async function fetchTweetJson(
   }
 }
 
-/** What a hydration ended with. `failure` is the sentence a card shows and the
- * one `tweet_cache` stores; `failureKind` is the same outcome in the taxonomy
- * an attachment records. */
+/** Result of a tweet hydration attempt. `failure` contains the display error
+ * message stored in `tweet_cache`; `failureKind` classifies the failure for
+ * attachment metadata. */
 export interface TweetResolution {
   status: "resolved" | "unavailable";
   snapshot: TweetSnapshot | null;
@@ -141,7 +134,7 @@ export interface TweetResolution {
   fetchedAt: number;
 }
 
-/** What a post that resolved to nothing says on the card. */
+/** User-facing message displayed when a post cannot be retrieved. */
 export const TWEET_UNAVAILABLE_MESSAGE = "This post is unavailable.";
 
 export interface TweetHydrationDeps {
@@ -163,8 +156,7 @@ function unavailable(message: string, cached: boolean, fetchedAt: number): Tweet
   };
 }
 
-/** One syndication attempt, reduced to a snapshot or the reason there is
- * none. Never throws: the caller has a second provider to try. */
+/** Attempts resolution via syndication CDN, returning snapshot or error status. */
 async function fromSyndication(
   deps: TweetHydrationDeps,
   id: string,
@@ -183,15 +175,15 @@ async function fromSyndication(
   try {
     payload = JSON.parse(body);
   } catch {
-    return { snapshot: null, payload: null, failure: "the tweet response was not valid JSON" };
+    return { snapshot: null, payload: null, failure: "Tweet response was not valid JSON" };
   }
   const snapshot = tweetSnapshotFromSyndication(id, payload);
-  // A tombstone parses: deleted, withheld and protected posts come back as
-  // `TweetTombstone`, which is an answer, not a transport failure.
+  // Deleted, withheld, and protected posts return a `TweetTombstone` payload
+  // representing post status rather than a network error.
   return { snapshot, payload, failure: snapshot ? null : TWEET_UNAVAILABLE_MESSAGE };
 }
 
-/** One oEmbed attempt. Never throws, for the same reason. */
+/** Attempts resolution via oEmbed fallback. */
 async function fromOembed(
   deps: TweetHydrationDeps,
   id: string,
@@ -201,16 +193,14 @@ async function fromOembed(
     const payload = await fetchTweetOembed(deps.fetch, id, handle);
     return { snapshot: await tweetSnapshotFromOembed(id, payload), payload };
   } catch (error) {
-    deps.logger?.debug({ tweetId: id, error }, "the oEmbed fallback did not resolve a post");
+    deps.logger?.debug({ tweetId: id, error }, "oEmbed fallback failed to resolve post");
     return { snapshot: null, payload: null };
   }
 }
 
 /**
- * Writes the attempt to `tweet_cache`, or logs why it could not be. The cache
- * is an optimization: a post that resolved must still render when the row
- * cannot be written (an oversized payload, a database error), which is why
- * nothing here is allowed to escape into a hydration that already succeeded.
+ * Persists the resolution attempt to `tweet_cache`, logging write failures.
+ * Cache write failures do not interrupt successful resolutions.
  */
 function remember(
   deps: TweetHydrationDeps,
@@ -224,9 +214,8 @@ function remember(
   }
 }
 
-/** Registers the snapshot's images for `/embeds/<hash>`, or leaves them
- * pointing at their origin. Same reasoning as {@link remember}: a card whose
- * images are not cached is better than no card. */
+/** Registers snapshot images for `/embeds/<hash>`. If image registration
+ * fails, image URLs retain their origin targets so the card can still render. */
 function withCachedImages(deps: TweetHydrationDeps, snapshot: TweetSnapshot): TweetSnapshot {
   try {
     return cacheSnapshotImages(deps.db, snapshot);
@@ -237,14 +226,13 @@ function withCachedImages(deps: TweetHydrationDeps, snapshot: TweetSnapshot): Tw
 }
 
 /**
- * The cache-first hydration path: a fresh row is returned as it is, and every
- * attempt — resolved or not — is written back, so a deleted post is not
- * refetched on every render. It answers rather than throws, so a caller can
- * record the outcome on the entry or the attachment it belongs to.
+ * Cache-first hydration: cached rows within TTL are returned directly, and
+ * resolution outcomes are cached to prevent repeated requests for missing posts.
+ * Returns a resolution result rather than throwing to allow callers to persist
+ * outcome metadata.
  *
- * A snapshot is stored with its images rewritten to `/embeds/<hash>`
- * (`embeds/storage.ts`), which is also what registers them for fetching; the
- * rewrite happens once here rather than on every render.
+ * Stored snapshots have images rewritten to `/embeds/<hash>` (`embeds/storage.ts`),
+ * registering them for local serving.
  */
 export async function resolveTweet(
   deps: TweetHydrationDeps,
@@ -252,17 +240,12 @@ export async function resolveTweet(
   options: {
     now?: number;
     handle?: string | undefined;
-    /** Ask again although a fresh cached row says the post is unavailable:
-     * an explicit retry (`research.hydratePostTweet`). A resolved row is
-     * still reused. */
+    /** Bypass cached unavailable status on explicit retry (`research.hydratePostTweet`). */
     retryUnavailable?: boolean;
   } = {},
 ): Promise<TweetResolution> {
   const now = options.now ?? Date.now();
-  // Every caller derives the id with `tweetIdFromUrl`, but `journal.restore`
-  // hands back a whole entry the client was holding, `tweet_id` included. The
-  // shape is checked once here so a malformed id is answered without asking
-  // either provider about it.
+  // Validates tweet ID format before contacting upstream providers.
   if (!TWEET_ID.test(id)) {
     return unavailable("Invalid tweet ID.", false, now);
   }
@@ -291,11 +274,9 @@ export async function resolveTweet(
   let snapshot = syndication.snapshot;
   let payload = syndication.payload;
   let provider: TweetAttachmentProvider = "xSyndication";
-  // The fallback is for a post syndication will not serve — a 404, a rate
-  // limit, a tombstone — not for one it did not answer about at all. A
-  // timeout means the path to X is slow or blocked, where a second request
-  // only makes the caller wait twice for the same silence; the attempt is
-  // recorded `timeout`, which is the one failure worth retrying.
+  // The fallback is invoked only when syndication returns an explicit error or
+  // unavailable status (e.g. 404, rate limit, tombstone). Timeouts indicate
+  // upstream connectivity failures where a secondary request would compound latency.
   if (!snapshot && classifyTweetFetchFailure(syndication.failure ?? "") !== "timeout") {
     const fallback = await fromOembed(deps, id, options.handle);
     if (fallback.snapshot) {
@@ -306,9 +287,7 @@ export async function resolveTweet(
   }
 
   if (!snapshot) {
-    // The syndication failure is what is reported: it is the provider that was
-    // asked about the post itself, and "HTTP 404" from it says more than the
-    // publish endpoint declining to render a card.
+    // Reports the syndication error message, which provides more specific status details.
     const message = syndication.failure ?? TWEET_UNAVAILABLE_MESSAGE;
     remember(deps, { tweetId: id, status: "unavailable", failure: message });
     return unavailable(message, false, now);

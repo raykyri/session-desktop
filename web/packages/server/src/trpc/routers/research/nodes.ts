@@ -41,15 +41,13 @@ import { detailWithQueues, dispatchFollowups, publishNode, publishTreeEvent } fr
 
 export const nodeProcedures = {
   /**
-   * Creates a follow-up of `parentNodeId` (`fork_research_node`). A branch,
-   * or with `inline` the parent's inline follow-up when its slot is free;
-   * continuing a chain whose last answer is still running goes through
-   * `followups.ask`, which queues it.
+   * Creates a follow-up node connected to `parentNodeId` (`fork_research_node`).
+   * Creates a branch, or an inline follow-up when `inline` is set and the slot is
+   * available; continuing an active chain uses `followups.ask` to queue.
    *
-   * `agent` picks any registry model the account may use and an effort that
-   * model accepts; absent, the parent's agent. `replacesNodeId` names a
-   * failed or stopped question this one replaces (an edited question): the
-   * new node is admitted and the old one removed in one transaction.
+   * Configures the model and effort, defaulting to the parent node's configuration.
+   * `replacesNodeId` replaces an existing failed or cancelled node within a single
+   * transaction.
    */
   forkNode: protectedProcedure
     .input(
@@ -65,15 +63,15 @@ export const nodeProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }): Promise<ResearchNode> => {
-      // A viewer is refused before anything is resolved or charged.
+      // Reject viewer role before resolving attachments or checking limits.
       requireNodeRole(ctx, input.parentNodeId, "commenter");
       const parent = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.parentNodeId)),
         `research node ${input.parentNodeId} was not found`,
       );
       const model = input.agent?.model ?? nodeModelId(parent);
-      // A follow-up on the parent's model keeps the parent's effort unless it
-      // names one; one on another model starts at that model's default.
+      // Inherit the parent's effort level if the same model is used; otherwise
+      // use the model's default effort.
       const effort =
         input.agent?.effort !== undefined
           ? input.agent.effort
@@ -93,8 +91,8 @@ export const nodeProcedures = {
         )),
         ...images,
       ];
-      // Checked again with the write: other launches may have been admitted
-      // while the attachments resolved.
+      // Verify limits again in the write transaction in case concurrent runs
+      // were admitted while attachments were being resolved.
       const admitted = admitWithinLimits(ctx, (db) => {
         const child = repo(() =>
           nodes.admitChildDetailed(db, ctx.user.id, {
@@ -128,8 +126,8 @@ export const nodeProcedures = {
         publishNode(ctx, admitted.reorderedHead);
       }
       if (admitted.movedQueue && admitted.replacedNodeId !== null) {
-        // The queue now waits under the new question: announced under both
-        // heads, so a client holding it under the old one drops it there.
+        // Reassign queued follow-ups to the replacement node and notify clients
+        // under both head node IDs.
         publishQueue(ctx, ctx.user.id, node.treeId, admitted.replacedNodeId);
         publishQueue(ctx, ctx.user.id, node.treeId, node.id);
       }
@@ -164,12 +162,9 @@ export const nodeProcedures = {
     }),
 
   /**
-   * Reruns a settled question in place (`rerun_research_node`): as
-   * `retryNode`, and a complete answer is accepted too and replaced. Its
-   * snapshot and recap are deleted; highlights stay and re-anchor by quote.
-   * The answer it follows must be complete, except for an inline follow-up
-   * of an answer that is itself running again: the rerun then waits in the
-   * run queue until that answer settles.
+   * Reruns a completed research node in place (`rerun_research_node`), resetting
+   * existing answers and recaps while preserving highlights. Dependent inline
+   * follow-ups wait in the queue until the parent run completes.
    */
   rerunNode: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
@@ -189,18 +184,17 @@ export const nodeProcedures = {
     }),
 
   /**
-   * Stores the display order of the messages column whose inline chain
-   * starts at `headNodeId` (`set_research_chain_order`). `nodeIds` must be
-   * exactly the chain's nodes. Display only: a follow-up still continues the
-   * chain's last node.
+   * Sets the display ordering for the message chain starting at `headNodeId`
+   * (`set_research_chain_order`). `nodeIds` must contain all nodes in the chain.
+   * Affects display order only; follow-ups continue from the terminal node.
    */
   setChainOrder: protectedProcedure
     .input(
       z.object({
         headNodeId: z.string(),
         nodeIds: z.array(z.string()),
-        /** The display order the caller reordered from. When given, a column
-         * someone else reordered since is refused with `CONFLICT`. */
+        /** The display order the caller reordered from. When provided, requests
+         * that conflict with concurrent reordering return `CONFLICT`. */
         expectedOrder: z.array(z.string()).optional(),
       }),
     )
@@ -224,7 +218,7 @@ export const nodeProcedures = {
   cancelNode: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(({ ctx, input }): ResearchNode => {
-      // The person who asked, or the thread's owner, may stop a run.
+      // Only the node author or thread owner may cancel a run.
       const standing = requireNodeRole(ctx, input.nodeId, "commenter");
       if (standing.role !== "owner" && standing.node.authorId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: access.ACCESS_MESSAGES.ownContent });
@@ -233,8 +227,7 @@ export const nodeProcedures = {
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,
       );
-      // Queued, running, or interrupted and waiting to resume
-      // (`nodes.stopRun`); a settled run cannot be stopped.
+      // Only queued, running, or interrupted runs may be stopped (`nodes.stopRun`).
       const node = repo(() => nodes.stopRun(ctx.db, input.nodeId));
       if (node === null) {
         throw new TRPCError({
@@ -242,8 +235,7 @@ export const nodeProcedures = {
           message: `Research node is already in terminal status: ${nodeStatus(existing)}`,
         });
       }
-      // A rerun of its inline follow-up held behind it fails now rather than
-      // when its wait runs out; a running node's settlement does this too.
+      // Wake dependent child runs; child reruns fail immediately if the parent is cancelled.
       queue.wakeChildrenOf(ctx.db, node.id);
       ctx.runs.cancel(node.id);
       publishNode(ctx, node);
@@ -291,8 +283,8 @@ export const nodeProcedures = {
             : { expectedHighlightIds: input.expectedHighlightIds }),
         }),
       );
-      // The tree is the caller's view; the rest of the audience gets it
-      // without the per-person fields.
+      // Emit tree event with user-specific fields to the caller, and without
+      // per-user fields to other thread viewers.
       publishTreeEvent(ctx, "research.document.updated", {
         tree: result.tree,
         node: result.node,
@@ -300,10 +292,10 @@ export const nodeProcedures = {
         markdownChanged: result.markdownChanged,
         removedHighlightCount: result.removedHighlightCount,
       });
-      // Branches asked about a passage moved with their quote.
+      // Update branch positions when their anchor text moves.
       for (const branch of movedBranches) publishNode(ctx, branch);
       emitFeedItemUpsertedForNode(ctx, result.node.id);
-      // A new body cleared the recap; an imported report gets a new one.
+      // Clear the existing recap and schedule a new recap when document content changes.
       if (result.markdownChanged) scheduleDocumentRecap(ctx, result.node.id);
       return result;
     }),
@@ -320,7 +312,7 @@ export const nodeProcedures = {
       });
       const feedItem = feedItems.forTree(ctx.db, removal.treeId);
       if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
-      // Removing a chain's failed or stopped tail lets its queue send again.
+      // Removing a terminal failed or stopped node allows queued follow-ups to proceed.
       dispatchFollowups(ctx, removal.treeId);
       return removal;
     }),
@@ -333,8 +325,8 @@ export const nodeProcedures = {
   generateTitle: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
     .mutation(async ({ ctx, input }): Promise<string> => {
-      // A title is a rename: the owner's, or the author's of their own node
-      // (`access.assertMayChangeNode`); the requester pays for the run.
+      // Validate rename permission for the thread owner or node author
+      // (`access.assertMayChangeNode`); the requesting user is billed for the run.
       const standing = requireNodeRole(ctx, input.nodeId, "commenter");
       repo(() => access.assertMayChangeNode(ctx.db, standing, ctx.user.id));
       assertMetadataAllowed(ctx);

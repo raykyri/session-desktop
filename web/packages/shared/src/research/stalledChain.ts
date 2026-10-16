@@ -1,9 +1,9 @@
-// The note an ask box shows, and the refusal `followups.ask` answers with,
+// The note an ask box displays, and the rejection `followups.ask` returns,
 // when the last answer of an inline chain stopped and will not complete on its
-// own (web only). The person who asked that answer pays for its runs, so only
+// own (web only). The author of that answer pays for its runs, so only
 // they can retry it; the desktop's wording (`researchChainComposerState`) is
-// theirs. Anyone else in a shared thread is told who can retry it and what
-// they can do instead.
+// theirs. Other users in a shared thread are informed who can retry it and what
+// actions they can take instead.
 
 /** The desktop's notes, for the person who can retry the answer. */
 export const STALLED_TAIL_MESSAGES = {
@@ -15,10 +15,10 @@ export interface StalledTailNoteInput {
   /** How the last answer ended: with an error (failed, or interrupted and
    * not resuming) or stopped (cancelled). */
   status: "failed" | "stopped";
-  /** The reader pays for the answer's runs (its author, or the owner when
+  /** The current user pays for the answer's runs (its author, or the owner when
    * the author's account is gone): they can retry it. */
   readerIsPayer: boolean;
-  /** The reader owns the thread: they can delete the answer. */
+  /** The current user owns the thread: they can delete the answer. */
   readerIsOwner: boolean;
   /** The payer is the thread's owner. */
   payerIsOwner: boolean;
@@ -27,10 +27,10 @@ export interface StalledTailNoteInput {
 }
 
 /**
- * The note for a reader of a chain whose last answer stopped. The payer
- * reads the desktop's sentence. Anyone else is told that only the payer can
- * retry it, that the owner can delete it (or, for the owner, to delete it),
- * and to branch from the answer before it to continue.
+ * The note for a user viewing a chain whose last answer stopped. The payer
+ * receives the desktop's wording. Other users are informed that only the payer
+ * can retry it, that the owner can delete it (or, for the owner, to delete it),
+ * and to branch from the preceding answer to continue.
  */
 export function stalledTailNote(input: StalledTailNoteInput): string {
   if (input.readerIsPayer) {

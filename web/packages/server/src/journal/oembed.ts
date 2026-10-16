@@ -1,18 +1,15 @@
-// The oEmbed fallback behind tweet hydration (`03-api-and-events.md` §2).
+// oEmbed fallback for tweet hydration (`03-api-and-events.md` §2).
 //
-// New on the web; the desktop has one pipeline. The syndication CDN is the
-// source of a full snapshot — media, quoted post, link card, counts — but it
-// answers 404 for a post that its widget tier has stopped serving and rate
-// limits an origin that asks for many at once. `publish.twitter.com/oembed` is
-// the documented endpoint, and it keeps answering in exactly those cases. What
-// it returns is a rendering, not a record: one paragraph of HTML, the author's
-// name and handle, and the date. So a post resolved here carries text, author
-// and timestamp and nothing else, and the attachment records `xOembed` as its
-// provider so a reduced card is recognizable as one.
+// The syndication CDN provides complete snapshots (media, quoted posts, cards,
+// and interaction counts), but returns 404 once its widget tier stops serving a
+// post and applies rate limits during high request volume. The secondary
+// endpoint `publish.twitter.com/oembed` remains available in those cases.
+// It returns rendered HTML containing author name, handle, date, and text.
+// Posts resolved through oEmbed contain only text, author, and timestamp,
+// recording `xOembed` as the provider to indicate reduced metadata.
 //
-// The HTML is X's own markup, but it is still third-party HTML: it is parsed
-// into text and link runs rather than rendered, and every href is put through
-// `tweetWebUrl` before it can reach the snapshot.
+// The received HTML is parsed into plain text and link runs rather than
+// executed as DOM markup, and href attributes are sanitized with `tweetWebUrl`.
 
 import type { TweetSnapshot, TweetTextRun } from "@session/shared";
 import { storableTweetSnapshot, tweetWebUrl } from "@session/shared";
@@ -21,21 +18,18 @@ import { ResponseTooLargeError, readCappedText } from "../net/readCapped.js";
 
 const OEMBED_ENDPOINT = "https://publish.twitter.com/oembed";
 
-/** The endpoint's own cap is far below this; the bound is here so a wrong
- * answer cannot be buffered without limit. */
+/** Upper bound on response size to prevent unbounded buffering of invalid responses. */
 export const MAX_OEMBED_RESPONSE_BYTES = 256 * 1024;
 
 export const OEMBED_FETCH_TIMEOUT_MS = 8_000;
 
 /** X handles are `[A-Za-z0-9_]` and at most 15 characters. A source URL's
- * handle is only ever echoed back into the permalink this module builds, so it
- * is checked rather than trusted. */
+ * handle is validated before inclusion in constructed permalinks. */
 const HANDLE = /^[A-Za-z0-9_]{1,15}$/;
 
 /**
- * The permalink the endpoint is asked about. Built here from the numeric id,
- * never taken from the caller: `handle` is used only when it is handle-shaped,
- * and `i` — X's own handle-less permalink form — otherwise.
+ * Constructs the status permalink for the oEmbed endpoint from the numeric ID.
+ * Uses `handle` if valid, otherwise falls back to `i`.
  */
 export function oembedTweetUrl(id: string, handle?: string): string {
   const segment = handle !== undefined && HANDLE.test(handle) ? handle : "i";
@@ -45,9 +39,7 @@ export function oembedTweetUrl(id: string, handle?: string): string {
 export function oembedRequestUrl(id: string, handle?: string): string {
   const url = new URL(OEMBED_ENDPOINT);
   url.searchParams.set("url", oembedTweetUrl(id, handle));
-  // No widget script (nothing here renders one), no tracking, and the
-  // paragraph unstyled: `omit_script` and `dnt` are what make the response a
-  // small, stable blockquote.
+  // Omit widget scripts, tracking, and styling to request a minimal blockquote.
   url.searchParams.set("omit_script", "1");
   url.searchParams.set("dnt", "1");
   url.searchParams.set("lang", "en");
@@ -61,8 +53,7 @@ export interface OembedPayload {
   url?: unknown;
 }
 
-/** The oEmbed body, refused over the cap and past the timeout. Throws with a
- * message the failure taxonomy can classify. */
+/** Fetches the oEmbed payload, enforcing maximum byte limits and timeout. */
 export async function fetchTweetOembed(
   doFetch: typeof globalThis.fetch,
   id: string,
@@ -93,11 +84,10 @@ export async function fetchTweetOembed(
 }
 
 /**
- * What this module reads out of `linkedom`.
+ * Minimal DOM interface types for `linkedom`.
  *
- * The package types itself against the DOM library, which the server does not
- * load (`lib` is ES2022, `webFetch.ts:83-101` narrows the same way). Node type
- * numbers rather than instance checks for the same reason.
+ * Uses numeric node types rather than `instanceof` checks because the server
+ * runtime environment does not include browser DOM type definitions.
  */
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -125,12 +115,10 @@ function children(node: OembedNode): OembedNode[] {
 }
 
 /**
- * The paragraph's contents as display runs. A text node is text; an anchor is
- * a link labeled the way X labeled it (a `t.co` shortlink, or the
- * `pic.twitter.com` stand-in for media this pipeline cannot render); a `<br>`
- * is the newline it stands for. Unlike the syndication path there are no URL
- * entities to expand, so a link run carries no `tco` and its target is the
- * shortlink itself.
+ * Converts blockquote paragraph contents into display runs. Text nodes become
+ * plain text runs; anchors become link runs with sanitized targets; `<br>`
+ * elements become newline text runs. Unlike syndication payloads, oEmbed HTML
+ * does not provide expanded URL entities, so link runs preserve the shortlink target.
  */
 export function oembedTextRuns(paragraph: OembedNode): TweetTextRun[] {
   const runs: TweetTextRun[] = [];
@@ -166,8 +154,7 @@ export function oembedTextRuns(paragraph: OembedNode): TweetTextRun[] {
     }
     pushText(child.textContent ?? "");
   }
-  // The same edge trim the syndication normalizer applies, for the same
-  // reason: the markup's own indentation is not part of the post.
+  // Trims leading and trailing whitespace introduced by blockquote markup formatting.
   const first = runs[0];
   if (first?.kind === "text") {
     first.text = first.text.replace(/^\s+/, "");
@@ -179,7 +166,7 @@ export function oembedTextRuns(paragraph: OembedNode): TweetTextRun[] {
   return runs.filter((run) => run.kind !== "text" || run.text !== "");
 }
 
-/** The handle out of `author_url` (`https://twitter.com/jack`). */
+/** Extracts the author handle from `author_url` (e.g. `https://twitter.com/jack`). */
 export function oembedHandle(authorUrl: unknown): string | undefined {
   if (typeof authorUrl !== "string") {
     return undefined;
@@ -190,9 +177,9 @@ export function oembedHandle(authorUrl: unknown): string | undefined {
 }
 
 /**
- * The date the blockquote signs off with ("March 21, 2006"), as an ISO
- * timestamp. It is a rendered date with no time and no zone, so it is read as
- * UTC midnight: the card shows a day, and a day is all the endpoint says.
+ * Parses the blockquote sign-off date (e.g. "March 21, 2006") as an ISO
+ * timestamp. Evaluated as UTC midnight because the endpoint returns only
+ * date resolution without time or timezone.
  */
 export function oembedCreatedAt(text: string | null | undefined): string | undefined {
   const trimmed = text?.trim();
@@ -204,11 +191,9 @@ export function oembedCreatedAt(text: string | null | undefined): string | undef
 }
 
 /**
- * Normalizes an oEmbed body into the stored snapshot, or null when it is not
- * one. The id is the one that was asked for — the endpoint answers about the
- * post at the URL this module built — and the permalink is rebuilt from the
- * handle the endpoint reported, so a snapshot can never point somewhere the
- * caller chose.
+ * Normalizes an oEmbed payload into a `TweetSnapshot`, or null if invalid.
+ * Uses the requested ID and reconstructs the canonical permalink with the
+ * returned author handle.
  */
 export async function tweetSnapshotFromOembed(
   id: string,
@@ -232,9 +217,8 @@ export async function tweetSnapshotFromOembed(
     author: { name: name === "" ? handle : name, handle },
     ...(createdAt === undefined ? {} : { createdAt }),
     runs: paragraph ? oembedTextRuns(paragraph) : [],
-    // The endpoint returns the whole post, so nothing is cut off — but it
-    // returns no media, no quoted post, no card and no counts, which is why
-    // `provider` is stored beside the snapshot.
+    // The endpoint returns complete text, but excludes media, quoted posts,
+    // link cards, and counts; recorded as `xOembed` to denote limited metadata.
     partial: false,
     media: [],
   };

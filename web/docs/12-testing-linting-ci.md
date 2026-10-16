@@ -67,7 +67,7 @@ prompt assembly against recorded fixtures.
 
 ### 3.1 Shared (pure)
 
-Every module ported from `src/lib/` brings its `tests/*.test.ts` file,
+Every module ported from `src/lib/` retains its corresponding `tests/*.test.ts` file,
 converted from `node:test` (`describe/it` + `node:assert`) to AVA. The
 conversion is mechanical: `it(...)` → `test(...)`, `assert.equal` → `t.is`,
 `assert.deepEqual` → `t.deepEqual`. New fixture-based tests for logic ported
@@ -127,7 +127,7 @@ the committed tool exchanges as context and no duplicate turns), admission
 and per-provider caps with queue positions, 429 re-queue backoff, interest
 filtering, tweet proxy validation and caching, the artifact host's
 isolation, widget pages (both pages' CSP, the same-site rule, revisions and
-per-person saved inputs, `widgets.test.ts`), the volume file sweep
+per-user saved inputs, `widgets.test.ts`), the volume file sweep
 (`storage.test.ts`). Collaboration: `tenancy.test.ts` is the role ×
 procedure matrix (owner, commenter, viewer, a signed-in reader of a public
 thread, a stranger to a private one, a guest; each cell on its own thread;
@@ -135,12 +135,12 @@ thread, a stranger to a private one, a guest; each cell on its own thread;
 read, `UNAUTHORIZED` for a guest on a signed-in procedure) plus the
 workspace-scoped refusals; `collaboration.test.ts` covers invitations, the
 event audience (members, a public reader that declared the thread open,
-per-person events), presence, notifications, asker-pays queueing and daily
+per-user events), presence, notifications, asker-pays queueing and daily
 limits, `CONFLICT` on stale edits, the owner's Trash hiding a thread from its
 members, removing a member, and image access through the thread;
 `events.test.ts` covers `emitToTree` and presence expiry with a fake clock.
 In `packages/db`, `collaboration.test.ts` covers the same rules at the
-repository level (roles, own-content rules, per-person Archive, Trash and
+repository level (roles, own-content rules, per-user Archive, Trash and
 filing, invitations, payer, Follow, a stale chain order).
 `e2e/widgets.spec.ts` runs a widget's script and checks
 from inside the frame that cookies, storage, the parent's DOM, `fetch` to the
@@ -167,7 +167,7 @@ in the delete and make-private confirmations, and the invitation routes
 redirect without the token, `/invite/$token` links of the earlier form).
 `notifications.test.tsx` covers the inbox page (open marks read and
 navigates, Mark all as read, paging) and the bridge refetching it with
-toasts off. `test/helpers.tsx` answers the collaboration reads
+toasts off. `test/helpers.tsx` responds to collaboration read procedures
 (`sharing.listShared`, `invites.received`, `events.presence`,
 `notifications.list`, …) with empty lists by default. Server and database:
 `inbox.test.ts` in both packages (follow defaults, storing, paging, marking
@@ -192,7 +192,7 @@ result.
 The port is `SESSION_E2E_PORT` (default 8788) and the data directory is per
 port (`$TMPDIR/session-web-e2e-<port>`). Playwright starts its own server and
 refuses a port that is already in use; `SESSION_E2E_REUSE_SERVER=1` runs
-against a server already listening there (one started by hand, for
+against a server already listening there (one started manually, for
 iteration). The server binds `::` unless `SESSION_E2E_HOST` names
 another address; on a machine or container without IPv6, set it to
 `127.0.0.1` (Chromium tries the IPv4 loopback for `localhost` when `::1`
@@ -209,14 +209,14 @@ schedules a recap). Nothing in the suite reaches the network: the fixture
 providers answer for the models, `web_search` is unregistered because no
 search key is set, and `web_fetch` reads the fixture's page in process
 (`fixturePageFetch`). With fixture providers the server's own fetches (link
-post hydration) also go to `fixturePageFetch`, which answers the X
+post hydration) also go to `fixturePageFetch`, which serves the X
 syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 
 | Spec | What it drives |
 | --- | --- |
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed (Refresh, Remove highlight); a follow-up queued while the answer streams, Cancel, and Edit question on a queued follow-up behind a stopped answer; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
 | `library.spec.ts` | Save a note and a link (the link's card shows its X post label); create a folder, drag a card into its tray and nest one card under another; Delete → Move to Trash, Restore, then Delete now and Empty Trash; Save draft → open from Drafts → Send; a finished thread on Home and Move to Archive; Markdown report import; the composer text and the appearance and theme pickers surviving a reload; Reduce motion and Require ⌘↵ to send taking effect and persisting |
-| `live.spec.ts` | Changes by a thread's owner while others have it open, each person in their own context: a commenter made a viewer loses the ask box and their queued follow-up (held behind a stopped answer, so it cannot be sent first); Archive turns a member's ask box read-only while a public reader keeps reading, and Make private shows the reader the unavailable state while the member keeps the thread; Trash shows the unavailable state to a member and a public reader; a removed member gets the unavailable state and leaves the owner's presence avatars; presence avatars appear when a member opens the thread and go when they navigate away or close the tab; a public reader who left for Home and a guest each see, on going back, a question the owner asked meanwhile. Waits are on UI state: the owner's presence avatars confirm that a reader's open-thread declaration reached the server, or that it was withdrawn |
+| `live.spec.ts` | Changes by a thread's owner while others have it open, each user in their own context: a commenter made a viewer loses the ask box and their queued follow-up (held behind a stopped answer, so it cannot be sent first); Archive turns a member's ask box read-only while a public reader keeps reading, and Make private shows the reader the unavailable state while the member keeps the thread; Trash shows the unavailable state to a member and a public reader; a removed member gets the unavailable state and leaves the owner's presence avatars; presence avatars appear when a member opens the thread and go when they navigate away or close the tab; a public reader who left for Home and a guest each see, on going back, a question the owner asked meanwhile. Waits are on UI state: the owner's presence avatars confirm that a reader's open-thread declaration reached the server, or that it was withdrawn |
 | `collaboration.spec.ts` | Accounts and a guest, each in its own browser context. Through the UI: the owner copies a commenter and a viewer invitation link (`/invite#<token>`) from the Share dialog; the commenter opens theirs, lands on the thread and asks (counted in their usage); the owner's open page shows the question live with the commenter's author chip and opens its answer; the viewer's page has no ask box and shows them as Viewer; a thread made Public in the dialog opens read-only for a guest; a stale note edit opens "This note changed", Reload keeps the text and the next save succeeds; signed out, an invitation link goes to `/login?redirect=/invite` with the token in no URL, and after signing in `/invite` accepts it; an `/invite/<token>` link of the earlier form still accepts; a member's question appears as an unread badge on the owner's Notifications row without a reload, the inbox entry opens the thread and is marked read, and the member clears their run notification with Mark all as read. Through the tRPC endpoint: invite by link and by login and accept; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and a guest; a member's page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
 | `admin.spec.ts` |
  `claude-fable` visible in the composer's model menu for administrators and hidden for other users |

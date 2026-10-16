@@ -196,7 +196,7 @@ export function useResearchAnnotations({
       ),
   );
   // Branch heads open as levels (and the pending branch): their passages are
-  // underlined and their markers drawn in the accent colour.
+  // underlined and their markers drawn in the accent color.
   const openBranchIds = useMemo(() => {
     const open = new Set<string>(levels.slice(1).map((level) => level.headId));
     if (activePending) {

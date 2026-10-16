@@ -1,24 +1,23 @@
 // The follow-up queue: questions asked at the end of an inline chain while
-// the chain could not take one, kept per chain head in the model (and in
-// state.json as `researchFollowups`) and sent in order as the chain frees up.
+// the chain could not accept one, kept per chain head in the model (and in
+// state.json as `researchFollowups`) and sent in order as previous turns complete.
 // It follows the web server's queue (web/packages/db/src/repos/followups.ts,
 // web/packages/server/src/research/followups.ts) and the shared rules in
 // `researchQueueAction` (web/packages/shared/src/lib/researchBranchView.ts):
 //
-// - Asking sends at once when nothing is queued for the chain and its last
-//   answer can take a follow-up; otherwise the question joins the queue. A
-//   question that would wait behind an answer that stopped is refused with
-//   the ask box's note.
+// - Asking sends immediately when nothing is queued for the chain and its last
+//   answer can accept a follow-up; otherwise the question is added to the queue. A
+//   question queued behind a stopped run is rejected with the composer note.
 // - Dispatch sends a chain's first item once the chain's last answer has
 //   completed with a recorded checkpoint. It runs when a run settles, after
 //   a branch removal, a chain-order change, a restore from the Archive or the
 //   Trash, a cancel or retry, and at startup. Threads in the Archive or the
-//   Trash wait.
-// - A refused send records `failed_reason`; the chain's queue waits on that
-//   item until it is retried or cancelled.
+//   Trash do not dispatch.
+// - A rejected send records `failed_reason`; subsequent items in the chain remain
+//   queued until that item is retried or cancelled.
 // - The images of a queued item are referenced by the queue (see
 //   `research_image_ids`), so they stay in the image store; a cancel releases
-//   them, and a send hands them to the new node.
+//   them, and a send transfers them to the new node.
 
 use super::*;
 use crate::research::{QueuedResearchFollowup, ResearchFollowupQueueItem};
@@ -26,7 +25,7 @@ use crate::tweets::ResearchMessageAttachment;
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
-/// Starts the run of a follow-up the queue admitted (a Queued node). It
+/// Starts the run of an admitted follow-up (a Queued node). It
 /// settles the node as Failed when the launch fails.
 pub type FollowupLauncher = Arc<dyn Fn(&AppState, &ResearchNode) + Send + Sync>;
 
@@ -72,8 +71,8 @@ fn serialize_node_view<S: serde::Serializer>(
     node.view().serialize(serializer)
 }
 
-/// An image of a queued follow-up stored by earlier builds, as the webview
-/// sends it.
+/// An image of a queued follow-up stored by earlier builds, as received from
+/// the webview.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyQueuedResearchFollowupImage {
@@ -83,7 +82,7 @@ pub struct LegacyQueuedResearchFollowupImage {
 }
 
 /// A queued follow-up that earlier builds kept in the webview's
-/// localStorage, sent once so the backend takes it over.
+/// localStorage, imported into backend persistence.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyQueuedResearchFollowup {
@@ -98,10 +97,10 @@ pub struct LegacyQueuedResearchFollowup {
     pub attachments: Vec<ResearchMessageAttachment>,
 }
 
-/// Whether the last message of the chain headed by `head_id` can take a
+/// Whether the last message of the chain headed by `head_id` can accept a
 /// follow-up (`researchQueueStep`): send it (with the tail's id), wait (the
 /// answer is running, or its checkpoint is not recorded yet), or stalled
-/// (the answer failed or was stopped, with the ask box's note).
+/// (the answer failed or was stopped, with the composer note).
 enum ChainTail {
     Send(String),
     Wait,
@@ -168,7 +167,7 @@ fn queued_followup_agent(
 /// What a chain's queue does next (`researchQueueAction`).
 enum FollowupStep {
     Wait,
-    /// The head is gone: the queue has nothing to continue.
+    /// The head node no longer exists: the queue has nothing to continue.
     Clear,
     Send {
         item: QueuedResearchFollowup,
@@ -312,8 +311,8 @@ impl AppState {
         }
     }
 
-    /// Tells open windows the queue of the chain `head_id` heads changed,
-    /// with the whole queue after the change (`research.queue.changed`).
+    /// Emits `research.queue.changed` for the chain headed by `head_id`,
+    /// containing the full queue after the change.
     pub(super) fn emit_research_queue_changed(&self, tree_id: &str, head_id: &str) {
         let items = self
             .inner
@@ -347,7 +346,7 @@ impl AppState {
 
     /// Admits a follow-up as the inline child of `tail_id` under the same
     /// workspace checks as a fork. `consumed` names the queued item it
-    /// sends, which leaves the queue with the insert.
+    /// sends, which is removed from the queue with the insertion.
     fn admit_research_followup(
         &self,
         tail_id: &str,
@@ -372,10 +371,10 @@ impl AppState {
     }
 
     /// Asks a follow-up at the end of the chain that holds `node_id`: when
-    /// nothing is queued for the chain and its last answer can take a
-    /// follow-up, it is sent at once (and its run started); otherwise it is
+    /// nothing is queued for the chain and its last answer can accept a
+    /// follow-up, it is sent immediately (and its run started); otherwise it is
     /// added to the chain's queue. Refused in an archived thread or one in
-    /// the Trash, and when it would wait behind an answer that stopped.
+    /// the Trash, and when queued behind a stopped answer.
     pub fn ask_research_followup(
         &self,
         node_id: &str,
@@ -557,7 +556,7 @@ impl AppState {
         self.persist();
         self.release_research_images(&item.message.attachments);
         self.emit_research_queue_changed(&tree_id, &head_id);
-        // A cancelled first item that had failed no longer holds the queue.
+        // Cancelling a failed leading item unblocks the queue.
         self.schedule_research_followup_dispatch(Some(&tree_id));
         self.research_followup_queue(&tree_id, &head_id)
     }
@@ -604,7 +603,7 @@ impl AppState {
     }
 
     /// Moves the queue of the chain `from` heads to `to`: an edited first
-    /// question of a branch hands the queue back to the question it was to
+    /// question of a branch returns the queue to the question it was to
     /// replace when the replacement is rolled back.
     pub fn move_research_followups(&self, from: &str, to: &str) {
         let tree_id = {
@@ -630,10 +629,10 @@ impl AppState {
         self.emit_research_queue_changed(&tree_id, to);
     }
 
-    /// Takes over queued follow-ups that earlier builds kept in the
+    /// Imports queued follow-ups that earlier builds kept in the
     /// webview's storage. Items whose id is already queued are skipped, so a
     /// second import (another window, a retry after a failed request) adds
-    /// nothing; items whose chain is gone are dropped. An item whose images
+    /// nothing; items whose chain no longer exists are dropped. An item whose images
     /// are no longer stored is kept without them, marked as not sent.
     /// Returns how many items were added.
     pub fn import_research_followups(
@@ -749,7 +748,7 @@ impl AppState {
     }
 
     /// Runs `dispatch_research_followups` off the caller's thread: callers
-    /// are run settlement and mutations that may hold locks a send takes.
+    /// are run settlement and mutations that may hold locks needed for dispatch.
     /// Tests record the request and run it with
     /// `run_scheduled_research_followup_dispatches`.
     pub(crate) fn schedule_research_followup_dispatch(&self, tree_id: Option<&str>) {
@@ -780,7 +779,7 @@ impl AppState {
     }
 
     /// Sends the first queued follow-up of every chain (of one tree, or of
-    /// all) that can take it now, and starts their runs. Returns the nodes
+    /// all) eligible to run, and starts their execution. Returns the nodes
     /// admitted.
     pub fn dispatch_research_followups(&self, tree_id: Option<&str>) -> Vec<ResearchNode> {
         let admitted = {

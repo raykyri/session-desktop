@@ -157,7 +157,7 @@ export function useSwipeNavigation(
   }, [attachmentKey, handlers, targetRef]);
 }
 
-/** Test seam: forgets a navigated gesture's momentum. */
+/** Test seam: clears a navigated gesture's momentum. */
 export function resetSwipeGestureForTests(): void {
   if (gestureIdleTimer !== null) clearTimeout(gestureIdleTimer);
   gestureIdleTimer = null;

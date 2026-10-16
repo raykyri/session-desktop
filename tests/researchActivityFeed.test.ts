@@ -65,7 +65,7 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.match(html, /post-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
-  // The ask box starts Home, before the Unfiled list; the header has no
+  // The composer starts Home, before the Unfiled list; the header has no
   // + Ask, and it marks Home for the collapsed sidebar.
   assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-card"));
   assert.ok(html.indexOf("research-feed-card") < html.indexOf("research-feed-tray"));
@@ -320,7 +320,7 @@ test("Trash lists its items newest first with Restore and Delete now, and emptie
   assert.ok(html.indexOf("Old folder") < html.indexOf("Old thread"));
   assert.match(html, /aria-label="Restore Old thread"/);
   assert.match(html, /aria-label="Delete Old folder now"/);
-  // Trash has no ask box and takes no drops.
+  // Trash has no composer and takes no drops.
   assert.doesNotMatch(html, /Query composer/);
   assert.doesNotMatch(html, /research-feed-solo"[^>]*data-research-drop/);
 
@@ -517,7 +517,7 @@ test("a post is an untitled card showing its body", () => {
   assert.doesNotMatch(html, /research-feed-card-title/);
 });
 
-test("Archive has no ask box; Home keeps it", () => {
+test("Archive has no composer; Home keeps it", () => {
   assert.doesNotMatch(renderFeed({ view: { kind: "archive" } }), /Query composer/);
   assert.match(renderFeed({}), /Query composer/);
 });

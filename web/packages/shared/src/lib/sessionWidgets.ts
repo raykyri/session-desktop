@@ -111,8 +111,8 @@ export const SESSION_WIDGET_FRAME_INITIAL: SessionWidgetFrame = {
 
 /** Transitions of a widget frame: prepare, static page, then (Run) the run
  * page. The page navigating itself drops the frame until Reload: reported by
- * the page's own guard when its document unloads, or seen as a second load of
- * the same frame. Run needs a run URL, which the backend gives only while
+ * the page's own guard when its document unloads, or detected as a second load of
+ * the same frame. Run requires a run URL, which the backend provides only while
  * widget scripts are allowed. Stop returns a running widget to its static page
  * with a reason (a widget that keeps taking keyboard focus from the app). */
 export function sessionWidgetFrameReducer(
@@ -167,7 +167,7 @@ export function sessionWidgetFrameReducer(
   }
 }
 
-/** The page the frame shows: the run page once the reader has run it. */
+/** The URL displayed in the frame: the run page once the widget has been executed. */
 export function sessionWidgetFrameUrl(state: SessionWidgetFrame): string | null {
   if (state.phase !== "ready" || !state.urls) {
     return null;
@@ -175,8 +175,8 @@ export function sessionWidgetFrameUrl(state: SessionWidgetFrame): string | null 
   return state.running && state.urls.runUrl ? state.urls.runUrl : state.urls.staticUrl;
 }
 
-/** The page "Open in browser" shows: the static page unless the reader has
- * already run the widget, so opening it never starts scripts by itself. */
+/** The URL for "Open in browser": the static page unless the widget has
+ * already been executed, ensuring opening it does not run scripts automatically. */
 export function sessionWidgetOpenUrl(state: SessionWidgetFrame): string | null {
   if (!state.urls) {
     return null;

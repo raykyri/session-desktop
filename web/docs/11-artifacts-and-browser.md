@@ -29,10 +29,10 @@ same process.
 - `middleware/artifactHost.ts` is mounted before every route. On the artifact
   host only `GET`/`HEAD /w/:token` reaches the widget routes; every other
   method and path is 404, so no app route (auth, tRPC, images, the SPA)
-  answers there. A `Set-Cookie` header is removed from every artifact-host
+  responds there. A `Set-Cookie` header is removed from every artifact-host
   response, and the session loader runs after the widget routes, so the
   artifact host never reads or sets a cookie.
-- `/w/:token` answers only when `Host` is the artifact host and
+- `/w/:token` responds only when `Host` is the artifact host and
   `Sec-Fetch-Dest` is `iframe`: a top-level visit, a subresource load or a
   request without Fetch Metadata is 403.
 - The app's CSP lists the artifact origin in `frame-src`; the app sends
@@ -80,7 +80,7 @@ Both pages use the desktop's widget wrapper (`artifacts/widgetPage.ts`, from
 `src-tauri/src/file_server.rs`): its theme tokens and utility classes, and
 Session's scripts in `<head>` ahead of the widget's markup, which is the whole
 `<body>`. The navigation guard runs first on both pages (cancels link
-activations, answers liveness pings, reports `pagehide`), and the height
+activations, responds to liveness pings, reports `pagehide`), and the height
 reporter last.
 
 | | Static page | Run page |
@@ -121,7 +121,7 @@ What a widget script can and cannot do:
   request to the app would in any case be cross-site and refused by the CSRF
   guard (`Sec-Fetch-Site: cross-site`, `Origin: null`).
 - It can navigate its own frame. The guard cancels link clicks; a scripted
-  navigation is noticed by the missing ping answers or the second load event,
+  navigation is noticed by the missing ping responses or the second load event,
   and the app removes the frame ("The widget navigated away from its page").
   The new document stays inside the sandbox. A navigation to the app gets
   `X-Frame-Options: DENY`, so nothing renders, and the request's opaque
@@ -196,8 +196,8 @@ The desktop's research artifact store (`research_artifacts.rs`) on
   `unresolved` counts sources that could not be stored.
 - `artifacts.getState` / `updateState` read and change the caller's saved
   inputs for one revision: `enable`, `disable` (forgets the value), `reset`,
-  `save` (only while enabled), `migrate` (copies the same person's value from
-  the parent revision). Saved inputs are per person.
+  `save` (only while enabled), `migrate` (copies the same user's value from
+  the parent revision). Saved inputs are scoped per user.
 - A declared parent that is malformed or not stored makes the revision a root
   with `unresolvedParent`; `parent_revision` keeps the declared value as
   written so a later parent resolves it.

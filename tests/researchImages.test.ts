@@ -230,7 +230,7 @@ test("queued questions an earlier build stored move to the backend once, with th
   assert.equal(calls, 0);
 });
 
-test("a thread's ask box images are stored with its navigation for a day", async () => {
+test("a thread's composer images are stored with its navigation for a day", async () => {
   const navigation = await import("../src/lib/researchNavigation");
   const boxes = { root: [image("1", "One.png")], "pending:n1": [image("2")] };
   navigation.recordResearchComposerImages("tree-images", boxes, 1_000);

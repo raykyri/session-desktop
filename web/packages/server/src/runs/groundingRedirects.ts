@@ -110,7 +110,7 @@ interface GroundingChunk {
 /**
  * The same part with every grounding redirect replaced by the page it stands
  * for: the `url` of a `source` part, and each `groundingChunks[].web.uri` in a
- * step's Google metadata. Parts that cite nothing come back as they were, so
+ * step's Google metadata. Parts that cite nothing are returned unmodified, so
  * the stream's hot path (text deltas) pays only for the check.
  */
 export async function resolveGroundingRedirects(

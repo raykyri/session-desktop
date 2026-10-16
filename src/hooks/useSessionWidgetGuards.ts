@@ -77,8 +77,8 @@ export function useSessionWidgetGuards({
   // another app control. Focus that enters the frame
   // without a pointer or keyboard action returns to the previously focused
   // element. If a widget repeatedly takes focus, its scripts are stopped (it returns
-  // to its static page with a notice), since it would otherwise capture the
-  // user's typing and prevent app shortcuts.
+  // to its static page with a notice), since it would otherwise capture
+  // keyboard input and prevent app shortcuts.
   useEffect(() => {
     if (!running || !frameUrl) {
       return;

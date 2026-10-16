@@ -301,7 +301,7 @@ pub fn register(root: &Path, input: ArtifactInput) -> Result<ArtifactRevision, S
     // A revision is immutable: re-reading an answer cannot rewrite its title
     // or parent; a new source creates another revision. A parent that is not
     // stored (yet) does not block storing the child, which is then handled as
-    // a root until the parent appears.
+    // a root until the parent is stored.
     let path = revision_path(&dir, &revision.revision);
     if path.exists() {
         let stored = read_revision(&path, &revision.tree_id, &revision.artifact_id)?;
@@ -901,7 +901,7 @@ mod tests {
                 .exists()
         );
         assert!(!stale.exists() && fresh.exists());
-        // Over the cap, revisions without saved inputs go first.
+        // Over the cap, revisions without saved inputs are removed first.
         let plain = register(&temp, input("plain", "live", None)).unwrap();
         prune(&temp, &live, 1);
         assert!(!exists(&temp, "tree", "chart", &plain.revision));

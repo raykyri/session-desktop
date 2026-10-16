@@ -167,8 +167,8 @@ export function agentStatusKeepsMachineAwake(status: AgentInfo["status"]): boole
  * snapshot is authoritative. During a WebContent reload, React initially has
  * an empty agent list while `listAgents()` is still in flight; treating that
  * placeholder as "no busy agents" creates a brief assertion gap in which macOS
- * can commit to idle sleep. `null` means leave the backend's current state
- * untouched until hydration succeeds. */
+ * can enter idle sleep. `null` leaves the backend's current state
+ * unchanged until hydration succeeds. */
 export function desiredPreventSleepState(
   agentsHydrated: boolean,
   settingEnabled: boolean,

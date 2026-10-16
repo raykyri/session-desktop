@@ -16,7 +16,7 @@ test("retains user account association when GitHub username is renamed", (t) => 
   closeDatabase(db);
 });
 
-test("the sign-up context is recorded once, on creation", (t) => {
+test("records sign-up context on creation only", (t) => {
   const db = openDatabase(":memory:");
   const { user } = users.upsertFromGitHub(db, { githubId: 8, login: "a" }, { signupIpHash: "h1" });
   users.upsertFromGitHub(db, { githubId: 8, login: "a" }, { signupIpHash: "h2" });
@@ -25,7 +25,7 @@ test("the sign-up context is recorded once, on creation", (t) => {
   closeDatabase(db);
 });
 
-test("admin is set by login and is not granted by sign-in", (t) => {
+test("sets admin role by login without granting on regular sign-in", (t) => {
   const db = openDatabase(":memory:");
   users.upsertFromGitHub(db, { githubId: 9, login: "raymond" });
   t.false(users.findByLogin(db, "raymond")?.isAdmin ?? true);
@@ -36,7 +36,7 @@ test("admin is set by login and is not granted by sign-in", (t) => {
   closeDatabase(db);
 });
 
-test("the session table stores the hash, not the cookie", (t) => {
+test("stores hashed session token rather than plaintext cookie value", (t) => {
   const fixture = createFixture(t);
   const session = auth.createSession(fixture.db, fixture.userId, { userAgent: "test" });
   t.is(session.id, auth.hashSessionToken(session.token));
@@ -92,7 +92,7 @@ test("invalidates OAuth state after single use or expiration", (t) => {
   t.is(auth.consumeOAuthState(fixture.db, "s2"), null);
 });
 
-test("invites debit the inviter's allotment and are spent once", (t) => {
+test("debits inviter quota and redeems invite codes once", (t) => {
   const fixture = createFixture(t);
   users.setInvitesRemaining(fixture.db, fixture.userId, 2);
   const codes = auth.createInvites(fixture.db, fixture.userId, 5);
@@ -104,7 +104,7 @@ test("invites debit the inviter's allotment and are spent once", (t) => {
   t.false(auth.redeemInvite(fixture.db, "unknown", fixture.userId));
 });
 
-test("sign-up attempts are counted per ip and window", (t) => {
+test("counts sign-up attempts by IP address and time window", (t) => {
   const fixture = createFixture(t);
   const at = Date.now();
   auth.recordSignupAttempt(fixture.db, "ip-a", "ok", at - 10_000);
@@ -115,7 +115,7 @@ test("sign-up attempts are counted per ip and window", (t) => {
   t.is(auth.countSignupAttempts(fixture.db, "ip-b", at - 60_000), 1);
 });
 
-test("per-user limits default to absent and round-trip", (t) => {
+test("defaults per-user limits to null and persists updates", (t) => {
   const fixture = createFixture(t);
   t.is(auth.getUserLimits(fixture.db, fixture.userId), null);
   t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 5 }), {
@@ -128,7 +128,7 @@ test("per-user limits default to absent and round-trip", (t) => {
   });
 });
 
-test("setting one limit keeps the other, and an explicit null resets it", (t) => {
+test("updates specific limits independently and resets on explicit null", (t) => {
   const fixture = createFixture(t);
   auth.setUserLimits(fixture.db, fixture.userId, { dailyTokens: 5, dailyRuns: 3 });
   t.deepEqual(auth.setUserLimits(fixture.db, fixture.userId, { dailyRuns: 7 }), {

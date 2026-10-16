@@ -1,10 +1,9 @@
 // Integration between the API and the agent loop.
 //
-// The API admits a node: it writes the row, enqueues it in `run_queue`, and
-// emits the events. Everything after that is this module — claiming the queue
-// under the concurrency caps, opening the provider stream, re-queueing a
-// rate-limited attempt, draining on `SIGTERM` — and the metadata pool that
-// titles and recaps run in
+// The API admits a node by inserting the database row, enqueuing it in `run_queue`,
+// and emitting events. This module processes the queue under concurrency limits,
+// streams provider responses, re-queues rate-limited attempts, handles `SIGTERM`
+// draining, and manages the metadata execution pool for titles and recaps
 // (`04-agent-runtime.md` §2, §9, `05-run-lifecycle-and-streaming.md` §7, §8).
 
 import type { SessionDatabase } from "@session/db";
@@ -46,24 +45,24 @@ export type MetadataJob =
   | { kind: "recap"; userId: string; nodeId: string; instructions?: string };
 
 export interface RunsService {
-  /** A node has been admitted and enqueued; wake the claim loop. */
+  /** A node has been admitted and enqueued; notify the claim loop to process the queue. */
   start(nodeId: string): void;
   /** The node's status has already been written; abort its provider stream if
    * one is open. */
   cancel(nodeId: string): void;
   /** Schedule a metadata run. Separate pool, separate concurrency. */
   enqueueMetadata(job: MetadataJob): void;
-  /** A title, awaited: `research.generateTitle` answers the client with it. */
+  /** Generates and returns a title for `research.generateTitle`. */
   requestTitle(userId: string, nodeId: string): Promise<string | null>;
-  /** A recap candidate, awaited: the dialog is open and waiting for it. */
+  /** Generates and returns a recap candidate for display. */
   requestRecapCandidate(
     userId: string,
     nodeId: string,
     instructions: string,
   ): Promise<ResearchRecapCandidate>;
-  /** The candidate this server issued to this account under `id`, so
-   * `recaps.applyCandidate` stores the text that was generated rather than the
-   * text it was handed. */
+  /** Retrieves the recap candidate generated under `id`, allowing
+   * `recaps.applyCandidate` to verify and store generated text rather than
+   * unverified client input. */
   recallRecapCandidate(userId: string, id: string): ResearchRecapCandidate | null;
   /** `SIGTERM`: stop admitting, persist checkpoints, mark open attempts
    * `interrupted` with `resume_pending` (`05` §7). Resolves when it is safe to
@@ -72,8 +71,7 @@ export interface RunsService {
 }
 
 export interface NoopRunsService extends RunsService {
-  /** What the API asked for, in order. The Phase 3 tests assert on this
-   * instead of on a provider stream. */
+  /** The sequence of requested operations, recorded for Phase 3 test assertions. */
   readonly started: string[];
   readonly cancelled: string[];
   readonly metadata: MetadataJob[];
@@ -122,8 +120,8 @@ export function createNoopRunsService(): NoopRunsService {
   };
 }
 
-/** How long a metadata run may take before the waiting caller gives up. The
- * job itself is not cancelled: a recap that finishes late is still saved. */
+/** Timeout for awaiting a metadata run. The background execution continues
+ * if the timeout expires, preserving late completions. */
 export const METADATA_TIMEOUT_MS = 60_000;
 
 /** Concurrent metadata runs (`04-agent-runtime.md` §10). */
@@ -134,22 +132,22 @@ export const METADATA_POOL_SIZE = 4;
  * §3). */
 export const MAX_AUTO_RESUMES = 2;
 
-/** How often the claim loop looks for work it was not woken for — a backoff
- * that came due, or a slot another run freed. */
+/** How often the claim loop checks for available queue items that have expired
+ * backoff timers or freed concurrency capacity. */
 export const CLAIM_INTERVAL_MS = 250;
 
-/** The longest a node waits in the run queue for its parent's run before it
- * is looked at again. The parent's settlement wakes it sooner. */
+/** Maximum wait duration in the run queue for a parent run before
+ * re-evaluating. Completion of the parent run triggers earlier processing. */
 export const PARENT_WAIT_MS = 60_000;
 
 /** How long a claimed node waits when its previous attempt is still
- * unwinding (a retry or rerun right after a cancel). That attempt's
- * settlement makes it claimable sooner; the delay only bounds a missed
- * wake-up. */
+ * terminating (such as a retry or rerun immediately following cancellation).
+ * Completion of that attempt allows earlier processing; this interval bounds
+ * missed notifications. */
 export const PREVIOUS_ATTEMPT_WAIT_MS = 1_000;
 
-/** The error of a node whose parent settled without an answer while the
- * node waited for it. */
+/** Error message for a node whose parent run terminated without completing
+ * an answer. */
 export const PARENT_INCOMPLETE = "The answer this question follows did not complete.";
 
 export interface RunsServiceDeps {
@@ -206,8 +204,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   const active = new Map<string, ActiveRun>();
-  /** Nodes claimed while an earlier attempt of theirs was still active, put
-   * back to wait for it (`begin`). */
+  /** Nodes claimed while an earlier attempt was still active, deferred until
+   * that attempt completes (`begin`). */
   const deferred = new Set<string>();
   const metadataQueue: MetadataJob[] = [];
   const metadataRunning = new Set<Promise<void>>();
@@ -215,8 +213,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   let ticking: Promise<void> | null = null;
   let tickAgain = false;
 
-  /** A node event to everyone reading the node's thread, and to `userId`
-   * (the run's asker). */
+  /** Broadcasts a node event to thread viewers and the requesting `userId`. */
   const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
     const event = sessionEvent(type, payload);
     const treeId = (payload["node"] as ResearchNode | undefined)?.treeId;
@@ -240,8 +237,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       .length;
 
   const settleRateLimited = (userId: string, nodeId: string): void => {
-    // The attempt that just ended has already written its `rate_limited` row,
-    // so the first 429 counts one and takes the first backoff.
+    // The attempt has already recorded its `rate_limited` status,
+    // so the count increments and applies the initial backoff.
     const spent = rateLimitedSoFar(nodeId);
     const backoff = spent > MAX_RATE_LIMIT_REQUEUES ? null : backoffFor(spent - 1);
     if (backoff === null) {
@@ -260,9 +257,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     emitFeedItemUpsertedForNode(deps, node.id);
   };
 
-  /** Last resort for an attempt that threw past the loop's own settlement:
-   * a node no longer being run must not stay `running`. Only while the
-   * attempt that threw is still the node's. */
+  /** Fails a node if an unhandled error occurred outside loop settlement,
+   * ensuring nodes do not remain `running`. Only applied while the failed
+   * attempt is still current for the node. */
   const settleUnhandled = (nodeId: string, userId: string, attempt: number): void => {
     try {
       if (nodesRepo.attemptOf(deps.db, nodeId) !== attempt) {
@@ -290,9 +287,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     runs: { start: (nodeId) => service.start(nodeId) },
   };
 
-  /** A run left `running`: release the follow-ups that wait on it. Its
-   * reruns and retries held in the run queue (`parentGate`) become claimable
-   * at once, and the thread's follow-up queues send what they can. */
+  /** When a run completes, release dependent follow-up runs. Queued reruns
+   * and retries held in `parentGate` become claimable immediately, and pending
+   * tree follow-ups are dispatched. */
   const afterSettle = (userId: string, nodeId: string): void => {
     try {
       queueRepo.wakeChildrenOf(deps.db, nodeId);
@@ -306,10 +303,10 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   /**
-   * Whether a claimed node may start: its parent's answer is its context, so
-   * a parent that is still active (an answer being rerun ahead of a rerun of
-   * its inline follow-up) holds it, and a parent that settled without an
-   * answer fails it. Posts and documents have no run and never hold a child.
+   * Determines whether a claimed node may start. If the parent run is still
+   * active, the node must wait; if the parent terminated without completing an
+   * answer, the child run fails. Posts and documents do not execute runs and
+   * never block child nodes.
    */
   const parentGate = (userId: string, node: ResearchNode): "start" | "wait" | "fail" => {
     if (!node.parentNodeId) {
@@ -329,23 +326,18 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   /**
-   * Starts the claimed node's attempt. Everything the attempt does when it
-   * ends is fenced by its attempt number: once a retry or rerun has replaced
-   * it (Cancel, then Retry, before the cancelled stream finished
-   * unwinding), it releases no queue row, writes no status and sends no
-   * notification, since those belong to the newer attempt now.
+   * Starts the claimed attempt for the node. Attempt completion logic is
+   * scoped to its attempt number: if a retry or rerun replaced it before the
+   * aborted stream finished terminating, this attempt does not release the
+   * queue row, update status, or send notifications belonging to the newer attempt.
    */
   /**
-   * Re-checks the payer's daily limits before a queued node's fresh attempt
-   * starts (`06-auth-and-users.md` §8). Admission checked them, counting the
-   * queue, but the queue can still hold more than the day allows: an
-   * operator lowered the limit, tokens were spent meanwhile, a launch path
-   * that did not count. A refused node stays `queued`, its row held until the
-   * next UTC midnight (or until an operator changes the account's limits,
-   * `admin.setLimits`), with the reason as its run's `error`, which the claim
-   * round's queue positions publish. A 429 re-queue continues an attempt that
-   * already started and is not held; nor is a resume, which never reaches
-   * here.
+   * Verifies account daily usage limits before starting a fresh attempt
+   * (`06-auth-and-users.md` §8). If limits were reduced or tokens consumed
+   * concurrently, exceeded nodes remain `queued` with backoff until the next UTC
+   * midnight (or until updated via `admin.setLimits`), recording the reason in
+   * the run error field published with queue positions. Rate-limited re-queues
+   * and resumed attempts bypass this check.
    */
   const heldForDailyLimits = (userId: string, nodeId: string): boolean => {
     if (!deps.config.limits.enforceDailyLimits) {
@@ -368,9 +360,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
 
   const begin = (nodeId: string, userId: string, kind: "fresh" | "resume"): void => {
     if (active.has(nodeId)) {
-      // The node's previous attempt has not settled yet. Dropping the claim
-      // would leave the row claimed with nothing running it; it waits
-      // instead, and that attempt's settlement makes it claimable.
+      // The previous attempt for this node is still active. To prevent leaving
+      // the queue row claimed without active execution, re-queue with backoff
+      // until the prior attempt completes.
       queueRepo.requeueWithBackoff(deps.db, nodeId, Date.now() + PREVIOUS_ATTEMPT_WAIT_MS);
       deferred.add(nodeId);
       return;
@@ -398,7 +390,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           settleRateLimited(userId, nodeId);
         } else {
           queueRepo.releaseAttempt(deps.db, nodeId, attempt);
-          // The asker hears that their run finished or failed.
+          // Notify the requesting user that the run finished or failed.
           const settled = nodesRepo.get(deps.db, userId, nodeId);
           if (settled) notifyRunFinished(deps, settled);
         }
@@ -415,16 +407,15 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       .catch((error: unknown) => {
         logger.error({ nodeId, error }, "run attempt threw");
         queueRepo.releaseAttempt(deps.db, nodeId, attempt);
-        // The loop completes the node for every expected failure; this is
-        // the one it does not. A throw past its own handlers — a SQLite write
-        // that failed while the last turn was being committed, most likely —
-        // would otherwise leave the node `running` with nothing left to move
-        // it, until a restart reconciled it hours later.
+        // The loop handles expected failures directly. If an unhandled exception
+        // occurs outside loop error handling (such as a database write error
+        // during turn commit), mark the node failed to prevent remaining in
+        // `running` status until server reconciliation.
         settleUnhandled(nodeId, userId, attempt);
       })
       .finally(() => {
         active.delete(nodeId);
-        // A newer attempt claimed while this one was active waits no longer.
+        // Clear backoff for any attempt deferred while this attempt was active.
         if (deferred.delete(nodeId)) {
           queueRepo.clearBackoff(deps.db, nodeId);
         }
@@ -489,9 +480,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     metadata,
 
     start() {
-      // `autoStart: false` also means "claim only when asked": a test that
-      // subscribes between admitting a node and running it would otherwise
-      // miss the events the run has already emitted.
+      // When `autoStart: false`, claim only when explicitly triggered so tests
+      // can subscribe before execution begins and receive all emitted events.
       if (!draining && deps.autoStart !== false) {
         void service.tick();
       }
@@ -530,11 +520,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       if (draining) {
         return;
       }
-      // One claim round at a time: two overlapping rounds would each see the
-      // other's un-started claims as free capacity. A wake-up that arrives
-      // mid-round is remembered rather than dropped — the round may already
-      // have read the queue by then, and without the flag the node would wait
-      // for the interval, or forever where there is no interval.
+      // Process one claim round at a time to prevent overlapping passes from
+      // double-allocating capacity. A notification arriving during an active round
+      // sets `tickAgain` to trigger a subsequent pass after completion.
       if (ticking) {
         tickAgain = true;
         await ticking;
@@ -557,9 +545,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           const node = nodesRepo.get(deps.db, run.userId, run.nodeId);
           if (!node) {
             queueRepo.release(deps.db, run.nodeId);
-            // The payer can no longer read the thread (they left it or were
-            // removed): nobody else may be billed, so the run stops for good
-            // rather than waiting to be re-queued at the next boot.
+            // The requesting user no longer has thread access (left or removed):
+            // terminate the run permanently rather than re-queuing on restart.
             const stopped = nodesRepo.stopRun(deps.db, run.nodeId, nodesRepo.ASKER_GONE_ERROR);
             if (stopped) {
               deps.eventBus.emitToTree(
@@ -572,9 +559,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
             }
             continue;
           }
-          // An interrupted node was re-queued by boot reconciliation; opening
-          // a new attempt on it is what makes it runnable again, and its
-          // committed turns come along as context (`05` §7).
+          // An interrupted node was re-queued during startup reconciliation;
+          // starting a new attempt resumes it with committed turns as context (`05` §7).
           if (nodeStatus(node) === "interrupted") {
             const resumesSoFar = runsRepo
               .listAttempts(deps.db, node.id)
@@ -584,11 +570,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
                 { nodeId: node.id },
                 "maximum automatic resume attempts reached; node remains interrupted",
               );
-              // The flag goes with the queue row: left set, every later boot
-              // would re-queue a node the runtime has already given up on.
+              // Clear resumePending to prevent repeated re-queuing on subsequent restarts.
               nodesRepo.clearResumePending(deps.db, run.userId, node.id);
-              // The node is settled now: readers see that it will not resume
-              // (Retry is offered), and what waited on it moves on.
+              // The node is now terminal; dependent operations may proceed.
               const settled = nodesRepo.get(deps.db, run.userId, node.id);
               if (settled) {
                 emit(run.userId, "research.node.updated", { node: settled });
@@ -608,8 +592,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           }
           const gate = parentGate(run.userId, node);
           if (gate === "wait") {
-            // Woken by `afterSettle` when the parent's run ends; the delay
-            // only bounds how long a missed wake-up can hold it.
+            // Re-queued until parent run completion; the timeout bounds
+            // delay if the completion notification is missed.
             queueRepo.requeueWithBackoff(deps.db, run.nodeId, Date.now() + PARENT_WAIT_MS);
             continue;
           }
@@ -655,9 +639,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     async drain() {
       draining = true;
       tickAgain = false;
-      // A claim round that was already past its `draining` check can still be
-      // starting attempts; they have to be in `active` before it is read, or
-      // the process would exit with a stream open and a node left `running`.
+      // Await in-progress claim passes so starting attempts register in `active`
+      // before controllers are aborted and drained.
       await ticking?.catch(() => undefined);
       const open = [...active.values()];
       for (const run of open) {

@@ -4,8 +4,8 @@
 //
 // Ported from the desktop `src/lib/researchNavigation.ts` minus its storage
 // layer. The desktop held one module-level singleton hydrated from
-// localStorage; `shared` has no storage, so only the value semantics live
-// here: every function takes the record it operates on and either returns a
+// localStorage; `shared` has no storage, so only the value semantics are
+// implemented here: every function takes the record it operates on and either returns a
 // value or reports whether the record changed. The client manages the store, its
 // hydration (using `isSavedResearchAnchor` to validate persisted anchors) and
 // its persistence.

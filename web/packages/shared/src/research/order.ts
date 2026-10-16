@@ -24,7 +24,7 @@ export function moveResearchTreeIdToGap(ids: string[], treeId: string, gapIndex:
 }
 
 /** Replaces one folder's relative order inside an active or archived master
- * list without disturbing the slots occupied by other folders. */
+ * list without altering the positions occupied by other folders. */
 export function replaceResearchTreeScopeOrder(
   trees: ResearchTreeSummary[],
   workspaceId: string,

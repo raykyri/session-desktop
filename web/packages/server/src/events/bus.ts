@@ -1,23 +1,20 @@
 // Event fan-out (`03-api-and-events.md` §3).
 //
-// One process, so the bus is a map from user id to that user's open
-// connections. There is no replay buffer: a client that misses events
-// refetches (`05-run-lifecycle-and-streaming.md` §4), which is why a
-// connection whose queue overflows is closed rather than trimmed silently —
-// Closes overflowed connections to trigger a full client resynchronization rather than silently dropping missed events.
+// Manages server-sent event dispatch across in-process user connections.
+// There is no replay buffer; clients that miss events must refetch state
+// (`05-run-lifecycle-and-streaming.md` §4). Connections whose queue overflows
+// are closed to trigger client resynchronization rather than silently dropping events.
 //
-// A thread's events (`emitToTree`) go to its audience: the owner's and the
-// members' connections, and, for a public thread, the connections of other
-// signed-in readers that declared the thread open (`setInterest` with
-// `treeIds`). The same declaration is presence: who has a thread open, kept
-// in memory, dropped when the connection closes or its declaration is not
-// renewed within `PRESENCE_TTL_MS`, and announced as
-// `research.presence.changed`. Guests have no event connection.
+// Thread events (`emitToTree`) route to thread audience members (owners,
+// collaborators, and active viewers of public threads declared via `setInterest`).
+// Active viewer state also drives presence tracking, expiring if not renewed
+// within `PRESENCE_TTL_MS` or when connections terminate. Guest sessions do
+// not establish event connections.
 
 import type { SessionEvent, ThreadViewer } from "@session/shared";
 
-/** Run deltas go only to connections that asked for the node
- * (`events.setInterest`); everything else goes to every connection. */
+/** Run deltas are dispatched only to connections that registered interest in the node
+ * (`events.setInterest`); all other events are broadcast to all user connections. */
 const INTEREST_FILTERED_PREFIX = "research.turn.";
 
 /** Disconnects clients whose pending event queue exceeds MAX_QUEUED_EVENTS to bound server memory. */
@@ -28,15 +25,15 @@ export interface Subscription {
   /** Yields until `close()`, an overflow, or the end of its session. */
   events: AsyncIterableIterator<SessionEvent>;
   close(): void;
-  /** True once `closeSession` ended the connection: the session it was
-   * opened with was signed out, deleted or expired. */
+  /** True once `closeSession` terminated the connection because the associated
+   * session was signed out, deleted, or expired. */
   sessionEnded(): boolean;
 }
 
 export interface SubscribeOptions {
-  /** The `sessions` row the connection was opened with
-   * (`auth.hashSessionToken` of the cookie). `closeSession` ends the
-   * connections of one session; null for a connection that has none. */
+  /** Session ID associated with this connection (`auth.hashSessionToken` of
+   * the cookie). Used by `closeSession` to terminate connections for a specific
+   * session; null if unauthenticated. */
   sessionId?: string | null;
 }
 
@@ -44,7 +41,7 @@ export function sessionEvent(type: string, payload: Record<string, unknown>): Se
   return { type, payload, timestamp: Date.now() };
 }
 
-/** The node a run event is about, when it carries one. */
+/** Extracts the node ID from a run event payload, if present. */
 function eventNodeId(event: SessionEvent): string | null {
   const nodeId = event.payload["nodeId"];
   return typeof nodeId === "string" ? nodeId : null;
@@ -53,7 +50,7 @@ function eventNodeId(event: SessionEvent): string | null {
 /** How long a declared open thread counts as viewed without a renewal. */
 export const PRESENCE_TTL_MS = 90_000;
 
-/** Most threads one connection may declare open. */
+/** Maximum number of threads a single connection may declare open. */
 export const MAX_OPEN_TREES = 20;
 
 /** Who may receive a thread's events (`sharing.audience`). */
@@ -64,8 +61,8 @@ export interface TreeAudience {
   public: boolean;
 }
 
-/** What the bus reads from the database: a thread's audience and how to show
- * a person in presence. Absent, `emitToTree` delivers nothing. */
+/** Database directory interface providing thread audience and viewer presence
+ * metadata. If absent, `emitToTree` does not dispatch events. */
 export interface TreeDirectory {
   audience(treeId: string): TreeAudience | null;
   viewer(userId: string): ThreadViewer | null;
@@ -78,10 +75,10 @@ interface Connection {
   /** Set when `closeSession` ended it. */
   sessionEnded: boolean;
   interest: Set<string>;
-  /** Threads the connection has open, with when it last said so. */
+  /** Threads open on this connection, mapped to last interest renewal timestamp. */
   openTrees: Map<string, number>;
   queue: SessionEvent[];
-  /** Set while the iterator is parked waiting for the next event. */
+  /** Resolver called when the next event is queued. */
   wake: ((event: IteratorResult<SessionEvent>) => void) | null;
   closed: boolean;
 }
@@ -98,7 +95,7 @@ export class EventBus {
     this.#now = options.now ?? Date.now;
   }
 
-  /** Sets what `emitToTree` reads; the server sets it once at boot. */
+  /** Sets the directory used by `emitToTree` during server initialization. */
   setDirectory(directory: TreeDirectory): void {
     this.#directory = directory;
   }
@@ -208,11 +205,11 @@ export class EventBus {
   }
 
   /**
-   * Ends every connection opened with `sessionId`: called when that session
-   * is signed out or deleted, and by the periodic check when it expired. The
-   * stream's iterator finishes with `sessionEnded()` true, which
-   * `events.subscribe` turns into `UNAUTHORIZED`. Returns how many
-   * connections it ended.
+   * Closes every connection opened with `sessionId`: called when that session
+   * is signed out or deleted, or when the periodic check detects expiry. The
+   * stream's iterator completes with `sessionEnded()` true, which
+   * `events.subscribe` translates to `UNAUTHORIZED`. Returns the number of
+   * closed connections.
    */
   closeSession(sessionId: string): number {
     let closed = 0;
@@ -233,10 +230,9 @@ export class EventBus {
   }
 
   /**
-   * Which active nodes this connection wants `research.turn.*` for and,
-   * when `treeIds` is given, which threads it has open. The caller has
-   * checked that the user may read each of `treeIds`. Repeating the same
-   * `treeIds` renews presence.
+   * Registers node IDs for filtered `research.turn.*` delivery and optional
+   * open thread IDs for presence tracking. Callers must verify user read
+   * permissions for `treeIds`. Repeating `treeIds` renews presence TTL.
    */
   setInterest(
     userId: string,
@@ -260,18 +256,18 @@ export class EventBus {
     return true;
   }
 
-  /** Whether `userId` is in the thread's audience now: its owner, a
-   * member, or anyone while it is public. Without a directory, everyone. */
+  /** Checks whether `userId` belongs to the thread audience (owner, member,
+   * or any user if public). Returns true if no directory is configured. */
   #inAudience(audience: TreeAudience | null | undefined, userId: string): boolean {
     if (audience === undefined) return true;
     if (audience === null) return false;
     return audience.public || audience.ownerId === userId || audience.memberIds.includes(userId);
   }
 
-  /** The people with `treeId` open, each once, in user id order. Only
-   * people who may still read the thread are listed: a declaration made
-   * before the thread turned private, or before its reader was removed, is
-   * not presence. */
+  /** Active viewers of `treeId`, deduplicated and sorted by user ID. Only
+   * users with current read access are returned; declarations recorded
+   * before access was revoked or before the thread was made private are
+   * excluded. */
   viewers(treeId: string): ThreadViewer[] {
     const at = this.#now();
     const audience = this.#directory ? this.#directory.audience(treeId) : undefined;
@@ -315,11 +311,10 @@ export class EventBus {
   }
 
   /**
-   * Drops the open-thread declarations of people outside the thread's
-   * audience now, and announces the thread's presence if it changed. Called
-   * after a change that takes readers away: the thread turned private, a
-   * member left or was removed, the owner moved it to the Trash or deleted
-   * it. Their connections stop receiving its events through the declaration.
+   * Removes open-thread declarations for users no longer in the thread's
+   * audience, and announces presence changes if any occurred. Called after
+   * permissions changes (e.g. thread set to private, member removed, or
+   * thread deleted) so ineligible connections stop receiving events.
    */
   refreshAudience(treeId: string): void {
     const audience = this.#directory ? this.#directory.audience(treeId) : undefined;
@@ -331,11 +326,10 @@ export class EventBus {
   }
 
   /**
-   * Delivers an event to the connections that declared `treeId` open and
-   * belong to nobody in `except`, whatever the audience is now: how readers
-   * of a public thread who are not members hear that it turned private or
-   * was deleted, after the change that took it from them. Call it before
-   * `refreshAudience`, which drops those declarations.
+   * Delivers an event to connections that declared `treeId` open and do not
+   * belong to any user in `except`, regardless of current audience. Used to
+   * notify active viewers when a public thread becomes private or is deleted.
+   * Must be called before `refreshAudience` removes those declarations.
    */
   emitToOpenReaders(treeId: string, event: SessionEvent, except: readonly string[] = []): void {
     const skipped = new Set(except);
@@ -359,11 +353,11 @@ export class EventBus {
   }
 
   /**
-   * Delivers a thread's event to its audience: every connection of its
-   * owner and members and, for a public thread, every connection that
-   * declared it open. `research.turn.*` still reaches only the connections
-   * interested in the node. `also` names people outside the audience who
-   * must get it too (the actor of a change that removed them).
+   * Delivers a thread event to its audience: connections belonging to the
+   * owner and members, plus connections of any user who declared the thread
+   * open if public. `research.turn.*` events filter by node interest.
+   * `also` specifies additional users outside the audience to receive the
+   * event (such as an actor who removed themselves).
    */
   emitToTree(
     treeId: string,
@@ -399,9 +393,9 @@ export class EventBus {
   }
 
   /**
-   * Delivers an event to every connection of `userId`. Call it after the
-   * transaction that produced the event has committed, never inside it: a
-   * client that refetches on the event must not race the write it describes.
+   * Delivers an event to every connection of `userId`. Must be called after
+   * the transaction producing the event has committed to prevent client
+   * refetches from racing uncommitted database writes.
    */
   emit(userId: string, event: SessionEvent): void {
     const connections = this.#byUser.get(userId);
@@ -418,7 +412,7 @@ export class EventBus {
     }
   }
 
-  /** `emit` to each of `userIds` once. */
+  /** Emits an event once to each user in `userIds`. */
   emitToUsers(userIds: Iterable<string>, event: SessionEvent): void {
     for (const userId of new Set(userIds)) this.emit(userId, event);
   }

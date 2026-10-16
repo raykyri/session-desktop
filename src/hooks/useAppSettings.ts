@@ -149,7 +149,7 @@ export function useAppSettings(onError: (message: string) => void) {
     });
   }, [settings.researchLaunchInstruction]);
 
-  // Research launches read the widget preference on the Rust side to decide
+  // Research launches read the widget preference on the Rust side to determine
   // whether agents receive the widget guidance.
   useEffect(() => {
     if (!researchInlineWidgetsHydratedRef.current) {

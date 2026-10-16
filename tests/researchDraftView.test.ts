@@ -13,7 +13,7 @@ type DomWindow = Parameters<Parameters<typeof withWidgetDom>[0]>[0];
 const noop = () => {};
 const asyncNoop = async () => {};
 
-test("a draft opens as a messages column: its question as the title, then a full-width ask box labelled Draft", () => {
+test("renders draft view with question title and full-width composer", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchDraftView, {
       draft: { id: "d1", workspaceId: "ws", prompt: "An unsent draft", createdAt: 1, updatedAt: 1 },
@@ -23,17 +23,17 @@ test("a draft opens as a messages column: its question as the title, then a full
     }),
   );
   assert.match(html, /<h2 class="research-column-title"[^>]*>An unsent draft<\/h2>/);
-  // The header has no + Ask button.
+  // Header omits the ask button.
   assert.doesNotMatch(html, /Go to the ask box/);
   assert.match(html, /research-composer-wrap is-full-width/);
   assert.match(html, /research-composer-mode-label"><b>Draft<\/b>/);
   assert.match(html, /<textarea[^>]*aria-label="Draft question"[^>]*>An unsent draft<\/textarea>/);
   assert.match(html, /type="submit"[^>]*aria-label="Send"/);
-  // Opening a draft never focuses its box; Delete is in the feed row's menu.
+  // Draft view does not autofocus composer.
   assert.doesNotMatch(html, /autofocus|Delete draft/i);
 });
 
-test("the toast's live region stays mounted while no toast shows", () => {
+test("toast live region remains mounted when toast is null", () => {
   const props = { onUndo: noop, onDismiss: noop, onPause: noop, onResume: noop };
   const empty = renderToStaticMarkup(createElement(ResearchFeedToast, { toast: null, ...props }));
   assert.match(empty, /^<div class="research-feed-toast-region" role="status" aria-live="polite"><\/div>$/);
@@ -69,7 +69,7 @@ const settle = async () => {
   await Promise.resolve();
 };
 
-test("draft edits save after a pause, skipping empty and unchanged text", (t) => {
+test("debounces draft edits and skips empty or unchanged text", (t) => {
   const { autosave, saves } = autosaveHarness(t);
   autosave.edit("Draft 1");
   t.mock.timers.tick(300);
@@ -84,7 +84,7 @@ test("draft edits save after a pause, skipping empty and unchanged text", (t) =>
   assert.deepEqual(saves, ["Draft 12"]);
 });
 
-test("closing the draft flushes a pending edit at once", (t) => {
+test("flush writes pending edits immediately", (t) => {
   const { autosave, saves } = autosaveHarness(t);
   autosave.edit("Draft, edited");
   autosave.flush();
@@ -95,7 +95,7 @@ test("closing the draft flushes a pending edit at once", (t) => {
   assert.deepEqual(saves, ["Draft, edited"]);
 });
 
-test("⌘S saves a pending edit at once and resolves whether it saved", async (t) => {
+test("saveNow writes pending edits immediately and returns boolean status", async (t) => {
   const { autosave, saves, errors, failSave } = autosaveHarness(t);
   assert.equal(await autosave.saveNow(), false, "nothing to save");
   autosave.edit("Draft, edited");
@@ -116,12 +116,12 @@ test("⌘S saves a pending edit at once and resolves whether it saved", async (t
   assert.equal(await autosave.saveNow(), false, "nothing saves once a send started");
 });
 
-test("⌘S in a draft saves the edit and shows a toast; with nothing to save it does nothing", async () => {
+test("save shortcut persists pending edits and triggers toast, or no-ops when unchanged", async () => {
   await withWidgetDom(async (window) => {
     // Imported once the DOM is installed: React DOM decides at load whether
     // the browser fires input events, and typing in a field needs it to.
     const { createRoot } = await import("react-dom/client");
-    // The ask box sizes its field to the text.
+    // The composer sizes the textarea to content height.
     const computedStyle = Object.getOwnPropertyDescriptor(globalThis, "getComputedStyle");
     Object.defineProperty(globalThis, "getComputedStyle", {
       value: window.getComputedStyle.bind(window),
@@ -198,7 +198,7 @@ test("finishing cancels a pending save", (t) => {
   assert.deepEqual(saves, []);
 });
 
-test("a failed send or delete resumes saving", (t) => {
+test("resume restores autosave after failed submission or deletion", (t) => {
   const { autosave, saves } = autosaveHarness(t);
   autosave.edit("Draft, edited");
   autosave.finish();
@@ -219,15 +219,15 @@ test("a failed save is reported while the draft is being edited", async (t) => {
 test("a moved card regains focus only if no other control received focus", () => {
   const body = { name: "body" };
   const anchor = { isConnected: true };
-  assert.equal(researchCardRefocus(anchor, anchor, body), "wait", "the old … button keeps focus until the card moves");
+  assert.equal(researchCardRefocus(anchor, anchor, body), "wait", "button retains focus until card moves");
   assert.equal(researchCardRefocus(anchor, { name: "field" }, body), "drop", "focus moved elsewhere first");
   anchor.isConnected = false;
-  assert.equal(researchCardRefocus(anchor, body, body), "focus", "the button is gone and focus fell to the page");
+  assert.equal(researchCardRefocus(anchor, body, body), "focus", "button is disconnected and focus reverted to body");
   assert.equal(researchCardRefocus(anchor, null, body), "focus");
-  assert.equal(researchCardRefocus(anchor, { name: "answer column" }, body), "drop", "it never takes focus back");
+  assert.equal(researchCardRefocus(anchor, { name: "answer column" }, body), "drop", "focus is not reclaimed");
 });
 
-test("a draft save sends its images only when they changed since the last save", async () => {
+test("passes images to save only when changed since previous save", async () => {
   const sent: (readonly string[] | undefined)[] = [];
   let fail = false;
   const initial = ["a"];
@@ -239,32 +239,32 @@ test("a draft save sends its images only when they changed since the last save",
   const changed = ["a", "b"];
   fail = true;
   await assert.rejects(save("Text", changed));
-  // A failed save sends the images again with the next one.
+  // Failed save retries images on the next attempt.
   fail = false;
   await save("Text, edited", changed);
   await save("Text, edited again", changed);
   assert.deepEqual(sent, [undefined, changed, changed, undefined]);
 });
 
-test("a failed save leaves the text unsaved, so ⌘S and closing save it again", async (t) => {
+test("failed save retains unsaved status for subsequent saveNow and flush attempts", async (t) => {
   const { autosave, saves, errors, failSave } = autosaveHarness(t);
   failSave("Disk full.");
   autosave.edit("Draft 2");
   t.mock.timers.tick(500);
   await settle();
   assert.deepEqual(errors, ["Disk full."]);
-  assert.equal(await autosave.saveNow(), true, "⌘S saves the same text again");
+  assert.equal(await autosave.saveNow(), true, "saveNow retries unsaved text");
   assert.deepEqual(saves, ["Draft 2", "Draft 2"]);
-  assert.equal(await autosave.saveNow(), false, "saved now");
+  assert.equal(await autosave.saveNow(), false, "already saved");
 
   failSave("Disk full.");
   autosave.edit("Draft 3");
   await assert.rejects(autosave.saveNow(), /Disk full/);
   autosave.flush();
-  assert.deepEqual(saves, ["Draft 2", "Draft 2", "Draft 3", "Draft 3"], "closing saves it");
+  assert.deepEqual(saves, ["Draft 2", "Draft 2", "Draft 3", "Draft 3"], "flushed on close");
 });
 
-test("a failed save leaves the text saved when a newer save started and succeeded", async () => {
+test("failed save does not overwrite newer successful save state", async () => {
   const pending: {
     prompt: string;
     resolve: () => void;
@@ -397,7 +397,7 @@ const removeImage = async (window: DomWindow, container: HTMLElement) => {
   });
 };
 
-test("⌘S in a draft retries a failed save of the text or of an image removal", async () => {
+test("save shortcut retries failed text save or image removal", async () => {
   await withDraftView(async ({ window, container, saves, toasts, failNext, press, type }) => {
     const alertText = () => container.querySelector('[role="alert"]')?.textContent ?? null;
     failNext();
@@ -412,7 +412,7 @@ test("⌘S in a draft retries a failed save of the text or of an image removal",
     );
     assert.deepEqual(toasts, ["Draft saved."]);
 
-    // Removing the image saves at once; when that fails, ⌘S saves it again.
+    // Image removal saves immediately; retried via shortcut on failure.
     failNext();
     await removeImage(window, container);
     assert.deepEqual(saves[2], ["Draft, edited", []]);
@@ -421,11 +421,11 @@ test("⌘S in a draft retries a failed save of the text or of an image removal",
     assert.deepEqual(saves[3], ["Draft, edited", []]);
     assert.deepEqual(toasts, ["Draft saved.", "Draft saved."]);
     await press();
-    assert.equal(saves.length, 4, "nothing left to save");
+    assert.equal(saves.length, 4, "no pending changes");
   });
 });
 
-test("closing a draft after a failed image save saves the images again", async () => {
+test("unmounting draft after failed image save retries image persistence", async () => {
   await withDraftView(async ({ window, container, saves, failNext, unmount }) => {
     failNext();
     await removeImage(window, container);

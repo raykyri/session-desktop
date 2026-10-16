@@ -2,8 +2,8 @@ import { getInterfaceDraft, setInterfaceDraft } from "./api";
 
 const STORAGE_PREFIX = "session.interface-draft.";
 const SAVE_DEBOUNCE_MS = 120;
-/** Small composers flush to the process-local backend immediately so a hard
- * WebContent kill (which may skip `pagehide`) still keeps the latest draft.
+/** Small composers flush to the process-local backend immediately so unexpected
+ * WebContent termination (which may skip `pagehide`) still preserves the latest draft.
  * Large document bodies keep the short debounce and rely on visibility/pagehide
  * flushes for the residual window. */
 const IMMEDIATE_BACKEND_FLUSH_MAX_CHARS = 4_096;

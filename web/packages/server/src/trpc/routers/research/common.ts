@@ -119,15 +119,15 @@ export function publishTreeEvent(
   );
 }
 
-/** The owner and members of a thread, read before a change that may take it
- * away from them (a delete, the owner's Trash), so they can be told after. */
+/** The owner and members of a thread, read before a change that may revoke
+ * their access (a delete, the owner's Trash), to notify them afterwards. */
 export function treeAudienceIds(ctx: { db: AppContext["db"] }, treeId: string): string[] {
   const audience = sharing.audience(ctx.db, treeId);
   return audience ? [audience.ownerId, ...audience.memberIds] : [];
 }
 
-/** Tells people their access to a thread changed (`research.sharing.changed`,
- * web only): they refetch their lists and the thread. */
+/** Emits access changes for a thread (`research.sharing.changed`,
+ * web only): recipients refetch their lists and the thread. */
 export function publishSharingChanged(
   ctx: { eventBus: AppContext["eventBus"] },
   treeId: string,

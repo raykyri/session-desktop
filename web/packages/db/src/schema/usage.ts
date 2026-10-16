@@ -1,4 +1,4 @@
-// Recorded provider usage, the input to the daily limits
+// Recorded provider usage for daily limit tracking
 // (`docs/02-domain-model-and-database.md` §3.7, `docs/06-auth-and-users.md`
 // §8).
 
@@ -13,12 +13,11 @@ export const usageEvents = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** Null for usage not tied to a node (a metadata run for a workspace). The
-     * reference is deliberately absent so deleting a thread does not erase the
-     * account's usage history. */
+    /** Associated node ID, or null if not tied to a specific node. Foreign key is
+     * omitted to preserve usage history upon thread deletion. */
     nodeId: text("node_id"),
-    /** `run` is one research attempt started, with no tokens: what the
-     * daily run limit counts (`runs.startAttempt`). The others carry usage. */
+    /** Event category. `run` tracks attempt starts for daily run limits; other
+     * categories record token usage. */
     kind: text("kind", { enum: ["research", "metadata", "search", "fetch", "run"] }).notNull(),
     provider: text("provider").notNull(),
     model: text("model"),

@@ -16,7 +16,7 @@ export interface ResearchUnitMenuPlacement {
   align: ResearchMenuAlign;
 }
 
-/** Targets whose own right-click behaviour is kept: links (Session's link
+/** Targets whose own right-click behavior is kept: links (Session's link
  * menu, or the webview's), media (the webview's image and video menu), and
  * form fields (the webview's edit menu). */
 const NATIVE_MENU_TARGET_SELECTOR =
@@ -84,7 +84,7 @@ function selectionInside(unit: Element): { text: string; inside: boolean } {
   return { text: "", inside: false };
 }
 
-/** A visible … button: laid out, and the topmost element at its centre (not
+/** A visible … button: laid out, and the topmost element at its center (not
  * scrolled out of its column or covered). */
 function visibleButtonRect(button: HTMLElement | null): DOMRect | null {
   if (!button) return null;

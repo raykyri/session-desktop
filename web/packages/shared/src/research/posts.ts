@@ -1,7 +1,7 @@
 // Notes and saved links (post nodes): the limits and the derived title the
 // desktop applies in `research.rs` (`MAX_POST_TEXT_BYTES`,
 // `post_default_title`). The server enforces them; the composer and the note
-// editor use them to refuse an oversized note before sending it.
+// editor use them to reject an oversized note before sending it.
 
 /** Longest note, in UTF-8 bytes (`research.rs` `MAX_POST_TEXT_BYTES`). */
 export const MAX_POST_TEXT_BYTES = 64 * 1024;
@@ -14,7 +14,7 @@ const POST_TITLE_MAX_CHARS = 80;
  * to 80 code points with an ellipsis, at a word boundary when one falls in
  * the second half (`post_default_title`). "Post" when the text has no
  * non-empty line. `updatePost` compares a thread's title against this value
- * for the old text to decide whether the title follows an edit.
+ * for the old text to determine whether the title follows an edit.
  */
 export function postDefaultTitle(body: string): string {
   const line =

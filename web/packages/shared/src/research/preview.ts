@@ -26,7 +26,7 @@ const DEFAULT_TITLE_MAX_CHARS = 72;
 /** Longest generated title, in code points (`title_generation.rs`). */
 export const RESEARCH_TITLE_MAX_CHARS = 80;
 
-/** Whitespace as Rust's `char::is_whitespace` sees it — the Unicode
+/** Whitespace matching Rust's `char::is_whitespace` definition — the Unicode
  * White_Space property. JavaScript's `\s` is the same set plus U+FEFF and
  * minus U+0085, so the property escape is used instead. */
 const WHITESPACE_RUN = /\p{White_Space}+/u;
@@ -49,7 +49,7 @@ export interface NormalizedPrefix {
 /**
  * Normalizes whitespace while retaining at most `maxChars` Unicode scalar
  * values. Unlike collecting and joining every word, this stops as soon as the
- * bounded UI string is known, which matters for 10 MB document lines.
+ * bounded UI string length is reached, which matters for 10 MB document lines.
  */
 export function normalizedPrefix(text: string, maxChars: number): NormalizedPrefix {
   let value = "";

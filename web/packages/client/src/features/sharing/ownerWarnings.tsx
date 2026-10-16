@@ -8,8 +8,7 @@ import { useThreadMembers } from "../../api/queries.js";
 
 /** How many people the reader's own thread is shared with (its members, not
  * the owner); 0 until the list loads, and 0 when `enabled` is false (a
- * thread shared with the reader, whose members are not theirs to warn
- * about). */
+ * thread shared with the reader, whose members are not managed by the reader). */
 export function useOwnerMemberCount(treeId: string, enabled: boolean): number {
   const members = useThreadMembers(treeId, enabled).data;
   if (!enabled || !members) return 0;

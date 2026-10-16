@@ -1,7 +1,7 @@
 // Browser-style visit history for the research document's back/forward
 // controls. A pure, immutable reducer: the client holds one `ResearchHistory`
 // value and swaps it for the result of these transitions, so the branch/cursor
-// semantics live here (and are unit-tested) rather than inline in the view.
+// semantics are implemented here (and are unit-tested) rather than inline in the view.
 
 export interface ResearchHistory {
   /** Visited node ids, oldest first. */
@@ -69,9 +69,9 @@ export function researchHistoryForward(history: ResearchHistory): ResearchHistor
 }
 
 /** Removes visits to nodes that no longer exist while keeping the cursor on
- * the same surviving visit whenever possible. Visits that become adjacent
+ * the same remaining visit whenever possible. Visits that become adjacent
  * duplicates are collapsed: stepping between two entries for the same node
- * would re-apply the already-selected node, which readers treat as a real
+ * would re-apply the already-selected node, which clients treat as an intentional
  * navigation (e.g. clearing content for a load that never restarts). */
 export function pruneResearchHistory(
   history: ResearchHistory,

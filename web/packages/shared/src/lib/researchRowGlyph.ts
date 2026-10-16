@@ -44,7 +44,7 @@ interface ResearchRowGlyphSpec {
   label: string | null;
 }
 
-/** A node or a feed entry: the fields that decide its kind. */
+/** A node or a feed entry: the fields that determine its kind. */
 interface KindSource {
   type?: ResearchNodeType | undefined;
   source?: DocumentSource | null;

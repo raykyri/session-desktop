@@ -1,18 +1,14 @@
-// The bytes behind an embedded post's images (`13-deployment-fly.md` §6).
+// Local image cache for embedded posts (`13-deployment-fly.md` §6).
 //
-// A hydrated snapshot points at `pbs.twimg.com` for its avatar, photos, video
-// posters and link-card thumbnails. Rendering those directly works, but it
-// makes every reader of a card fetch from X, and it means a card outlives its
-// images only for as long as X serves them. Hydration therefore rewrites each
-// of those URLs to `/embeds/<sha256 of the URL>` and registers the mapping;
-// the bytes are fetched the first time someone actually renders the card, and
-// land on the same Fly volume the database and the uploads live on.
+// Hydrated snapshots point at `pbs.twimg.com` for avatars, photos, video
+// posters, and link-card thumbnails. To prevent direct client requests to X
+// and preserve image availability beyond external hosting lifetimes, hydration
+// rewrites each image URL to `/embeds/<sha256>` and registers the mapping.
+// Assets are fetched on first render and stored on the persistent Fly volume.
 //
-// The volume is finite, so this cache is explicitly disposable: `sweepEmbeds`
-// unlinks the least recently served files once the cache passes its size cap
-// or an asset goes untouched for long enough, and leaves the row behind. A
-// request for an evicted hash re-fetches from `source_url`, so eviction costs
-// a round trip and never a broken image.
+// Cache eviction is handled by `sweepEmbeds`, which unlinks least recently
+// accessed files when storage exceeds `maxBytes` or an asset exceeds its idle
+// threshold. Requests for evicted assets refetch from `source_url`.
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
@@ -27,39 +23,37 @@ import { ResponseTooLargeError, readCapped } from "../net/readCapped.js";
 
 type EmbedAsset = embeds.EmbedAsset;
 
-/** The hosts an embed asset may be fetched from. X serves every image a
- * snapshot carries from these, and the allowlist is what keeps a stored URL
- * from turning `/embeds/<hash>` into an open proxy. */
+/** Allowed source hosts for embed assets. Restricting origins prevents
+ * `/embeds/<hash>` from operating as an open proxy. */
 const EMBED_HOSTS = new Set(["pbs.twimg.com", "abs.twimg.com", "video.twimg.com"]);
 
 /** The public path a rewritten snapshot carries. Relative, so a stored
  * snapshot does not bake in the origin it was hydrated on. */
 export const EMBED_PATH_PREFIX = "/embeds/";
 
-/** Per-asset ceiling. A timeline image is well under a megabyte; the cap is
- * what stops a wrong answer from filling the volume in one request. */
+/** Per-asset size ceiling. Limits single-response downloads to prevent
+ * excessive disk volume consumption. */
 export const MAX_EMBED_BYTES = 8 * 1024 * 1024;
 
 export const EMBED_FETCH_TIMEOUT_MS = 10_000;
 
-/** How stale an access time may be before the read path writes a new one.
- * Eviction order only needs to be roughly right, and a write per image
- * request would be a write per rendered card. */
+/** Interval before an asset read updates `lastAccessAt` in the database,
+ * bounding write frequency for frequently rendered images. */
 export const EMBED_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 
-/** An asset untouched for this long is evicted whether or not the cache is
- * over its cap: nothing is rendering it, and the row can re-fetch it. */
+/** Assets unaccessed for this duration are evicted regardless of cache size,
+ * as inactive assets can be refetched on demand. */
 export const EMBED_MAX_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Mappings with no bytes and no request in this long are dropped outright. */
+/** Mappings with no stored bytes and no requests for this duration are deleted. */
 export const EMBED_ROW_MAX_IDLE_MS = 180 * 24 * 60 * 60 * 1000;
 
 export function embedHash(sourceUrl: string): string {
   return createHash("sha256").update(sourceUrl).digest("hex");
 }
 
-/** `${SESSION_DATA_DIR}/embeds/<ab>/<hash>`: fanned out one level so a cache
- * of tens of thousands of images is not one directory. */
+/** `${SESSION_DATA_DIR}/embeds/<ab>/<hash>`: partitioned into two-character
+ * subdirectories to avoid large flat directories. */
 export function embedStoragePath(embedsDir: string, hash: string): string {
   return join(embedsDir, hash.slice(0, 2), hash);
 }
@@ -71,9 +65,9 @@ export function isEmbeddableImageUrl(value: string): boolean {
 }
 
 /**
- * The cached path for one image URL, registering the mapping as a side effect.
- * A URL the cache will not fetch is returned unchanged, so a snapshot that
- * points somewhere unexpected still renders the way it did before.
+ * Returns the cached `/embeds/<hash>` path for an image URL and registers the
+ * mapping. URLs not handled by the embed cache are returned unchanged to
+ * preserve rendering of external image sources.
  */
 function cachedImageUrl(db: SessionDatabase, sourceUrl: string): string {
   if (!isEmbeddableImageUrl(sourceUrl)) {
@@ -104,10 +98,9 @@ function withCachedImages<T extends QuotedTweetSnapshot>(db: SessionDatabase, sn
 }
 
 /**
- * The snapshot as it is stored: every image URL the cache can serve replaced
- * by its `/embeds/<hash>` path, and the mapping back to the origin registered.
- * Applied once, at hydration, so the rewrite is part of the persisted format
- * rather than something every render has to redo.
+ * Rewrites cacheable image URLs in a snapshot to `/embeds/<hash>` paths and
+ * registers mappings. Executed once during hydration to persist rewritten URLs
+ * rather than transforming URLs on each render.
  */
 export function cacheSnapshotImages(db: SessionDatabase, snapshot: TweetSnapshot): TweetSnapshot {
   const quoted = snapshot.quoted;
@@ -130,15 +123,15 @@ async function readStored(embedsDir: string, asset: EmbedAsset): Promise<EmbedBy
     const bytes = await readFile(embedStoragePath(embedsDir, asset.hash));
     return { bytes, contentType: asset.contentType ?? "application/octet-stream" };
   } catch {
-    // The row says stored and the file is gone — a sweep that was interrupted
-    // between the unlink and the update, or a volume restored from a snapshot
-    // older than the row. Re-fetching is the same work as the cold path.
+    // The database record indicates stored but the file is missing — caused
+    // by an interrupted sweep or a volume snapshot rollback. Refetching uses
+    // the standard cold path.
     return null;
   }
 }
 
-/** Fetches one asset from its origin, refusing anything that is not an image
- * inside the cap, and writes it to the volume. */
+/** Fetches an asset from origin, rejecting responses that exceed size limits
+ * or are not valid images, and writes it to the volume. */
 async function fetchAsset(
   doFetch: typeof globalThis.fetch,
   embedsDir: string,
@@ -183,10 +176,9 @@ export interface EmbedStoreOptions {
 }
 
 /**
- * The read path behind `GET /embeds/:hash`: the stored file, or one fetch of
- * the origin URL stored in the row. Concurrent requests for the same cold
- * asset share one fetch — a feed of cards from one author asks for the same
- * avatar as many times as there are cards on screen.
+ * Read path for `GET /embeds/:hash`: returns stored files or fetches the
+ * origin URL. Concurrent requests for the same uncached asset share a single
+ * in-flight fetch request.
  */
 export class EmbedStore {
   readonly #options: EmbedStoreOptions;
@@ -253,11 +245,10 @@ export interface EmbedSweepResult {
 }
 
 /**
- * Brings the cache back inside its budget: every asset idle past
- * `maxIdleMs` goes, and then the least recently served go until the total fits
- * `maxBytes`. Files are unlinked before their rows are cleared, so a crash in
- * the middle leaves rows claiming bytes that are gone — which the read path
- * already handles by re-fetching.
+ * Enforces cache storage limits: evicts assets idle beyond `maxIdleMs`,
+ * followed by least recently accessed assets until usage is within `maxBytes`.
+ * Files are unlinked before updating database records; any resulting orphaned
+ * records are handled on subsequent read requests via refetching.
  */
 export async function sweepEmbeds(
   options: EmbedStoreOptions & EmbedSweepOptions,
@@ -270,9 +261,9 @@ export async function sweepEmbeds(
   let total = embeds.storedBytes(db);
   const doomed: EmbedAsset[] = [];
   for (const asset of ordered) {
-    // `ordered` is least recently served first, so once an asset is young
-    // enough to keep and the cache fits its budget, everything after it does
-    // too.
+    // `ordered` is sorted least recently accessed first; once an asset is
+    // within the idle window and cache usage is within budget, all subsequent
+    // assets are retained.
     if (asset.lastAccessAt >= idleBefore && total <= options.maxBytes) {
       break;
     }

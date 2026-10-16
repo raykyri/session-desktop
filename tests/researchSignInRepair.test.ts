@@ -7,7 +7,7 @@ import type { AgentAdapterMetadata, ResearchNode } from "../src/types";
 import { buildSegmentView } from "../src/lib/researchSegmentView";
 import { researchNode, withRun } from "./researchNodeFixture";
 
-// The repair panel reaches the adapter icons through Agent Setup.
+// The repair panel imports adapter icons through Agent Setup.
 register("./svgStubLoader.mjs", import.meta.url);
 const {
   ResearchAgentRepairContext,

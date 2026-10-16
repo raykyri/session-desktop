@@ -119,7 +119,7 @@ export function researchMenuShortcutKey(event: {
   return /^[a-z0-9]$/.test(key) ? key : null;
 }
 
-/** Where a press or click landed, as an open menu sees it:
+/** Where a press or click landed relative to an open menu:
  * - "menu": in the menu's popover;
  * - "trigger": on what opened it (the `trigger` prop, an element anchor, or
  *   what `isTriggerPress` accepts);
@@ -252,8 +252,8 @@ export function ResearchMenu({
   const [returnFocus] = useState<HTMLElement | null>(() =>
     owner ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null),
   );
-  // Cleared by a close that should leave focus where the user put it (a
-  // press, scroll or resize outside).
+  // Cleared by a close that should leave current focus unchanged (after a
+  // press, scroll, or resize outside).
   const restoreOnCloseRef = useRef(true);
 
   useLayoutEffect(() => {

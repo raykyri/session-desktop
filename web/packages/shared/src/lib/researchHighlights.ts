@@ -131,7 +131,7 @@ export const RESEARCH_HIGHLIGHT_CONTEXT_LENGTH = 128;
  * conversation selection with no enclosing message spans turns: separate
  * speakers, reading as one passage without being one, while the conversation
  * projection injects a role label between them. That is not anchorable, so it
- * is refused rather than saved with ambiguous context. */
+ * is rejected rather than saved with ambiguous context. */
 export function researchAnchorContextBounds(input: {
   isConversation: boolean;
   messageBounds: ResearchHighlightOffsets | null;

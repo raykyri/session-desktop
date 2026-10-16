@@ -26,7 +26,7 @@ packages/db/
       feedgen.ts  drafts.ts  posts.ts  trash.ts  followups.ts
       researchDrafts.ts  images.ts  researchDocuments.ts
       mappers.ts             # rows to the wire ResearchNode envelope
-      access.ts              # who may read a thread (its owner, for now)
+      access.ts              # thread read access authorization
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -94,13 +94,13 @@ Web-only types: `User`, `Workspace`, `UserSettings`, `ModelInfo`,
 
 Column types are SQLite affinities via Drizzle (`text`, `integer`, `real`).
 `PK` = primary key, `FK` = foreign key with `ON DELETE CASCADE` unless noted.
-Rows a person owns name them in `owner_id` (`trees`, `folders`,
-`research_images`) or `user_id` (per-person state). Rows inside a thread
-(`nodes`, `highlights`, `followup_queue`) name who wrote them in `author_id`;
-access goes through the thread's owner (`repos/access.ts`), not through the
-author column, so phase 5 can add members without touching those rows.
-Author foreign keys are `ON DELETE SET NULL` where content in other people's
-threads must survive an account deletion.
+Rows owned by a user record their ID in `owner_id` (`trees`, `folders`,
+`research_images`) or `user_id` (per-user state). Rows inside a thread
+(`nodes`, `highlights`, `followup_queue`) record the author in `author_id`;
+access control is evaluated against the thread's owner (`repos/access.ts`), not
+through the author column, so phase 5 can add members without modifying those rows.
+Author foreign keys use `ON DELETE SET NULL` so content in other users'
+threads is preserved upon account deletion.
 
 ### 3.1 Accounts
 
@@ -119,7 +119,7 @@ threads must survive an account deletion.
 - `code` text PK, `created_by` FK, `created_at`, `used_by` text null FK,
   `used_at` null. These are sign-up codes (the UI's name; thread
   invitations are `tree_invites`, §3.5). Sign-up requires a valid unused code
-  when `SESSION_REQUIRE_INVITE=1`; codes are distributed manually at first.
+  when `SESSION_REQUIRE_INVITE=1`; codes are initially distributed manually.
 
 `signup_attempts`
 
@@ -154,7 +154,7 @@ threads must survive an account deletion.
 - `user_id` FK, `key` text (≤128 B), `value` text (≤ 1 MiB on the web; the
   desktop allowed 12 MiB in memory), `updated_at`; PK (`user_id`, `key`)
 
-`research_drafts` (the desktop's `ResearchDraft`; private to the person)
+`research_drafts` (the desktop's `ResearchDraft`; private to the user)
 
 - `id` PK, `user_id` FK, `workspace_id` FK, `prompt` text,
   `attachments_json` text (image attachments, default `[]`), `position`,
@@ -190,10 +190,10 @@ The desktop's `ResearchFolderState` is spread over four tables: `folders`,
   row is Unfiled.
 
 `collapsed_places`: `user_id` FK, `workspace_id` FK, `place_id` text (a
-folder id or a `system:*` tray id); PK over all three. Per person.
+folder id or a `system:*` tray id); PK over all three. Per user.
 
 `collapsed_groups`: `user_id` FK, `tree_id` FK; PK (`user_id`, `tree_id`).
-The parent trees whose nested children a person has hidden. Per person.
+Parent trees whose nested child trees a user has collapsed. Maintained per user.
 
 ### 3.3 Research
 
@@ -219,8 +219,8 @@ The parent trees whose nested children a person has hidden. Per person.
 `tree_views`
 
 - `user_id` FK, `tree_id` FK, `last_viewed_at`; PK (`user_id`, `tree_id`)
-- When each person last opened each thread; the summary's unseen flags
-  compare against it, so they are per person.
+- Records when each user last accessed each thread; thread summary unseen flags
+  are evaluated against this timestamp per user.
 
 `nodes` (the wire envelope; `repos/mappers.ts` builds `ResearchNode`)
 
@@ -267,8 +267,8 @@ The parent trees whose nested children a person has hidden. Per person.
 
 `followup_queue` (the desktop backend keeps the same queue in `state.json`, `researchFollowups`; §5.13)
 
-- `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain's head; the
-  items go with it), `author_id` FK (who is billed when the item is sent)
+- `id` PK, `tree_id` FK, `head_node_id` FK (the inline chain root; queued
+  items are associated with it), `author_id` FK (the user billed when the item executes)
 - `message_json` text (attachments resolved when queued), `model`, `effort`
   null (the agent the follow-up runs on), `position` (send order within the
   chain), `created_at`, `failed_reason` null (why the last send was refused)
@@ -346,13 +346,13 @@ The parent trees whose nested children a person has hidden. Per person.
 unavailable`), `provider` text null (`xSyndication | xOembed`; which
   pipeline produced the snapshot — null on an unavailable row and on rows
   written before the fallback existed), `failure` text null
-- Shared across accounts: a post's public payload is the same for everyone and
-  the row records nothing about who asked. A row this side of
-  `TWEET_CACHE_TTL_MS` (6 h) is reused rather than refetched, failures
-  about the post included (not found, withheld, over the size cap), so a
-  deleted post is not re-asked on every render. A timeout or network failure
-  says nothing about the post and is reused for
-  `TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min) only.
+- Shared across accounts: a post's public payload is identical for all users and
+  the row records no requesting user ID. A row within
+  `TWEET_CACHE_TTL_MS` (6 h) is reused rather than refetched,
+  including post failures (not found, withheld, exceeding the size limit),
+  preventing repeated requests for deleted posts on subsequent renders.
+  Transient errors (such as timeouts or network failures) do not indicate post
+  availability and are cached only for `TWEET_TRANSIENT_FAILURE_TTL_MS` (1 min).
 
 `embed_assets`
 
@@ -360,15 +360,15 @@ unavailable`), `provider` text null (`xSyndication | xOembed`; which
   snapshot includes), `source_url` text, `content_type` text null, `bytes`
   integer, `stored_at` integer null, `last_access_at`, `created_at`
 - Index: (`last_access_at`) — the sweep's eviction order
-- The mapping from a snapshot's rewritten image URL back to the origin one.
-  The row outlives the bytes: the sweep unlinks files and clears `stored_at`,
-  and the next request for that hash re-fetches. Also shared across accounts,
-  and registered at hydration rather than when the image is first served
-  (`13-deployment-fly.md` §6).
+- Maps a snapshot's rewritten image URL back to the original URL.
+  The database record is retained after file deletion: cache cleanup unlinks
+  files and clears `stored_at`, and subsequent requests for that hash re-fetch
+  the asset. Also shared across accounts, and registered at hydration rather
+  than when the image is first served (`13-deployment-fly.md` §6).
 
 ### 3.5 Sharing (phase 5)
 
-Web only; the desktop has one person. Rules in §5.16.
+Web only; the desktop application is single-user. Rules in §5.16.
 
 - `tree_members` (`tree_id`, `user_id`, `role` `commenter | viewer`,
   `invited_by`, `created_at`, and the member's own `archived_at`,
@@ -397,8 +397,8 @@ Web only; the desktop has one person. Rules in §5.16.
   (`user_id`) where `read_at IS NULL` for the unread count, and (`tree_id`)
   for the cascade.
 - `tree_member_removals` (`tree_id`, `user_id`, `removed_by`, `removed_at`):
-  people the owner removed. A link invitation created at or before
-  `removed_at` does not admit them again (§5.16).
+  users removed by the owner. Link invitations created at or before
+  `removed_at` cannot be used to rejoin (§5.16).
 - `trees.visibility` (`private | public`) and `trees.trashed_by` (who moved
   the thread to its owner's Trash).
 - `nodes.author_id` and `highlights.author_id` are `ON DELETE SET NULL`;
@@ -426,11 +426,11 @@ deployed with an earlier history.
   names a row of one of three tables), `tree_id` null FK (cascade; the
   thread of a node or queued item, null for a draft), `created_at`; PK
   (`image_id`, `holder_kind`, `holder_id`), indexes (`holder_kind`,
-  `holder_id`) and (`tree_id`). §5.15 has who writes it.
+  `holder_id`) and (`tree_id`). §5.15 documents reference creation.
 - The bytes are at `${SESSION_DATA_DIR}/documents/<owner_id>/<sha256>`, with
   a 256 px JPEG thumbnail beside a PNG or JPEG image as
-  `<sha256>.thumb.jpg`. Two rows of one owner with the same bytes share the
-  file. §5.15 has the lifecycle.
+  `<sha256>.thumb.jpg`. Multiple records with identical content for the same
+  owner reference the same file. §5.15 has the lifecycle.
 
 `widget_revisions` (the desktop's research artifact store)
 
@@ -441,11 +441,11 @@ deployed with an earlier history.
 - `parent_revision` is the fence's declared `parent=` as written (at most 128
   characters). A value that is not a 64-hex revision id is the desktop's
   `invalidParent`: the wire revision has no parent and `unresolvedParent`.
-- Rows are immutable; they go with their node or tree (`repos/widgets.ts`).
+- Rows are immutable and deleted with their parent node or tree (`repos/widgets.ts`).
   Index (`node_id`), which the cascade from `nodes` follows: without it every
   node delete scans the table.
 
-`widget_state`: saved widget inputs per person and revision; `state_json`
+`widget_state`: saved widget inputs per user and revision; `state_json`
 (`{ enabled, value? }`, the value JSON of at most 16 KiB), `updated_at`; PK
 (`tree_id`, `artifact_id`, `revision`, `user_id`), FK to `widget_revisions`.
 
@@ -460,12 +460,12 @@ removed with the uploaded-documents feature in phase 2.0.
 metadata | search | fetch | run`), `provider` text, `model` text null,
   `input_tokens`, `output_tokens`, `reasoning_tokens`, `cached_tokens`
   integer, `cost_estimate_micros` integer, `created_at`
-- `node_id` has no foreign key: deleting research keeps the account's usage.
+- `node_id` has no foreign key constraint: deleting research retains account usage history.
 - `run` rows carry no tokens: `runs.startAttempt` writes one per attempt
-  started, for the person who pays for it, with the id
-  `run:<node_id>:<attempt>` so starting the same attempt again does not count
-  twice. They are what the daily run limit counts, so deleting a thread does
-  not give its runs back.
+  started, for the paying user, with the id
+  `run:<node_id>:<attempt>` so re-executing the same attempt is idempotent.
+  The daily run limit counts these records, ensuring that deleting a thread
+  does not restore daily run allowances.
 - Index (`user_id`, `created_at`). Admission sums the current UTC day per
   user for the daily token and run limits (`06-auth-and-users.md` §8);
   rollups are materialized only if that query becomes slow.
@@ -478,10 +478,9 @@ metadata | search | fetch | run`), `provider` text, `model` text null,
   review the SQL, commit both. CI fails if `db:generate` would produce a diff
   (`drizzle-kit check` plus a generate-and-git-diff step).
 - `openDatabase()` runs `migrate(db, { migrationsFolder })` before returning.
-  Server boot stops if the database reports a migration the code
-  does not know (the desktop's "newer version ⇒ abort startup" contract,
-  `persistence.rs:403`), by comparing `__drizzle_migrations` against the
-  bundled journal.
+  Server boot aborts if the database reports an unrecognized migration (the
+  desktop's "newer version ⇒ abort startup" contract, `persistence.rs:403`),
+  by comparing `__drizzle_migrations` against the bundled journal.
 - Data backfills that cannot be expressed in SQL run as versioned TypeScript
   steps in `src/backfills/` after `migrate()`, recorded in a `backfills`
   table. The list is empty since the reset below.
@@ -564,8 +563,8 @@ Each item names the desktop source and the enforcing function.
 
 ### 5.4 Follow-ups
 
-- An exchange parent must be `complete`; posts and documents take
-  follow-ups at once. The tree must be neither archived nor in the Trash
+- An exchange parent must be `complete`; posts and documents accept
+  follow-ups immediately. The tree must be neither archived nor in the Trash
   (`state.rs:5244`). Only a post takes a follow-up note (a `post` child).
 - At most one inline child per parent regardless of the child's status; the
   partial unique index makes the check atomic, and the repo maps the
@@ -586,8 +585,8 @@ Each item names the desktop source and the enforcing function.
   exchange under the same parent with the same `inline`. In one transaction
   the new node is admitted and the replaced one deleted (an inline one
   first, since the partial unique index holds one inline child); the new
-  node takes the replaced one's place in the head's `chain_order_json`, and a
-  replaced branch head's queued follow-ups move to the new node.
+  node takes the replaced one's place in the head's `chain_order_json`, and
+  queued follow-ups from the replaced branch head are transferred to the new node.
 - `nodes.setChainOrder(headNodeId, nodeIds)` (`set_research_chain_order`)
   stores a messages column's display order on the chain head. `headNodeId`
   must start its chain, `nodeIds` must be exactly the chain's current nodes
@@ -660,26 +659,26 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   `resume_pending` node is re-queued at the head of the queue
   (`05-run-lifecycle-and-streaming.md` §7). Nodes whose snapshot row already
   has an `outcome` adopt it (the desktop's rule, `state.rs:2405-2506`). A
-  node whose payer can no longer read its thread (a member who left or was
-  removed before their interrupted run was stopped) is stopped instead of
-  re-queued (`stoppedNodeIds`, "Stopped: the person who asked no longer has
+  node whose payer no longer has read access to the thread (such as a member
+  who left or was removed before an interrupted run was cancelled) is stopped
+  rather than re-queued (`stoppedNodeIds`, "Stopped: the person who asked no longer has
   access to this thread."). Each node is reconciled in a savepoint of its
-  own: one that fails is left as it was and reported (`failures`), and the
-  boot goes on.
+  own: if reconciliation fails, the node remains unchanged, the error is recorded (`failures`),
+  and startup continues.
 - `nodes.stopRun(nodeId, error?)` stops a run the server still owns
   (`queued`, `starting`, `running`, or `interrupted` with a resume pending)
   in one transaction: status `cancelled`, `resume_pending` cleared, the
-  `run_queue` row deleted. `setStatus` refuses `interrupted` → `cancelled`;
-  this is the path out. `research.cancelNode`, a departed member's questions
+  `run_queue` row deleted. `setStatus` disallows `interrupted` → `cancelled`;
+  `nodes.stopRun` provides the cancellation path. `research.cancelNode`, a departed member's questions
   (`afterDeparture`), a claimed row whose payer can no longer read the
   thread, and boot use it.
-- A claimed node whose parent's answer is not `complete` does not start: its
-  parent's conversation is its context. While the parent is active the row
-  goes back to the queue with `not_before` up to `PARENT_WAIT_MS` (60 s)
-  ahead, and the parent's settlement clears it (`queue.wakeChildrenOf`); a
-  parent that settled without an answer fails the node with "The answer this
-  question follows did not complete." This is how a rerun waits behind the
-  answer it follows (§5.3).
+- A claimed node whose parent answer is not `complete` does not start,
+  as the parent conversation provides its execution context. While the parent
+  is active, the queue row is re-queued with `not_before` set up to
+  `PARENT_WAIT_MS` (60 s) in the future; completion of the parent clears this delay
+  (`queue.wakeChildrenOf`). A parent that finishes without an answer fails the child
+  node with "The answer this question follows did not complete.", allowing reruns to
+  wait for prerequisite answers (§5.3).
 
 ### 5.8 Recaps
 
@@ -695,10 +694,9 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
 - `recaps.applyCandidate` additionally requires
   `expectedCurrentRecapId === node.recap?.id` and a non-archived tree
   (`state.rs:8992`). Instructions trimmed, non-empty, ≤ 4000 chars. The
-  server stores only a candidate it generated for the caller and still holds
-  (`recallRecapCandidate`); otherwise it answers `CONFLICT` "This recap is no
-  longer available; generate it again." and never stores text the client
-  sent.
+  server stores only a candidate it generated for the caller and retains in
+  cache (`recallRecapCandidate`); otherwise it returns `CONFLICT` ("This recap is no
+  longer available; generate it again.") and rejects client-provided candidate text.
 
 ### 5.9 Feeds
 
@@ -727,9 +725,9 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
 
 ### 5.10 Trash
 
-- `trash.trashTree` sets `trees.trashed_at` (`trash_research_tree`). Nothing
-  is deleted: nodes, snapshots, membership, parent, archive state and
-  position stay. It deletes the tree's `feed_items` row. Refused while a node
+- `trash.trashTree` sets `trees.trashed_at` (`trash_research_tree`). No data
+  is deleted: nodes, snapshots, membership, parent associations, archive state,
+  and positions are preserved. It deletes the tree's `feed_items` row. Refused while a node
   of the tree has an active run (`queued`, `running`, or `interrupted` with
   a resume pending; §5.3), with the desktop's message. Trashing a tree already in the Trash changes nothing.
 - `trash.restoreTree` clears `trashed_at`
@@ -744,21 +742,20 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   trees in the Trash (as `trees.remove` does: marked deleted, §5.18) and its
   folders in the Trash
   (their memberships cascade, so their trees become Unfiled; `collapsed_places`
-  rows naming them are deleted). A tree that somehow has an active run is
+  rows naming them are deleted). A tree with an active run is
   left in the Trash. Returns `{ treeIds, folderIds }`.
 - `trees.remove` is Delete now, in or out of the Trash. It marks the trees
   deleted (§5.18).
-- Groups: a parent (`trees.parent_tree_id`, §5.11) is archived, unarchived,
-  moved to and out of the Trash, and deleted together with the children
-  listed under it: the trees whose parent it is and that are listed in the
-  same place (the Trash, the Archive, Drafts, the same folder outside the
-  Trash, or Unfiled). This is the desktop's `groupChildren`
+- Groups: operations (archiving, unarchiving, trashing, restoring, and deletion)
+  on a parent tree (`trees.parent_tree_id`, §5.11) cascade to child trees
+  listed under it in the same section (Trash, Archive, Drafts, the same folder
+  outside the Trash, or Unfiled). This mirrors desktop `groupChildren`
   (`useResearchGroupActions.tsx`), which the desktop applies from the client
-  one call per tree; the web applies it in the repository, in one
-  transaction, so the active-run refusal covers the whole group. A child's
-  own operations do not reach its parent, and a child listed elsewhere stays
-  when its parent is deleted (`ON DELETE SET NULL`).
-- Every list leaves the Trash out: `trees.summaries`, `trees.reorder`,
+  one call per tree; the web applies it in the repository in one
+  transaction, so the active-run refusal covers the whole group. Child tree
+  operations do not affect the parent tree, and child trees listed in other
+  locations are retained when the parent tree is deleted (`ON DELETE SET NULL`).
+- Queries exclude trashed items by default: `trees.summaries`, `trees.reorder`,
   `feeds.recentQueries`, the Home feed (`feedgen` drops and skips the row),
   `highlights.feed` and `workspaces.treeCounts`.
 - User edits to a tree in the Trash are refused with "restore this research
@@ -769,7 +766,7 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   `remove`, `removeMany` and `recaps.applyCandidate`. `nodes.admitChild` and
   `researchDocuments.update` keep their own Trash messages. Run bookkeeping
   is not refused, and `markViewed` is not an edit.
-- The Trash is per person. With a single owner per thread, the owner's Trash
+- Trash state is scoped per user. With a single owner per thread, the owner's Trash
   is `trees.trashed_at`; phase 5 adds per-member hiding, and only the
   owner's Trash will set `trashed_at` (comment in `repos/trash.ts`).
 
@@ -780,11 +777,11 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   returns the stored state with `changed`, which `folders.set` uses to decide
   whether to emit `research.folders.changed`. It applies:
   - `normalizeFolderState`, the desktop's `normalize_research_folder_state`
-    (`research.rs`): dedupe folder ids (the first wins), drop membership
-    naming a folder not in the state (`system:drafts` excepted), keep only
-    collapsed entries naming a folder in the state or `system:drafts`,
+    (`research.rs`): deduplicate folder IDs (preserving the first occurrence),
+    drop memberships referencing folders absent from state (`system:drafts` excepted),
+    keep only collapsed entries naming a folder in the state or `system:drafts`,
     `system:archive` or `system:unfiled`, and keep nesting one level deep
-    (drop self links and every link whose parent is itself a child; dedupe
+    (drop self links and every link whose parent is itself a child; deduplicate
     `collapsedGroups`). It does not prune by tree existence.
   - `validateFolders`, the desktop's `validate_research_folders`: names are
     trimmed; empty names, names over 40 code points, the reserved names
@@ -795,20 +792,21 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
     restoring it from the Trash fails while another folder has its name. The
     messages are the desktop's.
   - Folders of another workspace and folder ids already used by another
-    person or workspace are dropped. Membership, `parents` and
-    `collapsedGroups` naming a tree outside the person's workspace are
+    user or workspace are dropped. Membership, `parents` and
+    `collapsedGroups` referencing a tree outside the user's workspace are
     dropped, and nesting is normalized again.
-  - A child whose membership the write changes to a place other than its
-    parent's leaves the group (the desktop's `moveTree` does this from the
-    client). Nesting writes the child's membership equal to its parent's
-    (`researchFolderStateWithParent`), and a child whose membership the write
-    leaves unchanged keeps its link, so an archived child can rejoin.
+  - A child tree whose folder membership is updated to a location different from
+    its parent is removed from the group (equivalent to client-side `moveTree` on
+    desktop). Nesting sets the child tree's folder membership to match the
+    parent's (`researchFolderStateWithParent`), and a child tree whose membership
+    is unchanged retains its association, allowing an archived child tree to rejoin
+    the group upon unarchiving.
 - `trashedAt` on a folder is taken from the state: a folder enters and leaves
   the Trash through `folders.set`, as on the desktop. Its trees keep their
   membership and are listed as Unfiled meanwhile (`researchTreePlace`).
 - Any tree type can be a parent (questions, documents and posts:
   `researchTreeHoldsChildren`).
-- `collapsed` and `collapsedGroups` are per person (`collapsed_places`,
+- `collapsed` and `collapsedGroups` are per-user (`collapsed_places`,
   `collapsed_groups`): a write replaces only the caller's rows.
 - Tree deletion cascades membership and collapsed groups via FK and clears
   children's `parent_tree_id`, the web equivalent of
@@ -826,12 +824,12 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   is admitted as the chain tail's inline child and its run enqueued;
   otherwise it is appended at the next `position`. `headNodeId` may be any
   node of the chain; the queue is kept under the chain's head. Archived and
-  trashed threads refuse. With nothing queued, a chain whose last answer
-  stopped (failed, cancelled, or interrupted with no resume pending) refuses
-  with the desktop's ask-box notes ("The last answer stopped with an error.
+  trashed threads refuse. When no items are queued, appending to a chain whose
+  final answer stopped (`failed`, `cancelled`, or `interrupted` without pending resume)
+  is rejected with the corresponding composer error notes ("The last answer stopped with an error.
   Retry it or edit its question to continue." / "The last answer was
-  stopped. Run it again to continue.", `PRECONDITION_FAILED`); behind queued
-  items it queues, as the desktop does. Queueing (not sending) is bounded per
+  stopped. Run it again to continue.", `PRECONDITION_FAILED`); if items are already queued,
+  the follow-up is appended to the queue. Queueing (not sending) is bounded per
   author by `SESSION_QUEUED_PER_USER`.
 - `followups.nextStep` is `researchQueueAction` over the stored queue: send
   the first item when the tail is `complete` (and, for an exchange, its
@@ -840,14 +838,14 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   archived or in the Trash (dispatch skips those threads, and restoring
   from the Archive or the Trash dispatches them); a tail that settled without an answer stalls the
   queue until it is retried, rerun, or removed.
-- The queue's rules read one chain, not the thread: `nodes.chainNodes`
+- Queue rules evaluate a single chain rather than the full thread: `nodes.chainNodes`
   returns the node's inline ancestors up to the chain's head and every
   inline descendant of them, with one recursive query over
-  `nodes_parent_idx`, mapped without highlights. That is every node
-  `inlineChainFor`, `researchQueueAction` and the stalled-tail note look at.
-  `followups.chainTail` (the node a follow-up would continue, whose agent an
-  unspecified one inherits) uses it too; neither `ask` nor dispatch builds
-  the thread's detail.
+  `nodes_parent_idx`, mapped without highlights. These queries identify all
+  nodes inspected by `inlineChainFor`, `researchQueueAction`, and stalled-chain checks.
+  `followups.chainTail` (the node that a follow-up extends, from which an unspecified
+  agent is inherited) also uses this query; neither `ask` nor queue dispatch constructs
+  full thread details.
 - `followups.send(itemId, tailId)` re-checks `nextStep` inside its
   transaction, admits the item as the tail's inline child (authored by the
   item's author), enqueues the run, and deletes the item.
@@ -855,15 +853,15 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   a thread after a run settles, `removeBranch`, `setChainOrder`, a restore
   from the Archive or the Trash, and a cancel or retry of a queue item; and
   every chain on boot; also after a member leaves or is removed. Before
-  sending it checks the item's author, not the thread's owner: that they
-  may still ask there (owner or commenter, `followups.authorMayAsk`), model
-  access, daily limits, and the run-queue bound. A refusal is stored as
-  `failed_reason`; the chain waits on that item until `followups.retry`
-  clears it or `followups.cancel` removes it. `followups.retry` is the
-  author's and is refused once they are a viewer.
-- A branch question replaced by an edited one (`nodes.admitChildDetailed`
-  with `replacesNodeId`) hands its queue to the new node (`movedQueue`); the
-  server announces `research.queue.changed` under both heads.
+  dispatch, permissions are checked against the item author rather than the thread owner:
+  write access (owner or commenter, `followups.authorMayAsk`), model
+  access, daily limits, and the run-queue bound. Rejections are persisted in
+  `failed_reason`; dispatch for the chain pauses at that item until `followups.retry`
+  clears the error or `followups.cancel` deletes the item. `followups.retry` requires
+  author permissions and is rejected if the user has been demoted to viewer.
+- When an edited question replaces a branch question (`nodes.admitChildDetailed`
+  with `replacesNodeId`), queued follow-ups are transferred to the new node (`movedQueue`);
+  the server emits `research.queue.changed` under both chain heads.
 
 ### 5.14 Posts and drafts
 
@@ -914,8 +912,8 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   A missing and a foreign id get the same message ("An attached image is no
   longer available. Remove it and attach it again."). The server wraps it as
   `resolveImageAttachments` (`server/src/research/images.ts`).
-- What keeps an image is a row of `image_refs`, written in the same
-  transaction as what names the image (`repos/imageRefs.ts`):
+- Image persistence is tracked via `image_refs` rows, written within the same
+  transaction as the referencing entity (`repos/imageRefs.ts`):
   `images.setRefs` when a node is admitted (`trees.admitRoot`,
   `nodes.admitChildDetailed`), a follow-up is queued (`followups.ask`) and a
   draft is saved with images (`researchDrafts.save`, replacing the draft's
@@ -923,14 +921,14 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   dropped with a departing member, and when a draft is removed;
   `images.dropNodeRefs` wherever nodes are deleted (`subtrees.ts`: branch
   removal, an edited question's replaced node, the deletion job), which also
-  drops the rows of the queued items that go with a deleted chain head.
-  Removing a workspace drops its drafts' rows with them. Writing a row marks
-  the image attached; dropping an image's last row returns it to pending
-  (the desktop's `release`). No message JSON is read for any of this.
-- `images.readable(userId, imageId)`: the uploader, or anyone who may read
-  a thread a node or queued item naming the image is in (a join of
-  `image_refs.tree_id` with `access.treeReadableBy`, so a deleted thread
-  gives no one access). An image in a draft is its owner's alone.
+  drops queued item rows associated with a deleted chain head.
+  Removing a workspace drops its drafts' rows with them. Inserting a reference marks
+  the image attached; deleting an image's final reference reverts its status to pending
+  (the desktop's `release`). Message JSON is not parsed for reference management.
+- `images.readable(userId, imageId)`: accessible to the uploader, or any user
+  with read access to a thread containing a node or queued item that references the
+  image (joining `image_refs.tree_id` with `access.treeReadableBy`; deleting a thread
+  revokes access). Images in drafts are accessible only to their author.
 - `images.sweep(at)`, run every maintenance interval: rows whose holder no
   longer exists are dropped (a cascade the repositories did not see, such as
   an account's deletion); a referenced pending image is marked attached; an
@@ -938,7 +936,7 @@ unmatchedBranchCount }` and, for the server, the moved branches (each
   deleted, pending or not; an unreferenced attached image younger than that
   returns to pending. Each is an indexed lookup per row. This is the
   desktop's pending lifetime and `release`. The server then unlinks
-  every file under the documents directory that no remaining row names,
+  every file under the documents directory not referenced by any remaining row,
   thumbnails included (`uploads/storage.ts` `sweepImages`), except files
   modified within `ORPHAN_GRACE_MS` (1 h): the upload route writes the file
   before it inserts the row, and touches a file it finds already stored.
@@ -967,27 +965,27 @@ null`. `owner` when `trees.owner_id` is the caller; a member's role from
   recaps. `owner` does everything else: rename, visibility, members,
   invitations, chain order, editing the root document, deleting anyone's
   branch or highlight.
-- Own content (`assertMayChangeNode`): a commenter renames, deletes or
-  titles only nodes they wrote, and only while every node under them is
-  theirs too ("Someone else has replied under this; only the owner of this
+- Author permissions (`assertMayChangeNode`): commenters may rename, delete, or
+  title only nodes they authored, and only while all descendant nodes were
+  also authored by them ("Someone else has replied under this; only the owner of this
   thread can change it now."). Text edits (`assertMayEditText`: updatePost,
-  an edited question through `replacesNodeId`) are the author's alone, the
-  owner included; the owner edits a node whose author's account is gone.
-  A commenter removes only their own highlights.
-- Asker pays (`payerOf` = `nodes.author_id`, else the owner): the run
+  an edited question through `replacesNodeId`) are restricted to the author,
+  including thread owners; the owner may edit a node only if the author's account
+  has been removed. A commenter removes only their own highlights.
+- Payer billing (`payerOf` = `nodes.author_id`, else the owner): the run
   queue's `user_id`, usage events and the daily run count (`nodePaidBy`)
   follow the question's author, also when a queued follow-up is sent by
-  dispatch or a run resumes after boot. Retry and Rerun are the payer's
-  alone (`assertMayRelaunch`), so nobody can spend another account's
-  budget; Cancel is the asker's or the owner's. Queued follow-ups are
-  cancelled by their author or the owner and retried by their author.
-- Per person: `tree_views` (unseen flags), Follow, drafts, folders and
+  dispatch or a run resumes after boot. Retry and Rerun are restricted to
+  the payer (`assertMayRelaunch`) to prevent unauthorized quota consumption;
+  Cancel may be invoked by the author or the thread owner. Queued follow-ups
+  can be cancelled by their author or the owner and retried by their author.
+- Per-user state: `tree_views` (unseen flags), Follow, drafts, folders and
   collapsed state. A member's Archive and Trash are flags on their member
   row: `trees.archiveGroup`/`restoreGroup`, `trash.trashTree`/`restoreTree`
   act on the member row for a member, on the thread (with its group) for the
   owner. The owner's Archive also shows the thread as archived to its members
   (`ResearchTree.archivedAt` = the member's own or the owner's) and keeps the
-  thread's own write refusals; a member's Archive or Trash locks nothing.
+  thread's own write refusals; a member's Archive or Trash status imposes no write locks.
   `trees.remove` by a member is leaving (`trees.leave`). A member's Trash is
   per workspace (`tree_members.trash_workspace_id`): `trash.trashTree` files
   the entry under the workspace named (else the default),
@@ -997,7 +995,7 @@ null`. `owner` when `trees.owner_id` is the caller; a member's role from
   moved to their own Trash, whose member row it deletes directly
   (`trees.removeMembership`). A member's Unarchive of a thread its owner
   archived is refused (`OWNER_ARCHIVED_MESSAGE`); `archivedBy` (`owner` |
-  `me`) on trees and summaries says who archived it for the reader.
+  `me`) on trees and summaries indicates whether the owner or current user archived the thread.
 - Filing: `folders.setState` files a shared thread in one of the caller's
   own folders (`tree_members.folder_id`); `folders.getState` reports it in
   `membership`, and `trees.summaries({ workspaceId })` lists such threads with
@@ -1016,10 +1014,10 @@ null)` (the guest catalog: public threads outside their owner's Archive and
   `recentQueriesForTrees` reads any thread the caller may read.
 - Images: `images.readable(userId | null, id)` is the uploader, or anyone who
   may read a thread whose node or queued follow-up names the image. Widget
-  revisions follow the thread; saved inputs stay per person.
-- `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole` (making a
-  member a viewer deletes their queued follow-ups, `dropQueuedFollowups`;
-  their questions already sent run on), `removeMember` and `leave` (both
+  revisions follow the thread; saved inputs remain scoped per user.
+- `repos/sharing.ts`: `setVisibility`, `listMembers`, `setRole` (demoting a
+  member to viewer deletes their queued follow-ups, `dropQueuedFollowups`,
+  while already-submitted questions continue execution), `removeMember` and `leave` (both
   return the member's queued follow-ups, which are deleted, and their active
   questions, which the server cancels, `trees.depart`; a member's Delete,
   `trees.remove`, and Empty Trash, `trash.empty`, leave the same way and
@@ -1035,13 +1033,13 @@ null)` (the guest catalog: public threads outside their owner's Archive and
   `listInvites` (usable ones: a used link stays listed so it can be revoked), `receivedInvites(login)`, `revokeInvite`, `acceptInvite`
   (by token, or by id for a login invitation addressed to the caller; a
   login invitation is used once, a link until it expires or is revoked;
-  a person the owner removed is refused, "You were removed from this
+  a user removed by the owner is rejected with "You were removed from this
   thread." (`FORBIDDEN`), a link created at or before the removal, while a
   later link or a later login invitation to them admits them and deletes
   the removal; leaving records nothing; joining never lowers a role; at most
-  100 members; a member who accepts again gets the thread back from their
-  own Archive and Trash, `restored`; a new member follows the thread, while
-  a member who accepts again keeps their Follow choice), `setFollowing`,
+  100 members; re-accepting restores the thread from the member's Archive
+  or Trash, `restored`; new members subscribe to thread notifications by default,
+  while returning members retain their previous subscription setting), `setFollowing`,
   `followers` (those who may still read the thread), `audience` (owner,
   members, public) and `workspaceMembers`.
 
@@ -1062,17 +1060,17 @@ above the cap. Deleting a thread deletes its notifications.
 ### 5.18 Deleting threads in the background
 
 - Delete now (`trees.remove`), Empty Trash (`trash.empty`) and removing a
-  workspace (`workspaces.remove`) answer and publish as before, but only mark
-  the threads (`deletion.markTreesDeleted`), inside their transaction:
-  `trees.deleted_at` is set, a thread listed under one of them elsewhere
-  loses its parent, and the rows that tie a thread to people are deleted at
-  once (`MARK_DELETED_TABLES`: members, invitations, member removals,
+  workspace (`workspaces.remove`) return responses and publish events immediately
+  while marking threads as deleted (`deletion.markTreesDeleted`) within the transaction:
+  `trees.deleted_at` is set, child trees nested under deleted parents clear
+  `parent_tree_id`, and user-associated metadata rows are deleted immediately
+  (`MARK_DELETED_TABLES`: members, invitations, member removals,
   follows, views, collapsed groups, filing, the Home feed row, inbox
   notifications about the thread, and queued follow-ups with their image
   references).
-- From then on the thread is hidden: `access.roleFor` gives nobody a role,
+- From then on the thread is hidden: `access.roleFor` returns null for all users,
   `treeReadableBy` and `treeJoinedBy` exclude it, and every query on
-  `trees` outside them includes `access.treeLive()` (`deleted_at IS NULL`):
+  `trees` outside these contexts applies `access.treeLive()` (`deleted_at IS NULL`):
   the sidebar sections, summaries, the public catalog, Shared with me,
   group children, folders, recent queries, the follow-up dispatch, boot
   reconciliation, the audience the event bus reads, followers, invitations
@@ -1080,9 +1078,10 @@ above the cap. Deleting a thread deletes its notifications.
 - Removing a workspace deletes its folders, collapsed trays, drafts (with
   their image references) and feed rows at once, and points members' Trash
   entries filed under it to their default workspace
-  (`deletion.markWorkspaceDeleted`). The row itself is deleted then when no
-  thread names it, else marked (`workspaces.deleted_at`, hidden from every
-  workspace query) and deleted by the job after its last thread.
+  (`deletion.markWorkspaceDeleted`). The workspace row itself is deleted
+  immediately when no thread references it; otherwise it is marked
+  (`workspaces.deleted_at`, hidden from all workspace queries) and deleted by
+  the background job after its final thread is removed.
 - `deletion.step(limits)` deletes the next bounded batch, in one
   transaction: for the oldest marked thread, the next `limits.nodes` nodes
   deepest first (computed from the remaining `(id, parent)` pairs each
@@ -1091,21 +1090,22 @@ above the cap. Deleting a thread deletes its notifications.
   highlights, attempts, snapshots, summaries) up to `limits.rows`, then the
   nodes with their image references; when no node is left, the thread row.
   Then marked workspaces no thread names. Null when nothing is left. The
-  default (`DEFAULT_STEP_LIMITS`) is 250 nodes and 2000 rows, a step of a few
-  to a few tens of milliseconds.
-- Nothing is kept between steps, so a restart resumes from what is left:
-  the server's job (`server/src/research/deletion.ts`) is kicked at boot and
+  default (`DEFAULT_STEP_LIMITS`) is 250 nodes and 2000 rows, a step typically
+  executing in tens of milliseconds.
+- No state is retained in memory between steps; a restarted process resumes from
+  the remaining marked records:
+  the server's job (`server/src/research/deletion.ts`) is triggered at boot and
   after each procedure that marks threads, runs one step per `setImmediate`
   so requests interleave, and after a step that throws waits 30 s before
   trying again. `deletion.drain` runs every step at once (tests).
-- A test checks the three table lists against SQLite's foreign keys, so a
-  new table that references `trees`, `nodes` or `workspaces` has to be
-  placed in one of them.
+- A test validates the three table lists against SQLite's foreign keys, ensuring
+  any new table referencing `trees`, `nodes` or `workspaces` is included in one
+  of the lists.
 
 ## 6. Data volumes and performance notes
 
 - A heavy user has thousands of nodes and hundreds of snapshots of tens of
-  KB, occasionally a 10 MiB document. SQLite handles this comfortably; the
+  KB, occasionally a 10 MiB document. SQLite handles this workload efficiently; the
   feed query is keyset-paginated with covering indexes.
 - Snapshots are read only for the open node and for recap/highlight checks;
   `nodes` never embeds turns. `run_turns` holds only active attempts and is

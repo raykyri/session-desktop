@@ -113,7 +113,7 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         }));
       }
       if (event.type.startsWith("agent.")) {
-        // Status events include the updated agent: apply it directly so a busy
+        // Status events include the updated agent: apply it directly so an active
         // agent's stream of hook events doesn't refetch and replace the entire list
         // (with the re-renders and ordering hazards that caused). Events without an
         // agent fall back to a sequenced refetch.

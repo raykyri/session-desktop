@@ -427,7 +427,7 @@ fn browser_reveal_local_path(
     reveal_path_in_file_manager(&resolved.path)
 }
 
-/// Deliberate context-menu action for handing a validated local link to its OS
+/// Deliberate context-menu action for passing a validated local link to its OS
 /// default application. Unlike the primary click path, this may mount a disk
 /// image or launch an application, so the frontend never calls it implicitly.
 #[tauri::command(async)]
@@ -1229,8 +1229,8 @@ async fn fork_research_node(
                         agent,
                     )?;
                     if let Err(err) = state.remove_research_branch(replaced) {
-                        // A replaced branch head handed its queue to the
-                        // new question; give it back before the rollback.
+                        // A replaced branch head transferred its queue to the
+                        // new question; restore it before rollback.
                         state.move_research_followups(&child.id, replaced);
                         let _ = state.remove_unsent_research_branch(&child.id);
                         return Err(err);
@@ -1255,8 +1255,8 @@ async fn fork_research_node(
     .map(|node| node.view())
 }
 
-/// Asks a follow-up at the end of the inline chain holding `node_id`: sent at
-/// once when the chain's last answer can take it and nothing is queued
+/// Asks a follow-up at the end of the inline chain holding `node_id`: sent
+/// immediately when the chain's last answer can accept it and nothing is queued
 /// ahead, else added to the chain's queue (see `state::research_followups`).
 #[tauri::command]
 async fn ask_research_followup(
@@ -1291,7 +1291,7 @@ async fn cancel_research_followup(
         .map_err(|err| format!("cancel_research_followup task failed: {err}"))?
 }
 
-/// Sends a queued follow-up whose send was refused again, and returns its
+/// Retries dispatch for a rejected queued follow-up, and returns its
 /// chain's queue.
 #[tauri::command]
 async fn retry_research_followup(
@@ -1313,7 +1313,7 @@ async fn list_research_followups(
     state.research_followups(&tree_id)
 }
 
-/// Takes over the queued follow-ups earlier builds kept in the webview's
+/// Imports queued follow-ups earlier builds kept in the webview's
 /// storage. Returns how many were added; ids already queued are skipped.
 #[tauri::command]
 async fn import_research_followups(
@@ -1330,8 +1330,8 @@ async fn import_research_followups(
         .map_err(|err| format!("import_research_followups task failed: {err}"))?
 }
 
-/// Starts the run of a follow-up asked through the queue (sent at once or
-/// later), then gives it a model title as `fork_research_node`'s caller does
+/// Starts the run of a follow-up submitted through the queue (sent immediately or
+/// later), then generates a model title as `fork_research_node` does
 /// for other follow-ups. Every launch failure settles the node as Failed
 /// (`launch_research_child_run`).
 fn launch_queued_research_followup(state: &AppState, node: &ResearchNode) {
@@ -2479,12 +2479,12 @@ fn main() {
                 ));
                 state.restore_session();
                 workspace::reconcile_imported_research_archives(&state);
-                // Send queued follow-ups whose chain freed up while the app
-                // was not running to send them.
+                // Send queued follow-ups whose previous turn completed while the app
+                // was not running.
                 state.schedule_research_followup_dispatch(None);
                 // Recovery fell back to an empty session (state discarded to a .bak)
                 // or dropped entries: say so in a dialog, since a Finder launch never
-                // shows stderr and silent session loss looks like Session ate the tabs.
+                // shows stderr and silent session loss leaves the missing state unexplained.
                 if let Some(warning) = state.take_recovery_warning() {
                     notify_startup_warning(app.handle(), &warning);
                 }

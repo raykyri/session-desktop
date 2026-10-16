@@ -1,5 +1,5 @@
 // ⌃Tab / ⌃⇧Tab in the research columns: select the next or previous row of
-// the column the person last interacted with, wrapping at both ends. The
+// the column the user last interacted with, wrapping at both ends. The
 // feed cycles its cards, a messages column its
 // chain, and a note's follow-ups column its rows. ResearchColumns tracks the
 // column and dispatches the key; the feed and the document perform the moves.

@@ -2,7 +2,7 @@
 //
 // The desktop kept two plugin lists in two modules and they drifted
 // (`06-porting-pain-points.md` pain point 6); here the base lists and the
-// lazily-loaded math lists live together, so every surface that renders
+// lazily-loaded math lists are stored together, so every surface that renders
 // transcript markdown parses identically. The client composes them: it renders
 // with the base lists, imports the math chunk in the background, and swaps the
 // combined lists in when it resolves (`08-design-system-and-styling.md` §5).

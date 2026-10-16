@@ -98,12 +98,12 @@ Rate limits and invite restrictions are enabled in production. Because the hoste
   reach the host.
 - `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
   Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
-  `TOO_MANY_REQUESTS`; admins are exempt; enforced whatever
-  `SESSION_ENFORCE_LIMITS` says, because it bounds the queue itself rather
+  `TOO_MANY_REQUESTS`; admins are exempt; enforced regardless of
+  `SESSION_ENFORCE_LIMITS`, because it bounds the queue itself rather
   than the day's spend. Checked again inside the transaction that admits the
   node, so concurrent launches cannot pass it together.
 
-Per-account overrides for the daily limits live in `user_limits` and are set
+Per-account overrides for the daily limits are stored in `user_limits` and are set
 from `/admin`, so raising one account's ceiling does not mean turning
 enforcement off.
 
@@ -132,10 +132,11 @@ fly deploy web -c web/fly.toml
 
 Create the storage volume prior to running the initial deployment: with `strategy = "immediate"`, the deployment will fail if the required volume does not already exist when the machine starts.
 
-Granting administrative privileges (which provides access to `claude-fable` and the `/admin` dashboard) is performed after the user's initial sign-in and requires different commands depending on the environment. Locally it is `npm run db:admin -- <github login>`. On
-the machine it is not: the runtime image contains the server bundle and
-production `node_modules` only, so neither `packages/db/bin/admin.ts` nor `tsx`
-is there to run. Instead, update the database directly using `better-sqlite3`:
+Granting administrative privileges (enabling `claude-fable` and `/admin` access)
+occurs after initial account creation. In local development, run
+`npm run db:admin -- <github login>`. In production deployments, because the
+runtime container omits `packages/db/bin/admin.ts` and `tsx`, update the database
+directly using `better-sqlite3`:
 
 ```sh
 fly ssh console -a session-dev -C "node -e \"
@@ -168,10 +169,11 @@ the database package's own default would not resolve.
 server writes at boot) and exports `GOOGLE_APPLICATION_CREDENTIALS`, then runs
 `litestream replicate -config /etc/litestream.yml -restore-if-db-not-exists
 -exec "node /app/packages/server/dist/server.mjs"` when
-`LITESTREAM_REPLICA_URL` is set, else the server directly. Those steps need
-root — a Fly volume arrives owned by root — so the entrypoint re-execs the
-process itself as `session` (uid 1000) with `setpriv`. No agent CLIs, no
-browsers, no per-user OS accounts.
+`LITESTREAM_REPLICA_URL` is set, else the server directly. These initialization
+steps require root permissions because mounted Fly volumes default to root
+ownership; the entrypoint drops privileges and executes the application process
+as user `session` (UID 1000) via `setpriv`. The environment contains no agent CLIs,
+browser binaries, or per-user operating system accounts.
 
 `web/.dockerignore` allowlists `web/**` minus `node_modules`, `**/dist`,
 `docs`, `.data`, and `.env*`. The repo root's Dockerfile, `.dockerignore`, and `fly.toml`
@@ -209,33 +211,34 @@ the process rather than the port.
 
 Shutdown on `SIGTERM`: stop admitting; abort open provider streams after
 persisting their last checkpoint; mark their nodes `interrupted` with
-`resume_pending`; close SSE connections; checkpoint WAL; exit. The next boot
-resumes the runs.
+`resume_pending`; close SSE connections; checkpoint WAL; exit. Subsequent
+process startup resumes interrupted runs.
 
-The drain is raced against a 20-second deadline (`main.ts:SHUTDOWN_DEADLINE_MS`)
-rather than awaited outright, leaving ten seconds of `kill_timeout = 30s` for
-the close and the WAL checkpoint. A provider that has stopped sending without
+The drain process enforces a 20-second timeout (`main.ts:SHUTDOWN_DEADLINE_MS`)
+to reserve ten seconds of the 30-second `kill_timeout` for connection closure
+and WAL checkpointing. A provider that has stopped sending without
 closing its stream would otherwise hold the drain past the timeout, and the
 subsequent SIGKILL would terminate the process before the checkpoint, leaving
-an uncheckpointed WAL file for the next startup. What the deadline cuts short is recovered on boot
-anyway: `reconcileOnBoot` marks anything still `running` as `interrupted` with
-`resume_pending` and re-queues it. If draining takes too long, the interrupted run must be resumed on the next boot; if SIGKILL terminates the process, the WAL checkpoint cannot be completed.
+an uncheckpointed WAL file for the next startup. Work interrupted by the deadline
+is recovered on restart: `reconcileOnBoot` updates uncommitted `running` nodes
+to `interrupted` with `resume_pending` and re-queues them. If draining exceeds
+the deadline, interrupted runs resume on subsequent startup.
 
 Startup reconciliation also resolves inconsistent states that can occur if the server crashes between database transactions: a `queued` node with no `run_queue` row
 (re-queued at the back), and a node whose payer can no longer read its
 thread (a member who left or was removed before their run was stopped),
 which is stopped (`cancelled`) instead of re-queued. Each node is
-reconciled in a savepoint of its own: one that fails is logged ("could not
-reconcile a run from the previous process") and left as it was, and the
-boot goes on. Documents have no run and no status, so boot does not look at
-them.
+reconciled in a dedicated savepoint: failed reconciliations are logged ("could not
+reconcile a run from the previous process") and left unchanged while startup
+continues. Documents do not track runs or execution status and are omitted from
+reconciliation.
 
 Boot also starts the document archive check (§6), without waiting for it,
 and the deletion job (`research/deletion.ts`, `02` §5.18), which deletes the
 rows of threads that Delete now, Empty Trash or a workspace removal marked
 and an earlier process did not finish. It runs one bounded step per
-`setImmediate` and is stopped first on `SIGTERM`; a step interrupted by the
-exit rolls back and is done again by the next boot.
+`setImmediate` and is stopped first on `SIGTERM`; steps interrupted during
+shutdown roll back and are re-executed upon subsequent boot.
 
 ## 6. Backups and restore
 
@@ -261,10 +264,10 @@ exit rolls back and is done again by the next boot.
   `session_documents_backup_age_seconds` (§7) reports the marker's age.
 - `/data/documents` holds image attachments (`research_images`,
   `<owner>/<sha256>` plus `<sha256>.thumb.jpg`); uploaded documents were
-  removed in phase 2.0. The maintenance interval runs `sweepImages`
-  (`server/src/uploads/storage.ts`): rows no message, draft or queued
-  follow-up has named for a day are deleted, then every file no remaining row
-  names and nothing wrote in the last hour is unlinked.
+  removed in phase 2.0. The maintenance routine executes `sweepImages`
+  (`server/src/uploads/storage.ts`): records unreferenced by any message,
+  draft, or queued item for 24 hours are removed, and files without referencing
+  database rows unmodified within the last hour are unlinked.
   `session_volume_free_bytes` (§7) is the gauge to alert on — a full volume
   fails every SQLite write at once.
 - `/data/embeds` is the one directory on the volume that is **not** backed up. It holds
@@ -278,9 +281,8 @@ exit rolls back and is done again by the next boot.
   fits `SESSION_EMBED_CACHE_BYTES` (2 GiB by default, of a 20 GB mount). The
   row is kept and only its file state cleared, so the next request for that
   hash re-fetches; mappings that hold no bytes and have not been asked for in
-  180 days are dropped outright. The budget is what keeps a cache of
-  third-party images from being the thing that fills the volume the database
-  writes to.
+  180 days are dropped outright. This quota prevents cached third-party assets
+  from exhausting disk capacity required by the database.
 - Restore, including the quarterly rehearsal:
   `web/docs/runbooks/restore.md`.
 

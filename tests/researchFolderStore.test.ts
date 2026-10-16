@@ -94,7 +94,7 @@ test("writes go out in order, and a rejected write restores the state it replace
   const second = store.commit(collapse("b"));
   await flush();
   assert.equal(saves.length, 1, "the second write waits for the first");
-  assert.deepEqual(store.getState().collapsed, ["a", "b"], "both apply locally at once");
+  assert.deepEqual(store.getState().collapsed, ["a", "b"], "both apply locally in sequence");
 
   saves[0].reply.reject("write failed");
   await assert.rejects(first, /write failed/);

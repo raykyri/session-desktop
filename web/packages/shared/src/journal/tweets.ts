@@ -656,8 +656,8 @@ export function tweetAttachmentFromFetch(
 }
 
 /**
- * The message as the reader sees it: a trailing permalink whose post did
- * embed is presentation-only, so the card replaces it rather than repeating
+ * The user-facing message prompt: a trailing permalink whose post was
+ * embedded is presentation-only, so the card replaces it rather than repeating
  * the URL underneath (`ResearchMessage.tsx:visibleResearchPrompt`).
  *
  * The stored prompt is never rewritten — the run was launched with the

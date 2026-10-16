@@ -206,7 +206,7 @@ export default function ResearchColumns({
 
   // Mostly horizontal wheel and trackpad input (and Shift+wheel) scrolls the
   // strip, even over a column that only scrolls vertically. Capture phase, so
-  // a column's swipe navigation sees the event as handled while the strip can
+  // a column's swipe navigation treats the event as handled while the strip can
   // still move that way.
   useEffect(() => {
     if (!row) return;

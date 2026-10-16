@@ -50,7 +50,7 @@ export interface BranchSourceProps {
   resolves: boolean;
   /** The parent's answer is on screen. */
   parentLoaded: boolean;
-  /** In a branches column: the name of the message it was asked from. */
+  /** In a branches column: the source message of the branch. */
   from?: string | null;
 }
 

@@ -14,15 +14,13 @@ import { budgetedProcedure, protectedProcedure, router } from "../base.js";
 
 export const eventsRouter = router({
   /**
-   * The event stream, served as SSE by the fetch adapter. `connectionId` lets
-   * the client address its own connection in `setInterest`; when it is absent
-   * the server mints one and announces it as the first event so a client that
-   * did not generate an id can still declare interest.
+   * The event stream, served as SSE by the fetch adapter. `connectionId` allows
+   * the client to identify its connection in `setInterest`; when omitted, the
+   * server generates an identifier and emits it in the initial event.
    *
-   * The stream belongs to the session it was opened with: signing that
-   * session out, deleting it, or its expiry (checked every
-   * `SESSION_STREAM_CHECK_MS`, `auth/session.ts`) ends it with
-   * `UNAUTHORIZED`, which the client treats as a sign-out.
+   * The stream is tied to the active session: signing out, session deletion,
+   * or session expiration (verified every `SESSION_STREAM_CHECK_MS`, `auth/session.ts`)
+   * terminates the stream with an `UNAUTHORIZED` error.
    */
   subscribe: protectedProcedure
     .input(z.object({ connectionId: z.string().min(1).max(64).optional() }).optional())
@@ -50,14 +48,12 @@ export const eventsRouter = router({
     }),
 
   /**
-   * Which active nodes this connection wants turn deltas for and, with
-   * `treeIds`, which threads it has open. Open threads are what a reader of
-   * a public thread who is not a member receives that thread's events
-   * through, and what presence (`research.presence.changed`) reports;
-   * sending the same `treeIds` again renews presence, which lapses after
-   * `PRESENCE_TTL_MS` without a renewal. Ids of threads the caller may not
-   * read are dropped. Renewals draw on their own budget
-   * (`RATE_LIMITS.interest`), not on the mutation budget.
+   * Updates subscription interest for active node deltas and open threads.
+   * Non-member readers of public threads receive events for open threads,
+   * which are also used for presence tracking (`research.presence.changed`).
+   * Periodic updates refresh presence before expiration (`PRESENCE_TTL_MS`).
+   * Unauthorized thread IDs are filtered out. Renewals are rate-limited under
+   * `RATE_LIMITS.interest`.
    */
   setInterest: budgetedProcedure("interest", "too many interest updates; try again in a moment")
     .input(
@@ -68,8 +64,8 @@ export const eventsRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => ({
-      // False when the connection has already gone; the client's next
-      // subscribe publishes its interest again.
+      // Returns false if the connection is no longer active; the client
+      // re-registers interest upon reconnecting.
       applied: ctx.eventBus.setInterest(
         ctx.user.id,
         input.connectionId,
@@ -78,8 +74,7 @@ export const eventsRouter = router({
       ),
     })),
 
-  /** Who has the thread open now (`research.presence.changed` reports
-   * changes). */
+  /** Returns active viewers currently viewing the specified thread. */
   presence: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .query(({ ctx, input }): ThreadViewer[] => {

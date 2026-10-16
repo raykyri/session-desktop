@@ -1,6 +1,6 @@
 // `sharing`, `invites` and `subscriptions`: who a thread is shared with and
 // how (`03-api-and-events.md` §2, `02-domain-model-and-database.md` §5.16).
-// Web only; the desktop has one person.
+// Web only; the desktop is single-user.
 //
 // Roles are owner, commenter and viewer (`repos/access.ts`). A thread is
 // private (its owner and members) or public (anyone, guests included). The
@@ -36,8 +36,8 @@ import {
 const treeInput = z.object({ treeId: z.string() });
 
 export const sharingRouter = router({
-  /** Makes a thread public or private. The owner's. A public thread is
-   * listed in the All Users feed and the guest catalog. */
+  /** Makes a thread public or private. Restricted to the owner. A public
+   * thread is listed in the All Users feed and the guest catalog. */
   setVisibility: protectedProcedure
     .input(z.object({ treeId: z.string(), visibility: researchTreeVisibilitySchema }))
     .mutation(({ ctx, input }): ResearchTree => {
@@ -53,9 +53,9 @@ export const sharingRouter = router({
         const audience = treeAudienceIds(ctx, tree.id);
         publishSharingChanged(ctx, tree.id, audience);
         if (input.visibility === "private") {
-          // Readers who are not members and had it open lose it now: they
-          // are told, and their open-thread declarations (events, presence)
-          // are dropped.
+          // Non-member readers who had the thread open lose access: they
+          // receive an update event, and their open-thread declarations
+          // (events, presence) are dropped.
           ctx.eventBus.emitToOpenReaders(
             tree.id,
             sessionEvent("research.sharing.changed", { treeId: tree.id }),
@@ -78,7 +78,7 @@ export const sharingRouter = router({
       repo(() => sharing.listMembers(ctx.db, ctx.user.id, input.treeId)),
     ),
 
-  /** Changes a member's role. The owner's. A member made a viewer can no
+  /** Changes a member's role. Restricted to the owner. A member made a viewer can no
    * longer ask: their queued follow-ups are dropped. */
   setRole: protectedProcedure
     .input(z.object({ treeId: z.string(), userId: z.string(), role: memberRoleSchema }))
@@ -91,7 +91,7 @@ export const sharingRouter = router({
       return change.members;
     }),
 
-  /** Removes a member. The owner's. Their questions, notes and highlights
+  /** Removes a member. Restricted to the owner. Their questions, notes and highlights
    * stay in the thread; their queued follow-ups are dropped and their
    * running questions stopped. */
   removeMember: protectedProcedure
@@ -152,8 +152,8 @@ export const invitesRouter = router({
    * answer only: the server stores its hash. Invitations expire after
    * fourteen days. Inviting a login that already has a pending invitation
    * renews it (one per account and thread; the earlier link stops working);
-   * inviting a member is refused (`@login already has access to this
-   * thread.`), as is a hundred login invitations a day.
+   * inviting an existing member is rejected (`@login already has access to this
+   * thread.`), as is exceeding 100 login invitations per day.
    */
   create: protectedProcedure
     .input(
@@ -202,8 +202,7 @@ export const invitesRouter = router({
   ),
 
   /** Accepts an invitation by its link's token, or by id for one addressed
-   * to the caller's login. Answers with the thread as the caller now sees
-   * it. */
+   * to the caller's login. Returns the thread record for the caller. */
   accept: protectedProcedure
     .input(z.union([z.object({ token: z.string().min(1) }), z.object({ inviteId: z.string() })]))
     .mutation(({ ctx, input }): ResearchTree => {
@@ -223,7 +222,7 @@ export const invitesRouter = router({
       return tree;
     }),
 
-  /** Revokes a pending invitation. The owner's. */
+  /** Revokes a pending invitation. Restricted to the owner. */
   revoke: protectedProcedure
     .input(z.object({ inviteId: z.string() }))
     .mutation(({ ctx, input }): ThreadInvite =>
@@ -232,9 +231,9 @@ export const invitesRouter = router({
 });
 
 export const subscriptionsRouter = router({
-  /** Follow: notifications for new questions and notes in the thread. Anyone
-   * signed in who may read it. Answers with the thread as the caller sees
-   * it (`followed`), which is also published to their own connections. */
+  /** Follow: notifications for new questions and notes in the thread. Available
+   * to any signed-in user with read access. Returns the thread record for the
+   * caller (`followed`), which is also published to their connections. */
   set: protectedProcedure
     .input(z.object({ treeId: z.string(), value: z.boolean() }))
     .mutation(({ ctx, input }): ResearchTree => {

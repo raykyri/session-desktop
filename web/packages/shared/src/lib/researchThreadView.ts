@@ -278,7 +278,7 @@ export function researchEditorCanSave(
  * become the initial ones, so the field reads as unchanged; what was typed
  * while the save ran still differs from them. The next save expects what the
  * backend stored: for a note, its trimmed text; for a document, the thread's
- * title and the new revision; for both, the highlights that survived. */
+ * title and the new revision; for both, the highlights that were preserved. */
 export function researchEditorSessionSaved<
   S extends {
     kind: "document" | "post";

@@ -184,7 +184,7 @@ export function useResearchTextSelection({
     );
     const highlightIds = intersectingResearchHighlightIds(offsets, resolvedRanges);
     // Whitespace cannot form a useful new highlight, but it can still be a
-    // selected subset of an existing annotation that the user wants removed.
+    // selected subset of an existing annotation to remove.
     if (!exact.trim() && highlightIds.length === 0) {
       setHighlightAction(null);
       return;

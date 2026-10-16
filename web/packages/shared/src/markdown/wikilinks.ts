@@ -12,7 +12,7 @@ const WIKILINK_PATTERN = new RegExp(`\\[\\[(${BODY_PART})(?:\\|(${BODY_PART}))?\
 export interface Wikilink {
   /** The canonical term, trimmed. */
   term: string;
-  /** What the reader sees: the alias when given, otherwise the term. */
+  /** The rendered label: the alias when given, otherwise the term. */
   label: string;
 }
 
@@ -47,7 +47,7 @@ const UNESCAPED_ALIAS_PATTERN = new RegExp(
 /** Escape the alias pipe of every wikilink on a Markdown table row, so the
  * GFM parser does not split `[[Term|shown]]` into two cells (which also drops
  * the row's overflow cell). GFM reads `\|` in a cell as a literal `|`, so the
- * remark transform still sees `[[Term|shown]]` after parsing. Runs on the
+ * remark transform still receives `[[Term|shown]]` after parsing. Runs on the
  * source before parsing, since the split happens during parsing.
  *
  * A line counts as a table row when it has a `|` outside its wikilinks; that

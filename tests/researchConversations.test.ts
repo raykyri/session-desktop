@@ -73,7 +73,7 @@ test("non-marker thinking falls back to ordinary activity rendering", () => {
   assert.equal(conversationActivityToolCalls(activities[0]), null);
 });
 
-test("mixed marker and non-marker values refuse the chip", () => {
+test("mixed marker and non-marker values omit the tool call chip", () => {
   const items = buildTimelineItems([
     turn("node-1-0", "assistant", [
       marker(1),

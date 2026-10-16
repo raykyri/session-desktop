@@ -145,7 +145,7 @@ export function modelsFor(user: Pick<User, "isAdmin"> | null): ModelEntry[] {
   return MODEL_REGISTRY.filter((model) => canUseModel(user, model.id));
 }
 
-/** The registry as the client sees it. `available` comes from the server's
+/** The client-facing model registry. `available` comes from the server's
  * credential check; a model without a configured provider is listed but
  * cannot be launched. */
 export function modelInfo(model: ModelEntry, available: boolean): ModelInfo {

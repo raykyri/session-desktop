@@ -14,15 +14,11 @@ import { nextUtcMidnight, now } from "../time.js";
 import { nodeReadableBy } from "./access.js";
 
 /**
- * Which cap a queued row is admitted under.
+ * Execution pool classification for admission control.
  *
- * Only `research` is ever written today: the metadata pool of four
- * (`docs/04-agent-runtime.md` §10) is an in-memory queue in
- * `RunsService`, because a title or a recap that a restart loses is
- * regenerated from the answer it summarizes and never worth a durable row.
- * The arm stays because `run_queue.pool` is declared with both values and
- * dropping one is a migration; it is the extension point a metadata run would use if it
- * ever had to survive a deploy.
+ * Currently only `research` tasks are persisted to the database. Metadata operations
+ * run via an in-memory queue. The `metadata` pool enum value is preserved for schema
+ * compatibility and future persistence support.
  */
 export type RunPool = "research" | "metadata";
 
@@ -31,7 +27,7 @@ export interface EnqueueInput {
   pool?: RunPool | undefined;
   /** The provider the node's model routes to, for the per-provider cap. */
   provider: string;
-  /** Head-of-queue insertion for a resume. */
+  /** Enqueues at the front of the queue for resumed runs. */
   enqueuedAt?: number | undefined;
   notBefore?: number | null | undefined;
 }
@@ -91,14 +87,11 @@ export interface ClaimedRun {
 }
 
 /**
- * Claims runnable rows.
+ * Claims runnable queue items according to user and provider concurrency limits.
  *
- * Fair rather than strictly first-come: candidates are grouped by user, each
- * user's own rows stay in `enqueued_at` order, and the claim round-robins
- * across users ordered by their oldest waiting row. One account submitting
- * twenty questions therefore cannot push everyone else behind them, which is
- * what "nobody's run is starved silently" asks for. A row held back by
- * `not_before` (a 429 backoff) is invisible until its time comes.
+ * Implements round-robin scheduling across users ordered by oldest enqueued item,
+ * preventing starvation from high-volume single users. Items with a future `notBefore`
+ * timestamp (such as backoff delays) are excluded from claims.
  */
 export function claim(db: SessionDatabase, limits: ClaimLimits = {}): ClaimedRun[] {
   const pool = limits.pool ?? "research";
@@ -167,8 +160,7 @@ export function claim(db: SessionDatabase, limits: ClaimLimits = {}): ClaimedRun
         }
         const providerCap = limits.perProvider?.[row.provider] ?? providerDefault;
         if ((perProviderCount.get(row.provider) ?? 0) >= providerCap) {
-          // The whole user is not blocked, but this row is; move past it so a
-          // later row on a free provider is still reachable.
+          // The current provider is saturated; advance cursor to check subsequent items.
           cursor.set(userId, index + 1);
           progressed = true;
           continue;
@@ -191,7 +183,7 @@ export function claim(db: SessionDatabase, limits: ClaimLimits = {}): ClaimedRun
   });
 }
 
-/** Removes the row: the run finished, was cancelled, or failed for good. */
+/** Deletes a queue entry upon run completion, cancellation, or terminal failure. */
 export function release(db: SessionDatabase, nodeId: string): boolean {
   const row = db
     .delete(runQueue)
@@ -202,10 +194,8 @@ export function release(db: SessionDatabase, nodeId: string): boolean {
 }
 
 /**
- * Removes the row only while `attempt` is still the node's current attempt:
- * how a finished agent attempt releases its claim. A retry or rerun that
- * replaced a cancelled attempt has moved the attempt number and put its own
- * row in, which the old attempt must leave alone.
+ * Removes a queue row conditionally if `attempt` matches the node's current attempt,
+ * preventing a superseded run attempt from deleting a subsequent attempt's queue entry.
  */
 export function releaseAttempt(db: SessionDatabase, nodeId: string, attempt: number): boolean {
   const row = db
@@ -222,9 +212,8 @@ export function releaseAttempt(db: SessionDatabase, nodeId: string, attempt: num
 }
 
 /**
- * Makes `userId`'s rows held until a UTC midnight after `at` claimable now:
- * the runs the dispatcher held for the daily limits, released when an
- * operator changes the account's limits. Returns their node ids.
+ * Clears daily limit hold delays (`notBefore`) for `userId` when quota limits
+ * are modified, returning the released node IDs.
  */
 export function releaseDailyHolds(
   db: SessionDatabase,
@@ -257,13 +246,12 @@ export function clearBackoff(db: SessionDatabase, nodeId: string): boolean {
   return row !== undefined;
 }
 
-/** Puts a claimed row back with a delay — the 429 path (5 s, 20 s, 60 s). */
+/** Re-enqueues a claimed row with a backoff timestamp in `notBefore`. */
 export function requeueWithBackoff(db: SessionDatabase, nodeId: string, notBefore: number): void {
   db.update(runQueue).set({ claimedAt: null, notBefore }).where(eq(runQueue.nodeId, nodeId)).run();
 }
 
-/** Makes the waiting rows of `parentNodeId`'s children claimable now: the
- * runs the agent loop held back until that parent's run settled. */
+/** Clears `notBefore` delays for child nodes awaiting parent run completion. */
 export function wakeChildrenOf(db: SessionDatabase, parentNodeId: string): number {
   return db
     .update(runQueue)
@@ -280,15 +268,13 @@ export function wakeChildrenOf(db: SessionDatabase, parentNodeId: string): numbe
 }
 
 /**
- * 1-based position among the rows still waiting in the same pool, or 0 once
- * the run is claimed — the number `research.node.updated` carries while a node
- * is `queued`.
+ * Returns 1-based queue position among waiting rows in the specified pool,
+ * or 0 if the row is already claimed or absent.
  */
 export function position(
   db: SessionDatabase,
-  /** The account that pays for the run, or null for any: a reader of a
-   * shared thread sees the place of someone else's question. The caller
-   * checks that the reader may read the node. */
+  /** The account paying for the run, or null to match any account (for readers
+   * viewing queue position in shared threads). The caller verifies read permissions. */
   userId: string | null,
   nodeId: string,
   at: number = now(),
@@ -320,10 +306,7 @@ export function position(
 }
 
 /**
- * Number of rows queued for this account. The per-user concurrency cap bounds
- * what *runs*; this is what bounds what has been admitted, which is the number
- * that decides the bill — a queue is spend already committed to
- * (`docs/06-auth-and-users.md` §8).
+ * Returns the count of unclaimed queue entries currently enqueued for `userId`.
  */
 export function queuedCount(
   db: SessionDatabase,
@@ -338,16 +321,16 @@ export function queuedCount(
   return row?.value ?? 0;
 }
 
-/** Positions for every waiting node of one account, for a list render. */
+/** Returns queue positions for all waiting nodes of an account, for display in a list. */
 export function positions(
   db: SessionDatabase,
   userId: string,
   at: number = now(),
 ): Map<string, number> {
-  const mine = db
+  const waiting = db
     .select({ nodeId: runQueue.nodeId })
     .from(runQueue)
     .where(and(eq(runQueue.userId, userId), isNull(runQueue.claimedAt)))
     .all();
-  return new Map(mine.map((row) => [row.nodeId, position(db, userId, row.nodeId, at)]));
+  return new Map(waiting.map((row) => [row.nodeId, position(db, userId, row.nodeId, at)]));
 }

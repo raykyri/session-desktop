@@ -1,22 +1,21 @@
-// The account that the unsent text kept in this browser belongs to: the
-// composer drafts (`stores/drafts.ts`) and the thread pages' unsent branches
-// (`features/thread/persistence.ts`). localStorage is shared by every tab, so
-// the account is recorded there (`session.local-owner.v1`); each tab also
-// remembers the account it rendered for. A tab whose account no longer
-// matches the recorded one (another tab signed out or signed in as someone
-// else) stops writing that state. `stores/localAccount.ts` does the claiming
-// and clearing.
+// Manages local account ownership for unpersisted user text in localStorage,
+// specifically composer drafts (`stores/drafts.ts`) and unsent thread branches
+// (`features/thread/persistence.ts`). Because localStorage is shared across browser tabs,
+// the active account ID is recorded under `session.local-owner.v1`. Each tab tracks the
+// user identity it rendered with. If a tab's user identity mismatches the stored identity
+// (for example, following sign-out or account switching in another tab), the tab ceases writing
+// local state to prevent data leakage. Account claiming and clearing are handled in
+// `stores/localAccount.ts`.
 
 export const LOCAL_OWNER_KEY = "session.local-owner.v1";
 
-/** A user id, or null for a signed-out tab. */
+/** User ID of the local state owner, or null for unauthenticated sessions. */
 export type LocalOwner = string | null;
 
-/** The account this tab rendered for; undefined until the session is known. */
+/** Active account identity associated with this tab; undefined prior to session initialization. */
 let tabOwner: LocalOwner | undefined;
 
-/** The recorded account in a stored value; undefined when nothing readable
- * is recorded. */
+/** Parses the owner user ID from serialized storage; returns undefined if unreadable or absent. */
 export function parseLocalOwner(raw: string | null): LocalOwner | undefined {
   if (raw === null) return undefined;
   try {
@@ -40,7 +39,7 @@ export function writeLocalOwner(owner: LocalOwner): void {
   try {
     localStorage.setItem(LOCAL_OWNER_KEY, JSON.stringify({ userId: owner }));
   } catch {
-    // Storage unavailable: nothing else persists either.
+    // Storage unavailable; local state persistence is disabled.
   }
 }
 
@@ -53,10 +52,9 @@ export function setLocalStateOwner(owner: LocalOwner | undefined): void {
 }
 
 /**
- * Whether this tab may write the per-account state it holds: false once the
- * recorded account differs from the one this tab rendered for. True before
- * the tab knows its account, when nothing is recorded and when storage is
- * unreadable, as there is then no other account to protect.
+ * Determines whether this tab may write account-scoped local state. Returns false if the
+ * recorded account differs from this tab's rendered account. Returns true prior to session
+ * resolution, when no owner is stored, or when localStorage is inaccessible.
  */
 export function ownsLocalState(): boolean {
   if (tabOwner === undefined) return true;

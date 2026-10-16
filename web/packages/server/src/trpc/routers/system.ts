@@ -21,7 +21,7 @@ export interface RuntimeFeatures {
   /**
    * The artifact origin, which serves widget previews
    * (`11-artifacts-and-browser.md` §2). It is per-deployment rather than
-   * per-build, so it travels with the rest of the runtime configuration
+   * per-build, so it is provided alongside the rest of the runtime configuration
    * instead of a build-time constant or a `<meta>` the boot HTML would have
    * to be templated for. No client code reads it since the document preview
    * panel was removed.

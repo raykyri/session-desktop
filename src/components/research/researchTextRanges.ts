@@ -231,7 +231,7 @@ export function flatOffsetAtPoint(root: HTMLElement, clientX: number, clientY: n
  * every boundary between messages, or between a message and the
  * tool/thinking rows around it. The projection concatenates these with no
  * separating whitespace, so word expansion needs them to avoid fusing a
- * message's last word to its neighbour's first (see
+ * message's last word to its neighbor's first (see
  * `createResearchSelectionExpander`). */
 export function messageFlatBoundaries(root: HTMLElement) {
   const boundaries: number[] = [];

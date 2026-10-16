@@ -24,7 +24,7 @@ export interface QueuedResearchFollowup {
   /** Images sent with the question. Absent when it has none. */
   images?: ResearchImageAttachment[];
   /** Why sending it failed. A failed question is not sent again until the
-   * reader retries it; this is not restored on load, so a reload retries. */
+   * user retries it; this is not restored on load, so a reload retries. */
   failed?: string;
 }
 
@@ -95,7 +95,7 @@ export function researchLevelPathShows(
 
 /** The nearest node on `nodeId`'s ancestry (itself included) that still
  * exists, from the parents recorded before a removal: the source message of a
- * removed branch, or null when nothing on the way survives. */
+ * removed branch, or null when no ancestor node remains. */
 export function researchSurvivingAncestor(
   parentById: ReadonlyMap<string, string | null>,
   nodeId: string,
@@ -190,7 +190,7 @@ export function researchQueueAction(
   ) {
     return { kind: "wait" };
   }
-  // A question the backend refused waits for Retry or Remove.
+  // A question the backend rejected waits for Retry or Remove.
   if (first.failed) {
     return { kind: "wait" };
   }

@@ -1,5 +1,5 @@
 // Saved drafts (`10-home-feed-journal.md` §1), ported from the desktop's
-// `ResearchDraftView.tsx` and `researchDraftAutosave.ts`: the Drafts place,
+// `ResearchDraftView.tsx` and `researchDraftAutosave.ts`: the Drafts section,
 // the draft's own view with its autosave and ⌘S, and sending it.
 
 import type { ResearchDraft } from "@session/shared";
@@ -16,7 +16,7 @@ import { node, tree } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
 import { serverSettings, testQueryClient, workspace, WORKSPACE_ID } from "./phase6Fixtures.js";
 
-/** An autosave on a hand-driven clock. */
+/** Test harness for autosave with manual timer control. */
 function autosaveHarness(initial = "Draft") {
   const saves: string[] = [];
   const errors: string[] = [];
@@ -57,26 +57,26 @@ function autosaveHarness(initial = "Draft") {
   };
 }
 
-test("draft edits save after a pause, skipping empty and unchanged text", (t) => {
+test("debounces draft edits and skips empty or unchanged text", (t) => {
   const { autosave, saves, tick } = autosaveHarness();
   autosave.edit("Draft");
   tick();
   autosave.edit("   ");
   tick();
-  t.deepEqual(saves, [], "nothing changed, then nothing to keep");
+  t.deepEqual(saves, [], "no change recorded");
   autosave.edit("Draft, longer");
   tick();
   t.deepEqual(saves, ["Draft, longer"]);
 });
 
-test("closing the draft flushes a pending edit at once", (t) => {
+test("flushes pending edits immediately on close", (t) => {
   const { autosave, saves } = autosaveHarness();
   autosave.edit("Edited");
   autosave.flush();
   t.deepEqual(saves, ["Edited"]);
 });
 
-test("⌘S saves a pending edit and resolves whether it saved", async (t) => {
+test("saveNow writes pending edits and returns boolean status", async (t) => {
   const { autosave, saves } = autosaveHarness();
   t.false(await autosave.saveNow(), "nothing to save");
   autosave.edit("Edited");
@@ -84,7 +84,7 @@ test("⌘S saves a pending edit and resolves whether it saved", async (t) => {
   t.deepEqual(saves, ["Edited"]);
 });
 
-test("sending stops the autosave and its errors; a failed send resumes it", async (t) => {
+test("submission halts autosave and suppresses errors; failed submission resumes autosave", async (t) => {
   const { autosave, saves, errors, fail, tick } = autosaveHarness();
   fail("offline");
   autosave.edit("Edited");
@@ -92,7 +92,7 @@ test("sending stops the autosave and its errors; a failed send resumes it", asyn
   autosave.finish();
   await Promise.resolve();
   await Promise.resolve();
-  t.deepEqual(errors, [], "an error after a send started is not shown");
+  t.deepEqual(errors, [], "errors after submission started are suppressed");
   autosave.edit("Edited again");
   tick();
   t.deepEqual(saves, ["Edited"]);
@@ -102,7 +102,7 @@ test("sending stops the autosave and its errors; a failed send resumes it", asyn
   t.deepEqual(saves, ["Edited", "Edited a third time"]);
 });
 
-test("a draft save sends its images only when they changed", async (t) => {
+test("passes images only when changed since previous save", async (t) => {
   const sent: (readonly string[] | undefined)[] = [];
   const first = ["a"];
   const save = createResearchDraftImageSave(first, (_prompt, images) => {
@@ -116,7 +116,7 @@ test("a draft save sends its images only when they changed", async (t) => {
   t.deepEqual(sent, [undefined, second, undefined]);
 });
 
-test("a failed save leaves the text unsaved, so ⌘S and closing save it again", async (t) => {
+test("failed save retains unsaved state for subsequent saveNow and flush attempts", async (t) => {
   const { autosave, saves, errors, fail, tick } = autosaveHarness();
   fail("offline");
   autosave.edit("Edited");
@@ -124,17 +124,17 @@ test("a failed save leaves the text unsaved, so ⌘S and closing save it again",
   await Promise.resolve();
   await Promise.resolve();
   t.deepEqual(errors, ["offline"]);
-  t.true(await autosave.saveNow(), "⌘S saves the same text again");
+  t.true(await autosave.saveNow(), "saveNow retries unsaved text");
   t.deepEqual(saves, ["Edited", "Edited"]);
-  t.false(await autosave.saveNow(), "saved now");
+  t.false(await autosave.saveNow(), "already saved");
   fail("offline");
   autosave.edit("Edited again");
   await t.throwsAsync(autosave.saveNow(), { message: "offline" });
-  t.true(autosave.flush(), "closing saves it");
+  t.true(autosave.flush(), "flushed on close");
   t.deepEqual(saves, ["Edited", "Edited", "Edited again", "Edited again"]);
 });
 
-test("a failed save leaves the text saved when a newer save started and succeeded", async (t) => {
+test("failed save does not overwrite newer successful save state", async (t) => {
   const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
   const autosave = createResearchDraftAutosave({
     initial: "Draft",
@@ -209,30 +209,33 @@ test.serial("Drafts lists the drafts; a draft's card opens its view", async (t) 
   app.unmount();
 });
 
-test.serial("a draft card's Delete removes the draft and says so", async (t) => {
-  const app = await renderApp("/drafts", {
-    queryClient: testQueryClient(),
-    responses: draftResponses(),
-  });
-  await waitUntil(
-    t,
-    () => screen.queryByRole("button", { name: "Draft actions" }) !== null,
-    "the draft's card",
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Draft actions" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
-  await waitUntil(
-    t,
-    () => useNotificationsStore.getState().items.some((item) => item.title === "Draft deleted."),
-    "the desktop's toast",
-  );
-  t.deepEqual(app.trpc.calls.find((call) => call.path === "drafts.remove")?.input, {
-    draftId: "d1",
-  });
-  app.unmount();
-});
+test.serial(
+  "deleting a draft card removes the draft and displays notification toast",
+  async (t) => {
+    const app = await renderApp("/drafts", {
+      queryClient: testQueryClient(),
+      responses: draftResponses(),
+    });
+    await waitUntil(
+      t,
+      () => screen.queryByRole("button", { name: "Draft actions" }) !== null,
+      "the draft's card",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Draft actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await waitUntil(
+      t,
+      () => useNotificationsStore.getState().items.some((item) => item.title === "Draft deleted."),
+      "the desktop's toast",
+    );
+    t.deepEqual(app.trpc.calls.find((call) => call.path === "drafts.remove")?.input, {
+      draftId: "d1",
+    });
+    app.unmount();
+  },
+);
 
-test.serial("an edit saves after a pause, and ⌘S saves at once", async (t) => {
+test.serial("edits debounce automatically and ⌘S triggers immediate save", async (t) => {
   const app = await renderApp("/drafts/d1", {
     queryClient: testQueryClient(),
     responses: draftResponses(),
@@ -258,7 +261,7 @@ test.serial("an edit saves after a pause, and ⌘S saves at once", async (t) => 
   app.unmount();
 });
 
-/** The draft view over a `drafts.save` that fails `failNext()` times. */
+/** Renders draft view with a mock drafts.save failing failNext() times. */
 async function openFailingDraft(t: ExecutionContext) {
   let failures = 0;
   const image = { kind: "image" as const, id: "img1", mimeType: "image/png", byteSize: 10 };
@@ -295,7 +298,7 @@ async function openFailingDraft(t: ExecutionContext) {
   };
 }
 
-test.serial("⌘S retries a failed save of the text or of an image removal", async (t) => {
+test.serial("save shortcut retries failed text save or image removal", async (t) => {
   useNotificationsStore.getState().clear();
   const { app, saves, failNext, field } = await openFailingDraft(t);
   failNext();
@@ -304,7 +307,7 @@ test.serial("⌘S retries a failed save of the text or of an image removal", asy
   await waitUntil(
     t,
     () => screen.queryByText("The draft couldn't be saved.") !== null,
-    "the failure shows",
+    "error message is displayed",
   );
   fireEvent.keyDown(field, { key: "s", metaKey: true });
   await waitUntil(t, () => saves().length === 2, "⌘S saves the same text again");
@@ -312,7 +315,7 @@ test.serial("⌘S retries a failed save of the text or of an image removal", asy
   await waitUntil(
     t,
     () => useNotificationsStore.getState().items.some((item) => item.title === "Draft saved."),
-    "and says so",
+    "toast notification is displayed",
   );
 
   failNext();
@@ -322,18 +325,18 @@ test.serial("⌘S retries a failed save of the text or of an image removal", asy
   await waitUntil(
     t,
     () => screen.queryByText("The draft couldn't be saved.") !== null,
-    "the failure shows",
+    "error message is displayed",
   );
   fireEvent.keyDown(field, { key: "s", metaKey: true });
   await waitUntil(t, () => saves().length === 4, "⌘S saves the removal again");
   t.deepEqual(saves()[3]?.images, []);
   fireEvent.keyDown(field, { key: "s", metaKey: true });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  t.is(saves().length, 4, "nothing left to save");
+  t.is(saves().length, 4, "no pending changes");
   app.unmount();
 });
 
-test.serial("closing a draft after a failed save saves the text again", async (t) => {
+test.serial("unmounting a draft view after failed save retries persistence", async (t) => {
   const { app, saves, failNext, field } = await openFailingDraft(t);
   failNext();
   fireEvent.change(field, { target: { value: "What is a radix trie?" } });
@@ -341,17 +344,17 @@ test.serial("closing a draft after a failed save saves the text again", async (t
   await waitUntil(
     t,
     () => screen.queryByText("The draft couldn't be saved.") !== null,
-    "the failure shows",
+    "error message is displayed",
   );
   app.unmount();
-  await waitUntil(t, () => saves().length === 2, "closing saves it again");
+  await waitUntil(t, () => saves().length === 2, "saved on unmount");
   t.deepEqual(
     saves().map((save) => save.prompt),
     ["What is a radix trie?", "What is a radix trie?"],
   );
 });
 
-test.serial("Send asks the question, removes the draft and opens the thread", async (t) => {
+test.serial("Send creates research thread, deletes draft, and navigates to thread", async (t) => {
   const app = await renderApp("/drafts/d1", {
     queryClient: testQueryClient(),
     responses: draftResponses(),
@@ -379,7 +382,7 @@ test.serial("Send asks the question, removes the draft and opens the thread", as
   await waitUntil(
     t,
     () => screen.queryByRole("textbox", { name: "Draft question" }) === null,
-    "the thread replaces the draft",
+    "thread view replaces draft view",
   );
   await waitUntil(
     t,
@@ -392,7 +395,7 @@ test.serial("Send asks the question, removes the draft and opens the thread", as
   app.unmount();
 });
 
-test.serial("a draft that was sent elsewhere says so", async (t) => {
+test.serial("draft sent in another session displays missing draft message", async (t) => {
   const app = await renderApp("/drafts/gone", {
     queryClient: testQueryClient(),
     responses: draftResponses(),

@@ -6,7 +6,7 @@ import type { AgentInfo, GroupInfo } from "../types";
 /**
  * The backend's groups and agents as session events report them, and the
  * wake lock held while the `preventSleep` setting is on and an agent may
- * still be working.
+ * still be running.
  */
 export function useSessionProcesses(preventSleep: boolean) {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
@@ -17,16 +17,16 @@ export function useSessionProcesses(preventSleep: boolean) {
   // placeholder above. Until listAgents() succeeds, it is not safe to infer
   // that the backend has no active agents and release its existing wake lock.
   const [agentsHydrated, setAgentsHydrated] = useState(false);
-  /** Applies the startup agent list; the wake lock is decided from then on. */
+  /** Applies the startup agent list; wake lock status is evaluated from then on. */
   const hydrateAgents = useCallback((initial: AgentInfo[]) => {
     setAgents(initial);
     setAgentsHydrated(true);
   }, []);
 
   // Keep the machine awake while the toggle is on and at least one agent may
-  // still be working, including while an in-flight tool waits for permission or
-  // user feedback.
-  // Releasing the lock once every agent is at rest lets normal power management
+  // still be running, including while an in-flight tool waits for permission or
+  // feedback.
+  // Releasing the lock once every agent is idle lets normal power management
   // resume.
   const anyAgentBusy = useMemo(
     () => agents.some((agent) => agentStatusKeepsMachineAwake(agent.status)),

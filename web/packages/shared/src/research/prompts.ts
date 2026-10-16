@@ -84,7 +84,7 @@ export const DEFAULT_RESEARCH_LAUNCH_INSTRUCTION = "Answer concisely, in a few s
  * Trims a research launch instruction to the byte cap at a code-point
  * boundary. The cap counts UTF-8 bytes — the unit the server validates — not
  * UTF-16 length, so a multi-byte instruction cannot pass in the editor yet be
- * refused on save.
+ * rejected on save.
  */
 export function clampResearchLaunchInstruction(value: string): string {
   return truncateUtf8(value, RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES);
@@ -92,7 +92,7 @@ export function clampResearchLaunchInstruction(value: string): string {
 
 /**
  * Validates an instruction as entered in settings: trimmed, `undefined` when
- * empty (meaning "send prompts unchanged"), refused over the byte cap.
+ * empty (meaning "send prompts unchanged"), rejected over the byte cap.
  * Throws with the message the settings dialog shows.
  */
 export function sanitizedResearchLaunchInstruction(raw: string): string | undefined {
@@ -137,7 +137,7 @@ function isWrapperTag(segment: string): boolean {
 /**
  * Neutralizes the instruction wrapper's own tag vocabulary inside the
  * instruction content: an instruction that spells `</research-instructions>`
- * (in any whitespace or case variant a lenient reader would accept) cannot
+ * (in any whitespace or case variant a lenient parser would accept) cannot
  * close the wrapper early and leak the remainder past the sanitizers as
  * displayed content. Unrelated markup is left intact.
  */
@@ -184,9 +184,9 @@ export function promptWithResearchLaunchInstruction(
  *
  * Slash-command ordering follows {@link documentFollowupPrompt}: a question
  * that begins with a slash command keeps it at the very start of the message,
- * with the quote after it. The wrapper is what the document builder then sees
- * as its question, so burying the command here buried it in the launched
- * prompt too.
+ * with the quote after it. The wrapper is what the document builder then
+ * treats as its question, so placing the command after the quote would displace
+ * it from the start of the launched prompt as well.
  */
 export function queryFollowupPrompt(exact: string, question: string): string {
   const quote = normalizedText(exact);

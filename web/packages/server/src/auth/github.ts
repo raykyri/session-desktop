@@ -1,5 +1,5 @@
-// GitHub sign-in (`06-auth-and-users.md` §2, §3). Plain Hono routes rather
-// than tRPC: the flow is two browser redirects, not two RPCs.
+// GitHub OAuth routes (`06-auth-and-users.md` §2, §3). Implemented as Hono routes
+// rather than tRPC procedures because the flow requires browser redirects.
 
 import { timingSafeEqual } from "node:crypto";
 
@@ -26,8 +26,8 @@ const PROFILE_ENDPOINT = "https://api.github.com/user";
 /** HTTP timeout for api.github.com requests during OAuth profile exchange. */
 const PROFILE_TIMEOUT_MS = 10_000;
 
-/** `read:user` rather than the desktop's empty scope: the profile fields the
- * account row keeps (`created_at`, `name`) need it, and it grants no writes. */
+/** `read:user` scope instead of empty scope: required by stored user profile
+ * fields (`created_at`, `name`); grants no write access. */
 const SCOPES = ["read:user"];
 
 export interface GitHubProfileResponse {
@@ -38,8 +38,8 @@ export interface GitHubProfileResponse {
   created_at?: string | null;
 }
 
-/** A backslash (Windows browsers normalize it to a slash) or a control
- * character, which would let a return path smuggle a second header line. */
+/** Checks for a backslash (normalized to a slash by Windows browsers) or a
+ * control character, which could inject an additional header line. */
 function hasUnsafeCharacter(value: string): boolean {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
@@ -51,9 +51,9 @@ function hasUnsafeCharacter(value: string): boolean {
 }
 
 /**
- * A same-origin path to return to after sign-in. Anything else — an absolute
- * URL, a protocol-relative `//host`, a backslash Windows browsers normalize to
- * a slash — is dropped rather than corrected.
+ * Validates a same-origin redirect path after sign-in. Rejects absolute URLs,
+ * protocol-relative URLs (`//host`), and paths containing backslashes or
+ * control characters.
  */
 export function safeReturnTo(value: string | null | undefined): string | null {
   if (typeof value !== "string" || value === "" || value.length > 512) {
@@ -68,9 +68,9 @@ export function safeReturnTo(value: string | null | undefined): string | null {
   return value;
 }
 
-/** `oauth_states` carries one text column for the round trip, so the return
- * path and the invite code travel in it together. A bare path is still
- * accepted so a row written by an older build redirects as it used to. */
+/** Encodes return path and invite code into the `oauth_states` payload column.
+ * Unencoded paths are accepted for backward compatibility with states created
+ * by earlier versions. */
 function encodeStatePayload(returnTo: string | null, invite: string | null): string | null {
   if (returnTo === null && invite === null) {
     return null;
@@ -117,8 +117,8 @@ function blockedByAllowlist(login: string, allowed: readonly string[] | null): b
   return allowed !== null && !allowed.includes(login.toLowerCase());
 }
 
-/** The slice of `arctic`'s `OAuth2Client` this module uses, named so a test
- * can substitute one without a network. */
+/** OAuth client interface used by this module, allowing tests to mock
+ * network interactions. */
 export interface OAuthClient {
   authorizationUrl(state: string, codeVerifier: string): URL;
   exchange(code: string, codeVerifier: string): Promise<string>;
@@ -158,10 +158,10 @@ function signInError(publicOrigin: string, reason: string): string {
 }
 
 /**
- * The state is also kept in a `SameSite=Lax` cookie, which a top-level
- * redirect from GitHub carries and a third-party page cannot write. Without it
- * a handshake the attacker started could be finished in someone else's
- * browser, signing that person into the attacker's account.
+ * Stores the OAuth state parameter in a `SameSite=Lax` cookie sent with top-level
+ * redirects from GitHub and inaccessible to third-party contexts. Prevents login
+ * CSRF where an authorization flow initiated by an attacker completes in another
+ * browser session.
  */
 export const OAUTH_STATE_COOKIE = "oauth_state";
 const OAUTH_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
@@ -186,8 +186,8 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
   };
 
   const authLimit = rateLimitByIp(limiter, "auth", RATE_LIMITS.auth);
-  // The test-only sign-in (below) is outside the per-address budget: an e2e
-  // run signs in dozens of accounts a minute from one address.
+  // Test authentication bypasses IP rate limits to accommodate integration
+  // test suites authenticating multiple accounts from a single IP address.
   const authBudget: MiddlewareHandler<AppEnv> = (c, next) =>
     config.testAuthEnabled && c.req.path === "/auth/test-login" ? next() : authLimit(c, next);
   app.use("/auth/*", authBudget);
@@ -230,8 +230,8 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
       secure: config.isProduction,
       sameSite: "Lax",
     });
-    // Single use: the row is deleted by the read, so a replayed callback URL
-    // finds nothing (`06-auth-and-users.md` §2).
+    // Single use: the row is deleted upon consumption, so a replayed callback URL
+    // matches no record (`06-auth-and-users.md` §2).
     const stored = auth.consumeOAuthState(deps.db, state);
     if (!stored || cookieState === null || !sameState(cookieState, state)) {
       return c.redirect(signInError(config.publicOrigin, "expired_state"), 302);
@@ -315,7 +315,7 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
   });
 
   if (config.testAuthEnabled) {
-    // Development and test only; `loadConfig` refuses to enable it in
+    // Development and test only; `loadConfig` prevents enabling this route in
     // production (`03-api-and-events.md` §5).
     app.post("/auth/test-login", async (c) => {
       const body = (await c.req.json().catch(() => ({}))) as {
@@ -327,7 +327,7 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
       const githubId =
         typeof body.githubId === "number"
           ? body.githubId
-          : // Stable per login, so repeated test logins reuse one account.
+          : // Deterministic hash per login, so repeated test logins reuse the account.
             Number(BigInt(`0x${Buffer.from(login, "utf8").toString("hex")}`) % 1000000007n);
       const { user } = users.upsertFromGitHub(deps.db, { githubId, login, name: login });
       if (body.isAdmin === true && !user.isAdmin) {

@@ -4,14 +4,14 @@
 // a toast when the Notifications setting is on.
 //
 // Sent for:
-// - a run you asked finishing (complete or failed), to its asker;
+// - a submitted run finishing (complete or failed), to its author;
 // - a new question or note in a thread you follow (`subscriptions.set`), to
 //   every follower but its author;
 // - a branch from your answer or note (a follow-up that is not inline), to
 //   the parent's author, in place of the follow-up notification;
 // - an invitation to a thread, to the invited account.
 //
-// Nobody is told about a thread they can no longer read.
+// Notifications are not sent for threads the user can no longer access.
 
 import { randomUUID } from "node:crypto";
 
@@ -95,7 +95,8 @@ function authorOf(node: ResearchNode): string | null {
 }
 
 /** Whether `userId` may still read the thread: a person removed from it, or
- * a former reader of a thread that turned private, hears nothing about it. */
+ * a former reader of a thread that turned private, receives no notifications
+ * about it. */
 function canRead(db: SessionDatabase, userId: string, treeId: string): boolean {
   return access.treeAccess(db, userId, treeId) !== null;
 }
@@ -153,8 +154,8 @@ function parentAuthorKind(deps: NotifyDeps, node: ResearchNode): string {
   return parent?.type === "post" ? "note" : parent?.type === "document" ? "document" : "answer";
 }
 
-/** A run settled: its asker hears whether it completed or failed. A
- * cancelled run was stopped by someone and says nothing. */
+/** A run settled: its author receives a notification of whether it
+ * completed or failed. A cancelled run emits no notification. */
 export function notifyRunFinished(deps: NotifyDeps, node: ResearchNode): void {
   const status = nodeStatus(node);
   const asker = authorOf(node);

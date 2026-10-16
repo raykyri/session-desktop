@@ -104,7 +104,7 @@ export function reconcileResearchTreeDetail<
 }
 
 /** A viewed acknowledgment is normally already reflected locally. Preserve
- * list identity in that common case so it does not manufacture a render. */
+ * list identity in that common case so it does not trigger an unnecessary re-render. */
 export function clearResearchTreeAttention<Summary extends AttentionSummary>(
   trees: Summary[],
   treeId: string,

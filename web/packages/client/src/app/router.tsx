@@ -46,7 +46,7 @@ import { AppShell } from "./layout/AppShell.js";
 import { appQueryClient } from "./queryClient.js";
 
 // View state is kept in URL query parameters rather than localStorage so deep
-// links and multiple tabs stay in sync; each schema below validates and
+// links and multiple tabs remain synchronized; each schema below validates and
 // rejects malformed values.
 const workspaceScopeSearchSchema = z.object({
   /** Workspace scope. Absent means the account's default workspace. */
@@ -67,15 +67,14 @@ const researchSearchSchema = z.object({
   node: z.string().optional(),
   /** A highlight to scroll to and focus once the document loads. */
   highlight: z.string().optional(),
-  /** A note to open in the editor (a double-click on its card on Home). */
+  /** Node id of a note to open in the editor. */
   edit: z.string().optional(),
   filter: z.enum(["active", "archived", "all"]).optional(),
   feed: z.string().optional(),
 });
 
-/** Query parameters of /login: a sign-in refusal (`error`), where to go after
- * signing in (`redirect`), and a sign-up code for a new account (`signup`;
- * `invite`, its earlier name, is still read). */
+/** Search parameters for /login: authentication error code (`error`), post-login
+ * destination (`redirect`), and registration invite token (`signup` or legacy `invite`). */
 const loginSearchSchema = z.object({
   error: z.string().optional(),
   signup: z.string().optional(),
@@ -93,16 +92,15 @@ export interface RouterContext {
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet });
 
-/** The kitchen sink (08 §4) is registered only in development and loaded
- * lazily, so the module is a chunk production never references. `import.meta`
- * has no `env` outside the bundler, and AVA imports this module directly,
- * so the check tolerates its absence. */
+/** The UI development sandbox (`/dev/ui`, 08 §4) is registered only in development
+ * and loaded lazily as a chunk excluded from production bundles. Outside the bundler
+ * (such as test environments), `import.meta.env` may be undefined, so the check
+ * handles its absence. */
 const isDevelopment = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 /**
- * Validates return paths after login to ensure redirects stay on the same origin and avoid redirect loops to /login. The server applies the same rule to `return_to`
- * (`auth/github.ts:safeReturnTo`); this one governs the in-app hop, which
- * never reaches the server.
+ * Validates post-login return paths to enforce same-origin redirects and prevent
+ * redirect loops to /login. Mirrors server-side `safeReturnTo` validation (`auth/github.ts`).
  */
 export function safeRedirectPath(value: string | undefined): string | null {
   if (value === undefined || !value.startsWith("/")) return null;
@@ -112,10 +110,9 @@ export function safeRedirectPath(value: string | undefined): string | null {
 }
 
 /**
- * The session, read through the cache. Each answer claims this browser's
- * unsent drafts and thread state for that account before any view reads them
- * (`stores/localAccount.ts`); null when signed out, and when the server could
- * not be asked, which claims nothing.
+ * Loads the current authentication session. Associates local unsent drafts and
+ * thread state with the authenticated account (`stores/localAccount.ts`); returns
+ * null if unauthenticated or on request failure.
  */
 async function loadSession(client: QueryClient) {
   try {
@@ -142,9 +139,8 @@ const loginRoute = createRoute({
 });
 
 /**
- * Warms the shell queries the sidebar renders from (07 §2). Account settings
- * wait for a session; guests still prefetch the public catalog. Individual
- * query components handle failures.
+ * Prefetches core application shell queries required for sidebar rendering (07 §2).
+ * Loads user settings if authenticated; prefetches runtime configuration and workspaces.
  */
 async function warmBootQueries(client: QueryClient): Promise<void> {
   const me = await client.ensureQueryData(meQueryOptions()).catch(() => null);
@@ -164,17 +160,15 @@ async function warmBootQueries(client: QueryClient): Promise<void> {
   ]);
 }
 
-/** A pathless layout route, so every public and signed-in view shares one
- * `AppShell` instance — and therefore one keydown listener, one overlay stack
- * and one event subscription. */
+/** Pathless layout route providing a shared `AppShell` instance across all routes
+ * for unified event listeners, overlay management, and event subscriptions. */
 const shellRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_shell",
   beforeLoad: async ({ context, location }) => {
-    // The kitchen sink is a design-system page with no server state; it is
-    // reachable in development without an account (07 §3). The exemption is
-    // conditioned on the build rather than on the path alone, so a route named
-    // `/dev/...` in a production bundle could never opt out of the guard.
+    // The development UI route requires no authentication in development mode (07 §3).
+    // The exemption is conditioned on the build environment rather than path alone,
+    // preventing production routes from bypassing authentication based solely on path prefix.
     if (isDevelopment && location.pathname.startsWith("/dev/")) return;
     await loadSession(context.queryClient);
   },
@@ -218,7 +212,7 @@ const highlightsRoute = createRoute({
   pendingComponent: RoutePendingPanel,
 });
 
-/** The place views (`10-home-feed-journal.md` §1), private to the account. */
+/** Folder and filtered collection routes (`10-home-feed-journal.md` §1). */
 const folderRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/f/$folderId",
@@ -259,7 +253,7 @@ const trashRoute = createRoute({
   component: TrashPage,
 });
 
-/** Web only: the threads shared with the reader. */
+/** Web only: threads shared with the current user. */
 const sharedRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/shared",
@@ -268,7 +262,7 @@ const sharedRoute = createRoute({
   component: SharedPage,
 });
 
-/** Web only: the notification inbox. */
+/** Web only: notification inbox route. */
 const notificationsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/notifications",
@@ -278,17 +272,17 @@ const notificationsRoute = createRoute({
   pendingComponent: RoutePendingPanel,
 });
 
-/** Web only: an invitation link (`invites.create`'s `url`, `/invite#<token>`).
- * Signed out, the page sends the reader to sign in and back here; the token
- * waits in `sessionStorage` (`lib/pendingInvite.ts`). */
+/** Invitation acceptance route (`/invite#<token>`). Unauthenticated visitors
+ * are redirected to sign in with the pending token stored in `sessionStorage`
+ * (`lib/pendingInvite.ts`). */
 const inviteRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/invite",
   component: InvitePage,
 });
 
-/** Links created before the token moved to the fragment: the token is
- * stored as a fragment's would be, and the address becomes `/invite`. */
+/** Legacy invitation route redirecting path-parameter tokens (`/invite/$token`)
+ * to the fragment-based invitation handler. */
 const legacyInviteRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/invite/$token",
@@ -304,8 +298,7 @@ const researchRoute = createRoute({
   path: "/r/$treeId",
   validateSearch: researchSearchSchema,
   component: lazyRouteComponent(loadThreadRoute, "ThreadPage"),
-  // The page's own loading placeholder, from the main chunk, so a first load
-  // of a thread URL shows the thread's header while the chunk arrives.
+  // Displays thread header placeholder while the lazy route chunk loads.
   pendingComponent: ThreadPending,
 });
 
@@ -361,7 +354,7 @@ export const routeTree = rootRoute.addChildren([
     settingsRoute,
     adminRoute,
     ...devRoutes,
-    // Last: a catch-all would otherwise shadow the routes declared after it.
+    // Catch-all route placed last to avoid shadowing preceding route paths.
     notFoundRoute,
   ]),
 ]);
@@ -378,8 +371,8 @@ export function createAppRouter(
     routeTree,
     defaultPreload: "intent",
     context: { queryClient },
-    // The shell's boundaries cover every signed-in view; these catch a failure
-    // on `/login`, which renders outside the shell.
+    // Default error and not-found components for routes rendered outside the
+    // shell boundary (such as `/login`).
     defaultErrorComponent: RouteErrorPanel,
     defaultNotFoundComponent: RouteNotFoundPanel,
     ...rest,

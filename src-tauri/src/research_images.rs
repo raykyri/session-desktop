@@ -8,12 +8,12 @@
 //! last message or draft that references it is permanently deleted, and that
 //! state is written, the image is removed, unless it was attached within
 //! [`PENDING_LIFETIME`]: then it moves back to `pending/` for a composer that
-//! may still hold it. A message removed because its run failed to launch
-//! returns its images to pending whatever their age.
+//! may still retain it. A message removed because its run failed to launch
+//! returns its images to pending regardless of age.
 //!
 //! The frontend keeps unsent images in composers, a thread's ask boxes, and
 //! its queue of follow-ups (the last two stored in the webview across
-//! restarts), which the backend cannot see. Pending images that no node or
+//! restarts), which are not persisted in the backend. Pending images that no node or
 //! draft references are therefore removed once they are older than
 //! [`PENDING_LIFETIME`], at startup and whenever an image is saved. A clean startup also moves stored images that
 //! nothing references to pending. Removing a workspace folder copies its
@@ -32,18 +32,18 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use crate::tweets::ResearchMessageAttachment;
 
-/// Largest image a message can carry: the Claude API's limit per image.
+/// Maximum image size per message: the Claude API's limit per image.
 /// Larger PNG and JPEG images are downscaled when saved.
 pub const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
 /// Largest image accepted from a paste or drop, before downscaling.
 pub const MAX_INPUT_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
-/// Largest stored image that still loads: images saved before downscaling
-/// were kept up to 10 MB. Launches refuse anything over [`MAX_IMAGE_BYTES`].
+/// Maximum stored image size loaded from disk: images saved before downscaling
+/// were kept up to 10 MB. Launches reject anything over [`MAX_IMAGE_BYTES`].
 const MAX_STORED_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
-/// Most image bytes one message can carry, which bounds the run's stdin
+/// Maximum total image bytes per message, which bounds the run's stdin
 /// (Claude Code takes them base64 encoded) and memory.
 pub const MAX_MESSAGE_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
-/// Longest side an image keeps without downscaling; the Claude API refuses
+/// Maximum dimension an image retains without downscaling; the Claude API rejects
 /// larger images.
 const MAX_IMAGE_SIDE: u32 = 8000;
 /// Longest side of a downscaled image.
@@ -58,12 +58,11 @@ const THUMBNAIL_SIDE: u32 = 256;
 const THUMBNAIL_SUFFIX: &str = ".thumb.jpg";
 /// Largest thumbnail file read back.
 const MAX_THUMBNAIL_BYTES: u64 = 1024 * 1024;
-/// Most images one message can carry.
+/// Maximum number of image attachments per message.
 pub const MAX_IMAGES_PER_MESSAGE: usize = 8;
 /// Longest kept original file name, in characters.
 const MAX_FILE_NAME_CHARS: usize = 255;
-/// How long an image nothing references is kept for a composer or queue that
-/// may still send it.
+/// Retention duration for unreferenced images pending dispatch.
 const PENDING_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Held from checking that a message's images exist through inserting the
@@ -589,7 +588,7 @@ pub fn read_data_url(workspace_root: &Path, id: &str) -> Result<String, String> 
 
 /// The image's thumbnail as a `data:` URL, for the strips in messages and
 /// composers. A PNG or JPEG image without one (saved before thumbnails, or
-/// copied back from a folder archive) gets one written now; a GIF or WebP
+/// copied back from a folder archive) is generated on demand; a GIF or WebP
 /// image is returned whole.
 pub fn read_thumbnail_data_url(workspace_root: &Path, id: &str) -> Result<String, String> {
     let path = image_path(workspace_root, id).ok_or_else(|| {
@@ -687,7 +686,7 @@ fn skip_thumbnail(dir: &Path, name: &str) -> bool {
 }
 
 /// Copies the image files of a detached research archive into the store, as
-/// the folder is added back. An image already here is kept (and moved into
+/// the folder is restored. An image already here is kept (and moved into
 /// the store if pending). Failures are logged; the message then shows the
 /// image as unavailable.
 pub fn import_archived(workspace_root: &Path, images: &[(String, PathBuf)]) {
@@ -732,7 +731,7 @@ pub fn ensure_available(
     }
 }
 
-/// Removes stored images nothing references any more. One attached within
+/// Removes stored images that are no longer referenced. One attached within
 /// [`PENDING_LIFETIME`] moves back to pending instead, for a composer that
 /// may send it again. Call only after the state without the references is
 /// written.
@@ -749,7 +748,7 @@ pub fn release<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>
     }
 }
 
-/// Moves stored images back to pending whatever their age, and restarts
+/// Moves stored images back to pending regardless of age, and resets
 /// their pending lifetime: for a message removed because its run failed to
 /// launch, whose composer still holds its images to send again.
 pub fn return_to_pending<'a>(workspace_root: &Path, ids: impl IntoIterator<Item = &'a str>) {
@@ -761,8 +760,8 @@ pub fn return_to_pending<'a>(workspace_root: &Path, ids: impl IntoIterator<Item 
     }
 }
 
-/// Sets the file's modification time to now, which starts its pending
-/// lifetime again.
+/// Sets the file's modification time to now, resetting its pending
+/// lifetime.
 fn touch(path: &Path) {
     if !is_regular_file(path) {
         return;
@@ -843,8 +842,8 @@ pub fn sweep_pending(workspace_root: &Path, referenced: &HashSet<String>) {
 
 /// Removes pending images older than [`PENDING_LIFETIME`] that no node or
 /// draft references (`in_use`), run whenever an image is saved. A composer or
-/// queue that kept an image that long gets "no longer available" when it
-/// sends. Referenced pending images (after a crash, or a degraded load that
+/// queue referencing an image past this window receives a "no longer available" error
+/// on send. Referenced pending images (after a crash, or a degraded load that
 /// skipped [`sweep_pending`]) are kept.
 pub fn sweep_stale_pending(workspace_root: &Path, in_use: &HashSet<String>) {
     let pending = pending_dir(workspace_root);
@@ -864,7 +863,7 @@ pub fn sweep_stale_pending(workspace_root: &Path, in_use: &HashSet<String>) {
     }
 }
 
-/// Makes a file look older, for tests of the pending lifetime.
+/// Modifies file modification time for pending lifetime tests.
 #[cfg(test)]
 pub fn age_file_for_test(path: &Path) {
     fs::File::options()
@@ -950,7 +949,7 @@ fn adapter_label(adapter: &str) -> &str {
     }
 }
 
-/// Refuses a message with images for an agent that cannot read them,
+/// Rejects messages with images for an agent that does not support image input,
 /// instead of sending the text without them. Checked when the message is
 /// created and again before each launch. `codex exec` splits an `--image`
 /// value at commas, so Codex is refused when the image store's path has one.
@@ -1003,8 +1002,8 @@ impl LaunchImage {
 }
 
 /// The images of the message a run sends, in message order, after
-/// [`ensure_adapter_reads_images`]. Every image must still exist: a run never
-/// goes out with some of its images missing.
+/// [`ensure_adapter_reads_images`]. Every image must still exist: a run is not
+/// dispatched if any referenced image is missing.
 pub fn launch_images(
     workspace_root: &Path,
     adapter: &str,
@@ -1216,7 +1215,7 @@ mod tests {
         sweep_stale_pending(&root, &HashSet::new());
         assert!(pending_dir(&root).join(referenced_id).is_file());
 
-        // Startup moves unreferenced stored images to pending, fresh.
+        // Startup moves unreferenced stored images to pending with reset lifetimes.
         commit(&root, [referenced_id.as_str()]);
         let kept = save_pending(&root, &png(1, 4), None).unwrap();
         let ResearchMessageAttachment::Image { id: kept_id, .. } = &kept else {
@@ -1403,8 +1402,7 @@ mod tests {
         fs::remove_file(store_dir(&root).join(thumbnail_name(id))).unwrap();
         read_thumbnail_data_url(&root, id).unwrap();
         assert!(store_dir(&root).join(thumbnail_name(id)).is_file());
-        // The startup pass keeps a thumbnail with its image and moves it
-        // along.
+        // The startup pass migrates thumbnails alongside their source images.
         reconcile_store(&root, &HashSet::new());
         assert!(thumbnail.is_file());
         age_file_for_test(&pending_dir(&root).join(id));

@@ -26,7 +26,7 @@ export type ResearchArtifactRef = Pick<
   "treeId" | "artifactId" | "revision"
 >;
 
-/** Saved widget inputs for one revision: whether the reader opted in, and
+/** Saved widget inputs for one revision: whether input saving is enabled, and
  * the value the widget last saved (`null` for none). */
 export interface ResearchArtifactState {
   enabled: boolean;

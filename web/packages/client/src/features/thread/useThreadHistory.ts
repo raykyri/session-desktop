@@ -55,7 +55,7 @@ export function selectionAsPath(
     : researchSelectionPath(nodes, selection);
 }
 
-// The furthest history index this tab has pushed to, so Forward knows whether
+// The furthest history index this tab has pushed to, so Forward can determine whether
 // there is an entry ahead. Kept in sessionStorage, which survives a reload of
 // the tab as its history does.
 const MAX_INDEX_KEY = "session.thread-history.max-index";

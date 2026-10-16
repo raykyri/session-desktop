@@ -68,9 +68,9 @@ pub fn parse_claude_version(output: &str) -> Option<ClaudeVersion> {
     })
 }
 
-/// Runs `<binary> -v` in its own process group, so a timeout can stop
-/// everything it started and a background process it leaves holding the
-/// output pipes cannot delay the result past `VERSION_PROBE_TIMEOUT`.
+/// Runs `<binary> -v` in its own process group so that a timeout terminates
+/// all spawned processes and prevents background processes inheriting output
+/// pipes from delaying the probe past `VERSION_PROBE_TIMEOUT`.
 pub fn probe_claude_version(binary: &str) -> Result<ClaudeVersion, String> {
     let mut child = Command::new(binary)
         .arg("-v")
@@ -393,9 +393,9 @@ pub fn assistant_message_is_end_turn(raw: &Value) -> bool {
         == Some("end_turn")
 }
 
-/// A stream-json user message. Without images the content is the prompt
-/// string; with images it is a content array, images first, as the Messages
-/// API recommends. Claude Code resizes an image over the API's limits before
+/// Constructs a stream-json user message. Without images, content is the
+/// prompt string; with images, content is an array with image blocks
+/// preceding prompt text. Claude Code resizes an image over the API's limits before
 /// sending it.
 pub fn user_message(prompt: &str, images: Vec<Value>) -> Value {
     let content = if images.is_empty() {
@@ -613,8 +613,7 @@ impl ClaudeSdkSession {
         Ok(request_id)
     }
 
-    /// Sends the prompt with `images` (Messages API `image` content blocks)
-    /// before its text.
+    /// Sends the prompt with image content blocks preceding prompt text.
     pub fn send_user_message(&mut self, prompt: &str, images: Vec<Value>) -> Result<(), String> {
         if !self.initialized {
             return Err("cannot send a user prompt before initialize succeeds".to_string());
@@ -686,10 +685,10 @@ impl ClaudeSdkSession {
         self.stdin.take();
     }
 
-    /// Finishes capturing stderr after Claude Code has exited. Background
-    /// processes it left in its process group are stopped, and the capture
-    /// ends by `deadline` (plus `KILL_GRACE`) even if a process outside the
-    /// group still holds the pipe.
+    /// Completes stderr capture after Claude Code exits. Remaining processes
+    /// in the process group are stopped, and collection terminates by
+    /// `deadline` (plus `KILL_GRACE`) even if a process outside the group
+    /// retains the pipe open.
     pub fn finish_output(&mut self, deadline: Instant) {
         self.collect_stderr_reader(deadline);
     }
@@ -875,7 +874,7 @@ pub fn terminate_process_tree(pid: u32) {
     // Keep the first descendant snapshot through SIGKILL. Once the group
     // leader exits, descendants that created their own process group may be
     // reparented and disappear from a fresh parent walk even though they are
-    // still alive.
+    // still running.
     let mut descendants = crate::headless_process::descendant_process_ids(pid);
     signal_process_tree(pid, &descendants, libc::SIGTERM);
     thread::sleep(Duration::from_millis(100));
@@ -913,7 +912,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn user_messages_put_images_before_the_prompt_text() {
+    fn user_messages_place_images_before_prompt_text() {
         assert_eq!(
             user_message("Question", Vec::new()),
             json!({
@@ -1424,7 +1423,7 @@ time.sleep(8)
     const CLEANUP_MARGIN: Duration = Duration::from_millis(600);
 
     #[test]
-    fn version_probe_does_not_wait_for_a_background_child_holding_stderr() {
+    fn version_probe_does_not_block_on_background_child_retaining_stderr() {
         let dir = temp_dir();
         let binary = write_script(
             &dir,
@@ -1462,7 +1461,7 @@ time.sleep(8)
     }
 
     #[test]
-    fn finish_output_does_not_wait_for_a_background_child_holding_stderr() {
+    fn finish_output_does_not_block_on_background_child_retaining_stderr() {
         let dir = temp_dir();
         let binary = write_script(
             &dir,

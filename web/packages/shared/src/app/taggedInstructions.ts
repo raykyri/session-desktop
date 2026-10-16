@@ -2,7 +2,7 @@
 //
 // A launch message carries more than the user's question: the runtime wraps it
 // in `<session_instruction>`-style tags, and some providers add their own
-// envelope (Grok's `<user_query>`, a `<timestamp>` chip). Readers, previews,
+// envelope (Grok's `<user_query>`, a `<timestamp>` chip). Transcript views, previews,
 // and clipboard copies must show the question, not the scaffolding, so every
 // consumer routes its text through these helpers.
 //

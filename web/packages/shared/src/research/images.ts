@@ -1,7 +1,7 @@
 // Image attachments: the limits of the desktop's research image store
 // (`src-tauri/src/research_images.rs`) and the web routes that serve it. The
 // server enforces the limits when an image is uploaded and when a message or
-// draft names it; the composer can use them to refuse a file before uploading
+// draft names it; the composer can use them to reject a file before uploading
 // it.
 
 /** Largest image a message carries: the Claude API's limit per image. A
@@ -17,7 +17,7 @@ export const MAX_MESSAGE_IMAGE_BYTES = 20 * 1024 * 1024;
 /** Most images one message can carry. */
 export const MAX_IMAGES_PER_MESSAGE = 8;
 
-/** Longest side an image keeps without downscaling; the Claude API refuses
+/** Longest side an image retains without downscaling; the Claude API rejects
  * larger images. */
 export const MAX_IMAGE_SIDE = 8000;
 
