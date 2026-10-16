@@ -12,6 +12,9 @@ on:
       - "vite.config.ts"
       - "index.html"
       - "session.config.json"
+      # The desktop imports the research wire model and pure logic from here
+      # (`@session/shared/*`, AGENTS.md).
+      - "web/packages/shared/**"
       - ".github/workflows/desktop.yml"
   pull_request:
     paths:
@@ -24,9 +27,12 @@ on:
       - "vite.config.ts"
       - "index.html"
       - "session.config.json"
+      - "web/packages/shared/**"
       - ".github/workflows/desktop.yml"
 
 jobs:
+  # The frontend's type check (app and tests), the unused-module check, the
+  # unit tests and a production build.
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -41,10 +47,20 @@ jobs:
       - run: npm run test:unit
       - run: npm run build:frontend
 
-  native:
-    runs-on: macos-latest
+  # The Rust workspace (the app and `crates/*`) on Linux: formatting and every
+  # test. Tauri links WebKitGTK and GTK on Linux; the packages are the ones
+  # Tauri's Linux prerequisites list. The Swift bridge is built only for macOS
+  # targets (`src-tauri/build.rs`), so it is not needed here.
+  rust:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Tauri's Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libxdo-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -52,5 +68,19 @@ jobs:
         with:
           workspaces: src-tauri
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
+
+  # macOS only: the Swift package's tests (AppKit/WebKit) and the Rust tests
+  # again, because the `cfg(target_os = "macos")` code (the native support
+  # bridge and the other AppKit/WebKit integration) compiles and runs only on
+  # a macOS target.
+  native:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
       - run: swift test --package-path src-tauri/swift-native-support --scratch-path "$RUNNER_TEMP/session-native-tests"

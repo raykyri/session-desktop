@@ -9,6 +9,13 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/web.yml"
+  # By hand, to render the Linux visual baselines (the `e2e` job).
+  workflow_dispatch:
+    inputs:
+      update-visual-baselines:
+        description: Render the @visual screenshots and upload them as the visual-baselines-linux artifact
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -42,15 +49,26 @@ jobs:
   # The Playwright suite (`web/docs/12-testing-linting-ci.md` §3.6): one real
   # server with fixture providers, a temp data directory and the test-only
   # sign-in route, serving a client build through its own static middleware.
-  # Only Chromium is installed, and `npm run test:e2e` runs only that project;
-  # WebKit is best-effort and opt-in (`npm run test:e2e:webkit`).
+  # `npm run test:e2e` runs only the Chromium project; WebKit is best-effort
+  # and opt-in (`npm run test:e2e:webkit`).
   #
-  # The visual baselines are committed per platform, so the `@visual` test
-  # skips itself on a runner that has none rather than failing. To add the
-  # Linux set, run `npm run test:e2e:update-snapshots` on this image and commit
-  # `web/e2e/__screenshots__/linux/`.
+  # The job runs in Playwright's image, whose tag must equal the
+  # `@playwright/test` version in web/package-lock.json (checked below): its
+  # browser build, fonts and system libraries are fixed, so the `@visual`
+  # screenshots render the same on every run, and the baselines in
+  # web/e2e/__screenshots__/linux/ are this job's renders. To regenerate them
+  # after an intended change (or a Playwright upgrade), run this workflow by
+  # hand on the branch (Actions > web > Run workflow) with
+  # `update-visual-baselines` checked, download the `visual-baselines-linux`
+  # artifact and commit its files to web/e2e/__screenshots__/linux/.
   e2e:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    env:
+      # The container's network has no IPv6, so the server binds the IPv4
+      # loopback (`web/e2e/constants.ts`, `E2E_HOST`).
+      SESSION_E2E_HOST: 127.0.0.1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,10 +77,19 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Check that the image matches the locked Playwright version
+        run: test "$(npx playwright --version)" = "Version 1.63.0"
       # GitHub sets CI=true, which is what turns on retries, traces, the HTML
       # report and a fresh server per run (`web/playwright.config.ts`).
-      - run: npm run test:e2e
+      - if: ${{ !inputs.update-visual-baselines }}
+        run: npm run test:e2e
+      - if: ${{ inputs.update-visual-baselines }}
+        run: npm run test:e2e -- --grep @visual --update-snapshots=all
+      - if: ${{ inputs.update-visual-baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: web/e2e/__screenshots__/linux
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

@@ -220,7 +220,7 @@ syndication request for `FIXTURE_TWEET_ID` with a fixed post.
 | `collaboration.spec.ts` | Accounts and a guest, each in its own browser context. Through the UI: the owner copies a commenter and a viewer invitation link (`/invite#<token>`) from the Share dialog; the commenter opens theirs, lands on the thread and asks (counted in their usage); the owner's open page shows the question live with the commenter's author chip and opens its answer; the viewer's page has no ask box and shows them as Viewer; a thread made Public in the dialog opens read-only for a guest; a stale note edit opens "This note changed", Reload keeps the text and the next save succeeds; signed out, an invitation link goes to `/login?redirect=/invite` with the token in no URL, and after signing in `/invite` accepts it; an `/invite/<token>` link of the earlier form still accepts; a member's question appears as an unread badge on the owner's Notifications row without a reload, the inbox entry opens the thread and is marked read, and the member clears their run notification with Mark all as read. Through the tRPC endpoint: invite by link and by login and accept; a viewer is `FORBIDDEN` to ask; a public thread opens for another account and a guest; a member's page shows the owner's new question without a reload; a stale note edit is `CONFLICT` |
 | `admin.spec.ts` |
  `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
-| `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`. The account name (it carries the run's id) and relative times are masked. The Linux set is rendered by CI's `e2e` job (§4) and fails CI when missing; outside CI a platform without a set skips. Another Linux machine's browser build can render text a pixel apart, so run the suite there with `--grep-invert @visual`. The `darwin` set predates several UI changes and needs regenerating on a Mac (`npm run test:e2e:update-snapshots -- --grep @visual`) |
+| `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`. The account name (it carries the run's id) and relative times are masked. The Linux set is rendered by CI's `e2e` job in Playwright's image (§4) and fails CI when missing; outside CI a platform without a set skips. Another Linux machine's browser build can render text a pixel apart, so run the suite there with `--grep-invert @visual`. The `darwin` set predates several UI changes and needs regenerating on a Mac (`npm run test:e2e:update-snapshots -- --grep @visual`) |
 
 ## 4. CI (GitHub Actions, `.github/workflows/web.yml`)
 
@@ -229,17 +229,21 @@ Triggers on pushes and PRs touching `web/**`. Jobs:
 1. `check`: `npm ci`, `npm run check` (`tsc -b`, ESLint, Prettier,
    `drizzle-kit check`).
 2. `test`: `npm ci`, `npm test` — AVA in every package. Node 22.
-3. `e2e`: `npm ci`, `npx playwright install --with-deps chromium`, then
-   `npm run test:e2e`, which builds the client and starts the server itself.
-   `web/test-results` and `web/playwright-report` are uploaded on failure.
-   The Linux visual baselines are this job's own renders: screenshots taken
-   on another Linux machine differ (a different Chromium build or FreeType
-   moves glyph edges by a pixel across all text), so they are not used. To
-   regenerate the set after an intended UI change or a Playwright upgrade,
-   push the change; the `@visual` test fails, and the run's
-   `playwright-traces` artifact holds the new renders as
-   `test-results/visual-*/<name>-actual.png`. Check them, then commit each
-   as `web/e2e/__screenshots__/linux/<name>.png`.
+3. `e2e`: in the `mcr.microsoft.com/playwright:v<version>-noble` container,
+   whose tag must equal the locked `@playwright/test` version (a step checks
+   it; change both together). `npm ci`, then `npm run test:e2e`, which builds
+   the client and starts the server itself on `127.0.0.1`
+   (`SESSION_E2E_HOST`; the container has no IPv6). `web/test-results` and
+   `web/playwright-report` are uploaded on failure. The image fixes the
+   browser build, fonts and system libraries, so the `@visual` screenshots
+   are the same on every run, and the Linux baselines are this job's own
+   renders: screenshots taken elsewhere differ (a different Chromium build
+   or FreeType moves glyph edges by a pixel across all text), so they are
+   not used. To regenerate the set after an intended UI change or a
+   Playwright upgrade: Actions → web → Run workflow on the branch with
+   `update-visual-baselines` checked. The job then runs only `@visual` with
+   `--update-snapshots=all` and uploads the `visual-baselines-linux`
+   artifact; commit its PNGs to `web/e2e/__screenshots__/linux/`.
 4. `docker`: build `web/Dockerfile` with the Buildx GitHub cache and never
    push it, so a Dockerfile change cannot break a deploy unnoticed.
 5. `deploy`: on a push to `main` only, needs all four, and runs
@@ -249,13 +253,16 @@ Triggers on pushes and PRs touching `web/**`. Jobs:
 The desktop's root `npm run preflight` is unaffected except that
 `test:integration` (the landing server test) is removed.
 
-The desktop has its own workflow, `.github/workflows/desktop.yml`:
+The desktop has its own workflow, `.github/workflows/desktop.yml`, which also
+runs when `web/packages/shared/**` changes, since the desktop imports it:
 `frontend` (type checks of the app and the tests, the unused-module check,
-`npm run test:unit`, the production build) and `native` on macOS (`cargo fmt
---check`, `cargo test --workspace` in `src-tauri`, and the Swift package's
-tests). A Rust test that needs an installed agent CLI must configure one
-itself, since the runners have none (`test_config_with_installed_claude` in
-`src-tauri/src/state.rs`).
+`npm run test:unit`, the production build), `rust` on Linux (`cargo fmt
+--check` and `cargo test --workspace` in `src-tauri`, with the WebKitGTK and
+GTK development packages Tauri needs) and `native` on macOS (`cargo test`
+again for the `cfg(target_os = "macos")` code, and the Swift package's
+tests, which need AppKit). A Rust test that needs an installed agent CLI must
+configure one itself, since the runners have none
+(`test_config_with_installed_claude` in `src-tauri/src/state.rs`).
 
 ## 5. Coverage targets
 
