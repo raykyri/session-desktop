@@ -76,6 +76,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      # better-sqlite3 compiles from source during `npm ci`, and the image has
+      # no make or C++ compiler.
+      - name: Install the build tools for better-sqlite3
+        run: apt-get update && apt-get install -y --no-install-recommends make g++
       - run: npm ci
       - name: Check that the image matches the locked Playwright version
         run: test "$(npx playwright --version)" = "Version 1.63.0"
