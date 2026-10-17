@@ -305,7 +305,7 @@ schedules the recap (imported reports bypass the length cutoffs) and emits
 
 - The Ask/Note switch (`AskNoteSwitch`, a radio group). In Ask mode the field
   placeholder is "Ask a question" and sends `research.createTree`, then opens the
-  thread; in Note mode the placeholder is "Write a note, or paste a link to save" and
+  thread; in Note mode the placeholder is "Write or paste a link" and
   sends `research.createPost` (a bare URL saves a link post, which the server
   hydrates) and stays on Home. The send button label is Start research, Save
   note or Save link.

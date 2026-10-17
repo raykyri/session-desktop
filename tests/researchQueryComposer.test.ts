@@ -141,7 +141,7 @@ test("note mode hides AI controls", () => {
 
 test("note mode saves a note, or a link when the text is one URL", () => {
   assert.deepEqual(askBoxCopy("note", "Read the spec first", false, "Ask a question"), {
-    placeholder: "Write a note, or paste a link to save",
+    placeholder: "Write or paste a link",
     submitLabel: "Save note",
   });
   assert.equal(askBoxCopy("note", " https://example.com/page ", false, "Ask a question").submitLabel, "Save link");
@@ -185,7 +185,7 @@ test("Ask and Note are two icon radios; only the selected one is a tab stop", ()
   assert.match(ask, new RegExp(`<span id="${describedBy}" hidden="">Press Enter to choose a model</span>`));
   assert.match(
     ask,
-    /<button type="button" role="radio" aria-checked="false" tabindex="-1" class="new-research-switch-option" aria-label="Save as note" title="Save as note"><svg[^>]*lucide-sticky-note/,
+    /<button type="button" role="radio" aria-checked="false" tabindex="-1" class="new-research-switch-option" aria-label="Save as note" title="Save as note"><svg[^>]*lucide-pencil-line/,
   );
   assert.doesNotMatch(ask, /network|lucide-users|lucide-globe/i);
 

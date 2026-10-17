@@ -1,6 +1,6 @@
 import { useId, useRef } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "react";
-import { ChevronDown, StickyNote } from "lucide-react";
+import { ChevronDown, PencilLine } from "lucide-react";
 
 /** What the text in an ask box becomes: a question for an agent ("ai"), or
  * a note ("note"), which is saved without running anything; a body that is a
@@ -122,7 +122,7 @@ export function AskNoteSwitch({
         }}
         onKeyDown={(event) => onKeyDown(event, "note")}
       >
-        <StickyNote size={14} aria-hidden="true" />
+        <PencilLine size={14} aria-hidden="true" />
       </button>
       {hasMenu ? (
         <span id={hintId} hidden>

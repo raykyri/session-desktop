@@ -147,7 +147,8 @@ test("the glyph is a named image for a state with a name, and hidden otherwise",
 
   // A note whose thread is running pulses its whole shape.
   const note = renderToStaticMarkup(createElement(ResearchRowGlyph, { kind: "note", state: "running" }));
-  assert.match(note, /class="research-row-glyph is-note is-tone-running" role="img" aria-label="Running"[^>]*><svg class="research-row-glyph-pulse"/);
+  assert.match(note, /class="research-row-glyph is-note is-tone-running" role="img" aria-label="Running"/);
+  assert.match(note, /<svg[^>]*class="[^"]*lucide-pencil-line[^"]*research-row-glyph-pulse/);
 
   // Dashed shapes use butt caps so the dashes stay apart.
   for (const [kind, state] of [["exchange", "queued"], ["draft", "answered"]] as const) {

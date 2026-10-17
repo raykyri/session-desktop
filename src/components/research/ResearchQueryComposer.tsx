@@ -72,7 +72,7 @@ export function askBoxCopy(
 ): { placeholder: string; submitLabel: string } {
   if (askMode === "note") {
     return {
-      placeholder: "Write a note, or paste a link to save",
+      placeholder: "Write or paste a link",
       submitLabel: submitting ? "Saving…" : postFormatOf(prompt) === "link" ? "Save link" : "Save note",
     };
   }

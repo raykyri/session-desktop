@@ -2,7 +2,7 @@
 // box becomes — a question for a model ("ai"), or a note ("note"), saved
 // without running anything; a note that is a single URL is saved as a link.
 
-import { ChevronDown, StickyNote } from "lucide-react";
+import { ChevronDown, PencilLine } from "lucide-react";
 import { useId, useRef } from "react";
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
 
@@ -124,7 +124,7 @@ export function AskNoteSwitch({
         }}
         onKeyDown={(event) => onKeyDown(event, "note")}
       >
-        <StickyNote size={14} aria-hidden="true" />
+        <PencilLine size={14} aria-hidden="true" />
       </button>
       {hasMenu ? (
         <span id={hintId} hidden>

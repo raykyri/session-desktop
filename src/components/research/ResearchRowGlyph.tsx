@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PencilLine } from "lucide-react";
 import {
   researchRowGlyph,
   type ResearchRowGlyphShape,
@@ -17,7 +18,7 @@ const PAGE = (
   </>
 );
 
-const SHAPES: Record<ResearchRowGlyphShape, ReactNode> = {
+const SHAPES: Record<Exclude<ResearchRowGlyphShape, "note">, ReactNode> = {
   queued: <circle cx="7" cy="7" r="5.6" strokeDasharray="1.47 1.463" strokeLinecap="butt" />,
   running: (
     <>
@@ -53,12 +54,6 @@ const SHAPES: Record<ResearchRowGlyphShape, ReactNode> = {
     <>
       {RING}
       <path d="M5.3 5.3l3.4 3.4M8.7 5.3l-3.4 3.4" />
-    </>
-  ),
-  note: (
-    <>
-      {SQUARE}
-      <path d="M4.7 5.6h4.6M4.7 8.4h2.8" />
     </>
   ),
   link: (
@@ -130,21 +125,28 @@ export default function ResearchRowGlyph({
   const className = `research-row-glyph is-${glyph.shape}${glyph.tone ? ` is-tone-${glyph.tone}` : ""}`;
   // The running ring pulses its pie; another kind running pulses whole.
   const pulse = glyph.tone === "running" && glyph.shape !== "running";
-  const svg = (
-    <svg
-      className={pulse ? "research-row-glyph-pulse" : undefined}
-      viewBox="0 0 14 14"
-      width="14"
-      height="14"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {SHAPES[glyph.shape]}
-    </svg>
-  );
+  const svg =
+    glyph.shape === "note" ? (
+      <PencilLine
+        size={14}
+        className={pulse ? "research-row-glyph-pulse" : undefined}
+        aria-hidden="true"
+      />
+    ) : (
+      <svg
+        className={pulse ? "research-row-glyph-pulse" : undefined}
+        viewBox="0 0 14 14"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {SHAPES[glyph.shape]}
+      </svg>
+    );
   if (name) {
     return (
       <span id={id} className={className} role="img" aria-label={name} title={name}>

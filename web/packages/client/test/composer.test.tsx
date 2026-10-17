@@ -115,7 +115,7 @@ test("each model offers its own efforts, and a leftover choice falls back", (t) 
 
 test("Note mode saves a note, or a link when the text is one URL", (t) => {
   t.deepEqual(askBoxCopy("note", "Some thoughts", false, "Ask a question"), {
-    placeholder: "Write a note, or paste a link to save",
+    placeholder: "Write or paste a link",
     submitLabel: "Save note",
   });
   t.is(
@@ -370,7 +370,7 @@ test.serial("Note saves a note with the box's model as its follow-up default", a
   fireEvent.click(screen.getByRole("radio", { name: "Save as note" }));
   t.is(
     screen.getByRole("textbox", { name: FIELD }).getAttribute("placeholder"),
-    "Write a note, or paste a link to save",
+    "Write or paste a link",
   );
   fireEvent.click(screen.getByRole("button", { name: "Save note" }));
   await waitUntil(
