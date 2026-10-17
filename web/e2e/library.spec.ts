@@ -150,7 +150,10 @@ test("Delete moves to the Trash; Restore brings it back; Empty Trash deletes", a
     .getByRole("link", { name: "Trash" })
     .click();
   await expect(page.getByRole("heading", { name: "Trash", level: 1 })).toBeVisible();
-  await page.getByRole("button", { name: "Restore Disposable note" }).click();
+  const trashed = page.getByRole("list", { name: "Items in the Trash" }).getByRole("listitem");
+  await trashed.hover();
+  await trashed.getByRole("button", { name: "Trash actions for Disposable note" }).click();
+  await page.getByRole("menuitem", { name: "Restore" }).click();
   await expect(page.getByRole("list", { name: "Items in the Trash" })).toHaveCount(0);
 
   await page

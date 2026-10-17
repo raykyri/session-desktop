@@ -597,8 +597,8 @@
   outline-offset: 1px;
 }
 
-/* — Trash — Rows don't open, so they have no hover fill; the actions sit at
-   the end of each row. */
+/* — Trash — Rows don't open, so they have no hover fill. Restore and Delete
+   now are in the corner pill's … menu (the feed rail, above). */
 
 .research-trash-list {
   margin: 0;
@@ -607,6 +607,7 @@
 }
 
 .research-trash-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -639,12 +640,6 @@
 .research-trash-meta {
   color: var(--text-faint);
   font-size: var(--fs-xs);
-}
-
-.research-trash-actions {
-  display: flex;
-  flex: none;
-  gap: 4px;
 }
 
 .research-feed-tray-name:focus-visible {
@@ -972,7 +967,7 @@
 
 /* Use 85% opacity to keep overlaid text visible. Message rows use the same
    control pill (see research.css). */
-:is(.research-feed-card, .research-msg-row):is(:hover, :focus-within, .has-open-menu)
+:is(.research-feed-card, .research-msg-row, .research-trash-row):is(:hover, :focus-within, .has-open-menu)
   > .research-feed-rail {
   opacity: 0.85;
 }
@@ -995,28 +990,9 @@
 }
 
 /* — Groups —
-   A parent's child cards follow its card, indented 24px,
-   beside a 1px guide in the parent's glyph column (the row text inset plus
-   half the 14px glyph). */
+   A parent's child cards follow its card, indented 24px. */
 .research-feed-group {
-  --research-group-guide-left: 27px;
-  position: relative;
   padding-bottom: 4px;
-}
-
-.research-feed-tray-body .research-feed-group {
-  --research-group-guide-left: 21px;
-}
-
-.research-feed-group::before {
-  position: absolute;
-  top: 0;
-  bottom: 8px;
-  left: var(--research-group-guide-left);
-  width: 1px;
-  background: var(--surface-border-strong);
-  content: "";
-  pointer-events: none;
 }
 
 .research-feed-tray-body .research-feed-group > .research-feed-card {
@@ -1034,37 +1010,13 @@
   opacity: 0.4;
 }
 
-/* The "N items" line in a parent card: it collapses and expands the group,
-   and while collapsed shows the children's running, failed and updated
-   counts. */
-.research-feed-group-toggle {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  height: 22px;
-  align-items: center;
-  gap: 4px;
-  margin: 3px 0 0 -4px;
-  padding: 0 7px 0 3px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  line-height: 22px;
-  cursor: pointer;
+/* The group's chevron, left of the drag handle in the corner pill. It points
+   right while collapsed and turns 90 degrees while expanded. */
+.research-feed-rail > .research-feed-group-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   pointer-events: auto;
-}
-
-.research-feed-group-toggle:hover {
-  color: var(--text-heading);
-  background: var(--surface-fill-hover);
-}
-
-.research-feed-group-toggle:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
 }
 
 .research-feed-group-chevron {
@@ -1076,11 +1028,11 @@
   transform: rotate(90deg);
 }
 
+/* Running, failed and updated counts under a collapsed group's card. */
 .research-feed-group-summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 4px;
   font-variant-numeric: tabular-nums;
 }
 

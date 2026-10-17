@@ -14,7 +14,7 @@ export function researchPlaceEmptyText(place: string): string {
     return "Archive is empty. Archived questions stop sending follow-up notifications.";
   }
   if (place === RESEARCH_DRAFTS_FOLDER_ID) {
-    return "No drafts. Use Save draft in the composer to keep a question for later.";
+    return "No drafts. Use Save draft in the composer to create one.";
   }
   return "Empty folder. Drag or file questions here.";
 }

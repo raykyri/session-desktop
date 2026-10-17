@@ -1,6 +1,5 @@
 import { useId, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { researchItemCount } from "@session/shared/lib/researchGroups";
 import {
   researchRowGlyph,
   type ResearchRowKind,
@@ -59,14 +58,14 @@ interface ResearchFeedCardProps {
   holdsChildren?: boolean;
   /** For a child card: its parent's tree id. */
   parentId?: string;
-  /** For a parent with children: the toggle line in the card, and the child
-   * cards (`nested`) listed after it when expanded. */
+  /** For a parent with children: the rail's chevron, and the child cards
+   * (`nested`) listed after the card when expanded. */
   group?: ResearchFeedGroup;
   nested?: ReactNode;
 }
 
-/** A parent card's group: `count` children, which the toggle line shows and
- * hides. */
+/** A parent card's group: `count` children, which the rail's chevron shows
+ * and hides. */
 interface ResearchFeedGroup {
   count: number;
   collapsed: boolean;
@@ -78,7 +77,7 @@ interface ResearchFeedGroup {
   onToggle: (all: boolean) => void;
 }
 
-/** The status counts on a collapsed group's toggle line. */
+/** The status counts under a collapsed group's card. */
 function GroupSummary({ summary }: { summary: ResearchFeedGroup["summary"] }) {
   const parts = [
     { key: "running", count: summary.running, state: "running" as const, unread: false, name: "running" },
@@ -136,8 +135,9 @@ export function researchCardRefocus(
 /** Feed card for a thread rooted in a question, post, or document. It shows
  * the title when distinct, the root content, a type/status glyph, and controls
  * on hover or focus. The card opens the thread while nested links and embeds
- * remain separate targets. A parent card has a toggle line; its child cards
- * follow it, beside a guide, while it is expanded. */
+ * remain separate targets. A parent card's rail starts with a chevron that
+ * shows and hides its children; the child cards follow it, indented, while
+ * it is expanded. */
 export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",
@@ -214,24 +214,26 @@ export default function ResearchFeedCard({
             {renderBody((content) => (
               <div className="research-feed-card-question">{content}</div>
             ))}
-            {group ? (
-              <button
-                type="button"
-                className="research-feed-group-toggle"
-                aria-expanded={!group.collapsed}
-                aria-label={group.label}
-                data-research-no-drag
-                onClick={(event) => group.onToggle(event.altKey)}
-              >
-                <ChevronRight className="research-feed-group-chevron" size={13} aria-hidden="true" />
-                <span>{researchItemCount(group.count)}</span>
-                {group.collapsed ? <GroupSummary summary={group.summary} /> : null}
-              </button>
-            ) : null}
+            {group?.collapsed ? <GroupSummary summary={group.summary} /> : null}
           </div>
         </div>
         <ResearchRowRail
           grip={Boolean(onDragStart)}
+          leading={
+            group ? (
+              <button
+                type="button"
+                className="research-feed-icon-button research-feed-group-toggle"
+                aria-expanded={!group.collapsed}
+                aria-label={group.label}
+                title={group.label}
+                data-research-no-drag
+                onClick={(event) => group.onToggle(event.altKey)}
+              >
+                <ChevronRight className="research-feed-group-chevron" size={14} aria-hidden="true" />
+              </button>
+            ) : null
+          }
           menuLabel={menuLabel}
           menuOpen={menuOpen}
           onMenu={onMenu}

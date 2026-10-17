@@ -265,7 +265,7 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
   }));
 }
 
-test("a parent's card has a toggle line and its children follow it as indented cards", () => {
+test("a parent's card toggles its children from the corner pill, and they follow it as indented cards", () => {
   const trees = [
     tree("p"),
     tree("c1", { runningCount: 1 }),
@@ -281,7 +281,11 @@ test("a parent's card has a toggle line and its children follow it as indented c
   const folderState = { ...emptyResearchFolderState(), parents: { c1: "p", c2: "p" } };
   const html = renderFeed({ items, researchTrees: trees, folderState });
   assert.match(html, /aria-expanded="true" aria-label="Hide 2 items under “Title p”"/);
-  assert.match(html, /<span>2 items<\/span>/);
+  assert.match(
+    html,
+    /class="research-feed-rail"><button type="button" class="research-feed-icon-button research-feed-group-toggle"[^>]*aria-expanded="true"[^>]*>[\s\S]*?research-feed-card-grip/,
+  );
+  assert.doesNotMatch(html, /<span>2 items<\/span>/);
   assert.match(html, /class="research-feed-group"/);
   // Children carry their parent for drag and drop and name it to assistive
   // technology. Top-level questions, documents and posts (a note, a link

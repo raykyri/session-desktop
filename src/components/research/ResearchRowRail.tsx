@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Ellipsis, GripVertical } from "lucide-react";
 
 /** A row's controls: the drag handle and the … button in one pill in the
@@ -5,9 +6,10 @@ import { Ellipsis, GripVertical } from "lucide-react";
  * over the end of the row's text. The pill shows on hover, on
  * focus within the row and while the row has the `has-open-menu` class. The
  * handle is decoration: a press anywhere on the row starts a drag, except on
- * the … button. */
+ * the … button. `leading` sits left of the handle (a group's chevron). */
 export default function ResearchRowRail({
   grip,
+  leading,
   menuLabel,
   menuTitle = menuLabel,
   menuOpen,
@@ -15,6 +17,8 @@ export default function ResearchRowRail({
   onMenu,
 }: {
   grip: boolean;
+  /** A control before the drag handle. */
+  leading?: ReactNode;
   /** The … button's accessible name. */
   menuLabel: string;
   /** The … button's tooltip; the accessible name by default. */
@@ -24,9 +28,10 @@ export default function ResearchRowRail({
   menuTabIndex?: number;
   onMenu?: (anchor: HTMLButtonElement) => void;
 }) {
-  if (!grip && !onMenu) return null;
+  if (!grip && !onMenu && !leading) return null;
   return (
     <span className="research-feed-rail">
+      {leading}
       {grip ? (
         <span className="research-feed-card-grip" aria-hidden="true">
           <GripVertical size={14} />

@@ -3,10 +3,9 @@
 // it differs from the question, the root's text, a kind and status glyph, and
 // a drag handle and … button on hover or focus. The whole card is one open
 // button placed behind its content, so links inside stay separate targets. A
-// parent card has a toggle line; its child cards follow it, beside a guide,
-// while it is expanded.
+// parent card's rail starts with a chevron that shows and hides its children;
+// the child cards follow it, indented, while it is expanded.
 
-import { researchItemCount } from "@session/shared/lib/researchGroups";
 import { researchNoteDoubleClickEdits } from "@session/shared/lib/researchNoteEdit";
 import {
   researchRowGlyph,
@@ -29,8 +28,8 @@ export interface CardMenuPlacement {
   y: number;
 }
 
-/** A parent card's group: `count` children, which the toggle line shows and
- * hides. */
+/** A parent card's group: `count` children, which the rail's chevron shows
+ * and hides. */
 export interface FeedCardGroup {
   count: number;
   collapsed: boolean;
@@ -92,7 +91,7 @@ export interface FeedCardProps {
   nested?: ReactNode;
 }
 
-/** The status counts on a collapsed group's toggle line. */
+/** The status counts under a collapsed group's card. */
 function GroupSummary({ summary }: { summary: FeedCardGroup["summary"] }) {
   const parts = [
     {
@@ -119,7 +118,7 @@ function GroupSummary({ summary }: { summary: FeedCardGroup["summary"] }) {
   ].filter((part) => part.count > 0);
   if (parts.length === 0) return null;
   return (
-    <span className="ml-1 inline-flex items-center gap-1.5 tabular-nums" aria-hidden="true">
+    <span className="inline-flex items-center gap-1.5 tabular-nums" aria-hidden="true">
       {parts.map((part) => (
         <span
           key={part.key}
@@ -350,36 +349,10 @@ export function FeedCard({
               </span>
             ) : null}
             {body}
-            {group ? (
-              <button
-                type="button"
-                className={cn(
-                  "text-fg-muted hover:bg-surface-fill-hover hover:text-fg-heading relative z-2 mt-[3px] -ml-1 inline-flex h-[22px] cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent pr-[7px] pl-[3px] text-xs leading-[22px]",
-                  FOCUS_RING,
-                )}
-                aria-expanded={!group.collapsed}
-                aria-label={group.label}
-                data-research-no-drag=""
-                onClick={(event) => {
-                  event.stopPropagation();
-                  group.onToggle(event.altKey);
-                }}
-              >
-                <ChevronRight
-                  size={13}
-                  aria-hidden="true"
-                  className={cn(
-                    "transition-transform duration-120",
-                    !group.collapsed && "rotate-90",
-                  )}
-                />
-                <span>{researchItemCount(group.count)}</span>
-                {group.collapsed ? <GroupSummary summary={group.summary} /> : null}
-              </button>
-            ) : null}
+            {group?.collapsed ? <GroupSummary summary={group.summary} /> : null}
           </div>
         </div>
-        {onDragStart || onMenu ? (
+        {onDragStart || onMenu || group ? (
           <span
             className={cn(
               "border-border-strong bg-surface-feed-popover absolute top-[5px] right-[5px] z-2 flex h-6 items-center gap-px rounded-[7px] border px-0.5 opacity-0",
@@ -387,6 +360,32 @@ export function FeedCard({
               "group-focus-within/card:opacity-85 group-hover/card:opacity-85 group-[.has-open-menu]/card:opacity-85",
             )}
           >
+            {group ? (
+              <button
+                type="button"
+                className={cn(
+                  "text-fg-muted hover:bg-surface-fill-hover hover:text-fg-primary pointer-events-auto grid size-5 place-items-center rounded-[5px] border-0 bg-transparent p-0",
+                  FOCUS_RING,
+                )}
+                aria-expanded={!group.collapsed}
+                aria-label={group.label}
+                title={group.label}
+                data-research-no-drag=""
+                onClick={(event) => {
+                  event.stopPropagation();
+                  group.onToggle(event.altKey);
+                }}
+              >
+                <ChevronRight
+                  size={14}
+                  aria-hidden="true"
+                  className={cn(
+                    "transition-transform duration-120",
+                    !group.collapsed && "rotate-90",
+                  )}
+                />
+              </button>
+            ) : null}
             {onDragStart ? (
               <span
                 className="text-fg-faint pointer-events-auto grid size-5 cursor-grab place-items-center"
@@ -422,10 +421,7 @@ export function FeedCard({
       {group && !group.collapsed ? (
         <>
           <div
-            className={cn(
-              "relative pb-1 [--research-group-guide-left:27px] in-[[data-research-tray-body]]:[--research-group-guide-left:21px]",
-              "before:bg-border-strong before:pointer-events-none before:absolute before:top-0 before:bottom-2 before:left-(--research-group-guide-left) before:w-px before:content-['']",
-            )}
+            className="pb-1"
             data-research-group={cardId}
           >
             {nested}

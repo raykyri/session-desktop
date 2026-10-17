@@ -318,8 +318,9 @@ test("Trash lists its items newest first with Restore and Delete now, and emptie
   assert.match(html, /aria-label="Back to Home"/);
   assert.match(html, /<button type="button" class="research-feed-button">Empty Trash<\/button>/);
   assert.ok(html.indexOf("Old folder") < html.indexOf("Old thread"));
-  assert.match(html, /aria-label="Restore Old thread"/);
-  assert.match(html, /aria-label="Delete Old folder now"/);
+  assert.match(html, /aria-label="Trash actions for Old thread" aria-haspopup="menu"/);
+  assert.match(html, /aria-label="Trash actions for Old folder" aria-haspopup="menu"/);
+  assert.doesNotMatch(html, />Restore<|>Delete now</);
   // Trash has no composer and takes no drops.
   assert.doesNotMatch(html, /Query composer/);
   assert.doesNotMatch(html, /research-feed-solo"[^>]*data-research-drop/);
@@ -341,7 +342,7 @@ test("Drafts lists unsent drafts, then trees filed in Drafts", () => {
   assert.ok(html.indexOf("An unsent draft") > 0);
   assert.ok(html.indexOf("An unsent draft") < html.indexOf("Collective memory"));
   const empty = renderFeed({ view: { kind: "drafts" } });
-  assert.match(empty, /No drafts\. Use Save draft in the composer to keep a question for later\./);
+  assert.match(empty, /No drafts\. Use Save draft in the composer to create one\./);
 });
 
 test("a draft card opens in the content column and has Open and Delete in its … menu", () => {

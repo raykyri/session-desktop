@@ -56,7 +56,7 @@ test.after.always(() => {
   }
 });
 
-test("Trash rows name what they are and when they went, with Restore and Delete now", (t) => {
+test("Trash rows name what they are and when they went, with Restore and Delete now", async (t) => {
   const restored: string[] = [];
   const deleted: string[] = [];
   const entries: ResearchTrashEntry[] = [
@@ -85,8 +85,10 @@ test("Trash rows name what they are and when they went, with Restore and Delete 
   );
   const list = screen.getByRole("list", { name: "Items in the Trash" });
   t.regex(list.textContent ?? "", /Papers.*Folder · /);
-  fireEvent.click(screen.getByRole("button", { name: "Restore Papers" }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete Old question now" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trash actions for Papers" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Restore" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trash actions for Old question" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete now" }));
   t.deepEqual(restored, ["f1"]);
   t.deepEqual(deleted, ["t1"]);
   view.unmount();
@@ -172,11 +174,12 @@ test.serial("the Trash view restores a thread and a folder", async (t) => {
   });
   await waitUntil(
     t,
-    () => screen.queryByRole("button", { name: "Restore Old question" }) !== null,
+    () => screen.queryByRole("button", { name: "Trash actions for Old question" }) !== null,
     "the rows",
   );
   t.truthy(screen.getByRole("heading", { name: "Trash", level: 1 }));
-  fireEvent.click(screen.getByRole("button", { name: "Restore Old question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trash actions for Old question" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Restore" }));
   await waitUntil(
     t,
     () => app.trpc.calls.some((call) => call.path === "research.restoreTreeFromTrash"),
@@ -187,7 +190,8 @@ test.serial("the Trash view restores a thread and a folder", async (t) => {
     () => useNotificationsStore.getState().items.some((item) => item.title === "Restored."),
     "the desktop's toast",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Restore Papers" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trash actions for Papers" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Restore" }));
   await waitUntil(
     t,
     () => app.trpc.calls.some((call) => call.path === "folders.set"),
@@ -207,10 +211,11 @@ test.serial("Delete now in the Trash asks once and deletes the thread", async (t
   });
   await waitUntil(
     t,
-    () => screen.queryByRole("button", { name: "Delete Old question now" }) !== null,
+    () => screen.queryByRole("button", { name: "Trash actions for Old question" }) !== null,
     "the rows",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Delete Old question now" }));
+  fireEvent.click(screen.getByRole("button", { name: "Trash actions for Old question" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete now" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete permanently?" });
   t.regex(dialog.textContent ?? "", /“Old question” will be deleted\. This can’t be undone\./);
   fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));

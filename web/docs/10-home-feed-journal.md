@@ -36,8 +36,8 @@ Home, top to bottom:
    order, **Archive**, then **Trash**. The Trash tray starts collapsed and its
    open state is local to the view and not saved, as on the desktop
    (`ResearchActivityFeed`'s `trashTrayOpen`). An empty tray shows the desktop's empty
-   text ("No drafts. Use Save draft in the composer to keep a question for
-   later.", "Empty folder. Drag or file questions here.", …).
+   text ("No drafts. Use Save draft in the composer to create one.", "Empty
+   folder. Drag or file questions here.", …).
 4. A "+ New folder" link below the Trash tray.
 
 Places (all behind `requireSignedIn`; `routes/places.tsx`):
@@ -72,12 +72,13 @@ card's content is its thread's root entry, read per rendered card through
   note whose first line is a Markdown heading shows that heading in the title
   style above a three-line preview. A link post shows the X post label
   "[Tweet: @handle]" ("[Tweet]" without a handle) or a link card.
-- The rail (on hover or focus) holds the drag grip and the … button
-  ("Thread actions"). There is no Follow or Bookmark control.
-- A card with children shows "N items" with a collapse toggle and the
-  `researchGroupSummary` line; children render one level deep in an indented
-  group, whose foot holds the "Move out of group" drop strip while a child is
-  dragged.
+- The rail (on hover or focus) holds, for a card with children, a chevron
+  that shows and hides them (pointing right when collapsed, down when
+  expanded), then the drag grip and the … button ("Thread actions"). There
+  is no Follow or Bookmark control.
+- A collapsed card with children shows the `researchGroupSummary` counts.
+  Children render one level deep in an indented group, whose foot holds the
+  "Move out of group" drop strip while a child is dragged.
 - Click, Enter or → opens the thread (`/r/$treeId`). A draft card opens
   `/drafts/$draftId`.
 
@@ -160,8 +161,9 @@ drafts (`["drafts", ws]`).
 ## 4. Trash (`TrashList`)
 
 `research.listTrash` for the workspace, with trashed folders and their
-threads grouped (`researchTrashEntries`). Each entry has Restore and "Delete
-now" (with the permanent-delete confirmation); the header has "Empty Trash"
+threads grouped (`researchTrashEntries`). Each entry's corner pill opens a
+menu with Restore and "Delete now" (with the permanent-delete confirmation);
+the header has "Empty Trash"
 ("Empty the Trash?", "N items will be deleted.", `research.emptyTrash`).
 `research.trash.changed` invalidates `["trash", ws]`. A restored child whose
 parent is still in the Trash returns to its place as a top-level card.
