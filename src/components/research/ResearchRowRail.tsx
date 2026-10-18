@@ -3,10 +3,11 @@ import { Ellipsis, GripVertical } from "lucide-react";
 
 /** A row's controls: the drag handle and the … button in one pill in the
  * row's top-right corner. Used by feed rows and by a thread's message rows,
- * over the end of the row's text. The pill shows on hover, on
- * focus within the row and while the row has the `has-open-menu` class. The
- * handle is decoration: a press anywhere on the row starts a drag, except on
- * the … button. `leading` sits left of the handle (a group's chevron). */
+ * over the end of the row's text. The pill shows on hover, while focus is
+ * inside the pill, and while the row has the `has-open-menu` class.
+ * Selecting the row focuses its open button and does not show the pill.
+ * The handle is decoration: a press anywhere on the row starts a drag, except
+ * on the … button. `leading` sits left of the handle (a group's chevron). */
 export default function ResearchRowRail({
   grip,
   leading,

@@ -882,6 +882,12 @@
   overflow-wrap: anywhere;
 }
 
+/* After the group's title: the child count, in a child's title color. */
+.research-feed-group-count {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 /* Show the full question in a larger font than the title above it. */
 .research-feed-card-question {
   min-width: 0;
@@ -953,8 +959,10 @@
 }
 
 /* The drag handle and … button share a pill in the row's top-right corner.
-   The pill appears on hover and focus and overlays the text without reserving
-   space. Pointer events on the handle reach the row to start dragging. */
+   The pill appears on hover, while its menu is open, and while focus is
+   inside the pill. It overlays the text without reserving space. Selecting
+   the row focuses its open button and does not show the pill by itself.
+   Pointer events on the handle reach the row to start dragging. */
 .research-feed-rail {
   position: absolute;
   top: 5px;
@@ -974,9 +982,11 @@
 }
 
 /* Use 85% opacity to keep overlaid text visible. Message rows use the same
-   control pill (see research.css). */
-:is(.research-feed-card, .research-msg-row, .research-trash-row):is(:hover, :focus-within, .has-open-menu)
-  > .research-feed-rail {
+   control pill (see research.css). Focus inside the pill (its … button or
+   chevron) shows it; focus on the row's open button does not. */
+:is(.research-feed-card, .research-msg-row, .research-trash-row):is(:hover, .has-open-menu)
+  > .research-feed-rail,
+:is(.research-feed-card, .research-msg-row, .research-trash-row) > .research-feed-rail:focus-within {
   opacity: 0.85;
 }
 

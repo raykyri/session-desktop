@@ -8,10 +8,12 @@ import type {
   ResearchFolderState,
   ResearchTreeSummary,
 } from "@session/shared";
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { RESEARCH_GROUP_COLLAPSE_DELAY_MS } from "@session/shared/lib/researchGroups";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import test from "ava";
 
 import { estimateRowHeight } from "../src/features/home/ActivityFeed.js";
+import { FeedCard, type FeedCardGroup } from "../src/features/home/FeedCard.js";
 import { archivedFeedTrees, feedRowOpenKey } from "../src/features/home/FeedView.js";
 import { countNewAbove, feedScrollBehavior } from "../src/features/home/useActivityFeedState.js";
 import { REORDER_FAILED_MESSAGE } from "../src/features/home/useFiling.js";
@@ -298,6 +300,109 @@ test.serial("a child is listed under its parent, and its toggle collapses the gr
     "the child is hidden",
   );
   app.unmount();
+});
+
+test.serial("clicking a collapsed group's card expands it", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: {
+      ...homeResponses({
+        trees: [tree("p", { title: "Parent" }), tree("c", { title: "Child" })],
+        roots: [root("p", { prompt: "Parent" }), root("c", { prompt: "Child" })],
+        folders: folderState({ parents: { c: "p" }, collapsedGroups: ["p"] }),
+      }),
+      "research.getTree": { tree: { id: "p" }, nodes: [] },
+    },
+  });
+
+  await waitUntil(
+    t,
+    () => within(unfiled()).queryByRole("button", { name: /^Show 1 item under/ }) !== null,
+    "the collapsed group",
+  );
+  t.is(within(unfiled()).queryByRole("button", { name: /Child, in/ }), null);
+  fireEvent.click(card(unfiled(), "^Parent"));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "folders.set"),
+    "the group is expanded",
+  );
+  const saved = app.trpc.calls.find((call) => call.path === "folders.set")?.input as {
+    state: ResearchFolderState;
+  };
+  t.deepEqual(saved.state.collapsedGroups, []);
+  app.unmount();
+});
+
+function groupProps(collapsed: boolean, onToggle: (all: boolean) => void): FeedCardGroup {
+  return {
+    count: 2,
+    collapsed,
+    summary: { running: 0, failed: 0, updated: 0 },
+    label: `${collapsed ? "Show" : "Hide"} 2 items under “Parent”`,
+    onToggle,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+test.serial("a later click collapses the selected group, and a double-click does not", async (t) => {
+  const toggles: boolean[] = [];
+  let opens = 0;
+  const props = {
+    cardId: "p",
+    place: "system:unfiled",
+    label: "Parent",
+    body: "Parent question",
+    onOpen: () => {
+      opens += 1;
+    },
+  };
+
+  const collapsed = render(
+    <FeedCard {...props} group={groupProps(true, (all) => toggles.push(all))} />,
+  );
+  fireEvent.click(collapsed.getByRole("button", { name: "Parent" }), { detail: 1 });
+  t.deepEqual(toggles, [false]);
+  t.is(opens, 1);
+  collapsed.unmount();
+
+  toggles.length = 0;
+  opens = 0;
+  const opened = render(
+    <FeedCard {...props} group={groupProps(false, (all) => toggles.push(all))} />,
+  );
+  fireEvent.click(opened.getByRole("button", { name: "Parent" }), { detail: 1 });
+  t.deepEqual(toggles, []);
+  t.is(opens, 1, "the first click on an expanded group opens it");
+  opened.unmount();
+
+  toggles.length = 0;
+  opens = 0;
+  const selected = render(
+    <FeedCard {...props} selected group={groupProps(false, (all) => toggles.push(all))} />,
+  );
+  const button = selected.getByRole("button", { name: "Parent" });
+  fireEvent.click(button, { detail: 1 });
+  fireEvent.click(button, { detail: 2 });
+  await delay(RESEARCH_GROUP_COLLAPSE_DELAY_MS + 40);
+  t.deepEqual(toggles, [], "a double-click does not collapse");
+  t.is(opens, 0);
+
+  fireEvent.click(button, { detail: 1 });
+  t.deepEqual(toggles, []);
+  await delay(RESEARCH_GROUP_COLLAPSE_DELAY_MS + 40);
+  t.deepEqual(toggles, [false]);
+  t.is(opens, 0, "the collapsing click does not open the thread again");
+  // A double-click slower than the wait still must not leave the group closed.
+  fireEvent.click(button, { detail: 2 });
+  t.deepEqual(toggles, [false, false]);
+  selected.unmount();
+  cleanup();
 });
 
 test.serial("↓ moves between cards, and Enter opens the focused thread", async (t) => {

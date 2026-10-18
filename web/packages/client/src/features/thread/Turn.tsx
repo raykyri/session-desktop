@@ -636,7 +636,9 @@ export function TileToggle({
   );
 }
 
-/** Action rail providing drag handle and context menu trigger for message rows. */
+/** Action rail: the drag handle and … button for a message row. Shown on
+ * hover, while the menu is open, and while focus is inside the rail.
+ * Selecting the row focuses its open button and does not show the rail. */
 export function RowRail({
   grip,
   menuLabel,
@@ -659,7 +661,7 @@ export function RowRail({
     <span
       className={cn(
         "bg-surface-popover border-border-divider absolute top-1.5 z-[2] flex items-center rounded-md border opacity-0 shadow-sm",
-        "group-focus-within/row:opacity-100 group-hover/row:opacity-100 group-data-[menu-open]/row:opacity-100",
+        "group-hover/row:opacity-100 group-data-[menu-open]/row:opacity-100 focus-within:opacity-100",
         "[.is-research-dragging_&]:opacity-0",
         className ?? "right-1.5",
       )}

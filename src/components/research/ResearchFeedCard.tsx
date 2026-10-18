@@ -1,5 +1,9 @@
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
+import {
+  RESEARCH_GROUP_COLLAPSE_DELAY_MS,
+  researchGroupCardClick,
+} from "@session/shared/lib/researchGroups";
 import {
   researchRowGlyph,
   type ResearchRowKind,
@@ -77,6 +81,11 @@ interface ResearchFeedGroup {
   onToggle: (all: boolean) => void;
 }
 
+/** The child count after a group's title, in the color of a child's title. */
+export function ResearchGroupCount({ count }: { count: number }) {
+  return <span className="research-feed-group-count"> ({count})</span>;
+}
+
 /** The status counts under a collapsed group's card. */
 function GroupSummary({ summary }: { summary: ResearchFeedGroup["summary"] }) {
   const parts = [
@@ -134,10 +143,13 @@ export function researchCardRefocus(
 
 /** Feed card for a thread rooted in a question, post, or document. It shows
  * the title when distinct, the root content, a type/status glyph, and controls
- * on hover or focus. The card opens the thread while nested links and embeds
- * remain separate targets. A parent card's rail starts with a chevron that
- * shows and hides its children; the child cards follow it, indented, while
- * it is expanded. */
+ * on hover, while the menu is open, and while focus is inside the control
+ * pill. Selection alone does not show the pill. The card opens the thread
+ * while nested links and embeds remain separate targets. A click on a
+ * collapsed group expands it; a later single click on the selected, expanded
+ * group collapses it. A double-click is not that collapse. A parent card's
+ * rail starts with a chevron that shows and hides its children; the child
+ * cards follow it, indented, while it is expanded. */
 export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",
@@ -165,10 +177,71 @@ export default function ResearchFeedCard({
   nested,
 }: ResearchFeedCardProps) {
   const glyphId = useId();
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const collapseTimer = useRef<number | null>(null);
+  // Set once the delayed collapse has run, so a slow double-click can undo it.
+  const collapsedByClick = useRef(false);
+  const clearCollapse = () => {
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+  };
+  // A double-click is not the collapse. Cancel a pending one, and reopen a
+  // group this click already closed.
+  const cancelCollapseClick = () => {
+    if (collapseTimer.current !== null) {
+      clearCollapse();
+      return;
+    }
+    if (!collapsedByClick.current) return;
+    collapsedByClick.current = false;
+    groupRef.current?.onToggle(false);
+  };
+  useEffect(
+    () => () => {
+      clearCollapse();
+    },
+    [],
+  );
+  const onCardClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const action = researchGroupCardClick({
+      group: group != null,
+      collapsed: group?.collapsed === true,
+      selected,
+      detail: event.detail,
+    });
+    // The second click of a double-click edits a note. It neither opens
+    // the thread again nor leaves the group collapsed.
+    if (action === "ignore") {
+      cancelCollapseClick();
+      return;
+    }
+    collapsedByClick.current = false;
+    if (action === "expand") group?.onToggle(false);
+    if (action === "collapse") {
+      clearCollapse();
+      collapseTimer.current = window.setTimeout(() => {
+        collapseTimer.current = null;
+        collapsedByClick.current = true;
+        groupRef.current?.onToggle(false);
+      }, RESEARCH_GROUP_COLLAPSE_DELAY_MS);
+      return;
+    }
+    onOpen();
+  };
   // The glyph's state name describes the open button.
   const glyphNamed = researchRowGlyph({ kind, state, unread }).label !== null;
   const glyph = (
-    <ResearchRowGlyph kind={kind} state={state} unread={unread} label={statusLabel} id={glyphId} />
+    <ResearchRowGlyph
+      kind={kind}
+      state={state}
+      unread={unread}
+      label={statusLabel}
+      id={glyphId}
+      collapsed={group?.collapsed}
+    />
   );
   return (
     <>
@@ -199,18 +272,18 @@ export default function ResearchFeedCard({
           aria-describedby={glyphNamed ? glyphId : undefined}
           aria-current={selected ? "true" : undefined}
           title={tooltip}
-          onClick={(event) => {
-            // The second click of a double-click that edits the note does
-            // not open the thread again; the first click opened it.
-            if (onEdit && event.detail > 1) return;
-            onOpen();
-          }}
+          onClick={onCardClick}
           {...researchNoteDoubleClickProps(onEdit)}
         />
         <div className={`research-feed-card-layout${title ? " has-title" : ""}`}>
           {glyph}
           <div className="research-feed-card-content">
-            {title ? <span className="research-feed-card-title">{title}</span> : null}
+            {title ? (
+              <span className="research-feed-card-title">
+                {title}
+                {group ? <ResearchGroupCount count={group.count} /> : null}
+              </span>
+            ) : null}
             {renderBody((content) => (
               <div className="research-feed-card-question">{content}</div>
             ))}

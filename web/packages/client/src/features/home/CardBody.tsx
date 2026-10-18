@@ -31,6 +31,12 @@ const QUESTION =
 /** Under a title the question is muted and at most two lines. */
 const QUESTION_UNDER_TITLE = "line-clamp-2 text-fg-muted";
 
+/** The child count after a group's title, in the color of a child's title. */
+export function GroupCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="text-fg-muted font-normal"> ({count})</span>;
+}
+
 /** The question, as the card's text. */
 export function CardQuestion({
   children,
@@ -57,7 +63,7 @@ function resolvedTweets(query: RecentResearchQuery): ResearchTweetAttachment[] {
 }
 
 /** A link post whose URL did not resolve to an X post: its link card. */
-function LinkCard({ url }: { url: string }) {
+function LinkCard({ url, childCount = 0 }: { url: string; childCount?: number }) {
   let host = url;
   try {
     host = new URL(url).hostname;
@@ -73,7 +79,10 @@ function LinkCard({ url }: { url: string }) {
       data-research-no-drag=""
       onClick={(event) => event.stopPropagation()}
     >
-      <span className="text-accent text-sm break-all">{url}</span>
+      <span className="text-accent text-sm break-all">
+        {url}
+        <GroupCount count={childCount} />
+      </span>
       <span className="text-fg-faint flex items-center gap-1 text-xs">
         <ExternalLink size={11} aria-hidden="true" />
         {host}
@@ -88,6 +97,7 @@ export function CardBody({
   isPost,
   awaitingTitle,
   underTitle,
+  childCount = 0,
 }: {
   /** The thread's root entry, when loaded. */
   query: RecentResearchQuery | undefined;
@@ -98,27 +108,45 @@ export function CardBody({
   awaitingTitle: boolean;
   /** The card shows a title above the body. */
   underTitle: boolean;
+  /** Children of a group whose title is this body, not a separate title. */
+  childCount?: number;
 }) {
-  if (!query) return <CardQuestion underTitle={underTitle}>{feedText(fallback)}</CardQuestion>;
+  const count = childCount ?? 0;
+  if (!query) {
+    return (
+      <CardQuestion underTitle={underTitle}>
+        {feedText(fallback)}
+        <GroupCount count={count} />
+      </CardQuestion>
+    );
+  }
   const tweets = resolvedTweets(query);
   if (isPost && query.format === "link" && tweets.length === 0) {
-    return <LinkCard url={query.prompt.trim()} />;
+    return <LinkCard url={query.prompt.trim()} childCount={count} />;
   }
   const text = stripTaggedInstructionBlocksForPreview(
     visibleResearchPrompt(query.prompt, query.attachments),
   ).trim();
   let content: ReactNode = null;
   if (!isPost && !awaitingTitle) {
-    content = text ? <CardQuestion underTitle={underTitle}>{feedText(text)}</CardQuestion> : null;
+    content = text ? (
+      <CardQuestion underTitle={underTitle}>
+        {feedText(text)}
+        <GroupCount count={count} />
+      </CardQuestion>
+    ) : (
+      <GroupCount count={count} />
+    );
   } else {
     const { heading, rest } = isPost ? splitNoteHeading(text) : { heading: null, rest: text };
     const preview = collapseBlankLines(rest).trim();
     content =
-      heading || preview ? (
+      heading || preview || count > 0 ? (
         <div className="min-w-0" data-research-card-question="">
           {heading ? (
             <span className="text-fg-heading line-clamp-2 text-[length:calc(var(--fs-base)+0.5px)] leading-[1.4] font-semibold [overflow-wrap:anywhere]">
               {heading}
+              <GroupCount count={count} />
             </span>
           ) : null}
           {preview ? (
@@ -127,8 +155,11 @@ export function CardBody({
               data-research-feed-preview=""
             >
               {feedText(preview)}
+              {heading ? null : <GroupCount count={count} />}
             </span>
-          ) : null}
+          ) : heading ? null : (
+            <GroupCount count={count} />
+          )}
         </div>
       ) : null;
   }

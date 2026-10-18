@@ -127,6 +127,8 @@ test("Ask as a question is enabled within the limit, with the model menu showing
   assert.doesNotMatch(html, /aria-disabled/);
   assert.doesNotMatch(html, /Asks /);
   assert.match(html, /aria-label="Model"[^>]*>.*<span class="launcher-select-value">Opus<\/span>/);
+  const model = /<button[^>]*aria-label="Model"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.doesNotMatch(model, /\sdisabled/);
   assert.match(html, /aria-label="Edit note"/);
   assert.match(html, />Save</);
 });
@@ -172,10 +174,20 @@ test("the preview marks blocks that are not in the saved text", () => {
   assert.equal(html.match(/research-edit-block is-changed/g)?.length, 1);
 });
 
-test("over the limit, the count stays visible beside the model menu", () => {
+test("over the limit, the count stays visible beside the model menu and the menu is disabled", () => {
   const html = editor("x".repeat(601));
   assert.match(html, /launcher-select-value">Opus</);
   assert.match(html, />601 \/ 500 characters</);
+  assert.match(html, /class="research-editor-count is-over"/);
+  const model = /<button[^>]*aria-label="Model"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.match(model, /\sdisabled/);
+});
+
+test("an empty question leaves the model menu enabled", () => {
+  const html = editor("   ");
+  assert.match(html, />Write the question first</);
+  const model = /<button[^>]*aria-label="Model"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.doesNotMatch(model, /\sdisabled/);
 });
 
 test("without a ready agent there is no model menu, and the note says so", () => {

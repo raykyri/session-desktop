@@ -306,7 +306,7 @@ export function EditorColumn({
               choice={choice}
               models={models}
               title="Model for the question"
-              disabled={asking || saving}
+              disabled={asking || saving || (!question.allowed && question.count > 0)}
               onChange={setChosen}
             />
           ) : null}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SquareChevronRight } from "lucide-react";
 import {
   researchRowGlyph,
   type ResearchRowGlyphShape,
@@ -117,6 +118,7 @@ export default function ResearchRowGlyph({
   unread = false,
   label,
   id,
+  collapsed = false,
 }: {
   kind: ResearchRowKind;
   state?: ResearchRowState;
@@ -124,13 +126,23 @@ export default function ResearchRowGlyph({
   /** Replaces the state's name, such as "Failed since last viewed". */
   label?: string;
   id?: string;
+  /** A collapsed note group draws a square chevron in place of the note. */
+  collapsed?: boolean;
 }) {
   const glyph = researchRowGlyph({ kind, state, unread });
   const name = glyph.label === null ? null : (label ?? glyph.label);
   const className = `research-row-glyph is-${glyph.shape}${glyph.tone ? ` is-tone-${glyph.tone}` : ""}`;
   // The running ring pulses its pie; another kind running pulses whole.
   const pulse = glyph.tone === "running" && glyph.shape !== "running";
-  const svg = (
+  // Feed cards set this for a collapsed group. The note's square-and-lines
+  // becomes the square chevron; every other shape stays.
+  const svg = collapsed && glyph.shape === "note" ? (
+    <SquareChevronRight
+      className={pulse ? "research-row-glyph-pulse" : undefined}
+      size={14}
+      aria-hidden="true"
+    />
+  ) : (
     <svg
       className={pulse ? "research-row-glyph-pulse" : undefined}
       viewBox="0 0 14 14"

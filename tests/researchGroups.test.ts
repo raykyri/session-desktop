@@ -17,6 +17,7 @@ import {
   researchChildIds,
   researchFolderStateWithGroupCollapsed,
   researchFolderStateWithParent,
+  researchGroupCardClick,
   researchGroupSummary,
   researchItemCount,
   researchNestCandidates,
@@ -230,6 +231,25 @@ test("a collapsed group counts running, failed and updated children", () => {
   assert.equal(researchChildCount(2), "2 children");
 });
 
+test("a click expands a collapsed group, and a later click on the selection collapses it", () => {
+  const click = (overrides: Partial<Parameters<typeof researchGroupCardClick>[0]> = {}) =>
+    researchGroupCardClick({ group: true, collapsed: false, selected: false, detail: 1, ...overrides });
+  // A collapsed group expands, including from a key (detail 0).
+  assert.equal(click({ collapsed: true }), "expand");
+  assert.equal(click({ collapsed: true, selected: true, detail: 0 }), "expand");
+  // The first click on an expanded group opens it. A later pointer click
+  // collapses the selection. A key does not, and a double-click's second
+  // press does neither.
+  assert.equal(click(), "open");
+  assert.equal(click({ selected: true }), "collapse");
+  assert.equal(click({ selected: true, detail: 0 }), "open");
+  assert.equal(click({ selected: true, detail: 2 }), "ignore");
+  assert.equal(click({ collapsed: true, detail: 2 }), "ignore");
+  // A card without children only opens, and still drops the double-click.
+  assert.equal(click({ group: false, selected: true }), "open");
+  assert.equal(click({ group: false, detail: 2 }), "ignore");
+});
+
 test("Make child of… keeps the nearest eligible items of a long list, in list order", () => {
   const list = Array.from({ length: 10 }, (_, index) => `t${index}`);
   const eligible = (id: string) => id !== "t5" && id !== "t6";
@@ -281,6 +301,7 @@ test("a parent's card toggles its children from the corner pill, and they follow
   const folderState = { ...emptyResearchFolderState(), parents: { c1: "p", c2: "p" } };
   const html = renderFeed({ items, researchTrees: trees, folderState });
   assert.match(html, /aria-expanded="true" aria-label="Hide 2 items under “Title p”"/);
+  assert.match(html, /research-feed-card-title">Title p<span class="research-feed-group-count"> \(2\)<\/span>/);
   assert.match(
     html,
     /class="research-feed-rail"><button type="button" class="research-feed-icon-button research-feed-group-toggle"[^>]*aria-expanded="true"[^>]*>[\s\S]*?research-feed-card-grip/,
@@ -310,10 +331,55 @@ test("a parent's card toggles its children from the corner pill, and they follow
     folderState: { ...folderState, collapsedGroups: ["p"] },
   });
   assert.match(collapsed, /aria-expanded="false" aria-label="Show 2 items under “Title p”"/);
+  assert.match(collapsed, /research-feed-card-title">Title p<span class="research-feed-group-count"> \(2\)<\/span>/);
   assert.match(collapsed, /data-research-group-collapsed=""/);
   assert.doesNotMatch(collapsed, /data-research-card="c1"/);
   assert.match(collapsed, /class="is-running" title="1 running"/);
   assert.match(collapsed, /class="is-updated" title="1 updated"/);
+  // A collapsed question keeps its ring. The square chevron is the note's.
+  assert.doesNotMatch(collapsed, /lucide-square-chevron-right/);
+});
+
+test("a collapsed note group draws a square chevron in place of the note", () => {
+  const trees = [
+    tree("n", { type: "post" }),
+    tree("c"),
+    tree("link", { type: "post" }),
+    tree("cl"),
+  ];
+  const items = [
+    root("n", { type: "post", format: "text", prompt: "# AKA iterations\n\nNotes" }),
+    root("c"),
+    root("link", { type: "post", format: "link", prompt: "https://example.com/a" }),
+    root("cl"),
+  ];
+  const parents = { c: "n", cl: "link" };
+  const open = renderFeed({
+    items,
+    researchTrees: trees,
+    folderState: { ...emptyResearchFolderState(), parents },
+  });
+  assert.doesNotMatch(open, /lucide-square-chevron-right/);
+  assert.match(open, /M4\.7 5\.6h4\.6/);
+  assert.match(
+    open,
+    /research-feed-note-heading">AKA iterations<span class="research-feed-group-count"> \(1\)<\/span>/,
+  );
+
+  const collapsed = renderFeed({
+    items,
+    researchTrees: trees,
+    folderState: { ...emptyResearchFolderState(), parents, collapsedGroups: ["n", "link"] },
+  });
+  assert.match(collapsed, /data-research-card="n"[^]*?lucide-square-chevron-right/);
+  assert.doesNotMatch(collapsed, /M4\.7 5\.6h4\.6/);
+  assert.match(
+    collapsed,
+    /research-feed-note-heading">AKA iterations<span class="research-feed-group-count"> \(1\)<\/span>/,
+  );
+  // A collapsed link group keeps its link mark and names its child.
+  assert.match(collapsed, /M5\.3 8\.7l3\.4-3\.4/);
+  assert.match(collapsed, /https:\/\/example.com\/a<span class="research-feed-group-count"> \(1\)<\/span>/);
 });
 
 test("a folder tray groups its trees the same way", () => {

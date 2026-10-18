@@ -1,11 +1,19 @@
 // A Home card (the desktop's `ResearchFeedCard.tsx`): a thread rooted in a
 // question, note, link or document, or a saved draft. It shows the title when
 // it differs from the question, the root's text, a kind and status glyph, and
-// a drag handle and … button on hover or focus. The whole card is one open
-// button placed behind its content, so links inside stay separate targets. A
-// parent card's rail starts with a chevron that shows and hides its children;
-// the child cards follow it, indented, while it is expanded.
+// a drag handle and … button on hover, while the menu is open, and while
+// focus is inside that pill. Selecting the card does not show the pill. The
+// whole card is one open button placed behind its content, so links inside
+// stay separate targets. A click on a collapsed group expands it; a later
+// single click on the selected, expanded group collapses it. A double-click
+// is not that collapse. A parent card's rail starts with a chevron that
+// shows and hides its children; the child cards follow it, indented, while
+// it is expanded.
 
+import {
+  RESEARCH_GROUP_COLLAPSE_DELAY_MS,
+  researchGroupCardClick,
+} from "@session/shared/lib/researchGroups";
 import { researchNoteDoubleClickEdits } from "@session/shared/lib/researchNoteEdit";
 import {
   researchRowGlyph,
@@ -16,6 +24,7 @@ import { ChevronRight, Ellipsis, GripVertical } from "lucide-react";
 import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { GroupCount } from "./CardBody.js";
 import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
@@ -196,9 +205,32 @@ export function FeedCard({
 }: FeedCardProps) {
   const glyphId = useId();
   const openTimer = useRef<number | null>(null);
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const collapseTimer = useRef<number | null>(null);
+  // Set once the delayed collapse has run, so a slow double-click can undo it.
+  const collapsedByClick = useRef(false);
+  const clearCollapse = () => {
+    if (collapseTimer.current !== null) {
+      window.clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+  };
+  // A double-click is not the collapse. Cancel a pending one, and reopen a
+  // group this click already closed.
+  const cancelCollapseClick = () => {
+    if (collapseTimer.current !== null) {
+      clearCollapse();
+      return;
+    }
+    if (!collapsedByClick.current) return;
+    collapsedByClick.current = false;
+    groupRef.current?.onToggle(false);
+  };
   useEffect(
     () => () => {
       if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+      clearCollapse();
     },
     [],
   );
@@ -290,10 +322,34 @@ export function FeedCard({
           onPointerEnter={onIntent}
           onFocus={onIntent}
           onClick={(event) => {
+            const action = researchGroupCardClick({
+              group: group != null,
+              collapsed: group?.collapsed === true,
+              selected,
+              detail: event.detail,
+            });
+            // The second click of a double-click edits a note. It neither
+            // opens the thread nor collapses the group.
+            if (action === "ignore") {
+              if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+              openTimer.current = null;
+              cancelCollapseClick();
+              return;
+            }
+            collapsedByClick.current = false;
+            if (action === "expand") group?.onToggle(false);
+            if (action === "collapse") {
+              clearCollapse();
+              collapseTimer.current = window.setTimeout(() => {
+                collapseTimer.current = null;
+                collapsedByClick.current = true;
+                groupRef.current?.onToggle(false);
+              }, RESEARCH_GROUP_COLLAPSE_DELAY_MS);
+              return;
+            }
             // A pointer click on an editable note waits to see whether it is
             // the first of a double-click (NOTE_OPEN_DELAY_MS); a key press
             // (detail 0) opens at once.
-            if (onEdit && event.detail > 1) return;
             if (onEdit && event.detail === 1) {
               if (openTimer.current !== null) window.clearTimeout(openTimer.current);
               openTimer.current = window.setTimeout(() => {
@@ -319,6 +375,7 @@ export function FeedCard({
                   event.preventDefault();
                   if (openTimer.current !== null) window.clearTimeout(openTimer.current);
                   openTimer.current = null;
+                  cancelCollapseClick();
                   onEdit();
                 }
               : undefined
@@ -338,6 +395,7 @@ export function FeedCard({
             unread={unread}
             label={statusLabel}
             id={glyphId}
+            collapsed={group?.collapsed}
             className="mt-[calc((1lh-14px)/2)] w-3.5"
           />
           <div className="relative z-1 min-w-0 flex-1 [&_a]:pointer-events-auto [&_button]:pointer-events-auto [&>*+*]:mt-0.5">
@@ -347,6 +405,7 @@ export function FeedCard({
                 data-research-card-title=""
               >
                 {title}
+                {group ? <GroupCount count={group.count} /> : null}
               </span>
             ) : null}
             {body}
@@ -358,7 +417,7 @@ export function FeedCard({
             className={cn(
               "border-border-strong bg-surface-feed-popover absolute top-[5px] right-[5px] z-2 flex h-6 items-center gap-px rounded-[7px] border px-0.5 opacity-0",
               "pointer-events-none shadow-[0_2px_8px_color-mix(in_srgb,var(--text-heading)_8%,transparent)]",
-              "group-focus-within/card:opacity-85 group-hover/card:opacity-85 group-[.has-open-menu]/card:opacity-85",
+              "group-hover/card:opacity-85 group-[.has-open-menu]/card:opacity-85 focus-within:opacity-85",
             )}
           >
             {group ? (

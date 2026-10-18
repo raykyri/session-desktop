@@ -49,6 +49,7 @@ export function PostContent({
   lead,
   renderPrompt,
   tweetLabels,
+  suffix,
 }: {
   prompt: string;
   format: PostFormat;
@@ -58,6 +59,8 @@ export function PostContent({
   renderPrompt?: (content: ReactNode) => ReactNode;
   /** As in ResearchMessageBody. */
   tweetLabels?: boolean;
+  /** After a link card's URL, such as a group's child count. */
+  suffix?: ReactNode;
 }) {
   const resolvedTweet = attachments.some(
     (attachment) =>
@@ -84,6 +87,7 @@ export function PostContent({
         <span className="post-link-card-url">
           {lead}
           {url}
+          {suffix}
         </span>
         <span className="post-link-card-host">
           <ExternalLink size={11} aria-hidden="true" />

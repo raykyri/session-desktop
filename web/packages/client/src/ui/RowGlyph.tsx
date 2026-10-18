@@ -9,6 +9,7 @@ import {
   type ResearchRowKind,
   type ResearchRowState,
 } from "@session/shared/lib/researchRowGlyph";
+import { SquareChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
@@ -129,6 +130,7 @@ export function RowGlyph({
   id,
   size = 14,
   className,
+  collapsed = false,
 }: {
   kind: ResearchRowKind;
   state?: ResearchRowState;
@@ -138,6 +140,8 @@ export function RowGlyph({
   id?: string | undefined;
   size?: number;
   className?: string | undefined;
+  /** A collapsed note group draws a square chevron in place of the note. */
+  collapsed?: boolean;
 }) {
   const glyph = researchRowGlyph({ kind, state, unread });
   const name = glyph.label === null ? null : (label ?? glyph.label);
@@ -150,7 +154,19 @@ export function RowGlyph({
       : "text-[var(--research-row-glyph-color,var(--text-faint))]",
     className,
   );
-  const svg = (
+  // Feed cards set this for a collapsed group. The note's square-and-lines
+  // becomes the square chevron; every other shape stays. The stroke matches
+  // the 1.5px custom shapes: Lucide's 24px grid, drawn at `size`.
+  const svg = collapsed && glyph.shape === "note" ? (
+    <SquareChevronRight
+      className={pulse ? "session-row-pulse block" : "block"}
+      size={size}
+      strokeWidth={1.5}
+      absoluteStrokeWidth
+      aria-hidden="true"
+      data-research-row-glyph={glyph.shape}
+    />
+  ) : (
     <svg
       className={pulse ? "session-row-pulse block" : "block"}
       viewBox="0 0 14 14"

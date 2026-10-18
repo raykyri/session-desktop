@@ -69,6 +69,7 @@ import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed"
 import { ResearchColumnsContext } from "./ResearchColumns";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
 import ResearchFeedCard, {
+  ResearchGroupCount,
   researchCardRefocus,
   researchFeedCardControl,
 } from "./ResearchFeedCard";
@@ -949,6 +950,10 @@ function ResearchActivityFeed({
     const awaitingTitle = !isPost && !(tree?.title ?? query?.title)?.trim();
     const selected = treeId === selectedTreeId;
     const state = researchThreadState(tree, query);
+    // A group names its children after the title. A separate title carries
+    // the count; otherwise it follows the note heading, preview, or question.
+    const childCount = children.length;
+    const count = title == null && childCount > 0 ? <ResearchGroupCount count={childCount} /> : null;
     // The card shows the question as plain text, URLs in the link color; its
     // Markdown renders in the conversation. Link cards still show; a tweet
     // shows as a "[Tweet: @handle]" label, its embed only in the conversation.
@@ -957,15 +962,30 @@ function ResearchActivityFeed({
     // line is a Markdown heading shows that line in the card title's style.
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () => {
       const text = query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question;
-      if (!isPost && !awaitingTitle) return asQuestion(feedText(text));
+      if (!isPost && !awaitingTitle) {
+        return asQuestion(
+          <>
+            {feedText(text)}
+            {count}
+          </>,
+        );
+      }
       const { heading, rest } = isPost ? splitNoteHeading(text) : { heading: null, rest: text };
       const preview = collapseBlankLines(rest).trim();
       return asQuestion(
         <>
-          {heading ? <span className="research-feed-card-title research-feed-note-heading">{heading}</span> : null}
-          {preview ? (
-            <span className={`research-feed-preview-text${heading ? " is-after-heading" : ""}`}>{feedText(preview)}</span>
+          {heading ? (
+            <span className="research-feed-card-title research-feed-note-heading">
+              {heading}
+              {count}
+            </span>
           ) : null}
+          {preview ? (
+            <span className={`research-feed-preview-text${heading ? " is-after-heading" : ""}`}>
+              {feedText(preview)}
+              {heading ? null : count}
+            </span>
+          ) : heading ? null : count}
         </>,
       );
     };
@@ -1022,6 +1042,7 @@ function ResearchActivityFeed({
                   variant="compact"
                   renderPrompt={plainPrompt(asQuestion)}
                   tweetLabels
+                  suffix={count}
                 />
               ) : (
                 <ResearchMessageBody
@@ -1034,7 +1055,12 @@ function ResearchActivityFeed({
               )}
             </ResearchUserMessage>
           ) : (
-            asQuestion(feedText(question))
+            asQuestion(
+              <>
+                {feedText(question)}
+                {count}
+              </>,
+            )
           )
         }
         kind={researchThreadKind(tree, query)}

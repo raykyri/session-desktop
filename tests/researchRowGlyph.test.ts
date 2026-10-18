@@ -149,6 +149,22 @@ test("the glyph is a named image for a state with a name, and hidden otherwise",
   const note = renderToStaticMarkup(createElement(ResearchRowGlyph, { kind: "note", state: "running" }));
   assert.match(note, /class="research-row-glyph is-note is-tone-running" role="img" aria-label="Running"[^>]*><svg class="research-row-glyph-pulse"/);
 
+  // A collapsed note group keeps that name and pulse, and draws the square chevron.
+  const collapsedNote = renderToStaticMarkup(
+    createElement(ResearchRowGlyph, { kind: "note", state: "running", collapsed: true }),
+  );
+  assert.match(
+    collapsedNote,
+    /class="research-row-glyph is-note is-tone-running" role="img" aria-label="Running"[^>]*><svg[^>]*class="[^"]*lucide-square-chevron-right[^"]*research-row-glyph-pulse/,
+  );
+  assert.doesNotMatch(collapsedNote, /M4\.7 5\.6h4\.6/);
+  // A collapsed question keeps its ring.
+  const collapsedExchange = renderToStaticMarkup(
+    createElement(ResearchRowGlyph, { kind: "exchange", state: "answered", collapsed: true }),
+  );
+  assert.match(collapsedExchange, /class="research-row-glyph is-answered"/);
+  assert.doesNotMatch(collapsedExchange, /lucide-square-chevron-right/);
+
   // Dashed shapes use butt caps so the dashes stay apart.
   for (const [kind, state] of [["exchange", "queued"], ["draft", "answered"]] as const) {
     assert.match(

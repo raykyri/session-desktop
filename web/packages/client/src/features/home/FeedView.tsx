@@ -1561,6 +1561,7 @@ function TreeCard({
           isPost={isPost}
           awaitingTitle={awaitingTitle}
           underTitle={Boolean(title)}
+          childCount={title ? 0 : childSummaries.length}
         />
       }
       kind={researchThreadKind(tree, query)}

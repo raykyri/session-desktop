@@ -301,6 +301,35 @@ export function researchChildCount(count: number): string {
   return `${count} ${count === 1 ? "child" : "children"}`;
 }
 
+/** How long a collapsing click waits, so the second press of a double-click
+ * can cancel it before the group closes. */
+export const RESEARCH_GROUP_COLLAPSE_DELAY_MS = 250;
+
+/** What a click on a card does to its group.
+ *
+ * A collapsed group expands, and the card still opens. A later single click
+ * on the already selected, expanded group collapses it. The second click of
+ * a double-click does neither: a note edits on double-click, and that press
+ * is not the collapse. A key (`detail` 0) expands a collapsed group and
+ * otherwise opens; it does not collapse.
+ *
+ * `detail` is the click's `event.detail`. */
+export type ResearchGroupCardClick = "expand" | "collapse" | "open" | "ignore";
+
+export function researchGroupCardClick(input: {
+  /** The card lists children. */
+  group: boolean;
+  collapsed: boolean;
+  /** The card is the open selection. */
+  selected: boolean;
+  detail: number;
+}): ResearchGroupCardClick {
+  if (input.detail > 1) return "ignore";
+  if (input.group && input.collapsed) return "expand";
+  if (input.group && !input.collapsed && input.selected && input.detail === 1) return "collapse";
+  return "open";
+}
+
 /** Make child of… lists the eligible items of a list (`ids`, its top-level
  * items in order). A long list keeps the `limit` nearest to `anchorId` (the
  * item, or a child's parent), in list order. */

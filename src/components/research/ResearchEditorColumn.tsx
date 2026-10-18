@@ -213,7 +213,7 @@ export function ResearchEditorColumn({
             <ResearchQuestionModelPicker
               adapters={questionAdapters}
               choice={questionChoice}
-              disabled={asking || saving}
+              disabled={asking || saving || (!question.allowed && question.count > 0)}
               onChange={setChosenQuestion}
             />
           ) : null}

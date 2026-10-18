@@ -97,7 +97,7 @@ export function TrashList({
                 className={cn(
                   "border-border-strong bg-surface-feed-popover absolute top-[5px] right-[5px] z-2 flex h-6 items-center gap-px rounded-[7px] border px-0.5 opacity-0",
                   "pointer-events-none shadow-[0_2px_8px_color-mix(in_srgb,var(--text-heading)_8%,transparent)]",
-                  "group-focus-within/trash:opacity-85 group-hover/trash:opacity-85 group-[.has-open-menu]/trash:opacity-85",
+                  "group-hover/trash:opacity-85 group-[.has-open-menu]/trash:opacity-85 focus-within:opacity-85",
                 )}
               >
                 <button
