@@ -998,7 +998,9 @@
 }
 
 /* — Groups —
-   A parent's child cards follow its card, indented 24px. */
+   A parent's child cards follow its card. The extra inset is the glyph
+   column plus the gap beside it (14px + 6px), so a child's icon lines up
+   with the text of the level above. */
 .research-feed-group {
   padding-bottom: 4px;
 }
@@ -1011,7 +1013,7 @@
 }
 
 .research-feed-group > .research-feed-card {
-  margin-left: calc(var(--research-row-inset) + 24px);
+  margin-left: calc(var(--research-row-inset) + 14px + 6px);
 }
 
 .research-feed-group.is-dragging {

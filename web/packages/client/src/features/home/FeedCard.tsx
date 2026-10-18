@@ -228,7 +228,8 @@ export function FeedCard({
         className={cn(
           "group/card relative cursor-pointer rounded-[10px] select-none",
           child
-            ? "mr-(--research-row-inset) ml-[calc(var(--research-row-inset)+24px)]"
+            ? // Glyph column (14px) plus the 6px gap, so the icon lines up with the parent's text.
+              "mr-(--research-row-inset) ml-[calc(var(--research-row-inset)+14px+6px)]"
             : "mx-(--research-row-inset)",
           "py-2.5 pr-3 pl-[calc(var(--research-row-text)-var(--research-row-inset))]",
           "[--research-row-inset:8px] [--research-row-text:20px]",
