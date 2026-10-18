@@ -602,8 +602,16 @@
 
 .research-trash-list {
   margin: 0;
+  /* 8px matches a top-level card's inset, so the corner pill shares that
+     card's right edge. */
   padding: 0 8px 4px;
   list-style: none;
+}
+
+/* Tray cards set --research-row-inset to 6px. The same inset keeps a trash
+   row's pill on their right edge. */
+.research-feed-tray-body .research-trash-list {
+  padding-inline: 6px;
 }
 
 .research-trash-row {

@@ -1,10 +1,9 @@
 // The glyph a row in the feed or a thread's messages column starts with: one
 // 14px shape for the row's kind, with an exchange's run state as its interior.
 // Exchanges are rings (queued dashed; running a half pie; answered a check;
-// answered and unread a centre dot; failed "!"; stopped "×"). A note is the
-// pencil-line icon. Saved links and X posts are rounded squares, documents
-// are pages, and drafts are dashed squares, each with its own inner mark.
-// ResearchRowGlyph draws them.
+// answered and unread a centre dot; failed "!"; stopped "×"). Notes, saved
+// links and X posts are rounded squares, documents are pages, and drafts are
+// dashed squares, each with its own inner mark. ResearchRowGlyph draws them.
 
 import type {
   DocumentSource,

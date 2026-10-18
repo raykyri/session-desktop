@@ -58,7 +58,10 @@ export function TrashList({
   if (entries.length === 0) return <FeedEmpty>The Trash is empty.</FeedEmpty>;
   return (
     <>
-      <ul className="m-0 list-none px-2 pt-0 pb-1" aria-label="Items in the Trash">
+      <ul
+        className="m-0 list-none px-2 pt-0 pb-1 in-[[data-research-tray-body]]:px-[6px]"
+        aria-label="Items in the Trash"
+      >
         {entries.map((entry) => {
           const open = menu !== null && entryKey(menu.entry) === entryKey(entry);
           return (

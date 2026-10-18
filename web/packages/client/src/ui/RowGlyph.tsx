@@ -3,14 +3,13 @@
 // `ResearchRowGlyph.tsx`; the shape and tone rules are the shared
 // `researchRowGlyph`.
 
-import { PencilLine } from "lucide-react";
-import type { ReactNode } from "react";
 import {
   researchRowGlyph,
   type ResearchRowGlyphShape,
   type ResearchRowKind,
   type ResearchRowState,
 } from "@session/shared/lib/researchRowGlyph";
+import type { ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
 
@@ -24,7 +23,7 @@ const PAGE = (
   </>
 );
 
-const SHAPES: Record<Exclude<ResearchRowGlyphShape, "note">, ReactNode> = {
+const SHAPES: Record<ResearchRowGlyphShape, ReactNode> = {
   queued: <circle cx="7" cy="7" r="5.6" strokeDasharray="1.47 1.463" strokeLinecap="butt" />,
   running: (
     <>
@@ -60,6 +59,12 @@ const SHAPES: Record<Exclude<ResearchRowGlyphShape, "note">, ReactNode> = {
     <>
       {RING}
       <path d="M5.3 5.3l3.4 3.4M8.7 5.3l-3.4 3.4" />
+    </>
+  ),
+  note: (
+    <>
+      {SQUARE}
+      <path d="M4.7 5.6h4.6M4.7 8.4h2.8" />
     </>
   ),
   link: (
@@ -145,34 +150,23 @@ export function RowGlyph({
       : "text-[var(--research-row-glyph-color,var(--text-faint))]",
     className,
   );
-  // The drawn shapes use a 14px grid with a 1.5 stroke. Pencil-line is a
-  // 24px Lucide icon, so its stroke is scaled to the same weight.
-  const svg =
-    glyph.shape === "note" ? (
-      <PencilLine
-        size={size}
-        strokeWidth={(1.5 * 24) / 14}
-        className={pulse ? "session-row-pulse block" : "block"}
-        aria-hidden="true"
-        data-research-row-glyph="note"
-      />
-    ) : (
-      <svg
-        className={pulse ? "session-row-pulse block" : "block"}
-        viewBox="0 0 14 14"
-        width={size}
-        height={size}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        data-research-row-glyph={glyph.shape}
-      >
-        {SHAPES[glyph.shape]}
-      </svg>
-    );
+  const svg = (
+    <svg
+      className={pulse ? "session-row-pulse block" : "block"}
+      viewBox="0 0 14 14"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      data-research-row-glyph={glyph.shape}
+    >
+      {SHAPES[glyph.shape]}
+    </svg>
+  );
   if (name) {
     return (
       <span id={id} className={classes} role="img" aria-label={name} title={name}>
