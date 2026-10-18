@@ -1217,6 +1217,7 @@ function MainApp() {
               placeholder so its scroll position survives content changes. */}
           <ResearchColumns
             hasThread={researchStageView === "thread" || openResearchDraft !== null}
+            reduceMotion={settings.reduceMotion}
             feed={
               config ? (
                 feedPage.kind === "highlights" ? (

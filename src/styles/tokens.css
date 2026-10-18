@@ -370,6 +370,9 @@
   --research-thread-page-bg: var(--right-pane-bg);
   /* The strip past the last pair, where the next pair opens. */
   --research-page-bg: #131417;
+  /* Glyphs of the animated field in that strip (ResearchBackdrop); the
+     field's mask fades them further. */
+  --research-backdrop-glyph: rgba(200, 204, 216, 0.2);
   --field-bg: #18191c;
   --field-bg-hover: #1e1f23;
   --panel-bg: #1a1b1f;
@@ -462,6 +465,7 @@
   --workspace-bg: #1c1b1a;
   --research-thread-page-bg: var(--right-pane-bg);
   --research-page-bg: #121110;
+  --research-backdrop-glyph: rgba(214, 206, 196, 0.19);
   --field-bg: #171615;
   --field-bg-hover: #1e1d1a;
   --panel-bg: var(--field-bg);
@@ -637,6 +641,7 @@
   --workspace-bg: #f8f8f9;
   --research-thread-page-bg: var(--right-pane-bg);
   --research-page-bg: #ebebed;
+  --research-backdrop-glyph: rgba(52, 55, 66, 0.27);
   --field-bg: #ffffff;
   --field-bg-hover: #f8f8f9;
   --panel-bg: #f8f8f9;
@@ -727,6 +732,7 @@
   --workspace-bg: #f5f3f0;
   --research-thread-page-bg: var(--right-pane-bg);
   --research-page-bg: #e9e6e1;
+  --research-backdrop-glyph: rgba(66, 58, 48, 0.27);
   --field-bg: #fbfaf8;
   --field-bg-hover: #f5f2ee;
   --panel-bg: var(--field-bg);

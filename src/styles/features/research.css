@@ -1541,10 +1541,14 @@
   flex-direction: column;
   min-width: 0;
   height: 100%;
+}
+
+.research-empty-content > .research-column-header {
   background: var(--research-page-bg);
 }
 
-/* Where the next pair opens, when there is room for it. */
+/* Where the next pair opens, when there is room for it. Transparent: the
+   backdrop under the strip (ResearchBackdrop) draws its color and glyphs. */
 .research-columns-filler {
   display: grid;
   flex: 1 1 0;
@@ -1552,7 +1556,7 @@
   padding: 24px 16px;
   overflow: hidden;
   color: var(--text-subtle);
-  background: var(--research-page-bg);
+  background: transparent;
   font-size: calc(13px + var(--font-ui-size-offset));
   text-align: center;
   container-type: inline-size;

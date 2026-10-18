@@ -26,6 +26,7 @@ import {
   trimResearchStripSlack,
   type ResearchColumnSizing,
 } from "./ResearchColumnResizer";
+import { ResearchBackdrop, type ResearchBackdropMode } from "./ResearchBackdrop";
 
 /** The system setting or the app's own Reduce motion setting. */
 function prefersReducedMotion() {
@@ -125,16 +126,25 @@ type ResearchCycleHandler = (request: ResearchCycleRequest) => boolean;
 
 export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
 
+/** How long the strip's slide back may take before the backdrop counts it
+ * as done without a transitionend (an interrupted or skipped transition). */
+const BACKDROP_CLOSE_TIMEOUT = 700;
+const MODIFIER_KEYS = new Set(["Alt", "Control", "Meta", "Shift"]);
+
 /** Horizontal strip containing the feed and either thread columns or a
  * placeholder. The viewport determines initial widths; resize handles store
- * overrides in researchColumnWidths.ts. */
+ * overrides in researchColumnWidths.ts. The backdrop (ResearchBackdrop) shows
+ * in the strip's empty space, and its button slides the strip away. */
 export default function ResearchColumns({
   hasThread,
   feed,
+  reduceMotion = false,
   children,
 }: {
   hasThread: boolean;
   feed: ReactNode;
+  /** The app's Reduce motion setting, which stills the backdrop. */
+  reduceMotion?: boolean;
   children: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -144,8 +154,53 @@ export default function ResearchColumns({
   const [availableWidth, setAvailableWidth] = useState(1232);
   const [feedCurrent, setFeedCurrent] = useState(false);
   const [storedWidths, setStoredWidths] = useState<ResearchStoredColumnWidths>(loadResearchColumnWidths);
+  const [backdrop, setBackdrop] = useState<ResearchBackdropMode>("closed");
 
   useEffect(listenForInteraction, []);
+
+  // The strip slides back on Esc, on a shortcut (history, ⌘J, ⌃Tab act on
+  // it), on a press outside the column area (the sidebar, a dialog) or of the
+  // mouse's back and forward buttons, and when a thread opens or closes, since
+  // the strip then shows something new. Esc is taken in the capture phase so
+  // the thread's own Esc (which closes a level) does not also act on the
+  // hidden strip; menus and dialogs keep theirs.
+  const closeBackdrop = useCallback(() => {
+    setBackdrop((current) => (current === "open" ? "closing" : current));
+  }, []);
+  const toggleBackdrop = useCallback(() => {
+    setBackdrop((current) => (current === "open" ? "closing" : "open"));
+  }, []);
+  useEffect(closeBackdrop, [closeBackdrop, hasThread]);
+  useEffect(() => {
+    if (backdrop !== "open") return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || MODIFIER_KEYS.has(event.key)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("dialog, [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeBackdrop();
+      } else if (event.metaKey || event.ctrlKey || event.altKey) {
+        closeBackdrop();
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const inside = event.target instanceof Node && rootRef.current?.contains(event.target);
+      if (!inside || event.button === 3 || event.button === 4) closeBackdrop();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, [backdrop, closeBackdrop]);
+  useEffect(() => {
+    if (backdrop !== "closing") return;
+    const timer = window.setTimeout(() => setBackdrop("closed"), BACKDROP_CLOSE_TIMEOUT);
+    return () => window.clearTimeout(timer);
+  }, [backdrop]);
 
   // ⌃Tab / ⌃⇧Tab select the next or previous row of the column last
   // interacted with: the last column in the strip that was focused, pressed
@@ -169,8 +224,9 @@ export default function ResearchColumns({
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       const direction = researchCycleDirection(event);
       if (direction === null || event.defaultPrevented || event.isComposing) return;
-      // The strip hidden behind another surface, or focus in a dialog or menu.
-      if (!row.isConnected || row.getClientRects().length === 0) return;
+      // The strip hidden behind another surface or slid away for the
+      // backdrop, or focus in a dialog or menu.
+      if (!row.isConnected || row.inert || row.getClientRects().length === 0) return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("[role='dialog'], [role='alertdialog'], [role='menu']")) return;
       event.preventDefault();
@@ -376,7 +432,9 @@ export default function ResearchColumns({
       <ResearchColumnSizingContext.Provider value={sizing}>
         <div
           ref={rootRef}
-          className={`research-columns${hasThread ? " has-thread" : ""}`}
+          className={`research-columns${hasThread ? " has-thread" : ""}${
+            backdrop === "closed" ? "" : ` is-backdrop-${backdrop}`
+          }`}
           style={
             {
               "--research-feed-column-width": `${widths.feed}px`,
@@ -385,7 +443,17 @@ export default function ResearchColumns({
             } as CSSProperties
           }
         >
-          <div ref={setRow} className="research-columns-row">
+          <ResearchBackdrop row={row} mode={backdrop} reduceMotion={reduceMotion} onToggle={toggleBackdrop} />
+          <div
+            ref={setRow}
+            className="research-columns-row"
+            inert={backdrop === "open"}
+            onTransitionEnd={(event) => {
+              if (event.target === event.currentTarget && event.propertyName === "transform") {
+                setBackdrop((current) => (current === "closing" ? "closed" : current));
+              }
+            }}
+          >
             {feed ? (
               <section
                 ref={feedRef}

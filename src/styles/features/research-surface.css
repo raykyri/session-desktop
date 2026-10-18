@@ -37,7 +37,11 @@
   overflow: clip;
 }
 
+/* Positioned so it paints over the backdrop, its earlier sibling, without a
+   z-index: a stacking context here would hold the fixed menus and tips inside
+   the strip under the sidebar and the find bar. */
 .research-columns-row {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -45,6 +49,88 @@
   overflow: auto hidden;
   scrollbar-color: var(--surface-border-strong) transparent;
   scrollbar-width: thin;
+  transition:
+    transform 460ms cubic-bezier(0.22, 0.8, 0.24, 1),
+    opacity 300ms ease;
+}
+
+/* The glyph field (ResearchBackdrop) under the strip. It shows through the
+   strip's empty space, which is transparent, and supplies that space's
+   color. The canvas reads its glyph color and font from color and
+   font-family. */
+.research-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--research-backdrop-glyph);
+  background: var(--research-page-bg);
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+/* The expand button: a ghost button at the top right of the filler, level
+   with the column headers' controls, above the strip. */
+.research-backdrop-toggle {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  z-index: var(--z-research-overlay);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.research-backdrop-toggle:hover,
+.research-backdrop-toggle[aria-pressed="true"] {
+  color: var(--text-tertiary);
+}
+
+.research-backdrop-toggle:hover {
+  border-color: var(--surface-border-subtle);
+  background: var(--surface-fill-hover);
+}
+
+/* Open: the strip slides out to the left, fading, and is hidden once it is
+   gone; it slides back while closing. The find bar's layer goes with it. A
+   drag region takes the place of the strip's header bars. */
+.research-columns.is-backdrop-open > .research-columns-row {
+  transform: translateX(-100%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 460ms cubic-bezier(0.55, 0, 0.75, 0.2),
+    opacity 300ms ease 120ms,
+    visibility 0s linear 460ms;
+}
+
+.research-columns.is-backdrop-closing > .research-columns-row {
+  transform: translateX(0);
+}
+
+.research-columns:is(.is-backdrop-open, .is-backdrop-closing) > .research-columns-overlay {
+  visibility: hidden;
+}
+
+/* As tall as a header bar with its border. */
+.research-backdrop-drag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 44px;
 }
 
 /* While a column is being resized (ResearchColumnResizer), widths apply
@@ -57,11 +143,17 @@
 
 /* Space after the last column that a resize adds so the strip's scroll
    offset stays in range while columns shrink (ResearchColumnResizer sets its
-   width); 0 otherwise. It looks like the filler. */
+   width); 0 otherwise. It looks like the filler: transparent over the
+   backdrop. Without a filler (a draft, a loading thread) it also takes the
+   room left after the last column, so the backdrop shows there too. */
 .research-strip-slack {
   flex: none;
   width: 0;
-  background: var(--research-page-bg);
+  background: transparent;
+}
+
+.research-columns-row:not(:has(.research-columns-filler)) > .research-strip-slack {
+  flex-grow: 1;
 }
 
 .research-feed-column {
