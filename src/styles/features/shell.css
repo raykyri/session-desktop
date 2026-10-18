@@ -200,6 +200,52 @@
   --research-titlebar-inset: 64px;
 }
 
+/* When the columns are slid away, their header rule leaves with them. Continue
+   it under the traffic lights and let it ease out from the rail's right edge
+   to just past the expand button, the far side of that 116px zone. The stops
+   follow an ease-in-out curve: the line holds as it leaves the rail, then
+   falls away. The first pixel overlaps the rail's own rule so the join has
+   no gap. */
+.app-shell.has-titlebar-rail::after {
+  position: absolute;
+  top: 43px;
+  left: calc(var(--sidebar-width, 52px) - 1px);
+  z-index: 4;
+  width: 65px;
+  height: 1px;
+  background: var(--surface-divider);
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    rgb(0 0 0 / 0.96) 15%,
+    rgb(0 0 0 / 0.81) 30%,
+    rgb(0 0 0 / 0.59) 45%,
+    rgb(0 0 0 / 0.33) 60%,
+    rgb(0 0 0 / 0.13) 75%,
+    rgb(0 0 0 / 0.03) 88%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    rgb(0 0 0 / 0.96) 15%,
+    rgb(0 0 0 / 0.81) 30%,
+    rgb(0 0 0 / 0.59) 45%,
+    rgb(0 0 0 / 0.33) 60%,
+    rgb(0 0 0 / 0.13) 75%,
+    rgb(0 0 0 / 0.03) 88%,
+    transparent 100%
+  );
+  transition: opacity 400ms ease;
+}
+
+.app-shell.has-titlebar-rail:has(.research-columns.is-ambient-expanded)::after {
+  opacity: 1;
+}
+
 .research-rail-icon.is-expand[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;

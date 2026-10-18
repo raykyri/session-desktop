@@ -9,6 +9,7 @@ import {
   type ResearchColumnId,
 } from "@session/shared/lib/researchColumns";
 import { columnIdOf } from "../../lib/researchColumnDom";
+import ResearchAmbient from "./ResearchAmbient";
 import { isEditableTarget } from "../../lib/appHelpers";
 import { researchCycleDirection, type ResearchCycleRequest } from "@session/shared/lib/researchSiblingCycle";
 import {
@@ -132,10 +133,12 @@ export default function ResearchColumns({
   hasThread,
   feed,
   children,
+  reduceMotion = false,
 }: {
   hasThread: boolean;
   feed: ReactNode;
   children: ReactNode;
+  reduceMotion?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const feedRef = useRef<HTMLElement>(null);
@@ -143,6 +146,7 @@ export default function ResearchColumns({
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(1232);
   const [feedCurrent, setFeedCurrent] = useState(false);
+  const [ambientExpanded, setAmbientExpanded] = useState(false);
   const [storedWidths, setStoredWidths] = useState<ResearchStoredColumnWidths>(loadResearchColumnWidths);
 
   useEffect(listenForInteraction, []);
@@ -376,7 +380,7 @@ export default function ResearchColumns({
       <ResearchColumnSizingContext.Provider value={sizing}>
         <div
           ref={rootRef}
-          className={`research-columns${hasThread ? " has-thread" : ""}`}
+          className={`research-columns${hasThread ? " has-thread" : ""}${ambientExpanded ? " is-ambient-expanded" : ""}`}
           style={
             {
               "--research-feed-column-width": `${widths.feed}px`,
@@ -385,6 +389,7 @@ export default function ResearchColumns({
             } as CSSProperties
           }
         >
+          <ResearchAmbient row={row} expanded={ambientExpanded} onExpandedChange={setAmbientExpanded} reduceMotion={reduceMotion} />
           <div ref={setRow} className="research-columns-row">
             {feed ? (
               <section

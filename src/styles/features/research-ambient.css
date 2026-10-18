@@ -1,0 +1,96 @@
+/* The canvas sits below the strip. Opaque columns cover it; only the unused
+   space and Home's transparent filler reveal the monochrome wisps. */
+.research-columns {
+  isolation: isolate;
+  background: var(--research-page-bg);
+}
+
+.research-ambient {
+  position: absolute;
+  inset: 0 0 0 var(--ambient-start, 100%);
+  overflow: hidden;
+  pointer-events: none;
+  transition: left 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.research-ambient.is-expanded {
+  left: 0;
+}
+
+.research-ambient-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--text-primary);
+  opacity: 0.85;
+  /* Fall away on all sides, with breathing room around the title bar. */
+  mask-image: linear-gradient(to right, transparent, currentColor 12%, currentColor 88%, transparent),
+    linear-gradient(to bottom, transparent 3%, currentColor 24%, currentColor 80%, transparent 98%);
+  mask-composite: intersect;
+}
+
+.research-columns-row {
+  position: relative;
+  z-index: 1;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 400ms ease;
+}
+
+.research-columns.is-ambient-expanded > .research-columns-row {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.research-columns.is-ambient-expanded > .research-columns-overlay {
+  visibility: hidden;
+}
+
+.research-ambient-toggle {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  z-index: 4;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-subtle);
+  opacity: 0.4;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.research-ambient-toggle:hover,
+.research-ambient-toggle:focus-visible {
+  background: var(--surface-fill-hover);
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.research-ambient-toggle:focus-visible {
+  opacity: 1;
+}
+
+/* Home's hint remains above the decorative layer. Its history header keeps
+   the normal surface, so it stays distinct from the drifting field. */
+.research-columns .research-empty-content,
+.research-columns .research-columns-filler,
+.research-columns .research-strip-slack {
+  background: transparent;
+}
+
+.research-empty-content > .research-column-header {
+  background: var(--research-page-bg);
+}
+
+@media (forced-colors: active) {
+  .research-ambient-canvas {
+    display: none;
+  }
+}
