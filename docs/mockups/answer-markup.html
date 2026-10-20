@@ -1,0 +1,1012 @@
+<!doctype html>
+<!--
+  Session answer markup: the Sketch Stacks answer rendered with the changes in
+  docs/answer-markup-proposal.md switched on or off, per agent and app.
+  Open directly in a browser; Inter and JetBrains Mono load from Google Fonts.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Answer Markup Mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: control panel on top, then a Session thread window (question | answer),
+   then a renderer test strip. Tokens follow Session's warm dark and warm light themes. */
+:root {
+  color-scheme: light;
+  --page: #e9e6e1;
+  --window: #f8f6f3;
+  --pane: #fbfaf8;
+  --field: #ffffff;
+  --sel: #ece8e2;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: #d2ccc5;
+  --fill: rgba(0, 0, 0, 0.04);
+  --fill-2: rgba(0, 0, 0, 0.07);
+  --heading: #1b1a18;
+  --text: #2a2826;
+  --body: #34322f;
+  --muted: #6f6a64;
+  --faint: #8a847d;
+  --accent: #0a6fb8;
+  --accent-soft: rgba(10, 111, 184, 0.1);
+  --ok: #2e7d4f;
+  --warn: #9a6a12;
+  --warn-soft: rgba(154, 106, 18, 0.1);
+  --tip: #2e7d4f;
+  --tip-soft: rgba(46, 125, 79, 0.09);
+  --note: #0a6fb8;
+  --note-soft: rgba(10, 111, 184, 0.08);
+  --off: #8a847d;
+  --key-bg: #ffffff;
+  --key-border: #cfc9c1;
+  --code-bg: rgba(0, 0, 0, 0.05);
+  --new: #7a4fb3;
+  --new-soft: rgba(122, 79, 179, 0.1);
+  --demo-item: #dbe8f4;
+  --demo-item-2: #e6dff1;
+  --demo-item-3: #e2eedf;
+  --demo-stack: rgba(10, 111, 184, 0.06);
+  --demo-pad: rgba(154, 106, 18, 0.14);
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #121110; --window: #1a1918; --pane: #1c1b1a; --field: #232220; --sel: #2b2927;
+    --border: rgba(255, 255, 255, 0.075); --border-strong: #373634;
+    --fill: rgba(255, 255, 255, 0.05); --fill-2: rgba(255, 255, 255, 0.09);
+    --heading: #f4f3ec; --text: #e7e7e2; --body: #d9ddd9; --muted: #919994; --faint: #828b86;
+    --accent: #33adff; --accent-soft: rgba(51, 173, 255, 0.13);
+    --ok: #81c784; --warn: #d8b878; --warn-soft: rgba(216, 184, 120, 0.12);
+    --tip: #81c784; --tip-soft: rgba(129, 199, 132, 0.09);
+    --note: #79a7c8; --note-soft: rgba(121, 167, 200, 0.1);
+    --off: #828b86; --key-bg: #262523; --key-border: #45433f; --code-bg: rgba(255, 255, 255, 0.07);
+    --new: #b99cf0; --new-soft: rgba(185, 156, 240, 0.12);
+    --demo-item: #22384c; --demo-item-2: #362d4a; --demo-item-3: #27402c;
+    --demo-stack: rgba(51, 173, 255, 0.08); --demo-pad: rgba(216, 184, 120, 0.16);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121110; --window: #1a1918; --pane: #1c1b1a; --field: #232220; --sel: #2b2927;
+  --border: rgba(255, 255, 255, 0.075); --border-strong: #373634;
+  --fill: rgba(255, 255, 255, 0.05); --fill-2: rgba(255, 255, 255, 0.09);
+  --heading: #f4f3ec; --text: #e7e7e2; --body: #d9ddd9; --muted: #919994; --faint: #828b86;
+  --accent: #33adff; --accent-soft: rgba(51, 173, 255, 0.13);
+  --ok: #81c784; --warn: #d8b878; --warn-soft: rgba(216, 184, 120, 0.12);
+  --tip: #81c784; --tip-soft: rgba(129, 199, 132, 0.09);
+  --note: #79a7c8; --note-soft: rgba(121, 167, 200, 0.1);
+  --off: #828b86; --key-bg: #262523; --key-border: #45433f; --code-bg: rgba(255, 255, 255, 0.07);
+  --new: #b99cf0; --new-soft: rgba(185, 156, 240, 0.12);
+  --demo-item: #22384c; --demo-item-2: #362d4a; --demo-item-3: #27402c;
+  --demo-stack: rgba(51, 173, 255, 0.08); --demo-pad: rgba(216, 184, 120, 0.16);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 18px;
+}
+header h1 {
+  margin: 0 0 4px;
+  color: var(--heading);
+  font-size: 20px;
+  font-weight: 600;
+  text-wrap: balance;
+}
+header p { margin: 0; max-width: 72ch; color: var(--muted); }
+header code { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* Control panel */
+.panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 14px 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--window);
+}
+.group { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.group-label {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.seg button, .preset {
+  appearance: none;
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--body);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] { color: var(--heading); background: var(--fill-2); border-color: var(--accent); }
+.seg button:hover, .preset:hover { color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.changes { display: grid; gap: 4px; }
+.change {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.change:hover { background: var(--fill); }
+.change input { margin: 2px 0 0; accent-color: var(--accent); }
+.change .tag {
+  min-width: 26px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 18px;
+}
+.tag.is-new { color: var(--new); background: var(--new-soft); }
+.tag.is-shipped { color: var(--ok); background: var(--tip-soft); }
+.change-text { min-width: 0; }
+.change-text b { color: var(--heading); font-weight: 500; }
+.change-text small { display: block; color: var(--muted); font-size: 12px; }
+.change-text small.effect-none { color: var(--warn); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 10px;
+}
+.fact {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--window);
+}
+.fact .group-label { display: block; margin-bottom: 3px; }
+.fact p { margin: 0; color: var(--body); }
+.fact code { font-family: var(--font-mono); font-size: 11.5px; padding: 0 3px; border-radius: 3px; background: var(--code-bg); overflow-wrap: anywhere; }
+.fact .warn { color: var(--warn); }
+
+/* Session window */
+.window {
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--window);
+}
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--heading);
+  font-weight: 600;
+}
+.titlebar .crumbs { color: var(--faint); font-weight: 400; }
+.titlebar .agent-chip {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.thread { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+@media (max-width: 760px) { .thread { grid-template-columns: minmax(0, 1fr); } }
+.ask { padding: 14px; border-right: 1px solid var(--border); display: grid; gap: 10px; align-content: start; }
+@media (max-width: 760px) { .ask { border-right: 0; border-bottom: 1px solid var(--border); } }
+.ask-field {
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--faint);
+  background: var(--field);
+}
+.question {
+  padding: 12px 14px;
+  border-radius: 9px;
+  color: var(--heading);
+  background: var(--sel);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.answer-pane { min-width: 0; padding: 16px 22px 22px; background: var(--pane); }
+
+/* Answer prose */
+.prose { max-width: 70ch; color: var(--body); font-size: 15px; line-height: 1.6; }
+.prose > * { margin: 0 0 0.72em; }
+.prose h3 { margin-top: 1.1em; color: var(--heading); font-size: 15px; font-weight: 600; }
+.prose strong { color: var(--heading); font-weight: 600; }
+.prose ul { padding-left: 1.3em; }
+.prose li { margin: 0.25em 0; }
+.prose code {
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+.prose blockquote {
+  margin-left: 0;
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--muted);
+}
+.prose blockquote > p { margin: 0; }
+.prose .literal { color: var(--warn); background: var(--warn-soft); border-radius: 3px; }
+.prose pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+.prose table { border-collapse: collapse; font-size: 14px; }
+.prose th, .prose td { padding: 5px 10px; border: 1px solid var(--border-strong); text-align: left; }
+.prose th { color: var(--heading); font-weight: 600; background: var(--fill); }
+.prose .menu-path { color: var(--heading); font-weight: 600; }
+
+kbd {
+  display: inline-block;
+  min-width: 1.55em;
+  margin: 0 0.08em;
+  padding: 0.05em 0.38em;
+  border: 1px solid var(--key-border);
+  border-radius: 4px;
+  color: var(--heading);
+  background: var(--key-bg);
+  box-shadow: inset 0 -1px 0 var(--key-border);
+  font-family: var(--font-ui);
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  vertical-align: 0.08em;
+}
+.chord { white-space: nowrap; }
+
+.callout {
+  padding: 9px 12px 10px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 6px;
+}
+.callout-title { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; font-size: 13px; font-weight: 600; }
+.callout-title svg { width: 14px; height: 14px; }
+.callout p { margin: 0; }
+.callout[data-kind="tip"] { border-left-color: var(--tip); background: var(--tip-soft); }
+.callout[data-kind="tip"] .callout-title { color: var(--tip); }
+.callout[data-kind="note"] { border-left-color: var(--note); background: var(--note-soft); }
+.callout[data-kind="note"] .callout-title { color: var(--note); }
+.callout[data-kind="warning"] { border-left-color: var(--warn); background: var(--warn-soft); }
+.callout[data-kind="warning"] .callout-title { color: var(--warn); }
+
+.source-view {
+  margin: 0;
+  overflow-x: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--body);
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.source-view .diff { color: var(--new); background: var(--new-soft); }
+
+/* Session widget chrome (SessionWidget.tsx / transcript.css) */
+.session-widget {
+  margin: 0 0 0.72em;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--fill);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.widget-bar {
+  display: flex;
+  min-height: 28px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 3px 5px;
+  border-bottom: 1px solid var(--border);
+}
+.widget-heading { display: flex; min-width: 0; flex: 1 1 120px; align-items: center; gap: 8px; padding-left: 4px; font-size: 12px; }
+.widget-title { min-width: 0; overflow: hidden; color: var(--body); text-overflow: ellipsis; white-space: nowrap; }
+.widget-status { display: inline-flex; align-items: center; gap: 5px; color: var(--faint); white-space: nowrap; }
+.widget-status::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+.widget-status[data-status="running"] { color: var(--ok); }
+.widget-controls { display: flex; flex: none; align-items: center; gap: 4px; margin-left: auto; }
+.widget-view { display: inline-flex; height: 21px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 4px; }
+.widget-view button {
+  appearance: none; height: 100%; padding: 0 7px; border: 0; color: var(--body); background: transparent;
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.widget-view button + button { border-left: 1px solid var(--border-strong); }
+.widget-view button[aria-pressed="true"] { color: var(--heading); background: var(--fill-2); }
+.widget-run {
+  appearance: none; display: inline-flex; align-items: center; gap: 4px; height: 21px; padding: 0 8px 0 6px;
+  border: 1px solid var(--accent); border-radius: 4px; color: var(--accent); background: var(--accent-soft);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.widget-run svg { width: 11px; height: 11px; }
+.widget-icon {
+  appearance: none; display: inline-grid; place-items: center; width: 22px; height: 21px; padding: 0;
+  border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer;
+}
+.widget-icon:hover { color: var(--accent); background: var(--fill-2); }
+.widget-icon svg { width: 13px; height: 13px; }
+.change-text code { font-family: var(--font-mono); font-size: 11px; }
+.widget-frame { padding: 14px; background: var(--pane); }
+.widget-source { margin: 0; max-height: 280px; overflow: auto; padding: 10px 12px; font-family: var(--font-mono); font-size: 11.5px; white-space: pre; color: var(--body); background: var(--pane); }
+
+/* The widget's own fragment (what the agent wrote) */
+.sx { display: grid; gap: 12px; color: var(--text); font-size: 13px; }
+.sx-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px 14px; }
+.sx-controls label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+.sx-controls select, .sx-controls input { font: inherit; color: var(--text); }
+.sx-controls select { padding: 2px 4px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--field); }
+.sx-controls input[type="range"] { width: 100%; accent-color: var(--accent); }
+.sx-controls output { font-variant-numeric: tabular-nums; color: var(--text); }
+.sx-stage { overflow-x: auto; padding: 4px 0; }
+.sx-parent {
+  width: 100%;
+  max-width: 460px;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+}
+.sx-parent-label { display: block; margin-bottom: 6px; color: var(--faint); font-size: 11px; }
+.sx-stack {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--demo-stack);
+  box-shadow: inset 0 0 0 10px var(--demo-pad);
+  width: fit-content;
+  max-width: 100%;
+  transition: all 160ms ease;
+}
+.sx-item {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: var(--heading);
+  background: var(--demo-item);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 160ms ease;
+}
+.sx-item:nth-child(2) { background: var(--demo-item-2); }
+.sx-item:nth-child(3) { background: var(--demo-item-3); }
+.sx-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; }
+.sx-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
+.sx-readout { margin: 0; color: var(--muted); font-size: 12px; }
+.sx-readout b { color: var(--text); font-weight: 500; }
+.sx[data-inert] .sx-controls { opacity: 0.75; }
+
+/* Test strip */
+.strip { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--window); }
+.strip h2, .notes h2 { margin: 0; color: var(--heading); font-size: 14px; font-weight: 600; }
+.strip-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 640px) { .strip-row { grid-template-columns: minmax(0, 1fr); } }
+.strip-src { margin: 0; overflow-x: auto; padding: 6px 9px; border-radius: 5px; background: var(--code-bg); font-family: var(--font-mono); font-size: 12px; white-space: pre; }
+.strip-out { min-width: 0; font-size: 14px; }
+.strip-out > * { margin: 0; }
+
+.notes { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--window); }
+.notes p, .notes li { margin: 0; color: var(--body); max-width: 90ch; }
+.notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.notes code { font-family: var(--font-mono); font-size: 11.5px; padding: 0 3px; border-radius: 3px; background: var(--code-bg); }
+
+.unavailable {
+  display: grid;
+  gap: 6px;
+  max-width: 60ch;
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--body);
+}
+.unavailable b { color: var(--heading); }
+
+@media (prefers-reduced-motion: reduce) { .sx-stack, .sx-item { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Answer Markup Mock</h1>
+    <p>The Sketch answer from the screenshot, as Session would show it with each proposed change switched on or off. Built against <code>main</code> at <code>6dd75ad1</code>. Changes marked <b>new</b> are proposals; <b>shipped</b> is already on main.</p>
+  </header>
+
+  <section class="panel" aria-label="Mock settings">
+    <div class="group">
+      <span class="group-label" id="agent-label">Agent</span>
+      <div class="seg" role="group" aria-labelledby="agent-label" id="agent-seg">
+        <button type="button" data-agent="claude" aria-pressed="true">Claude</button>
+        <button type="button" data-agent="gpt" aria-pressed="false">GPT</button>
+        <button type="button" data-agent="gemini" aria-pressed="false">Gemini</button>
+        <button type="button" data-agent="grok" aria-pressed="false">Grok</button>
+      </div>
+      <span class="group-label" id="surface-label">App</span>
+      <div class="seg" role="group" aria-labelledby="surface-label" id="surface-seg">
+        <button type="button" data-surface="desktop" aria-pressed="true">Desktop (macOS)</button>
+        <button type="button" data-surface="web" aria-pressed="false">Web (production)</button>
+      </div>
+      <span class="group-label" id="view-label">Answer view</span>
+      <div class="seg" role="group" aria-labelledby="view-label" id="view-seg">
+        <button type="button" data-view="rendered" aria-pressed="true">Rendered</button>
+        <button type="button" data-view="source" aria-pressed="false">Markdown the agent wrote</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="group-label">Changes</span>
+      <div class="changes">
+        <label class="change"><input type="checkbox" id="opt-keys" checked><span class="tag is-new">A1</span><span class="change-text"><b>Key chords as keycaps</b><small>Inline code that is only a chord (<code>⌘L</code>, <code>⇧S</code>) renders as keys.</small></span></label>
+        <label class="change"><input type="checkbox" id="opt-alerts" checked><span class="tag is-new">A2</span><span class="change-text"><b>Callouts</b><small id="eff-alerts">GitHub alert syntax <code>&gt; [!TIP]</code> renders as a callout.</small></span></label>
+        <label class="change"><input type="checkbox" id="opt-html"><span class="tag is-new">A3</span><span class="change-text"><b>Inline HTML allowlist</b><small id="eff-html"><code>&lt;kbd&gt;</code>, <code>&lt;mark&gt;</code>, <code>&lt;sub&gt;</code>, <code>&lt;sup&gt;</code> render; all other HTML stays literal.</small></span></label>
+        <label class="change"><input type="checkbox" id="opt-guide" checked><span class="tag is-new">B</span><span class="change-text"><b>Formatting guidance</b><small>A short block sent with the widget guidance. Changes what the agent writes.</small></span></label>
+        <label class="change"><input type="checkbox" id="opt-widget" checked><span class="tag is-shipped">W</span><span class="change-text"><b>Answer widgets</b><small>The “Widgets in answers” setting. On: the agent gets the widget guidance and <code>session-html</code> blocks render as widgets.</small></span></label>
+      </div>
+      <div class="presets">
+        <button type="button" class="preset" data-preset="main">Main today</button>
+        <button type="button" class="preset" data-preset="rec">Recommended</button>
+        <button type="button" class="preset" data-preset="all">Everything</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="facts" aria-label="Agent and app details" id="facts"></section>
+
+  <section class="window" aria-label="Session thread">
+    <div class="titlebar">
+      <span>Sketch automatic layout walkthrough</span>
+      <span class="crumbs">Research</span>
+      <span class="agent-chip" id="agent-chip">Claude</span>
+    </div>
+    <div class="thread">
+      <div class="ask">
+        <div class="ask-field">Ask a follow-up</div>
+        <div class="question">I have no idea how to use automatic layout in Sketch. Can you walk me through it, including hotkeys?</div>
+      </div>
+      <div class="answer-pane" id="answer"></div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Renderer test strip">
+    <h2>Renderer test strip</h2>
+    <p style="margin:0;color:var(--muted)">The same answer only exercises what the agent chose to write. These lines go through the current renderer settings directly.</p>
+    <div id="strip"></div>
+  </section>
+
+  <section class="notes" aria-label="Notes">
+    <h2>Notes on the mock</h2>
+    <ul>
+      <li>The answer text up to “Fixed stays at the size you set.” is from the screenshot; the Fit and Fill lines and the widget are written for the mock.</li>
+      <li>The widget runs in this page’s DOM. In Session it runs in an iframe with an opaque origin, no network access, and scripts only after <b>Run scripts</b>. The static view before that shows the HTML and CSS only, so the controls do nothing until then.</li>
+      <li>The widget’s Source view shortens its script to a comment.</li>
+      <li>Rendering for A1–A3 follows the rules in <code>docs/answer-markup-proposal.md</code>. The Markdown view with B on shows what an agent following the draft guidance could write; it is not recorded output from any model.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const state = {
+    agent: "claude",
+    surface: "desktop",
+    view: "rendered",
+    keys: true,
+    alerts: true,
+    html: false,
+    guide: true,
+    widget: true,
+    widgetRunning: false,
+    widgetSource: false,
+  };
+
+  // Facts per agent and app. Channels and availability are from main at 6dd75ad1.
+  const WEB_CHANNEL = "the <code>system</code> string passed to the AI SDK's <code>streamText</code>, after the fixed research prompt";
+  const AGENTS = {
+    claude: {
+      name: "Claude",
+      desktop: { runtime: "Claude Code CLI in stream-json mode with read-only tools", channel: "<code>--append-system-prompt</code> on every launch" },
+      web: { runtime: "Claude Fable 5.1 through the Anthropic API, admin accounts only", channel: WEB_CHANNEL },
+    },
+    gpt: {
+      name: "GPT",
+      desktop: { runtime: "Codex CLI <code>exec</code> with a read-only sandbox", channel: "<code>-c developer_instructions=…</code>, read only when a thread starts; follow-ups inherit it" },
+      web: { runtime: "GPT-5.6 Luna through OpenRouter", channel: WEB_CHANNEL },
+    },
+    gemini: {
+      name: "Gemini",
+      desktop: null,
+      web: { runtime: "Gemini 3.8 Flash through Vertex AI, the web app's default model", channel: WEB_CHANNEL },
+    },
+    grok: {
+      name: "Grok",
+      desktop: { runtime: "Grok CLI in headless mode with a read-only tool list", channel: "<code>--rules</code>" },
+      web: null,
+    },
+  };
+
+  const ICONS = {
+    tip: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.5a4.5 4.5 0 0 0-2.6 8.17c.37.27.6.68.6 1.13V12h4v-1.2c0-.45.23-.86.6-1.13A4.5 4.5 0 0 0 8 1.5ZM6 13.25h4v.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75v-.5Z"/></svg>',
+    note: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM7.25 5a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0Zm0 2.25h1.5v4.25h-1.5V7.25Z"/></svg>',
+    warning: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M7.13 2.5a1 1 0 0 1 1.74 0l5.6 9.75a1 1 0 0 1-.87 1.5H2.4a1 1 0 0 1-.87-1.5l5.6-9.75ZM7.25 6v3.5h1.5V6h-1.5Zm0 4.75v1.5h1.5v-1.5h-1.5Z"/></svg>',
+    play: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4.5 2.8v10.4L13 8 4.5 2.8Z"/></svg>',
+    reload: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M2.75 8a5.25 5.25 0 1 0 1.6-3.78M2.75 2.75v3h3"/></svg>',
+  };
+
+  // The widget fragment an agent would write. Static HTML and CSS show a sensible
+  // initial state; the script wires the controls.
+  const WIDGET_HTML = [
+    '<div class="sx">',
+    '  <div class="sx-controls">',
+    '    <label>Direction <select id="sx-dir"><option value="row">Horizontal</option><option value="column">Vertical</option></select></label>',
+    '    <label>Spacing <output id="sx-gap-o">8</output><input id="sx-gap" type="range" min="-12" max="32" value="8"></label>',
+    '    <label>Padding <output id="sx-pad-o">10</output><input id="sx-pad" type="range" min="0" max="32" value="10"></label>',
+    '    <label>Alignment <select id="sx-align"><option value="flex-start">Start</option><option value="center" selected>Center</option><option value="flex-end">End</option><option value="stretch">Stretch</option></select></label>',
+    '    <label>Stack width <select id="sx-stack-size"><option value="fit">Fit</option><option value="fixed">Fixed 420</option></select></label>',
+    '    <label>"Upgrade plan" width <select id="sx-item-size"><option value="fit">Fit</option><option value="fixed">Fixed 140</option><option value="fill">Fill</option></select></label>',
+    '  </div>',
+    '  <div class="sx-stage"><div class="sx-parent"><span class="sx-parent-label">Parent frame</span>',
+    '    <div class="sx-stack" id="sx-stack">',
+    '      <div class="sx-item">Avatar</div>',
+    '      <div class="sx-item" id="sx-label">Upgrade plan</div>',
+    '      <div class="sx-item">Badge</div>',
+    '    </div></div></div>',
+    '  <div class="sx-legend"><span><span class="sx-swatch" style="background:var(--demo-pad)"></span>Padding</span><span><span class="sx-swatch" style="background:var(--demo-stack)"></span>Stack</span></div>',
+    '  <p class="sx-readout" id="sx-readout">Horizontal stack, spacing 8, padding 10, items centered. The stack fits its content.</p>',
+    '</div>',
+    '<script>/* wires the controls to the stack\'s flex properties */<\/script>',
+  ].join("\n");
+
+  // Markdown source of the answer, by guidance (B) and widget (W) state.
+  function answerSource() {
+    const g = state.guide;
+    const w = state.widget;
+    const lines = [];
+    lines.push('In current Sketch, "auto layout" is called **Stacks**. The older Smart Layout still exists but is marked legacy, so learn Stacks. Here is the walkthrough.');
+    lines.push("");
+    lines.push(g ? "### 1. Create a stack" : "**1. Create a stack**");
+    lines.push("");
+    lines.push(
+      "Select the layers you want to lay out (or an existing frame or group) and press `⌘L` or `⇧S`. " +
+      "Sketch wraps them in a frame, turns it into a stack, and infers direction, spacing, and padding from how the layers are already arranged. " +
+      (g
+        ? "From the menus: **Arrange › Stack › Add Stack Layout**, or the plus button in the Inspector's Layout section."
+        : "If you'd rather use menus: Arrange > Stack > Add Stack Layout, or the plus button in the Inspector's Layout section.")
+    );
+    lines.push("");
+    if (g) {
+      lines.push("> [!TIP]");
+      lines.push("> If your selection is a rectangle with text on top, the rectangle's fill becomes the stack's own background and the rectangle layer disappears. That is how you make a button that grows with its label.");
+    } else {
+      lines.push("Nice detail: if your selection is a rectangle with text on top, the rectangle's fill becomes the stack's own background and the rectangle layer disappears. That is how you make a button that grows with its label.");
+    }
+    lines.push("");
+    lines.push(g ? "### 2. Set direction, spacing, padding, alignment" : "**2. Set direction, spacing, padding, alignment**");
+    lines.push("");
+    lines.push("All of this lives in the Stack section of the Inspector once a stack is selected:");
+    lines.push("");
+    lines.push("- **Direction** toggles vertical (column) or horizontal (row). One stack can't do both. For a grid-like layout, nest a horizontal stack inside a vertical one.");
+    lines.push("- **Spacing** is the gap between items. Negative values are allowed, which is handy for overlapping avatars.");
+    lines.push("- **Distribution** offers Space Between, Space Evenly, and Space Around. Picking one sets spacing to Auto.");
+    lines.push("- **Padding** has a toggle for four individual fields vs. a horizontal/vertical pair, plus a link button to use one value everywhere. You can also drag the padding handles directly on the canvas when hovering a stack.");
+    lines.push("- **Alignment** controls where items sit on the cross axis. There's a stretch option to fill it.");
+    if (g) {
+      lines.push("- **Wrap** pushes overflow onto a new row or column.");
+    } else {
+      lines.push("- **Wrap** pushes overflow onto a new row or column. It only works when the container has a fixed size on the main axis.");
+    }
+    lines.push("- The gear icon opens extra settings: include borders in layout, and layering order (first on top or last on top).");
+    lines.push("");
+    if (g) {
+      lines.push("> [!NOTE]");
+      lines.push("> Wrap only works when the stack has a fixed size on its main axis.");
+      lines.push("");
+    }
+    lines.push(g ? "### 3. Sizing modes" : "**3. Sizing modes**");
+    lines.push("");
+    lines.push("This is the part that trips up most people. Every stack and every item has a sizing mode per axis, set in the Inspector's Layout section:");
+    lines.push("");
+    lines.push("- **Fixed** stays at the size you set.");
+    lines.push("- **Fit** grows and shrinks with its content.");
+    lines.push("- **Fill** takes the space left in its parent stack. It only has an effect when the parent has room to give, so a Fill item inside a Fit stack looks the same as Fit.");
+    lines.push("");
+    if (w) {
+      lines.push('```session-html id="sketch-stack" title="Stack direction, spacing and sizing"');
+      lines.push(WIDGET_HTML);
+      lines.push("```");
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
+
+  // ---- Minimal renderer for the subset of Markdown the answer uses ----
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  // A1: inline code whose whole text is a key chord: modifiers then one key, with
+  // optional "or" alternatives handled by the caller (each code span separately).
+  const MODS = "⌘⇧⌥⌃";
+  const NAMED = ["Return", "Enter", "Esc", "Tab", "Space", "Delete", "⌫", "↩", "←", "→", "↑", "↓", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"];
+  const WORD_MODS = ["Cmd", "Command", "Ctrl", "Control", "Shift", "Alt", "Option", "Opt", "Win", "Super", "Fn"];
+  function chordParts(text) {
+    const t = text.trim();
+    // Word form: Ctrl+Shift+P. Every part but the last must be a modifier name.
+    if (t.includes("+") && !/\s/.test(t)) {
+      const words = t.split("+");
+      const key = words.pop();
+      if (words.length > 0 && words.every((w) => WORD_MODS.includes(w)) &&
+          (/^[A-Za-z0-9]$/.test(key) || NAMED.includes(key))) {
+        return [...words, key.length === 1 ? key.toUpperCase() : key];
+      }
+      return null;
+    }
+    let i = 0;
+    const parts = [];
+    while (i < t.length && MODS.includes(t[i])) { parts.push(t[i]); i += 1; }
+    const rest = t.slice(i);
+    if (parts.length === 0 || rest.length === 0) return null;
+    if (/^[A-Za-z0-9]$/.test(rest) || /^[\[\]\\;',./`=\-]$/.test(rest) || NAMED.includes(rest)) {
+      parts.push(rest.toUpperCase());
+      return parts;
+    }
+    return null;
+  }
+
+  function inline(text) {
+    let out = "";
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === "`") {
+        const end = text.indexOf("`", i + 1);
+        if (end > i) {
+          const code = text.slice(i + 1, end);
+          const chord = state.keys ? chordParts(code) : null;
+          out += chord
+            ? `<span class="chord">${chord.map((k) => `<kbd>${esc(k)}</kbd>`).join("")}</span>`
+            : `<code>${esc(code)}</code>`;
+          i = end + 1;
+          continue;
+        }
+      }
+      if (text.startsWith("**", i)) {
+        const end = text.indexOf("**", i + 2);
+        if (end > i) {
+          out += `<strong>${inline(text.slice(i + 2, end))}</strong>`;
+          i = end + 2;
+          continue;
+        }
+      }
+      const tag = /^<(\/?)(kbd|mark|sub|sup)>/.exec(text.slice(i));
+      if (tag) {
+        out += state.html ? `<${tag[1]}${tag[2]}>` : `<span class="literal">${esc(tag[0])}</span>`;
+        i += tag[0].length;
+        continue;
+      }
+      out += esc(text[i]);
+      i += 1;
+    }
+    return out;
+  }
+
+  function render(md) {
+    const lines = md.split("\n");
+    let html = "";
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.trim() === "") { i += 1; continue; }
+      const fence = /^```(\S+)?\s*(.*)$/.exec(line);
+      if (fence) {
+        const body = [];
+        i += 1;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) { body.push(lines[i]); i += 1; }
+        i += 1;
+        if (fence[1] === "session-html" && state.widget) {
+          html += '<div data-widget-slot></div>';
+        } else {
+          html += `<pre><code>${esc(body.join("\n"))}</code></pre>`;
+        }
+        continue;
+      }
+      if (line.startsWith("### ")) { html += `<h3>${inline(line.slice(4))}</h3>`; i += 1; continue; }
+      if (line.startsWith("> ")) {
+        const quote = [];
+        while (i < lines.length && lines[i].startsWith(">")) { quote.push(lines[i].replace(/^>\s?/, "")); i += 1; }
+        const alert = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/.exec(quote[0]);
+        if (alert && state.alerts) {
+          const kind = alert[1] === "TIP" ? "tip" : alert[1] === "NOTE" || alert[1] === "IMPORTANT" ? "note" : "warning";
+          const label = alert[1][0] + alert[1].slice(1).toLowerCase();
+          html += `<div class="callout" data-kind="${kind}" role="note"><div class="callout-title">${ICONS[kind]}${label}</div><p>${inline(quote.slice(1).join(" "))}</p></div>`;
+        } else if (alert) {
+          html += `<blockquote><p><span class="literal">${esc(quote[0])}</span><br>${inline(quote.slice(1).join(" "))}</p></blockquote>`;
+        } else {
+          html += `<blockquote><p>${inline(quote.join(" "))}</p></blockquote>`;
+        }
+        continue;
+      }
+      if (line.startsWith("- ")) {
+        html += "<ul>";
+        while (i < lines.length && lines[i].startsWith("- ")) { html += `<li>${inline(lines[i].slice(2))}</li>`; i += 1; }
+        html += "</ul>";
+        continue;
+      }
+      if (line.startsWith("|")) {
+        const rows = [];
+        while (i < lines.length && lines[i].startsWith("|")) { rows.push(lines[i]); i += 1; }
+        const cells = (r) => r.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        html += '<div style="overflow-x:auto"><table><thead><tr>' + cells(rows[0]).map((c) => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>";
+        for (const r of rows.slice(2)) html += "<tr>" + cells(r).map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>";
+        html += "</tbody></table></div>";
+        continue;
+      }
+      const para = [];
+      while (i < lines.length && lines[i].trim() !== "" && !/^(```|### |> |- |\|)/.test(lines[i])) { para.push(lines[i]); i += 1; }
+      html += `<p>${inline(para.join(" "))}</p>`;
+    }
+    return html;
+  }
+
+  // ---- Widget ----
+  function widgetAvailability() {
+    if (state.surface === "web") {
+      return { canRun: false, status: { key: "off", label: "Scripts off" }, reason: "Production serves static widget pages only: the artifact origin is a subdomain of the app's domain, the same site." };
+    }
+    return { canRun: true, status: state.widgetRunning ? { key: "running", label: "Running" } : null };
+  }
+
+  function buildWidget(slot) {
+    const avail = widgetAvailability();
+    const fig = document.createElement("figure");
+    fig.className = "session-widget";
+    fig.setAttribute("aria-label", "Answer widget");
+    fig.style.margin = "0 0 0.72em";
+    const status = avail.status ? `<span class="widget-status" data-status="${avail.status.key}" title="${esc(avail.reason || "")}">${avail.status.label}</span>` : "";
+    // As in SessionWidget.tsx: no Run button when the server offers no run page,
+    // and an icon-only Reload once scripts are running.
+    const runButton = !avail.canRun
+      ? ""
+      : state.widgetRunning
+        ? `<button type="button" class="widget-icon" id="w-reload" title="Reload widget" aria-label="Reload widget">${ICONS.reload}</button>`
+        : `<button type="button" class="widget-run" id="w-run">${ICONS.play}Run scripts</button>`;
+    fig.innerHTML =
+      `<div class="widget-bar"><div class="widget-heading"><span class="widget-title">Stack direction, spacing and sizing</span>${status}</div>` +
+      `<div class="widget-controls"><div class="widget-view" role="group" aria-label="Widget view">` +
+      `<button type="button" id="w-prev" aria-pressed="${!state.widgetSource}">Preview</button>` +
+      `<button type="button" id="w-src" aria-pressed="${state.widgetSource}">Source</button></div>${runButton}</div></div>` +
+      (state.widgetSource
+        ? `<pre class="widget-source">${esc(WIDGET_HTML)}</pre>`
+        : `<div class="widget-frame">${WIDGET_HTML.replace(/<script>[\s\S]*?<\/script>/, "")}</div>`);
+    slot.replaceWith(fig);
+
+    fig.querySelector("#w-prev").addEventListener("click", () => { state.widgetSource = false; draw(); });
+    fig.querySelector("#w-src").addEventListener("click", () => { state.widgetSource = true; draw(); });
+    const run = fig.querySelector("#w-run");
+    if (run) run.addEventListener("click", () => { state.widgetRunning = true; draw(); });
+    const reload = fig.querySelector("#w-reload");
+    if (reload) reload.addEventListener("click", () => draw());
+
+    if (state.widgetSource) return;
+    const sx = fig.querySelector(".sx");
+    if (!(state.widgetRunning && avail.canRun)) {
+      sx.setAttribute("data-inert", "");
+      // Static page: no scripts run, so the controls change nothing.
+      return;
+    }
+    wireWidget(sx);
+  }
+
+  function wireWidget(root) {
+    const q = (id) => root.querySelector("#" + id);
+    const stack = q("sx-stack");
+    const label = q("sx-label");
+    const update = () => {
+      const dir = q("sx-dir").value;
+      const gap = Number(q("sx-gap").value);
+      const pad = Number(q("sx-pad").value);
+      const align = q("sx-align").value;
+      const stackSize = q("sx-stack-size").value;
+      const itemSize = q("sx-item-size").value;
+      q("sx-gap-o").textContent = String(gap);
+      q("sx-pad-o").textContent = String(pad);
+      stack.style.flexDirection = dir;
+      // Negative spacing overlaps items; flex gap cannot be negative, so use margins.
+      stack.style.gap = "0px";
+      [...stack.children].forEach((child, index) => {
+        child.style.margin = "0";
+        if (index > 0) child.style[dir === "row" ? "marginLeft" : "marginTop"] = gap + "px";
+      });
+      stack.style.padding = pad + "px";
+      stack.style.boxShadow = `inset 0 0 0 ${pad}px var(--demo-pad)`;
+      stack.style.alignItems = align;
+      const mainProp = dir === "row" ? "width" : "height";
+      stack.style.width = "fit-content";
+      stack.style.height = "auto";
+      if (stackSize === "fixed") {
+        if (dir === "row") stack.style.width = "min(420px, 100%)";
+        else stack.style.height = "230px";
+      }
+      label.style.flex = "0 0 auto";
+      label.style.width = "";
+      label.style.height = "";
+      if (itemSize === "fixed") label.style[mainProp] = "140px";
+      if (itemSize === "fill") label.style.flex = "1 1 0";
+      const words = {
+        row: "Horizontal", column: "Vertical",
+        "flex-start": "at the start", center: "centered", "flex-end": "at the end", stretch: "stretched",
+      };
+      const fillNote = itemSize === "fill" && stackSize === "fit"
+        ? " <b>Fill has no effect here:</b> the stack fits its content, so there is no space left to fill."
+        : itemSize === "fill" ? " “Upgrade plan” takes the space left in the stack." : "";
+      q("sx-readout").innerHTML =
+        `${words[dir]} stack, spacing ${gap}, padding ${pad}, items ${words[align]}. ` +
+        (stackSize === "fixed" ? "The stack has a fixed size on its main axis." : "The stack fits its content.") + fillNote;
+    };
+    root.querySelectorAll("select, input").forEach((el) => el.addEventListener("input", update));
+    update();
+  }
+
+  // ---- Panels ----
+  function drawFacts() {
+    const a = AGENTS[state.agent];
+    const d = a.desktop;
+    const w = a.web;
+    const cell = (label, html) => `<div class="fact"><span class="group-label">${label}</span><p>${html}</p></div>`;
+    const here = state.surface === "desktop" ? d : w;
+    let out = "";
+    out += cell("Desktop", d ? `${d.runtime}. Guidance goes through ${d.channel}.` : '<span class="warn">No adapter. The desktop app runs Claude Code, Codex and Grok only.</span>');
+    out += cell("Web", w ? `${w.runtime}. Guidance goes in ${w.channel}.` : '<span class="warn">Not offered on the web app.</span>');
+    out += cell("Widget scripts", state.surface === "desktop"
+      ? "Run on macOS after <b>Run scripts</b>; the app's web view has WebRTC turned off first. Other platforms show the static page."
+      : '<span class="warn">Static page only in production.</span> The artifact origin shares a registrable domain with the app, so the server refuses run pages. Development and e2e run scripts.');
+    out += cell("Where B goes", here
+      ? "The same channel as the widget guidance, but sent whether or not widgets are on. The desktop and web copies stay identical, as the widget guidance does."
+      : "Nothing to send: this agent does not run on this app.");
+    document.getElementById("facts").innerHTML = out;
+    document.getElementById("agent-chip").textContent = a.name + (state.surface === "web" ? " · web" : " · desktop");
+  }
+
+  function drawEffects() {
+    const alerts = document.getElementById("eff-alerts");
+    alerts.className = state.guide ? "" : "effect-none";
+    alerts.innerHTML = state.guide
+      ? "GitHub alert syntax <code>&gt; [!TIP]</code> renders as a callout."
+      : "No effect on this answer: without B the agent did not write any alert syntax. See the test strip.";
+    const html = document.getElementById("eff-html");
+    html.className = "effect-none";
+    html.innerHTML = "No effect on this answer: neither version contains HTML tags. See the test strip.";
+  }
+
+  const STRIP = [
+    "Press `⌘L` or `⇧S` to add a stack.",
+    "Press <kbd>⌘</kbd><kbd>L</kbd> to add a stack.",
+    "> [!WARNING]\n> Detaching a stack keeps the layers where they are.",
+    "On Windows, press `Ctrl+Shift+P`.",
+    "Use `--ignore-user-config` to skip the config file.",
+  ];
+
+  function drawStrip() {
+    document.getElementById("strip").innerHTML = STRIP.map((src) =>
+      `<div class="strip-row"><pre class="strip-src">${esc(src)}</pre><div class="strip-out prose">${render(src)}</div></div>`
+    ).join("");
+  }
+
+  function drawAnswer() {
+    const host = document.getElementById("answer");
+    const a = AGENTS[state.agent];
+    const available = state.surface === "desktop" ? a.desktop : a.web;
+    if (!available) {
+      host.innerHTML = `<div class="unavailable"><b>${a.name} is not available on the ${state.surface} app.</b><span>${state.surface === "desktop" ? "Gemini runs only on the web app, through Vertex AI. Switch App to Web." : "Grok runs only on the desktop app. Switch App to Desktop."}</span></div>`;
+      return;
+    }
+    const md = answerSource();
+    if (state.view === "source") {
+      host.innerHTML = `<pre class="source-view">${esc(md)}</pre>`;
+      return;
+    }
+    host.innerHTML = `<div class="prose">${render(md)}</div>`;
+    const slot = host.querySelector("[data-widget-slot]");
+    if (slot) buildWidget(slot);
+  }
+
+  function draw() {
+    drawFacts();
+    drawEffects();
+    drawAnswer();
+    drawStrip();
+  }
+
+  function bindSeg(id, key, attr) {
+    const seg = document.getElementById(id);
+    seg.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      state[key] = button.dataset[attr];
+      seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+      draw();
+    });
+  }
+  bindSeg("agent-seg", "agent", "agent");
+  bindSeg("surface-seg", "surface", "surface");
+  bindSeg("view-seg", "view", "view");
+
+  const toggles = { keys: "opt-keys", alerts: "opt-alerts", html: "opt-html", guide: "opt-guide", widget: "opt-widget" };
+  for (const [key, id] of Object.entries(toggles)) {
+    document.getElementById(id).addEventListener("change", (event) => {
+      state[key] = event.target.checked;
+      if (key === "widget") state.widgetRunning = false;
+      draw();
+    });
+  }
+  const PRESETS = {
+    main: { keys: false, alerts: false, html: false, guide: false, widget: true },
+    rec: { keys: true, alerts: true, html: false, guide: true, widget: true },
+    all: { keys: true, alerts: true, html: true, guide: true, widget: true },
+  };
+  document.querySelectorAll("[data-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      Object.assign(state, PRESETS[button.dataset.preset]);
+      for (const [key, id] of Object.entries(toggles)) document.getElementById(id).checked = state[key];
+      state.widgetRunning = false;
+      draw();
+    });
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>
