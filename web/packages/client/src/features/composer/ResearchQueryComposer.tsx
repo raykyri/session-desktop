@@ -421,7 +421,7 @@ export function ResearchQueryComposer({
           placeholder={shownPlaceholder}
           aria-label="New question"
           aria-describedby={imageProblem ? imageProblemId : undefined}
-          className="text-fg-strong placeholder:text-fg-faint block max-h-40 min-h-[30px] w-full min-w-0 resize-none border-0 bg-transparent px-0 py-1 text-[length:calc(var(--fs-base)+1px)] leading-[1.45] outline-none"
+          className="text-fg-strong placeholder:text-fg-faint block max-h-60 min-h-[30px] w-full min-w-0 resize-none border-0 bg-transparent px-0 py-1 text-[length:calc(var(--fs-base)+1px)] leading-[1.45] outline-none"
           onChange={(event) => {
             const text = event.currentTarget.value;
             setPrompt(text);

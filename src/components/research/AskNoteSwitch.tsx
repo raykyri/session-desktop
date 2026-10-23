@@ -8,16 +8,17 @@ import { ChevronDown, PencilLine } from "lucide-react";
 export type AskMode = "note" | "ai";
 
 /** The mode a key on the Ask/Note switch selects, or null for any other key:
- * ← and → move to the other segment, Home to Ask, End to Note. */
+ * ← and → move to the other segment, Home to Note (the first segment), End to
+ * Ask (the last). */
 export function askSwitchKeyTarget(key: string, current: AskMode): AskMode | null {
   switch (key) {
     case "ArrowLeft":
     case "ArrowRight":
       return current === "ai" ? "note" : "ai";
     case "Home":
-      return "ai";
-    case "End":
       return "note";
+    case "End":
+      return "ai";
     default:
       return null;
   }
@@ -40,11 +41,11 @@ interface AskNoteSwitchProps {
   onMenuOpenChange?: (open: boolean) => void;
 }
 
-/** Ask and Note as two icon segments in a radiogroup with a roving tabindex.
- * A press on the selected Ask segment (or Enter, Space or ↓ on it) opens the
- * model menu; from Note, Ask only switches back, keeping the last model. A
- * radio cannot carry aria-haspopup, so the menu is announced through a
- * description instead. */
+/** Note and Ask as two icon segments in a radiogroup with a roving tabindex.
+ * Note (the pencil) is first. A press on the selected Ask segment (or Enter,
+ * Space or ↓ on it) opens the model menu; from Note, Ask only switches back,
+ * keeping the last model. A radio cannot carry aria-haspopup, so the menu is
+ * announced through a description instead. */
 export function AskNoteSwitch({
   askMode,
   askIcon,
@@ -84,6 +85,23 @@ export function AskNoteSwitch({
       aria-label={`Ask or ${noteLabel.charAt(0).toLowerCase()}${noteLabel.slice(1)}`}
     >
       <button
+        ref={noteRef}
+        type="button"
+        role="radio"
+        aria-checked={!ask}
+        tabIndex={ask ? -1 : 0}
+        className="new-research-switch-option"
+        aria-label={noteLabel}
+        title={noteLabel}
+        onClick={(event) => {
+          event.currentTarget.focus();
+          onModeChange("note");
+        }}
+        onKeyDown={(event) => onKeyDown(event, "note")}
+      >
+        <PencilLine size={14} aria-hidden="true" />
+      </button>
+      <button
         ref={askRef}
         type="button"
         role="radio"
@@ -106,23 +124,6 @@ export function AskNoteSwitch({
         {ask && hasMenu ? (
           <ChevronDown size={9} className="new-research-switch-chevron" aria-hidden="true" />
         ) : null}
-      </button>
-      <button
-        ref={noteRef}
-        type="button"
-        role="radio"
-        aria-checked={!ask}
-        tabIndex={ask ? -1 : 0}
-        className="new-research-switch-option"
-        aria-label={noteLabel}
-        title={noteLabel}
-        onClick={(event) => {
-          event.currentTarget.focus();
-          onModeChange("note");
-        }}
-        onKeyDown={(event) => onKeyDown(event, "note")}
-      >
-        <PencilLine size={14} aria-hidden="true" />
       </button>
       {hasMenu ? (
         <span id={hintId} hidden>

@@ -172,6 +172,9 @@ function renderSwitch(askMode: "ai" | "note") {
 test("Ask and Note are two icon radios; only the selected one is a tab stop", () => {
   const ask = renderSwitch("ai");
   assert.match(ask, /<div class="new-research-switch" role="radiogroup" aria-label="Ask or save as note">/);
+  const noteIndex = ask.indexOf('aria-label="Save as note"');
+  const askIndex = ask.indexOf('aria-label="Ask with Claude Code Fable"');
+  assert.ok(noteIndex !== -1 && askIndex !== -1 && noteIndex < askIndex, "the pencil precedes Ask");
   // Ask: the agent's icon and, while selected, a chevron and the hint that
   // Enter opens the model menu.
   const askRadio = ask.match(/<button[^>]*aria-label="Ask with Claude Code Fable"[^>]*>(.*?)<\/button>/);
@@ -213,13 +216,13 @@ test("a switch with no model menu shows no chevron or menu hint on Ask", () => {
   assert.doesNotMatch(html, /lucide-chevron-down|aria-describedby|Press Enter to choose a model/);
 });
 
-test("arrow keys switch the mode; Home is Ask and End is Note", () => {
+test("arrow keys switch the mode; Home is Note and End is Ask", () => {
   assert.equal(askSwitchKeyTarget("ArrowRight", "ai"), "note");
   assert.equal(askSwitchKeyTarget("ArrowLeft", "ai"), "note");
   assert.equal(askSwitchKeyTarget("ArrowRight", "note"), "ai");
   assert.equal(askSwitchKeyTarget("ArrowLeft", "note"), "ai");
-  assert.equal(askSwitchKeyTarget("Home", "note"), "ai");
-  assert.equal(askSwitchKeyTarget("End", "ai"), "note");
+  assert.equal(askSwitchKeyTarget("Home", "ai"), "note");
+  assert.equal(askSwitchKeyTarget("End", "note"), "ai");
   // ↓ opens the menu from Ask instead; Enter and Space click.
   assert.equal(askSwitchKeyTarget("ArrowDown", "ai"), null);
   assert.equal(askSwitchKeyTarget("Enter", "ai"), null);

@@ -332,7 +332,8 @@ test("the follow-up box's Ask segment shows the agent's icon and opens the model
     );
     const textarea = container.querySelector("textarea")!;
     await act(async () => textarea.focus());
-    const askSegment = () => container.querySelector<HTMLButtonElement>('.new-research-switch-option[role="radio"]')!;
+    const askSegment = () =>
+      container.querySelector<HTMLButtonElement>('.new-research-switch-option[aria-label^="Ask"]')!;
     // The note's agent and model, as the agent's icon instead of a sparkle.
     assert.equal(askSegment().getAttribute("aria-label"), "Ask Claude Fable");
     assert.equal(askSegment().getAttribute("title"), "Ask Claude Fable");

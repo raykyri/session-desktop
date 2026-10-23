@@ -6,7 +6,7 @@ import type { ModelInfo, ResearchImageAttachment } from "@session/shared";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
 
-import { askSwitchKeyTarget } from "../src/features/composer/AskNoteSwitch.js";
+import { AskNoteSwitch, askSwitchKeyTarget } from "../src/features/composer/AskNoteSwitch.js";
 import {
   askLabelFor,
   effortOptionsFor,
@@ -132,9 +132,26 @@ test("Note mode saves a note, or a link when the text is one URL", (t) => {
 test("the arrow keys move between Ask and Note, Home and End jump", (t) => {
   t.is(askSwitchKeyTarget("ArrowRight", "ai"), "note");
   t.is(askSwitchKeyTarget("ArrowLeft", "note"), "ai");
-  t.is(askSwitchKeyTarget("Home", "note"), "ai");
-  t.is(askSwitchKeyTarget("End", "ai"), "note");
+  t.is(askSwitchKeyTarget("Home", "ai"), "note");
+  t.is(askSwitchKeyTarget("End", "note"), "ai");
   t.is(askSwitchKeyTarget("Enter", "ai"), null);
+});
+
+test.serial("the pencil precedes Ask", (t) => {
+  render(
+    <AskNoteSwitch
+      askMode="ai"
+      askIcon={null}
+      askLabel="Ask with Gemini"
+      noteLabel="Save as note"
+      onModeChange={() => {}}
+    />,
+  );
+  t.deepEqual(
+    screen.getAllByRole("radio").map((option) => option.getAttribute("aria-label")),
+    ["Save as note", "Ask with Gemini"],
+  );
+  cleanup();
 });
 
 test("prompts exceeding word or byte limits return standardized validation errors", (t) => {

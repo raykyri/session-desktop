@@ -1,4 +1,4 @@
-const COMPOSER_TEXTAREA_MAX_HEIGHT = 200;
+const COMPOSER_TEXTAREA_MAX_HEIGHT = 300;
 
 export function growComposerTextarea(textarea: HTMLTextAreaElement) {
   textarea.style.height = "auto";

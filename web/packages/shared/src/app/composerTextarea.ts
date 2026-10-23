@@ -4,7 +4,7 @@
 // the result back to `style.height`.
 
 /** Tallest the composer grows before its content starts scrolling, in CSS pixels. */
-export const COMPOSER_TEXTAREA_MAX_HEIGHT = 200;
+export const COMPOSER_TEXTAREA_MAX_HEIGHT = 300;
 
 /** Height to apply for a measured content height. */
 export function composerTextareaHeight(scrollHeight: number): number {
