@@ -1,5 +1,5 @@
 import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
-import { memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   KeyRound,
@@ -656,6 +656,10 @@ export function researchMessageStateWord(state: ResearchRowState): string | null
   return null;
 }
 
+/** The messages of the range selection (src/lib/researchRange.ts) in the
+ * messages columns, which their rows show with the selected row's fill. */
+export const ResearchRangeRowsContext = createContext<ReadonlySet<string>>(new Set());
+
 /** One message in a level's messages column: the user's message in full,
  * then a meta line, shown only when it has something to show: "Imported"
  * for an imported report, or the word Queued or Stopped. A message whose
@@ -720,7 +724,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** The row's text shows in full (Show less), not clamped. */
   expanded?: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
-  onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
+  /** `extend`: a Shift+click, which extends the column's range selection. */
+  onSelect: (nodeId: string, level: number, row: HTMLElement, extend: boolean) => void;
   /** The branch indicator: selects the answer's first branch in the next
    * column, or clears that column when one of its branches is selected. */
   onToggleBranches: (nodeId: string, level: number) => void;
@@ -734,6 +739,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   onDragStart?: ResearchCardDragStart;
 }) {
   const labelId = useId();
+  const inRange = useContext(ResearchRangeRowsContext).has(node.id);
   const draggable = Boolean(dragPlace && onDragStart);
   const status = nodeStatus(node);
   const settled = status === "complete" || status === "failed" || status === "cancelled";
@@ -806,6 +812,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
     <li
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
       className={`research-msg-row is-status-${retryQueued ? "queued" : status}${selected ? " is-selected" : ""}${
+        inRange && !selected ? " is-in-range" : ""
+      }${
         answerMenuOpen ? " has-open-menu" : ""
       }${showBranches ? " has-branches" : ""}`}
       data-segment-anchor={node.id}
@@ -826,7 +834,11 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         aria-current={selected ? "true" : undefined}
         aria-labelledby={labelId}
         tabIndex={tabIndex}
-        onClick={(event) => onSelect(node.id, level, event.currentTarget)}
+        // Shift+press would extend the page's text selection.
+        onMouseDown={(event) => {
+          if (event.shiftKey) event.preventDefault();
+        }}
+        onClick={(event) => onSelect(node.id, level, event.currentTarget, event.shiftKey)}
       />
       <div id={labelId} className="research-msg-content" data-research-drag-label="">
         {prompt}

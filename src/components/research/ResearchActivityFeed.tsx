@@ -35,6 +35,7 @@ import type {
   ResearchTreeSummary,
 } from "../../types";
 import { isEditableTarget } from "../../lib/appHelpers";
+import { researchRangeIds, researchRangeStep } from "../../lib/researchRange";
 import { getResearchNodeContent } from "../../lib/api";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -239,8 +240,23 @@ export interface ResearchActivityFeedProps {
   selectedTreeId?: string | null;
   /** The draft open in the content column. */
   selectedDraftId?: string | null;
+  /** The threads of the range selection (src/lib/researchRange.ts), in list
+   * order, the selected thread included; null without one. */
+  rangeTreeIds?: readonly string[] | null;
+  /** Shift+click and Shift+↑/↓ set the range; null (Esc, or opening a card)
+   * clears it. */
+  onSelectRange?: (treeIds: string[] | null) => void;
   onBack?: () => void;
   onForward?: () => void;
+}
+
+/** A card in one of the feed's lists (see feedLists). */
+interface FeedRowEntry {
+  key: string;
+  cardId: string;
+  /** The card's row in the virtualized list, which may not be rendered. */
+  virtualIndex: number | null;
+  open: () => void;
 }
 
 /** A child card under a top-level card. */
@@ -454,6 +470,8 @@ function ResearchActivityFeed({
   onRefresh,
   selectedTreeId = null,
   selectedDraftId = null,
+  rangeTreeIds = null,
+  onSelectRange,
   onBack,
   onForward,
 }: ResearchActivityFeedProps) {
@@ -920,6 +938,7 @@ function ResearchActivityFeed({
   /** Opens a thread's card: a question row opens its thread at the question;
    * a row for a later node of the tree opens at that node. */
   function openTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
+    if (rangeTreeIds) onSelectRange?.(null);
     if (query && query.nodeId !== tree?.rootNodeId) onOpenResearchQuery(query);
     else onOpenTree?.(tree?.id ?? query?.treeId ?? "");
   }
@@ -1069,10 +1088,21 @@ function ResearchActivityFeed({
           state === "failed" && tree?.hasUnseenFailure ? "Failed since last viewed" : undefined
         }
         selected={selected}
+        inRange={!selected && rangeSet.has(treeId)}
         // Unread shows on an answered card only (researchRowGlyph).
         unread={Boolean(tree?.hasUnseenUpdate) && !selected}
         menuOpen={menuTreeId === treeId}
         onOpen={() => openTreeCard(tree, query)}
+        // An archived thread's card is not in a range (Archive lists its own
+        // cards).
+        onExtend={
+          onSelectRange && tree && tree.archivedAt == null
+            ? () => {
+                if (!extendRange(treeId)) openTreeCard(tree, query);
+              }
+            : undefined
+        }
+        onPlainClick={rangeTreeIds ? () => onSelectRange?.(null) : undefined}
         // A double-click on a note's card edits the note, unless the thread is
         // archived (researchNoteEditable).
         onEdit={
@@ -1238,21 +1268,10 @@ function ResearchActivityFeed({
   const userFolder =
     view.kind === "folder" ? (folders.find((folder) => folder.id === view.folderId) ?? null) : null;
 
-  // ⌃Tab / ⌃⇧Tab with the feed as the column last interacted with (see
-  // ResearchColumns): opens the next or previous card of the list that holds
-  // the current card, as clicking it would. The lists are Home's recent
-  // activity and each open tray, or the view's own cards; an expanded
-  // group's children follow their parent. The current card is the focused
-  // one, else the open one.
-  const cycleFeedRef = useRef<(request: ResearchCycleRequest) => boolean>(() => false);
-  cycleFeedRef.current = (request) => {
-    interface FeedRowEntry {
-      key: string;
-      cardId: string;
-      /** The card's row in the virtualized list, which may not be rendered. */
-      virtualIndex: number | null;
-      open: () => void;
-    }
+  /** The feed's card lists, each in display order: Home's recent activity
+   * and each open tray, or the view's own cards. An expanded group's
+   * children follow their parent; a collapsed group's are not listed. */
+  function feedLists(): FeedRowEntry[][] {
     const treeEntry = (
       tree: ResearchTreeSummary | undefined,
       query: RecentResearchQuery | undefined,
@@ -1305,7 +1324,74 @@ function ResearchActivityFeed({
       }
     }
     if (soloPlace) lists.push(placeEntries(soloPlace));
+    return lists;
+  }
 
+  // The range's far end: the card Shift+click or Shift+↑/↓ last extended
+  // it to. The selected thread is the other end.
+  const rangeFarRef = useRef<string | null>(null);
+  const rangeSet = useMemo(() => new Set(rangeTreeIds ?? []), [rangeTreeIds]);
+
+  /** The threads of the list that holds both the selected thread and
+   * `treeId` (a thread can be listed in Home's recent activity and in a
+   * tray), with each card's entry; null when there is none. Archive's cards
+   * are not in ranges. */
+  function rangeList(treeId: string): FeedRowEntry[] | null {
+    const selectedTree = researchTrees.find((tree) => tree.id === selectedTreeId);
+    if (!selectedTree || selectedTree.archivedAt != null) return null;
+    const holds = (entries: FeedRowEntry[], id: string) => entries.some((entry) => entry.key === `tree:${id}`);
+    const list = feedLists().find((entries) => holds(entries, selectedTree.id) && holds(entries, treeId));
+    return list ? list.filter((entry) => entry.key.startsWith("tree:")) : null;
+  }
+
+  /** Extends the range from the selected thread to `treeId`; false when
+   * the two are not in the same list (the card then opens as a click
+   * does). Extending to the selected thread clears the range. */
+  function extendRange(treeId: string): boolean {
+    const list = rangeList(treeId);
+    if (!list || !onSelectRange) return false;
+    if (treeId === selectedTreeId) {
+      rangeFarRef.current = null;
+      onSelectRange(null);
+      return true;
+    }
+    const ids = researchRangeIds(
+      list.map((entry) => entry.cardId),
+      selectedTreeId ?? "",
+      treeId,
+    );
+    if (!ids) return false;
+    rangeFarRef.current = treeId;
+    onSelectRange(ids);
+    announce(`${ids.length} threads selected.`);
+    return true;
+  }
+
+  /** Shift+↑ or Shift+↓ on a card of the selected thread's list: moves the
+   * range's far end one card and focuses that card. */
+  function stepRange(direction: -1 | 1) {
+    if (!selectedTreeId) return;
+    const far = rangeTreeIds && rangeFarRef.current ? rangeFarRef.current : selectedTreeId;
+    const list = rangeList(far);
+    if (!list) return;
+    const next = researchRangeStep(
+      list.map((entry) => entry.cardId),
+      far,
+      direction,
+    );
+    const entry = next ? list.find((candidate) => candidate.cardId === next) : undefined;
+    if (!next || !entry) return;
+    extendRange(next);
+    revealFeedRow(next, entry.virtualIndex, false);
+  }
+
+  // ⌃Tab / ⌃⇧Tab with the feed as the column last interacted with (see
+  // ResearchColumns): opens the next or previous card of the list that holds
+  // the current card, as clicking it would. The current card is the focused
+  // one, else the open one.
+  const cycleFeedRef = useRef<(request: ResearchCycleRequest) => boolean>(() => false);
+  cycleFeedRef.current = (request) => {
+    const lists = feedLists();
     const step = feedCycleStep(
       lists.map((entries) => entries.map((entry) => entry.key)),
       currentFeedCard(),
@@ -1662,6 +1748,33 @@ function ResearchActivityFeed({
           ) {
             event.preventDefault();
             moveFocusedCard(target, event.key === "ArrowUp" ? -1 : 1);
+            return;
+          }
+          // Shift+↑ and Shift+↓ extend the range selection from the open
+          // thread, within its list.
+          if (
+            (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+            event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey &&
+            target.matches(FEED_ROW_SELECTOR) &&
+            onSelectRange
+          ) {
+            event.preventDefault();
+            stepRange(event.key === "ArrowUp" ? -1 : 1);
+            return;
+          }
+          // Esc clears the range selection.
+          if (
+            event.key === "Escape" &&
+            rangeTreeIds &&
+            !event.defaultPrevented &&
+            !isEditableTarget(target) &&
+            !target.closest("[role='menu'], [role='dialog'], [role='alertdialog']")
+          ) {
+            event.preventDefault();
+            rangeFarRef.current = null;
+            onSelectRange?.(null);
+            // Focus returns to the open thread's card.
+            if (selectedTreeId) researchFeedCardControl(selectedTreeId)?.focus({ preventScroll: true });
             return;
           }
           // ↑ and ↓ move between the cards, a group's children included.

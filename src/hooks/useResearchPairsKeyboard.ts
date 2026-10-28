@@ -54,6 +54,9 @@ export function useResearchPairsKeyboard({
   goBranch,
   selectedRow,
   moveFocusedMessage,
+  rangeRef,
+  stepRange,
+  clearRange,
 }: {
   columnsLayout: React.ContextType<typeof ResearchColumnsContext>;
   columnsLayoutRef: Ref<React.ContextType<typeof ResearchColumnsContext>>;
@@ -79,6 +82,11 @@ export function useResearchPairsKeyboard({
   goBranch: (level: number, headId: string, end?: "first" | "last") => void;
   selectedRow: (level: number) => HTMLElement | null;
   moveFocusedMessage: (row: HTMLElement, level: number, step: -1 | 1) => void;
+  /** The range selection in a messages column, while there is one. */
+  rangeRef: Ref<{ level: number } | null>;
+  /** Shift+↑/↓: moves the range's far end; returns that message, or null. */
+  stepRange: (level: number, direction: -1 | 1) => string | null;
+  clearRange: () => void;
 }) {
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
   // returns to the root level when no menu, popover, or dialog is
@@ -98,6 +106,15 @@ export function useResearchPairsKeyboard({
           isEditableTarget(event.target) ||
           target?.closest("[role='menu'], [role='dialog'], [role='alertdialog'], .popover-surface")
         ) {
+          return;
+        }
+        if (
+          rangeRef.current &&
+          (!target || target === document.body || document.querySelector(".research-columns")?.contains(target))
+        ) {
+          // A range selection clears first, also with focus lost to the page.
+          event.preventDefault();
+          clearRange();
           return;
         }
         if (levelPathRef.current.length > 0 && document.querySelector(".research-columns")?.contains(target ?? document.body)) {
@@ -147,7 +164,7 @@ export function useResearchPairsKeyboard({
       window.removeEventListener("keydown", onKeyDown);
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
-  }, [closeAfter, goBack, goForward, requestFocus]);
+  }, [clearRange, closeAfter, goBack, goForward, rangeRef, requestFocus]);
 
   /** The branches of `level`'s selected answer, in the order the branches
    * column lists them. */
@@ -219,6 +236,28 @@ export function useResearchPairsKeyboard({
       return;
     }
     const key = event.key;
+    // Shift+↑ and Shift+↓ extend the range selection from the column's
+    // selected message; focus follows the range's far end.
+    if (target.matches("[data-research-row]") && event.shiftKey && (key === "ArrowUp" || key === "ArrowDown")) {
+      const level = columnLevelIndex(columnIdOf(target));
+      event.preventDefault();
+      if (level === null) {
+        return;
+      }
+      const far = stepRange(level, key === "ArrowUp" ? -1 : 1);
+      const column = target.closest<HTMLElement>(columnSelector());
+      const row = far
+        ? column?.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(far)}"]`)
+        : null;
+      if (row) {
+        for (const candidate of column?.querySelectorAll<HTMLElement>("[data-research-row]") ?? []) {
+          candidate.tabIndex = candidate === row ? 0 : -1;
+        }
+        row.focus({ preventScroll: true });
+        scrollIntoColumn(row);
+      }
+      return;
+    }
     // A note's follow-ups column: ↑/↓ move between its rows, Enter or → on a
     // follow-up opens it as the next level (focus goes to its message), ←
     // goes to the note.

@@ -2919,3 +2919,29 @@
   font-size: var(--fs-base);
   white-space: nowrap;
 }
+
+/* A range selection (src/lib/researchRange.ts): its rows take the selected
+   row's fill, and the content column shows each selected message's question
+   and answer in order, read-only (ResearchRangeView). */
+:is(.research-feed-card, .research-msg-row).is-in-range {
+  background: var(--research-card-selected-bg);
+}
+
+.research-range-entry + .research-range-entry {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-range-heading {
+  max-width: 70ch;
+  margin: 0 0 12px;
+  color: var(--text-heading);
+  font-size: calc(var(--fs-base) + 2px);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.research-range-question {
+  margin-bottom: 14px;
+}

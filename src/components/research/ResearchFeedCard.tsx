@@ -39,12 +39,21 @@ interface ResearchFeedCardProps {
   /** Replaces the state's name, such as "Failed since last viewed". */
   statusLabel?: string;
   selected?: boolean;
+  /** In the feed's range selection (src/lib/researchRange.ts), besides the
+   * selected card. */
+  inRange?: boolean;
   /** The thread changed since it was last viewed. */
   unread?: boolean;
   menuOpen?: boolean;
   /** The … button's name: "Thread actions" by default. */
   menuLabel?: string;
   onOpen: () => void;
+  /** Shift+click: extends the feed's range selection to this card. Absent
+   * for cards that cannot be in a range (drafts). */
+  onExtend?: () => void;
+  /** Any other click, before it opens, expands or collapses the card (it
+   * ends the range selection). */
+  onPlainClick?: () => void;
   /** Edits the card's note on a double-click of the card; absent when the
    * card is not an editable note. */
   onEdit?: () => void;
@@ -162,10 +171,13 @@ export default function ResearchFeedCard({
   state = "answered",
   statusLabel,
   selected = false,
+  inRange = false,
   unread = false,
   menuOpen = false,
   menuLabel = "Thread actions",
   onOpen,
+  onExtend,
+  onPlainClick,
   onEdit,
   onMenu,
   onContextMenu,
@@ -206,6 +218,16 @@ export default function ResearchFeedCard({
     [],
   );
   const onCardClick = (event: MouseEvent<HTMLButtonElement>) => {
+    // Shift+click extends the range; it neither opens the card nor expands
+    // or collapses its group.
+    if (event.shiftKey && onExtend) {
+      clearCollapse();
+      // The card keeps focus, so Shift+↑/↓ and Esc act on the range.
+      event.currentTarget.focus({ preventScroll: true });
+      onExtend();
+      return;
+    }
+    onPlainClick?.();
     const action = researchGroupCardClick({
       group: group != null,
       collapsed: group?.collapsed === true,
@@ -231,6 +253,9 @@ export default function ResearchFeedCard({
     }
     onOpen();
   };
+  const noteDoubleClick: ReturnType<typeof researchNoteDoubleClickProps> & {
+    onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
+  } = researchNoteDoubleClickProps(onEdit);
   // The glyph's state name describes the open button.
   const glyphNamed = researchRowGlyph({ kind, state, unread }).label !== null;
   const glyph = (
@@ -246,7 +271,7 @@ export default function ResearchFeedCard({
   return (
     <>
       <div
-        className={`research-feed-card${selected ? " is-selected" : ""}${
+        className={`research-feed-card${selected ? " is-selected" : ""}${inRange ? " is-in-range" : ""}${
           menuOpen ? " has-open-menu" : ""
         }${parentId ? " is-child" : ""}`}
         data-research-card={cardId}
@@ -273,7 +298,12 @@ export default function ResearchFeedCard({
           aria-current={selected ? "true" : undefined}
           title={tooltip}
           onClick={onCardClick}
-          {...researchNoteDoubleClickProps(onEdit)}
+          {...noteDoubleClick}
+          onMouseDown={(event) => {
+            // Shift+press would extend the page's text selection.
+            if (event.shiftKey && onExtend) event.preventDefault();
+            noteDoubleClick.onMouseDown?.(event);
+          }}
         />
         <div className={`research-feed-card-layout${title ? " has-title" : ""}`}>
           {glyph}

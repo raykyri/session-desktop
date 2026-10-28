@@ -32,7 +32,7 @@ export function useResearchColumnScroll({
   navigationPersistence,
   columns,
   levelPath,
-  queuedAnswerId,
+  hiddenAnswerIds,
   contentByNode,
   contentErrorByNode,
   pairColumn,
@@ -44,9 +44,10 @@ export function useResearchColumnScroll({
   columns: readonly ResearchColumn[];
   /** The selected message of each open level. */
   levelPath: readonly string[];
-  /** A selected message whose answer column shows a selected queued
-   * message in its place: its answer is not on screen. */
-  queuedAnswerId: string | null;
+  /** Selected messages whose answer columns show something else in their
+   * place (a selected queued message, or a range's answers): their answers
+   * are not on screen. */
+  hiddenAnswerIds: readonly string[];
   contentByNode: Record<string, ResearchNodeContent>;
   contentErrorByNode: Record<string, string>;
   pairColumn: (kind: "messages" | "answer", level: number) => HTMLElement | null;
@@ -94,7 +95,7 @@ export function useResearchColumnScroll({
     // An answer that leaves the screen (its message is no longer selected,
     // or a queued message is shown in its place) has its offset restored
     // again when its column mounts again.
-    const shown = (nodeId: string) => levelPath.includes(nodeId) && nodeId !== queuedAnswerId;
+    const shown = (nodeId: string) => levelPath.includes(nodeId) && !hiddenAnswerIds.includes(nodeId);
     for (const nodeId of [...restoredAnswerScrollRef.current]) {
       if (!shown(nodeId)) {
         restoredAnswerScrollRef.current.delete(nodeId);
@@ -118,7 +119,7 @@ export function useResearchColumnScroll({
         answerScrollRef.current.get(nodeId) ??
         restoreResearchScrollPosition(navigationPersistence.store[treeId], nodeId);
     }
-  }, [contentByNode, contentErrorByNode, levelPath, navigationPersistence, pairColumn, queuedAnswerId, treeId]);
+  }, [contentByNode, contentErrorByNode, hiddenAnswerIds, levelPath, navigationPersistence, pairColumn, treeId]);
 
   // Each messages and branches column, as it mounts: its scroll offset comes
   // back (from this visit, else the persisted store), then its selected

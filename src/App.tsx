@@ -131,6 +131,10 @@ import { researchTreeContents, type ResearchTreeContents } from "@session/shared
 import { emptyResearchTrash } from "./lib/api";
 import { researchTrashEntries, type ResearchTrashEntry } from "@session/shared/lib/researchTrash";
 import { useResearchTrash } from "./hooks/useResearchTrash";
+import type { ResearchVisitHistory } from "@session/shared/lib/researchHistory";
+import { ResearchFeedRangeView } from "./components/research/ResearchRangeView";
+import { researchFeedCardControl } from "./components/research/ResearchFeedCard";
+import { TranscriptLinkActionsProvider } from "./components/TranscriptMarkdown";
 import type {
   AgentAdapterMetadata,
   ResearchDraft,
@@ -731,6 +735,65 @@ function MainApp() {
     },
     [archivedResearchTrees, navigateToResearchThread, openResearchNode, researchTrees],
   );
+  // The feed's range selection (src/lib/researchRange.ts): its threads in
+  // list order, with the open thread (the range's anchor) and the visit
+  // history it was made in. The content column then shows the threads one
+  // after another (ResearchFeedRangeView). Any navigation changes the
+  // history and ends the range, as does a change of the open thread or
+  // fewer than two of its threads remaining.
+  const [feedRangeState, setFeedRangeState] = useState<{
+    treeIds: readonly string[];
+    anchorTreeId: string;
+    visits: ResearchVisitHistory;
+  } | null>(null);
+  const { researchVisits, researchVisitsRef } = researchNavigationState;
+  const setFeedRange = useCallback(
+    (treeIds: string[] | null) =>
+      setFeedRangeState(
+        treeIds && activeResearchTreeId
+          ? { treeIds, anchorTreeId: activeResearchTreeId, visits: researchVisitsRef.current }
+          : null,
+      ),
+    [activeResearchTreeId, researchVisitsRef],
+  );
+  const feedRange = useMemo(() => {
+    if (
+      !feedRangeState ||
+      researchStageView !== "thread" ||
+      activeResearchTreeId !== feedRangeState.anchorTreeId ||
+      researchVisits !== feedRangeState.visits
+    ) {
+      return null;
+    }
+    const trees = [...researchTrees, ...archivedResearchTrees];
+    const shown = feedRangeState.treeIds.flatMap((treeId) => {
+      const tree = trees.find((candidate) => candidate.id === treeId);
+      const rootNodeId = tree ? researchFeedCardNodeId(trees, treeId) : null;
+      return tree && rootNodeId ? [{ id: treeId, title: tree.title.trim() || "Untitled", rootNodeId }] : [];
+    });
+    return shown.length >= 2 ? shown : null;
+  }, [activeResearchTreeId, archivedResearchTrees, feedRangeState, researchStageView, researchTrees, researchVisits]);
+  const feedRangeTreeIds = useMemo(() => feedRange?.map((tree) => tree.id) ?? null, [feedRange]);
+  // Opening the open thread's card while a range shows ends the range (the
+  // feed clears it first) and shows the thread as it was: its page mounts
+  // again, so there is no page to select the card's message in place. A
+  // card for a later message of the thread opens that message as usual.
+  const openFeedCardTree = useCallback(
+    (treeId: string) => {
+      if (feedRange && treeId === activeResearchTreeId) return;
+      openFeedResearchTree(treeId);
+    },
+    [activeResearchTreeId, feedRange, openFeedResearchTree],
+  );
+  const clearFeedRange = useCallback(() => {
+    setFeedRangeState(null);
+    // Focus goes back to the open thread's card.
+    if (activeResearchTreeId) {
+      window.requestAnimationFrame(() =>
+        researchFeedCardControl(activeResearchTreeId)?.focus({ preventScroll: true }),
+      );
+    }
+  }, [activeResearchTreeId]);
   const openFeedView = useCallback(
     (view: ResearchFeedView) => {
       cancelResearchFolderDelete();
@@ -1235,6 +1298,8 @@ function MainApp() {
                     view={feedPage}
                     selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
                     selectedDraftId={openResearchDraft?.id ?? null}
+                    rangeTreeIds={feedRangeTreeIds}
+                    onSelectRange={setFeedRange}
                     onImportReport={importReport}
                     composer={feedComposer}
                     setupGuide={feedSetupGuide}
@@ -1246,7 +1311,7 @@ function MainApp() {
                     onLoadTrees={loadActivityForTrees}
                     onOpenResearchQuery={openRecentResearchQuery}
                     onOpenDraft={openResearchDraftInColumn}
-                    onOpenTree={openFeedResearchTree}
+                    onOpenTree={openFeedCardTree}
                     onEditNote={editResearchNoteFromFeed}
                     onOpenView={openFeedView}
                     onResearchRecapApplied={handleResearchRecapApplied}
@@ -1285,7 +1350,15 @@ function MainApp() {
               ) : null
             }
           >
-            {researchStageView === "thread" && activeResearchTreeId ? (
+            {researchStageView === "thread" && activeResearchTreeId && feedRange ? (
+              <ResearchInlineWidgetsContext.Provider value={settings.researchInlineWidgets}>
+                <TranscriptLinkActionsProvider
+                  actions={browser.linkActionsFor(researchBrowserOwnerId(activeResearchTreeId))}
+                >
+                  <ResearchFeedRangeView trees={feedRange} onClear={clearFeedRange} />
+                </TranscriptLinkActionsProvider>
+              </ResearchInlineWidgetsContext.Provider>
+            ) : researchStageView === "thread" && activeResearchTreeId ? (
               // Remount on tree changes to reset selection, fetched content,
               // and the follow-up draft before rendering the new tree. An
               // effect would briefly show and refetch the previous tree's node.

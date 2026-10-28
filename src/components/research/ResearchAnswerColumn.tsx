@@ -14,6 +14,7 @@ import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import { ResearchEditPreview } from "./ResearchEditorColumn";
 import { ResearchBranchOpenGlyph } from "./ResearchIcons";
 import { ResearchAnswerPane } from "./ResearchTurn";
+import { ResearchRangeEntry } from "./ResearchRangeView";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 /** The answer pane's callbacks, the same for every answer column. */
@@ -274,6 +275,54 @@ export function ResearchAnswerColumn({
               ) : null}
             </div>
           ) : null}
+        </article>
+      </div>
+      <ResearchColumnResizer kind="answer" label="Resize answer column" />
+    </section>
+  );
+}
+
+/** A level's answer column (A{level}) while its messages column has a range
+ * selection (src/lib/researchRange.ts): each message's question and answer
+ * in the column's order, read-only (ResearchRangeEntry). It keeps the
+ * column's identity, so widths and keyboard order hold; its scroll is not
+ * saved under the selected message's. */
+export function ResearchRangeAnswerColumn({
+  column,
+  nodes,
+  views,
+  contentErrors,
+  current,
+}: {
+  column: Extract<ResearchColumn, { role: "answer" }>;
+  nodes: readonly ResearchNode[];
+  views: ReadonlyMap<string, SegmentView>;
+  contentErrors: Readonly<Record<string, string>>;
+  current: boolean;
+}) {
+  const label = `${nodes.length} messages`;
+  return (
+    <section
+      className={`research-pair-answer research-range-column${current ? " is-current" : ""}`}
+      {...columnAttributes(column)}
+      aria-label={`Answers to ${label}`}
+    >
+      <header className="research-column-header is-spanned">
+        <div className="research-column-bar" data-tauri-drag-region />
+      </header>
+      <div className="research-column-scroll" tabIndex={-1}>
+        <article className="research-answer research-reading-surface research-range">
+          <p className="research-visually-hidden" role="status">
+            {label} selected
+          </p>
+          {nodes.map((node) => (
+            <ResearchRangeEntry
+              key={node.id}
+              node={node}
+              view={views.get(node.id)?.content ? (views.get(node.id) ?? null) : null}
+              error={contentErrors[node.id] ?? null}
+            />
+          ))}
         </article>
       </div>
       <ResearchColumnResizer kind="answer" label="Resize answer column" />

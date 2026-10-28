@@ -79,6 +79,8 @@ import {
   researchRerunDialogNode,
 } from "@session/shared/lib/researchChains";
 import { buildSegmentView, type SegmentView } from "../../lib/researchSegmentView";
+import { researchRangeIds, researchRangeStep } from "../../lib/researchRange";
+import { ResearchRangeRowsContext } from "./ResearchTurn";
 import {
   researchEditorCanSave,
   researchEditorSessionSaved,
@@ -134,6 +136,7 @@ import {
 import { ResearchFollowUpsColumn, ResearchNoteColumn } from "./ResearchNoteColumns";
 import {
   ResearchAnswerColumn,
+  ResearchRangeAnswerColumn,
   ResearchMarkerTip,
   ResearchQueuedAnswerColumn,
   type ResearchAnswerPaneHandlers,
@@ -515,6 +518,41 @@ function ResearchThreadPage({
   const pendingGroup = strip.pending;
   const activePending = pendingGroup ? pending : null;
 
+  // A range selection in one level's messages column
+  // (src/lib/researchRange.ts): from the level's selected message (the
+  // anchor) to `farId`. Its answer column then shows the range's messages
+  // one after another, read-only. Not part of the visit history: any
+  // navigation clears it, and it lapses when the anchor is no longer the
+  // level's selection or either end is no longer listed.
+  // `listed` is the column's order when the range was made: reordering the
+  // column ends the range rather than changing what it holds.
+  const [range, setRange] = useState<{ level: number; anchorId: string; farId: string; listed: string } | null>(
+    null,
+  );
+  const rangeIds = useStableValue(
+    useMemo(() => {
+      const level = range ? levels[range.level] : undefined;
+      if (
+        !range ||
+        !level ||
+        level.kind === "post" ||
+        level.selectedId !== range.anchorId ||
+        level.displayIds.join("\n") !== range.listed
+      ) {
+        return null;
+      }
+      return researchRangeIds(level.displayIds, range.anchorId, range.farId);
+    }, [levels, range]),
+    (left, right) => (left === null || right === null ? left === right : sameIds(left, right)),
+  );
+  // A new selection or new branch (navigation, or a selection restored or
+  // pruned in place) ends the range.
+  useEffect(() => setRange(null), [selection, pending]);
+  const rangeLevel = rangeIds && range ? range.level : null;
+  const rangeRows = useMemo<ReadonlySet<string>>(() => new Set(rangeIds ?? []), [rangeIds]);
+  const rangeRef = useRef(rangeIds ? range : null);
+  rangeRef.current = rangeIds ? range : null;
+
   // Answers on screen: each level's selected message, plus the message whose
   // … menu is open (its details need the answer).
   const menuNodeId = menu?.kind === "answer" ? menu.nodeId : null;
@@ -526,12 +564,20 @@ function ResearchThreadPage({
     sameIds,
   );
   const chainKey = chainNodeIds.join("\n");
-  const chainNodes = useMemo(
+  // The answers to load: those on screen, and a range's.
+  const loadedNodeIds = useStableValue(
+    useMemo(
+      () => (rangeIds ? [...chainNodeIds, ...rangeIds.filter((id) => !chainNodeIds.includes(id))] : chainNodeIds),
+      [chainNodeIds, rangeIds],
+    ),
+    sameIds,
+  );
+  const loadedNodes = useMemo(
     () =>
-      chainNodeIds
+      loadedNodeIds
         .map((id) => nodeById.get(id))
         .filter((node): node is ResearchNode => Boolean(node)),
-    [chainNodeIds, nodeById],
+    [loadedNodeIds, nodeById],
   );
   const {
     contentByNode,
@@ -541,7 +587,7 @@ function ResearchThreadPage({
     reloadContent,
     patchNodeHighlights,
     replaceContentNode,
-  } = useResearchContentLoader({ detail, levels, chainNodeIds, chainNodes });
+  } = useResearchContentLoader({ detail, levels, chainNodeIds: loadedNodeIds, chainNodes: loadedNodes });
   const removeHighlights = useCallback(
     async (nodeId: string, highlightIds: string[]) => {
       const removed = await removeResearchHighlights(nodeId, highlightIds);
@@ -785,6 +831,7 @@ function ResearchThreadPage({
         return null;
       }
       navigationSeqRef.current += 1;
+      setRange(null);
       setSelection(shown);
       persistSelection(shown);
       setQueuedView(null);
@@ -1135,14 +1182,20 @@ function ResearchThreadPage({
     [navigationPersistence, treeId],
   );
 
+  const queuedAnswerId = shownQueued
+    ? (levels.find((level) => level.headId === shownQueued.headId)?.selectedId ?? null)
+    : null;
+  const rangeAnchorId = rangeLevel !== null ? (levelPath[rangeLevel] ?? null) : null;
+  const hiddenAnswerIds = useMemo(
+    () => [queuedAnswerId, rangeAnchorId].filter((id): id is string => id !== null),
+    [queuedAnswerId, rangeAnchorId],
+  );
   const { restoredAnswerScrollRef, onColumnScroll, captureScroll } = useResearchColumnScroll({
     treeId,
     navigationPersistence,
     columns: strip.columns,
     levelPath,
-    queuedAnswerId: shownQueued
-      ? (levels.find((level) => level.headId === shownQueued.headId)?.selectedId ?? null)
-      : null,
+    hiddenAnswerIds,
     contentByNode,
     contentErrorByNode,
     pairColumn,
@@ -1168,7 +1221,7 @@ function ResearchThreadPage({
   const segmentViews = useMemo(() => {
     const cache = segmentViewCacheRef.current;
     const views = new Map<string, SegmentView>();
-    for (const node of chainNodes) {
+    for (const node of loadedNodes) {
       const content = contentByNode[node.id] ?? null;
       const showAllTurns = Boolean(expandedNodes[node.id]);
       const showFullTrace = Boolean(fullTraceNodes[node.id]);
@@ -1192,7 +1245,7 @@ function ResearchThreadPage({
       }
     }
     return views;
-  }, [chainNodes, contentByNode, expandedNodes, fullTraceNodes]);
+  }, [contentByNode, expandedNodes, fullTraceNodes, loadedNodes]);
 
   // ---- annotations ----------------------------------------------------------
 
@@ -1415,14 +1468,41 @@ function ResearchThreadPage({
   onForkRef.current = onFork;
   const { cancelling, retryingNodeId, queuedRetries, handleCancelNode, handleRetryNode, removeQueuedRetry } =
     useResearchRunControls({ nodes, nodeById, onCancel, onRetryNode, onRerunNode, onToast, onError });
-  /** A click on a message row: selects it and brings its pair into view. */
+  /** A click on a message row: selects it and brings its pair into view.
+   * Shift+click (`extend`) on another message of the level's chain extends
+   * the range selection from the level's selected message instead. */
   const selectRow = useCallback(
-    (nodeId: string, level: number) => {
+    (nodeId: string, level: number, row?: HTMLElement, extend = false) => {
+      const anchorId = levelPathRef.current[level];
+      const listed = stripRef.current.levels[level];
+      if (extend && anchorId && listed && listed.kind !== "post" && listed.displayIds.includes(nodeId)) {
+        setRange(
+          nodeId === anchorId ? null : { level, anchorId, farId: nodeId, listed: listed.displayIds.join("\n") },
+        );
+        // The row keeps focus, so Shift+↑/↓ and Esc act on the range.
+        row?.focus({ preventScroll: true });
+        return;
+      }
+      setRange(null);
       selectMessage(level, nodeId);
       requestFocus({ kind: "row", level }, "reveal");
     },
     [requestFocus, selectMessage],
   );
+  /** Shift+↑ or Shift+↓ on a row of level `level`: moves the range's far end
+   * one message (starting from the selected message) and returns it, or
+   * null at the end of the column. */
+  const stepRange = useCallback((level: number, direction: -1 | 1): string | null => {
+    const listed = stripRef.current.levels[level];
+    const anchorId = levelPathRef.current[level];
+    if (!listed || listed.kind === "post" || !anchorId) return null;
+    const current = rangeRef.current?.level === level ? rangeRef.current.farId : anchorId;
+    const next = researchRangeStep(listed.displayIds, current, direction);
+    if (!next) return null;
+    setRange(next === anchorId ? null : { level, anchorId, farId: next, listed: listed.displayIds.join("\n") });
+    return next;
+  }, []);
+  const clearRange = useCallback(() => setRange(null), []);
   const showFullTraceFor = useCallback(
     (nodeId: string) =>
       setFullTraceNodes((current) =>
@@ -1501,6 +1581,10 @@ function ResearchThreadPage({
   const announce = useCallback((message: string) => {
     setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
   }, []);
+  const rangeCount = rangeIds?.length ?? 0;
+  useEffect(() => {
+    if (rangeCount > 1) announce(`${rangeCount} messages selected.`);
+  }, [announce, rangeCount]);
 
   /** The messages of the chain headed by `headId` in the order its column
    * or branch group lists them; empty when `headId` heads no chain. */
@@ -1616,6 +1700,9 @@ function ResearchThreadPage({
     goBranch,
     selectedRow,
     moveFocusedMessage,
+    rangeRef,
+    stepRange,
+    clearRange,
   });
 
   /** A row's branch indicator: selects the message's first branch (in
@@ -2635,6 +2722,18 @@ function ResearchThreadPage({
             />
           );
         }
+        if (rangeIds && rangeLevel === column.level.index) {
+          return (
+            <ResearchRangeAnswerColumn
+              key={`${column.id}:range`}
+              column={column}
+              nodes={rangeIds.flatMap((id) => nodeById.get(id) ?? [])}
+              views={segmentViews}
+              contentErrors={contentErrorByNode}
+              current={currentLevel === column.level.index}
+            />
+          );
+        }
         const node = nodeById.get(column.nodeId);
         const view = segmentViews.get(column.nodeId);
         if (!node || !view) {
@@ -2747,154 +2846,156 @@ function ResearchThreadPage({
       setComposerText((current) => ({ ...current, [key]: widgetChangePrompt(answer, html, current[key] ?? "") }));
     }}>
     <TranscriptLinkActionsProvider actions={linkActions}>
-      <div
-        ref={workspaceRef}
-        className="research-thread-page research-pairs"
-        onKeyDown={onPairsKeyDown}
-      >
-        {strip.columns.map(renderColumn)}
-        <div className="research-columns-filler" aria-hidden={!strip.endsWithAnswer || undefined}>
-          {strip.endsWithAnswer ? (
-            <p>Select a passage or a branch marker beside the answer to open it as the next pair.</p>
-          ) : null}
+      <ResearchRangeRowsContext.Provider value={rangeRows}>
+        <div
+          ref={workspaceRef}
+          className="research-thread-page research-pairs"
+          onKeyDown={onPairsKeyDown}
+        >
+          {strip.columns.map(renderColumn)}
+          <div className="research-columns-filler" aria-hidden={!strip.endsWithAnswer || undefined}>
+            {strip.endsWithAnswer ? (
+              <p>Select a passage or a branch marker beside the answer to open it as the next pair.</p>
+            ) : null}
+          </div>
         </div>
-      </div>
-      {columnsLayout?.overlay ? createPortal(searchBar, columnsLayout.overlay) : searchBar}
-      <div className="research-visually-hidden" role="status" aria-live="polite">
-        {announcement}
-      </div>
-      {menu ? (
-        <ResearchThreadMenu
-          menu={menu}
-          nodes={nodes}
-          nodeById={nodeById}
-          treeNodes={detail.nodes}
-          rootNodeId={rootNodeId}
-          treeTitle={treeTitleText}
-          archived={archived}
-          treeMenu={treeMenu}
-          content={contentByNode[menu.nodeId] ?? null}
-          view={segmentViews.get(menu.nodeId) ?? null}
-          hiddenHighlights={hiddenHighlightsByNode[menu.nodeId] ?? 0}
-          fullTrace={Boolean(fullTraceNodes[menu.nodeId])}
-          openBranchIds={openBranchIds}
-          relaunchPending={retryingNodeId !== null}
-          isPassagePress={pressOnMenuPassage}
-          onClose={closeMenu}
-          onOpenBranch={(parentNodeId, branchId) => {
-            const level = levelPathRef.current.indexOf(parentNodeId);
-            if (level >= 0) {
-              goBranch(level, branchId);
+        {columnsLayout?.overlay ? createPortal(searchBar, columnsLayout.overlay) : searchBar}
+        <div className="research-visually-hidden" role="status" aria-live="polite">
+          {announcement}
+        </div>
+        {menu ? (
+          <ResearchThreadMenu
+            menu={menu}
+            nodes={nodes}
+            nodeById={nodeById}
+            treeNodes={detail.nodes}
+            rootNodeId={rootNodeId}
+            treeTitle={treeTitleText}
+            archived={archived}
+            treeMenu={treeMenu}
+            content={contentByNode[menu.nodeId] ?? null}
+            view={segmentViews.get(menu.nodeId) ?? null}
+            hiddenHighlights={hiddenHighlightsByNode[menu.nodeId] ?? 0}
+            fullTrace={Boolean(fullTraceNodes[menu.nodeId])}
+            openBranchIds={openBranchIds}
+            relaunchPending={retryingNodeId !== null}
+            isPassagePress={pressOnMenuPassage}
+            onClose={closeMenu}
+            onOpenBranch={(parentNodeId, branchId) => {
+              const level = levelPathRef.current.indexOf(parentNodeId);
+              if (level >= 0) {
+                goBranch(level, branchId);
+              }
+            }}
+            onBranch={openPendingBranch}
+            onRemoveHighlight={(nodeId, highlightId) =>
+              removeHighlights(nodeId, [highlightId]).catch((err) =>
+                onError(err instanceof Error ? err.message : String(err)),
+              )
             }
-          }}
-          onBranch={openPendingBranch}
-          onRemoveHighlight={(nodeId, highlightId) =>
-            removeHighlights(nodeId, [highlightId]).catch((err) =>
-              onError(err instanceof Error ? err.message : String(err)),
+            onEdit={startEditing}
+            onShowFullTrace={showFullTraceFor}
+            onToggleFullTrace={toggleFullTrace}
+            onCopyAnswer={handleCopyAnswer}
+            onCopyNote={(nodeId) => void copyNote(nodeId)}
+            onCopyThread={(chainIds) => void copyThread(chainIds)}
+            onRerun={(nodeId) => {
+              // Only a complete answer is replaced, so only it asks first. A
+              // failed or cancelled run is retried at once, as the answer
+              // pane's Retry button does.
+              const target = nodeById.get(nodeId);
+              if (target && researchRerunConfirms(target)) {
+                setRerunNodeId(nodeId);
+              } else {
+                handleRetryNode(nodeId);
+              }
+            }}
+            onGenerateRecap={setRecapDialogNodeId}
+            onRename={(nodeId, value) => setRenameTarget({ nodeId, value })}
+            onDelete={setDeletingBranchId}
+          />
+        ) : null}
+        {markerTip ? (
+          <ResearchMarkerTip
+            anchor={markerTip.element}
+            items={markerTip.branchIds.flatMap((branchId) => {
+              const branch = nodeById.get(branchId);
+              if (!branch) return [];
+              const chain = inlineChainFor(nodes, branchId);
+              return [
+                {
+                  id: branchId,
+                  question: nodePrompt(branch),
+                  source: passageAnchor(branch) ? `“${researchQuoteText(passageAnchor(branch)!.exact)}”` : "Whole answer",
+                  messages: chain.length,
+                  state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchStates.ofBranch(branchId),
+                },
+              ];
+            })}
+            opensNext={markerTip.branchIds.includes(levels[markerTip.level + 1]?.headId ?? "")}
+            onDismiss={dismissMarkerTip}
+          />
+        ) : null}
+        {highlightAction ? (
+          <ResearchSelectionToolbar
+            action={highlightAction}
+            saving={savingHighlight}
+            branchBlocker={selectionBranchBlocker}
+            onBranch={branchFromSelection}
+            onHighlight={() => void applyHighlightAction()}
+            onCopy={() => void copySelection()}
+            onDismiss={clearHighlightAction}
+          />
+        ) : null}
+        {rerunNode ? (
+          <ResearchRerunDialog
+            node={rerunNode}
+            parent={rerunNode.parentNodeId ? nodeById.get(rerunNode.parentNodeId) ?? null : null}
+            pending={retryingNodeId !== null}
+            onConfirm={() => {
+              setRerunNodeId(null);
+              handleRetryNode(rerunNode.id);
+            }}
+            onClose={() => setRerunNodeId(null)}
+          />
+        ) : null}
+        {renameTarget ? (
+          <ResearchRenameDialog
+            key={renameTarget.nodeId}
+            initialValue={renameTarget.value}
+            isRoot={renameTarget.nodeId === rootNodeId}
+            onRename={(title) => renameNode(renameTarget.nodeId, title)}
+            onClose={() => setRenameTarget(null)}
+          />
+        ) : null}
+        {recapDialogNodeId && contentByNode[recapDialogNodeId] && nodeRecap(contentByNode[recapDialogNodeId].node)
+          ? createPortal(
+              <ResearchRecapDialog
+                content={contentByNode[recapDialogNodeId]}
+                onClose={() => setRecapDialogNodeId(null)}
+                onApplied={(updatedNode) => {
+                  replaceContentNode(updatedNode);
+                  onToast("Recap updated");
+                }}
+              />,
+              document.body,
             )
-          }
-          onEdit={startEditing}
-          onShowFullTrace={showFullTraceFor}
-          onToggleFullTrace={toggleFullTrace}
-          onCopyAnswer={handleCopyAnswer}
-          onCopyNote={(nodeId) => void copyNote(nodeId)}
-          onCopyThread={(chainIds) => void copyThread(chainIds)}
-          onRerun={(nodeId) => {
-            // Only a complete answer is replaced, so only it asks first. A
-            // failed or cancelled run is retried at once, as the answer
-            // pane's Retry button does.
-            const target = nodeById.get(nodeId);
-            if (target && researchRerunConfirms(target)) {
-              setRerunNodeId(nodeId);
-            } else {
-              handleRetryNode(nodeId);
-            }
-          }}
-          onGenerateRecap={setRecapDialogNodeId}
-          onRename={(nodeId, value) => setRenameTarget({ nodeId, value })}
-          onDelete={setDeletingBranchId}
-        />
-      ) : null}
-      {markerTip ? (
-        <ResearchMarkerTip
-          anchor={markerTip.element}
-          items={markerTip.branchIds.flatMap((branchId) => {
-            const branch = nodeById.get(branchId);
-            if (!branch) return [];
-            const chain = inlineChainFor(nodes, branchId);
-            return [
-              {
-                id: branchId,
-                question: nodePrompt(branch),
-                source: passageAnchor(branch) ? `“${researchQuoteText(passageAnchor(branch)!.exact)}”` : "Whole answer",
-                messages: chain.length,
-                state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchStates.ofBranch(branchId),
-              },
-            ];
-          })}
-          opensNext={markerTip.branchIds.includes(levels[markerTip.level + 1]?.headId ?? "")}
-          onDismiss={dismissMarkerTip}
-        />
-      ) : null}
-      {highlightAction ? (
-        <ResearchSelectionToolbar
-          action={highlightAction}
-          saving={savingHighlight}
-          branchBlocker={selectionBranchBlocker}
-          onBranch={branchFromSelection}
-          onHighlight={() => void applyHighlightAction()}
-          onCopy={() => void copySelection()}
-          onDismiss={clearHighlightAction}
-        />
-      ) : null}
-      {rerunNode ? (
-        <ResearchRerunDialog
-          node={rerunNode}
-          parent={rerunNode.parentNodeId ? nodeById.get(rerunNode.parentNodeId) ?? null : null}
-          pending={retryingNodeId !== null}
-          onConfirm={() => {
-            setRerunNodeId(null);
-            handleRetryNode(rerunNode.id);
-          }}
-          onClose={() => setRerunNodeId(null)}
-        />
-      ) : null}
-      {renameTarget ? (
-        <ResearchRenameDialog
-          key={renameTarget.nodeId}
-          initialValue={renameTarget.value}
-          isRoot={renameTarget.nodeId === rootNodeId}
-          onRename={(title) => renameNode(renameTarget.nodeId, title)}
-          onClose={() => setRenameTarget(null)}
-        />
-      ) : null}
-      {recapDialogNodeId && contentByNode[recapDialogNodeId] && nodeRecap(contentByNode[recapDialogNodeId].node)
-        ? createPortal(
-            <ResearchRecapDialog
-              content={contentByNode[recapDialogNodeId]}
-              onClose={() => setRecapDialogNodeId(null)}
-              onApplied={(updatedNode) => {
-                replaceContentNode(updatedNode);
-                onToast("Recap updated");
-              }}
-            />,
-            document.body,
-          )
-        : null}
-      {deletingBranchId ? (
-        <ResearchDeleteBranchDialog
-          key={deletingBranchId}
-          nodes={detail.nodes}
-          nodeId={deletingBranchId}
-          rootNodeId={rootNodeId}
-          treeTitle={treeTitleText}
-          groupChildCount={groupChildCount}
-          onTrashRoot={trashTree}
-          onRemove={removeBranch}
-          onClose={() => setDeletingBranchId(null)}
-          returnFocusFallback={deleteReturnFocus}
-        />
-      ) : null}
+          : null}
+        {deletingBranchId ? (
+          <ResearchDeleteBranchDialog
+            key={deletingBranchId}
+            nodes={detail.nodes}
+            nodeId={deletingBranchId}
+            rootNodeId={rootNodeId}
+            treeTitle={treeTitleText}
+            groupChildCount={groupChildCount}
+            onTrashRoot={trashTree}
+            onRemove={removeBranch}
+            onClose={() => setDeletingBranchId(null)}
+            returnFocusFallback={deleteReturnFocus}
+          />
+        ) : null}
+      </ResearchRangeRowsContext.Provider>
     </TranscriptLinkActionsProvider>
     </WidgetChangeContext.Provider>
   );
