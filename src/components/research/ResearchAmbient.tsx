@@ -26,7 +26,7 @@ function noise(x: number, y: number): number {
 /** Decorative, theme-colored ASCII wisps. No React updates per frame. */
 function AmbientCanvas({ reduceMotion }: { reduceMotion: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  // Keep the same cloud and character phase when Reduce motion is toggled.
+  // Keep the same cloud position when Reduce motion is toggled.
   const elapsedRef = useRef(0);
   useEffect(() => {
     const canvas = ref.current;
@@ -55,28 +55,23 @@ function AmbientCanvas({ reduceMotion }: { reduceMotion: boolean }) {
       context.fillStyle = ink;
       for (let y = dy / 2, row = 0; y < height; y += dy, row++) {
         for (let x = dx / 2, col = 0; x < width; x += dx, col++) {
-          const u = x / Math.max(width, 640);
-          const v = y / Math.max(height, 480);
-          // Domain-warped, layered noise reveals irregular wisps rather than
-          // visible bands. A narrow gap crops a cloud instead of squeezing it.
-          const nx = u * 3.6 + 0.65 * Math.sin(v * 4 + t * 0.03) - t * 0.018;
-          const ny = v * 4.2 + 0.35 * Math.sin(u * 5 - t * 0.02) + t * 0.01;
+          // Translate a stable field 12px/s right and 2px/s up before any
+          // warping, so the whole cloud travels together. A fixed pixel scale
+          // lets narrow and expanded views crop the field without stretching it.
+          const u = (x - t * 12) / 300;
+          const v = (y + t * 2) / 200;
+          const nx = u + 0.65 * Math.sin(v * 0.95);
+          const ny = v + 0.35 * Math.sin(u * 1.4);
           const field = noise(nx, ny) * 0.62 + noise(nx * 2.1, ny * 2.1) * 0.27
             + noise(nx * 4.1, ny * 4.1) * 0.11;
           const cloud = Math.max(0, Math.min(1, (field - 0.46) / 0.34));
           const seed = row * 613 + col * 17;
-          const alpha = cloud ** 1.6 * 0.11 * (0.75 + hash(seed) * 0.25);
+          const alpha = cloud ** 1.6 * (0.11 * 1.75) * (0.75 + hash(seed) * 0.25);
           if (alpha < 0.004) continue;
-          // Each cell changes at its own pace and crossfades, avoiding the
-          // flashing, synchronized scramble of a Matrix-style rain effect.
-          const phase = t / (3 + hash(seed + 1) * 5) + hash(seed + 2) * 10;
-          const epoch = Math.floor(phase);
-          const blend = Math.min(1, (phase - epoch) * 5);
-          const glyph = (at: number) => GLYPHS[Math.floor(hash(seed + at * 31) * GLYPHS.length)];
-          context.globalAlpha = alpha * (1 - blend);
-          if (blend < 1) context.fillText(glyph(epoch - 1), x, y);
-          context.globalAlpha = alpha * blend;
-          context.fillText(glyph(epoch), x, y);
+          // Characters stay anchored to their cells; the passing cloud only
+          // changes how brightly each one is revealed.
+          context.globalAlpha = alpha;
+          context.fillText(GLYPHS[Math.floor(hash(seed) * GLYPHS.length)], x, y);
         }
       }
       context.globalAlpha = 1;

@@ -151,7 +151,7 @@ test("animation keeps producing changing frames and resumes its phase after Redu
     }
     assert.equal(paintCount(), before + 120);
     const advanced = frameSignature();
-    assert.notEqual(advanced, initial, "the cloud and characters change over time");
+    assert.notEqual(advanced, initial, "the drifting cloud changes character opacity over time");
     await render(true);
     assert.equal(timers.size, 0);
     assert.equal(frameSignature(), advanced, "Reduce motion freezes the current frame");
