@@ -48,6 +48,11 @@ export interface SavedResearchNavigation {
   askByNode?: Record<string, SavedPendingBranch>;
   /** In-progress text in the root follow-up composer. */
   followupDraft?: SavedResearchFollowupDraft;
+  /** Follow-up composer text for existing branches, keyed by chain head.
+   * Kept until sent or cleared, like the root follow-up draft. */
+  chainDrafts?: Record<string, string>;
+  /** A composer editing a failed question must resume replacing that node. */
+  composerEditingByHead?: Record<string, string>;
   /** A highlight to scroll into view on the next page visit (set when a
    * Highlights feed unit is opened). Cleared after the thread page selects it. */
   focusHighlight?: { nodeId: string; highlightId: string };
@@ -197,6 +202,16 @@ function load(): Record<string, SavedResearchNavigation> {
                 updatedAt: candidate.followupDraft.updatedAt,
               }
             : undefined;
+        const chainDrafts = Object.fromEntries(
+          Object.entries(candidate.chainDrafts ?? {}).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+          ),
+        );
+        const composerEditingByHead = Object.fromEntries(
+          Object.entries(candidate.composerEditingByHead ?? {}).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+          ),
+        );
         const focusHighlight =
           candidate.focusHighlight &&
           typeof candidate.focusHighlight === "object" &&
@@ -240,6 +255,8 @@ function load(): Record<string, SavedResearchNavigation> {
           ...(Object.keys(expandedByNode).length > 0 ? { expandedByNode } : {}),
           ...(Object.keys(askByNode).length > 0 ? { askByNode } : {}),
           ...(followupDraft ? { followupDraft } : {}),
+          ...(Object.keys(chainDrafts).length > 0 ? { chainDrafts } : {}),
+          ...(Object.keys(composerEditingByHead).length > 0 ? { composerEditingByHead } : {}),
           ...(focusHighlight ? { focusHighlight } : {}),
           ...(Object.keys(queuedFollowups).length > 0 ? { queuedFollowups } : {}),
           ...(Object.keys(turnsScrollByHead).length > 0 ? { turnsScrollByHead } : {}),
@@ -410,6 +427,27 @@ export function recordResearchFollowupDraft(
   return true;
 }
 
+/** Returns an independent initial state for a remounted thread's branch composers. */
+export function savedResearchChainDrafts(treeId: string): Record<string, string> {
+  return { ...researchNavigationStore()[treeId]?.chainDrafts };
+}
+
+/** Empty text removes a sent or explicitly cleared branch draft. */
+export function recordResearchChainDraft(
+  navigation: SavedResearchNavigation,
+  headId: string,
+  text: string,
+): boolean {
+  if ((navigation.chainDrafts?.[headId] ?? "") === text) return false;
+  if (text.length > 0) {
+    (navigation.chainDrafts ??= {})[headId] = text;
+  } else {
+    delete navigation.chainDrafts?.[headId];
+    if (Object.keys(navigation.chainDrafts ?? {}).length === 0) delete navigation.chainDrafts;
+  }
+  return true;
+}
+
 /** The images stored for a tree's composers, unless saved more than
  * a day ago. */
 export function savedResearchComposerImages(
@@ -516,6 +554,18 @@ export function pruneResearchNavigationNodes(treeId: string, validNodeIds: Itera
   for (const headId of Object.keys(navigation.branchesScrollBySource ?? {})) {
     if (!valid.has(headId)) {
       delete navigation.branchesScrollBySource?.[headId];
+      changed = true;
+    }
+  }
+  for (const [headId, nodeId] of Object.entries(navigation.composerEditingByHead ?? {})) {
+    if (!valid.has(headId) || !valid.has(nodeId)) {
+      delete navigation.composerEditingByHead?.[headId];
+      changed = true;
+    }
+  }
+  for (const headId of Object.keys(navigation.chainDrafts ?? {})) {
+    if (!valid.has(headId)) {
+      delete navigation.chainDrafts?.[headId];
       changed = true;
     }
   }

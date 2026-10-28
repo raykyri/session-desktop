@@ -85,7 +85,7 @@ export function useResearchPairsKeyboard({
   /** The range selection in a messages column, while there is one. */
   rangeRef: Ref<{ level: number } | null>;
   /** Shift+↑/↓: moves the range's far end; returns that message, or null. */
-  stepRange: (level: number, direction: -1 | 1) => string | null;
+  stepRange: (level: number, direction: -1 | 1, focusedId: string) => string | null;
   clearRange: () => void;
 }) {
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
@@ -244,7 +244,7 @@ export function useResearchPairsKeyboard({
       if (level === null) {
         return;
       }
-      const far = stepRange(level, key === "ArrowUp" ? -1 : 1);
+      const far = stepRange(level, key === "ArrowUp" ? -1 : 1, target.dataset.nodeId ?? "");
       const column = target.closest<HTMLElement>(columnSelector());
       const row = far
         ? column?.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(far)}"]`)

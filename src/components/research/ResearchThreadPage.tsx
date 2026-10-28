@@ -1,3 +1,4 @@
+import { subscribeResearchDraftSubmitted } from "../../lib/researchThreadPersistence";
 import { deferResearchEditorLeave, registerResearchEditorLeaveGuard } from "../../lib/researchEditorLeave";
 import { ResearchEditorDiscardDialog } from "./ResearchEditorDiscardDialog";
 import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
@@ -98,6 +99,8 @@ import {
   pruneResearchNavigationNodes,
   recordResearchComposerImages,
   savedResearchComposerImages,
+  savedResearchChainDrafts,
+  researchNavigationStore,
   savedResearchSelection,
 } from "../../lib/researchNavigation";
 import type {
@@ -356,7 +359,14 @@ function ResearchThreadPage({
   // header title is at full strength; null until something is focused,
   // which makes the deepest level current.
   const [focusedColumnId, setFocusedColumnId] = useState<ResearchColumnId | null>(null);
-  const [composerText, setComposerText] = useState<Record<string, string>>({});
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const [composerText, setComposerText] = useState<Record<string, string>>(() =>
+    treeId ? savedResearchChainDrafts(treeId) : {},
+  );
   // The images in each ask box, keyed as `composerText`; a sent or queued
   // question takes them along. The navigation store keeps them, like the
   // text, across remounts and restarts, for as long as the backend keeps
@@ -372,7 +382,9 @@ function ResearchThreadPage({
   const [queuedView, setQueuedView] = useState<{ headId: string; itemId: string } | null>(null);
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   // Per chain head: the failed node whose question the composer is editing.
-  const [editingByHead, setEditingByHead] = useState<Record<string, string>>({});
+  const [editingByHead, setEditingByHead] = useState<Record<string, string>>(() =>
+    treeId ? { ...researchNavigationStore()[treeId]?.composerEditingByHead } : {},
+  );
   const [menu, setMenu] = useState<ThreadMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   // The message whose delete confirmation is open, and the message (or the
@@ -451,6 +463,19 @@ function ResearchThreadPage({
   submittingKeyRef.current = submittingKey;
   editingByHeadRef.current = editingByHead;
 
+  useEffect(() => subscribeResearchDraftSubmitted((draft) => {
+    if (draft.treeId !== treeId) return;
+    if (composerTextRef.current[draft.headId] === draft.text) {
+      setComposerText((current) => current[draft.headId] === draft.text ? { ...current, [draft.headId]: "" } : current);
+      setEditingByHead((current) => withoutKeys(current, [draft.headId]));
+    }
+    if (draft.imageIds.length) {
+      setComposerImages((current) => withImages(current, draft.headId,
+        (current[draft.headId] ?? []).filter((image) => !draft.imageIds.includes(image.id)),
+      ));
+    }
+  }), [treeId]);
+
   // The column scroll offsets are recorded when the page unmounts (see
   // useResearchColumnScroll).
   const captureScrollRef = useRef<(persistence: ResearchThreadPersistence) => void>(() => {});
@@ -495,6 +520,19 @@ function ResearchThreadPage({
     }
   }, [nodes]);
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  // Branch composers survive feed ranges and other page unmounts. Restore
+  // in the state initializer so the first empty render cannot erase them.
+  useEffect(() => {
+    if (!treeId || !rootNodeId) return;
+    for (const [headId, text] of Object.entries(composerText)) {
+      if (headId !== rootNodeId && nodeById.has(headId)) {
+        navigationPersistence.recordChainDraft(treeId, headId, text);
+      }
+    }
+    navigationPersistence.recordComposerEditing(treeId, Object.fromEntries(
+      Object.entries(editingByHead).filter(([headId, nodeId]) => nodeById.has(headId) && nodeById.has(nodeId)),
+    ));
+  }, [composerText, editingByHead, navigationPersistence, nodeById, rootNodeId, treeId]);
   // The Rerun confirmation is not shown in an archived thread; archiving the
   // thread while it is open closes it.
   const rerunNode = researchRerunDialogNode(rerunNodeId ? nodeById.get(rerunNodeId) : undefined, archived);
@@ -870,7 +908,7 @@ function ResearchThreadPage({
    * history, with each column's selection. */
   const navigate = useCallback(
     (target: string | readonly string[]) => {
-      if (deferResearchEditorLeave(() => navigate(target))) return;
+      if (!mountedRef.current || deferResearchEditorLeave(() => navigate(target))) return;
       const currentTreeId = treeIdRef.current;
       const shown = applyVisit(target);
       if (shown && currentTreeId) {
@@ -889,6 +927,7 @@ function ResearchThreadPage({
         // Selecting the message again (a click, or Enter) shows its own
         // answer in place of a selected queued message.
         setQueuedView(null);
+        setRange(null);
         return;
       }
       const next =
@@ -1505,10 +1544,10 @@ function ResearchThreadPage({
   /** Shift+↑ or Shift+↓ on a row of level `level`: moves the range's far end
    * one message (starting from the selected message) and returns it, or
    * null at the end of the column. */
-  const stepRange = useCallback((level: number, direction: -1 | 1): string | null => {
+  const stepRange = useCallback((level: number, direction: -1 | 1, focusedId: string): string | null => {
     const listed = stripRef.current.levels[level];
     const anchorId = levelPathRef.current[level];
-    if (!listed || listed.kind === "post" || !anchorId) return null;
+    if (!listed || listed.kind === "post" || !anchorId || !listed.displayIds.includes(focusedId)) return null;
     const current = rangeRef.current?.level === level ? rangeRef.current.farId : anchorId;
     const next = researchRangeStep(listed.displayIds, current, direction);
     if (!next) return null;
@@ -1765,7 +1804,8 @@ function ResearchThreadPage({
   const submitComposer = useCallback(
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
       const currentDetail = detailRef.current;
-      const prompt = (composerTextRef.current[headId] ?? "").trim();
+      const submittedText = composerTextRef.current[headId] ?? "";
+      const prompt = submittedText.trim();
       const images = composerImagesRef.current[headId] ?? [];
       if (!currentDetail || !prompt || archived || submittingKeyRef.current) {
         return;
@@ -1782,19 +1822,20 @@ function ResearchThreadPage({
       // already be gone.
       const navigationSeq = navigationSeqRef.current;
       const stillShown = (replacedId?: string) =>
-        navigationSeqRef.current === navigationSeq &&
+        mountedRef.current && navigationSeqRef.current === navigationSeq &&
         (headId === replacedId || stripRef.current.levels.some((level) => level.headId === headId));
       const clearComposer = () => {
-        setComposerText((current) => ({ ...current, [headId]: "" }));
+        setComposerText((current) => current[headId] === submittedText ? { ...current, [headId]: "" } : current);
         // Images added while the question was being sent stay in the box.
         const sent = new Set(images.map((image) => image.id));
         setComposerImages((current) =>
           withImages(current, headId, (current[headId] ?? []).filter((image) => !sent.has(image.id))),
         );
-        if (headId === mainComposerKey && treeIdRef.current) {
-          navigationPersistence.recordDraft(treeIdRef.current, "");
-          navigationPersistence.flush();
-        }
+        // A send may finish after the page unmounts into a feed range.
+        // Clear durable text directly; a React effect can no longer do it.
+        navigationPersistence.clearSubmittedDraft(
+          currentDetail.tree.id, headId, submittedText, headId === currentDetail.tree.rootNodeId, [...sent],
+        );
       };
       if (branch) {
         const source = [...chain].reverse().find((node) => canFollowUpFrom(node));

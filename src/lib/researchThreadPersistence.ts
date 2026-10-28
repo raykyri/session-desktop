@@ -1,11 +1,22 @@
 import {
   recordResearchFollowupDraft,
+  recordResearchChainDraft,
   recordResearchScrollPosition,
   researchNavigationStore,
   saveResearchNavigation,
 } from "./researchNavigation";
 import type { ResearchHighlightAnchor } from "../types";
 import type { ResearchScrollKind } from "@session/shared/lib/researchColumns";
+
+interface SubmittedDraft { treeId: string; headId: string; text: string; imageIds: readonly string[] }
+const submittedDraftListeners = new Set<(draft: SubmittedDraft) => void>();
+
+/** A send can finish after its thread page remounts; clear matching text
+ * in the currently mounted composer as well as in durable storage. */
+export function subscribeResearchDraftSubmitted(listener: (draft: SubmittedDraft) => void): () => void {
+  submittedDraftListeners.add(listener);
+  return () => { submittedDraftListeners.delete(listener); };
+}
 
 /** Prevent transitional React state from overwriting the destination tree's draft. */
 export function createResearchComposerDraftRestoration(
@@ -59,6 +70,40 @@ export function createResearchThreadPersistence(
     },
     recordDraft(treeId: string, text: string) {
       if (recordResearchFollowupDraft(entry(treeId), text)) schedule();
+    },
+    recordChainDraft(treeId: string, headId: string, text: string) {
+      if (recordResearchChainDraft(entry(treeId), headId, text)) schedule();
+    },
+    clearSubmittedDraft(treeId: string, headId: string, text: string, root: boolean, imageIds: readonly string[] = []) {
+      const navigation = store[treeId];
+      let changed = false;
+      const saved = root ? navigation?.followupDraft?.text : navigation?.chainDrafts?.[headId];
+      if (navigation && saved === text) {
+        if (root) recordResearchFollowupDraft(navigation, "");
+        else recordResearchChainDraft(navigation, headId, "");
+        delete navigation.composerEditingByHead?.[headId];
+        changed = true;
+      }
+      const savedImages = navigation?.composerImages;
+      const previousImages = savedImages?.images[headId] ?? [];
+      const remaining = previousImages.filter((image) => !imageIds.includes(image.id));
+      if (savedImages && remaining.length !== previousImages.length) {
+        const images = { ...savedImages.images };
+        if (remaining.length) images[headId] = remaining;
+        else delete images[headId];
+        if (Object.keys(images).length) navigation.composerImages = { images, updatedAt: Date.now() };
+        else delete navigation.composerImages;
+        changed = true;
+      }
+      if (changed) flush();
+      for (const listener of submittedDraftListeners) listener({ treeId, headId, text, imageIds });
+    },
+    recordComposerEditing(treeId: string, editing: Record<string, string>) {
+      const navigation = entry(treeId);
+      if (JSON.stringify(navigation.composerEditingByHead ?? {}) === JSON.stringify(editing)) return;
+      if (Object.keys(editing).length) navigation.composerEditingByHead = { ...editing };
+      else delete navigation.composerEditingByHead;
+      schedule();
     },
     recordPendingBranch(
       treeId: string,
