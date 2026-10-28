@@ -18,6 +18,7 @@ import { researchNoteDoubleClickProps } from "./researchNoteDoubleClick";
 interface ResearchFeedCardProps {
   /** Tree id, or draft id for a draft card. */
   cardId: string;
+  listId?: string;
   dragKind?: "tree" | "draft";
   /** The place the card is listed in, for drag and drop. */
   place: string;
@@ -161,6 +162,7 @@ export function researchCardRefocus(
  * cards follow it, indented, while it is expanded. */
 export default function ResearchFeedCard({
   cardId,
+  listId,
   dragKind = "tree",
   place,
   title,
@@ -275,6 +277,7 @@ export default function ResearchFeedCard({
           menuOpen ? " has-open-menu" : ""
         }${parentId ? " is-child" : ""}`}
         data-research-card={cardId}
+        data-research-list={listId}
         data-research-card-kind={dragKind}
         data-research-place={place}
         data-research-card-virtual={virtual ? "" : undefined}

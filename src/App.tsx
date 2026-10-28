@@ -1,3 +1,4 @@
+import { deferResearchEditorLeave } from "./lib/researchEditorLeave";
 import { useAppStartup } from "./hooks/useAppStartup";
 import { useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
@@ -748,12 +749,14 @@ function MainApp() {
   } | null>(null);
   const { researchVisits, researchVisitsRef } = researchNavigationState;
   const setFeedRange = useCallback(
-    (treeIds: string[] | null) =>
+    (treeIds: string[] | null) => {
+      if (treeIds && deferResearchEditorLeave(() => setFeedRange(treeIds))) return;
       setFeedRangeState(
         treeIds && activeResearchTreeId
           ? { treeIds, anchorTreeId: activeResearchTreeId, visits: researchVisitsRef.current }
           : null,
-      ),
+      );
+    },
     [activeResearchTreeId, researchVisitsRef],
   );
   const feedRange = useMemo(() => {
@@ -903,6 +906,7 @@ function MainApp() {
   }, [activeResearchTreeId]);
   const openResearchDraftInColumn = useCallback(
     (draft: ResearchDraft) => {
+      if (deferResearchEditorLeave(() => openResearchDraftInColumn(draft))) return;
       if (activeResearchTreeIdRef.current) focusResearchHome();
       setOpenResearchDraftId(draft.id);
     },
@@ -1013,7 +1017,7 @@ function MainApp() {
     async (prompt: string, choice: ResearchLaunchChoice) => {
       const origin = activeResearchDetailRef.current;
       const workspaceId = origin?.tree.workspaceId ?? researchScopeRef.current;
-      const newTreeId = await submitNewResearch({ prompt, ...choice, workspaceId });
+      const newTreeId = await submitNewResearch({ prompt, ...choice, workspaceId }, true);
       const contents = origin ? researchTreeContents(origin.nodes, origin.tree.rootNodeId) : null;
       if (origin && contents) {
         setResearchDeleteOffer({ treeId: origin.tree.id, newTreeId, contents });

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
-import { columnAttributes } from "@session/shared/lib/researchColumns";
+import { columnAttributes, type ResearchLevel } from "@session/shared/lib/researchColumns";
 import { documentSource, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "@session/shared/lib/researchNodeTypes";
 import { formatRunDuration } from "@session/shared/lib/shortTime";
-import { getResearchNodeContent } from "../../lib/api";
+import { useResearchContentLoader } from "../../hooks/useResearchContentLoader";
 import { isEditableTarget } from "../../lib/appHelpers";
 import { buildSegmentView, type SegmentView } from "../../lib/researchSegmentView";
 import type { ResearchNode } from "../../types";
@@ -64,7 +64,7 @@ export function ResearchRangeEntry({
       </ResearchUserMessage>
     );
   }
-  const items = view?.visibleTimelineItems ?? [];
+  const items = view?.displayedTimelineItems ?? [];
   return (
     <section className="research-range-entry" aria-label={heading ?? undefined}>
       {heading ? <h3 className="research-range-heading">{heading}</h3> : null}
@@ -103,6 +103,9 @@ interface ResearchFeedRangeTree {
   rootNodeId: string;
 }
 
+const EMPTY_LEVELS: readonly ResearchLevel[] = [];
+const EMPTY_NODES: readonly ResearchNode[] = [];
+
 /** The content column for a range of feed cards: each thread's title, then
  * its root message's question and answer (its follow-ups and branches are
  * not shown). The header names the count and clears the range. */
@@ -113,28 +116,16 @@ export function ResearchFeedRangeView({
   trees: readonly ResearchFeedRangeTree[];
   onClear: () => void;
 }) {
-  // Each root message's content, which carries its node; loaded once per
-  // view (the range is short-lived).
-  const [loaded, setLoaded] = useState<Record<string, { view: SegmentView } | { error: string }>>({});
-  const requestedRef = useRef(new Set<string>());
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-  // Retry asks for the answers that failed to load again.
-  const [retryNonce, setRetryNonce] = useState(0);
-  const retry = (nodeId: string) => {
-    requestedRef.current.delete(nodeId);
-    setLoaded((current) => {
-      const next = { ...current };
-      delete next[nodeId];
-      return next;
-    });
-    setRetryNonce((nonce) => nonce + 1);
-  };
+  const rootIds = useMemo(() => trees.map((tree) => tree.rootNodeId), [trees]);
+  const { contentByNode, contentErrorByNode, reloadContent: retry } = useResearchContentLoader({
+    detail: null,
+    levels: EMPTY_LEVELS,
+    chainNodeIds: rootIds,
+    chainNodes: EMPTY_NODES,
+  });
+  const views = useMemo(() => new Map(Object.entries(contentByNode).map(([id, content]) =>
+    [id, buildSegmentView(content.node, content, true, false)],
+  )), [contentByNode]);
   // Esc clears the range wherever focus is (the thread page that held it
   // has unmounted), unless a field, menu or dialog takes it.
   const onClearRef = useRef(onClear);
@@ -155,25 +146,6 @@ export function ResearchFeedRangeView({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-  const rootIds = useMemo(() => trees.map((tree) => tree.rootNodeId), [trees]);
-  useEffect(() => {
-    for (const nodeId of rootIds) {
-      if (requestedRef.current.has(nodeId)) continue;
-      requestedRef.current.add(nodeId);
-      getResearchNodeContent(nodeId).then(
-        (content) => {
-          if (!mountedRef.current) return;
-          const view = buildSegmentView(content.node, content, true, false);
-          setLoaded((current) => ({ ...current, [nodeId]: { view } }));
-        },
-        (error: unknown) => {
-          if (!mountedRef.current) return;
-          const message = error instanceof Error ? error.message : String(error);
-          setLoaded((current) => ({ ...current, [nodeId]: { error: `Couldn’t load this answer. ${message}` } }));
-        },
-      );
-    }
-  }, [retryNonce, rootIds]);
   const title = `${trees.length} threads`;
   return (
     <section
@@ -185,15 +157,15 @@ export function ResearchFeedRangeView({
       <div className="research-column-scroll" tabIndex={-1}>
         <article className="research-answer research-reading-surface research-range">
           {trees.map((tree) => {
-            const entry = loaded[tree.rootNodeId];
-            const view = entry && "view" in entry ? entry.view : null;
+            const error = contentErrorByNode[tree.rootNodeId];
+            const view = views.get(tree.rootNodeId);
             if (!view) {
               return (
                 <section key={tree.id} className="research-range-entry" aria-label={tree.title}>
                   <h3 className="research-range-heading">{tree.title}</h3>
-                  {entry && "error" in entry ? (
+                  {error ? (
                     <div className="research-response-loading">
-                      <p role="alert">{entry.error}</p>
+                      <p role="alert">{error}</p>
                       <button className="control-button" type="button" onClick={() => retry(tree.rootNodeId)}>
                         Retry
                       </button>

@@ -1,3 +1,4 @@
+import { deferResearchEditorLeave } from "../lib/researchEditorLeave";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ACTIVE_RESEARCH_TREE_KEY, type ResearchData } from "./useResearchData";
 import { RESEARCH_WORKSPACE_SCOPE_KEY, type useResearchNavigationState } from "./useResearchNavigationState";
@@ -386,6 +387,7 @@ export function useResearchNavigation(
       if (researchThreadShown(treeId)) {
         return;
       }
+      if (deferResearchEditorLeave(() => navigateToResearchThread(treeId))) return;
       recordResearchVisit({ kind: "node", treeId, nodeId: null });
       void selectResearchTree(treeId);
     },
@@ -399,6 +401,7 @@ export function useResearchNavigation(
   // tree does not have the node yet, the tree is fetched again.
   const openResearchNode = useCallback(
     (treeId: string, nodeId: string) => {
+      if (deferResearchEditorLeave(() => openResearchNode(treeId, nodeId))) return;
       const navigationStore = researchNavigationStore();
       const navigation = navigationStore[treeId] ?? { scrollByNode: {} };
       navigation.selectedNodeId = nodeId;
@@ -419,6 +422,7 @@ export function useResearchNavigation(
   );
   const openResearchHighlight = useCallback(
     (item: ResearchHighlightFeedItem) => {
+      if (deferResearchEditorLeave(() => openResearchHighlight(item))) return;
       // Record the highlight before navigation so visit restoration selects it
       // instead of applying the saved scroll offset.
       const navigationStore = researchNavigationStore();
@@ -460,6 +464,7 @@ export function useResearchNavigation(
     }
   }, [activeResearchTreeIdRef, selectResearchTree]);
   const focusResearchHome = useCallback(() => {
+    if (deferResearchEditorLeave(() => focusResearchHome())) return;
     recordResearchVisit({ kind: "home" });
     // Invalidate a tree request that may still be landing while Home is
     // selected; otherwise its detail can repaint behind the launcher.
@@ -472,6 +477,7 @@ export function useResearchNavigation(
   // way Home does, so the sidebar never shows a selected row behind the tab
   // that is actually forward.
   const showFeed = useCallback(() => {
+    if (deferResearchEditorLeave(() => showFeed())) return;
     researchDetailRequestSeqRef.current += 1;
     clearActiveResearchTree();
     setFeedOpen(true);
@@ -525,6 +531,7 @@ export function useResearchNavigation(
     [trashedResearchTreeIds],
   );
   const goResearchBack = useCallback(() => {
+    if (deferResearchEditorLeave(() => goResearchBack())) return;
     const step = researchVisitBack(researchVisitsRef.current, researchVisitHidden);
     if (!step) {
       return;
@@ -533,6 +540,7 @@ export function useResearchNavigation(
     applyResearchVisit(step.visit);
   }, [applyResearchVisit, researchVisitHidden, researchVisitsRef, updateResearchVisits]);
   const goResearchForward = useCallback(() => {
+    if (deferResearchEditorLeave(() => goResearchForward())) return;
     const step = researchVisitForward(researchVisitsRef.current, researchVisitHidden);
     if (!step) {
       return;
@@ -595,7 +603,8 @@ export function useResearchNavigation(
   // item creates its private default folder — follow it so the single-folder
   // sidebar immediately lists the new tree).
   const adoptCreatedResearchTree = useCallback(
-    (detail: ResearchTreeDetail) => {
+    (detail: ResearchTreeDetail, fromEditor = false) => {
+      if (!fromEditor && deferResearchEditorLeave(() => adoptCreatedResearchTree(detail))) return;
       researchDetailRequestSeqRef.current += 1;
       // Clear feedOpen so the new thread is visible after closing a
       // conversation or opening a draft.

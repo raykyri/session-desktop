@@ -952,11 +952,13 @@ function ResearchActivityFeed({
     query: RecentResearchQuery | undefined,
     {
       virtual = false,
+      listId = "recent",
       parentId,
       parentName,
       children = [],
     }: {
       virtual?: boolean;
+      listId?: string;
       parentId?: string;
       parentName?: string;
       children?: readonly ResearchFeedRowChild[];
@@ -1031,6 +1033,7 @@ function ResearchActivityFeed({
             <Fragment key={child.tree.id}>
               {renderTreeCard(child.tree, child.query, {
                 virtual,
+                listId,
                 parentId: treeId,
                 parentName: name,
               })}
@@ -1041,6 +1044,7 @@ function ResearchActivityFeed({
     return (
       <ResearchFeedCard
         cardId={treeId}
+        listId={listId}
         place={placeOf(tree)}
         title={title}
         label={parentName ? `${cardLabel}, in “${shortName(parentName)}”` : cardLabel}
@@ -1098,7 +1102,7 @@ function ResearchActivityFeed({
         onExtend={
           onSelectRange && tree && tree.archivedAt == null
             ? () => {
-                if (!extendRange(treeId)) openTreeCard(tree, query);
+                if (!extendRange(treeId, listId)) openTreeCard(tree, query);
               }
             : undefined
         }
@@ -1241,6 +1245,7 @@ function ResearchActivityFeed({
         {researchTreeGroups(trees, parents).map(({ tree, children }) => (
           <div key={tree.id} className="research-feed-unit">
             {renderTreeCard(tree, queryByTree.get(tree.id), {
+              listId: `place:${place}`,
               children: children.map((child) => ({ tree: child, query: queryByTree.get(child.id) })),
             })}
           </div>
@@ -1271,7 +1276,7 @@ function ResearchActivityFeed({
   /** The feed's card lists, each in display order: Home's recent activity
    * and each open tray, or the view's own cards. An expanded group's
    * children follow their parent; a collapsed group's are not listed. */
-  function feedLists(): FeedRowEntry[][] {
+  function feedLists(): { id: string; entries: FeedRowEntry[] }[] {
     const treeEntry = (
       tree: ResearchTreeSummary | undefined,
       query: RecentResearchQuery | undefined,
@@ -1307,48 +1312,50 @@ function ResearchActivityFeed({
         ]),
       ];
     };
-    const lists: FeedRowEntry[][] = [];
+    const lists: { id: string; entries: FeedRowEntry[] }[] = [];
     if (listed) {
-      lists.push(
-        rows.flatMap((row, index) => [
+      lists.push({
+        id: "recent",
+        entries: rows.flatMap((row, index) => [
           treeEntry(row.tree, row.query, index),
           ...(row.collapsed
             ? []
             : row.children.map((child) => treeEntry(child.tree, child.query, index))),
         ]),
-      );
+      });
     }
     if (view.kind === "home") {
       for (const place of trayPlaces) {
-        if (!collapsed.has(place)) lists.push(placeEntries(place));
+        if (!collapsed.has(place)) lists.push({ id: `place:${place}`, entries: placeEntries(place) });
       }
     }
-    if (soloPlace) lists.push(placeEntries(soloPlace));
+    if (soloPlace) lists.push({ id: `place:${soloPlace}`, entries: placeEntries(soloPlace) });
     return lists;
   }
 
   // The range's far end: the card Shift+click or Shift+↑/↓ last extended
   // it to. The selected thread is the other end.
-  const rangeFarRef = useRef<string | null>(null);
+  const rangeFarRef = useRef<{ treeId: string; listId: string } | null>(null);
   const rangeSet = useMemo(() => new Set(rangeTreeIds ?? []), [rangeTreeIds]);
 
   /** The threads of the list that holds both the selected thread and
    * `treeId` (a thread can be listed in Home's recent activity and in a
    * tray), with each card's entry; null when there is none. Archive's cards
    * are not in ranges. */
-  function rangeList(treeId: string): FeedRowEntry[] | null {
+  function rangeList(treeId: string, listId: string): FeedRowEntry[] | null {
     const selectedTree = researchTrees.find((tree) => tree.id === selectedTreeId);
     if (!selectedTree || selectedTree.archivedAt != null) return null;
     const holds = (entries: FeedRowEntry[], id: string) => entries.some((entry) => entry.key === `tree:${id}`);
-    const list = feedLists().find((entries) => holds(entries, selectedTree.id) && holds(entries, treeId));
-    return list ? list.filter((entry) => entry.key.startsWith("tree:")) : null;
+    const list = feedLists().find((list) => list.id === listId)?.entries;
+    if (!list || !holds(list, selectedTree.id) || !holds(list, treeId)) return null;
+    return list.filter((entry) => entry.key.startsWith("tree:"));
   }
 
   /** Extends the range from the selected thread to `treeId`; false when
    * the two are not in the same list (the card then opens as a click
    * does). Extending to the selected thread clears the range. */
-  function extendRange(treeId: string): boolean {
-    const list = rangeList(treeId);
+  function extendRange(treeId: string, listId: string): boolean {
+    const list = rangeList(treeId, listId);
     if (!list || !onSelectRange) return false;
     if (treeId === selectedTreeId) {
       rangeFarRef.current = null;
@@ -1361,7 +1368,7 @@ function ResearchActivityFeed({
       treeId,
     );
     if (!ids) return false;
-    rangeFarRef.current = treeId;
+    rangeFarRef.current = { treeId, listId };
     onSelectRange(ids);
     announce(`${ids.length} threads selected.`);
     return true;
@@ -1369,10 +1376,13 @@ function ResearchActivityFeed({
 
   /** Shift+↑ or Shift+↓ on a card of the selected thread's list: moves the
    * range's far end one card and focuses that card. */
-  function stepRange(direction: -1 | 1) {
+  function stepRange(direction: -1 | 1, target: HTMLElement) {
     if (!selectedTreeId) return;
-    const far = rangeTreeIds && rangeFarRef.current ? rangeFarRef.current : selectedTreeId;
-    const list = rangeList(far);
+    const listId = target.closest<HTMLElement>("[data-research-list]")?.dataset.researchList;
+    if (!listId) return;
+    const far = rangeTreeIds && rangeFarRef.current?.listId === listId
+      ? rangeFarRef.current.treeId : selectedTreeId;
+    const list = rangeList(far, listId);
     if (!list) return;
     const next = researchRangeStep(
       list.map((entry) => entry.cardId),
@@ -1381,8 +1391,8 @@ function ResearchActivityFeed({
     );
     const entry = next ? list.find((candidate) => candidate.cardId === next) : undefined;
     if (!next || !entry) return;
-    extendRange(next);
-    revealFeedRow(next, entry.virtualIndex, false);
+    extendRange(next, listId);
+    revealFeedRow(next, entry.virtualIndex, false, listId);
   }
 
   // ⌃Tab / ⌃⇧Tab with the feed as the column last interacted with (see
@@ -1393,11 +1403,11 @@ function ResearchActivityFeed({
   cycleFeedRef.current = (request) => {
     const lists = feedLists();
     const step = feedCycleStep(
-      lists.map((entries) => entries.map((entry) => entry.key)),
+      lists.map(({ entries }) => entries.map((entry) => entry.key)),
       currentFeedCard(),
       request.direction,
     );
-    const entry = step ? lists.flat().find((candidate) => candidate.key === step) : undefined;
+    const entry = step ? lists.flatMap(({ entries }) => entries).find((candidate) => candidate.key === step) : undefined;
     if (!entry) return true;
     entry.open();
     revealFeedRow(entry.cardId, entry.virtualIndex, request.keepFocus);
@@ -1423,7 +1433,7 @@ function ResearchActivityFeed({
   /** Scrolls a card into view, rendering it first when it is in a
    * virtualized row outside the rendered range, and focuses it unless focus
    * stays in a text field. */
-  function revealFeedRow(cardId: string, virtualIndex: number | null, keepFocus: boolean) {
+  function revealFeedRow(cardId: string, virtualIndex: number | null, keepFocus: boolean, listId?: string) {
     const scroller = scrollRef.current;
     if (scroller && virtualIndex !== null) {
       const geometry = metricsRef.current;
@@ -1435,7 +1445,8 @@ function ResearchActivityFeed({
         scroller.scrollTop = Math.min(top, bottom - scroller.clientHeight);
       }
     }
-    const selector = `.research-feed-card[data-research-card="${CSS.escape(cardId)}"] .research-feed-card-hit`;
+    const listSelector = listId ? `[data-research-list="${CSS.escape(listId)}"]` : "";
+    const selector = `.research-feed-card${listSelector}[data-research-card="${CSS.escape(cardId)}"] .research-feed-card-hit`;
     const started = performance.now();
     const attempt = () => {
       const row = scrollRef.current?.querySelector<HTMLElement>(selector);
@@ -1759,7 +1770,7 @@ function ResearchActivityFeed({
             onSelectRange
           ) {
             event.preventDefault();
-            stepRange(event.key === "ArrowUp" ? -1 : 1);
+            stepRange(event.key === "ArrowUp" ? -1 : 1, target);
             return;
           }
           // Esc clears the range selection.

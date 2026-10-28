@@ -153,7 +153,7 @@ export function useResearchActions(
       effort: string | null;
       workspaceId: string | null;
       images?: readonly ResearchImageAttachment[];
-    }) => {
+    }, fromEditor = false) => {
       const probedAdapters = await refreshAdapterReadiness();
       const selectedAdapter = probedAdapters.find(
         (adapter) => adapter.id === input.adapter,
@@ -184,7 +184,9 @@ export function useResearchActions(
         void refreshAdapterReadiness({ force: true }).catch(() => undefined);
         throw err;
       }
-      adoptCreatedResearchTree(detail);
+      // Ask as question explicitly consumes the editor text; it already
+      // authorizes leaving that editor after successful creation.
+      adoptCreatedResearchTree(detail, fromEditor);
       void applyGeneratedResearchTreeTitle(
         detail.tree.id,
         detail.tree.rootNodeId,

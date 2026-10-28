@@ -1,3 +1,4 @@
+import { deferResearchEditorLeave } from "../lib/researchEditorLeave";
 import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ResearchData } from "./useResearchData";
 import type { ResearchNavigation } from "./useResearchNavigation";
@@ -88,6 +89,7 @@ export function useResearchWorkspaces(
   // or first thread, or by Home.
   const selectWorkspace = useCallback(
     (scope: ResearchWorkspaceScope) => {
+      if (deferResearchEditorLeave(() => selectWorkspace(scope))) return;
       changeResearchWorkspaceScope(scope);
       const activeTreeId = activeResearchTreeIdRef.current;
       if (activeTreeId === null) {

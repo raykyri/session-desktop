@@ -41,7 +41,8 @@ export function useResearchContentLoader({
   levels: readonly ResearchLevel[];
   /** The answers on screen, with a stable identity while they do not change. */
   chainNodeIds: readonly string[];
-  /** The `chainNodeIds` present in the tree. */
+  /** Known metadata for `chainNodeIds`. Feed ranges can load by ID before
+   * metadata is available; content signals and active polling keep them fresh. */
   chainNodes: readonly ResearchNode[];
 }) {
   // Loaded answers, keyed by node id. Pruned to the open levels' chains.
@@ -182,7 +183,7 @@ export function useResearchContentLoader({
         }));
         const knownNode = detailRef.current?.nodes.find(
           (candidate) => candidate.id === nodeId,
-        );
+        ) ?? contentByNodeRef.current[nodeId]?.node;
         const attempts = (errorCounts.get(nodeId) ?? 0) + 1;
         errorCounts.set(nodeId, attempts);
         const isActive = knownNode && isActiveResearchStatus(nodeStatus(knownNode));
@@ -209,11 +210,8 @@ export function useResearchContentLoader({
       }
     });
     for (const nodeId of chainNodeIds) {
-      const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
-      if (!node) {
-        // A just-created branch the next detail refresh has not delivered.
-        continue;
-      }
+      const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId)
+        ?? contentByNodeRef.current[nodeId]?.node;
       const hasContent = Boolean(contentByNodeRef.current[nodeId]);
       const hasError = Boolean(contentErrorByNodeRef.current[nodeId]);
       if (
@@ -226,7 +224,7 @@ export function useResearchContentLoader({
         // must not sit on screen while this one is in flight.
         clearError(nodeId);
         requestRefresh(nodeId);
-      } else if (isActiveResearchStatus(nodeStatus(node))) {
+      } else if (node && isActiveResearchStatus(nodeStatus(node))) {
         // The cleanup above dropped this still-streaming turn's fallback
         // timer and any trailing refetch for a signal that arrived during an
         // in-flight fetch. Fetch once to cover that signal; the fetch re-arms

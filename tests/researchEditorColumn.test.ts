@@ -320,7 +320,7 @@ test("⌘S does nothing while Save is disabled or saving, and still keeps the we
   }
 });
 
-test("⌘S while the footer asks whether to discard saves and drops the question", async () => {
+test("⌘S in the discard dialog saves and closes the dialog", async () => {
   const calls: string[] = [];
   const props = editorProps("New text", {
     dirty: true,
@@ -330,10 +330,10 @@ test("⌘S while the footer asks whether to discard saves and drops the question
   });
   await withMountedEditor(props, async ({ column, field, press }) => {
     await press(field, "Escape");
-    assert.ok(column.querySelector("[aria-label='Discard changes']"));
-    assert.equal(await press(column.querySelector("[aria-label='Discard changes'] button")!, "s", { metaKey: true }), true);
+    assert.ok(column.ownerDocument.querySelector("[role='alertdialog']"));
+    assert.equal(await press(column.ownerDocument.querySelector("[role='alertdialog'] button")!, "s", { metaKey: true }), true);
     assert.deepEqual(calls, ["save in place"]);
-    assert.equal(column.querySelector("[aria-label='Discard changes']"), null);
+    assert.equal(column.ownerDocument.querySelector("[role='alertdialog']"), null);
   });
 });
 
@@ -480,5 +480,23 @@ test("repeated cancelled smart dashes preserve the caret from before the native 
     assert.equal(field.value, "------\n");
     assert.equal(field.selectionStart, 7);
     assert.equal(field.selectionEnd, 7);
+  });
+});
+
+test("closing a dirty editor requires Discard; Escape keeps editing", async () => {
+  let closed = 0;
+  await withMountedEditor(editorProps("Unsaved", { dirty: true, onCancel: () => closed++ }), async ({ column, field, press }) => {
+    await press(field, "Escape");
+    const doc = column.ownerDocument;
+    let dialog = doc.querySelector<HTMLElement>("[role='alertdialog']")!;
+    assert.ok(dialog);
+    assert.equal(closed, 0);
+    await press(dialog.querySelector("button")!, "Escape");
+    assert.equal(doc.querySelector("[role='alertdialog']"), null);
+    assert.equal(closed, 0);
+    await press(field, "Escape");
+    dialog = doc.querySelector<HTMLElement>("[role='alertdialog']")!;
+    await act(async () => dialog.querySelector<HTMLButtonElement>("button.danger")!.click());
+    assert.equal(closed, 1);
   });
 });

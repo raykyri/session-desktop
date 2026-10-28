@@ -1,3 +1,4 @@
+import { ResearchEditorDiscardDialog } from "./ResearchEditorDiscardDialog";
 import { memo, useId, useMemo, useRef, useState } from "react";
 import type { ComponentProps, KeyboardEvent, ReactNode, Ref } from "react";
 import { Eye, MessageSquarePlus } from "lucide-react";
@@ -62,7 +63,7 @@ interface ResearchEditorColumnProps {
  * answer column, which previews the text; a note's editor is shown in place
  * of the note column. ⌘↵ (Ctrl+↵) saves and closes the column; ⌘S (Ctrl+S)
  * saves and keeps it open. Both do nothing while Save is disabled. Esc closes
- * the column when nothing changed, and otherwise asks in the footer whether
+ * the column when nothing changed, and otherwise opens a dialog asking whether
  * to discard the changes. */
 export function ResearchEditorColumn({
   column,
@@ -88,7 +89,6 @@ export function ResearchEditorColumn({
   history = null,
 }: ResearchEditorColumnProps) {
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-  const keepEditingRef = useRef<HTMLButtonElement | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   useMarkdownDashGuard(fieldRef);
   const questionNoteId = useId();
@@ -121,7 +121,6 @@ export function ResearchEditorColumn({
       return;
     }
     setConfirmingDiscard(true);
-    window.requestAnimationFrame(() => keepEditingRef.current?.focus());
   };
   const keepEditing = () => {
     setConfirmingDiscard(false);
@@ -226,17 +225,8 @@ export function ResearchEditorColumn({
             </span>
           ) : null}
         </div>
-        {confirmingDiscard ? (
-          <div className="research-editor-row is-confirm" role="group" aria-label="Discard changes">
-            <span className="research-editor-confirm-text">Discard your changes?</span>
-            <button ref={keepEditingRef} type="button" className="control-button" onClick={keepEditing}>
-              Keep editing
-            </button>
-            <button type="button" className="control-button danger" onClick={onCancel}>
-              Discard
-            </button>
-          </div>
-        ) : (
+        {confirmingDiscard ? <ResearchEditorDiscardDialog onCancel={keepEditing} onDiscard={onCancel}
+          onSave={() => { if (canSave && !saving) { keepEditing(); onSaveInPlace(); } }} /> : null}
           <div className="research-editor-row">
             {countText ? (
               <span className={`research-editor-count${countText.over ? " is-over" : ""}`}>{countText.text}</span>
@@ -257,7 +247,6 @@ export function ResearchEditorColumn({
               </button>
             </span>
           </div>
-        )}
         {error ? (
           <p className="research-editor-error" role="alert">
             {error}

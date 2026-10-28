@@ -1,3 +1,5 @@
+import { deferResearchEditorLeave, registerResearchEditorLeaveGuard } from "../../lib/researchEditorLeave";
+import { ResearchEditorDiscardDialog } from "./ResearchEditorDiscardDialog";
 import { researchBranchBlocker } from "@session/shared/lib/researchThreadView";
 import { researchNoteEditable } from "@session/shared/lib/researchNoteEdit";
 import { WidgetChangeContext } from "../../lib/sessionWidgetActions";
@@ -381,6 +383,14 @@ function ResearchThreadPage({
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  const [editorLeaveAction, setEditorLeaveAction] = useState<(() => void) | null>(null);
+  useEffect(() => registerResearchEditorLeaveGuard((proceed) => {
+    const current = editorRef.current;
+    if (!current || (current.text === current.initialText && current.title === current.initialTitle)) return false;
+    setEditorLeaveAction(() => proceed);
+    return true;
+  }), []);
+
   const [editorSaving, setEditorSaving] = useState(false);
   const [editorAsking, setEditorAsking] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -860,6 +870,7 @@ function ResearchThreadPage({
    * history, with each column's selection. */
   const navigate = useCallback(
     (target: string | readonly string[]) => {
+      if (deferResearchEditorLeave(() => navigate(target))) return;
       const currentTreeId = treeIdRef.current;
       const shown = applyVisit(target);
       if (shown && currentTreeId) {
@@ -1063,6 +1074,7 @@ function ResearchThreadPage({
    * focus. */
   const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null) => {
+      if (deferResearchEditorLeave(() => openPendingBranch(parentNodeId, anchor))) return;
       if (archived) {
         return;
       }
@@ -1476,6 +1488,7 @@ function ResearchThreadPage({
       const anchorId = levelPathRef.current[level];
       const listed = stripRef.current.levels[level];
       if (extend && anchorId && listed && listed.kind !== "post" && listed.displayIds.includes(nodeId)) {
+        setQueuedView(null);
         setRange(
           nodeId === anchorId ? null : { level, anchorId, farId: nodeId, listed: listed.displayIds.join("\n") },
         );
@@ -1499,6 +1512,7 @@ function ResearchThreadPage({
     const current = rangeRef.current?.level === level ? rangeRef.current.farId : anchorId;
     const next = researchRangeStep(listed.displayIds, current, direction);
     if (!next) return null;
+    setQueuedView(null);
     setRange(next === anchorId ? null : { level, anchorId, farId: next, listed: listed.displayIds.join("\n") });
     return next;
   }, []);
@@ -1671,6 +1685,7 @@ function ResearchThreadPage({
   );
 
   const anyOverlayOpen =
+    Boolean(editorLeaveAction) ||
     Boolean(menu) ||
     Boolean(highlightAction) ||
     Boolean(renameTarget) ||
@@ -1947,6 +1962,7 @@ function ResearchThreadPage({
    * note changes no selection and adds no history visit; a follow-up note
    * that is not open (edited from its row's menu) opens first. */
   function startEditing(nodeId: string, returnFocus: HTMLElement | null) {
+    if (deferResearchEditorLeave(() => startEditing(nodeId, returnFocus))) return;
     const node = nodeById.get(nodeId);
     if (!node || archived || (nodeId !== rootNodeId && nodeType(node) !== "post")) {
       return;
@@ -2847,6 +2863,19 @@ function ResearchThreadPage({
     }}>
     <TranscriptLinkActionsProvider actions={linkActions}>
       <ResearchRangeRowsContext.Provider value={rangeRows}>
+        {editorLeaveAction ? <ResearchEditorDiscardDialog
+          onCancel={() => {
+            setEditorLeaveAction(null);
+            window.requestAnimationFrame(() => editorFieldRef.current?.focus());
+          }}
+          onDiscard={() => {
+            const proceed = editorLeaveAction;
+            editorRef.current = null;
+            setEditor(null);
+            setEditorLeaveAction(null);
+            proceed();
+          }}
+        /> : null}
         <div
           ref={workspaceRef}
           className="research-thread-page research-pairs"
