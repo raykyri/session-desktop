@@ -78,6 +78,19 @@
   --warn-soft: rgba(216, 184, 120, 0.12);
   --warn-border: rgba(216, 184, 120, 0.4);
   --toast-warn: #e9b65d;
+  /* Dialogs (shell.css confirm-dialog) and their buttons (.control-button). */
+  --dlg-bg: #171615;
+  --dlg-border: #3f3c37;
+  --dlg-shadow: 0 22px 70px rgba(0, 0, 0, 0.5);
+  --ctl-bg: #282827;
+  --ctl-bg-hover: #313130;
+  --ctl-border-hover: #4a4946;
+  --accent-strong: #268fd6;
+  --danger-bg: #2c1a17;
+  --danger-bg-hover: #3a221d;
+  --danger-border: #7a3b34;
+  --danger-fg: #ffb4a3;
+  --danger-ring: #a55349;
   --kbd-bg: #171512;
   --kbd-border: #3f3c37;
   --split-hover: rgba(215, 168, 79, 0.65);
@@ -107,6 +120,8 @@
   --warn: #9a6f16; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4); --toast-warn: #d3a23a; --kbd-bg: #f4f1ed; --kbd-border: #c8c1b9; --split-hover: rgba(154, 107, 18, 0.65);
   --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 44, 46, 0.42); --zone-line: rgba(11, 127, 209, 0.6);
   --shadow: 0 10px 28px rgba(20, 24, 26, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  --dlg-bg: #fbfaf8; --dlg-border: #c8c1b9; --dlg-shadow: 0 22px 70px rgba(20, 24, 26, 0.22); --ctl-bg: #efece8; --ctl-bg-hover: #e6e2dc; --ctl-border-hover: #c1bab0; --accent-strong: #095c98;
+  --danger-bg: #fdeae6; --danger-bg-hover: #fbdcd5; --danger-border: #e3a79b; --danger-fg: #7a2418; --danger-ring: #c8574a;
 }
 :root[data-theme="dark"] { color-scheme: dark; }
 
@@ -614,8 +629,6 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .hacts { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
 .hacts .ib .ic { width: 14px; height: 14px; }
 .hacts .ib.i15 .ic { width: 15px; height: 15px; }
-.confirm { margin: 10px 12px; padding: 10px 12px; border: 1px solid var(--fail-border); border-radius: 8px; background: var(--fail-soft); font-size: 13px; line-height: 1.45; }
-.confirm .row { display: flex; gap: 6px; margin-top: 8px; }
 
 /* Answer */
 .ans { --gut: 42px; padding: 18px var(--gut) 16px 24px; }
@@ -663,7 +676,6 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .btn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--field); color: var(--text); font-size: 12.5px; font-weight: 500; white-space: nowrap; flex: none; }
 .btn .ic { width: 14px; height: 14px; }
 .btn .ent { display: none; margin-left: -1px; font-size: 12px; opacity: 0.85; }
-form.ready .btn.primary .ent { display: inline; }
 .btn:hover { background: var(--fill-2); }
 .btn.primary { background: var(--accent); border-color: transparent; color: var(--on-accent); }
 .btn.primary:hover { filter: brightness(1.08); }
@@ -710,25 +722,61 @@ form.ready .btn.primary .ent { display: inline; }
 .askbox.is-draft .cmp .btn { margin-left: auto; }
 .a-mode .ib .ic { width: 13px; height: 13px; }
 
-/* modal dialog */
-.scrim { position: absolute; inset: 0; z-index: 70; background: var(--scrim); }
-.modal { position: absolute; z-index: 71; left: 50%; top: 30%; transform: translate(-50%, -50%); width: min(360px, calc(100% - 32px)); padding: 18px; border-radius: 12px; background: var(--pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow); }
-.modal h3 { margin: 0 0 4px; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--heading); }
-.modal-sub { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
-.modal input { width: 100%; height: 34px; margin: 10px 0 2px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--field); font-size: 14.5px; outline: none; }
-.modal input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.modal .err { color: var(--fail); font-size: 12px; margin-top: 6px; }
-.modal .row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+/* Dialogs (ConfirmDialog in shell.css): centred over a scrim with 18px of padding; a column of the title,
+   the body and the actions, right-aligned. The confirming button of each step takes focus. */
+.scrim { position: absolute; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 18px; background: var(--scrim); }
+.modal { display: flex; flex-direction: column; gap: 10px; width: min(440px, 100%); max-height: 100%; overflow-y: auto; padding: 16px; border-radius: 10px; background: var(--dlg-bg); border: 1px solid var(--dlg-border); box-shadow: var(--dlg-shadow); outline: none; }
+.modal h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--heading); }
+.modal p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+.modal-body { display: flex; flex-direction: column; gap: 10px; }
+.modal input:not([type]), .modal .dlg-input { width: 100%; min-height: 34px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--control-border); background: var(--dlg-bg); color: var(--strong); font-size: 15px; outline: none; }
+.modal input:not([type]):focus, .modal .dlg-input:focus { border-color: var(--accent); }
+.modal .err { color: var(--fail); }
+.modal-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--ctl-bg); color: var(--strong); font-size: 13px; text-align: center; white-space: nowrap; }
+.dbtn:hover:not(:disabled):not(.primary):not(.danger) { background: var(--ctl-bg-hover); border-color: var(--ctl-border-hover); }
+.dbtn.primary { border-color: var(--accent-strong); background: var(--accent-soft); color: var(--strong); }
+.dbtn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.dbtn.danger { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger-fg); }
+.dbtn.danger:hover:not(:disabled) { background: var(--danger-bg-hover); }
+.dbtn:disabled { color: var(--ghost); cursor: default; }
+.dbtn:focus { outline: 1px solid var(--accent); outline-offset: 1px; }
+.dbtn.danger:focus { outline-color: var(--danger-ring); }
+.dbtn.sq { width: 30px; padding: 0; }
+.dbtn .ic { width: 14px; height: 14px; }
+/* Delete now: a text action at the start of the button row. */
+.dlink { margin-right: auto; padding: 0 2px; color: var(--text-2); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.dlink:hover { color: var(--text); }
+/* Generate recap (ResearchRecapDialog): instructions, agent and model, then the candidate above the current recap. */
+.modal.recap-dlg { width: min(720px, 100%); }
+.recap-h { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.recap-f, .recap-ctl label { display: flex; flex-direction: column; gap: 5px; color: var(--text-2); font-size: 13px; }
+.recap-f textarea { display: block; width: 100%; min-height: 118px; padding: 9px 10px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--dlg-bg); color: var(--strong); font-size: 13px; line-height: 1.45; resize: vertical; outline: none; }
+.recap-ctl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.recap-ctl select, .recap-ctl input { width: 100%; min-height: 34px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--dlg-bg); color: var(--strong); font-size: 13px; outline: none; }
+.recap-f textarea:focus, .recap-ctl :is(select, input):focus { border-color: var(--accent); }
+.recap-cmp { display: flex; flex-direction: column; gap: 14px; }
+.recap-cmp hr { width: 100%; margin: 0; border: 0; border-top: 1px solid var(--border); }
+.recap-cmp section + section { padding-top: 14px; border-top: 1px solid var(--border); }
+.recap-cmp h4 { margin: 0 0 6px; color: var(--text-2); font-size: 13px; }
+.recap-cmp .cand p { color: var(--strong); }
+.recap-cmp .empty p { opacity: 0.75; }
+.recap-st { display: flex; align-items: center; gap: 7px; }
+.recap-st .ic { width: 14px; height: 14px; }
+@media (max-width: 620px) { .recap-ctl { grid-template-columns: minmax(0, 1fr); } }
 
-/* Popovers (menus and the text-selection actions), toast */
-.pop { position: fixed; z-index: 50; min-width: 200px; max-width: 300px; padding: 6px; border-radius: 10px; background: var(--pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 14.5px; line-height: 1.5; }
-.pop-meta { padding: 6px 8px 5px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+/* Popovers (menus and the text-selection actions), toast (ResearchMenu, research.css) */
+.pop { position: fixed; z-index: 50; min-width: 220px; max-width: 300px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 6px; border-radius: 10px; background: var(--pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 14.5px; line-height: 1.5; user-select: none; -webkit-user-select: none; }
+.pop-meta { padding: 6px 8px 5px; font-size: 12px; line-height: 1.4; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pop-t { display: block; padding: 6px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .mdiv { height: 1px; background: var(--border); margin: 4px 0; }
-.mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text); white-space: nowrap; }
+.mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; flex: none; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text); white-space: nowrap; }
 .mi:hover:not(:disabled), .mi:focus-visible { background: var(--fill-2); outline: none; }
+.mi[aria-current="true"] { background: var(--br-tint); }
 .mi:disabled { color: var(--muted); }
-.mi .ic { width: 14px; height: 14px; }
+.mi .ic { width: 15px; height: 15px; }
+/* The Passage menu uses the selection actions' 26px rows. */
+.pop.compact .mi { height: 26px; gap: 6px; padding: 0 7px; }
 .mi .rg { margin-top: 0; }
 .mi .clip { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mi .r { margin-left: auto; color: var(--accent); }
@@ -737,6 +785,7 @@ form.ready .btn.primary .ent { display: inline; }
 .mi .k { margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 4px; font: 600 10px/1 var(--font); color: var(--text-2); background: var(--fill); box-shadow: inset 0 -1px 0 var(--border); }
 .sel-row { display: flex; gap: 2px; }
 .sel-row .mi { width: auto; height: 26px; padding: 0 7px; gap: 6px; }
+.sel-row .mi .ic { width: 14px; height: 14px; }
 /* The text-selection popover is a single row of actions, so it is tighter than the menus. */
 .pop:has(> .sel-row) { min-width: 0; padding: 3px; border-radius: 8px; }
 .pop-note { padding: 4px 8px; font-size: 12px; color: var(--muted); }
@@ -857,112 +906,17 @@ form.ready .btn.primary .ent { display: inline; }
 
 <section class="panel doc" data-panel="notes" hidden>
 <h2>Summary</h2>
-<p class="lede">The proposal turns the research view into one horizontal strip of columns: the feed, then the open conversation as a pair of columns, then a Branches column listing the conversation's branches, which becomes the next pair when one of them is selected. Questions in the feed can be filed into Drafts, Archive, and user folders by dragging. A conversation is a messages column (the user's messages, with the ask box at the end) next to an answer column that shows the answer to the selected message. A branch opens from a passage in the answer, from a marker in the answer's right margin, or from its row in the Branches column.</p>
-<p>Every level, root or branch, is the same pair, so going deeper adds columns and never changes the width of the ones already open; the strip scrolls sideways when they don't fit. Rows are quiet: no fill or separators at rest, an inset rounded bubble on hover and selection, and a faint accent ring on the row that has keyboard focus. The left sidebar can collapse to a 52px icon strip; the traffic lights and the sidebar toggle beside them keep the same reserved zone with either sidebar.</p>
+<p class="lede">The prototype reproduces the research view of the Session desktop app as of commit <code>2beee16</code>: one horizontal strip of columns, starting with the feed, then each level of the open thread as a [messages | answer] pair, with a Branches column after every level whose messages have branches. The content is sample data, and nothing is saved.</p>
+<p>Every level is the same pair, so going deeper adds columns and never changes the width of the ones already open; the strip scrolls sideways when they don't fit. Rows have no fill or separators at rest, an inset rounded bubble on hover and selection, and a faint accent ring on the row that has keyboard focus. The sidebar collapses to a 52px icon strip, and the traffic lights and the sidebar toggle keep the same 116px × 44px zone with either.</p>
+<p><code>?preset=start|deep|siblings|new-branch|running|failed|stopped|draft|home|note</code> opens a representative state. Reset demo restores the sample data.</p>
 
-<h2>Review of the current app</h2>
-<p>Findings from the screenshots and the code (<code>App.tsx</code>, <code>ResearchColumns.tsx</code>, <code>ResearchDocument.tsx</code>, <code>shell.css</code>, <code>tauri.conf.json</code>).</p>
+<h2>Shell</h2>
 <ul>
-  <li><b>You can't read a branch next to its parent.</b> Branches are cards in a 220–260px rail beside the answer. Opening one replaces the document with the branch's own spine, plus a Back link. To go two levels deep you have to follow Back links, and nothing shows where you are in the tree.</li>
-  <li><b>The layout has only two panes.</b> <code>ResearchColumns</code> splits the window into a feed column and a content column, and below 880px it shows one. Nothing gives a third column room.</li>
-  <li><b>Long threads read as one tall scroll.</b> Collapsing works on the whole transcript ("Show full transcript"), not per turn. In a four-turn thread like the Richard Ngo summary, the questions end up screens apart, and there is no overview of the turns.</li>
-  <li><b>Questions can't be filed.</b> Client-side folders were removed in <code>d51a8d4</code>, although the backend storage for them was kept. Archive is a separate view, not a place you can drop a question. In the first screenshot, a post titled "Drafts" is being used as a folder, which shows the need.</li>
-  <li><b>Feed cards repeat their controls.</b> Every card shows both a Follow text button and a bookmark, so the controls compete with the titles. Follow has no behavior yet beyond storing a flag (<code>set_research_tree_followed</code>).</li>
-  <li><b>A collapsed sidebar can strand you.</b> Collapsing sets its width to 0. On Home, Bookmarks, and Archived no button brings it back; only ⇧⌘G and the command palette do.</li>
-  <li><b>The traffic lights overlap content.</b> The window uses the <code>Overlay</code> title bar without setting <code>trafficLightPosition</code>. With the sidebar collapsed, the lights cover the document header's back and forward buttons, and there is no drag region outside the sidebar. Fullscreen isn't handled, so the 32px top padding stays even when macOS hides the lights.</li>
-  <li><b>The sidebar toggle moves.</b> It sits at the right edge of a resizable sidebar (208–420px), so its position depends on the sidebar's width. After you collapse the sidebar, the button you just clicked is somewhere else.</li>
+  <li><b>Theme.</b> The "Warm" theme tokens from <code>tokens.css</code>, dark by default whatever the system setting; the sidebar's theme button switches to light. Inter at the app's Inter sizes, JetBrains Mono for the background. Icons are lucide paths at stroke width 2; the branch icon uses 1.75.</li>
+  <li><b>Sidebar.</b> The 44px title-bar row holds the traffic lights and the collapse toggle at its left, Settings and the theme button at its right. Below it: Home and Highlights, then Folders: Drafts, the user folders, Archive and Trash. No counts. A user folder's row has a … button (Rename…, Delete…). While ⌘ is held, Home shows "⌘N". The footer has the workspace, Agents and the account. A handle on the right edge sets the width, 208–420px.</li>
+  <li><b>Icon strip.</b> ⇧⌘G or the toggle collapses the sidebar to a 52px strip. The traffic lights stay; the expand button takes the toggle's place at x 84. The strip's top cell is an empty 44px row with the header rule under it, and the feed header is inset 64px with Home's title hidden. Folders show their first letter, with the full name in the tooltip. Below 900px of window width the strip is automatic and the expand button is disabled.</li>
+  <li><b>Background.</b> Drifting ASCII clouds (<code>ResearchAmbient</code>) fill the space right of the last column. The button at the top right, shown when that space is at least 72px wide, slides the columns away (Expand background); Esc or the button restores them.</li>
 </ul>
-
-<h2>The column model</h2>
-<p>The strip holds the feed, then one [messages | answer] pair per level: level 0 is the root conversation, level 1 the branch selected in the Branches column after it, and so on. A note is a note column and a follow-ups column instead, and its next level is one of its follow-ups. A conversation is a chain of turns, which maps to <code>inlineChainFor(node)</code> in today's code. A branch is a non-inline child node with a <code>queryAnchor</code>.</p>
-<h3>Rules</h3>
-<ul>
-  <li><b>Every level is the same pair.</b> The messages column lists the conversation's messages in full (clamped to 12 lines, with Show more) and ends with the ask box. The answer column shows only the answer to the selected message, with no composer. Each column keeps its own selection: selecting another message replaces the answer beside it and leaves the columns to its right as they are, since what they list doesn't depend on it (<code>researchColumns.ts</code>).</li>
-  <li><b>The Branches column.</b> After a level whose messages have branches, a Branches column lists every branch of every message that level lists, one group per branch in reading order: the source message and passage, the branch's messages, and its queue. With nothing selected it stands alone at the messages width. Selecting a row in it (or a branched passage, a margin marker, or a row's branch indicator) makes it the next level's messages column: its header spans the answer column beside it, the selected group ends with the ask box, and its × ("Clear branch selection") closes the columns after it.</li>
-  <li><b>Margin markers.</b> The answer column keeps a narrow right margin. A paragraph with branched passages gets a link-styled marker there, level with its first line: an up-right arrow and the number of branches, or the running or failed glyph while a message in them runs or has failed. Whole-answer branches get a marker at the end of the answer. Hovering or focusing a marker shows the branch questions in a popover, each marked Open, Running or Failed. The open branch's marker is accent and underlined and shows no popover, and clicking it clears the next column's selection. A paragraph with several branches has one marker, which opens the first.</li>
-  <li><b>The parent shows where you are.</b> Passages with branches are tinted blue; the passage of the open branch is also underlined. Highlights are tinted amber.</li>
-  <li><b>One header bar per pair.</b> A level's messages and answer columns share one header bar. The root's has Back and Forward, the conversation title (clamped to 4 lines), "Archived" or "Imported conversation" when they apply, and a … button ("Thread actions") with the first message's answer menu; the Branches column's reads "Branches · N". The pair that holds keyboard focus has full-strength header text; the others are one step dimmer. Header cells across the strip share the height of the tallest, so the band reads as one row.</li>
-  <li><b>Widths depend only on the window, until resized.</b> They are set from the strip's width: the window less its borders and the sidebar or icon strip. Opening, closing or switching a branch never resizes a column. A handle on each column's right edge sets the width of every column of its kind (feed, messages, answer); a double-click restores the automatic width. When the pairs don't fit, the strip scrolls sideways.</li>
-  <li><b>Starting a branch.</b> Selecting text in a finished answer offers Branch, Highlight and Copy. Branch, or typing a character, adds an unsent branch to the Branches column, placed by its passage among the branches of the same message, with the passage and an ask box labelled "New branch"; the branch is saved when its first question is sent. Esc or the × cancels it. "Branch from the whole answer" is in the answer's … menu, and ⇧⌘↵ in an ask box sends its question as a branch from the column's last finished answer.</li>
-  <li><b>Highlights work as before.</b> They stay as character offsets within one block, as with <code>ResearchHighlightAnchor</code> today. A selection has to stay within one paragraph. Clicking a highlight opens a small menu with Branch from highlight, which starts a new branch on that passage, and Remove highlight.</li>
-</ul>
-<h3>Widths</h3>
-<div class="tablewrap"><table>
-<tr><th>Element</th><th>Width</th><th>Notes</th></tr>
-<tr><td>Feed</td><td>21% of the strip's width, 240–300px</td><td>Home, a place (Drafts, Archive, the Trash or a folder) or Highlights</td></tr>
-<tr><td>Messages column</td><td>18% of the strip's width, 220–280px</td><td>The first column of every pair</td></tr>
-<tr><td>Answer column</td><td>44% of the strip's width, 340–660px</td><td>Includes a 42px right margin for the markers</td></tr>
-<tr><td>Remaining width</td><td>Empty; it says where the next pair opens when there is room</td><td>The strip scrolls sideways when the pairs don't fit</td></tr>
-</table></div>
-<h3>Costs</h3>
-<ul>
-  <li>Each branch level adds two columns. At 1440px one pair fits beside the feed; a second level scrolls the feed and the root out of view.</li>
-  <li>The margin takes about 16px of reading width from the answer.</li>
-  <li>A marker shows only an icon and a count, so the branch questions are read one paragraph at a time, on hover or focus, rather than as a list.</li>
-  <li>The answer to only one message per level is visible at a time; reading two answers of the same conversation side by side isn't possible.</li>
-</ul>
-
-<h2>Chrome</h2>
-<ul>
-  <li><b>Pair header:</b> Back and Forward, the conversation title, then the … button with the first message's answer menu; no Ask button and no "Answer" label. ⌘J focuses the current level's ask box, and holding ⌘ shows "⌘J" on it. Move to is in the question's … menu in the feed, and below the answer's own actions in the root pair's answer menus.</li>
-  <li><b>Source</b>: each group of the Branches column starts with its source message on one line and the passage in italics, clamped to two lines.</li>
-  <li><b>Message rows</b> have no time, star or status pill. A 14px glyph before the first line shows a queued, running, failed or stopped message, and a meta line names Queued or Stopped. A message whose answer has branches has an up-right arrow at the end of its first line (accent while one of them is selected, the running or failed glyph while one runs or failed, a dot when one has a new answer). The … menu and, with two or more messages, a drag handle for reordering sit in a pill in the corner on hover. The … menu starts with the answer's token count, run time and model, then "Branch from the whole answer" and "Copy answer".</li>
-  <li><b>Answer footer</b> is the time (and " · Edited" for an edited answer), under a rule. A completed answer can start with its recap.</li>
-  <li><b>Rows</b> in the feed and the messages columns have no fill or separators at rest. Hover shows an inset rounded bubble at 55% of the selected fill; the selected row is a bubble with the selected fill; the row that keys act on shows a 1px accent ring at 35% opacity. A focused answer column shows the same ring inside the column, below the header.</li>
-  <li><b>Sidebar</b> has no counts next to Home, Highlights or folders.</li>
-  <li><b>Feed composer</b> starts Home; in a folder or Drafts it ends the list, and Archive and the Trash have none. Once the field is focused or holds text, a row under it shows the Note | Ask switch (Note first), a … button with Save draft (only with text), and Send. In Note mode the placeholder reads "Write or paste a link" and Send saves a note, or a link when the text is a single URL.</li>
-</ul>
-<h3>Costs</h3>
-<ul>
-  <li>The number of highlights is only visible after opening the view.</li>
-</ul>
-
-<h2>Layout options</h2>
-<p>Five ways of reducing layout motion were built and compared in the <a href="https://claude.ai/artifact/EtxZepkf5V5ut5ob5UAYzH">column motion candidates</a> page. Earlier versions of this prototype combined the branch drawer (E) with calm chrome (D). The conversation area now uses column pairs, the design chosen from the later branch-navigation concepts ("Pairs 6: Bubble selection").</p>
-<div class="tablewrap"><table>
-<tr><th>Option</th><th>How it works</th><th>Good at</th><th>Costs</th></tr>
-<tr><td>Column pairs (chosen)</td><td>Each level is a [messages | answer] pair; branches open as further pairs to the right, from passages or margin markers.</td><td>A branch is read next to the answer it came from, at every depth, and no column changes width.</td><td>Each level adds two columns, so deep paths scroll the root out of view.</td></tr>
-<tr><td>Branch drawer (replaced)</td><td>Branches open in a drawer over the conversation; pinning makes a fixed-width column.</td><td>Nothing on screen moves when a branch opens, changes or closes.</td><td>The drawer covers part of the parent's answers.</td></tr>
-<tr><td>Focus stack (earlier iterations)</td><td>The focused column gets a wide minimum, the nearest neighbours open, and the rest become 44px spines. Based on Matuschak's stacked notes.</td><td>Reading one conversation in the two-column grid while keeping the parent in view.</td><td>Columns change width and switch between grid and stacked when focus moves or a branch opens.</td></tr>
-<tr><td>Stacked scroll</td><td>Fixed-width columns in a horizontal row; earlier columns slide under later ones.</td><td>No column ever changes width.</td><td>The parent is partly covered beside a branch below about 1870px; reaching earlier columns takes a scroll.</td></tr>
-<tr><td>Tiled (removed)</td><td>Conversation columns share the width equally; leftmost columns collapse to spines.</td><td>Comparing siblings at equal weight.</td><td>With a parent and one branch open, neither gets enough width for the grid.</td></tr>
-<tr><td>Inline nesting</td><td>A branch expands inside the parent's turn as an indented sub-grid.</td><td>One level of short branches.</td><td>Each level takes width from the answer column. Not built.</td></tr>
-</table></div>
-
-<h3>Feed cards</h3>
-<ul>
-  <li><b>Row glyph.</b> Every card starts with a 14px glyph for its kind and state: a ring for a question (check when answered, a centre dot when updated since last viewed, a pulsing half pie while running, "!" when failed, × when stopped, dashed when queued), a rounded square for a note or a link, a page for a document, a dashed square for a draft. Named states are announced with the card.</li>
-  <li><b>Text.</b> A title (13.5px, weight 600) shows above the question when it differs; the question under it is muted and clamped to two lines. Without a title the question is 14px in the text colour. Notes, and questions still waiting for a title, show at most four muted lines; a note's Markdown heading line takes the title's style. A link post shows its URL and host in a card. URLs in card text take the link colour. There is no metadata row.</li>
-  <li><b>Composer.</b> No keyboard hint text. Enter sends when the field has text; Shift+Enter adds a line; Esc leaves the field. The send button is disabled while the field is empty.</li>
-  <li><b>One pill.</b> A row's controls are one pill in its top-right corner, over the end of the text: a group's chevron, the drag handle, and "…". It shows on hover, while its menu is open, and while focus is inside it. "…" opens Make child of…, Move out of group (children), Collapse or Expand (parents), Move to with New folder…, Rename, and Delete (D). A draft's menu is Open and Delete. A second click on "…" closes it.</li>
-</ul>
-
-<h2>Conversation turns</h2>
-<ul>
-  <li><b>Messages on the left, the selected answer on the right.</b> Messages are shown in full, as rows in the messages column. Clicking one shows its answer in the answer column; nothing is sticky.</li>
-  <li><b>Answers are shown in full.</b> There is no clamp, fade or expand control; the answer column scrolls.</li>
-  <li><b>Turn actions.</b> A message's … menu holds the answer's details, "Branch from the whole answer" and "Copy answer". Its branch indicator opens the first of its branches, or clears the open one. Selecting text in a finished answer gives Branch, Highlight and Copy. Clicking a branched passage opens its branch. A running answer's status line has Show trace and Stop ("Stopping…" until it stops).</li>
-  <li><b>Failed answers.</b> The error box is followed by Retry and Edit question. Retry while another answer in the conversation is running queues the retry behind it; removing it from the queue brings the failed attempt back. Edit question puts the failed question in the ask box, labelled "Editing", with a × (or Esc) to cancel; sending replaces the failed turn.</li>
-  <li><b>The ask box belongs to its column.</b> Each messages column ends with its own ask box, the equivalent of today's "Continue thread", so you can ask in a parent without leaving the branch. It sends with ⌘↵; ↵ adds a line, and Send shows "⌘↵" while it would send. A question asked while an answer is running ("Queue a follow-up") is held in the chain's queue, listed after its messages with Cancel, and sent when the answer finishes. After a stopped or failed answer the box is disabled, with a note above it, until the answer is run again or its question edited. A draft's ask box gives the text the full width with Send on its own row, and opening a draft never focuses it.</li>
-</ul>
-
-<h2>Folders and dragging</h2>
-<ul>
-  <li><b>Where folders appear.</b> The Home view starts with the composer, lists unfiled questions without a heading, then a tray for each folder (Drafts, user folders, then Archive), the Trash tray (collapsed, takes no drops) and a "+ New folder" link. The same folders are in the sidebar, or as icons in the strip. "Home" is the view and "Unfiled" is the place: a question is never "in Home". In a tray header, the folder name opens the folder; the rest of the header and the chevron collapse or expand the tray.</li>
-  <li><b>Drop targets.</b> Dragging uses pointer events: a press anywhere on a card starts it after 5px, and a two-line label of the card follows the pointer. You can drop a question on a tray, on a sidebar row, or on a strip icon (its label shows while you hover during a drag). The Home row is a drop target for Unfiled, so a question can go back from any view. Dropping between cards in a tray sets the order, shown by an insertion line. The middle band of a card that can hold children nests the question under it ("Make child of “…”"); a dragged child's group shows a "Move out of group" strip under it.</li>
-  <li><b>Groups.</b> A question, document or post can list others under its card, one level deep. Children are indented so their glyphs line up with the parent's text, and the parent's title ends with the count, such as " (2)". The pill's chevron collapses a group; a collapsed group shows running, failed and updated counts under its text. Clicking a collapsed group expands and opens it; a single click on the selected, expanded group collapses it after 250ms, and a double-click does not.</li>
-  <li><b>Spring-loading.</b> Hovering over a collapsed tray or group for 650ms during a drag opens it, so you can place the card precisely.</li>
-  <li><b>Same-folder drops do nothing.</b> Dropping on the folder a question is already in shows a no-drop cursor, and no toast appears.</li>
-  <li><b>Undo.</b> Every move to another folder, nesting under another item, and Delete (which moves to the Trash) shows a toast with Undo for 6 seconds. Reordering within a folder doesn't show one.</li>
-  <li><b>Asking from a folder view.</b> A question asked from a user folder's view is filed in that folder. From Drafts or Archive it goes to Unfiled.</li>
-  <li><b>Naming folders.</b> New folder and Rename open a small modal dialog over the window, with the field focused. Enter or the primary button confirms; Esc, Cancel, or a click outside closes it.</li>
-  <li><b>Move to.</b> Use a card's "…" menu to open "Move to". It lists every folder, marks the current one as disabled, and ends with "New folder…", which creates the folder and moves the question in one step.</li>
-  <li><b>Archive.</b> Archive maps to <code>archivedAt</code>. An archived question is listed only in the Archive tray, newest archived first, by its title alone, and stops sending follow-up notifications. Its menu has Unarchive research and no group actions or Rename. A running question moved to Archive keeps running, and the toast says so. An open conversation stays open.</li>
-  <li><b>Drafts.</b> Drafts is a new system folder. Save draft in the composer's … menu puts a question there; the unused <code>GlobalDraft</code> type already describes a drafts surface. It accepts any question, sent or not, like any other folder. Sending a draft from Drafts moves it to Unfiled. There is no Undo here, because the question has already been sent.</li>
-  <li><b>User folders.</b> These restore the client-side folders removed in <code>d51a8d4</code>, and should be stored in the backend that was kept. Names must be unique, ignoring case, and "Home" and "Unfiled" are reserved. Deleting a folder needs confirmation, and its questions move to Unfiled. Drafts and Archive can't be renamed or deleted.</li>
-</ul>
-
-<h2>Sidebar strip and traffic lights</h2>
 <figure class="fig">
 <svg viewBox="0 0 800 220" role="img" aria-label="Two states of the top-left corner: full sidebar and icon strip">
   <text x="0" y="14" class="t-h">Full sidebar</text>
@@ -985,68 +939,129 @@ form.ready .btn.primary .ent { display: inline; }
 </svg>
 <figcaption>Turn on "Titlebar zones" in the prototype controls to draw the reserved zone and the drag region over the live layout.</figcaption>
 </figure>
+
+<h2>Feed</h2>
 <ul>
-  <li><b>Pin the lights.</b> Set <code>trafficLightPosition</code> so the lights are vertically centred in a 44px header row, which every column header shares. Start from <code>{"x": 16, "y": 16}</code> and adjust on a real device. Today the lights sit in a 30px strip above the sidebar header.</li>
-  <li><b>Reserve a zone for the lights.</b> With the full sidebar, the zone at the window's top-left is 116px × 44px: it covers the lights (x 16–68) and the sidebar toggle beside them (x 84–110).</li>
-  <li><b>Keep the lights with the icon strip.</b> The strip's top cell is an empty 44px title-bar row under the lights, with the rule below it; the strip's right border starts below that row, so the column headers' rule runs on across it.</li>
-  <li><b>The toggle stays put.</b> The collapse button (full sidebar) and the expand button (strip) are the same 26px button at x 84, beside the lights. Collapsing leaves the pointer over the expand button. ⇧⌘G toggles the strip.</li>
-  <li><b>Inset whatever is under the zone.</b> With the full sidebar no column starts under the zone. With the strip the feed header starts 64px after the strip's edge, and its "Home" title is hidden, since the strip marks Home.</li>
-  <li><b>Drag region.</b> The whole 44px header row of every column is a drag region (<code>data-tauri-drag-region</code> on the bar, not on its buttons), and double-clicking it zooms the window. Today only the sidebar can be dragged.</li>
-  <li><b>The strip replaces collapsing to 0px.</b> It keeps navigation and folder drop targets one click away. Icons show tooltips on hover. User folders show the first letter of their name; the tooltip gives the full name, so two folders may share a letter.</li>
-  <li><b>Automatic strip.</b> Below 900px of window width the sidebar becomes the strip automatically, without changing the saved preference. The expand button beside the lights is disabled there, and its tooltip says why.</li>
-  <li><b>No hover peek.</b> A hover peek of the full sidebar over the strip was rejected. During a drag it would open whenever the pointer crossed the strip, and the strip icons already act as drop targets.</li>
+  <li><b>Views.</b> Home, a folder, Drafts, Archive, the Trash, or Highlights. Home lists the composer, the unfiled items without a heading, a tray per folder (Drafts, user folders, Archive), the Trash tray (collapsed, takes no drops), then "+ New folder". "Home" is the view and "Unfiled" the place. In a tray header the folder name opens the folder; the rest of the header collapses the tray. A folder's own view has Back, Rename folder and Delete folder; the Trash has Empty Trash.</li>
+  <li><b>Composer.</b> It starts Home and ends a folder or Drafts; Archive and the Trash have none. Once focused or holding text it shows the Note | Ask switch (Note first), a … button with Save draft, and Send. Enter sends, Shift+Enter adds a line. In Note mode the text is saved as a note, or as a link when it is a single URL.</li>
+  <li><b>Cards.</b> Each card starts with a 14px glyph for its kind and state: a ring for a question (check when answered, a dot when updated, a pulsing half pie while running, "!" failed, × stopped, dashed when queued), a rounded square for a note or link, a page for a document, a dashed square for a draft. A title shows above the question when it differs; the question under it is muted and clamped to two lines. Notes show at most four muted lines. Archive cards show the title only, newest archived first.</li>
+  <li><b>Row pill.</b> A card's controls are one pill in its top-right corner: a group's chevron, the drag handle and "…". It shows on hover, while its menu is open and while focus is inside it.</li>
+  <li><b>Dragging.</b> A press anywhere on a card starts a drag after 5px, with a two-line label at the pointer. Drop on a tray, a sidebar row, a strip icon, or between cards to set the order. The middle band of a card that can hold children nests the card under it; a dragged child's group shows a "Move out of group" strip. A collapsed tray or group opens after 650ms. Dropping in the card's own place does nothing.</li>
+  <li><b>Trash.</b> Rows don't open; their … menu has Restore and Delete now. A trashed folder's questions show in Unfiled until the folder is restored.</li>
+  <li><b>Highlights.</b> Highlights grouped by thread in feed order, each with some context and a Remove pill. Clicking one opens its thread with the passage in view.</li>
 </ul>
 
 <h2>Groups</h2>
-<p>The app has no stars or promoted children. Home instead lists one item under another as a group, one level deep (<code>ResearchFolderState.parents</code>, <code>researchGroups.ts</code>). Groups are made by dragging a card onto the middle of another, or with Make child of… in the card's menu, and undone with Move out of group. A group's children are full feed cards, collapsed or expanded with the chevron in the parent's pill. Archive lists every item on its own.</p>
+<p>In a list that keeps an order, a question, document or post can list others under its card, one level deep (<code>ResearchFolderState.parents</code>, <code>researchGroups.ts</code>). Children are indented so their glyphs line up with the parent's text, and the parent's title ends with the count, such as " (2)". The pill's chevron collapses a group (with Alt, every group), and a collapsed group shows running, failed and updated counts. Clicking a collapsed group expands and opens it; a single click on the selected, expanded group collapses it after 250ms. Groups are made by dragging, with Make child of… or with ⌥→, and undone with Move out of group or ⌥←. Nesting a card that has children asks first, since they all become children of the new parent; archiving a parent with children asks too. Archive lists every item on its own. The thread's group panel, at the top of its messages column, lists the group's other members.</p>
+
+<h2>Conversation columns</h2>
+<ul>
+  <li><b>Pairs.</b> Level 0 is the root conversation. A messages column lists the conversation's messages, clamped to 12 lines with Show more, and ends with the ask box. The answer column shows the selected message's answer. Each column keeps its own selection: selecting another message replaces the answer beside it and leaves the columns to its right as they are (<code>researchColumns.ts</code>).</li>
+  <li><b>Branches column.</b> After a level whose messages have branches, a Branches column lists every branch of every message that level lists, one group per branch in reading order: the source message, the passage in italics, the branch's messages and its queue. With nothing selected it stands alone at the messages width. Selecting a row in it, a branched passage, a margin marker or a row's branch arrow makes it the next level's messages column: its header spans the answer column, the selected group ends with the ask box, and its × ("Clear branch selection") closes the columns after it.</li>
+  <li><b>Header.</b> One bar per pair. The root's has Back and Forward, the title (clamped to 4 lines), "Archived" or "Imported conversation", and a … button with the first message's answer menu. The Branches column's reads "Branches · N". The pair that holds focus has full-strength titles. Header cells share the height of the tallest.</li>
+  <li><b>Message rows.</b> No time or status pill. A glyph before the first line shows a queued, running, failed or stopped message, and a meta line names Queued or Stopped. A message whose answer has branches has an up-right arrow at the end of its first line (accent while one of them is selected, the running or failed glyph while one runs or failed, a dot for a new answer). The corner pill holds the … menu and, with two or more messages, a drag handle that reorders the column.</li>
+  <li><b>Answer.</b> A completed answer can start with its recap, in italics. Branched passages are tinted blue, and the open branch's passage is also underlined; highlights are tinted amber. A paragraph with branched passages has a marker in the right margin (an up-right arrow and the count, or the running or failed glyph) with the branch questions in a popover; whole-answer branches get a marker at the end. The footer is the time, under a rule. A running answer's status line has the clock, Show trace and Stop.</li>
+  <li><b>Ask box.</b> Each messages column ends with its own. ⌘↵ sends, ↵ adds a line, ⇧⌘↵ sends the question as a branch from the column's last finished answer, and Send shows "⌘↵" while it would send. A question asked while an answer runs is held in the chain's queue, listed after the messages with Cancel. After a failed or stopped answer the box is disabled, with a note above it. ⌘J focuses the current level's box, and holding ⌘ shows "⌘J" on its top edge.</li>
+  <li><b>Widths.</b> Set from the strip's width, until a handle on a column's right edge sets the width of every column of its kind; a double-click restores it. A messages column's handle starts below the header; the answer column's runs the full height, as in the app.</li>
+  <li><b>Notes.</b> A note is a note column and a follow-ups column. The follow-up box on top has the Note | Ask switch; an asked follow-up opens as the next level. A double-click on the note, or Edit note, opens the editor in its place (Cancel, Save with ⌘↵, Ask as a question).</li>
+</ul>
+<h3>Widths</h3>
+<div class="tablewrap"><table>
+<tr><th>Element</th><th>Width</th><th>Resize range</th></tr>
+<tr><td>Feed</td><td>21% of the strip's width, 240–300px</td><td>240px to half the strip, at most 560px</td></tr>
+<tr><td>Messages, Branches and follow-ups columns</td><td>18% of the strip's width, 220–280px</td><td>220–560px</td></tr>
+<tr><td>Answer, note and editor columns</td><td>44% of the strip's width, 340–660px</td><td>340–960px; includes a 42px right margin for the markers</td></tr>
+</table></div>
+
+<h2>Menus</h2>
+<ul>
+  <li><b>Answer menu</b> (a message's …, the header's …, or a right-click on the row or the answer). Its first line is the answer's length in words, its run time ("Ran for …" after a failure; none while running or after a stop) and the model. Then Branch to right; Copy answer as Markdown (complete answers); Copy thread as Markdown (with more than one message); Rerun; Generate recap (with a recap); Rename… (a chain's first message); Edit document (an authored or imported document); the delete item; and, in the root conversation, Move to with New folder…. Disabled items say why in their tooltip, for example "Wait for the answer to finish" or "This answer was stopped. Run it again to branch from it".</li>
+  <li><b>Delete item.</b> "Delete research" on the root's first message, "Delete follow-up" with nothing below it, "Delete from here" on a message followed by others, "Delete branch" on a branch with messages or branches below. Disabled while the message or anything below it runs.</li>
+  <li><b>Feed card menu</b> (220px). Make child of…, Move out of group (children), Collapse or Expand (parents); Move to: Unfiled, Drafts, folders and Archive, the current place checked and disabled, with A on Archive in Home; New folder…; Generate recap and Rename; Unarchive research (archived cards); Delete (D), disabled while it runs. A draft's menu (180px) is Open and Delete.</li>
+  <li><b>Other menus.</b> A Trash row: Restore, Delete now (D). A sidebar folder (180px, under the button's start): Rename…, Delete…. A note: Edit note, Copy note, then Delete note (D) on a follow-up note or Move to on the root note. The composer's …: Save draft.</li>
+  <li><b>Passage menu.</b> A click on a passage with one branch and no highlight opens that branch, or closes it when it is open. A passage with several branches, or a highlight, opens a menu at the click point instead: a row per branch (the open one tinted), then for a highlight Branch to right and Remove highlight. A second click on the passage closes it.</li>
+  <li><b>Selection actions.</b> Selecting text in an answer shows Branch to right (A), Highlight (H, or E) and Copy. Inside a highlight, Highlight reads Remove highlight. A selection that runs into a later paragraph is clipped to the end of the first, and a highlight made from it says so in a toast. In a running answer Branch and Highlight are disabled, with "Highlighting and branching are available when the answer finishes."</li>
+  <li><b>Behaviour.</b> A menu opens below its button with the right edges level (a sidebar folder's starts 4px left of its button), above it when it fits only there, or at the pointer for a context menu. The first enabled item has focus. ↑ ↓ wrap, Home and End go to the ends, and a shortcut letter selects its item. Esc or Tab closes the menu and returns focus to what opened it. A press, a scroll or a resize outside closes it. Right-click, Shift+F10 and the ContextMenu key open a card's, message's, answer's or note's menu; links, fields and a text selection keep their own.</li>
+</ul>
+
+<h2>Dialogs</h2>
+<p>Dialogs are centred over the window. The confirming button takes focus (Cancel when the action is unavailable, and in Rerun); Enter outside a button confirms a delete; Esc, Cancel or a press on the scrim closes; focus returns to what opened the dialog.</p>
+<div class="tablewrap"><table>
+<tr><th>Dialog</th><th>Opened by</th><th>Content</th></tr>
+<tr><td>New folder, Rename folder</td><td>+ New folder, a folder's Rename, New folder… in Move to</td><td>The name, selected. Create, Rename, or Create and move. Errors for an empty, long, reserved or taken name show under the field and clear while typing.</td></tr>
+<tr><td>Delete a thread</td><td>Delete on a card, Delete research</td><td>"Delete “…”?" (with "and its N children" for a group): Move to Trash, Cancel, and a Delete now link that opens "Delete permanently?". Toast "Moved to the Trash." with Undo.</td></tr>
+<tr><td>Delete a folder</td><td>Delete folder, Delete… in the sidebar</td><td>"Delete “…”?": the folder moves to the Trash and its questions show in Unfiled until it is restored. Delete now deletes it and moves its questions to Unfiled.</td></tr>
+<tr><td>Delete a message</td><td>The answer menu's delete item, Delete note</td><td>One danger step: "Delete this follow-up?", "Delete this research branch?", "Delete the rest of this thread?" or "Delete this note?", with what goes and "This can’t be undone."</td></tr>
+<tr><td>Delete permanently, Empty the Trash?</td><td>Delete now on a Trash row, Empty Trash</td><td>One danger step.</td></tr>
+<tr><td>Rename</td><td>Rename… in the answer menu, Rename on a card</td><td>"Rename research" or "Rename branch", with the title in the field.</td></tr>
+<tr><td>Rerun</td><td>Rerun on a complete answer</td><td>"Rerun will replace the current answer. Continue?" A failed or stopped answer reruns at once.</td></tr>
+<tr><td>Generate recap</td><td>Generate recap</td><td>Instructions, agent and model, Generate candidate, then the candidate above the current recap and Use this recap.</td></tr>
+<tr><td>Archive with children, Move with children</td><td>Archiving or nesting a parent</td><td>A primary confirmation naming the children.</td></tr>
+</table></div>
+<p>Toasts stay 3.5s, or 6s with Undo, and pause while the pointer or focus is on them. A failed copy shows "Couldn't copy." as a warning.</p>
 
 <h2>States and edge cases</h2>
 <div class="tablewrap"><table>
 <tr><th>Case</th><th>What you see</th><th>Try it in the prototype</th></tr>
-<tr><td>Answer running</td><td>A status line with elapsed time and Stop. Text streams in. The card's glyph is a pulsing half pie.</td><td>Open "How do Claude Mods work?"</td></tr>
-<tr><td>Follow-up while running</td><td>The question is held in the chain's queue: a row after the messages with a dashed glyph, "Queued" and Cancel. Selecting it shows "Queued" and Cancel queued message in the answer column. If the running answer is stopped, the first queued question reads "Not sent", with Edit question.</td><td>Ask a follow-up in the running thread</td></tr>
-<tr><td>Failed</td><td>The partial answer is kept, followed by an error box that starts "Error." and names the cause, with Retry and Edit question. Edit question puts the text in the ask box, and the failed turn is replaced only when you send. Retry while another answer is running is queued, and removing it from the queue brings the earlier attempt back. The message row and the feed card show a red "!" glyph, and the ask box is disabled with "The last answer stopped with an error. Retry it or edit its question to continue."</td><td>Permissions research → "TAL tool access language"</td></tr>
-<tr><td>Stopped by you</td><td>The partial answer is kept, followed by a note such as "Stopped after 1m 02s. The answer is incomplete." and a Run again button. The ask box is disabled with "The last answer was stopped. Run it again to continue."</td><td>"design-team → main"</td></tr>
-<tr><td>Draft</td><td>The question opens in its messages column, in an ask box labelled "Draft" that gives the text the full width, with Send on its own row. Opening it doesn't focus the field. Feed cards carry no draft badge; the Drafts tray already says what they are.</td><td>Drafts tray</td></tr>
-<tr><td>Empty folder, Archive, Drafts, Highlights, or the Trash</td><td>A line of text that says how items get there.</td><td>"Later" folder</td></tr>
-<tr><td>New branch</td><td>An unsent branch in the Branches column, placed by its passage, with the passage and an ask box labelled "New branch". It is discarded unless its first question is sent.</td><td>Select text in an answer → Branch</td></tr>
-<tr><td>Branch from a running answer</td><td>Branch and Highlight are disabled, with the note "Branching is available when the answer finishes.": both need the finished answer, whose text the highlight and the branch passage are stored against. Copy still works.</td><td>Select text in the running answer</td></tr>
-<tr><td>Selection crossing paragraphs</td><td>No actions are offered; a highlight or branch passage stays within one paragraph.</td><td>Select across two paragraphs</td></tr>
+<tr><td>Answer running</td><td>A status line with the clock, Show trace and Stop ("Stopping…" until it stops). The card's glyph is a pulsing half pie. Branch, Rerun and Delete are disabled in its menu.</td><td><code>?preset=running</code>, or "How do Claude Mods work?"</td></tr>
+<tr><td>Follow-up while running</td><td>The question is held in the chain's queue, after the messages, with "Queued" and Cancel. Selecting it shows Cancel queued message. If the running answer is stopped, the first queued question reads "Not sent", with Edit question.</td><td>Ask a follow-up in the running thread</td></tr>
+<tr><td>Failed</td><td>The partial answer, an error box that starts "Error.", Retry and Edit question. The row and the card show a red "!", and the ask box is disabled with a note.</td><td><code>?preset=failed</code></td></tr>
+<tr><td>Stopped</td><td>"Stopped after 1m 02s. The answer is incomplete." and Run again; the ask box is disabled.</td><td><code>?preset=stopped</code></td></tr>
+<tr><td>Draft</td><td>The question in an ask box labelled "Draft", the text across the full width and Send below it. Opening it doesn't focus the field; ⌘S saves.</td><td><code>?preset=draft</code></td></tr>
+<tr><td>New branch</td><td>An unsent group in the Branches column, placed by its passage, with an ask box labelled "New branch". It is discarded unless its first question is sent.</td><td><code>?preset=new-branch</code></td></tr>
+<tr><td>Selection across paragraphs</td><td>The actions are offered; a highlight or branch passage is clipped to the end of the first paragraph.</td><td>Select across two paragraphs</td></tr>
 <tr><td>Overlapping highlights</td><td>They merge into one.</td><td>Highlight over an existing highlight</td></tr>
-<tr><td>Folder name taken, reserved, empty, or too long</td><td>An inline error under the field names the problem. The dialog stays open with your text.</td><td>New folder → "drafts", "home"</td></tr>
-<tr><td>Menu near the bottom of the window</td><td>The menu opens above its button.</td><td>"…" on the last card in view</td></tr>
-<tr><td>Rerunning an answer that has branches or highlights</td><td>Branches anchored to a passage fall back to the whole answer. Highlights on that answer are removed. A toast says what changed.</td><td>Branch from "design-team → main", then Run again</td></tr>
-<tr><td>Very deep paths</td><td>Each level adds a Branches column and an answer column; the strip scrolls sideways, and ← or Esc goes back to the parent or the root.</td><td>Branch three times from a branch</td></tr>
-<tr><td>Deleting a folder that has questions</td><td>A confirmation states how many questions move to Unfiled.</td><td>Open "Reading list" → delete</td></tr>
-<tr><td>Long questions and titles</td><td>Feed cards show the full question; when a thread has a separate title (such as "Richard Ngo LessWrong summary"), it appears above the question, and the question is clamped to two lines. Pair headers clamp the title to 4 lines, and the full title is in the tooltip.</td><td>Drafts</td></tr>
-<tr><td>Narrow window</td><td>The sidebar becomes the strip below 900px. Columns keep their minimum widths and the strip scrolls sideways.</td><td>Drag the Width slider</td></tr>
+<tr><td>Rerun with branches or highlights</td><td>Branches anchored to a passage fall back to the whole answer, and highlights on that answer are removed; a toast says so.</td><td>Rerun an answer with a branched passage</td></tr>
+<tr><td>Empty places</td><td>A line that says how items get there.</td><td>The "Later" folder</td></tr>
+<tr><td>Menu near the window's bottom</td><td>The menu opens above its button.</td><td>"…" on a low card</td></tr>
+<tr><td>Narrow window</td><td>The sidebar becomes the strip below 900px; columns keep their minimum widths and the strip scrolls.</td><td>The Width slider</td></tr>
 </table></div>
 
 <h2>Keyboard</h2>
 <div class="tablewrap"><table>
 <tr><th>Key</th><th>Action</th><th>Note</th></tr>
-<tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move between rows in the feed or a messages column, or between items in a menu</td><td>In the Branches column they move across its groups</td></tr>
-<tr><td><kbd>Enter</kbd></td><td>Open the focused question, or select the focused message and move into its answer</td><td>In an ask box, <kbd>⌘↵</kbd> sends, <kbd>↵</kbd> adds a line and <kbd>⇧⌘↵</kbd> sends as a branch</td></tr>
-<tr><td><kbd>→</kbd></td><td>From a message, select its row in the Branches column (opening its first branch when none is selected there); with no branches, focus stays on the message</td><td>Selects and opens in one step</td></tr>
+<tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move between rows in the feed or a column, or between menu items</td><td>In the Branches column they cross its groups; in menus they wrap</td></tr>
+<tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>First or last row of a column, or first or last menu item</td><td></td></tr>
+<tr><td><kbd>Enter</kbd> <kbd>Space</kbd></td><td>On a feed row, select it (focus stays); on a message, select it and move into its answer</td><td>In a delete dialog Enter confirms</td></tr>
+<tr><td><kbd>→</kbd></td><td>From a feed row, select it and move into its thread; from a message, select its row in the Branches column</td><td>With no branches, focus stays on the message</td></tr>
+<tr><td><kbd>←</kbd></td><td>Go back to the parent message, or to the feed</td><td></td></tr>
+<tr><td><kbd>⌥↑</kbd> <kbd>⌥↓</kbd></td><td>Move the focused card or message up or down its list</td><td>Not in Archive</td></tr>
+<tr><td><kbd>⌥→</kbd> <kbd>⌥←</kbd></td><td>On a feed card: nest it under the card above, or move it out of its group; elsewhere: Forward and Back</td><td></td></tr>
+<tr><td><kbd>⌘[</kbd> <kbd>⌘]</kbd></td><td>Back and Forward through the visits</td><td>Also mouse buttons 4 and 5</td></tr>
+<tr><td><kbd>⌃Tab</kbd> <kbd>⌃⇧Tab</kbd></td><td>Select the next or previous row of the column last used</td><td>Focus stays in a text field</td></tr>
 <tr><td><kbd>⌘J</kbd></td><td>Focus the current level's ask box</td><td>Holding <kbd>⌘</kbd> shows the hint on it</td></tr>
-<tr><td><kbd>←</kbd></td><td>Go back to the parent message, or to the previous column</td><td></td></tr>
-<tr><td><kbd>Esc</kbd></td><td>Close menus and the folder dialog; close the delete-folder confirmation and return focus to Delete folder; with none of these open, return to the root conversation</td><td>In an ask box, cancels a new branch or an edited question</td></tr>
-<tr><td><kbd>Tab</kbd></td><td>Reaches the margin markers in an answer</td><td></td></tr>
-<tr><td><kbd>⇧⌘G</kbd></td><td>Toggle between the full sidebar and the strip</td><td>As in the app</td></tr>
-<tr><td><kbd>Esc</kbd> (background expanded)</td><td>Restore the columns after Expand background, and focus its button</td><td>Menus and dialogs take Esc first</td></tr>
+<tr><td><kbd>⌘↵</kbd> <kbd>⇧⌘↵</kbd></td><td>Send from a column's ask box, or send as a branch</td><td><kbd>↵</kbd> adds a line</td></tr>
+<tr><td><kbd>A</kbd> <kbd>H</kbd> <kbd>E</kbd></td><td>On a text selection: Branch to right, or Highlight</td><td></td></tr>
+<tr><td><kbd>D</kbd> <kbd>A</kbd></td><td>In a menu: Delete (or Delete now), Archive</td><td>Any item's shortcut letter</td></tr>
+<tr><td><kbd>⇧F10</kbd></td><td>Open the focused unit's menu</td><td>Also the ContextMenu key</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close a menu, the selection actions or a dialog; otherwise return to the root conversation</td><td>In an ask box, cancel a new branch or an edited question</td></tr>
+<tr><td><kbd>⇧⌘G</kbd></td><td>Toggle between the full sidebar and the strip</td><td></td></tr>
+<tr><td><kbd>Tab</kbd></td><td>Reach the margin markers in an answer; in a menu, close it</td><td></td></tr>
+</table></div>
+
+<h2>Layout options</h2>
+<p>Several layouts were built and compared before the column pairs (the <a href="https://claude.ai/artifact/EtxZepkf5V5ut5ob5UAYzH">column motion candidates</a> page and the branch-navigation concepts). The app and this prototype use "Pairs 6: Bubble selection".</p>
+<div class="tablewrap"><table>
+<tr><th>Option</th><th>How it works</th><th>Good at</th><th>Costs</th></tr>
+<tr><td>Column pairs (chosen)</td><td>Each level is a [messages | answer] pair, with a Branches column between levels.</td><td>A branch is read next to the answer it came from, at every depth, and no column changes width.</td><td>Each level adds two columns, so deep paths scroll the root out of view.</td></tr>
+<tr><td>Branch drawer</td><td>Branches open in a drawer over the conversation; pinning makes a fixed-width column.</td><td>Nothing on screen moves when a branch opens, changes or closes.</td><td>The drawer covers part of the parent's answers.</td></tr>
+<tr><td>Focus stack</td><td>The focused column gets a wide minimum, its neighbours open, and the rest become 44px spines.</td><td>Reading one conversation while keeping the parent in view.</td><td>Columns change width when focus moves or a branch opens.</td></tr>
+<tr><td>Stacked scroll</td><td>Fixed-width columns in a row; earlier columns slide under later ones.</td><td>No column ever changes width.</td><td>The parent is partly covered beside a branch below about 1870px.</td></tr>
+<tr><td>Tiled</td><td>Conversation columns share the width equally.</td><td>Comparing siblings at equal weight.</td><td>With a parent and one branch open, neither gets enough width.</td></tr>
 </table></div>
 
 <h2>Open questions</h2>
 <ul>
-  <li>Should a question be able to sit in Archive and in a user folder at the same time? This draft makes Archive exclusive, so a question is in one place at a time.</li>
-  <li>Swipe navigation with two fingers could move focus between columns instead of going back and forward through history.</li>
+  <li>Each branch level adds two columns; at 1440px a second level scrolls the feed and the root out of view.</li>
+  <li>A marker shows only an icon and a count, so branch questions are read one paragraph at a time, on hover or focus.</li>
+  <li>Only one answer per level is visible at a time; two answers of the same conversation can't be read side by side.</li>
 </ul>
 
 </section>
 
 <section class="panel doc log" data-panel="log" hidden>
 <h2>Review log</h2>
-<p>Each round lists what changed and what was checked. Round 1 is the first published iteration. Rounds 2 and 3 are design critiques of the published page, followed by fixes.</p>
+<p>Each round lists what changed and what was checked. Round 1 is the first published iteration. Rounds 2 and 3 are design critiques of the published page, followed by fixes. Round 4 brings the prototype in line with the app.</p>
 <h3><span class="tag">Round 1</span>First iteration</h3>
 <ul>
   <li>Built the column stack with Focus stack and Tiled layouts, the turn grid driven by a container query, branches as columns with anchors and a sibling switcher, highlights, folder trays with drag and drop, the icon strip, and the traffic-light reserve.</li>
@@ -1253,6 +1268,39 @@ form.ready .btn.primary .ent { display: inline; }
   <li>Still dropped: the single-column layout below 620px, the branch drawer with pinned columns and the sibling switcher, the question | answer grid, answer clamping with the fade and length dots, the Inline previews variant, the conversation header actions (Follow, Move to folder and Bookmark are in the feed row's … menu), the <kbd>[</kbd> <kbd>]</kbd> column keys, dimmed passage tints outside the focused column, and the feed's overlay scrollbar.</li>
 </ul>
 
+<h3><span class="tag fix">Round 4</span>Sync with the app (Oct 2026)</h3>
+<p>Four reviewers compared the mock with the desktop source at commit <code>2beee16</code> (shell, sidebar and tokens; the feed; the conversation columns; menus, dialogs and keyboard), and the findings were applied in four passes, checking surprising items against the source.</p>
+<div class="tablewrap"><table>
+<tr><th>Finding</th><th>Fix</th></tr>
+<tr><td colspan="2"><b>Shell, sidebar and tokens</b></td></tr>
+<tr><td>DM Sans, light by system setting, and older Warm token values.</td><td>Inter at the sizes the app uses with Inter, dark by default, and the Warm tokens from <code>tokens.css</code>; lucide icon paths.</td></tr>
+<tr><td>No ambient background.</td><td>Ported the drifting ASCII clouds (<code>ResearchAmbient</code>) and the Expand background toggle, with the header rule continued across the strip while the columns are away.</td></tr>
+<tr><td>The icon strip hid the traffic lights and the reserved zone.</td><td>The lights stay; the expand button sits at x 84; the strip's right border starts below its 44px top cell. Home is at y 50 rather than the reviewer's 48, since the app's rail adds a 2px gap (<code>.research-rail</code>).</td></tr>
+<tr><td>Bookmarks, Offline and Full screen, which the app no longer has; no Trash, folder menus, Agents control or sidebar resize.</td><td>Removed the former. Added Trash, the folder … menu, the ⌘N hint, the Agents and account controls, and the 208–420px resize handle.</td></tr>
+<tr><td colspan="2"><b>Feed</b></td></tr>
+<tr><td>Status dots and a side rail of controls.</td><td>Row glyphs for kind and state (<code>ResearchRowGlyph</code>) and one corner pill (chevron, grip, …).</td></tr>
+<tr><td>Starred children, Follow and Bookmark.</td><td>One-level groups: indented children, " (N)" counts, collapse with summaries, Make child of… and Move out of group.</td></tr>
+<tr><td>The composer after Unfiled, with a Save draft button.</td><td>The composer starts Home, with the Note | Ask switch and Save draft in its … menu; none in Archive or the Trash.</td></tr>
+<tr><td>HTML drag and drop, without nesting.</td><td>Pointer dragging with a label, insertion lines, a nesting band, a Move out strip and spring-loaded groups.</td></tr>
+<tr><td>No Trash, notes, links or documents.</td><td>The Trash tray and view, note, link and document cards, and the Highlights layout.</td></tr>
+<tr><td colspan="2"><b>Conversation columns</b></td></tr>
+<tr><td>One column per opened branch, "Branch · N messages" headers and + Ask buttons.</td><td>The Branches column after each level with branches, one group per branch, the unsent branch placed by its passage.</td></tr>
+<tr><td>Message rows with times, stars and pills; markers with a count only above one.</td><td>Glyphs, the branch arrow, the hover pill and a 12-line clamp; markers with the arrow and count, or the running or failed glyph.</td></tr>
+<tr><td>Queued follow-ups as turns; ↵ sent; the ask box stayed enabled after a failure.</td><td>Backend-held queue rows with Cancel and "Not sent"; ⌘↵ sends; the box is disabled with a note after a failed or stopped answer.</td></tr>
+<tr><td>Notes as turns; no resize handles or group panel.</td><td>Note and follow-ups columns with the editor; resize handles; the group panel. The answer column's handle runs the full height, as <code>ResearchAnswerColumn</code> passes no <code>belowHeader</code>, though the review said it starts below the header. The ⌘J hint sits on the box's top edge, centred on it as the app's <code>.pane-tab-shortcut-hint</code> base rule does.</td></tr>
+<tr><td colspan="2"><b>Menus, dialogs and keyboard</b></td></tr>
+<tr><td>The answer menu showed tokens and offered Branch from the whole answer, Copy answer, Bookmark and Follow, opening at the button's left edge.</td><td>Words, run time and model; Branch to right, the copy actions, Rerun, Generate recap, Rename…, the delete item and Move to, with the app's disabled reasons and delete labels; right-aligned, flipping above.</td></tr>
+<tr><td>Typing any character over a selection started a branch; the actions read Branch and Highlight.</td><td>Branch to right (A), Highlight (H or E) and Copy; Remove highlight inside a highlight; disabled with a note in a running answer; a selection across paragraphs is clipped, with a toast on Highlight.</td></tr>
+<tr><td>A highlight opened a two-item row; a passage opened only its first branch.</td><td>The Passage menu (compact rows at the click point): one row per branch, then Branch to right and Remove highlight. One branch and no highlight opens or closes it directly.</td></tr>
+<tr><td>Folder deletion was an inline banner; Delete, Delete now and Empty Trash acted at once; Rename and Generate recap were placeholders.</td><td>Two-step delete dialogs for threads and folders (Move to Trash, or Delete now), single-step ones for messages, notes and Trash items, and the Rename, Rerun and Generate recap dialogs. A trashed folder's questions show in Unfiled until it is restored.</td></tr>
+<tr><td>Nesting or archiving a parent with children moved them silently.</td><td>Both ask first, with the app's copy (<code>useResearchGroupActions</code>).</td></tr>
+<tr><td>Dialogs were 360px, placed at 30% height, with a ↵ glyph on the primary button.</td><td>The app's confirm dialog: centred, 440px, 16px padding, its panel, border and button colours in both themes; focus on the confirming button; no glyph.</td></tr>
+<tr><td>Menus lacked Home and End, kept open on outside scroll, and Tab left them open.</td><td>Home and End, shortcut letters, Tab and Esc close and return focus, a press, scroll or resize outside closes; 15px icons, 220px minimum. The open branch's row uses the branch tint (<code>--research-branch-tint</code>), not the accent tint the review gave.</td></tr>
+<tr><td>Enter on a feed row moved focus into the thread; no context menus; Back closed the thread and Forward reopened it.</td><td>Enter and Space select and keep focus, → enters the thread; right-click, Shift+F10 and the ContextMenu key open a unit's menu; visit history with ⌘[ ⌘], ⌥← ⌥→ and mouse buttons; ⌥↑ ⌥↓ move cards and messages, ⌥→ ⌥← nest and un-nest cards; ⌃Tab cycles rows.</td></tr>
+<tr><td>A failed copy showed a hint to use ⌘C.</td><td>"Couldn't copy." as a warning toast.</td></tr>
+</table></div>
+<p>Not ported: the answer menu's Show and Hide full transcript items, since the prototype has no transcript view.</p>
+
 </section>
 
 <div class="pop" id="pop" hidden></div>
@@ -1292,6 +1340,7 @@ const P = {
   pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
   branch: '<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
   copy: '<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>',
+  files: '<path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z"/><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1"/>',
   square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
   rotateccw: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   arrowupright: '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
@@ -1531,7 +1580,7 @@ win.innerHTML = '<div class="win-part" id="w-top"></div><div class="win-part" id
   + '<div class="side-rz" id="side-rz" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="208" tabindex="0" hidden></div>'
   + '<div class="area"><div class="ambient" id="ambient" aria-hidden="true"><canvas></canvas></div><main class="cols" id="cols" aria-label="Conversation columns"></main>'
   + '<button class="amb-toggle" id="amb-toggle" type="button" data-a="ambient" aria-controls="ambient" hidden></button></div>'
-  + '<div class="win-part" id="w-zones"></div><div class="win-part" id="w-modal"></div><div class="win-part" id="w-toast"></div>';
+  + '<div class="win-part" id="w-zones"></div><div class="win-part" id="w-modal"></div><div class="win-part" id="w-toast"></div><div class="sr" id="announce" aria-live="polite"></div>';
 const parts = { top: document.getElementById('w-top'), side: document.getElementById('w-side'), zones: document.getElementById('w-zones'), modal: document.getElementById('w-modal'), toast: document.getElementById('w-toast') };
 // Built once and updated in place: the resize handle keeps its pointer capture while the sidebar re-renders.
 const sideRz = document.getElementById('side-rz'), area = win.querySelector('.area');
@@ -1555,6 +1604,8 @@ function branchesOf(conv, turn) {
 }
 const roots = (f) => Object.values(C).filter((c) => !c.parent && c.folder === f).sort((a, b) => a.order - b.order);
 const titleOf = (c) => c.title || (c.turns[0] && c.turns[0].prompt) || c.draft || 'New question';
+// A thread's title on one line, as dialogs name it.
+const treeTitle = (c) => titleOf(c).split('\n')[0].trim();
 function treeBusy(id) {
   const c = C[id];
   if (c.turns.some((t) => t.status === 'running' || t.status === 'queued')) return true;
@@ -1570,8 +1621,47 @@ function shortWhen(w) {
   return u === 'd' ? m[1] + 'd' : u === 'h' ? m[1] + 'h' : m[1] + ' min';
 }
 const words = (t) => (t.body || []).map(textOf).join(' ').split(/\s+/).filter(Boolean).length;
-/* Sample data has no tokenizer output; estimate at about four characters per token. */
-const tokens = (t) => Math.max(1, Math.round((t.body || []).map(textOf).join(' ').length / 4));
+/* Sample data has no run timestamps: a settled answer "ran" for a minute plus a second per word. */
+const runSecs = (t) => t.runSecs ?? 60 + words(t);
+// shortTime.ts formatRunDuration: "42s", "1m 05s", "1h 02m".
+function runDuration(s) {
+  s = Math.max(0, Math.floor(s));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
+const active = (t) => !!t && (t.status === 'running' || t.status === 'queued');
+/* A message and everything below it (researchBranchInfo): the chain's later messages, and every branch or
+   follow-up from any of them, with theirs. Each entry is [conv, turn]. */
+function subtreeOf(conv, ti) {
+  const c = C[conv], out = [];
+  for (let j = ti; j < c.turns.length; j++) {
+    out.push([conv, j]);
+    kidsOf(conv).filter((k) => k.parent.turn === j).forEach((k) => out.push(...subtreeOf(k.id, 0)));
+  }
+  return out;
+}
+const subtreeInfo = (conv, ti) => { const s = subtreeOf(conv, ti); return { count: s.length - 1, busy: s.some(([cv, j]) => active(C[cv].turns[j])) }; };
+// The message a message follows: the previous one in its chain, or a branch's source message.
+const parentTurn = (conv, ti) => { const c = C[conv]; return ti > 0 ? c.turns[ti - 1] : c.parent && !c.parent.fu ? C[c.parent.conv].turns[c.parent.turn] : null; };
+/* Why no branch can start from an answer, or null (researchBranchBlocker). */
+function branchBlocker(conv, ti) {
+  const t = C[conv].turns[ti];
+  if (isArchived(C[conv])) return 'Move this question out of Archive to branch from it';
+  if (!t || active(t)) return 'Wait for the answer to finish';
+  if (t.status === 'failed') return 'This answer stopped with an error. Retry it to branch from it';
+  if (t.status === 'cancelled') return 'This answer was stopped. Run it again to branch from it';
+  return null;
+}
+/* Why Rerun is disabled, or null (researchRerunBlocker): the run, and the answer it follows, must have settled. */
+function rerunBlocker(conv, ti) {
+  const t = C[conv].turns[ti], p = parentTurn(conv, ti);
+  if (active(t)) return 'Wait for the answer to finish';
+  if (p && p.status !== 'done' && (ti === 0 || !active(p))) return active(p) ? 'Wait for the answer this follows to finish' : 'The answer this follows did not complete';
+  return null;
+}
+// researchDeleteLabel: the answer menu's delete item, and a single-step delete dialog's button.
+const deleteLabel = (isRoot, inline, count) => (isRoot ? 'Delete research' : count === 0 ? 'Delete follow-up' : inline ? 'Delete from here' : 'Delete branch');
 function linkify(text) { return esc(text).replace(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g, (u) => `<span class="ulink">${u}</span>`); }
 
 /* ---------- groups (researchGroups.ts) ----------
@@ -1719,8 +1809,9 @@ setInterval(() => { if (Object.values(C).some((c) => c.turns.some((t) => t.statu
    sent. queued is the selected queued message ({conv, id}), whose answer column shows it.
    The other fields are the window's: sidebar mode, page controls, the feed's view (Home, a folder,
    Drafts, Archive, the Trash or Highlights), the composer's Ask or Note mode, collapsed trays and groups,
-   column widths set with the resize handles, the note editor, the folder dialog, the toast, a folder
-   deletion awaiting confirmation and a drag in progress. reset() fills them. */
+   column widths set with the resize handles, the note editor, the folder-name form (modal) and the other
+   dialogs (dialog), the toast, the selection's actions (sel), the visit history (hist), the column ⌃Tab
+   cycles (cycleKey) and a drag in progress. reset() fills them. */
 const S = { levels: [], pending: null, mem: {}, chainMem: {}, collapsed: new Set(), collapsedGroups: new Set(), menu: null };
 const PREF_KEY = 'session-columns-proto.v1';
 function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; } }
@@ -1817,6 +1908,35 @@ function openChain(id, turn) {
   remember();
   S.levels = cutLevels(chain.map((x, L) => ({ conv: x.id, turn: L + 1 < chain.length ? chain[L + 1].parent.turn : turn != null ? turn : Math.min(S.chainMem[x.id] ?? lastTurn(x.id), lastTurn(x.id)) })));
   S.pending = null; S.queued = null;
+}
+
+/* ---------- history (researchHistory.ts) ----------
+   Browser-style visits: Home (no thread open, null) or a thread with each column's selection. Opening,
+   selecting and closing push a visit, dropping the visits ahead; Back and Forward (the header's arrows,
+   ⌘[ ⌘], ⌥← ⌥→, mouse buttons 4 and 5) step through them, skipping threads that were deleted or trashed. */
+const visitNow = () => (S.levels.length ? S.levels.map((v) => ({ conv: v.conv, turn: v.turn })) : null);
+const visitKey = (v) => (v ? v.map((x) => x.conv + ':' + x.turn).join(' ') : 'home');
+const visitLive = (v) => !v || (!!C[v[0].conv] && C[v[0].conv].folder !== 'trash');
+function recordVisit() {
+  const H = S.hist, v = visitNow();
+  if (H.index >= 0 && visitKey(H.entries[H.index]) === visitKey(v)) return;
+  H.entries = H.entries.slice(0, H.index + 1).concat([v]); H.index = H.entries.length - 1;
+}
+function canStep(d) {
+  for (let i = S.hist.index + d; i >= 0 && i < S.hist.entries.length; i += d) if (visitLive(S.hist.entries[i])) return true;
+  return false;
+}
+function goHistory(d) {
+  let i = S.hist.index + d;
+  while (i >= 0 && i < S.hist.entries.length && !visitLive(S.hist.entries[i])) i += d;
+  if (i < 0 || i >= S.hist.entries.length) return;
+  S.hist.index = i;
+  const v = S.hist.entries[i];
+  remember(); hidePop();
+  S.levels = v ? cutLevels(v.map((x) => ({ ...x }))) : []; S.pending = null; S.queued = null; S.editor = null;
+  commit();
+  if (S.levels.length) focusTurns(msgCol(S.levels.length - 1)); else { const f = colByKey('F'); if (f) focusTurns(f); }
+  settle();
 }
 
 /* ---------- columns ----------
@@ -2139,11 +2259,6 @@ function trashListHTML() {
     return `<li class="trash-row" data-trash="${k}"><span class="trash-ic">${e.kind === 'folder' ? I('folder') : glyphHTML(kindOf(e.c))}</span><span class="trash-text"><span class="trash-t">${esc(trunc(e.title, 200))}</span><span class="trash-m" title="${esc(tip)}">${e.kind === 'folder' ? 'Folder · ' : ''}${shortAgo(e.at)}</span></span><span class="c-rail"><button class="ib c-menu" data-act="trashmenu" data-k="${k}" data-fk="tm:${k}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc('Trash actions for ' + e.title)}" title="${esc('Trash actions for ' + e.title)}">${I('more')}</button></span></li>`;
   }).join('')}</ul>`;
 }
-function confirmHTML() {
-  const c = S.confirm; if (!c) return '';
-  const n = roots(c.f).length;
-  return `<div class="confirm" role="alertdialog" aria-label="Delete folder"><div>Delete “${esc(folderName(c.f))}”? ${n ? `Its ${n} question${n > 1 ? 's' : ''} move to Unfiled.` : 'It is empty.'}</div><div class="row"><button class="btn danger" data-act="confirmdel" data-f="${c.f}">Delete folder</button><button class="btn ghost" data-act="canceldel">Cancel</button></div></div>`;
-}
 /* Highlights, grouped by thread in feed order, each group sorted by creation time. A highlight in a branch
    names the branch's question above its excerpt; one in the thread's own messages doesn't. */
 function feedRank() {
@@ -2180,7 +2295,7 @@ function feedHTML() {
     const acts = f && !f.system ? `<button class="ib i15" data-act="renamefolder" data-f="${f.id}" title="Rename folder" aria-label="Rename folder">${I('pencil')}</button><button class="ib i15" data-act="deletefolder" data-f="${f.id}" title="Delete folder" aria-label="Delete folder">${I('trash')}</button>`
       : trash ? `<button class="btn" data-act="emptytrash" ${trashEntries().length ? '' : 'disabled'}>Empty Trash</button>` : '';
     return { head: `<button class="ib" data-act="home" title="Back to Home" aria-label="Back to Home">${I('left')}</button><h2 class="h big">${esc(folderName(v.f))}</h2>${acts ? `<span class="hacts">${acts}</span>` : ''}`,
-      body: confirmHTML() + `<section class="tray solo"${trash ? '' : ` data-drop="${v.f}"`} aria-label="${esc(folderName(v.f))}">${placeList(v.f, true)}</section>`, rest: '', label: `${folderName(v.f)}: questions` };
+      body: `<section class="tray solo"${trash ? '' : ` data-drop="${v.f}"`} aria-label="${esc(folderName(v.f))}">${placeList(v.f, true)}</section>`, rest: '', label: `${folderName(v.f)}: questions` };
   }
   // Home: the composer, Unfiled, a tray per folder (Drafts, user folders, Archive), the Trash, then New folder.
   const trays = folderList().map(trayHTML);
@@ -2254,7 +2369,8 @@ function srcBlock(from, quote, fu) {
   return `<div class="bsrc">${I('from')}<span class="bsrc-t">${from != null ? `<span class="bsrc-from" title="${esc(from)}">${esc(from)}</span>` : ''}<span class="bsrc-q">${q}</span></span></div>`;
 }
 const msgLabel = (conv, i) => (C[conv].turns[i] ? C[conv].turns[i].prompt : '').split('\n')[0];
-const histHTML = () => `<div class="hist-g" role="group" aria-label="Research history"><button class="hist" data-act="back" title="Back (⌘[)" aria-label="Back">${I('arrowl')}</button><button class="hist" data-act="fwd" disabled title="Forward (⌘])" aria-label="Forward">${I('arrowr')}</button></div>`;
+const histButtons = () => `<button class="hist" data-act="back"${canStep(-1) ? '' : ' disabled'} title="Back (⌘[)" aria-label="Back">${I('arrowl')}</button><button class="hist" data-act="fwd"${canStep(1) ? '' : ' disabled'} title="Forward (⌘])" aria-label="Forward">${I('arrowr')}</button>`;
+const histHTML = () => `<div class="hist-g" role="group" aria-label="Research history">${histButtons()}</div>`;
 const hmenu = (act, L, conv, label) => `<button class="hbtn hmenu" data-act="${act}" data-l="${L}" data-c="${conv}" data-fk="hm:${conv}" aria-haspopup="menu" aria-expanded="false" aria-label="${label}" title="${label}">${I('more')}</button>`;
 // "Archived", or "Imported conversation" for a copy of a terminal conversation, after the root's title.
 const badgeHTML = (c) => (c.kind === 'imported' ? `<span class="badge imp" title="This is a point-in-time copy of an imported conversation.">${I('terminal')}Imported conversation</span>` : '') + (c.folder === 'archive' ? '<span class="badge">Archived</span>' : '');
@@ -2400,14 +2516,11 @@ function markedText(text, ms, L) {
     const a = pts[k], b = pts[k + 1], seg = esc(text.slice(a, b));
     const cover = ms.filter((m) => m.s <= a && m.e >= b);
     if (!cover.length) { out += seg; continue; }
-    const br = cover.find((m) => m.b), h = cover.find((m) => m.hl), pd = cover.find((m) => m.pend);
-    const cls = 'mk' + (h ? ' hl' : '') + (br ? ' anc' : '') + (br && br.on ? ' on' : '') + (pd ? ' pend' : '');
-    // A highlight opens its menu when clicked (unless it is also a branched passage, which opens the branch);
-    // the Highlights view finds it by its id.
-    let attrs = h ? ` data-hl="${h.hl}"${br ? '' : ` data-act="hlmenu" data-l="${L}"`}` : '';
-    if (br) {
-      attrs += ` data-act="openbr" data-b="${br.b}" data-l="${L}"`;
-    }
+    const brs = cover.filter((m) => m.b), h = cover.find((m) => m.hl), pd = cover.find((m) => m.pend);
+    const cls = 'mk' + (h ? ' hl' : '') + (brs.length ? ' anc' : '') + (brs.some((m) => m.on) ? ' on' : '') + (pd ? ' pend' : '');
+    // A click on a passage with one branch and no highlight opens (or closes) the branch; with more, or a
+    // highlight, it opens the Passage menu. The Highlights view finds a highlight by its id.
+    const attrs = h || brs.length ? ` data-act="mark" data-l="${L}"${h ? ` data-hl="${h.hl}"` : ''}${brs.length ? ` data-brs="${brs.map((m) => m.b).join(' ')}"` : ''}` : '';
     out += `<span class="${cls}"${attrs}>${seg}</span>`;
   }
   return out;
@@ -2537,6 +2650,7 @@ function render() {
 }
 function renderCols() {
   S.levels = cutLevels(S.levels);
+  recordVisit();
   if (S.queued && !(C[S.queued.conv] && C[S.queued.conv].queue.some((q) => q.id === S.queued.id))) S.queued = null;
   // Every selected branch has been read.
   S.levels.forEach((v) => { delete C[v.conv].unreadBr; });
@@ -2560,7 +2674,7 @@ function renderCols() {
   const ft = !S.levels.length ? 'Select a question to open its conversation.' : last.kind === 'A' ? 'Select a passage or a branch marker beside the answer to open it as the next pair.' : '';
   // Home with no thread open: Back and Forward in a header bar over the hint, so Forward stays reachable
   // after a thread was closed.
-  const hist = !S.levels.length ? `<div class="empty-head" role="group" aria-label="Research history"><button class="hist" data-act="back" disabled title="Back (⌘[)" aria-label="Back">${I('arrowl')}</button><button class="hist" data-act="fwd" ${S.fwd && C[S.fwd] ? '' : 'disabled'} title="Forward (⌘])" aria-label="Forward">${I('arrowr')}</button></div>` : '';
+  const hist = !S.levels.length ? `<div class="empty-head" role="group" aria-label="Research history">${histButtons()}</div>` : '';
   const fh = hist + `<div class="fill-hint">${ft ? `<p>${ft}</p>` : ''}</div>`;
   if (filler._html !== fh) { filler.innerHTML = fh; filler._html = fh; }
   if (filler !== strip.lastChild) strip.appendChild(filler);
@@ -2782,25 +2896,7 @@ function act(a, el) {
       setTimeout(() => { delete turn.stopping; if (turn.status === 'running' || turn.status === 'queued') stopTurn(cv, +t); commit(); }, 500);
       return;
     }
-    case 'retry': {
-      const [cv, t] = el.dataset.k.split(':'), turn = C[cv].turns[+t];
-      if (turn.retrying) return;
-      turn.retrying = true; commit();
-      setTimeout(() => {
-        delete turn.retrying;
-        const note = detachAnchors(cv, +t);
-        // While another answer in the conversation is running, the retry waits behind it.
-        if (C[cv].turns.some((u) => u.status === 'running')) {
-          turn.prev = { status: turn.status, body: turn.body, error: turn.error, stoppedAfter: turn.stoppedAfter, removed: turn.removed };
-          turn.status = 'queued'; turn.body = []; delete turn.error; delete turn.stoppedAfter; delete turn.removed;
-          commit(); toast(`Queued. It runs after the running answer finishes.${note ? ' ' + note : ''}`);
-          return;
-        }
-        startTurn(cv, +t); commit();
-        if (note) toast(note);
-      }, 600);
-      return;
-    }
+    case 'retry': { const [cv, t] = el.dataset.k.split(':'); retryTurn(cv, +t); return; }
     case 'repair': toast('Not part of this prototype.'); return;
     case 'trace': { const k = el.dataset.k; if (S.trace.has(k)) S.trace.delete(k); else S.trace.add(k); commit(); refocusFk('[data-act="trace"]'); return; }
     case 'editq': {
@@ -2832,12 +2928,24 @@ function act(a, el) {
       if (ta) { ta.value = q.prompt; syncAsk(o); focusAsk(o); }
       return;
     }
-    case 'hlmenu': openHlMenu(el); return;
-    case 'openfolder': { S.view = { type: 'folder', f: el.dataset.f }; S.confirm = null; renderAll(); focusCol(colByKey('F')); return; }
+    case 'mark': {
+      // A second click on the passage whose menu is open closes it.
+      if (!pop.hidden && S.menu && S.menu.mark === markKey(el)) { hidePop(); return; }
+      const brs = (el.dataset.brs || '').split(' ').filter((b) => C[b]);
+      if (brs.length === 1 && !el.dataset.hl) {
+        if (S.levels[L + 1] && S.levels[L + 1].conv === brs[0]) { closeAfter(L); commit(); const a = answerCol(L); settle(a && a.el); }
+        else goBranch(L, brs[0]);
+        return;
+      }
+      openMarkMenu(el, lastPoint.x, lastPoint.y);
+      return;
+    }
+    case 'openfolder': { S.view = { type: 'folder', f: el.dataset.f }; renderAll(); focusCol(colByKey('F')); return; }
     case 'cancelpend': cancelPending(); return;
     // Back closes the thread (Home with no thread open), and Forward on Home reopens it.
-    case 'back': { if (!S.levels.length) return; S.fwd = S.levels[0].conv; remember(); S.levels = []; S.pending = null; S.queued = null; S.editor = null; commit(); const f = colByKey('F'); if (f) focusTurns(f); settle(); return; }
-    case 'fwd': { const id = S.fwd; S.fwd = null; if (!C[id]) return; openRoot(id); commit(); focusTurns(msgCol(0)); settle(); return; }
+    // Back and Forward step through the visits (Home, or a thread with each column's selection).
+    case 'back': goHistory(-1); return;
+    case 'fwd': goHistory(1); return;
     // The thread's group panel: a child opens from the parent's thread, the parent from a child's.
     case 'gpopen': {
       const id = el.dataset.id, row = strip.querySelector(`.col.k-F [data-fk="root:${CSS.escape(id)}"]`);
@@ -2880,21 +2988,10 @@ function act(a, el) {
     case 'refresh': commit(); return;
     case 'import': toast('Not part of this prototype.'); return;
     case 'newfolder': openFolderDialog({ ret: el }); return;
-    // pass 4: "Empty the Trash?" confirmation (ResearchDeleteDialog) before this.
-    case 'emptytrash': emptyTrash(); return;
-    case 'home': { S.view = { type: 'home' }; S.confirm = null; renderAll(); const f = colByKey('F'); if (f) focusCol(f); return; }
+    case 'emptytrash': openEmptyTrash(el); return;
+    case 'home': { S.view = { type: 'home' }; renderAll(); const f = colByKey('F'); if (f) focusCol(f); return; }
     case 'renamefolder': openFolderDialog({ f: el.dataset.f, value: folderName(el.dataset.f), ret: el }); return;
-    case 'deletefolder': { S.confirm = { f: el.dataset.f }; commit(); const b = strip.querySelector('[data-act="canceldel"]'); if (b) b.focus(); return; }
-    case 'canceldel': cancelConfirm(); return;
-    case 'confirmdel': {
-      const f = el.dataset.f, moved = roots(f);
-      moved.forEach((c) => { c.folder = 'inbox'; c.order = 1000 + c.order; });
-      renumber('inbox');
-      D.folders = D.folders.filter((x) => x.id !== f); S.confirm = null; S.view = { type: 'home' };
-      toast(`Deleted folder.${moved.length ? ` ${moved.length} question${moved.length > 1 ? 's' : ''} moved to Unfiled.` : ''}`);
-      renderAll(); focusCol(colByKey('F'));
-      return;
-    }
+    case 'deletefolder': openFolderDelete(el.dataset.f, el); return;
     case 'savedraft': {
       const o = colByKey('F'), ta = o.el.querySelector('.askbox textarea'), v = ta.value.trim(); if (!v) return;
       const id = 'n' + (++seq);
@@ -2905,10 +3002,27 @@ function act(a, el) {
     }
   }
 }
+/* Retry (and Rerun): "Retrying…" until the run starts. While another answer in the conversation is running, the
+   retry waits behind it. Branches anchored to a passage of the replaced answer fall back to the whole answer. */
+function retryTurn(cv, ti) {
+  const turn = C[cv].turns[ti];
+  if (!turn || turn.retrying) return;
+  turn.retrying = true; commit();
+  setTimeout(() => {
+    delete turn.retrying;
+    const note = detachAnchors(cv, ti);
+    if (C[cv].turns.some((u) => u.status === 'running')) {
+      turn.prev = { status: turn.status, body: turn.body, error: turn.error, stoppedAfter: turn.stoppedAfter, removed: turn.removed };
+      turn.status = 'queued'; turn.body = []; delete turn.error; delete turn.stoppedAfter; delete turn.removed;
+      commit(); toast(`Queued. It runs after the running answer finishes.${note ? ' ' + note : ''}`);
+      return;
+    }
+    startTurn(cv, ti); commit();
+    if (note) toast(note);
+  }, 600);
+}
 // After a refill, focus the element matching `sel` again (the clicked button was replaced).
 function refocusFk(sel) { const b = strip.querySelector(sel); if (b) b.focus({ preventScroll: true }); }
-// Closing the delete-folder confirmation returns focus to the Delete folder button.
-function cancelConfirm() { S.confirm = null; commit(); const b = strip.querySelector('[data-act="deletefolder"]'); if (b) b.focus(); }
 function cancelEdit(o) {
   const ctx = o && boxCtx(o); if (!ctx || !ctx.conv) return;
   C[ctx.conv].editing = null; setAskText(ctx.key, '');
@@ -2919,7 +3033,7 @@ function cancelPending() {
   const Pd = S.pending; S.pending = null; S.askText.pending = ''; commit();
   if (Pd) { const o = answerCol(Pd.L); if (o) focusCol(o); settle(o && o.el); }
 }
-// Branch from the whole answer: the unsent branch of message `t` of `conv`, listed in column L.
+// Branch to right from the answer menu: the unsent whole-answer branch of message `t` of `conv`, listed in column L.
 function startWhole(L, conv, t) {
   selectMessage(L, conv, t);
   S.levels = S.levels.slice(0, L + 1);
@@ -2939,13 +3053,13 @@ function toggleBranches(L, conv, t) {
   const o = msgCol(L + 1); settle(o ? (answerCol(L + 1) || o).el : null);
 }
 // The click's count and Alt key, for a group card's click (act 'root') and its chevron (act 'grptoggle').
-let clickDetail = 0, altClick = false;
+let clickDetail = 0, altClick = false, lastPoint = { x: 0, y: 0 };
 const GROUP_CLICK = { timer: null, closed: null };
 function setGroupCollapsed(id, on) { if (on) S.collapsedGroups.add(id); else S.collapsedGroups.delete(id); commit(); }
 strip.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
-  clickDetail = e.detail; altClick = e.altKey;
-  if ((a.dataset.act === 'openbr' || a.dataset.act === 'hlmenu') && a.classList.contains('mk') && !getSelection().isCollapsed) return;
+  clickDetail = e.detail; altClick = e.altKey; lastPoint = { x: e.clientX, y: e.clientY };
+  if (a.dataset.act === 'mark' && !getSelection().isCollapsed) return;
   if (a.closest('form') && a.type === 'submit') return;
   if (a.getAttribute('aria-disabled') === 'true') return;
   e.preventDefault();
@@ -3042,19 +3156,29 @@ function rightFrom(L) {
   const o = msgCol(L); if (o) { focusTurns(o); settle(o.el); }
 }
 
-/* Keyboard: ↑/↓ move between the rows of a column (across the groups of a branches column), Enter or Space
-   selects a message and moves into its answer, → selects a row in the branches column, ← goes to the parent
-   message (or the feed), Esc to the root conversation. */
+/* Keyboard: ↑/↓ move between the rows of a column (across the groups of a branches column). On a feed row,
+   Enter or Space selects it and focus stays; → selects it and moves into its thread. On a message, Enter or
+   Space selects it and moves into its answer, → selects a row in the branches column, ← goes to the parent
+   message (or the feed). Esc goes to the root conversation. ⌥↑/⌥↓ move the focused card or message one step
+   in its list; on a feed card ⌥→ nests it under the card above and ⌥← moves it out of its group. */
 strip.addEventListener('keydown', (e) => {
   const t = e.target;
-  if (e.key === 'Escape' && S.confirm && !t.closest('textarea')) { e.preventDefault(); cancelConfirm(); return; }
   if (e.key === 'Escape' && !t.closest('textarea') && S.levels.length && document.getElementById('pop').hidden) {
     e.preventDefault();
     // On a note, Esc also closes the open follow-up.
     if (isPostC(C[S.levels[0].conv]) && S.levels.length > 1) { closeAfter(0); commit(); }
     focusTurns(msgCol(0)); return;
   }
-  if (t.closest('textarea, .t-meta, .a-foot, .a-run, .askbox, .tray-h, .col-head, .c-rail, .confirm, .hl-item > .ib, .new-folder, .br-ind, .t-more, .q-acts, .col-rz, .gpanel, .ed-foot, .post-parent')) return;
+  if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.defaultPrevented && t.matches('.c-open[data-nav]')) {
+    const k = e.key, card = t.closest('.col.k-F .feed-card');
+    if (card && (k === 'ArrowUp' || k === 'ArrowDown')) { e.preventDefault(); moveFocusedCard(card, k === 'ArrowUp' ? -1 : 1); return; }
+    if (card && k === 'ArrowRight') { e.preventDefault(); nestFocusedCard(card); return; }
+    if (card && k === 'ArrowLeft') { e.preventDefault(); moveFocusedCardOut(card); return; }
+    if (!card && t.dataset.act === 'turn' && (k === 'ArrowUp' || k === 'ArrowDown')) { e.preventDefault(); moveFocusedMessage(t, k === 'ArrowUp' ? -1 : 1); return; }
+  }
+  // Other modified keys are not the strip's (⌥← ⌥→ walk history).
+  if (e.altKey || e.metaKey || e.ctrlKey) return;
+  if (t.closest('textarea, .t-meta, .a-foot, .a-run, .askbox, .tray-h, .col-head, .c-rail, .hl-item > .ib, .new-folder, .br-ind, .t-more, .q-acts, .col-rz, .gpanel, .ed-foot, .post-parent')) return;
   const colEl = t.closest('.col'); if (!colEl) return;
   const o = live.get(colEl.dataset.key); const sp = o.spec;
   const items = navItems(colEl), ix = items.indexOf(t), k = e.key;
@@ -3067,11 +3191,12 @@ strip.addEventListener('keydown', (e) => {
     return;
   }
   if (sp.kind === 'F') {
+    // A feed row is a question or a highlight. Enter or Space on a question selects it, as a click does.
+    if ((k === 'Enter' || k === ' ') && ix >= 0 && t.dataset.act === 'root') { e.preventDefault(); clickDetail = 0; act('root', t); return; }
     if (k === 'ArrowRight' || ((k === 'Enter' || k === ' ') && ix >= 0)) {
       e.preventDefault();
       if (ix < 0) { const nx = all[ci + 1]; if (nx) focusTurns(live.get(nx.dataset.key)); return; }
-      // A feed row is a question or a highlight.
-      const what = t.dataset.act; act(what, t);
+      const what = t.dataset.act; clickDetail = 0; act(what, t);
       const n = msgCol(what === 'root' ? 0 : S.levels.length - 1);
       if (n && isDraftCol(n)) settle(n.el); else if (n) { focusTurns(n); settle(n.el); }
     }
@@ -3262,9 +3387,11 @@ strip.addEventListener('pointerdown', (e) => {
   addEventListener('pointermove', move); addEventListener('pointerup', done); addEventListener('pointercancel', done);
 });
 
-/* ---------- selecting a passage ----------
-   The native selection stays (copy works). Branch, or typing a character, opens a pending
-   pair to the right of the answer whose ask box starts the branch. */
+/* ---------- selecting a passage (ResearchSelectionToolbar, useResearchTextSelection) ----------
+   The native selection stays (copy works). A selection that ends in a later paragraph is clipped to the end
+   of the first one. Its actions: Branch to right (A) adds the unsent branch to the branches column after the
+   answer's level; Highlight (H, or E) merges the selection with the highlights it overlaps, and reads Remove
+   highlight while the selection lies inside one; Copy copies the whole selection. */
 const pop = document.getElementById('pop');
 strip.addEventListener('mouseup', (e) => { if (e.target.closest('.a-body')) setTimeout(checkSel, 0); });
 function checkSel() {
@@ -3273,24 +3400,33 @@ function checkSel() {
   const r = sel.getRangeAt(0);
   const pOf = (nd) => (nd.nodeType === 1 ? nd : nd.parentElement).closest('.a-body [data-p]');
   const p1 = pOf(r.startContainer), p2 = pOf(r.endContainer);
-  if (!p1 || p1 !== p2) return;
+  if (!p1 || !p2 || p1.closest('.a-body') !== p2.closest('.a-body')) return;
+  const crossed = p1 !== p2;
   const body = p1.closest('.a-body');
-  const conv = body.dataset.conv, turn = +body.dataset.turn, L = +body.dataset.l;
+  const conv = body.dataset.conv, turn = +body.dataset.turn, L = +body.dataset.l, p = +p1.dataset.p;
   const t = C[conv].turns[turn];
   const pre = document.createRange(); pre.selectNodeContents(p1); pre.setEnd(r.startContainer, r.startOffset);
-  const text = textOf(t.body[+p1.dataset.p]);
-  let s = pre.toString().length, en = s + r.toString().length;
+  const text = textOf(t.body[p]);
+  let s = pre.toString().length, en = crossed ? text.length : s + r.toString().length;
   while (s < en && /\s/.test(text[s])) s++;
   while (en > s && /\s/.test(text[en - 1])) en--;
   while (s > 0 && /\w/.test(text[s - 1]) && /\w/.test(text[s])) s--;
   while (en < text.length && /\w/.test(text[en]) && /\w/.test(text[en - 1])) en++;
   if (en - s < 2) return;
-  const done = t.status === 'done';
-  S.pending = done ? { L, conv, turn, p: +p1.dataset.p, s, e: en, q: text.slice(s, en), armed: true } : (S.pending && !S.pending.armed ? S.pending : null);
-  const rect = r.getBoundingClientRect();
-  pop.innerHTML = `<div class="sel-row"><button class="mi" data-pa="branch" ${done ? '' : 'disabled'}>${I('branch')}Branch</button><button class="mi" data-pa="hl" ${done ? '' : 'disabled'}>${I('highlighter')}Highlight</button><button class="mi" data-pa="copy">${I('copy')}Copy</button></div>${done ? '' : '<div class="pop-note">Branching is available when the answer finishes.</div>'}`;
+  // A running answer has no text to anchor to yet: only Copy works.
+  const live = active(t), blocker = branchBlocker(conv, turn);
+  const over = live ? [] : D.hl.filter((h) => h.conv === conv && h.turn === turn && h.p === p && h.s < en && h.e > s);
+  const inside = over.length === 1 && over[0].s <= s && over[0].e >= en ? over[0].id : null;
+  S.sel = { L, conv, turn, p, s, e: en, crossed, live, remove: inside, copy: sel.toString() };
+  S.pending = blocker ? (S.pending && !S.pending.armed ? S.pending : null) : { L, conv, turn, p, s, e: en, q: text.slice(s, en), armed: true };
+  pop.innerHTML = `<div class="sel-row"><button class="mi" data-pa="branch" aria-keyshortcuts="A" title="${esc(blocker || 'Branch to right (A)')}"${blocker ? ' disabled' : ''}>${I('arrowupright')}Branch to right</button>`
+    + `<button class="mi" data-pa="hl" aria-keyshortcuts="H" title="${live ? 'Wait for the answer to finish' : 'Highlight (H)'}"${live ? ' disabled' : ''}>${I('highlighter')}${inside ? 'Remove highlight' : 'Highlight'}</button>`
+    + `<button class="mi" data-pa="copy" title="Copy">${I('copy')}Copy</button></div>`
+    + (live ? '<div class="pop-note">Highlighting and branching are available when the answer finishes.</div>'
+      : blocker === 'Wait for the answer to finish' ? '<div class="pop-note">Branching is available when the answer finishes.</div>' : '');
   pop.dataset.kind = 'sel';
-  showPop(rect, 300);
+  pop.setAttribute('role', 'toolbar'); pop.setAttribute('aria-label', 'Selection');
+  showPop(r.getBoundingClientRect(), 300);
 }
 function showPop(rect, w) {
   pop.hidden = false;
@@ -3300,10 +3436,11 @@ function showPop(rect, w) {
   pop.style.left = x + 'px'; pop.style.top = Math.min(y, innerHeight - ph - 8) + 'px';
 }
 function hidePop() {
-  pop.hidden = true; pop.dataset.kind = ''; pop.style.minWidth = pop.style.width = ''; S.menu = null;
+  pop.hidden = true; pop.dataset.kind = ''; pop.style.minWidth = pop.style.width = pop.style.maxHeight = ''; S.menu = null;
+  pop.classList.remove('compact'); pop.removeAttribute('role'); pop.removeAttribute('aria-label');
   win.querySelectorAll('.nav.menu-open').forEach((n) => { n.classList.remove('menu-open'); const b = n.querySelector('.nav-menu'); if (b) b.setAttribute('aria-expanded', 'false'); });
   win.querySelectorAll('.card.menu-open, .trash-row.menu-open').forEach((r) => menuOpenMark(r.querySelector('.c-menu'), false));
-  win.querySelectorAll('.l-more[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  win.querySelectorAll('.l-more[aria-expanded="true"], .hmenu[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
 }
 // A row whose menu is open keeps its pill shown (has-open-menu in the app).
 function menuOpenMark(btn, on) {
@@ -3313,74 +3450,81 @@ function menuOpenMark(btn, on) {
 }
 // A second click on the button that opened a menu closes it.
 const menuOpenFor = (btn) => !pop.hidden && pop.dataset.kind === 'menu' && !!S.menu && S.menu.btn === btn;
+// Highlight: a new highlight merges with those it overlaps; a selection inside one highlight removes it.
+function applyHighlight() {
+  const x = S.sel; if (!x || x.live) return;
+  if (x.remove) D.hl = D.hl.filter((h) => h.id !== x.remove);
+  else {
+    const over = D.hl.filter((h) => h.conv === x.conv && h.turn === x.turn && h.p === x.p && h.s < x.e && h.e > x.s);
+    D.hl = D.hl.filter((h) => !over.includes(h));
+    D.hl.push({ id: 'h' + (++seq), at: Date.now(), conv: x.conv, turn: x.turn, p: x.p, s: Math.min(x.s, ...over.map((h) => h.s)), e: Math.max(x.e, ...over.map((h) => h.e)) });
+  }
+  if (S.pending && S.pending.armed) S.pending = null;
+  S.sel = null; getSelection().removeAllRanges(); hidePop(); commit();
+  if (!x.remove && x.crossed) toast('Highlighted to the end of the paragraph. A highlight stays within one paragraph.');
+}
 pop.addEventListener('mousedown', (e) => { if (pop.dataset.kind === 'sel') e.preventDefault(); });
 pop.addEventListener('click', (e) => {
   const b = e.target.closest('[data-pa]'); if (!b || b.disabled) return;
-  const a = b.dataset.pa;
-  if (a === 'branch') { commitPending(); return; }
-  if (a === 'hl') {
-    const Pd = S.pending;
-    if (Pd && Pd.armed) {
-      // A highlight overlapping existing ones in the paragraph merges with them.
-      const over = D.hl.filter((h) => h.conv === Pd.conv && h.turn === Pd.turn && h.p === Pd.p && h.s < Pd.e && h.e > Pd.s);
-      D.hl = D.hl.filter((h) => !over.includes(h));
-      D.hl.push({ id: 'h' + (++seq), conv: Pd.conv, turn: Pd.turn, p: Pd.p, s: Math.min(Pd.s, ...over.map((h) => h.s)), e: Math.max(Pd.e, ...over.map((h) => h.e)) });
-      S.pending = null;
-    }
-    getSelection().removeAllRanges(); hidePop(); commit(); return;
-  }
-  if (a === 'copy') { const txt = getSelection().toString(); hidePop(); copyText(txt, 'Copied.'); return; }
-  if (a === 'menu-whole') { const m = S.menu; hidePop(); startWhole(m.L, m.conv, m.t); return; }
-  if (a === 'menu-copy') { const m = S.menu; const t = C[m.conv].turns[m.t]; hidePop(); copyText(t.body.map(textOf).join('\n\n'), 'Answer copied.'); return; }
+  const a = b.dataset.pa, m = S.menu, ret = m && (m.ret || m.btn);
+  // The selection actions.
+  if (a === 'branch') { S.sel = null; commitPending(); return; }
+  if (a === 'hl') { applyHighlight(); return; }
+  if (a === 'copy') { const txt = S.sel ? S.sel.copy : getSelection().toString(); S.sel = null; hidePop(); getSelection().removeAllRanges(); copyText(txt, 'Copied.'); return; }
+  // An answer menu (ResearchThreadMenu).
+  if (a === 'menu-whole') { hidePop(); startWhole(m.L, m.conv, m.t); return; }
+  if (a === 'menu-copy') { const t = C[m.conv].turns[m.t]; hidePop(); refocus(ret); copyText(t.body.map(textOf).join('\n\n'), 'Answer copied.'); return; }
+  if (a === 'menu-copythread') { hidePop(); refocus(ret); copyText(C[m.conv].turns.map((t) => [`**Question:** ${t.prompt}`, t.body.map(textOf).join('\n\n') || '_No response available._'].join('\n\n')).join('\n\n---\n\n'), 'Thread copied.'); return; }
+  if (a === 'menu-rerun') { hidePop(); if (C[m.conv].turns[m.t].status === 'done') openRerunDialog(m.conv, m.t, ret); else { refocus(ret); retryTurn(m.conv, m.t); } return; }
+  if (a === 'menu-recap') { hidePop(); openRecapDialog(m.conv, m.t, 'thread', ret); return; }
+  if (a === 'menu-rename') { hidePop(); openNodeRename(m.conv, ret); return; }
+  if (a === 'menu-editdoc') { hidePop(); refocus(ret); toast('Not part of this prototype.'); return; }
+  if (a === 'menu-delete') { hidePop(); openNodeDelete(m.L, m.conv, m.t, ret); return; }
   // A note's menu.
-  if (a === 'note-edit') { const m = S.menu; hidePop(); openEditor(m.conv); return; }
-  if (a === 'note-copy') { const m = S.menu; hidePop(); copyText(C[m.conv].turns[0].prompt, 'Note copied.'); return; }
-  if (a === 'note-delete') { const m = S.menu; hidePop(); delete C[m.conv]; closeAfter(m.L - 1); commit(); focusTurns(msgCol(m.L - 1)); return; }
+  if (a === 'note-edit') { hidePop(); openEditor(m.conv); return; }
+  if (a === 'note-copy') { hidePop(); refocus(ret); copyText(C[m.conv].turns[0].prompt, 'Note copied.'); return; }
+  if (a === 'note-delete') { hidePop(); openNodeDelete(m.L, m.conv, 0, ret); return; }
+  // The Passage menu: a branch on the passage, then the highlight's actions.
+  if (a === 'mark-open') { hidePop(); goBranch(m.L, b.dataset.b); return; }
   if (a === 'hl-branch') {
-    const m = S.menu, h = D.hl.find((x) => x.id === m.hl); hidePop();
+    const h = D.hl.find((x) => x.id === m.hl); hidePop(); if (!h) return;
     const text = textOf(C[h.conv].turns[h.turn].body[h.p]);
     S.levels = S.levels.slice(0, m.L + 1);
     S.pending = { L: m.L, conv: h.conv, turn: h.turn, p: h.p, s: h.s, e: h.e, q: text.slice(h.s, h.e), armed: false };
     commit(); focusAsk(pendingCol()); settle();
     return;
   }
-  if (a === 'hl-remove') { const m = S.menu; hidePop(); D.hl = D.hl.filter((h) => h.id !== m.hl); commit(); toast('Highlight removed.'); return; }
-  // A sidebar folder's menu. Delete… opens the folder with its delete confirmation.
-  if (a === 'folder-rename') { const ret = S.menu && S.menu.btn; openFolderDialog({ f: b.dataset.f, value: folderName(b.dataset.f), ret }); return; }
-  if (a === 'folder-delete') {
-    hidePop(); S.view = { type: 'folder', f: b.dataset.f }; S.confirm = { f: b.dataset.f }; renderAll();
-    const cb = strip.querySelector('[data-act="canceldel"]'); if (cb) cb.focus();
-    return;
-  }
+  if (a === 'hl-remove') { hidePop(); D.hl = D.hl.filter((h) => h.id !== m.hl); commit(); return; }
+  // A sidebar folder's menu. Delete… opens the folder's view with its delete confirmation.
+  if (a === 'folder-rename') { openFolderDialog({ f: b.dataset.f, value: folderName(b.dataset.f), ret }); return; }
+  if (a === 'folder-delete') { hidePop(); S.view = { type: 'folder', f: b.dataset.f }; renderAll(); openFolderDelete(b.dataset.f, ret); return; }
   // A feed row's menu, a draft's, a Trash row's, and the composer's "…".
-  const id = b.dataset.id, c = C[id], ret = S.menu && S.menu.btn;
+  const id = b.dataset.id, c = C[id];
   if (a === 'move-to') { hidePop(); moveThread(id, b.dataset.f); refocus(ret); return; }
   if (a === 'new-folder') { hidePop(); openFolderDialog({ moveId: id, ret }); return; }
   if (a === 'nest-menu') { openNestMenu(ret, id); return; }
   if (a === 'nest-to') { hidePop(); nestThread(id, b.dataset.p, null); refocus(ret); return; }
   if (a === 'move-out') { hidePop(); moveOut(id); refocus(ret); return; }
   if (a === 'grp-toggle') { hidePop(); setGroupCollapsed(id, !S.collapsedGroups.has(id)); refocus(ret); return; }
-  // pass 4: the Rename and Generate recap dialogs.
-  if (a === 'rename' || a === 'recap') { hidePop(); toast('Not part of this prototype.'); refocus(ret); return; }
+  if (a === 'rename') { hidePop(); openTreeRename(id, ret); return; }
+  if (a === 'recap') { hidePop(); openRecapDialog(id, 0, 'feed', ret); return; }
   if (a === 'unarchive') { hidePop(); moveThread(id, D.folders.some((f) => f.id === c.prevFolder) ? c.prevFolder : 'inbox'); refocus(ret); return; }
-  // pass 4: the "Delete “…”?" confirmation, whose primary action is Move to Trash.
-  if (a === 'delete') { hidePop(); trashThread(id); return; }
+  if (a === 'delete') { hidePop(); openTreeDelete(id, ret); return; }
   if (a === 'draft-open') { hidePop(); const r = strip.querySelector(`[data-fk="root:${CSS.escape(id)}"]`); if (r) act('root', r); return; }
   if (a === 'draft-delete') { hidePop(); deleteDraft(id); return; }
   if (a === 'trash-restore') { hidePop(); restoreTrash(b.dataset.k); return; }
-  // pass 4: the "Delete permanently?" confirmation.
-  if (a === 'trash-delete') { hidePop(); deleteTrashEntry(b.dataset.k); return; }
+  if (a === 'trash-delete') { hidePop(); openTrashDelete(b.dataset.k, ret); return; }
   if (a === 'savedraft') { hidePop(); act('savedraft', b); return; }
 });
-// Return focus to a feed row's menu button, or to its row when the feed was refilled meanwhile.
+// Return focus to a menu's button (or the row it was opened from), or to its row when the column was refilled.
 function refocus(btn) {
   if (!btn) return;
   const el = btn.isConnected ? btn : btn.dataset.a === 'foldermenu' ? win.querySelector(`[data-a="foldermenu"][data-f="${CSS.escape(btn.dataset.f)}"]`)
-    : strip.querySelector(`[data-fk="${CSS.escape(btn.dataset.fk)}"]`) || strip.querySelector(`[data-fk="root:${CSS.escape(btn.dataset.id)}"]`);
+    : (btn.dataset.fk && strip.querySelector(`[data-fk="${CSS.escape(btn.dataset.fk)}"]`)) || (btn.dataset.id && strip.querySelector(`[data-fk="root:${CSS.escape(btn.dataset.id)}"]`));
   if (el) el.focus({ preventScroll: true });
 }
 function copyText(txt, done) {
-  const fail = () => toast('Copy isn\'t available here. Select the text and press ⌘C.', { kind: 'warn' });
+  const fail = () => toast('Couldn\'t copy.', { kind: 'warn' });
   try { navigator.clipboard.writeText(txt).then(() => toast(done), fail); } catch (err) { fail(); }
 }
 function commitPending() {
@@ -3394,61 +3538,129 @@ function commitPending() {
 }
 document.addEventListener('selectionchange', () => {
   if (pop.dataset.kind !== 'sel') return;
-  if (getSelection().isCollapsed) { if (S.pending && S.pending.armed) S.pending = null; hidePop(); }
+  if (getSelection().isCollapsed) { if (S.pending && S.pending.armed) S.pending = null; S.sel = null; hidePop(); }
 });
+/* The selection actions' keys, ahead of everything else: A branches, H or E highlights, Esc dismisses the bar
+   (the selection stays). A key that names a disabled action does nothing. */
 document.addEventListener('keydown', (e) => {
-  const Pd = S.pending;
-  if (e.key === 'Escape' && !pop.hidden) { const m = S.menu; hidePop(); if (m && m.btn && m.btn.isConnected) m.btn.focus(); e.stopPropagation(); return; }
-  if (!Pd || !Pd.armed || e.defaultPrevented) return;
-  if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('textarea, input')) return;
-  commitPending(); // focus moves to the new pair's ask box, so it receives the keystroke
+  if (pop.hidden || pop.dataset.kind !== 'sel') return;
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (S.pending && S.pending.armed) S.pending = null; S.sel = null; hidePop(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.defaultPrevented || (e.target.closest && e.target.closest('textarea, input, select, [contenteditable]'))) return;
+  const k = e.key.toLowerCase(), b = k === 'a' ? pop.querySelector('[data-pa="branch"]') : k === 'h' || k === 'e' ? pop.querySelector('[data-pa="hl"]') : null;
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  if (!b.disabled) b.click();
+}, true);
+// Esc closes an open menu and returns focus to what opened it.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || pop.hidden || pop.dataset.kind !== 'menu') return;
+  const m = S.menu; hidePop(); if (m) refocus(m.ret || m.btn);
+  e.preventDefault(); e.stopPropagation();
 });
+/* A press outside a menu closes it, without moving focus; a press on its button (or the passage that opened
+   it) is left to the click, which toggles. */
 document.addEventListener('mousedown', (e) => {
   if (pop.hidden || pop.contains(e.target) || pop.dataset.kind !== 'menu') return;
-  if (S.menu && S.menu.btn && S.menu.btn.contains(e.target)) return;  // its click toggles the menu
+  if (S.menu && S.menu.btn && S.menu.btn.contains(e.target)) return;
+  const mk = e.target.closest && e.target.closest('.mk[data-act="mark"]');
+  if (S.menu && S.menu.mark && mk && markKey(mk) === S.menu.mark) return;
   hidePop();
 });
-/* The answer menu of message `ti` of `conv`, listed in column L: from the row's … button, or the pair
-   header's (the chain's first message). pass 4: the app's items (finding 1 of the menus review). */
-function openMenu(btn, L, conv, ti) {
-  hidePop();
-  const t = C[conv].turns[ti];
-  const w = words(t);
-  const canBr = ['done', 'failed', 'cancelled'].includes(t.status);
-  S.menu = { L, conv, t: ti, btn, fk: btn.dataset.fk };
-  menuOpenMark(btn, true);
-  pop.innerHTML = `<div class="pop-meta">${tokens(t).toLocaleString()} tokens${t.status === 'done' ? ` · ${Math.floor((60 + w) / 60)}m ${String((60 + w) % 60).padStart(2, '0')}s` : ''} · Claude Opus</div><div role="menu" aria-label="Answer actions"><button class="mi" role="menuitem" data-pa="menu-whole" ${canBr ? '' : 'disabled'}>${I('branch')}Branch from the whole answer</button><button class="mi" role="menuitem" data-pa="menu-copy">${I('copy')}Copy answer</button>${!C[conv].parent ? `<div class="mdiv"></div>${moveItems(conv, false)}` : ''}</div>`;
+/* A scroll or a resize outside an open menu closes it. The selection actions follow their selection instead,
+   and go when it does. */
+let selFrame = 0;
+addEventListener('scroll', (e) => {
+  if (pop.hidden) return;
+  if (pop.dataset.kind === 'menu') { if (!(e.target instanceof Node && pop.contains(e.target))) hidePop(); return; }
+  if (pop.dataset.kind === 'sel' && !selFrame) selFrame = requestAnimationFrame(() => { selFrame = 0; const s = getSelection(); if (pop.dataset.kind !== 'sel') return; if (!s.rangeCount || s.isCollapsed) { hidePop(); return; } showPop(s.getRangeAt(0).getBoundingClientRect(), 300); });
+}, true);
+addEventListener('resize', () => { if (!pop.hidden && pop.dataset.kind === 'menu') hidePop(); });
+
+/* ---------- menus (ResearchMenu) ----------
+   A menu opens against its button, below it (align end: the right edges level; start: 4px left of the
+   button's left edge), or above when it fits only there; when it fits on neither side it takes the taller
+   side and scrolls. A context menu opens at the pointer. The first enabled item takes focus. ↑ ↓ wrap,
+   Home and End go to the ends, a bare letter selects the item with that shortcut (D Delete, A Archive), and
+   Esc or Tab closes the menu and returns focus to what opened it. */
+function placeMenu(anchor, align = 'end', width = 0) {
   pop.dataset.kind = 'menu';
-  const r = btn.getBoundingClientRect();
-  pop.hidden = false;
-  pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
-  pop.style.top = Math.min(innerHeight - pop.offsetHeight - 8, r.bottom + 4) + 'px';
-  const first = pop.querySelector('.mi:not(:disabled)'); if (first) first.focus();
+  pop.style.minWidth = pop.style.width = width ? width + 'px' : '';
+  const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : anchor;
+  pop.style.maxHeight = 'none'; pop.hidden = false;
+  const w = pop.offsetWidth, h = pop.offsetHeight, gap = align === 'point' ? 0 : 4;
+  const below = innerHeight - 8 - (r.bottom + gap), above = r.top - gap - 8;
+  let left = align === 'start' ? r.left - 4 : align === 'end' ? r.right - w : r.left, top, maxH = null;
+  if (align !== 'point' && h > below && h > above) { const up = above > below; maxH = Math.max(0, up ? above : below); top = up ? r.top - gap - maxH : r.bottom + gap; }
+  else top = h > below && above > below ? r.top - gap - h : r.bottom + gap;
+  pop.style.maxHeight = maxH == null ? '' : maxH + 'px';
+  pop.style.left = clamp(left, 8, innerWidth - w - 8) + 'px';
+  pop.style.top = clamp(top, 8, innerHeight - (maxH ?? h) - 8) + 'px';
+  const first = pop.querySelector('.mi:not(:disabled)'); if (first) first.focus({ preventScroll: true });
 }
-/* A note's menu (ResearchThreadMenu): Edit note, Copy note, Delete note on a follow-up note, and the
-   thread's Move to on the root note. */
-function openNoteMenu(btn, L, conv) {
+/* Starts a menu. From its … button (`ctx` null), a second click on the button closes it. A context menu
+   (`ctx`: the unit's … button, which keeps its row's pill shown) has no trigger and returns focus to what
+   had it. */
+function menuBegin(btn, ctx, extra) {
   hidePop();
-  const c = C[conv];
-  S.menu = { L, conv, btn, fk: btn.dataset.fk };
-  menuOpenMark(btn, true);
-  const edit = editableNote(c), archived = isArchived(c);
-  pop.innerHTML = `<div role="menu" aria-label="Note actions">${mi(`data-pa="note-edit"${edit ? '' : ` disabled title="${archived ? 'Move this note out of Archive to edit it' : 'This note can’t be edited'}"`}`, I('pencil'), 'Edit note')}${mi('data-pa="note-copy"', I('copy'), 'Copy note')}`
-    + (c.parent ? `<div class="mdiv"></div><button class="mi danger" role="menuitem" data-pa="note-delete" data-key="d">${I('trash')}<span class="clip">Delete note</span>${keycap('D')}</button>` : `<div class="mdiv"></div>${moveItems(conv, false)}`) + '</div>';
-  placeMenu(btn, 'end', 220);
-}
-/* A highlight's menu: Branch from highlight and Remove highlight, in the selection popover's row style. */
-function openHlMenu(mk) {
-  const h = D.hl.find((x) => x.id === mk.dataset.hl); if (!h) return;
-  const done = C[h.conv].turns[h.turn].status === 'done';
-  S.menu = { btn: mk, hl: h.id, L: +mk.dataset.l };
-  pop.innerHTML = `<div class="sel-row" role="menu" aria-label="Highlight actions"><button class="mi" role="menuitem" data-pa="hl-branch" ${done ? '' : 'disabled'}>${I('branch')}Branch from highlight</button><button class="mi" role="menuitem" data-pa="hl-remove">${I('x')}Remove highlight</button></div>`;
-  pop.dataset.kind = 'menu';
-  showPop(mk.getBoundingClientRect(), 340);
-  const first = pop.querySelector('.mi:not(:disabled)'); if (first) first.focus();
+  const mark = ctx ? ctx.btn : btn, ae = document.activeElement;
+  S.menu = Object.assign({ btn: ctx ? null : btn, ret: ctx ? (ae && ae !== document.body ? ae : null) : btn, fk: mark && mark.dataset ? mark.dataset.fk : null }, extra);
+  menuOpenMark(mark, true);
 }
 const mi = (attrs, icon, label, extra = '') => `<button class="mi" role="menuitem" ${attrs}>${icon}<span class="clip">${label}</span>${extra}</button>`;
 const keycap = (k) => `<kbd class="k" aria-hidden="true">${k}</kbd>`;
+const disabledBy = (why) => (why ? ` disabled title="${esc(why)}"` : '');
+/* The answer menu of message `ti` of `conv`, listed in column L (ResearchThreadMenu): from the row's … button,
+   the pair header's (the chain's first message), or a context menu. Its first line is the answer's length,
+   run time and model; then Branch to right, the copy actions, Rerun, Generate recap, Rename… (on a chain's
+   first message), the delete action, and, in the root conversation, the question's Move to. */
+function openMenu(anchor, L, conv, ti, align = 'end', ctx = null) {
+  const c = C[conv], t = c.turns[ti]; if (!t) return;
+  menuBegin(anchor, ctx, { L, conv, t: ti });
+  const done = t.status === 'done', root = !c.parent && ti === 0, archived = isArchived(c), info = subtreeInfo(conv, ti), w = words(t);
+  const stats = [done ? `${w.toLocaleString()} ${w === 1 ? 'word' : 'words'}` : null,
+    active(t) || t.status === 'cancelled' ? null : (done ? '' : 'Ran for ') + runDuration(runSecs(t)),
+    c.kind === 'imported' ? null : 'Claude Opus'].filter(Boolean).join(' · ');
+  // Rerun relaunches an answered question in place (after a confirmation); a failed or stopped one is retried.
+  const rb = rerunBlocker(conv, ti);
+  const rerun = archived || c.kind !== 'exchange' ? '' : mi(`data-pa="menu-rerun"${rb || t.retrying ? ` disabled${rb ? ` title="${esc(rb)}"` : ''}` : done ? ' title="Run this question again and replace its answer"' : ''}`, I('rotateccw'), 'Rerun');
+  const doc = root && (c.kind === 'authored' || c.kind === 'imported');
+  pop.innerHTML = (stats ? `<div class="pop-meta" id="ans-meta">${esc(stats)}</div><div class="mdiv"></div>` : '')
+    + `<div role="menu" aria-label="Answer actions"${stats ? ' aria-describedby="ans-meta"' : ''}>`
+    + mi(`data-pa="menu-whole"${disabledBy(branchBlocker(conv, ti))}`, I('branch'), 'Branch to right')
+    + (done ? mi('data-pa="menu-copy"', I('copy'), 'Copy answer as Markdown') : '')
+    + (c.turns.length > 1 ? mi('data-pa="menu-copythread"', I('files'), 'Copy thread as Markdown') : '')
+    + rerun
+    + (!archived && done && t.recap ? mi('data-pa="menu-recap"', I('refresh'), 'Generate recap') : '')
+    + (ti === 0 ? mi('data-pa="menu-rename"', I('pencil'), 'Rename…') : '')
+    + (doc ? mi(`data-pa="menu-editdoc"${disabledBy(archived && 'Move this question out of Archive to edit its document')}`, I('pencil'), 'Edit document') : '')
+    + `<div class="mdiv"></div><button class="mi danger" role="menuitem" data-pa="menu-delete"${disabledBy(info.busy && 'This branch must finish or be cancelled before deletion')}>${I('trash')}<span class="clip">${deleteLabel(root, ti > 0, info.count)}</span></button>`
+    + (!c.parent ? `<div class="mdiv"></div>${moveItems(conv, false)}` : '') + '</div>';
+  placeMenu(anchor, align);
+}
+/* A note's menu (ResearchThreadMenu): Edit note and Copy note; a follow-up note adds Delete note (D), the root
+   note the thread's Move to. */
+function openNoteMenu(anchor, L, conv, align = 'end', ctx = null) {
+  const c = C[conv];
+  menuBegin(anchor, ctx, { L, conv });
+  const archived = isArchived(c), info = subtreeInfo(conv, 0);
+  pop.innerHTML = `<div role="menu" aria-label="Note actions">${mi(`data-pa="note-edit"${editableNote(c) ? '' : ' disabled'}${archived ? ` title="${c.parent ? 'Move this thread out of Archive to edit its notes' : 'Move this note out of Archive to edit it'}"` : ''}`, I('pencil'), 'Edit note')}${mi('data-pa="note-copy"', I('copy'), 'Copy note')}`
+    + (c.parent ? `<div class="mdiv"></div><button class="mi danger" role="menuitem" data-pa="note-delete" data-key="d"${disabledBy(info.busy && 'Finish or cancel all follow-ups before deleting this note')}>${I('trash')}<span class="clip">Delete note</span>${keycap('D')}</button>` : `<div class="mdiv"></div>${moveItems(conv, false)}`) + '</div>';
+  placeMenu(anchor, align);
+}
+/* The Passage menu, opened by a click on a passage that carries several branches, or a highlight: a row per
+   branch (the selected one tinted), then for a highlight Branch to right and Remove highlight. Compact rows,
+   at the pointer. */
+const markKey = (mk) => `${mk.dataset.l}|${mk.dataset.brs || ''}|${mk.dataset.hl || ''}`;
+function openMarkMenu(mk, x, y) {
+  const body = mk.closest('.a-body'), L = +mk.dataset.l, conv = body.dataset.conv, turn = +body.dataset.turn;
+  const brs = (mk.dataset.brs || '').split(' ').filter((b) => C[b]), hl = mk.dataset.hl || null;
+  menuBegin(null, { btn: null }, { L, conv, t: turn, hl, mark: markKey(mk) });
+  const open = S.levels[L + 1] && S.levels[L + 1].conv;
+  pop.innerHTML = `<div role="menu" aria-label="Passage">${brs.map((b) => mi(`data-pa="mark-open" data-b="${b}"${b === open ? ' aria-current="true"' : ''}`, I('arrowupright'), esc(trunc((C[b].title || C[b].turns[0].prompt).trim() || 'Branch', 120)))).join('')}`
+    + (hl ? mi(`data-pa="hl-branch"${disabledBy(branchBlocker(conv, turn))}`, I('branch'), 'Branch to right') + mi('data-pa="hl-remove"', I('x'), 'Remove highlight') : '') + '</div>';
+  pop.classList.add('compact');
+  placeMenu({ left: x - 20, right: x - 20, top: y - 10, bottom: y + 10 }, 'point');
+}
 /* Move to (ResearchMoveMenu): Unfiled, Drafts, the user folders and Archive, the current place checked and
    disabled; then New folder…, which creates a folder and moves the question into it. On Home, A selects
    Archive. Shown in a feed card's menu and, below the answer's own actions, in the root pair's answer menus. */
@@ -3460,18 +3672,6 @@ function moveItems(id, archiveKey) {
     return mi(`data-pa="move-to" data-id="${id}" data-f="${f.id}"${here ? ' disabled aria-checked="true"' : ''}${key ? ' data-key="a"' : ''}`, I(f.icon || 'folder'), esc(f.name), here ? I('check', 'r') : key ? keycap('A') : '');
   }).join('')}</div><div class="mdiv"></div>${mi(`data-pa="new-folder" data-id="${id}"`, I('plus'), 'New folder…')}`;
 }
-// Open a menu under its button, its right edge on the button's (align end) or its left edge on the
-// button's (start); it flips above when there is no room below.
-function placeMenu(btn, align = 'end', width = 0) {
-  pop.dataset.kind = 'menu';
-  if (width) pop.style.minWidth = pop.style.width = width + 'px';
-  const r = btn.getBoundingClientRect();
-  pop.hidden = false;
-  const x = align === 'end' ? r.right - pop.offsetWidth : r.left;
-  pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, x)) + 'px';
-  pop.style.top = (r.bottom + 4 + pop.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - 4 - pop.offsetHeight) : r.bottom + 4) + 'px';
-  const first = pop.querySelector('.mi:not(:disabled)'); if (first) first.focus();
-}
 // Make child of… lists the list's top-level items that can hold children, other than the item and its parent.
 function nestCandidates(id) {
   const c = C[id], p = listedParent(id);
@@ -3481,14 +3681,12 @@ function nestCandidates(id) {
 /* A feed card's menu (ResearchFeedRowMenu, 220px): the group actions (Make child of…, Move out of group,
    Collapse or Expand; none on an archived card), Move to and New folder…, then the thread's own actions
    (Generate recap and Rename, Unarchive on an archived card, Delete). A draft's menu is Open and Delete. */
-function openCardMenu(btn, id) {
-  hidePop();
+function openCardMenu(anchor, id, align = 'end', ctx = null) {
   const c = C[id];
-  S.menu = { btn, id, fk: btn.dataset.fk };
-  menuOpenMark(btn, true);
+  menuBegin(anchor, ctx, { id });
   if (isDraft(c)) {
     pop.innerHTML = `<div role="menu" aria-label="Draft actions">${mi(`data-pa="draft-open" data-id="${id}"`, I('draft'), 'Open')}${mi(`data-pa="draft-delete" data-id="${id}"`, I('trash'), 'Delete')}</div>`;
-    placeMenu(btn, 'end', 180); return;
+    placeMenu(anchor, align, 180); return;
   }
   const archived = c.folder === 'archive', parent = listedParent(id), kids = parent ? [] : childrenOf(id);
   let group = '';
@@ -3505,39 +3703,81 @@ function openCardMenu(btn, id) {
   pop.innerHTML = `<div role="menu" aria-label="${esc('Actions for ' + trunc(titleOf(c), 80))}">${group}${moveItems(id, S.view.type === 'home')}<div class="mdiv"></div>${recap}${rename}${recap || rename ? '<div class="mdiv"></div>' : ''}`
     + (archived ? mi(`data-pa="unarchive" data-id="${id}"`, I('restore'), 'Unarchive research') : '')
     + `<button class="mi danger" role="menuitem" data-pa="delete" data-id="${id}" data-key="d"${busy ? ' disabled title="Research with active runs cannot be deleted"' : ''}>${I('trash')}<span class="clip">Delete</span>${keycap('D')}</button></div>`;
-  placeMenu(btn, 'end', 220);
+  placeMenu(anchor, align, 220);
 }
 // Make child of…: replaces the card's menu, 260px wide, with the candidates.
 function openNestMenu(btn, id) {
   const c = C[id];
   pop.innerHTML = `<div role="menu" aria-label="${esc(`Make “${shortName(cardName(c))}” a child of`)}"><div class="pop-t">Make child of</div>${nestCandidates(id).map((x) => mi(`data-pa="nest-to" data-id="${id}" data-p="${x.id}"`, glyphHTML(kindOf(x)), esc(trunc(cardName(x), 80)))).join('')}</div>`;
-  pop.style.minWidth = pop.style.width = '';
-  placeMenu(btn, 'end', 260);
+  placeMenu(btn && btn.isConnected ? btn : { left: parseFloat(pop.style.left), right: parseFloat(pop.style.left) + pop.offsetWidth, top: parseFloat(pop.style.top), bottom: parseFloat(pop.style.top) }, 'end', 260);
 }
 // A Trash row's menu: Restore, then Delete now (D).
 function openTrashMenu(btn, k) {
-  hidePop();
-  S.menu = { btn, fk: btn.dataset.fk };
-  menuOpenMark(btn, true);
   const e = trashEntries().find((x) => x.kind + ':' + x.id === k); if (!e) return;
+  menuBegin(btn, null, {});
   pop.innerHTML = `<div role="menu" aria-label="${esc('Actions for ' + e.title)}">${mi(`data-pa="trash-restore" data-k="${k}"`, I('restore'), 'Restore')}<button class="mi danger" role="menuitem" data-pa="trash-delete" data-k="${k}" data-key="d">${I('trash')}<span class="clip">Delete now</span>${keycap('D')}</button></div>`;
   placeMenu(btn, 'end');
 }
 // The composer's "…": Save draft.
 function openComposerMenu(btn) {
   hidePop();
-  S.menu = { btn };
+  S.menu = { btn, ret: btn };
   btn.setAttribute('aria-expanded', 'true');
   pop.innerHTML = `<div role="menu" aria-label="Question actions">${mi('data-pa="savedraft"', I('draft'), 'Save draft')}</div>`;
   placeMenu(btn, 'start');
 }
 pop.addEventListener('keydown', (e) => {
   if (pop.dataset.kind !== 'menu') return;
-  const items = [...pop.querySelectorAll('.mi:not(:disabled)')], ix = items.indexOf(document.activeElement);
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[(ix + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
-  if (e.key === 'Tab') hidePop();
+  const items = [...pop.querySelectorAll('.mi:not(:disabled)')], ix = items.indexOf(document.activeElement), n = items.length;
+  const k = e.key, to = !n ? null : k === 'ArrowDown' ? (ix < 0 ? 0 : (ix + 1) % n) : k === 'ArrowUp' ? (ix < 0 ? n - 1 : (ix - 1 + n) % n) : k === 'Home' ? 0 : k === 'End' ? n - 1 : null;
+  if (to != null) { e.preventDefault(); items[to].focus(); return; }
+  // Tab would leave the menu while it stays open: it closes the menu instead.
+  if (k === 'Tab') { e.preventDefault(); const m = S.menu; hidePop(); if (m) refocus(m.ret || m.btn); return; }
   // A bare letter selects the item with that shortcut (D for Delete, A for Archive).
-  if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) { const m = pop.querySelector(`.mi[data-key="${CSS.escape(e.key.toLowerCase())}"]:not(:disabled)`); if (m) { e.preventDefault(); m.click(); } }
+  if (/^[a-z0-9]$/i.test(k) && !e.metaKey && !e.ctrlKey && !e.altKey && !e.isComposing) { const m = pop.querySelector(`.mi[data-key="${CSS.escape(k.toLowerCase())}"]`); if (m) { e.preventDefault(); if (!m.disabled) m.click(); } }
+});
+
+/* ---------- context menus (researchUnitMenu.ts) ----------
+   A right-click on a feed card, a message row, an answer or a note opens that unit's … menu at the pointer;
+   Shift+F10 or the ContextMenu key opens it at the unit's … button (at the unit's top-left corner when the
+   button is off screen). Links, fields and a non-empty text selection inside the unit keep their own menu. */
+function unitOf(t) {
+  const card = t.closest('.col.k-F .feed-card');
+  if (card) return { kind: 'card', el: card, id: card.dataset.card, btn: card.querySelector('.c-menu') };
+  const row = t.closest('.col:is(.k-T, .k-B) .msg[data-t]');
+  if (row) { const b = row.querySelector('.c-menu'); return b ? { kind: 'answer', el: row, L: +b.dataset.l, conv: b.dataset.c, t: +b.dataset.t, btn: b } : null; }
+  const col = t.closest('.col.k-A, .col.k-N'), o = col && live.get(col.dataset.key), sc = col && t.closest('.col-scroll');
+  if (!o || !sc) return null;
+  if (o.spec.kind === 'N') return { kind: 'note', el: sc, L: o.spec.L, conv: o.spec.conv, btn: col.querySelector('.hmenu') };
+  if (o.spec.qv) return null;
+  const m = msgCol(o.spec.L), b = m && m.el.querySelector(`.msg[data-c="${CSS.escape(o.spec.conv)}"][data-t="${o.spec.turn}"] .c-menu`);
+  return { kind: 'answer', el: sc, L: o.spec.L, conv: o.spec.conv, t: o.spec.turn, btn: b };
+}
+function openUnitMenu(u, anchor, align) {
+  const ctx = { btn: u.btn };
+  if (u.kind === 'card') openCardMenu(anchor, u.id, align, ctx);
+  else if (u.kind === 'note') openNoteMenu(anchor, u.L, u.conv, align, ctx);
+  else openMenu(anchor, u.L, u.conv, u.t, align, ctx);
+}
+const pointRect = (x, y) => ({ left: x, right: x, top: y, bottom: y });
+strip.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('a[href], img, video, audio, input, textarea, select, [contenteditable]')) return;
+  const u = unitOf(e.target); if (!u) return;
+  const s = getSelection();
+  if (s.rangeCount && !s.isCollapsed && s.getRangeAt(0).intersectsNode(u.el) && s.toString().trim()) return;
+  e.preventDefault();
+  openUnitMenu(u, pointRect(e.clientX, e.clientY), 'point');
+});
+strip.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing || !(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+  if (e.target.closest('textarea, input')) return;
+  const u = unitOf(e.target); if (!u) return;
+  e.preventDefault();
+  // The … button when it is laid out and on top at its centre; otherwise the unit's top-left corner.
+  const r = u.btn && u.btn.getBoundingClientRect(), hit = r && r.width && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  if (hit && u.btn.contains(hit)) { openUnitMenu(u, u.btn, 'end'); return; }
+  const ur = u.el.getBoundingClientRect();
+  openUnitMenu(u, pointRect(clamp(ur.left, 0, innerWidth), clamp(ur.top, 0, innerHeight)), 'point');
 });
 
 /* ---------- margin marker popover ----------
@@ -3652,25 +3892,181 @@ function sidebarHTML(icons, auto) {
 /* A user folder's … menu in the sidebar: Rename… and Delete…, 180px wide, under the button's start. */
 function openFolderMenu(btn, f) {
   hidePop();
-  S.menu = { btn };
-  pop.innerHTML = `<div role="menu" aria-label="Actions for ${esc(folderName(f))}"><button class="mi" role="menuitem" data-pa="folder-rename" data-f="${f}">${I('pencil')}<span class="clip">Rename…</span></button><button class="mi" role="menuitem" data-pa="folder-delete" data-f="${f}">${I('trash')}<span class="clip">Delete…</span></button></div>`;
-  pop.dataset.kind = 'menu';
-  pop.style.minWidth = pop.style.width = '180px';
+  S.menu = { btn, ret: btn };
+  pop.innerHTML = `<div role="menu" aria-label="Actions for ${esc(folderName(f))}">${mi(`data-pa="folder-rename" data-f="${f}"`, I('pencil'), 'Rename…')}${mi(`data-pa="folder-delete" data-f="${f}"`, I('trash'), 'Delete…')}</div>`;
   btn.closest('.nav').classList.add('menu-open'); btn.setAttribute('aria-expanded', 'true');
-  const r = btn.getBoundingClientRect();
-  pop.hidden = false;
-  pop.style.left = Math.max(8, Math.min(innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
-  pop.style.top = (r.bottom + 4 + pop.offsetHeight > innerHeight - 8 ? Math.max(8, r.top - 4 - pop.offsetHeight) : r.bottom + 4) + 'px';
-  const first = pop.querySelector('.mi'); if (first) first.focus();
+  placeMenu(btn, 'start', 180);
 }
-// Open the folder-name form in a modal dialog.
+// The folder-name form (ResearchFolderNameDialog): the field focused with its text selected.
 function modalHTML() {
   const p = S.modal; if (!p) return '';
   const verb = p.f ? 'Rename' : p.moveId ? 'Create and move' : 'Create';
-  return `<div class="scrim" data-a="close-modal"></div><div class="modal" role="dialog" aria-modal="true" aria-labelledby="folder-dlg-t"><form data-form="folder-name" novalidate><h3 id="folder-dlg-t">${p.f ? 'Rename folder' : 'New folder'}</h3>${p.moveId ? '<p class="modal-sub">The question moves into it once it\'s created.</p>' : ''}<label class="sr" for="folder-name">Folder name</label><input id="folder-name" autocomplete="off" placeholder="Folder name" value="${esc(p.value || '')}" aria-describedby="folder-err" ${p.err ? 'aria-invalid="true"' : ''}><div class="err" id="folder-err" ${p.err ? '' : 'hidden'}>${esc(p.err || '')}</div><div class="row"><span class="sp"></span><button type="button" class="btn tint" data-a="close-modal">Cancel</button><button class="btn primary" type="submit">${verb}<span class="ent" aria-hidden="true">↵</span></button></div></form></div>`;
+  return `<div class="scrim"><form class="modal" role="dialog" aria-modal="true" aria-labelledby="folder-dlg-t" data-form="folder-name" novalidate><h3 id="folder-dlg-t">${p.f ? 'Rename folder' : 'New folder'}</h3>${p.moveId ? '<p>The question moves into it once it\'s created.</p>' : ''}<input id="folder-name" autocomplete="off" spellcheck="false" placeholder="Folder name" aria-label="Folder name" value="${esc(p.value || '')}"${p.err ? ' aria-invalid="true" aria-describedby="folder-err"' : ''}>${p.err ? `<p class="err" id="folder-err" role="alert">${esc(p.err)}</p>` : ''}<div class="modal-acts"><button type="button" class="dbtn" data-a="close-modal">Cancel</button><button class="dbtn primary" type="submit">${verb}</button></div></form></div>`;
 }
-function openFolderDialog(p) { hidePop(); S.modal = Object.assign({ value: '', moveId: null }, p); S.focusNext = '#folder-name'; renderChrome(); }
+function openFolderDialog(p) {
+  hidePop(); S.dialog = null; S.modal = Object.assign({ value: '', moveId: null }, p); S.focusNext = '#folder-name'; renderChrome();
+  const i = document.getElementById('folder-name'); if (i) i.select();
+}
 function closeModal() { const ret = S.modal && S.modal.ret; S.modal = null; renderChrome(); refocus(ret); }
+
+/* ---------- dialogs ----------
+   S.dialog, over the window like the folder-name form: a delete confirmation (ResearchDeleteDialog), a
+   rename, Rerun, or Generate recap. A delete confirmation is a Move to Trash step, whose Delete now link opens
+   the permanent step, or the permanent step alone. The confirming button of each step takes focus (Cancel
+   while the action is unavailable); Enter outside a button confirms; Esc, Cancel or a press on the scrim
+   closes. Focus then returns to what opened the dialog, or, when that has gone, to `fallback`. */
+const DIALOG_STEP = {
+  trash: { label: 'Move to Trash', tone: 'primary' },
+  remove: { title: 'Delete permanently?', body: '<p>This can’t be undone.</p>', label: 'Delete', tone: 'danger' },
+};
+const dialogStep = (d) => Object.assign({}, DIALOG_STEP[d.step], d[d.step]);
+function openDialog(d, ret) {
+  hidePop(); S.modal = null;
+  S.dialog = Object.assign({ kind: 'confirm', step: d.trash ? 'trash' : 'remove', enter: true }, d, { ret: ret || null });
+  S.focusNext = d.kind === 'rename' ? '#dlg-input' : d.kind === 'recap' ? '#recap-ins' : d.disabled || d.focus === 'cancel' ? '[data-a="dlg-cancel"]' : '[data-a="dlg-ok"]';
+  renderChrome();
+  if (d.kind === 'rename' && d.select) { const i = document.getElementById('dlg-input'); if (i) i.select(); }
+}
+function dialogHTML() {
+  const d = S.dialog; if (!d) return '';
+  if (d.kind === 'rename') return `<div class="scrim"><form class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg-t" data-form="rename" novalidate><h3 id="dlg-t">${esc(d.title)}</h3><input id="dlg-input" class="dlg-input" autocomplete="off" aria-label="${esc(d.label)}" value="${esc(d.value)}"><div class="modal-acts"><button type="button" class="dbtn" data-a="dlg-cancel">Cancel</button><button type="submit" class="dbtn primary" data-a="dlg-submit"${!d.allowEmpty && !d.value.trim() ? ' disabled' : ''}>Rename</button></div></form></div>`;
+  if (d.kind === 'recap') return recapHTML(d);
+  const st = dialogStep(d);
+  return `<div class="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg-t"${st.body ? ' aria-describedby="dlg-b"' : ''} tabindex="-1" data-step="${d.step}"><h3 id="dlg-t">${esc(st.title)}</h3>${st.body ? `<div class="modal-body" id="dlg-b">${st.body}</div>` : ''}${d.disabled ? `<p role="status">${esc(d.disabled)}</p>` : ''}`
+    + `<div class="modal-acts">${d.step === 'trash' ? '<button type="button" class="dlink" data-a="dlg-now">Delete now</button>' : ''}<button type="button" class="dbtn" data-a="dlg-cancel">Cancel</button><button type="button" class="dbtn ${st.tone}" data-a="dlg-ok"${d.disabled ? ' disabled' : ''}>${esc(st.label)}</button></div></div></div>`;
+}
+function dialogReturn(d) {
+  if (d.ret && d.ret.isConnected) { d.ret.focus({ preventScroll: true }); return; }
+  if (d.ret) refocus(d.ret);
+  const a = document.activeElement;
+  if ((!a || a === document.body) && d.fallback) { const f = d.fallback(); if (f) f.focus({ preventScroll: true }); }
+}
+function closeDialog() { const d = S.dialog; if (!d) return; S.dialog = null; renderChrome(); dialogReturn(d); }
+function confirmDialog() {
+  const d = S.dialog; if (!d || d.kind !== 'confirm' || d.disabled) return;
+  S.dialog = null;
+  dialogStep(d).onConfirm();
+  renderChrome(); dialogReturn(d);
+}
+function submitRename() {
+  const d = S.dialog; if (!d || d.kind !== 'rename') return;
+  const v = d.value.trim();
+  if (!v && !d.allowEmpty) return;
+  S.dialog = null;
+  // A feed card's Rename closes without saving when the title is empty or unchanged.
+  if (v && v !== d.initial) d.onSubmit(v);
+  renderChrome(); dialogReturn(d);
+}
+// Fallbacks: the feed's current row (or its title), the selected row of a column.
+function feedFallback() {
+  const f = colByKey('F'); if (!f) return null;
+  const r = f.el.querySelector('[data-nav][tabindex="0"]') || f.el.querySelector('[data-nav]'); if (r) return r;
+  const h = f.el.querySelector('.col-head .h'); if (h) h.tabIndex = -1; return h;
+}
+function titleFallback() { const f = colByKey('F'), h = f && f.el.querySelector('.col-head .h'); if (h) h.tabIndex = -1; return h; }
+const rowFallback = (L) => () => { const o = msgCol(L) || msgCol(L - 1) || colByKey('F'); return o && (o.el.querySelector('[data-nav][aria-current="true"]') || o.el.querySelector('[data-nav]')); };
+
+/* Rename (ResearchRenameDialog): the research's title or a branch's, from the answer menu. A feed card's
+   Rename (ResearchTreeRenameDialog) selects the title. */
+function openNodeRename(conv, ret) {
+  const c = C[conv], root = !c.parent;
+  openDialog({ kind: 'rename', title: root ? 'Rename research' : 'Rename branch', label: 'Title', value: root ? treeTitle(c) : (c.title || c.turns[0].prompt).trim(), onSubmit: (v) => { c.title = v; commit(); } }, ret);
+}
+function openTreeRename(id, ret) {
+  const c = C[id], v = treeTitle(c);
+  openDialog({ kind: 'rename', title: 'Rename research', label: 'Research title', value: v, initial: v, select: true, allowEmpty: true, onSubmit: (x) => { c.title = x; commit(); } }, ret);
+}
+/* Rerun on an answered question asks first: it replaces the answer. Cancel has focus. */
+function openRerunDialog(conv, ti, ret) {
+  openDialog({ remove: { title: 'Rerun', body: '<p>Rerun will replace the current answer. Continue?</p>', label: 'Continue', tone: 'primary', onConfirm: () => retryTurn(conv, ti) },
+    disabled: rerunBlocker(conv, ti), focus: 'cancel', enter: false, fallback: rowFallback(S.levels.findIndex((v) => v.conv === conv)) }, ret);
+}
+/* Deleting a thread: Move to Trash, with the children listed under it in Home, or Delete now. From the
+   thread's answer menu (`followUps` given) the first step also counts its follow-ups. */
+function trashTreeSentence(followUps, kids) {
+  const fu = followUps ? `its ${followUps} follow-up${followUps === 1 ? '' : 's'}` : null;
+  if (!kids) return fu ? `It moves to the Trash with ${fu}, where you can restore it.` : 'It moves to the Trash, where you can restore it.';
+  return `It moves to the Trash with ${fu ? fu + ' and ' : ''}its ${childCount(kids)}. Restoring it restores ${kids === 1 ? 'its child' : 'its children'} too.`;
+}
+function openTreeDelete(id, ret, { name = treeTitle(C[id]), followUps = null } = {}) {
+  const kids = listedParent(id) ? [] : childrenOf(id), n = kids.length, ch = childCount(n);
+  const busyKid = followUps == null && kids.some((k) => treeBusy(k.id));
+  openDialog({
+    trash: { title: n ? `Delete “${name}” and its ${ch}?` : `Delete “${name}”?`, body: `<p>${esc(trashTreeSentence(followUps, n))}</p>`, onConfirm: () => trashThread(id) },
+    remove: Object.assign(n ? { body: `<p>“${esc(name)}” and its ${ch} will be deleted. This can’t be undone.</p>` } : {}, { onConfirm: () => removeTree(id) }),
+    disabled: treeBusy(id) ? 'It has active runs, which must finish or be cancelled before it can be deleted.'
+      : busyKid ? `${n === 1 ? 'Its child has' : 'At least one of its children has'} active runs, which must finish or be cancelled before this thread can be deleted.` : null,
+    fallback: feedFallback,
+  }, ret);
+}
+/* Deleting a message from its answer menu. The first message of the research deletes the thread (above); any
+   other is deleted at once with what follows it, in one danger step. */
+function openNodeDelete(L, conv, ti, ret) {
+  const c = C[conv], t = c.turns[ti];
+  if (!c.parent && ti === 0 && !isPostC(c)) { openTreeDelete(conv, ret, { followUps: subtreeInfo(conv, 0).count }); return; }
+  const info = subtreeInfo(conv, ti), n = info.count, inline = ti > 0, note = isPostC(c);
+  const name = ((ti === 0 ? c.title : '') || t.prompt).trim(), plural = (w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const title = note ? 'Delete this note?' : inline && n > 0 ? 'Delete the rest of this thread?' : n > 0 ? 'Delete this research branch?' : 'Delete this follow-up?';
+  const what = note ? (n > 0 ? `This deletes the note and ${plural('follow-up')} under it.` : 'This deletes the note.')
+    : inline && n > 0 ? `This deletes this follow-up and everything after it in the thread, ${plural('message')} in all, including any branches. A new follow-up can then be asked from the answer before it.`
+      : n > 0 ? `This also deletes ${plural('follow-up')} under it.` : 'This deletes the follow-up and its response.';
+  openDialog({ remove: { title, body: `<p>“${esc(name)}”</p><p>${esc(what)} This can’t be undone.</p>`, label: note ? 'Delete note' : deleteLabel(false, inline, n), onConfirm: () => removeNode(conv, ti) },
+    disabled: info.busy ? 'It has active runs, which must finish or be cancelled before it can be deleted.' : null, fallback: rowFallback(L) }, ret);
+}
+// Deleting a folder: Move to Trash (its questions show in Unfiled until it is restored), or Delete now.
+function openFolderDelete(f, ret) {
+  const n = roots(f).length, s = n === 1 ? '' : 's';
+  openDialog({
+    trash: { title: `Delete “${folderName(f)}”?`, body: `<p>${n ? `The folder moves to the Trash. Its ${n} question${s} show${n === 1 ? 's' : ''} in Unfiled until you restore it.` : 'The folder is empty. It moves to the Trash.'}</p>`, onConfirm: () => trashFolder(f) },
+    remove: { body: `<p>${n ? `Its ${n} question${s} move${n === 1 ? 's' : ''} to Unfiled. ` : ''}This can’t be undone.</p>`, onConfirm: () => deleteFolderNow(f) },
+    fallback: feedFallback,
+  }, ret);
+}
+// The Trash: Delete now on a row, and Empty Trash, are permanent steps.
+function openTrashDelete(k, ret) {
+  const e = trashEntries().find((x) => x.kind + ':' + x.id === k); if (!e) return;
+  const kids = e.kind === 'tree' ? Object.values(C).filter((x) => x.folder === 'trash' && D.parents[x.id] === e.id).length : 0;
+  openDialog({ remove: { body: `<p>“${esc(e.title)}”${kids ? ` and its ${childCount(kids)}` : ''} will be deleted. This can’t be undone.</p>`, onConfirm: () => deleteTrashEntry(k) }, fallback: titleFallback }, ret);
+}
+function openEmptyTrash(ret) {
+  const n = trashEntries().length; if (!n) return;
+  openDialog({ remove: { title: 'Empty the Trash?', body: `<p>${n} item${n === 1 ? '' : 's'} will be deleted. This can’t be undone.</p>`, label: 'Empty Trash', onConfirm: emptyTrash }, fallback: titleFallback }, ret);
+}
+/* Generate recap (ResearchRecapDialog): instructions (the backend's default until edited), the agent and an
+   optional model, Generate candidate, then the candidate above the current recap. Use this recap replaces it.
+   Editing the instructions drops the candidate. */
+const RECAP_INSTRUCTIONS = 'Write a compact recap that directly answers the user\'s question using only the supplied answer. Usually use 30-70 words. For recommendations, name the recommended items and people. For analysis, preserve the main conclusion, mechanism, and essential qualifications. Short sentences and semicolon-separated phrases are fine. Do not merely describe what the answer discusses.';
+const RECAP_CANDIDATES = { 'c1:1': 'Ngo models an agent as a web of partly inconsistent beliefs held together by trust, not a utility maximiser; his 2024 memos argue that training toward virtues generalises better than training toward goals.' };
+const recapCandidate = (conv, ti) => RECAP_CANDIDATES[conv + ':' + ti] || ((C[conv].turns[ti].body.map(textOf).find((x) => x.length > 40) || '').split(/(?<=\.)\s/)[0]);
+function openRecapDialog(conv, ti, from, ret) {
+  openDialog({ kind: 'recap', conv, ti, from, ins: RECAP_INSTRUCTIONS, model: '', cand: null, gen: false, fallback: from === 'feed' ? feedFallback : rowFallback(S.levels.findIndex((v) => v.conv === conv)) }, ret);
+}
+function recapHTML(d) {
+  const t = C[d.conv] && C[d.conv].turns[d.ti]; if (!t) return '';
+  const off = d.gen ? ' disabled' : '';
+  return `<div class="scrim"><div class="modal recap-dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><header class="recap-h"><h3 id="dlg-t">Generate recap</h3><button type="button" class="dbtn sq" data-a="dlg-cancel" aria-label="Close recap generation">${I('x')}</button></header>`
+    + `<label class="recap-f" for="recap-ins"><span>Instructions</span><textarea id="recap-ins" maxlength="4000"${off}>${esc(d.ins)}</textarea></label>`
+    + `<div class="recap-ctl"><label><span>Agent</span><select id="recap-agent" aria-label="Agent"${off}><option>Claude Code</option></select></label><label><span>Model</span><input id="recap-model" type="text" placeholder="Agent default" maxlength="256" aria-label="Model" value="${esc(d.model)}"${off}></label></div>`
+    + `<div class="modal-acts"><button type="button" class="dbtn" data-a="dlg-cancel">Cancel</button><button type="button" class="dbtn" data-a="recap-gen"${d.gen || !d.ins.trim() ? ' disabled' : ''}>${d.gen ? 'Generating…' : d.cand ? 'Generate again' : 'Generate candidate'}</button></div>`
+    + `<div class="recap-cmp"><hr><section class="${d.cand ? 'cand' : d.gen ? '' : 'empty'}"><h4>Candidate</h4>${d.gen ? `<p class="recap-st">${I('loader', 'spin')}Generating with Claude Code…</p>` : `<p>${d.cand ? esc(d.cand) : 'Generate a new recap first.'}</p>`}</section><section><h4>Current</h4><p>${esc(t.recap || '')}</p></section></div>`
+    + (d.cand ? '<div class="modal-acts"><button type="button" class="dbtn primary" data-a="recap-use">Use this recap</button></div>' : '') + '</div></div>';
+}
+function recapGenerate() {
+  const d = S.dialog; if (!d || d.kind !== 'recap' || d.gen || !d.ins.trim()) return;
+  d.gen = true; d.cand = null; renderChrome();
+  setTimeout(() => {
+    if (S.dialog !== d) return;
+    d.gen = false; d.cand = recapCandidate(d.conv, d.ti);
+    if (document.activeElement === document.body) S.focusNext = '[data-a="recap-gen"]';
+    renderChrome();
+  }, 900);
+}
+function recapUse() {
+  const d = S.dialog; if (!d || d.kind !== 'recap' || !d.cand) return;
+  C[d.conv].turns[d.ti].recap = d.cand;
+  S.dialog = null; commit(); renderChrome(); dialogReturn(d);
+  if (d.from === 'thread') toast('Recap updated');
+}
 function toastHTML() {
   const t = S.toast; if (!t) return '';
   return `<div class="toast${t.kind ? ' ' + t.kind : ''}" role="status"><span>${t.html}</span>${t.undo ? '<button class="btn ghost" data-a="undo">Undo</button>' : ''}<button class="ib" data-a="dismiss-toast" aria-label="Dismiss">${I('x')}</button></div>`;
@@ -3743,14 +4139,13 @@ function renderChrome() {
   sideRz.setAttribute('aria-valuenow', S.sideWEff);
   sideRz.setAttribute('aria-valuemax', clampSideW(SIDE_MAX, WW));
   setPart(parts.zones, zones);
-  setPart(parts.modal, modalHTML());
+  setPart(parts.modal, modalHTML() || dialogHTML());
   setPart(parts.toast, toastHTML());
   syncAmbientButton();
   const next = S.focusNext ? win.querySelector(S.focusNext) : null;
   S.focusNext = null;
   const el = next || (activeKey && !ae.isConnected ? win.querySelector(activeKey) : null);
   if (el) { el.focus({ preventScroll: true }); if (!next && selStart != null) { try { el.setSelectionRange(selStart, selStart); } catch { /* not a text field */ } } }
-  syncReady();
   syncControls(WW, autoStrip);
   applyWidths();
   syncCmdHint();
@@ -3860,7 +4255,7 @@ function setAmbient(x) {
 // Esc restores the columns and returns focus to the toggle, unless a dialog or menu takes it.
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || e.defaultPrevented || !S.ambX) return;
-  if (S.modal || S.confirm || (!pop.hidden && pop.dataset.kind === 'menu')) return;
+  if (S.modal || S.dialog || (!pop.hidden && pop.dataset.kind === 'menu')) return;
   e.preventDefault();
   setAmbient(false);
   ambBtn.focus({ preventScroll: true });
@@ -3877,7 +4272,7 @@ win.addEventListener('focusin', (e) => { const ic = e.target.closest && e.target
    nest takes a snapshot first, which the toast's Undo restores. */
 function snapshot() {
   const convs = {};
-  Object.values(C).forEach((c) => { if (!c.parent) convs[c.id] = { folder: c.folder, order: c.order, prevFolder: c.prevFolder, archivedAt: c.archivedAt, trashedAt: c.trashedAt }; });
+  Object.values(C).forEach((c) => { if (!c.parent) convs[c.id] = { folder: c.folder, order: c.order, prevFolder: c.prevFolder, archivedAt: c.archivedAt, trashedAt: c.trashedAt, heldBy: c.heldBy }; });
   return { convs, parents: { ...D.parents }, groups: [...S.collapsedGroups], folders: D.folders.slice(), trashFolders: (D.trashFolders || []).slice() };
 }
 function restoreSnapshot(u) {
@@ -3895,12 +4290,19 @@ function placeInOrder(folder, ids, beforeId, afterId) {
 }
 /* File a thread (with its children) in `folder`; `beforeId` places it before a top-level item, '__end' at
    the end, `afterId` after an item's group. A child that leaves its list, or is placed at the top level,
-   leaves its group. Moving into Archive archives the group; out of Archive unarchives it. */
-function moveThread(id, folder, beforeId, afterId) {
+   leaves its group. Moving into Archive archives the group, after a confirmation when the thread has
+   children (useResearchGroupActions); out of Archive unarchives it. */
+function moveThread(id, folder, beforeId, afterId, confirmed) {
   const c = C[id]; if (!c || c.parent) return;
   if (c.folder === folder && !beforeId && !afterId) return;
   const u = snapshot(), from = c.folder;
   const kids = listedParent(id) ? [] : childrenOf(id), members = [id, ...kids.map((k) => k.id)];
+  if (folder === 'archive' && from !== 'archive' && kids.length && !confirmed) {
+    const name = treeTitle(c), n = childCount(kids.length), ret = document.activeElement;
+    openDialog({ remove: { title: `Archive “${name}” and its ${n}?`, body: `<p>They move to the Archive together. Unarchiving “${esc(name)}” brings ${kids.length === 1 ? 'its child' : 'its children'} back with it.</p>`,
+      label: 'Archive', tone: 'primary', onConfirm: () => moveThread(id, folder, beforeId, afterId, true) }, fallback: feedFallback }, ret);
+    return;
+  }
   if (listedParent(id)) delete D.parents[id];
   members.forEach((m) => {
     const x = C[m];
@@ -3916,12 +4318,18 @@ function moveThread(id, folder, beforeId, afterId) {
   renderAll();
 }
 /* List `id` under `parentId`, before one of its children or at the end of the group. A parent with
-   children of its own brings them along: nesting is one level deep, so they all become children of
-   `parentId` (pass 4: the app asks first). The parent's group expands. */
-function nestThread(id, parentId, beforeId) {
+   children of its own brings them along after a confirmation: nesting is one level deep, so they all
+   become children of `parentId`. The parent's group expands. */
+function nestThread(id, parentId, beforeId, confirmed) {
   const c = C[id], p = C[parentId]; if (!c || !p || id === parentId) return;
   const u = snapshot(), changes = D.parents[id] !== parentId;
   const own = listedParent(id) ? [] : childrenOf(id), members = [id, ...own.map((k) => k.id)];
+  if (own.length && !confirmed) {
+    const name = treeTitle(c), pn = treeTitle(p), n = childCount(own.length), ret = document.activeElement;
+    openDialog({ remove: { title: `Move “${name}” and its ${n} under “${pn}”?`, body: `<p>Nesting is one level deep, so “${esc(name)}” and its ${n} all become children of “${esc(pn)}”, and “${esc(name)}” no longer has children of its own.</p>`,
+      label: 'Move', tone: 'primary', onConfirm: () => nestThread(id, parentId, beforeId, true) }, fallback: feedFallback }, ret);
+    return;
+  }
   const siblings = childrenOf(parentId).map((k) => k.id).filter((x) => !members.includes(x));
   members.forEach((m) => { D.parents[m] = parentId; C[m].folder = p.folder; delete C[m].archivedAt; S.collapsedGroups.delete(m); });
   S.collapsedGroups.delete(parentId);
@@ -3952,6 +4360,8 @@ function restoreTrash(k) {
     const f = D.trashFolders.find((x) => x.id === id); if (!f) return;
     D.trashFolders = D.trashFolders.filter((x) => x !== f);
     D.folders.splice(D.folders.length - 1, 0, { id: f.id, name: f.name });
+    // Its questions, shown in Unfiled meanwhile, are listed in it again.
+    Object.values(C).forEach((c) => { if (c.heldBy === id) { if (c.folder === 'inbox') c.folder = id; delete c.heldBy; } });
   } else {
     const c = C[id]; if (!c) return;
     // Restoring a parent restores the children it took to the Trash.
@@ -3965,21 +4375,139 @@ function restoreTrash(k) {
 }
 function deleteTrashEntry(k) {
   const [kind, id] = k.split(':');
-  if (kind === 'folder') D.trashFolders = D.trashFolders.filter((x) => x.id !== id);
+  if (kind === 'folder') { D.trashFolders = D.trashFolders.filter((x) => x.id !== id); Object.values(C).forEach((c) => { if (c.heldBy === id) delete c.heldBy; }); }
   else Object.values(C).filter((x) => x.id === id || (x.folder === 'trash' && D.parents[x.id] === id)).forEach((x) => { delete C[x.id]; delete D.parents[x.id]; });
   renderAll();
 }
 function emptyTrash() {
   Object.values(C).filter((x) => x.folder === 'trash').forEach((x) => { delete C[x.id]; delete D.parents[x.id]; });
+  Object.values(C).forEach((c) => { delete c.heldBy; });
   D.trashFolders = [];
   renderAll();
-  const t = strip.querySelector('.col.k-F .col-head .h'); if (t) { t.tabIndex = -1; t.focus(); }
+}
+/* Moving a folder to the Trash keeps its questions' membership: they show in Unfiled until it is restored.
+   Undo puts it back. */
+function trashFolder(f) {
+  const fo = D.folders.find((x) => x.id === f); if (!fo) return;
+  const u = snapshot();
+  roots(f).forEach((c) => { c.folder = 'inbox'; c.heldBy = f; c.order = 1000 + c.order; });
+  renumber('inbox');
+  D.folders = D.folders.filter((x) => x !== fo);
+  D.trashFolders = (D.trashFolders || []).concat([{ id: f, name: fo.name, trashedAt: Date.now() }]);
+  S.view = { type: 'home' };
+  toast('Moved the folder to the Trash.', { undo: u });
+  renderAll();
+}
+// Delete now: the folder is deleted and its questions move to Unfiled.
+function deleteFolderNow(f) {
+  const moved = roots(f);
+  moved.forEach((c) => { c.folder = 'inbox'; c.order = 1000 + c.order; });
+  renumber('inbox');
+  D.folders = D.folders.filter((x) => x.id !== f); S.view = { type: 'home' };
+  toast(`Deleted folder.${moved.length ? ` ${moved.length} question${moved.length > 1 ? 's' : ''} moved to Unfiled.` : ''}`);
+  renderAll();
+}
+/* Delete now on a thread: it, everything below it, and the children listed under it are deleted. */
+function removeTree(id) {
+  const gone = new Set(), drop = (x) => { gone.add(x); kidsOf(x).forEach((k) => drop(k.id)); };
+  [id, ...(listedParent(id) ? [] : childrenOf(id).map((k) => k.id))].forEach(drop);
+  gone.forEach((x) => { delete C[x]; delete D.parents[x]; for (const k in streams) if (streams[k].conv === x) delete streams[k]; });
+  D.hl = D.hl.filter((h) => C[h.conv]);
+  if (S.levels[0] && gone.has(S.levels[0].conv)) { S.levels = []; S.pending = null; S.queued = null; }
+  renderAll();
+}
+/* Deleting a message: a branch's first message deletes the branch; any other deletes it, the messages after
+   it and the branches from any of them. Each column's selection moves to a surviving message, or closes. */
+function removeNode(conv, ti) {
+  const c = C[conv], gone = new Set(), drop = (x) => { gone.add(x); kidsOf(x).forEach((k) => drop(k.id)); };
+  if (ti === 0 && c.parent) drop(conv);
+  else {
+    kidsOf(conv).filter((k) => k.parent.turn >= ti).forEach((k) => drop(k.id));
+    c.turns.splice(ti); c.disp = null;
+    if (c.editing != null && c.editing >= ti) c.editing = null;
+    D.hl = D.hl.filter((h) => !(h.conv === conv && h.turn >= ti));
+    for (const k in streams) if (streams[k].conv === conv && streams[k].ti >= ti) delete streams[k];
+  }
+  gone.forEach((x) => { delete C[x]; for (const k in streams) if (streams[k].conv === x) delete streams[k]; });
+  D.hl = D.hl.filter((h) => C[h.conv]);
+  if (S.pending && (!C[S.pending.conv] || !C[S.pending.conv].turns[S.pending.turn])) S.pending = null;
+  commit();
 }
 // A draft is deleted without a confirmation.
 function deleteDraft(id) {
   delete C[id];
   if (S.levels[0] && S.levels[0].conv === id) { S.levels = []; S.pending = null; }
   renumber('drafts'); toast('Draft deleted.'); renderAll();
+}
+/* ---------- moving with the keyboard ----------
+   ⌥↑/⌥↓ move the focused card one step in the list it is shown in, when that list is its place and the place
+   keeps an order (not Archive), or the focused message one step in its column's display order. ⌥→ lists the
+   focused card under the card above it; ⌥← moves a child out of its group. Focus stays on the card or
+   message, and the result is announced. */
+const announcer = document.getElementById('announce');
+function announce(msg) { announcer.textContent = ''; requestAnimationFrame(() => { announcer.textContent = msg; }); }
+const keepRow = (fk) => requestAnimationFrame(() => { const r = strip.querySelector(`[data-fk="${CSS.escape(fk)}"]`); if (r) { r.focus({ preventScroll: true }); scrollIntoBody(r); } });
+const topIdsIn = (zone) => [...zone.querySelectorAll('.feed-card[data-kind="tree"]:not([data-parent])')].map((x) => x.dataset.card);
+function cardHere(card) {
+  const zone = card.closest('[data-drop]'), place = card.dataset.place;
+  return zone && zone.dataset.drop === place && reorderable(place) ? zone : null;
+}
+function moveFocusedCard(card, step) {
+  const zone = cardHere(card); if (!zone) return;
+  const id = card.dataset.card, place = card.dataset.place, parent = card.dataset.parent;
+  const ids = card.dataset.kind === 'draft' ? [...zone.querySelectorAll('.feed-card[data-kind="draft"]')].map((x) => x.dataset.card)
+    : parent ? [...card.parentElement.querySelectorAll(':scope > .feed-card[data-parent]')].map((x) => x.dataset.card) : topIdsIn(zone);
+  const i = ids.indexOf(id), j = i + step;
+  if (j < 0 || j >= ids.length) { announce(step < 0 ? 'Already first.' : 'Already last.'); return; }
+  const before = step < 0 ? ids[j] : ids[j + 1] || null;
+  if (card.dataset.kind === 'draft') { placeInOrder('drafts', [id], before); renderAll(); }
+  else if (parent) nestThread(id, parent, before);
+  else moveThread(id, place, before || '__end');
+  announce(`Moved to position ${j + 1} of ${ids.length}.`);
+  keepRow('root:' + id);
+}
+function nestFocusedCard(card) {
+  const zone = cardHere(card); if (!zone || card.dataset.kind !== 'tree') return;
+  const id = card.dataset.card;
+  if (card.dataset.parent) { announce('Already in a group. Nesting is one level deep.'); return; }
+  const ids = topIdsIn(zone), above = C[ids[ids.indexOf(id) - 1]];
+  if (!above) { announce('No question, document or post above to nest under.'); return; }
+  if (!holdsChildren(above)) { announce(`“${shortName(cardName(above))}” can’t hold children.`); return; }
+  nestThread(id, above.id, null);
+  // Nesting a card that has children asks first; the dialog is announced instead.
+  if (!card.dataset.children) { announce(`Moved under “${shortName(cardName(above))}”.`); keepRow('root:' + id); }
+}
+function moveFocusedCardOut(card) {
+  if (!cardHere(card)) return;
+  const id = card.dataset.card, p = listedParent(id);
+  if (!p) { announce('Not in a group.'); return; }
+  moveOut(id);
+  announce(`Moved out of “${shortName(cardName(C[p]))}”.`);
+  keepRow('root:' + id);
+}
+function moveFocusedMessage(row, step) {
+  const conv = row.dataset.c, ti = +row.dataset.t, c = C[conv];
+  if (isArchived(c)) return;
+  const ids = order(c), i = ids.indexOf(ti), j = i + step;
+  if (j < 0 || j >= ids.length) { announce(ids.length > 1 ? (step < 0 ? 'Already first.' : 'Already last.') : 'Only message.'); return; }
+  ids.splice(i, 1); ids.splice(j, 0, ti); c.disp = ids; commit();
+  announce(`Moved to position ${j + 1} of ${ids.length}.`);
+  keepRow(`turn:${conv}:${ti}`);
+}
+/* ⌃Tab / ⌃⇧Tab (useResearchPairsKeyboard): the next or previous row of the column last used, wrapping,
+   selected as a click selects it. An answer column cycles its level's messages, a note its follow-ups.
+   Focus moves to the row unless it is in a text field. */
+strip.addEventListener('focusin', (e) => { const c = e.target.closest('.col'); if (c) S.cycleKey = c.dataset.key; });
+strip.addEventListener('pointerdown', (e) => { const c = e.target.closest('.col'); if (c) S.cycleKey = c.dataset.key; }, true);
+function cycleRows(dir, keepFocus) {
+  let o = live.get(S.cycleKey) || colByKey('F');
+  if (o.spec.kind === 'A' || o.spec.kind === 'N' || o.spec.kind === 'E') o = msgCol(o.spec.L) || colByKey('F');
+  const rows = navItems(o.el).filter((x) => ['root', 'turn', 'openfu'].includes(x.dataset.act));
+  if (!rows.length) return;
+  const ae = document.activeElement, at = rows.indexOf(ae) >= 0 ? rows.indexOf(ae) : rows.findIndex((x) => x.getAttribute('aria-current') === 'true');
+  const next = rows[at < 0 ? (dir > 0 ? 0 : rows.length - 1) : (at + dir + rows.length) % rows.length];
+  clickDetail = 0; act(next.dataset.act, next);
+  if (keepFocus && ae && ae.isConnected) ae.focus({ preventScroll: true });
 }
 function toggleSidebar() { if (frameWidth() < 900) return; S.sidebar = S.sidebar === 'strip' ? 'full' : 'strip'; savePrefs(); renderAll(); }
 win.addEventListener('click', (e) => {
@@ -3993,13 +4521,18 @@ win.addEventListener('click', (e) => {
     case 'ambient': setAmbient(!S.ambX); break;
     case 'foldermenu': if (menuOpenFor(a)) hidePop(); else openFolderMenu(a, d.f); break;
     case 'nav': {
-      S.view = { type: d.view, f: d.f }; S.confirm = null; hidePop();
+      S.view = { type: d.view, f: d.f }; hidePop();
       renderAll();
       const f = colByKey('F'); if (f) reveal(f.el);
       break;
     }
     case 'new-folder': openFolderDialog({ ret: a }); break;
     case 'close-modal': closeModal(); break;
+    case 'dlg-ok': confirmDialog(); break;
+    case 'dlg-cancel': closeDialog(); break;
+    case 'dlg-now': S.dialog.step = 'remove'; S.focusNext = S.dialog.disabled ? '[data-a="dlg-cancel"]' : '[data-a="dlg-ok"]'; renderChrome(); break;
+    case 'recap-gen': recapGenerate(); break;
+    case 'recap-use': recapUse(); break;
     case 'undo': {
       const u = S.toast && S.toast.undo;
       if (u) restoreSnapshot(u);
@@ -4009,22 +4542,30 @@ win.addEventListener('click', (e) => {
   }
 });
 
-/* ---------- forms (the folder dialog) ---------- */
+/* ---------- forms (the folder-name, rename and recap dialogs) ---------- */
 const RESERVED = ['home', 'unfiled', 'drafts', 'archive', 'trash', 'highlights'];
-function syncReady() {
-  win.querySelectorAll('form.ready').forEach((f) => f.classList.remove('ready'));
-  const a = document.activeElement;
-  if (a && a.tagName === 'INPUT' && a.form && win.contains(a) && a.value.trim()) a.form.classList.add('ready');
-}
-win.addEventListener('focusin', syncReady);
-win.addEventListener('focusout', () => setTimeout(syncReady, 0));
+// A press on the scrim closes the dialog.
+win.addEventListener('mousedown', (e) => {
+  if (!e.target.classList || !e.target.classList.contains('scrim')) return;
+  e.preventDefault();
+  if (S.modal) closeModal(); else closeDialog();
+});
 win.addEventListener('input', (e) => {
-  syncReady();
-  const t = e.target;
-  if (t.id === 'folder-name' && S.modal) { S.modal.value = t.value; S.modal.err = null; t.removeAttribute('aria-invalid'); const er = document.getElementById('folder-err'); if (er) er.hidden = true; }
+  const t = e.target, d = S.dialog;
+  // Typing clears the folder name's error.
+  if (t.id === 'folder-name' && S.modal) { S.modal.value = t.value; if (S.modal.err) { S.modal.err = null; t.removeAttribute('aria-invalid'); t.removeAttribute('aria-describedby'); const er = document.getElementById('folder-err'); if (er) er.remove(); } }
+  if (t.id === 'dlg-input' && d) { d.value = t.value; const b = win.querySelector('[data-a="dlg-submit"]'); if (b) b.disabled = !d.allowEmpty && !t.value.trim(); }
+  if (t.id === 'recap-model' && d) d.model = t.value;
+  if (t.id === 'recap-ins' && d) {
+    d.ins = t.value;
+    if (d.cand) { d.cand = null; renderChrome(); }
+    else { const b = win.querySelector('[data-a="recap-gen"]'); if (b) b.disabled = !t.value.trim(); }
+  }
 });
 win.addEventListener('submit', (e) => {
-  const f = e.target; if (f.dataset.form !== 'folder-name') return;
+  const f = e.target;
+  if (f.dataset.form === 'rename') { e.preventDefault(); submitRename(); return; }
+  if (f.dataset.form !== 'folder-name') return;
   e.preventDefault();
   const p = S.modal; const v = f.querySelector('input').value.trim().replace(/\s+/g, ' ');
   const fail = (msg) => { p.err = msg; p.value = v; S.focusNext = '#folder-name'; renderChrome(); };
@@ -4045,7 +4586,7 @@ document.addEventListener('keydown', (e) => {
   // ⇧⌘G collapses the sidebar to the strip and expands it again.
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') { e.preventDefault(); toggleSidebar(); return; }
   // ⌘J focuses the ask box of the current level (the feed's composer while the feed is current).
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j' && !S.modal) {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j' && !S.modal && !S.dialog) {
     e.preventDefault();
     if (curL === -1 || !S.levels.length) { const f = colByKey('F'); if (f && f.el._box && !f.el._box.hidden) f.el._box.querySelector('textarea').focus(); return; }
     focusAsk(askColFor(curLevel()));
@@ -4053,19 +4594,32 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     if (S.modal) { e.preventDefault(); closeModal(); }
-    else if (S.confirm && !typing) { e.preventDefault(); cancelConfirm(); }
+    else if (S.dialog) { e.preventDefault(); closeDialog(); }
     return;
   }
-  // Keep Tab inside the modal dialog.
-  if (e.key === 'Tab' && win.querySelector('.modal')) {
-    const f = [...win.querySelectorAll('.modal input, .modal button:not(:disabled)')];
+  // Keep Tab inside the dialog.
+  if (e.key === 'Tab' && !e.ctrlKey && win.querySelector('.modal')) {
+    const f = [...win.querySelectorAll('.modal :is(input, textarea, select, button):not(:disabled)')];
     const i = f.indexOf(document.activeElement);
     if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === f.length - 1)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
     return;
   }
-  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (!win.contains(e.target) && e.target !== document.body && !e.target.closest('#controls')) return;
+  // In a delete confirmation, Enter outside a button confirms.
+  if (e.key === 'Enter' && S.dialog && S.dialog.kind === 'confirm' && S.dialog.enter && !e.isComposing && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey
+    && e.target.tagName !== 'BUTTON' && e.target.closest && e.target.closest('.modal')) { e.preventDefault(); confirmDialog(); return; }
+  if (S.modal || S.dialog) return;
+  // ⌃Tab / ⌃⇧Tab: the next or previous row of the column last used, selected as a click selects it.
+  if (e.key === 'Tab' && e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); cycleRows(e.shiftKey ? -1 : 1, !!typing); return; }
+  // ⌘[ ⌘] and ⌥← ⌥→ step back and forward through the visits (a feed card takes ⌥← ⌥→ first).
+  if (!typing && !e.defaultPrevented && pop.hidden) {
+    const primary = e.metaKey || e.ctrlKey, plainAlt = e.altKey && !primary && !e.shiftKey;
+    const d = primary && !e.altKey && !e.shiftKey && e.code === 'BracketLeft' ? -1 : primary && !e.altKey && !e.shiftKey && e.code === 'BracketRight' ? 1
+      : plainAlt && e.key === 'ArrowLeft' ? -1 : plainAlt && e.key === 'ArrowRight' ? 1 : 0;
+    if (d) { e.preventDefault(); goHistory(d); return; }
+  }
 });
+// Mouse buttons 4 and 5 step back and forward too.
+win.addEventListener('mouseup', (e) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); goHistory(e.button === 3 ? -1 : 1); } });
 const releaseCmd = () => { if (S.cmdHeld) { S.cmdHeld = false; renderChrome(); } };
 document.addEventListener('keyup', (e) => { if (e.key === 'Meta') releaseCmd(); });
 addEventListener('blur', releaseCmd);
@@ -4352,8 +4906,9 @@ function reset() {
     collapsed: new Set(['archive', 'f-later', 'trash']), collapsedGroups: new Set(['c2', 'c4']), menu: null, askMode: 'ai',
     widths: Object.assign({ feed: null, messages: null, answer: null }, prefs.widths),
     sidebar: prefs.sidebar || 'full', theme: prefs.theme === 'light' ? 'light' : 'dark', sideW: prefs.sideW || SIDE_MIN, sideWEff: SIDE_MIN,
-    zones: false, winW: null, ambX: false, cmdHeld: false, fwd: null,
-    view: { type: 'home' }, modal: null, toast: null, confirm: null, drag: null, pendingRender: false, focusNext: null,
+    // History starts at Home, as if the thread had been opened from it.
+    zones: false, winW: null, ambX: false, cmdHeld: false, hist: { entries: [null], index: 0 }, sel: null, cycleKey: null,
+    view: { type: 'home' }, modal: null, dialog: null, toast: null, drag: null, pendingRender: false, focusNext: null,
   });
   // c5 is running in the sample data: continue it with its scripted text.
   Object.values(C).forEach((c) => c.turns.forEach((t, i) => { if (t.status === 'running') startTurn(c.id, i, D.stream[c.id], true); }));
@@ -4457,9 +5012,10 @@ const PRESETS = {
     state() { presetRoot('c16'); },
     view() { focusTurns(msgCol(0)); presetFeedRow(); settle(msgCol(0) && msgCol(0).el); },
   },
-  // Home with no thread open, after the open conversation was closed: Forward reopens it.
+  // Home with no thread open, after Back from the open conversation: Forward reopens it.
   home: {
-    state() { S.fwd = S.levels[0].conv; remember(); S.levels = []; S.pending = null; commit(); },
+    keepHistory: true,
+    state() { goHistory(-1); },
     view() { const f = colByKey('F'); if (f) focusCol(f); settle(); },
   },
   draft: {
@@ -4475,6 +5031,8 @@ const presetName = new URLSearchParams(location.search).get('preset');
 if (presetName && Object.prototype.hasOwnProperty.call(PRESETS, presetName)) {
   const pr = PRESETS[presetName];
   pr.state();
+  // A preset is one visit after Home, however many steps its state took.
+  if (!pr.keepHistory) { S.hist = { entries: [null, visitNow()], index: 1 }; commit(); }
   pr.view();
   const focused = document.activeElement;
   document.documentElement.dataset.preset = presetName;
