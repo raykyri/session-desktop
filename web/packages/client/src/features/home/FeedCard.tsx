@@ -21,13 +21,13 @@ import {
   type ResearchRowState,
 } from "@session/shared/lib/researchRowGlyph";
 import { ChevronRight, Ellipsis, GripVertical } from "lucide-react";
-import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { GroupCount } from "./CardBody.js";
 import { RowGlyph } from "../../ui/RowGlyph.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
+import { GroupCount } from "./CardBody.js";
 import type { CardDragStart } from "./useCardDrag.js";
 
 /** Where a context menu opens: at the pointer, or for a key, below the
@@ -206,7 +206,9 @@ export function FeedCard({
   const glyphId = useId();
   const openTimer = useRef<number | null>(null);
   const groupRef = useRef(group);
-  groupRef.current = group;
+  useLayoutEffect(() => {
+    groupRef.current = group;
+  }, [group]);
   const collapseTimer = useRef<number | null>(null);
   // Set once the delayed collapse has run, so a slow double-click can undo it.
   const collapsedByClick = useRef(false);
@@ -480,10 +482,7 @@ export function FeedCard({
       </div>
       {group && !group.collapsed ? (
         <>
-          <div
-            className="pb-1"
-            data-research-group={cardId}
-          >
+          <div className="pb-1" data-research-group={cardId}>
             {nested}
           </div>
           {onDragStart ? (

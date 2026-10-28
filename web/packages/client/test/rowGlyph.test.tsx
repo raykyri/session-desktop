@@ -1,19 +1,16 @@
 // A collapsed note group's glyph is the square chevron. Expanded notes, and
 // every other kind, keep the shapes in RowGlyph.
 
+import type { RecentResearchQuery } from "@session/shared";
 import test from "ava";
 import { renderToStaticMarkup } from "react-dom/server";
-
-import type { RecentResearchQuery } from "@session/shared";
 
 import { CardBody } from "../src/features/home/CardBody.js";
 import { FeedCard } from "../src/features/home/FeedCard.js";
 import { RowGlyph } from "../src/ui/RowGlyph.js";
 
 test("a collapsed note draws the square chevron and keeps its state name", (t) => {
-  const html = renderToStaticMarkup(
-    <RowGlyph kind="note" state="running" collapsed />,
-  );
+  const html = renderToStaticMarkup(<RowGlyph kind="note" state="running" collapsed />);
   t.regex(html, /aria-label="Running"/);
   t.regex(html, /lucide-square-chevron-right/);
   t.regex(html, /session-row-pulse/);
@@ -72,7 +69,10 @@ test("a collapsed note card uses the square chevron; a link group does not", (t)
       group={{ ...group, count: 2, label: "Show 2 items under “Title”" }}
     />,
   );
-  t.regex(titled, /data-research-card-title="">Title<span class="text-fg-muted font-normal"> \(2\)<\/span>/);
+  t.regex(
+    titled,
+    /data-research-card-title="">Title<span class="text-fg-muted font-normal"> \(2\)<\/span>/,
+  );
 });
 
 test("a note group's count follows its heading in the child title color", (t) => {
@@ -87,7 +87,14 @@ test("a note group's count follows its heading in the child title color", (t) =>
     createdAt: 1,
   } as RecentResearchQuery;
   const html = renderToStaticMarkup(
-    <CardBody query={query} fallback="" isPost awaitingTitle={false} underTitle={false} childCount={2} />,
+    <CardBody
+      query={query}
+      fallback=""
+      isPost
+      awaitingTitle={false}
+      underTitle={false}
+      childCount={2}
+    />,
   );
   t.regex(html, /AKA iterations<span class="text-fg-muted font-normal"> \(2\)<\/span>/);
 });

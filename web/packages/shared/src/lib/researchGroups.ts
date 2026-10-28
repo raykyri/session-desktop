@@ -314,7 +314,7 @@ export const RESEARCH_GROUP_COLLAPSE_DELAY_MS = 250;
  * otherwise opens; it does not collapse.
  *
  * `detail` is the click's `event.detail`. */
-export type ResearchGroupCardClick = "expand" | "collapse" | "open" | "ignore";
+type ResearchGroupCardClick = "expand" | "collapse" | "open" | "ignore";
 
 export function researchGroupCardClick(input: {
   /** The card lists children. */

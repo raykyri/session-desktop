@@ -205,7 +205,7 @@
    to just past the expand button, the far side of that 116px zone. The stops
    follow an ease-in-out curve: the line holds as it leaves the rail, then
    falls away. The first pixel overlaps the rail's own rule so the join has
-   no gap. */
+   no gap. The mask colors encode alpha only and are appearance-invariant. */
 .app-shell.has-titlebar-rail::after {
   position: absolute;
   top: 43px;
@@ -219,24 +219,24 @@
   opacity: 0;
   -webkit-mask-image: linear-gradient(
     to right,
-    #000 0%,
-    rgb(0 0 0 / 0.96) 15%,
-    rgb(0 0 0 / 0.81) 30%,
-    rgb(0 0 0 / 0.59) 45%,
-    rgb(0 0 0 / 0.33) 60%,
-    rgb(0 0 0 / 0.13) 75%,
-    rgb(0 0 0 / 0.03) 88%,
+    #000 0%, /* appearance-invariant */
+    rgb(0 0 0 / 0.96) 15%, /* appearance-invariant */
+    rgb(0 0 0 / 0.81) 30%, /* appearance-invariant */
+    rgb(0 0 0 / 0.59) 45%, /* appearance-invariant */
+    rgb(0 0 0 / 0.33) 60%, /* appearance-invariant */
+    rgb(0 0 0 / 0.13) 75%, /* appearance-invariant */
+    rgb(0 0 0 / 0.03) 88%, /* appearance-invariant */
     transparent 100%
   );
   mask-image: linear-gradient(
     to right,
-    #000 0%,
-    rgb(0 0 0 / 0.96) 15%,
-    rgb(0 0 0 / 0.81) 30%,
-    rgb(0 0 0 / 0.59) 45%,
-    rgb(0 0 0 / 0.33) 60%,
-    rgb(0 0 0 / 0.13) 75%,
-    rgb(0 0 0 / 0.03) 88%,
+    #000 0%, /* appearance-invariant */
+    rgb(0 0 0 / 0.96) 15%, /* appearance-invariant */
+    rgb(0 0 0 / 0.81) 30%, /* appearance-invariant */
+    rgb(0 0 0 / 0.59) 45%, /* appearance-invariant */
+    rgb(0 0 0 / 0.33) 60%, /* appearance-invariant */
+    rgb(0 0 0 / 0.13) 75%, /* appearance-invariant */
+    rgb(0 0 0 / 0.03) 88%, /* appearance-invariant */
     transparent 100%
   );
   transition: opacity 400ms ease;

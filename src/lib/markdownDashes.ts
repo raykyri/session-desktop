@@ -181,24 +181,63 @@ function setNativeValue(textarea: HTMLTextAreaElement, value: string) {
 export function attachMarkdownDashGuard(textarea: HTMLTextAreaElement): () => void {
   let before = textarea.value;
   let key: string | null = null;
+  let caretRestore: { timer: ReturnType<typeof setTimeout>; value: string } | null = null;
+
+  const cancelCaretRestore = () => {
+    if (caretRestore) clearTimeout(caretRestore.timer);
+    caretRestore = null;
+  };
+  const restoreCancelledSelection = () => {
+    const value = textarea.value;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const direction = textarea.selectionDirection;
+    // WebKit's Editor::markAndReplaceFor adjusts the caret by the proposed
+    // replacement's length delta even when beforeinput cancels it. Wait for
+    // that native edit to finish; a microtask can run before it does.
+    const timer = setTimeout(() => {
+      caretRestore = null;
+      if (textarea.isConnected && textarea.ownerDocument.activeElement === textarea && textarea.value === value) {
+        textarea.setSelectionRange(start, end, direction);
+      }
+    }, 0);
+    caretRestore = { timer, value };
+  };
 
   const remember = () => {
     before = textarea.value;
   };
   const onKeyDown = (event: KeyboardEvent) => {
+    cancelCaretRestore();
     key = event.key;
     remember();
   };
   const onBeforeInput = (event: InputEvent) => {
     remember();
-    if (event.isComposing) return;
+    if (event.isComposing) {
+      cancelCaretRestore();
+      return;
+    }
     const data = event.data ?? event.dataTransfer?.getData("text/plain") ?? null;
     const input = { inputType: event.inputType, data, key };
     if (hyphenLineSubstitutionBlocked(textarea.value, textarea.selectionStart, textarea.selectionEnd, input)) {
       event.preventDefault();
+      if (event.defaultPrevented) {
+        // Multiple substitutions can share one native text-checking pass.
+        // Keep the first selection, before any of their caret adjustments.
+        if (caretRestore?.value !== textarea.value) {
+          cancelCaretRestore();
+          restoreCancelledSelection();
+        }
+        return;
+      }
     }
+    cancelCaretRestore();
   };
   const onInput = (event: Event) => {
+    // An enclosing Enter edit may emit input after the cancelled replacement
+    // without changing the value again. Keep its saved caret in that case.
+    if (caretRestore && caretRestore.value !== textarea.value) cancelCaretRestore();
     const inputEvent = event as InputEvent;
     const input = {
       inputType: typeof inputEvent.inputType === "string" ? inputEvent.inputType : "",
@@ -217,11 +256,16 @@ export function attachMarkdownDashGuard(textarea: HTMLTextAreaElement): () => vo
   };
 
   textarea.addEventListener("focus", remember);
+  textarea.addEventListener("blur", cancelCaretRestore);
+  textarea.addEventListener("pointerdown", cancelCaretRestore);
   textarea.addEventListener("keydown", onKeyDown);
   textarea.addEventListener("beforeinput", onBeforeInput);
   textarea.addEventListener("input", onInput);
   return () => {
+    cancelCaretRestore();
     textarea.removeEventListener("focus", remember);
+    textarea.removeEventListener("blur", cancelCaretRestore);
+    textarea.removeEventListener("pointerdown", cancelCaretRestore);
     textarea.removeEventListener("keydown", onKeyDown);
     textarea.removeEventListener("beforeinput", onBeforeInput);
     textarea.removeEventListener("input", onInput);

@@ -157,32 +157,33 @@ export function RowGlyph({
   // Feed cards set this for a collapsed group. The note's square-and-lines
   // becomes the square chevron; every other shape stays. The stroke matches
   // the 1.5px custom shapes: Lucide's 24px grid, drawn at `size`.
-  const svg = collapsed && glyph.shape === "note" ? (
-    <SquareChevronRight
-      className={pulse ? "session-row-pulse block" : "block"}
-      size={size}
-      strokeWidth={1.5}
-      absoluteStrokeWidth
-      aria-hidden="true"
-      data-research-row-glyph={glyph.shape}
-    />
-  ) : (
-    <svg
-      className={pulse ? "session-row-pulse block" : "block"}
-      viewBox="0 0 14 14"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      data-research-row-glyph={glyph.shape}
-    >
-      {SHAPES[glyph.shape]}
-    </svg>
-  );
+  const svg =
+    collapsed && glyph.shape === "note" ? (
+      <SquareChevronRight
+        className={pulse ? "session-row-pulse block" : "block"}
+        size={size}
+        strokeWidth={1.5}
+        absoluteStrokeWidth
+        aria-hidden="true"
+        data-research-row-glyph={glyph.shape}
+      />
+    ) : (
+      <svg
+        className={pulse ? "session-row-pulse block" : "block"}
+        viewBox="0 0 14 14"
+        width={size}
+        height={size}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        data-research-row-glyph={glyph.shape}
+      >
+        {SHAPES[glyph.shape]}
+      </svg>
+    );
   if (name) {
     return (
       <span id={id} className={classes} role="img" aria-label={name} title={name}>

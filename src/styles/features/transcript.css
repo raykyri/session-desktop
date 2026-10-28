@@ -230,6 +230,12 @@
   margin: 3px 0;
 }
 
+.turn-markdown li.task-list-item {
+  list-style: none;
+  /* A floated checkbox still needs a row when its label has no visible text. */
+  min-height: 1lh;
+}
+
 .turn-markdown li > p {
   margin: 0;
 }
@@ -938,14 +944,17 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   background: var(--surface-border-strong);
 }
 
-/* GFM task-list checkboxes always rendered disabled. */
+/* GFM checkboxes replace the bullet in its gutter. The float's horizontal
+   margins cancel its width so task text and wrapped lines keep the same
+   starting position as ordinary list items, including loose lists with <p>. */
 .turn-markdown input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
+  box-sizing: border-box;
+  float: left;
   width: 13px;
   height: 13px;
-  margin: 0 6px 0 0;
-  vertical-align: -2px;
+  margin: calc((1lh - 13px) / 2) 5px 0 -18px;
   border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
   background: var(--control-bg);

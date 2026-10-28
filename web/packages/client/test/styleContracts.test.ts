@@ -164,8 +164,13 @@ test("research prose restores list markers that Tailwind preflight strips", (t) 
   );
   t.regex(
     css,
-    /\.research-prose ul\.contains-task-list,\s*\.research-prose li\.task-list-item\s*\{[^}]*list-style:\s*none/,
+    /\.research-prose li\.task-list-item\s*\{[^}]*list-style:\s*none/,
     "task items keep the checkbox and drop the disc",
+  );
+  t.notRegex(
+    css,
+    /\.research-prose ul\.contains-task-list[^{}]*\{[^}]*list-style:\s*none/,
+    "ordinary items in mixed task lists keep their bullets",
   );
 });
 

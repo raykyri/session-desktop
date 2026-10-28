@@ -55,10 +55,10 @@
   min-height: var(--post-gutter);
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 0 5px;
   color: var(--text-subtle);
   font-size: var(--research-meta-font-size);
-  line-height: var(--research-meta-line-height);
+  line-height: 1.2;
 }
 
 .post-reply-author {

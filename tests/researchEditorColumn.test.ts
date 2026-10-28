@@ -399,3 +399,86 @@ test("the note field restores hyphens a substitution replaced and stores them th
     }
   });
 });
+
+test("a cancelled smart dash keeps the caret on Enter's new line after WebKit adjusts it", async () => {
+  await withMountedEditor(editorProps("---\n"), async ({ field }) => {
+    const window = field.ownerDocument.defaultView!;
+    field.focus();
+    field.setSelectionRange(4, 4);
+    const event = new window.InputEvent("beforeinput", {
+      inputType: "insertReplacementText",
+      data: "—",
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(async () => {
+      field.dispatchEvent(event);
+      assert.equal(event.defaultPrevented, true);
+      // WebKit's text checker applies the planned replacement's length
+      // adjustment even though beforeinput cancelled the replacement.
+      field.setSelectionRange(3, 3);
+      // Enter's enclosing edit can still report input with unchanged text.
+      field.dispatchEvent(new window.InputEvent("input", { inputType: "insertLineBreak", bubbles: true }));
+      await new Promise((resolve) => window.setTimeout(resolve, 10));
+    });
+    assert.equal(field.value, "---\n");
+    assert.equal(field.selectionStart, 4);
+    assert.equal(field.selectionEnd, 4);
+  });
+});
+
+test("a deferred smart-dash caret restore yields to later typing, navigation, clicks and blur", async () => {
+  for (const action of ["typing", "navigation", "click", "blur"]) {
+    await withMountedEditor(editorProps("---\n"), async ({ field }) => {
+      const window = field.ownerDocument.defaultView!;
+      field.focus();
+      field.setSelectionRange(4, 4);
+      await act(async () => {
+        field.dispatchEvent(new window.InputEvent("beforeinput", {
+          inputType: "insertReplacementText",
+          data: "—",
+          bubbles: true,
+          cancelable: true,
+        }));
+        if (action === "typing") {
+          field.dispatchEvent(new window.InputEvent("beforeinput", { inputType: "insertText", data: "x", bubbles: true }));
+        } else if (action === "navigation") {
+          field.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+        } else if (action === "click") {
+          field.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+        } else {
+          field.blur();
+        }
+        field.setSelectionRange(1, 1);
+        await new Promise((resolve) => window.setTimeout(resolve, 10));
+      });
+      assert.equal(field.selectionStart, 1, action);
+      assert.equal(field.selectionEnd, 1, action);
+    });
+  }
+});
+
+test("repeated cancelled smart dashes preserve the caret from before the native checking pass", async () => {
+  await withMountedEditor(editorProps("------\n"), async ({ field }) => {
+    const window = field.ownerDocument.defaultView!;
+    field.focus();
+    field.setSelectionRange(7, 7);
+    await act(async () => {
+      for (const caret of [6, 5]) {
+        const event = new window.InputEvent("beforeinput", {
+          inputType: "insertReplacementText",
+          data: "—",
+          bubbles: true,
+          cancelable: true,
+        });
+        field.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, true);
+        field.setSelectionRange(caret, caret);
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 10));
+    });
+    assert.equal(field.value, "------\n");
+    assert.equal(field.selectionStart, 7);
+    assert.equal(field.selectionEnd, 7);
+  });
+});
