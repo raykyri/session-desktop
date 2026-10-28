@@ -23,6 +23,32 @@ function noise(x: number, y: number): number {
   return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
 }
 
+const CIRRUS_BANDS = [
+  { x: 420, y: 255, length: 390 },
+  { x: 720, y: 388, length: 475 },
+  { x: 530, y: 528, length: 340 },
+];
+
+function cirrusCloud(x: number, y: number): number {
+  // Repeat beyond the tapered ends so new ribbons enter as the field drifts.
+  const u = ((x % 1440) + 1440) % 1440;
+  const v = ((y % 840) + 840) % 840;
+  let cloud = 0;
+  for (const [i, band] of CIRRUS_BANDS.entries()) {
+    const q = (u - band.x) / band.length;
+    const taper = Math.max(0, 1 - q * q) ** 0.8;
+    if (taper === 0) continue;
+    const path = band.y - 85 * q + 22 * Math.sin(q * 3.5 + i);
+    const d = (v - path) / (5 + 24 * taper);
+    const core = Math.exp(-d * d * 1.4);
+    const feathers = 0.3 + 0.7 * noise(u / 65 + i * 9, v / 24);
+    const strandDistance = (v - path - 29 * taper) / (5 + 7 * taper);
+    const strand = Math.exp(-strandDistance * strandDistance) * 0.37;
+    cloud = Math.max(cloud, (core * feathers + strand) * taper);
+  }
+  return Math.min(1, cloud);
+}
+
 /** Decorative, theme-colored ASCII wisps. No React updates per frame. */
 function AmbientCanvas({ reduceMotion }: { reduceMotion: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -55,18 +81,12 @@ function AmbientCanvas({ reduceMotion }: { reduceMotion: boolean }) {
       context.fillStyle = ink;
       for (let y = dy / 2, row = 0; y < height; y += dy, row++) {
         for (let x = dx / 2, col = 0; x < width; x += dx, col++) {
-          // Translate a stable field 12px/s right and 2px/s up before any
-          // warping, so the whole cloud travels together. A fixed pixel scale
-          // lets narrow and expanded views crop the field without stretching it.
-          const u = (x - t * 12) / 300;
-          const v = (y + t * 2) / 200;
-          const nx = u + 0.65 * Math.sin(v * 0.95);
-          const ny = v + 0.35 * Math.sin(u * 1.4);
-          const field = noise(nx, ny) * 0.62 + noise(nx * 2.1, ny * 2.1) * 0.27
-            + noise(nx * 4.1, ny * 4.1) * 0.11;
-          const cloud = Math.max(0, Math.min(1, (field - 0.46) / 0.34));
+          // Translate a stable field 12px/s right and 2px/s up so the whole
+          // cloud travels together. A fixed pixel scale lets narrow and expanded
+          // views crop the field without stretching it.
+          const cloud = cirrusCloud(x - t * 12, y + t * 2);
           const seed = row * 613 + col * 17;
-          const alpha = cloud ** 1.6 * (0.11 * 1.75) * (0.75 + hash(seed) * 0.25);
+          const alpha = cloud * (0.11 * 1.75) * (0.75 + hash(seed) * 0.25);
           if (alpha < 0.004) continue;
           // Characters stay anchored to their cells; the passing cloud only
           // changes how brightly each one is revealed.
