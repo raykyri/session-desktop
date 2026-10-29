@@ -6,7 +6,8 @@
   and an icon-strip sidebar with a fixed traffic-light zone. Open directly in a
   browser; Inter and JetBrains Mono load from Google Fonts. Dark by default, as in the app; the
   sidebar's theme button switches to light. All threads are sample content.
-  ?preset=start|deep|siblings|new-branch|running|failed|stopped|draft|home|note opens a representative state.
+  ?preset=start|deep|siblings|new-branch|running|failed|stopped|draft|home|note|range|feed-range|discard opens a
+  representative state.
 -->
 <html lang="en">
 <head>
@@ -268,9 +269,9 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .win.has-strip.amb-x::after { opacity: 1; }
 
 /* ---------- column strip ---------- */
-/* The ambient background (ResearchAmbient.tsx): drifting ASCII clouds on a canvas below the strip of
-   columns. The columns are opaque, so the clouds show only in the space right of the last column, or
-   across the whole area while the columns are slid away with Expand background. */
+/* The ambient background (ResearchAmbient.tsx): ASCII characters under drifting cirrus ribbons, on a
+   canvas below the strip of columns. The columns are opaque, so the ribbons show only in the space right
+   of the last column, or across the whole area while the columns are slid away with Expand background. */
 .area { flex: 1; min-width: 0; position: relative; display: flex; overflow: clip; isolation: isolate; background: var(--page); }
 .ambient { position: absolute; inset: 0 0 0 var(--ambient-start, 100%); overflow: hidden; pointer-events: none; transition: left 600ms cubic-bezier(0.22, 1, 0.36, 1); }
 .area.amb-x .ambient { left: 0; }
@@ -303,6 +304,9 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .col:is(.k-A, .k-N, .k-E) { width: var(--aw); }
 .col.k-E { background: var(--feed); }
 .col.pair-start { border-left: 1px solid var(--border-strong); }
+/* The feed's range column (ResearchFeedRangeView) stands in for the thread's columns, 100px narrower than a
+   messages + answer pair, as the content column's placeholder is. */
+.col.k-R { width: calc(var(--tw) + var(--aw) - 100px); }
 /* The pair divider replaces the previous column's own right border, so the two don't draw a double line. */
 .col:has(+ .col.pair-start) { border-right-color: transparent; }
 /* 10px above and 8px below: header text is centred 1px below the 44px row's centre, level with the traffic lights. */
@@ -419,6 +423,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .card + .card, .unit + .unit, .grp > .card + .card { margin-top: 2px; }
 .card:hover { background: color-mix(in srgb, var(--sel) 55%, transparent); }
 .card.sel { background: var(--sel); }
+/* A range selection (researchRange.ts): its other rows take the selected row's fill, and nothing else. */
+.card.in-range { background: var(--sel); }
 .c-open { display: block; width: 100%; padding: 10px 12px 10px calc(20px - var(--bx)); text-align: left; outline: none; border-radius: var(--br); }
 /* The focused row (the one the keys act on) gets a faint 1px accent ring and no fill of its own. */
 .card:has(.c-open:focus) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -632,10 +638,10 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 
 /* Answer */
 .ans { --gut: 42px; padding: 18px var(--gut) 16px 24px; }
-.a-body { font-size: 14.5px; line-height: 1.5; color: var(--body); overflow-wrap: anywhere; }
-.a-body p { margin: 0 0 10px; max-width: 70ch; }
-.a-body h4 { margin: 14px 0 6px; font-size: 14.5px; font-weight: 650; color: var(--heading); }
-.a-body > :first-child { margin-top: 0; }
+:is(.a-body, .range-a) { font-size: 14.5px; line-height: 1.5; color: var(--body); overflow-wrap: anywhere; }
+:is(.a-body, .range-a) p { margin: 0 0 10px; max-width: 70ch; }
+:is(.a-body, .range-a) h4 { margin: 14px 0 6px; font-size: 14.5px; font-weight: 650; color: var(--heading); }
+:is(.a-body, .range-a) > :first-child { margin-top: 0; }
 .mk { border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .mk.hl { background: var(--hl); cursor: pointer; }
 .mk.hl:hover { background: var(--hl-strong); }
@@ -668,6 +674,18 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .a-state { margin-top: 0; }
 .a-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .ans > .t-meta { padding: 10px 0 0; margin-top: 8px; border-top: 1px solid var(--border); }
+/* A range's content (ResearchRangeView): each entry's heading (a thread's title, in the feed's range), its
+   question (or a note's text) and its answer, one after another under a rule. Read-only: no highlights,
+   passages, markers, menus or run controls, and no .a-body, so the selection actions don't open. */
+.range-entry + .range-entry { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.range-h { max-width: 70ch; margin: 0 0 12px; color: var(--heading); font-size: 15px; font-weight: 600; line-height: 1.35; }
+.range-q { width: fit-content; max-width: min(100%, 640px); margin: 0 0 14px; color: var(--text); font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.range-q .ulink { color: var(--accent); }
+/* A note's text: its paragraphs and Markdown heading, as the note column sets them. */
+.range-q.note-text { white-space: normal; }
+.range-q.note-text h4 { color: var(--heading); }
+.range-q.note-text > :last-child { margin-bottom: 0; }
+.range-a > .a-state { margin-bottom: 6px; }
 
 /* Buttons */
 .ib { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 6px; color: var(--muted); }
@@ -857,7 +875,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .fu-row > :not(.fu-hit) { position: relative; z-index: 1; pointer-events: none; }
 .fu-g { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; align-self: start; margin-top: 1px; border: 1px solid var(--control-border); border-radius: 50%; background: var(--raised); color: var(--muted); }
 .fu-g .ic { width: 10px; height: 10px; }
-.fu-head { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 16px; color: var(--subtle); font-size: 13px; line-height: 1.35; }
+.fu-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 5px; min-height: 16px; color: var(--subtle); font-size: 13px; line-height: 1.2; }
 .fu-head b { color: var(--text-2); font-weight: 500; }
 .fu-q { grid-column: 1 / -1; margin-top: 1px; color: var(--text); font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fu-row.sel .fu-q { color: var(--heading); }
@@ -876,8 +894,6 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .ed-save { gap: 7px; }
 .ed-save:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--strong); }
 .ed-save .ent { display: inline; margin: 0; color: var(--muted); font-size: 11.5px; }
-.ed-row.confirm { flex: 1 1 100%; padding: 6px 8px; border-radius: 6px; background: var(--fill); }
-.ed-confirm-t { margin-right: auto; color: var(--strong); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -906,16 +922,16 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 
 <section class="panel doc" data-panel="notes" hidden>
 <h2>Summary</h2>
-<p class="lede">The prototype reproduces the research view of the Session desktop app as of commit <code>2beee16</code>: one horizontal strip of columns, starting with the feed, then each level of the open thread as a [messages | answer] pair, with a Branches column after every level whose messages have branches. The content is sample data, and nothing is saved.</p>
+<p class="lede">The prototype reproduces the research view of the Session desktop app as of commit <code>faa8c63</code>: one horizontal strip of columns, starting with the feed, then each level of the open thread as a [messages | answer] pair, with a Branches column after every level whose messages have branches. The content is sample data, and nothing is saved.</p>
 <p>Every level is the same pair, so going deeper adds columns and never changes the width of the ones already open; the strip scrolls sideways when they don't fit. Rows have no fill or separators at rest, an inset rounded bubble on hover and selection, and a faint accent ring on the row that has keyboard focus. The sidebar collapses to a 52px icon strip, and the traffic lights and the sidebar toggle keep the same 116px × 44px zone with either.</p>
-<p><code>?preset=start|deep|siblings|new-branch|running|failed|stopped|draft|home|note</code> opens a representative state. Reset demo restores the sample data.</p>
+<p><code>?preset=start|deep|siblings|new-branch|running|failed|stopped|draft|home|note|range|feed-range|discard</code> opens a representative state. Reset demo restores the sample data.</p>
 
 <h2>Shell</h2>
 <ul>
   <li><b>Theme.</b> The "Warm" theme tokens from <code>tokens.css</code>, dark by default whatever the system setting; the sidebar's theme button switches to light. Inter at the app's Inter sizes, JetBrains Mono for the background. Icons are lucide paths at stroke width 2; the branch icon uses 1.75.</li>
   <li><b>Sidebar.</b> The 44px title-bar row holds the traffic lights and the collapse toggle at its left, Settings and the theme button at its right. Below it: Home and Highlights, then Folders: Drafts, the user folders, Archive and Trash. No counts. A user folder's row has a … button (Rename…, Delete…). While ⌘ is held, Home shows "⌘N". The footer has the workspace, Agents and the account. A handle on the right edge sets the width, 208–420px.</li>
   <li><b>Icon strip.</b> ⇧⌘G or the toggle collapses the sidebar to a 52px strip. The traffic lights stay; the expand button takes the toggle's place at x 84. The strip's top cell is an empty 44px row with the header rule under it, and the feed header is inset 64px with Home's title hidden. Folders show their first letter, with the full name in the tooltip. Below 900px of window width the strip is automatic and the expand button is disabled.</li>
-  <li><b>Background.</b> Drifting ASCII clouds (<code>ResearchAmbient</code>) fill the space right of the last column. The button at the top right, shown when that space is at least 72px wide, slides the columns away (Expand background); Esc or the button restores them.</li>
+  <li><b>Background.</b> ASCII characters under drifting cirrus ribbons (<code>ResearchAmbient</code>) fill the space right of the last column. Each cell keeps one character; the ribbons, a field that repeats every 1440 × 840px, drift 12px/s right and 2px/s up and change only how brightly each character shows. With reduced motion it is one still frame. The button at the top right, shown when that space is at least 72px wide, slides the columns away (Expand background); Esc or the button restores them.</li>
 </ul>
 <figure class="fig">
 <svg viewBox="0 0 800 220" role="img" aria-label="Two states of the top-left corner: full sidebar and icon strip">
@@ -949,6 +965,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
   <li><b>Dragging.</b> A press anywhere on a card starts a drag after 5px, with a two-line label at the pointer. Drop on a tray, a sidebar row, a strip icon, or between cards to set the order. The middle band of a card that can hold children nests the card under it; a dragged child's group shows a "Move out of group" strip. A collapsed tray or group opens after 650ms. Dropping in the card's own place does nothing.</li>
   <li><b>Trash.</b> Rows don't open; their … menu has Restore and Delete now. A trashed folder's questions show in Unfiled until the folder is restored.</li>
   <li><b>Highlights.</b> Highlights grouped by thread in feed order, each with some context and a Remove pill. Clicking one opens its thread with the passage in view.</li>
+  <li><b>Thread range.</b> Shift+click or Shift+↑/↓ on a card selects the cards from the open thread to it, within the list that holds both: a tray, or a folder view's list. Expanded groups' children count; drafts, archived cards, collapsed groups' children and collapsed trays don't, and a draft or archived thread open makes no range. The cards take the selected fill, "N threads selected." is announced, and the content column becomes "N threads": each thread's title, then its root message's question and answer (a note's text; a document's text), with no follow-ups or branches, read-only. Esc anywhere outside a field, menu or dialog, the column's ×, a plain click on a card, or any history change ends it, and the thread shows again as it was, with its selections, unsent branch and ask-box text (<code>ResearchFeedRangeView</code>, <code>researchRange.ts</code>).</li>
 </ul>
 
 <h2>Groups</h2>
@@ -963,7 +980,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
   <li><b>Answer.</b> A completed answer can start with its recap, in italics. Branched passages are tinted blue, and the open branch's passage is also underlined; highlights are tinted amber. A paragraph with branched passages has a marker in the right margin (an up-right arrow and the count, or the running or failed glyph) with the branch questions in a popover; whole-answer branches get a marker at the end. The footer is the time, under a rule. A running answer's status line has the clock, Show trace and Stop.</li>
   <li><b>Ask box.</b> Each messages column ends with its own. ⌘↵ sends, ↵ adds a line, ⇧⌘↵ sends the question as a branch from the column's last finished answer, and Send shows "⌘↵" while it would send. A question asked while an answer runs is held in the chain's queue, listed after the messages with Cancel. After a failed or stopped answer the box is disabled, with a note above it. ⌘J focuses the current level's box, and holding ⌘ shows "⌘J" on its top edge.</li>
   <li><b>Widths.</b> Set from the strip's width, until a handle on a column's right edge sets the width of every column of its kind; a double-click restores it. A messages column's handle starts below the header; the answer column's runs the full height, as in the app.</li>
-  <li><b>Notes.</b> A note is a note column and a follow-ups column. The follow-up box on top has the Note | Ask switch; an asked follow-up opens as the next level. A double-click on the note, or Edit note, opens the editor in its place (Cancel, Save with ⌘↵, Ask as a question).</li>
+  <li><b>Message range.</b> Shift+click or Shift+↑/↓ on a message of the level's own chain selects the messages from the column's selected message to it, in the column's order (in a Branches column, only the selected group's). The other rows take the selected fill, with no other state; "N messages selected." is announced. The answer column then shows each message's question and answer one after another, read-only: no highlights, passages, markers, menus, run controls or selection actions, though the text can be copied; an unfinished answer has its state on one line ("Working", "Queued", "Error. …", "Stopped after …"). Esc in the strip clears it (focus stays), as do a plain click on a row, any selection or history change, a new branch, a reorder and a thread range (<code>ResearchRangeAnswerColumn</code>).</li>
+  <li><b>Notes.</b> A note is a note column and a follow-ups column. The follow-up box on top has the Note | Ask switch; an asked follow-up opens as the next level. A double-click on the note, or Edit note, opens the editor in its place (Cancel, Save with ⌘↵, Ask as a question). With changed text, Cancel, Esc, and anything that would leave the editor (opening another thread or a draft, a selection or history change, a new branch, editing another note, ⌃Tab, a Highlights jump, a thread range) ask in the discard dialog first; Discard closes the editor and then carries on. Feed views and Ask as a question don't ask.</li>
 </ul>
 <h3>Widths</h3>
 <div class="tablewrap"><table>
@@ -985,7 +1003,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 </ul>
 
 <h2>Dialogs</h2>
-<p>Dialogs are centred over the window. The confirming button takes focus (Cancel when the action is unavailable, and in Rerun); Enter outside a button confirms a delete; Esc, Cancel or a press on the scrim closes; focus returns to what opened the dialog.</p>
+<p>Dialogs are centred over the window. The confirming button takes focus (Cancel when the action is unavailable, and in Rerun; Keep editing in the discard dialog); Enter outside a button confirms a delete; Esc, Cancel or a press on the scrim closes (a press on the discard dialog's scrim does nothing); focus returns to what opened the dialog.</p>
 <div class="tablewrap"><table>
 <tr><th>Dialog</th><th>Opened by</th><th>Content</th></tr>
 <tr><td>New folder, Rename folder</td><td>+ New folder, a folder's Rename, New folder… in Move to</td><td>The name, selected. Create, Rename, or Create and move. Errors for an empty, long, reserved or taken name show under the field and clear while typing.</td></tr>
@@ -997,6 +1015,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 <tr><td>Rerun</td><td>Rerun on a complete answer</td><td>"Rerun will replace the current answer. Continue?" A failed or stopped answer reruns at once.</td></tr>
 <tr><td>Generate recap</td><td>Generate recap</td><td>Instructions, agent and model, Generate candidate, then the candidate above the current recap and Use this recap.</td></tr>
 <tr><td>Archive with children, Move with children</td><td>Archiving or nesting a parent</td><td>A primary confirmation naming the children.</td></tr>
+<tr><td>Discard changes</td><td>Cancel or Esc in the note editor with changed text; an action that would leave it</td><td>"Discard your changes?" "Your unsaved edits will be lost." Keep editing (focused, and Esc) returns to the field; Discard closes the editor and then runs the action that asked. From Cancel or Esc, ⌘S saves in place (<code>ResearchEditorDiscardDialog</code>).</td></tr>
 </table></div>
 <p>Toasts stay 3.5s, or 6s with Undo, and pause while the pointer or focus is on them. A failed copy shows "Couldn't copy." as a warning.</p>
 
@@ -1009,6 +1028,9 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 <tr><td>Stopped</td><td>"Stopped after 1m 02s. The answer is incomplete." and Run again; the ask box is disabled.</td><td><code>?preset=stopped</code></td></tr>
 <tr><td>Draft</td><td>The question in an ask box labelled "Draft", the text across the full width and Send below it. Opening it doesn't focus the field; ⌘S saves.</td><td><code>?preset=draft</code></td></tr>
 <tr><td>New branch</td><td>An unsent group in the Branches column, placed by its passage, with an ask box labelled "New branch". It is discarded unless its first question is sent.</td><td><code>?preset=new-branch</code></td></tr>
+<tr><td>Thread range</td><td>The cards from the open thread to the far one take the selected fill; the content column reads "N threads", with each thread's title and root message, a running answer streaming in place.</td><td><code>?preset=feed-range</code>, or Shift+click a card in the open thread's tray</td></tr>
+<tr><td>Message range</td><td>The column's rows from its selected message take the selected fill; the answer column shows their questions and answers in order, read-only, with "Error. …" or "Stopped after …" for an unfinished one.</td><td><code>?preset=range</code>, or Shift+click a message</td></tr>
+<tr><td>Discard changes</td><td>The note editor's changed text, behind "Discard your changes?"; Discard closes the editor and carries out what was asked.</td><td><code>?preset=discard</code>, or edit a note and open another thread</td></tr>
 <tr><td>Selection across paragraphs</td><td>The actions are offered; a highlight or branch passage is clipped to the end of the first paragraph.</td><td>Select across two paragraphs</td></tr>
 <tr><td>Overlapping highlights</td><td>They merge into one.</td><td>Highlight over an existing highlight</td></tr>
 <tr><td>Rerun with branches or highlights</td><td>Branches anchored to a passage fall back to the whole answer, and highlights on that answer are removed; a toast says so.</td><td>Rerun an answer with a branched passage</td></tr>
@@ -1026,6 +1048,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 <tr><td><kbd>→</kbd></td><td>From a feed row, select it and move into its thread; from a message, select its row in the Branches column</td><td>With no branches, focus stays on the message</td></tr>
 <tr><td><kbd>←</kbd></td><td>Go back to the parent message, or to the feed</td><td></td></tr>
 <tr><td><kbd>⌥↑</kbd> <kbd>⌥↓</kbd></td><td>Move the focused card or message up or down its list</td><td>Not in Archive</td></tr>
+<tr><td><kbd>⇧↑</kbd> <kbd>⇧↓</kbd></td><td>Extend a range from the open thread (feed) or the selected message (a messages column)</td><td>Within one list or chain; focus follows the far end</td></tr>
+<tr><td><kbd>⇧</kbd>-click</td><td>On a feed card or a message, select the range from the open thread or the selected message to it</td><td>On the open card or the selected message, clear it; elsewhere it opens or selects as a click does</td></tr>
 <tr><td><kbd>⌥→</kbd> <kbd>⌥←</kbd></td><td>On a feed card: nest it under the card above, or move it out of its group; elsewhere: Forward and Back</td><td></td></tr>
 <tr><td><kbd>⌘[</kbd> <kbd>⌘]</kbd></td><td>Back and Forward through the visits</td><td>Also mouse buttons 4 and 5</td></tr>
 <tr><td><kbd>⌃Tab</kbd> <kbd>⌃⇧Tab</kbd></td><td>Select the next or previous row of the column last used</td><td>Focus stays in a text field</td></tr>
@@ -1034,7 +1058,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 <tr><td><kbd>A</kbd> <kbd>H</kbd> <kbd>E</kbd></td><td>On a text selection: Branch to right, or Highlight</td><td></td></tr>
 <tr><td><kbd>D</kbd> <kbd>A</kbd></td><td>In a menu: Delete (or Delete now), Archive</td><td>Any item's shortcut letter</td></tr>
 <tr><td><kbd>⇧F10</kbd></td><td>Open the focused unit's menu</td><td>Also the ContextMenu key</td></tr>
-<tr><td><kbd>Esc</kbd></td><td>Close a menu, the selection actions or a dialog; otherwise return to the root conversation</td><td>In an ask box, cancel a new branch or an edited question</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close a menu, the selection actions or a dialog; clear a range selection; otherwise return to the root conversation</td><td>In an ask box, cancel a new branch or an edited question; in the discard dialog, keep editing</td></tr>
 <tr><td><kbd>⇧⌘G</kbd></td><td>Toggle between the full sidebar and the strip</td><td></td></tr>
 <tr><td><kbd>Tab</kbd></td><td>Reach the margin markers in an answer; in a menu, close it</td><td></td></tr>
 </table></div>
@@ -1061,7 +1085,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 
 <section class="panel doc log" data-panel="log" hidden>
 <h2>Review log</h2>
-<p>Each round lists what changed and what was checked. Round 1 is the first published iteration. Rounds 2 and 3 are design critiques of the published page, followed by fixes. Round 4 brings the prototype in line with the app.</p>
+<p>Each round lists what changed and what was checked. Round 1 is the first published iteration. Rounds 2 and 3 are design critiques of the published page, followed by fixes. Rounds 4 and 5 bring the prototype in line with the app.</p>
 <h3><span class="tag">Round 1</span>First iteration</h3>
 <ul>
   <li>Built the column stack with Focus stack and Tiled layouts, the turn grid driven by a container query, branches as columns with anchors and a sibling switcher, highlights, folder trays with drag and drop, the icon strip, and the traffic-light reserve.</li>
@@ -1300,6 +1324,25 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 <tr><td>A failed copy showed a hint to use ⌘C.</td><td>"Couldn't copy." as a warning toast.</td></tr>
 </table></div>
 <p>Not ported: the answer menu's Show and Hide full transcript items, since the prototype has no transcript view.</p>
+
+<h3><span class="tag fix">Round 5</span>Sync with the app (Oct 29, 2026)</h3>
+<p>Two reviewers compared the mock with the app at <code>faa8c632</code> (the ambient background and Markdown; range selection and the editor's discard dialog), and the findings were applied.</p>
+<div class="tablewrap"><table>
+<tr><th>Finding</th><th>Fix</th></tr>
+<tr><td>The background still drew the noise clouds from <code>6dd75ad1</code>, whose characters changed and crossfaded.</td><td>The cirrus field from <code>b3725885</code> and <code>fb2d4fe5</code>: three tapered, feathered ribbons repeating every 1440 × 840px, drifting 12px/s right and 2px/s up, at peak alpha 0.11 × 1.75; each cell keeps one character. The comments and the design notes describe it.</td></tr>
+<tr><td>A follow-up row's author line kept 5px row gaps and a 1.35 line height when it wrapped.</td><td><code>gap: 0 5px</code> and line height 1.2 (<code>posts.css</code>, <code>3f46e24f</code>). Task lists and the editor caret fix have nothing to port.</td></tr>
+<tr><td>Shift+click and Shift+↑/↓ in a messages column acted as plain clicks and arrows.</td><td>A message range from the selected message, in the column's order, within the level's own chain: the rows take the selected fill, and the answer column shows each question and answer read-only, with no <code>.a-body</code>, so no selection actions, highlights or markers. It ends on Esc, a plain click, a selection, history or unsent-branch change, or a reorder.</td></tr>
+<tr><td>No range in the feed.</td><td>Shift+click and Shift+↑/↓ select cards from the open thread within its tray or folder view, excluding drafts and Archive; the content column becomes "N threads" with each title and root message, and a running answer streams there. Esc anywhere, the ×, a plain click or a history change ends it; the thread's selections, unsent branch and ask-box text stay (<code>faa8c632</code>).</td></tr>
+<tr><td>Unfinished answers in a range had no wording to follow.</td><td>The app's state lines (<code>rangeStateText</code>): "Working", "Queued", "Error. …" as a plain line rather than the alert box, and "Stopped after …" or "Stopped before it started."</td></tr>
+<tr><td>The review gave a thread range's headings as the thread's display title (<code>titleOf</code>).</td><td>The stored title, as the app uses <code>tree.title</code>; a note's is its first line as written (<code>post_default_title</code>), so the "Reading group" note's heading keeps its "##".</td></tr>
+<tr><td>The editor's discard question was a row in its footer.</td><td>The discard dialog (<code>57a65d33</code>): Keep editing focused, Esc keeps editing, a press on the scrim does nothing, ⌘S from Cancel or Esc saves in place.</td></tr>
+<tr><td>Leaving the editor with changed text dropped the changes without asking.</td><td>The leave guard (<code>researchEditorLeave.ts</code>): opening another thread or a draft, selection and history changes, new branches, editing another note, ⌃Tab, Highlights jumps, new research from the feed and thread ranges wait for the dialog, and Discard then runs them. Opening another thread, Home or a thread range drops the editor, as the app's page closes.</td></tr>
+<tr><td>Gap: the app's Home recent-activity list, and a thread listed in two lists.</td><td>Not built: the prototype has no recent-activity list, so each tray, or a folder view, is a range's list.</td></tr>
+<tr><td>Gap: per-entry loading.</td><td>The prototype loads nothing, so a range has no spinner, no content error with Retry, and no polling.</td></tr>
+<tr><td>Gap: the editor's dirty check also counts a changed title.</td><td>Only the document editor has a title field, and the prototype edits notes only.</td></tr>
+<tr><td>Gap: in-range rows have no accessible state.</td><td>As in the app: no <code>aria-selected</code>; the count is announced, and the range column has a status line.</td></tr>
+</table></div>
+<p>Also fixed while checking: a tray's header and chevron now collapse and expand the tray; their click had no handler.</p>
 
 </section>
 
@@ -1807,6 +1850,11 @@ setInterval(() => { if (Object.values(C).some((c) => c.turns.some((t) => t.statu
    and a follow-ups column instead; its next level is one of its follow-ups. A committed passage selection
    adds the unsent branch (S.pending), a group of the branches column after the deepest level, until it is
    sent. queued is the selected queued message ({conv, id}), whose answer column shows it.
+   range is a range selection in one level's messages column (researchRange.ts): from the level's selected
+   message (the anchor) to another message of its chain (far), whose answer column then shows each message's
+   question and answer. feedRange is the feed's range of threads, from the open thread to another card of
+   its list, shown in one content column in place of the thread's columns. Neither is a visit: any
+   navigation ends them (rangeLive, feedRangeLive).
    The other fields are the window's: sidebar mode, page controls, the feed's view (Home, a folder,
    Drafts, Archive, the Trash or Highlights), the composer's Ask or Note mode, collapsed trays and groups,
    column widths set with the resize handles, the note editor, the folder-name form (modal) and the other
@@ -1930,6 +1978,7 @@ function goHistory(d) {
   let i = S.hist.index + d;
   while (i >= 0 && i < S.hist.entries.length && !visitLive(S.hist.entries[i])) i += d;
   if (i < 0 || i >= S.hist.entries.length) return;
+  if (deferLeave(() => goHistory(d))) return;
   S.hist.index = i;
   const v = S.hist.entries[i];
   remember(); hidePop();
@@ -1943,9 +1992,12 @@ function goHistory(d) {
    F the feed; T a level's messages column (or a draft); A its answer column; B the branches column after a
    level, which is the next level's messages column while one of its branches is selected (its header then
    spans the answer column) and stands alone, closed, while none is; N a note's own column (E, its editor,
-   while it is edited) and U its follow-ups column. */
+   while it is edited) and U its follow-ups column. R is the feed range's content column. */
 function columns() {
   const cols = [{ kind: 'F', key: 'F' }];
+  // A feed range shows its threads in one content column (R) in place of the thread's columns, whose state
+  // (selections, the unsent branch, ask-box text) is kept for when the range ends.
+  if (S.feedRange) { cols.push({ kind: 'R', key: 'R', ids: S.feedRange.ids }); return cols; }
   const lv = S.levels, Pd = shownPending();
   let inBr = false;
   lv.forEach((v, L) => {
@@ -1956,7 +2008,11 @@ function columns() {
     } else {
       if (!inBr) cols.push({ kind: 'T', L, conv: v.conv, key: `T${L}|${v.conv}` });
       const qv = S.queued && S.queued.conv === v.conv && v.turn === lastTurn(v.conv) ? S.queued.id : '';
-      if (c.turns.length) cols.push({ kind: 'A', L, conv: v.conv, turn: v.turn, qv, key: `A${L}|${v.conv}:${v.turn}${qv ? ':' + qv : ''}` });
+      // With a range in its messages column, the answer column shows the range's answers; it keeps its kind,
+      // so widths, the pair header and the keys hold.
+      const range = S.range && S.range.L === L ? rangeTurns(S.range) : null;
+      if (range) cols.push({ kind: 'A', L, conv: v.conv, turn: v.turn, range, key: `A${L}|range` });
+      else if (c.turns.length) cols.push({ kind: 'A', L, conv: v.conv, turn: v.turn, qv, key: `A${L}|${v.conv}:${v.turn}${qv ? ':' + qv : ''}` });
     }
     const groups = groupsOf(lv, L, L === lv.length - 1 ? Pd : null);
     inBr = groups.length > 0 && !!lv[L + 1];
@@ -1975,7 +2031,7 @@ function commit() { if (raf) { cancelAnimationFrame(raf); raf = 0; } return rend
 // A column's markup is its change signature; the feed's includes its views, folders, groups and the Trash.
 function htmlOf(sp) {
   return sp.kind === 'F' ? feedHTML() : sp.kind === 'T' ? turnsHTML(sp) : sp.kind === 'B' ? branchesHTML(sp) : sp.kind === 'U' ? followupsHTML(sp)
-    : sp.kind === 'N' ? noteHTML(sp) : sp.kind === 'E' ? editorHTML(sp) : answerHTML(sp);
+    : sp.kind === 'N' ? noteHTML(sp) : sp.kind === 'E' ? editorHTML(sp) : sp.kind === 'R' ? feedRangeHTML(sp) : sp.range ? rangeHTML(sp) : answerHTML(sp);
 }
 function sigOf(sp) {
   const r = sp.r = htmlOf(sp);
@@ -1985,20 +2041,22 @@ const RZ = { F: ['feed', 'Resize feed'], T: ['messages', 'Resize messages column
   A: ['answer', 'Resize answer column'], N: ['answer', 'Resize note column'], E: ['answer', 'Resize editor column'] };
 function makeCol(sp) {
   const el = document.createElement('section');
-  el.className = 'col k-' + sp.kind + (['T', 'B', 'N', 'E'].includes(sp.kind) ? ' pair-start' : '');
+  el.className = 'col k-' + sp.kind + (['T', 'B', 'N', 'E', 'R'].includes(sp.kind) ? ' pair-start' : '');
   el.dataset.key = sp.key;
-  // A resize handle on the column's right edge, except on a draft (ResearchColumnResizer).
+  // A resize handle on the column's right edge, except on a draft (ResearchColumnResizer) and the feed
+  // range's column.
   const draft = sp.kind === 'T' && !C[sp.conv].turns.length;
-  const rz = draft ? '' : `<div class="col-rz" role="separator" aria-orientation="vertical" tabindex="0" data-kind="${RZ[sp.kind][0]}" aria-label="${RZ[sp.kind][1]}"></div>`;
-  if (sp.kind === 'A' || sp.kind === 'N') { el.innerHTML = `<div class="col-head"></div><div class="col-scroll" tabindex="-1"><div class="lists"></div></div>${rz}`; return el; }
+  const rz = draft || sp.kind === 'R' ? '' : `<div class="col-rz" role="separator" aria-orientation="vertical" tabindex="0" data-kind="${RZ[sp.kind][0]}" aria-label="${RZ[sp.kind][1]}"></div>`;
+  if (sp.kind === 'A' || sp.kind === 'N' || sp.kind === 'R') { el.innerHTML = `<div class="col-head"></div><div class="col-scroll" tabindex="-1"><div class="lists"></div></div>${rz}`; return el; }
   if (sp.kind === 'E') {
     // The editor keeps its field across refills; only the header and the footer are refilled.
     el.innerHTML = `<div class="col-head"></div><div class="col-scroll"><textarea class="ed-field" aria-label="Note text" spellcheck="true"></textarea></div><footer class="ed-foot"></footer>${rz}`;
     const ta = el.querySelector('textarea');
     ta.value = S.editor.text;
-    ta.addEventListener('input', () => { if (S.editor) { S.editor.text = ta.value; S.editor.confirm = false; touch(); } });
+    ta.addEventListener('input', () => { if (S.editor) { S.editor.text = ta.value; touch(); } });
     ta.addEventListener('keydown', (e) => {
-      // ⌘↵ saves and closes; ⌘S saves and keeps editing; Esc closes, asking first when the text changed.
+      // ⌘↵ saves and closes; ⌘S saves and keeps editing; Esc closes, asking first in a dialog when the text
+      // changed.
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEditor(true); }
       else if (e.key.toLowerCase() === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEditor(false); }
       else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeEditorAsk(); }
@@ -2110,12 +2168,12 @@ function fill(o) {
   const r = sp.r || htmlOf(sp);
   el.querySelector('.col-head').innerHTML = r.head;
   el.setAttribute('aria-label', r.label);
-  if (sp.kind === 'A') {
+  if (sp.kind === 'A' || sp.kind === 'R') {
     const sc = el.querySelector('.col-scroll');
     const atBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 30;
     sc.innerHTML = r.body;
-    const t = C[sp.conv].turns[sp.turn];
-    if (t.status === 'running' && atBottom && sc.scrollTop > 0) sc.scrollTop = sc.scrollHeight;
+    const t = sp.kind === 'A' && !sp.range && C[sp.conv].turns[sp.turn];
+    if (t && t.status === 'running' && atBottom && sc.scrollTop > 0) sc.scrollTop = sc.scrollHeight;
   } else if (sp.kind === 'E') {
     el.querySelector('.ed-foot').innerHTML = r.body;
   } else {
@@ -2149,7 +2207,7 @@ function roving(col, target) {
   const items = navItems(col);
   const cur = target || items.find((x) => x.getAttribute('aria-current') === 'true' || x.classList.contains('on')) || items[0];
   items.forEach((x) => { x.tabIndex = x === cur ? 0 : -1; });
-  if (col.classList.contains('k-A') || col.classList.contains('k-N')) col.querySelector('.col-scroll').tabIndex = items.length ? -1 : 0;
+  if (col.matches('.k-A, .k-N, .k-R')) col.querySelector('.col-scroll').tabIndex = items.length ? -1 : 0;
   col.querySelectorAll('.card .c-rail button, .card > .br-ind, .card > .t-more').forEach((b) => { const row = b.closest('.card').querySelector('[data-nav]'); b.tabIndex = row && row === cur ? 0 : -1; });
 }
 
@@ -2178,6 +2236,7 @@ const archivedTip = (c) => (c.archivedAt ? 'Archived ' + new Date(c.archivedAt).
    an Archive card, which shows the thread title only. */
 function feedCard(c, { kids = [], parent = null, archived = false } = {}) {
   const draft = isDraft(c), kind = kindOf(c), sel = !!S.levels[0] && S.levels[0].conv === c.id;
+  const inRange = !sel && !!S.feedRange && S.feedRange.ids.includes(c.id);
   const state = threadState(c), q = (draft ? c.draft || '' : c.turns[0].prompt).trim();
   const title = archived ? null : cardTitle(c);
   const n = kids.length, collapsed = n > 0 && S.collapsedGroups.has(c.id);
@@ -2204,7 +2263,7 @@ function feedCard(c, { kids = [], parent = null, archived = false } = {}) {
   const tog = n ? `<button class="ib grp-tog" data-act="grptoggle" data-id="${c.id}" data-fk="gt:${c.id}" data-no-drag aria-expanded="${!collapsed}" aria-label="${esc(`${collapsed ? 'Show' : 'Hide'} ${itemCount(n)} under “${shortName(name)}”`)}" title="${esc(`${collapsed ? 'Show' : 'Hide'} ${itemCount(n)} under “${shortName(name)}”`)}">${I('chevr')}</button>` : '';
   const menuLabel = draft ? 'Draft actions' : 'Thread actions';
   const attrs = `data-card="${c.id}" data-kind="${draft ? 'draft' : 'tree'}" data-place="${c.folder}"${parent ? ` data-parent="${parent.id}"` : ''}${n ? ` data-children="${n}"` : ''}${collapsed ? ' data-collapsed' : ''}${!parent && holdsChildren(c) ? ' data-holds' : ''}`;
-  return `<div class="card feed-card${sel ? ' sel' : ''}" ${attrs}>
+  return `<div class="card feed-card${sel ? ' sel' : ''}${inRange ? ' in-range' : ''}" ${attrs}>
     <button class="c-open" data-nav data-act="root" data-id="${c.id}" data-fk="root:${c.id}" aria-current="${sel}" aria-label="${esc(label)}"${named ? ` aria-describedby="g-${c.id}"` : ''}${archived && c.archivedAt ? ` title="${esc(archivedTip(c))}"` : ''}><span class="c-lay${title ? ' has-title' : ''}">${glyph}<span class="c-body">${body}</span></span></button>
     <span class="c-rail">${tog}<span class="grip" aria-hidden="true">${I('grip')}</span><button class="ib c-menu" data-act="cardmenu" data-id="${c.id}" data-fk="cm:${c.id}" data-no-drag tabindex="-1" aria-haspopup="menu" aria-expanded="false" aria-label="${menuLabel}" title="${menuLabel}">${I('more')}</button></span></div>`;
 }
@@ -2231,12 +2290,13 @@ const emptyText = (f) => (f === 'inbox' ? 'Nothing unfiled. New questions appear
   : f === 'drafts' ? 'No drafts. Use Save draft in the composer to create one.' : f === 'trash' ? 'The Trash is empty.' : 'Empty folder. Drag or file questions here.');
 const placeCount = (f) => (f === 'trash' ? trashEntries().length : roots(f).length);
 function trayHTML(f) {
-  if (f.id === 'inbox') return `<section class="tray inbox" data-drop="inbox" aria-label="Unfiled">${placeList('inbox')}</section>`;
+  // data-list names the list a feed range is made in (each tray's cards, or a folder view's).
+  if (f.id === 'inbox') return `<section class="tray inbox" data-drop="inbox" data-list="place:inbox" aria-label="Unfiled">${placeList('inbox')}</section>`;
   const col = S.collapsed.has(f.id), n = placeCount(f.id), trash = f.id === 'trash';
   const noun = trash ? ['item', 'items'] : ['question', 'questions'];
   // The folder name opens the folder; the rest of the header, and the chevron, collapse or expand the tray.
   // The Trash tray takes no drops.
-  return `<section class="tray${col ? ' collapsed' : ''}"${trash ? '' : ` data-drop="${f.id}"`} data-tray="${f.id}" aria-label="${esc(f.name)}"><div class="tray-h"><div class="tray-t" data-act="tray" data-f="${f.id}">${I(f.icon || 'folder')}<button class="tray-n" data-act="openfolder" data-f="${f.id}" title="Open ${esc(f.name)}">${esc(f.name)}</button><span class="cnt">${n ? `${n}<span class="sr"> ${n > 1 ? noun[1] : noun[0]}</span>` : ''}</span><button class="ib tray-chev" data-act="tray" data-f="${f.id}" aria-expanded="${!col}" aria-label="${col ? 'Expand' : 'Collapse'} ${esc(f.name)}">${I('down', 'chev')}</button></div></div>${col ? '' : placeList(f.id)}</section>`;
+  return `<section class="tray${col ? ' collapsed' : ''}"${trash ? '' : ` data-drop="${f.id}" data-list="place:${f.id}"`} data-tray="${f.id}" aria-label="${esc(f.name)}"><div class="tray-h"><div class="tray-t" data-act="tray" data-f="${f.id}">${I(f.icon || 'folder')}<button class="tray-n" data-act="openfolder" data-f="${f.id}" title="Open ${esc(f.name)}">${esc(f.name)}</button><span class="cnt">${n ? `${n}<span class="sr"> ${n > 1 ? noun[1] : noun[0]}</span>` : ''}</span><button class="ib tray-chev" data-act="tray" data-f="${f.id}" data-fk="tray:${f.id}" aria-expanded="${!col}" aria-label="${col ? 'Expand' : 'Collapse'} ${esc(f.name)}">${I('down', 'chev')}</button></div></div>${col ? '' : placeList(f.id)}</section>`;
 }
 /* The Trash: trashed threads and folders, most recently trashed first. Rows don't open; Restore and
    Delete now are in the row's … menu. */
@@ -2295,7 +2355,7 @@ function feedHTML() {
     const acts = f && !f.system ? `<button class="ib i15" data-act="renamefolder" data-f="${f.id}" title="Rename folder" aria-label="Rename folder">${I('pencil')}</button><button class="ib i15" data-act="deletefolder" data-f="${f.id}" title="Delete folder" aria-label="Delete folder">${I('trash')}</button>`
       : trash ? `<button class="btn" data-act="emptytrash" ${trashEntries().length ? '' : 'disabled'}>Empty Trash</button>` : '';
     return { head: `<button class="ib" data-act="home" title="Back to Home" aria-label="Back to Home">${I('left')}</button><h2 class="h big">${esc(folderName(v.f))}</h2>${acts ? `<span class="hacts">${acts}</span>` : ''}`,
-      body: `<section class="tray solo"${trash ? '' : ` data-drop="${v.f}"`} aria-label="${esc(folderName(v.f))}">${placeList(v.f, true)}</section>`, rest: '', label: `${folderName(v.f)}: questions` };
+      body: `<section class="tray solo"${trash ? '' : ` data-drop="${v.f}" data-list="place:${v.f}"`} aria-label="${esc(folderName(v.f))}">${placeList(v.f, true)}</section>`, rest: '', label: `${folderName(v.f)}: questions` };
   }
   // Home: the composer, Unfiled, a tray per folder (Drafts, user folders, Archive), the Trash, then New folder.
   const trays = folderList().map(trayHTML);
@@ -2334,11 +2394,13 @@ function msgRow(conv, i, L, sel, drag) {
   const showBr = settled && n > 0, open = openSource(L) === k;
   const bstate = showBr ? branchesState(brs) : null, unread = brs.some((b) => b.unreadBr);
   const exp = S.expanded.has(k);
+  // In the column's range besides its selected message: the selected row's fill, and no other state.
+  const inRange = !sel && !!S.range && S.range.L === L && S.range.conv === conv && rangeTurns(S.range).includes(i);
   const brLabel = [`${n} ${n === 1 ? 'branch' : 'branches'} from this answer.`, open ? 'One is selected.' : '', bstate === 'running' ? 'A branch is running.' : bstate === 'failed' ? 'A branch failed.' : '', unread ? 'One has a new answer.' : ''].filter(Boolean).join(' ');
   const brTitle = open ? 'Clear the branch selected in the next column' : n === 1 ? 'Open branch' : `Open the first of ${n} branches`;
   const ind = showBr ? `<button class="br-ind${open ? ' on' : ''}${bstate ? ' is-' + bstate : ''}" data-act="togglebr" data-l="${L}" data-c="${conv}" data-t="${i}" data-no-drag aria-label="${esc(brLabel)}" title="${brTitle}">${bstate ? plainGlyph('exchange', bstate) : I('arrowupright')}${unread ? '<span class="br-dot" aria-hidden="true"></span>' : ''}</button>` : '';
   const menu = t.status === 'queued' ? '' : `<button class="ib c-menu" data-act="menu" data-l="${L}" data-c="${conv}" data-t="${i}" data-fk="am:${k}" data-no-drag aria-haspopup="menu" aria-expanded="false" aria-label="Answer actions" title="Answer details and actions">${I('more')}</button>`;
-  return `<li class="card msg st-${t.status}${sel ? ' sel' : ''}${showBr ? ' has-br' : ''}" data-c="${conv}" data-t="${i}"${drag ? ' data-drag' : ''}>
+  return `<li class="card msg st-${t.status}${sel ? ' sel' : ''}${inRange ? ' in-range' : ''}${showBr ? ' has-br' : ''}" data-c="${conv}" data-t="${i}"${drag ? ' data-drag' : ''}>
     <button class="c-open" data-nav data-act="turn" data-l="${L}" data-c="${conv}" data-t="${i}" data-fk="turn:${k}" aria-current="${sel}"><span class="t-prompt${exp ? '' : ' is-clamped'}" id="tp-${k}">${glyph}${linkify(t.prompt)}</span></button>
     <button class="t-more" data-act="more" data-k="${k}" aria-controls="tp-${k}" aria-expanded="${exp}" hidden>${exp ? 'Show less' : 'Show more'}</button>${word ? `<div class="t-meta"><span>${word}</span></div>` : ''}${ind}
     <span class="c-rail">${drag ? `<span class="grip" aria-hidden="true">${I('grip')}</span>` : ''}${menu}</span></li>`;
@@ -2489,9 +2551,7 @@ function followupBox(sp) {
    and a footer with "Ask as a question" on the left and Cancel and Save on the right. */
 function editorHTML(sp) {
   const ed = S.editor, changed = ed.text !== ed.initial;
-  const right = ed.confirm
-    ? `<div class="ed-row confirm" role="group" aria-label="Discard changes"><span class="ed-confirm-t">Discard your changes?</span><button class="btn" data-act="edkeep" data-fk="edkeep">Keep editing</button><button class="btn danger" data-act="eddiscard">Discard</button></div>`
-    : `<div class="ed-row"><span class="ed-acts"><button class="btn" data-act="edcancel">Cancel</button><button class="btn ed-save" data-act="edsave" title="Save and close (⌘↵) · Save and keep editing (⌘S)" ${changed && ed.text.trim() ? '' : 'disabled'}>Save<span class="ent" aria-hidden="true">⌘<span>↵</span></span></button></span></div>`;
+  const right = `<div class="ed-row"><span class="ed-acts"><button class="btn" data-act="edcancel">Cancel</button><button class="btn ed-save" data-act="edsave" title="Save and close (⌘↵) · Save and keep editing (⌘S)" ${changed && ed.text.trim() ? '' : 'disabled'}>Save<span class="ent" aria-hidden="true">⌘<span>↵</span></span></button></span></div>`;
   return { head: `${sp.L === 0 ? histHTML() : ''}<h2 class="h big" title="Edit note">Edit note</h2>`,
     body: `<div class="ed-row"><button class="btn ed-ask" data-act="edask"${ed.text.trim() ? '' : ' aria-disabled="true"'}>${I('msgplus')}Ask as a question</button></div>${right}`, label: 'Edit note' };
 }
@@ -2583,6 +2643,80 @@ function answerHTML(sp) {
     body: `<article class="ans">${pre}${recap}<div class="a-body" data-conv="${sp.conv}" data-turn="${sp.turn}" data-l="${sp.L}">${body}</div>${tail}${end}</article>` };
 }
 
+/* ---------- range selections (researchRange.ts, ResearchRangeView) ----------
+   A range is the rows from a list's selected row (the anchor) to another row of the same list (the far end),
+   in the list's order, at least two rows. Its content is read-only: each entry's question and answer one
+   after another, with no highlights, passages, markers, menus or run controls. */
+function rangeIds(ids, anchor, far) {
+  const a = ids.indexOf(anchor), b = ids.indexOf(far);
+  return a < 0 || b < 0 || a === b ? null : ids.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+// A message range's turns, in the column's order.
+const rangeTurns = (R) => rangeIds(order(C[R.conv]), R.anchor, R.far) || [];
+// A thread's stored title; a note's is its first line as written (post_default_title in research.rs).
+function postTitle(text) {
+  const line = text.split('\n').map((x) => x.trim()).find(Boolean) || 'Post';
+  if ([...line].length <= 80) return line;
+  let cut = [...line].slice(0, 79).join('');
+  const sp = cut.search(/\s\S*$/);
+  if (sp > 40) cut = cut.slice(0, sp).trimEnd();
+  return cut + '…';
+}
+const rangeTitle = (c) => c.title.trim() || (isPostC(c) ? postTitle(c.turns[0].prompt) : '') || 'Untitled';
+/* rangeStateText: the run state of an answer that is not complete, on one line; null for a complete answer. */
+function rangeState(t) {
+  if (t.status === 'running') return 'Working';
+  if (t.status === 'queued') return 'Queued';
+  if (t.status === 'failed') return `Error. ${t.error || 'The research run failed.'}`;
+  if (t.status === 'cancelled') return t.removed ? 'Stopped before it started.' : `Stopped after ${t.stoppedAfter || '0m 00s'}. The answer is incomplete.`;
+  return null;
+}
+/* One entry (ResearchRangeEntry): an optional heading (a thread's title, in the feed's range), the question
+   (a note's text; a document has none), then the answer: its run state, then its text. */
+function rangeEntryHTML(c, ti, heading) {
+  const t = c.turns[ti], post = isPostC(c), doc = ti === 0 && (c.kind === 'authored' || c.kind === 'imported');
+  const q = post ? (c.kind === 'note' ? `<div class="range-q note-text">${noteText(t.prompt.trim())}</div>` : `<div class="range-q">${linkify(t.prompt.trim())}</div>`)
+    : doc || !t.prompt.trim() ? '' : `<div class="range-q">${linkify(t.prompt)}</div>`;
+  const st = post ? null : rangeState(t);
+  const a = post ? '' : `<div class="range-a">${st ? `<p class="a-state">${esc(st)}</p>` : ''}${(t.body || []).map((b) => (b.startsWith('## ') ? `<h4>${esc(textOf(b))}</h4>` : `<p>${esc(b)}</p>`)).join('')}</div>`;
+  return `<section class="range-entry"${heading ? ` aria-label="${esc(heading)}"` : ''}>${heading ? `<h3 class="range-h">${esc(heading)}</h3>` : ''}${q}${a}</section>`;
+}
+/* A level's answer column while its messages column has a range (ResearchRangeAnswerColumn): no title of its
+   own under the pair header, and the count in a status line for screen readers. */
+function rangeHTML(sp) {
+  const c = C[sp.conv], n = sp.range.length;
+  return { label: `Answers to ${n} messages`, head: '',
+    body: `<article class="ans range"><p class="sr" role="status">${n} messages selected</p>${sp.range.map((ti) => rangeEntryHTML(c, ti, null)).join('')}</article>` };
+}
+/* The feed range's column (ResearchFeedRangeView): "N threads" with a × that clears the range, then each
+   thread's title and its root message (no follow-ups or branches). */
+function feedRangeHTML(sp) {
+  const n = sp.ids.length;
+  return { label: `${n} selected threads`,
+    head: `<h2 class="h big" title="${n} threads">${n} threads</h2><button class="hbtn hclear" data-act="clearrange" aria-label="Clear selection (Esc)" title="Clear selection (Esc)">${I('x')}</button>`,
+    body: `<article class="ans range">${sp.ids.map((id) => rangeEntryHTML(C[id], 0, rangeTitle(C[id]))).join('')}</article>` };
+}
+/* A message range from level L's selected message to `far` (null clears it). It records what it was made from:
+   the column's order, every column's selection and the unsent branch; when any of them changes the range
+   lapses (rangeLive). Setting one clears a selected queued message. */
+const pendKey = () => { const P = S.pending; return P && !P.armed ? [P.L, P.conv, P.turn, P.p, P.s, P.e].join(':') : ''; };
+function setMsgRange(L, far) {
+  const v = S.levels[L];
+  S.queued = null;
+  S.range = far == null || !v ? null : { L, conv: v.conv, anchor: v.turn, far, listed: order(C[v.conv]).join(), sel: visitKey(visitNow()), pend: pendKey() };
+}
+function rangeLive(R) {
+  const v = S.levels[R.L], c = v && C[v.conv];
+  return !!c && !isPostC(c) && v.conv === R.conv && v.turn === R.anchor && order(c).join() === R.listed && visitKey(visitNow()) === R.sel && pendKey() === R.pend && rangeTurns(R).length > 1;
+}
+/* The feed's range lasts while the same thread is open and the visit history is unchanged, with at least two
+   of its threads left (deleted or trashed ones drop out). */
+function feedRangeLive(F) {
+  if (!S.levels[0] || S.levels[0].conv !== F.anchor || S.hist.entries !== F.hist || S.hist.index !== F.at) return false;
+  F.ids = F.ids.filter((id) => C[id] && C[id].folder !== 'trash');
+  return F.ids.length > 1;
+}
+
 /* A messages column's ask box (researchChainComposerState): it continues the chain, queueing while an answer
    runs or questions are queued ahead ("Queue a follow-up"), or replaces a failed question being edited. While
    the chain's last answer is stopped or failed and nothing is queued, it is disabled, with a note above the
@@ -2643,7 +2777,7 @@ function syncCmdHint() {
   for (const o of live.values()) { const h = o.el._box && o.el._box.querySelector('.cmdj'); if (h) h.hidden = !(target && o === target && o.el._box.isConnected); }
 }
 
-let filler = null;
+let filler = null, lastRangeN = 0;
 function render() {
   const keepLeft = strip.scrollLeft;
   try { return renderCols(); } finally { if (strip.scrollLeft !== keepLeft) strip.scrollLeft = keepLeft; }
@@ -2652,10 +2786,18 @@ function renderCols() {
   S.levels = cutLevels(S.levels);
   recordVisit();
   if (S.queued && !(C[S.queued.conv] && C[S.queued.conv].queue.some((q) => q.id === S.queued.id))) S.queued = null;
+  // Ranges are not visits: one made before a navigation, a new selection or a reorder has lapsed.
+  if (S.range && !rangeLive(S.range)) S.range = null;
+  if (S.feedRange && !feedRangeLive(S.feedRange)) S.feedRange = null;
+  // The editor belongs to the open thread's page: opening another thread, Home or a feed range drops it.
+  if (S.editor && (S.feedRange || !S.levels[0] || rootOf(S.editor.conv) !== C[S.levels[0].conv])) S.editor = null;
+  const rn = S.range ? rangeTurns(S.range).length : 0;
+  if (rn !== lastRangeN) { lastRangeN = rn; if (rn > 1) announce(`${rn} messages selected.`); }
   // Every selected branch has been read.
   S.levels.forEach((v) => { delete C[v.conv].unreadBr; });
   const cols = columns();
-  for (const [k, o] of live) if (!cols.some((c) => c.key === k)) { scrollMem[k] = o.el.querySelector('.col-scroll').scrollTop; o.el.remove(); live.delete(k); }
+  // A range's column starts at the top each time (the anchor's own answer keeps its offset under its own key).
+  for (const [k, o] of live) if (!cols.some((c) => c.key === k)) { if (!/\|range$|^R$/.test(k)) scrollMem[k] = o.el.querySelector('.col-scroll').scrollTop; o.el.remove(); live.delete(k); }
   let ref = strip.firstChild;
   cols.forEach((sp) => {
     let o = live.get(sp.key), fresh = false;
@@ -2701,7 +2843,8 @@ function curLevel() {
 }
 function markCur(cols) {
   const L = curLevel();
-  for (const c of cols) live.get(c.key).el.classList.toggle('cur', c.kind === 'F' ? L < 0 : c.L === L);
+  // The feed range's column is always current.
+  for (const c of cols) live.get(c.key).el.classList.toggle('cur', c.kind === 'F' ? L < 0 : c.kind === 'R' || c.L === L);
 }
 strip.addEventListener('focusin', (e) => {
   const col = e.target.closest('.col'), o = col && live.get(col.dataset.key);
@@ -2834,17 +2977,28 @@ function act(a, el) {
       // expanded group collapses it after 250ms; the second click of a double-click cancels that.
       const id = el.dataset.id, kids = listedParent(id) ? [] : childrenOf(id), detail = clickDetail; clickDetail = 0;
       const sel = !!S.levels[0] && S.levels[0].conv === id;
-      if (detail > 1) {
+      // Shift+click extends the feed's range and neither opens the card nor expands or collapses its group; a
+      // card that can't extend it opens as a click does. Any other click ends the range first.
+      const shift = shiftClick && !!el.closest('.col.k-F');
+      if (shift) {
+        clearTimeout(GROUP_CLICK.timer); GROUP_CLICK.timer = null;
+        if (extendFeedRange(el)) return;
+      }
+      const ended = !!S.feedRange; S.feedRange = null;
+      if (!shift && detail > 1) {
         if (GROUP_CLICK.timer) { clearTimeout(GROUP_CLICK.timer); GROUP_CLICK.timer = null; }
         else if (GROUP_CLICK.closed === id) { GROUP_CLICK.closed = null; setGroupCollapsed(id, false); }
         return;
       }
-      GROUP_CLICK.closed = null;
-      if (kids.length && S.collapsedGroups.has(id)) S.collapsedGroups.delete(id);
-      else if (kids.length && sel && detail === 1) {
-        clearTimeout(GROUP_CLICK.timer);
-        GROUP_CLICK.timer = setTimeout(() => { GROUP_CLICK.timer = null; GROUP_CLICK.closed = id; setGroupCollapsed(id, true); }, 250);
-        return;
+      if (!shift) {
+        GROUP_CLICK.closed = null;
+        if (kids.length && S.collapsedGroups.has(id)) S.collapsedGroups.delete(id);
+        else if (kids.length && sel && detail === 1) {
+          clearTimeout(GROUP_CLICK.timer);
+          GROUP_CLICK.timer = setTimeout(() => { GROUP_CLICK.timer = null; GROUP_CLICK.closed = id; setGroupCollapsed(id, true); }, 250);
+          if (ended) commit();
+          return;
+        }
       }
       if (!S.levels[0] || S.levels[0].conv !== id) openRoot(id);
       commit();
@@ -2863,8 +3017,17 @@ function act(a, el) {
       ids.forEach((x) => (collapse ? S.collapsedGroups.add(x) : S.collapsedGroups.delete(x)));
       commit(); return;
     }
-    // A message row: it becomes its column's selection and its pair comes into view.
+    // A message row: it becomes its column's selection and its pair comes into view. Shift+click on another
+    // message of the level's chain extends the column's range from its selected message instead (on the
+    // selected message, it clears it); the row keeps focus. Any other click ends the range.
     case 'turn': {
+      const v = S.levels[L], c = el.dataset.c;
+      if (shiftClick && v && v.conv === c && !isPostC(C[c]) && order(C[c]).includes(ti)) {
+        setMsgRange(L, ti === v.turn ? null : ti); commit();
+        refocusFk(`[data-fk="turn:${CSS.escape(c + ':' + ti)}"]`);
+        return;
+      }
+      S.range = null;
       selectMessage(L, el.dataset.c, ti); commit();
       const o = msgCol(L), again = o && o.el.querySelector(`[data-fk="turn:${CSS.escape(el.dataset.c + ':' + ti)}"]`);
       if (again) { roving(o.el, again); again.focus({ preventScroll: true }); scrollIntoBody(again); }
@@ -2911,6 +3074,7 @@ function act(a, el) {
     // Queued messages: select one (its answer column shows it), cancel one, or put a stalled one back in the box.
     case 'selq': {
       const c = C[el.dataset.c];
+      S.range = null;
       selectMessage(L, c.id, lastTurn(c.id)); S.queued = { conv: c.id, id: el.dataset.q }; commit();
       refocusFk(`[data-fk="q:${CSS.escape(el.dataset.q)}"]`);
       revealPair(L);
@@ -2940,6 +3104,8 @@ function act(a, el) {
       openMarkMenu(el, lastPoint.x, lastPoint.y);
       return;
     }
+    // A tray's header (outside the folder name) or its chevron collapses or expands the tray.
+    case 'tray': { const f = el.dataset.f; if (S.collapsed.has(f)) S.collapsed.delete(f); else S.collapsed.add(f); commit(); return; }
     case 'openfolder': { S.view = { type: 'folder', f: el.dataset.f }; renderAll(); focusCol(colByKey('F')); return; }
     case 'cancelpend': cancelPending(); return;
     // Back closes the thread (Home with no thread open), and Forward on Home reopens it.
@@ -2957,8 +3123,8 @@ function act(a, el) {
     case 'openfu': { openBranch(L, el.dataset.id); commit(); refocusFk(`[data-fk="fu:${CSS.escape(el.dataset.id)}"]`); const n = levelCols(L + 1)[0]; settle(n ? levelCols(L + 1).slice(-1)[0].el : null); return; }
     case 'openparent': { closeAfter(L - 1); commit(); focusTurns(msgCol(L - 1)); settle(); return; }
     case 'edcancel': closeEditorAsk(); return;
-    case 'edkeep': { S.editor.confirm = false; commit(); const ta = strip.querySelector('.ed-field'); if (ta) ta.focus(); return; }
-    case 'eddiscard': closeEditor(); return;
+    // The feed range's ×.
+    case 'clearrange': clearFeedRange(); return;
     case 'edsave': saveEditor(true); return;
     case 'edask': {
       // Ask as a question starts new research with the note's text, filed in Unfiled.
@@ -3035,6 +3201,7 @@ function cancelPending() {
 }
 // Branch to right from the answer menu: the unsent whole-answer branch of message `t` of `conv`, listed in column L.
 function startWhole(L, conv, t) {
+  if (deferLeave(() => startWhole(L, conv, t))) return;
   selectMessage(L, conv, t);
   S.levels = S.levels.slice(0, L + 1);
   S.pending = { L, conv, turn: t, p: -1, s: 0, e: 0, q: null, armed: false };
@@ -3045,6 +3212,7 @@ function startWhole(L, conv, t) {
    its column (the column keeps its own selection); when one of the message's branches is selected there,
    clears that column instead. */
 function toggleBranches(L, conv, t) {
+  if (deferLeave(() => toggleBranches(L, conv, t))) return;
   if (openSource(L) === conv + ':' + t) { closeAfter(L); commit(); const r = strip.querySelector(`[data-act="togglebr"][data-c="${CSS.escape(conv)}"][data-t="${t}"]`); if (r) r.focus({ preventScroll: true }); return; }
   const first = branchesOf(conv, t)[0]; if (!first) return;
   openBranch(L, first.id, null, !S.levels[L]);
@@ -3052,10 +3220,17 @@ function toggleBranches(L, conv, t) {
   const r = strip.querySelector(`[data-act="togglebr"][data-c="${CSS.escape(conv)}"][data-t="${t}"]`); if (r) r.focus({ preventScroll: true });
   const o = msgCol(L + 1); settle(o ? (answerCol(L + 1) || o).el : null);
 }
-// The click's count and Alt key, for a group card's click (act 'root') and its chevron (act 'grptoggle').
-let clickDetail = 0, altClick = false, lastPoint = { x: 0, y: 0 };
+// The click's count, Alt and Shift keys, for a card's click (act 'root', 'turn') and a group's chevron
+// (act 'grptoggle'). shiftClick is set only while a click's action runs.
+let clickDetail = 0, altClick = false, shiftClick = false, lastPoint = { x: 0, y: 0 };
 const GROUP_CLICK = { timer: null, closed: null };
 function setGroupCollapsed(id, on) { if (on) S.collapsedGroups.add(id); else S.collapsedGroups.delete(id); commit(); }
+// Runs a click's action with its Shift key; an action that would leave a changed note editor waits for the
+// discard dialog (leavesBy, deferLeave).
+function runClick(name, el, shift) {
+  shiftClick = shift;
+  try { if (!(leavesBy(name, el) && deferLeave(() => runClick(name, el, shift)))) act(name, el); } finally { shiftClick = false; }
+}
 strip.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]'); if (!a) return;
   clickDetail = e.detail; altClick = e.altKey; lastPoint = { x: e.clientX, y: e.clientY };
@@ -3063,8 +3238,139 @@ strip.addEventListener('click', (e) => {
   if (a.closest('form') && a.type === 'submit') return;
   if (a.getAttribute('aria-disabled') === 'true') return;
   e.preventDefault();
-  act(a.dataset.act, a);
+  runClick(a.dataset.act, a, e.shiftKey);
 });
+// A Shift+press on a row would extend the page's text selection; its click extends a range instead.
+strip.addEventListener('mousedown', (e) => { if (e.shiftKey && e.target.closest('.c-open[data-act="turn"], .feed-card[data-kind="tree"] > .c-open')) e.preventDefault(); });
+
+/* ---------- the feed's range (ResearchActivityFeed, App.tsx feedRange) ----------
+   Shift+click or Shift+↑/↓ on a feed card selects the cards from the open thread to it, in the order of the
+   list that holds both: a tray's cards, or a folder view's, an expanded group's children after their parent
+   (a collapsed group's and a collapsed tray's are not listed). Drafts and Archive are never in a range, and a
+   draft or archived thread open makes none. The content column then shows each thread's title and root
+   message (feedRangeHTML). It is not a visit: Esc, the ×, a plain click on a card, or any history change
+   ends it, and the thread shows again as it was. */
+const listIds = (list) => [...list.querySelectorAll('.feed-card[data-kind="tree"]')].map((x) => x.dataset.card);
+// The open thread, when a range can start from it.
+function rangeAnchor() { const c = S.levels[0] && C[S.levels[0].conv]; return c && !isDraft(c) && c.folder !== 'archive' ? c : null; }
+/* Shift+click on a card: false when the card can't extend the range (the card then opens as a click does). */
+function extendFeedRange(btn) {
+  const card = btn.closest('.feed-card'), list = card && card.closest('[data-list]'), open = rangeAnchor(), id = card && card.dataset.card;
+  if (!list || !open || card.dataset.kind !== 'tree' || C[id].folder === 'archive') return false;
+  const ids = listIds(list);
+  if (!ids.includes(open.id) || !ids.includes(id)) return false;
+  // The card keeps focus, so Shift+↑/↓ and Esc act on the range.
+  btn.focus({ preventScroll: true });
+  setFeedRange(id === open.id ? null : rangeIds(ids, open.id, id), id, list.dataset.list);
+  return true;
+}
+/* Shift+↑ or Shift+↓ on a card: moves the range's far end one card in the focused card's list (from the open
+   thread when the range is in another list) and focuses that card. */
+function stepFeedRange(dir, btn) {
+  const list = btn.closest('[data-list]'), open = rangeAnchor(); if (!list || !open) return;
+  const ids = listIds(list), F = S.feedRange, far = F && F.list === list.dataset.list ? F.far : open.id;
+  const at = ids.indexOf(far), next = ids[at + dir];
+  if (!ids.includes(open.id) || at < 0 || !next) return;
+  if (deferLeave(() => stepFeedRange(dir, btn))) return;
+  setFeedRange(next === open.id ? null : rangeIds(ids, open.id, next), next, list.dataset.list);
+  const f = colByKey('F'), r = f.el.querySelector(`[data-list="${CSS.escape(list.dataset.list)}"] [data-fk="root:${CSS.escape(next)}"]`);
+  if (r) { roving(f.el, r); r.focus({ preventScroll: true }); scrollIntoBody(r); }
+}
+/* Sets the range (null clears it), recording the visit history it was made in. It clears a message range and
+   drops the editor (the thread's page closes while it shows); the thread's selections, unsent branch and
+   ask-box text stay. */
+function setFeedRange(ids, far, list) {
+  if (ids) {
+    S.feedRange = { ids, anchor: S.levels[0].conv, far, list, hist: S.hist.entries, at: S.hist.index };
+    S.range = null;
+    announce(`${ids.length} threads selected.`);
+  } else S.feedRange = null;
+  commit();
+}
+// Esc or the ×: focus goes back to the open thread's card.
+function clearFeedRange() {
+  S.feedRange = null; commit();
+  const f = colByKey('F'), r = S.levels[0] && f.el.querySelector(`[data-fk="root:${CSS.escape(S.levels[0].conv)}"]`);
+  if (r) { roving(f.el, r); r.focus({ preventScroll: true }); }
+}
+/* Esc ends the feed's range wherever focus is, unless it is in a field, a menu or a dialog; with focus lost to
+   the page, it ends a message range too. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || S.modal || S.dialog || (!pop.hidden && pop.dataset.kind === 'menu')) return;
+  if (e.target.closest && e.target.closest('textarea, input, select, [contenteditable], #pop')) return;
+  if (S.feedRange) { e.preventDefault(); clearFeedRange(); }
+  else if (S.range && e.target === document.body) { e.preventDefault(); S.range = null; commit(); }
+});
+
+/* Shift+↑ or Shift+↓ on a message row (ResearchThreadPage stepRange): moves the range's far end one message
+   (from the selected message when the column has no range) and focuses it. Only rows of the level's own chain
+   take part; at either end, or onto the selected message (which clears the range), nothing else moves. */
+function stepMsgRange(L, dir, row) {
+  const v = S.levels[L], conv = row.dataset.c;
+  if (!v || v.conv !== conv || isPostC(C[conv])) return;
+  const ids = order(C[conv]), R = S.range && S.range.L === L ? S.range : null;
+  if (!ids.includes(+row.dataset.t)) return;
+  const at = ids.indexOf(R ? R.far : v.turn), next = ids[at + dir];
+  if (at < 0 || next == null) return;
+  setMsgRange(L, next === v.turn ? null : next); commit();
+  const o = msgCol(L), r = o && o.el.querySelector(`[data-fk="turn:${CSS.escape(conv + ':' + next)}"]`);
+  if (r) { roving(o.el, r); r.focus({ preventScroll: true }); scrollIntoBody(r); }
+}
+
+/* ---------- leaving the editor (researchEditorLeave.ts) ----------
+   While the note editor's text has changed, an action that would leave it waits behind the discard dialog:
+   opening another thread or a draft, a selection or history change, a new branch, editing another note,
+   ⌃Tab, a Highlights jump or a feed range. Discard closes the editor, then runs the action; Keep editing
+   drops it. Feed views (the sidebar) and Ask as a question don't ask. With unchanged text the action runs. */
+function deferLeave(proceed) {
+  const ed = S.editor;
+  if (!ed || ed.text === ed.initial) return false;
+  openDiscard(proceed);
+  return true;
+}
+/* Whether a click's action would leave the editor: open another thread, change a selection, or close one. */
+function leavesBy(name, el) {
+  const L = el.dataset.l != null ? +el.dataset.l : null, v = L != null ? S.levels[L] : null;
+  switch (name) {
+    case 'root': return !S.levels[0] || S.levels[0].conv !== el.dataset.id;
+    case 'turn': {
+      const c = el.dataset.c, t = +el.dataset.t, extends_ = shiftClick && v && v.conv === c && order(C[c]).includes(t);
+      return !extends_ && !(v && v.conv === c && v.turn === t);
+    }
+    case 'selq': return !(v && v.conv === el.dataset.c && v.turn === lastTurn(el.dataset.c));
+    case 'openfu': return !(S.levels[L + 1] && S.levels[L + 1].conv === el.dataset.id);
+    case 'mark': return (el.dataset.brs || '').split(' ').filter((b) => C[b]).length === 1 && !el.dataset.hl;
+    case 'closebr': case 'clearbr': case 'openparent': case 'gotohl': case 'gpopen': return true;
+    default: return false;  // togglebr, openbr and back/fwd ask in toggleBranches, goBranch and goHistory
+  }
+}
+// The same for an action run from a key or a menu.
+function runGuarded(name, el) { if (!(leavesBy(name, el) && deferLeave(() => act(name, el)))) act(name, el); }
+// Runs a key again on its element (found again by data-fk when its column was refilled), once the editor has
+// closed.
+function redoKey(e, el) {
+  return () => {
+    const x = el.isConnected ? el : el.dataset.fk && strip.querySelector(`[data-fk="${CSS.escape(el.dataset.fk)}"]`);
+    if (!x) return;
+    x.focus({ preventScroll: true });
+    x.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, code: e.code, shiftKey: e.shiftKey, bubbles: true, cancelable: true }));
+  };
+}
+/* The discard dialog (ResearchEditorDiscardDialog): Keep editing has focus; Esc keeps editing and a press on
+   the scrim does nothing. From the editor's Cancel or Esc (no `proceed`), Discard closes the editor and ⌘S
+   saves in place; from a deferred action, Discard closes the editor and runs the action. */
+function openDiscard(proceed) {
+  hidePop(); S.modal = null;
+  S.dialog = { kind: 'discard', proceed, enter: false, ret: strip.querySelector('.ed-field') };
+  S.focusNext = '[data-a="ed-keep"]';
+  renderChrome();
+}
+function discardEditor() {
+  const d = S.dialog; if (!d || d.kind !== 'discard') return;
+  S.dialog = null; renderChrome();
+  if (!d.proceed) { closeEditor(); return; }
+  S.editor = null; d.proceed(); commit();
+}
 // A double-click on a note, outside its links and buttons, edits it.
 strip.addEventListener('dblclick', (e) => {
   const n = e.target.closest('.col.k-N .note-col.editable');
@@ -3075,8 +3381,9 @@ strip.addEventListener('dblclick', (e) => {
 
 /* ---------- notes ---------- */
 function openEditor(conv) {
+  if (S.editor && S.editor.conv !== conv && deferLeave(() => openEditor(conv))) return;
   const t = C[conv].turns[0];
-  S.editor = { conv, text: t.prompt, initial: t.prompt, confirm: false };
+  S.editor = { conv, text: t.prompt, initial: t.prompt };
   hidePop(); commit();
   const ta = strip.querySelector('.ed-field');
   if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); reveal(ta.closest('.col')); }
@@ -3086,12 +3393,11 @@ function closeEditor() {
   const n = conv && [...live.values()].find((o) => o.spec.kind === 'N' && o.spec.conv === conv);
   if (n) n.el.querySelector('.col-scroll').focus({ preventScroll: true });
 }
-// Cancel or Esc: closes at once when nothing changed, else asks first.
+// Cancel or Esc: closes at once when nothing changed, else asks first in the discard dialog.
 function closeEditorAsk() {
   const ed = S.editor; if (!ed) return;
   if (ed.text === ed.initial) { closeEditor(); return; }
-  ed.confirm = true; commit();
-  refocusFk('[data-fk="edkeep"]');
+  openDiscard(null);
 }
 function saveEditor(close) {
   const ed = S.editor; if (!ed || ed.text === ed.initial || !ed.text.trim()) return;
@@ -3134,6 +3440,7 @@ function cancelQueued(conv, id) {
 /* Open branch `id` of a message listed in column L and put focus on its selected message, in the branches
    column after it. `end` picks the branch's first or last row. */
 function goBranch(L, id, end, selectParent) {
+  if (deferLeave(() => goBranch(L, id, end, selectParent))) return;
   openBranch(L, id, end, selectParent);
   commit();
   const o = msgCol(L + 1);
@@ -3159,14 +3466,22 @@ function rightFrom(L) {
 /* Keyboard: ↑/↓ move between the rows of a column (across the groups of a branches column). On a feed row,
    Enter or Space selects it and focus stays; → selects it and moves into its thread. On a message, Enter or
    Space selects it and moves into its answer, → selects a row in the branches column, ← goes to the parent
-   message (or the feed). Esc goes to the root conversation. ⌥↑/⌥↓ move the focused card or message one step
-   in its list; on a feed card ⌥→ nests it under the card above and ⌥← moves it out of its group. */
+   message (or the feed). Esc clears a range, and otherwise goes to the root conversation. ⌥↑/⌥↓ move the
+   focused card or message one step in its list; on a feed card ⌥→ nests it under the card above and ⌥← moves
+   it out of its group. Shift+↑/↓ on a feed card or a message extend a range. */
 strip.addEventListener('keydown', (e) => {
   const t = e.target;
   if (e.key === 'Escape' && !t.closest('textarea') && S.levels.length && document.getElementById('pop').hidden) {
+    // The document's handler ends the feed's range.
+    if (S.feedRange) return;
     e.preventDefault();
+    // A message range clears first; focus stays, and the next Esc goes to the root conversation.
+    if (S.range) { S.range = null; commit(); return; }
     // On a note, Esc also closes the open follow-up.
-    if (isPostC(C[S.levels[0].conv]) && S.levels.length > 1) { closeAfter(0); commit(); }
+    if (isPostC(C[S.levels[0].conv]) && S.levels.length > 1) {
+      if (deferLeave(redoKey(e, t))) return;
+      closeAfter(0); commit();
+    }
     focusTurns(msgCol(0)); return;
   }
   if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.defaultPrevented && t.matches('.c-open[data-nav]')) {
@@ -3183,6 +3498,12 @@ strip.addEventListener('keydown', (e) => {
   const o = live.get(colEl.dataset.key); const sp = o.spec;
   const items = navItems(colEl), ix = items.indexOf(t), k = e.key;
   const all = colEls(), ci = all.indexOf(colEl);
+  if (e.shiftKey && (k === 'ArrowDown' || k === 'ArrowUp') && ix >= 0 && (t.dataset.act === 'root' || t.dataset.act === 'turn')) {
+    e.preventDefault();
+    if (sp.kind === 'F') stepFeedRange(k === 'ArrowUp' ? -1 : 1, t);
+    else stepMsgRange(sp.L, k === 'ArrowUp' ? -1 : 1, t);
+    return;
+  }
   if ((k === 'ArrowDown' || k === 'ArrowUp' || k === 'Home' || k === 'End') && items.length && ix >= 0) {
     e.preventDefault();
     let j = k === 'ArrowDown' ? ix + 1 : k === 'ArrowUp' ? ix - 1 : k === 'Home' ? 0 : items.length - 1;
@@ -3191,6 +3512,8 @@ strip.addEventListener('keydown', (e) => {
     return;
   }
   if (sp.kind === 'F') {
+    // Opening another thread (or a highlight) waits while the editor has changes.
+    if ((k === 'Enter' || k === ' ' || k === 'ArrowRight') && ix >= 0 && leavesBy(t.dataset.act, t) && deferLeave(redoKey(e, t))) { e.preventDefault(); return; }
     // A feed row is a question or a highlight. Enter or Space on a question selects it, as a click does.
     if ((k === 'Enter' || k === ' ') && ix >= 0 && t.dataset.act === 'root') { e.preventDefault(); clickDetail = 0; act('root', t); return; }
     if (k === 'ArrowRight' || ((k === 'Enter' || k === ' ') && ix >= 0)) {
@@ -3205,6 +3528,8 @@ strip.addEventListener('keydown', (e) => {
   const L = sp.L;
   if ((sp.kind === 'T' || sp.kind === 'B') && ix >= 0) {
     const conv = t.dataset.c, row = +t.dataset.t, v = S.levels[L], selected = !!v && v.conv === conv && v.turn === row;
+    // Selecting another message waits while the editor has changes.
+    if ((k === 'ArrowRight' || k === 'Enter' || k === ' ') && !selected && deferLeave(redoKey(e, t))) { e.preventDefault(); return; }
     if (k === 'ArrowRight') {
       e.preventDefault();
       if (selected) { rightFrom(L); return; }
@@ -3216,6 +3541,7 @@ strip.addEventListener('keydown', (e) => {
       else { selectMessage(L, conv, row); commit(); focusTurns(msgCol(L)); revealPair(L); }
     } else if (k === 'Enter' || k === ' ') {
       e.preventDefault();
+      S.range = null;
       selectMessage(L, conv, row); commit();
       const a = answerCol(L); if (a) { focusCol(a); revealPair(L); }
     } else if (k === 'ArrowLeft') {
@@ -3226,7 +3552,7 @@ strip.addEventListener('keydown', (e) => {
     return;
   }
   if (sp.kind === 'U' && ix >= 0) {
-    if (k === 'ArrowRight' || k === 'Enter' || k === ' ') { e.preventDefault(); act('openfu', t); }
+    if (k === 'ArrowRight' || k === 'Enter' || k === ' ') { e.preventDefault(); runGuarded('openfu', t); }
     else if (k === 'ArrowLeft') { e.preventDefault(); const n = levelCols(L)[0]; if (n && n.spec.kind === 'N') n.el.querySelector('.col-scroll').focus({ preventScroll: true }); }
     return;
   }
@@ -3248,6 +3574,8 @@ function send(key, branch) {
   const o = live.get(key); if (!o) return;
   const sp = o.spec, box = o.el._box, ta = box.querySelector('textarea');
   const text = ta.value.trim(); if (!text) return;
+  // New research from the feed opens its thread, which waits while the editor has changes.
+  if (sp.kind === 'F' && deferLeave(() => send(key, branch))) return;
   if (sp.kind === 'F') {
     ta.value = '';
     // New items start at the top of their list. In Note mode the text is saved as a note, or a single URL
@@ -3486,14 +3814,7 @@ pop.addEventListener('click', (e) => {
   if (a === 'note-delete') { hidePop(); openNodeDelete(m.L, m.conv, 0, ret); return; }
   // The Passage menu: a branch on the passage, then the highlight's actions.
   if (a === 'mark-open') { hidePop(); goBranch(m.L, b.dataset.b); return; }
-  if (a === 'hl-branch') {
-    const h = D.hl.find((x) => x.id === m.hl); hidePop(); if (!h) return;
-    const text = textOf(C[h.conv].turns[h.turn].body[h.p]);
-    S.levels = S.levels.slice(0, m.L + 1);
-    S.pending = { L: m.L, conv: h.conv, turn: h.turn, p: h.p, s: h.s, e: h.e, q: text.slice(h.s, h.e), armed: false };
-    commit(); focusAsk(pendingCol()); settle();
-    return;
-  }
+  if (a === 'hl-branch') { hidePop(); branchFromHighlight(m.L, m.hl); return; }
   if (a === 'hl-remove') { hidePop(); D.hl = D.hl.filter((h) => h.id !== m.hl); commit(); return; }
   // A sidebar folder's menu. Delete… opens the folder's view with its delete confirmation.
   if (a === 'folder-rename') { openFolderDialog({ f: b.dataset.f, value: folderName(b.dataset.f), ret }); return; }
@@ -3510,12 +3831,21 @@ pop.addEventListener('click', (e) => {
   if (a === 'recap') { hidePop(); openRecapDialog(id, 0, 'feed', ret); return; }
   if (a === 'unarchive') { hidePop(); moveThread(id, D.folders.some((f) => f.id === c.prevFolder) ? c.prevFolder : 'inbox'); refocus(ret); return; }
   if (a === 'delete') { hidePop(); openTreeDelete(id, ret); return; }
-  if (a === 'draft-open') { hidePop(); const r = strip.querySelector(`[data-fk="root:${CSS.escape(id)}"]`); if (r) act('root', r); return; }
+  if (a === 'draft-open') { hidePop(); const r = strip.querySelector(`[data-fk="root:${CSS.escape(id)}"]`); if (r) runGuarded('root', r); return; }
   if (a === 'draft-delete') { hidePop(); deleteDraft(id); return; }
   if (a === 'trash-restore') { hidePop(); restoreTrash(b.dataset.k); return; }
   if (a === 'trash-delete') { hidePop(); openTrashDelete(b.dataset.k, ret); return; }
   if (a === 'savedraft') { hidePop(); act('savedraft', b); return; }
 });
+// Branch to right on a highlight: the unsent branch on the highlight's passage.
+function branchFromHighlight(L, id) {
+  const h = D.hl.find((x) => x.id === id); if (!h) return;
+  if (deferLeave(() => branchFromHighlight(L, id))) return;
+  const text = textOf(C[h.conv].turns[h.turn].body[h.p]);
+  S.levels = S.levels.slice(0, L + 1);
+  S.pending = { L, conv: h.conv, turn: h.turn, p: h.p, s: h.s, e: h.e, q: text.slice(h.s, h.e), armed: false };
+  commit(); focusAsk(pendingCol()); settle();
+}
 // Return focus to a menu's button (or the row it was opened from), or to its row when the column was refilled.
 function refocus(btn) {
   if (!btn) return;
@@ -3529,6 +3859,7 @@ function copyText(txt, done) {
 }
 function commitPending() {
   const Pd = S.pending; if (!Pd || !Pd.armed) return;
+  if (deferLeave(() => { S.pending = Pd; commitPending(); })) return;
   Pd.armed = false; hidePop();
   getSelection().removeAllRanges();
   S.levels = S.levels.slice(0, Pd.L + 1);
@@ -3749,7 +4080,8 @@ function unitOf(t) {
   const col = t.closest('.col.k-A, .col.k-N'), o = col && live.get(col.dataset.key), sc = col && t.closest('.col-scroll');
   if (!o || !sc) return null;
   if (o.spec.kind === 'N') return { kind: 'note', el: sc, L: o.spec.L, conv: o.spec.conv, btn: col.querySelector('.hmenu') };
-  if (o.spec.qv) return null;
+  // A queued message or a range has no menu.
+  if (o.spec.qv || o.spec.range) return null;
   const m = msgCol(o.spec.L), b = m && m.el.querySelector(`.msg[data-c="${CSS.escape(o.spec.conv)}"][data-t="${o.spec.turn}"] .c-menu`);
   return { kind: 'answer', el: sc, L: o.spec.L, conv: o.spec.conv, t: o.spec.turn, btn: b };
 }
@@ -3931,6 +4263,8 @@ function dialogHTML() {
   const d = S.dialog; if (!d) return '';
   if (d.kind === 'rename') return `<div class="scrim"><form class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg-t" data-form="rename" novalidate><h3 id="dlg-t">${esc(d.title)}</h3><input id="dlg-input" class="dlg-input" autocomplete="off" aria-label="${esc(d.label)}" value="${esc(d.value)}"><div class="modal-acts"><button type="button" class="dbtn" data-a="dlg-cancel">Cancel</button><button type="submit" class="dbtn primary" data-a="dlg-submit"${!d.allowEmpty && !d.value.trim() ? ' disabled' : ''}>Rename</button></div></form></div>`;
   if (d.kind === 'recap') return recapHTML(d);
+  if (d.kind === 'discard') return '<div class="scrim"><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">Discard your changes?</h3><p>Your unsaved edits will be lost.</p>'
+    + '<div class="modal-acts"><button type="button" class="dbtn" data-a="ed-keep">Keep editing</button><button type="button" class="dbtn danger" data-a="ed-discard">Discard</button></div></div></div>';
   const st = dialogStep(d);
   return `<div class="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg-t"${st.body ? ' aria-describedby="dlg-b"' : ''} tabindex="-1" data-step="${d.step}"><h3 id="dlg-t">${esc(st.title)}</h3>${st.body ? `<div class="modal-body" id="dlg-b">${st.body}</div>` : ''}${d.disabled ? `<p role="status">${esc(d.disabled)}</p>` : ''}`
     + `<div class="modal-acts">${d.step === 'trash' ? '<button type="button" class="dlink" data-a="dlg-now">Delete now</button>' : ''}<button type="button" class="dbtn" data-a="dlg-cancel">Cancel</button><button type="button" class="dbtn ${st.tone}" data-a="dlg-ok"${d.disabled ? ' disabled' : ''}>${esc(st.label)}</button></div></div></div>`;
@@ -4156,9 +4490,10 @@ function renderChrome() {
 }
 
 /* ---------- ambient background ----------
-   Ported from ResearchAmbient.tsx: theme-coloured ASCII wisps from domain-warped, layered value noise,
-   drawn at 12 frames a second. Each cell changes its glyph at its own pace and crossfades. The canvas
-   fills the space right of the last column (--ambient-start), or the whole area while expanded. */
+   Ported from ResearchAmbient.tsx: theme-coloured ASCII characters revealed by a cirrus opacity field (three
+   tapered, feathered ribbons, repeating every 1440×840px) that drifts 12px/s right and 2px/s up, drawn at 12
+   frames a second. Each cell keeps one character; only its opacity changes. The canvas fills the space right
+   of the last column (--ambient-start), or the whole area while expanded. */
 const GLYPHS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const hash = (v) => { const n = Math.sin(v * 127.1 + 311.7) * 43758.5453; return n - Math.floor(n); };
 function noise(x, y) {
@@ -4166,6 +4501,29 @@ function noise(x, y) {
   const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
   const a = hash(ix + iy * 157), b = hash(ix + 1 + iy * 157), c = hash(ix + (iy + 1) * 157), d = hash(ix + 1 + (iy + 1) * 157);
   return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+}
+const CIRRUS_BANDS = [
+  { x: 420, y: 255, length: 390 },
+  { x: 720, y: 388, length: 475 },
+  { x: 530, y: 528, length: 340 },
+];
+// The opacity field in CSS px, 0–1. It repeats beyond the ribbons' tapered ends, so new ribbons enter as it drifts.
+function cirrusCloud(x, y) {
+  const u = ((x % 1440) + 1440) % 1440, v = ((y % 840) + 840) % 840;
+  let cloud = 0;
+  CIRRUS_BANDS.forEach((band, i) => {
+    const q = (u - band.x) / band.length;                       // -1..1 along the ribbon
+    const taper = Math.max(0, 1 - q * q) ** 0.8;                 // 0 at both ends
+    if (taper === 0) return;
+    const path = band.y - 85 * q + 22 * Math.sin(q * 3.5 + i);   // the ribbon's centre line
+    const d = (v - path) / (5 + 24 * taper);                     // half-width 5–29px
+    const core = Math.exp(-d * d * 1.4);
+    const feathers = 0.3 + 0.7 * noise(u / 65 + i * 9, v / 24);  // streaks along the ribbon
+    const sd = (v - path - 29 * taper) / (5 + 7 * taper);        // a thin strand below the core
+    const strand = Math.exp(-sd * sd) * 0.37;
+    cloud = Math.max(cloud, (core * feathers + strand) * taper);
+  });
+  return Math.min(1, cloud);
 }
 const contrast = matchMedia('(forced-colors: active)');
 const AMB = { ctx: ambCanvas.getContext('2d'), elapsed: 0, timer: 0, w: 0, h: 0, prev: 0, ink: '', font: '' };
@@ -4181,21 +4539,15 @@ function ambDraw() {
   ctx.fillStyle = AMB.ink;
   for (let y = dy / 2, row = 0; y < h; y += dy, row++) {
     for (let x = dx / 2, col = 0; x < w; x += dx, col++) {
-      const u = x / Math.max(w, 640), v = y / Math.max(h, 480);
-      const nx = u * 3.6 + 0.65 * Math.sin(v * 4 + t * 0.03) - t * 0.018;
-      const ny = v * 4.2 + 0.35 * Math.sin(u * 5 - t * 0.02) + t * 0.01;
-      const field = noise(nx, ny) * 0.62 + noise(nx * 2.1, ny * 2.1) * 0.27 + noise(nx * 4.1, ny * 4.1) * 0.11;
-      const cloud = clamp((field - 0.46) / 0.34, 0, 1);
+      // The whole field moves together at a fixed pixel scale, so narrow and expanded views crop it
+      // without stretching it.
+      const cloud = cirrusCloud(x - t * 12, y + t * 2);
       const seed = row * 613 + col * 17;
-      const alpha = cloud ** 1.6 * 0.11 * (0.75 + hash(seed) * 0.25);
+      const alpha = cloud * (0.11 * 1.75) * (0.75 + hash(seed) * 0.25);
       if (alpha < 0.004) continue;
-      const phase = t / (3 + hash(seed + 1) * 5) + hash(seed + 2) * 10;
-      const epoch = Math.floor(phase), blend = Math.min(1, (phase - epoch) * 5);
-      const glyph = (at) => GLYPHS[Math.floor(hash(seed + at * 31) * GLYPHS.length)];
-      ctx.globalAlpha = alpha * (1 - blend);
-      if (blend < 1) ctx.fillText(glyph(epoch - 1), x, y);
-      ctx.globalAlpha = alpha * blend;
-      ctx.fillText(glyph(epoch), x, y);
+      // Characters stay in their cells; the passing ribbons change only how brightly each one shows.
+      ctx.globalAlpha = alpha;
+      ctx.fillText(GLYPHS[Math.floor(hash(seed) * GLYPHS.length)], x, y);
     }
   }
   ctx.globalAlpha = 1;
@@ -4501,9 +4853,10 @@ strip.addEventListener('focusin', (e) => { const c = e.target.closest('.col'); i
 strip.addEventListener('pointerdown', (e) => { const c = e.target.closest('.col'); if (c) S.cycleKey = c.dataset.key; }, true);
 function cycleRows(dir, keepFocus) {
   let o = live.get(S.cycleKey) || colByKey('F');
+  if (o.spec.kind === 'R') o = colByKey('F');
   if (o.spec.kind === 'A' || o.spec.kind === 'N' || o.spec.kind === 'E') o = msgCol(o.spec.L) || colByKey('F');
   const rows = navItems(o.el).filter((x) => ['root', 'turn', 'openfu'].includes(x.dataset.act));
-  if (!rows.length) return;
+  if (!rows.length || deferLeave(() => cycleRows(dir, keepFocus))) return;
   const ae = document.activeElement, at = rows.indexOf(ae) >= 0 ? rows.indexOf(ae) : rows.findIndex((x) => x.getAttribute('aria-current') === 'true');
   const next = rows[at < 0 ? (dir > 0 ? 0 : rows.length - 1) : (at + dir + rows.length) % rows.length];
   clickDetail = 0; act(next.dataset.act, next);
@@ -4531,6 +4884,8 @@ win.addEventListener('click', (e) => {
     case 'dlg-ok': confirmDialog(); break;
     case 'dlg-cancel': closeDialog(); break;
     case 'dlg-now': S.dialog.step = 'remove'; S.focusNext = S.dialog.disabled ? '[data-a="dlg-cancel"]' : '[data-a="dlg-ok"]'; renderChrome(); break;
+    case 'ed-keep': closeDialog(); break;
+    case 'ed-discard': discardEditor(); break;
     case 'recap-gen': recapGenerate(); break;
     case 'recap-use': recapUse(); break;
     case 'undo': {
@@ -4544,11 +4899,11 @@ win.addEventListener('click', (e) => {
 
 /* ---------- forms (the folder-name, rename and recap dialogs) ---------- */
 const RESERVED = ['home', 'unfiled', 'drafts', 'archive', 'trash', 'highlights'];
-// A press on the scrim closes the dialog.
+// A press on the scrim closes the dialog, except the discard dialog's, which stays.
 win.addEventListener('mousedown', (e) => {
   if (!e.target.classList || !e.target.classList.contains('scrim')) return;
   e.preventDefault();
-  if (S.modal) closeModal(); else closeDialog();
+  if (S.modal) closeModal(); else if (!S.dialog || S.dialog.kind !== 'discard') closeDialog();
 });
 win.addEventListener('input', (e) => {
   const t = e.target, d = S.dialog;
@@ -4592,6 +4947,15 @@ document.addEventListener('keydown', (e) => {
     focusAsk(askColFor(curLevel()));
     return;
   }
+  // ⌘S in the discard dialog from the editor's Cancel or Esc saves in place: the dialog closes and the
+  // editor stays open.
+  if (S.dialog && S.dialog.kind === 'discard' && !S.dialog.proceed && (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    const ed = S.editor;
+    if (ed && ed.text !== ed.initial && ed.text.trim()) { closeDialog(); saveEditor(false); }
+    return;
+  }
+  // Esc closes a dialog (Keep editing, in the discard dialog).
   if (e.key === 'Escape') {
     if (S.modal) { e.preventDefault(); closeModal(); }
     else if (S.dialog) { e.preventDefault(); closeDialog(); }
@@ -4898,11 +5262,11 @@ function reset() {
   for (const o of live.values()) o.el.remove();
   live.clear();
   for (const k in scrollMem) delete scrollMem[k];
-  lastStructure = ''; curL = null;
+  lastStructure = ''; curL = null; lastRangeN = 0;
   hidePop();
   Object.assign(S, {
     // The Trash tray starts collapsed and its open state isn't saved; two groups start collapsed.
-    levels: [{ conv: 'c1', turn: 1 }], pending: null, queued: null, mem: {}, chainMem: {}, askText: {}, expanded: new Set(), trace: new Set(), editor: null,
+    levels: [{ conv: 'c1', turn: 1 }], pending: null, queued: null, range: null, feedRange: null, mem: {}, chainMem: {}, askText: {}, expanded: new Set(), trace: new Set(), editor: null,
     collapsed: new Set(['archive', 'f-later', 'trash']), collapsedGroups: new Set(['c2', 'c4']), menu: null, askMode: 'ai',
     widths: Object.assign({ feed: null, messages: null, answer: null }, prefs.widths),
     sidebar: prefs.sidebar || 'full', theme: prefs.theme === 'light' ? 'light' : 'dark', sideW: prefs.sideW || SIDE_MIN, sideWEff: SIDE_MIN,
@@ -5017,6 +5381,41 @@ const PRESETS = {
     keepHistory: true,
     state() { goHistory(-1); },
     view() { const f = colByKey('F'); if (f) focusCol(f); settle(); },
+  },
+  // A message range: the root's second to fourth messages, read in one answer column.
+  range: {
+    state() { selectMessage(0, 'c1', 1); setMsgRange(0, 3); commit(); },
+    view() {
+      const o = msgCol(0), r = o && o.el.querySelector('[data-fk="turn:c1:3"]');
+      if (r) { roving(o.el, r); r.focus({ preventScroll: true }); scrollIntoBody(r); }
+      settle(answerCol(0) && answerCol(0).el);
+    },
+  },
+  // A feed range in Unfiled from the open thread to "design-team → main": an answered thread, a group's child
+  // exchange and note, a note, a running answer and a stopped one, in one content column.
+  'feed-range': {
+    keepHistory: true,
+    state() {
+      presetRoot('c1');
+      S.hist = { entries: [null, visitNow()], index: 1 };
+      const list = strip.querySelector('.col.k-F [data-list="place:inbox"]');
+      setFeedRange(rangeIds(listIds(list), 'c1', 'c11'), 'c11', 'place:inbox');
+    },
+    view() {
+      const f = colByKey('F'), r = f && f.el.querySelector('[data-fk="root:c11"]');
+      if (r) { roving(f.el, r); r.focus({ preventScroll: true }); scrollIntoBody(r); }
+      settle();
+    },
+  },
+  // The note editor with changed text after Cancel: the discard dialog.
+  discard: {
+    state() {
+      presetRoot('c16'); openEditor('c16');
+      const ta = strip.querySelector('.ed-field');
+      ta.value = S.editor.text = S.editor.text + '\nAlso bring the timelines quick take.';
+      commit(); closeEditorAsk();
+    },
+    view() { settle(); const b = win.querySelector('[data-a="ed-keep"]'); if (b) b.focus(); },
   },
   draft: {
     state() { presetRoot('c6'); },
