@@ -12,13 +12,13 @@
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #23262f; --ink: #e8eaf0; --muted: #9aa1b2; --line: #3a3f4c; color-scheme: dark; } }
   :root[data-theme="dark"] { --bg: #23262f; --ink: #e8eaf0; --muted: #9aa1b2; --line: #3a3f4c; color-scheme: dark; }
   body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 40px 64px;
+  .wrap { max-width: 1280px; margin: 0 auto; padding-block: 40px 64px;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
     display: grid; gap: 20px; }
   h1 { margin: 0; font-size: 22px; font-weight: 600; }
   p { margin: 0; color: var(--muted); max-width: 70ch; }
   .scroll { overflow-x: auto; }
-  table { border-collapse: collapse; min-width: 820px; width: 100%; }
+  table { border-collapse: collapse; min-width: 1000px; width: 100%; }
   th { font: 400 11.5px var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; text-align: center; padding: 8px; }
   th[scope="row"] { text-align: left; white-space: nowrap; }
   td { padding: 12px 8px; border-top: 1px solid var(--line); text-align: center; vertical-align: top; }
@@ -31,7 +31,7 @@
   <p>Five-blade pinwheel drawn with <code>. : - = + * # % @</code> in JetBrains Mono, at 24, 26 and 30 grid columns. Border widths are in units of the 1024 px icon canvas. The current app icon uses 37.</p>
   <div class="scroll">
     <table>
-      <thead><tr><th></th><th>37 (current)</th><th>24</th><th>14</th><th>6</th></tr></thead>
+      <thead><tr><th></th><th>37 (current)</th><th>30</th><th>24</th><th>14</th><th>6</th></tr></thead>
       <tbody id="body"></tbody>
     </table>
   </div>
@@ -41,7 +41,7 @@
 const body = document.getElementById("body");
 for (const cols of [24, 26, 30]) {
   const tr = document.createElement("tr");
-  tr.innerHTML = `<th scope="row">${cols} columns</th>` + [37, 24, 14, 6].map(b => {
+  tr.innerHTML = `<th scope="row">${cols} columns</th>` + [37, 30, 24, 14, 6].map(b => {
     const src = `b${String(b).padStart(2, "0")}-ramp-c${cols}-color.svg`;
     return `<td><img class="big" src="${src}" alt="${cols} columns, border ${b}">
       <div class="small"><img src="${src}" width="64" height="64" alt=""><img src="${src}" width="32" height="32" alt=""></div></td>`;
