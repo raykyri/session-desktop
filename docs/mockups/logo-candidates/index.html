@@ -1,0 +1,149 @@
+<title>Session Logo Candidates</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a header strip with the brief, then a 3-column grid of candidate cards; each card shows the
+     color mark on the app's dark ground, a glyph-field rendering, and mono marks at icon sizes on dark and light. */
+  :root {
+    --ground: #151821;      /* app dark surface, the background every mark was drawn for */
+    --panel: #1b1f2a;
+    --line: #2a3040;
+    --ink: #e6e9f2;
+    --muted: #8d95a8;
+    --paper: #f4f5f8;       /* light swatch for mono checks */
+    --paper-ink: #151821;
+    --accent: #5ef0b0;
+    --display: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  body { background: var(--ground); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding-block: 40px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 32px; }
+  header { display: grid; gap: 10px; max-width: 70ch; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); }
+  .legend { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+  @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid; grid-template-rows: auto auto 1fr; min-width: 0; }
+  .stage { position: relative; aspect-ratio: 1; max-width: 100%; background: var(--ground); border-bottom: 1px solid var(--line); }
+  .stage img, .stage canvas { position: absolute; inset: 8%; width: 84%; height: 84%; }
+  .stage canvas { inset: 0; width: 100%; height: 100%; }
+  .stage .toggle { position: absolute; right: 10px; top: 10px; font: 500 11px var(--mono); letter-spacing: 0.04em; color: var(--muted);
+    background: color-mix(in srgb, var(--panel) 85%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+  .stage .toggle:hover, .stage .toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
+  .stage .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sizes { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+  .sizes > div { display: flex; align-items: flex-end; gap: 14px; padding: 14px 16px; }
+  .sizes .dark { color: var(--ink); background: var(--ground); }
+  .sizes .light { color: var(--paper-ink); background: var(--paper); }
+  .sizes span { display: block; }
+  .sizes svg { display: block; }
+  .meta { padding: 14px 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .meta h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+  .meta h2 .id { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+  .meta .by { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .meta p { margin: 0; color: var(--muted); font-size: 14px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Session logo candidates</h1>
+    <p>Open, radiating strokes around a hollow center, derived from an eight-petal pinwheel with the petals opened. Each card shows the full-color mark on the app's dark surface, the single-color mark at 64, 32 and 16&nbsp;px on dark and light, and a glyph-field rendering that approximates how the idle background could echo the mark.</p>
+    <div class="legend"><span>01–03 drawn in this session</span><span>04 Fable agent</span><span>05–06 Opus agents</span></div>
+  </header>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const CANDIDATES = [
+  { id: "01", slug: "01-open-pinwheel", name: "Open pinwheel", by: "Session lead",
+    note: "Eight tapered crescents: the reference petals reduced to their leading edges. Mint to cyan to violet, fading at the tips." },
+  { id: "02", slug: "02-filaments", name: "Filaments", by: "Session lead",
+    note: "Sixteen hairline arcs alternating long and short, with hue rotating around the ring. Busiest of the set at 16 px." },
+  { id: "03", slug: "03-split-flap", name: "Split flap", by: "Session lead",
+    note: "Each closed petal opened into its two edges, which no longer meet. Uses the current app-icon amber to coral gradient." },
+  { id: "04", slug: "04-curtain", name: "Curtain", by: "Fable agent",
+    note: "Eight blades alternating long and short, each a bright leading edge with a ragged curtain of rays on its outer side, green to teal to violet." },
+  { id: "05", slug: "05-rays", name: "Rays", by: "Opus agent",
+    note: "" },
+  { id: "06", slug: "06-ribbons", name: "Ribbons", by: "Opus agent",
+    note: "" },
+];
+
+const GLYPHS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+async function loadMono(slug) {
+  try { const r = await fetch(slug + "-mono.svg"); if (!r.ok) throw 0; return await r.text(); }
+  catch { return null; }
+}
+
+function sizedSvg(text, px) {
+  return text.replace(/<svg([^>]*?)\swidth="[^"]*"/, "<svg$1").replace(/<svg([^>]*?)\sheight="[^"]*"/, "<svg$1")
+             .replace("<svg", `<svg width="${px}" height="${px}" aria-hidden="true"`);
+}
+
+// Sample the color mark's luminance on a coarse grid and draw one glyph per cell, alpha by luminance.
+function drawGlyphs(img, canvas) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const size = canvas.clientWidth * dpr; canvas.width = canvas.height = size;
+  const cell = 9 * dpr, cols = Math.floor(size / cell);
+  const off = document.createElement("canvas"); off.width = off.height = cols;
+  const o = off.getContext("2d");
+  o.fillStyle = "#000"; o.fillRect(0, 0, cols, cols);
+  const pad = cols * 0.08; o.drawImage(img, pad, pad, cols - 2 * pad, cols - 2 * pad);
+  const px = o.getImageData(0, 0, cols, cols).data; // throws when tainted (file://)
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--ground");
+  ctx.fillRect(0, 0, size, size);
+  ctx.font = `600 ${cell * 0.95}px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
+    const i = (y * cols + x) * 4, r = px[i], g = px[i + 1], b = px[i + 2];
+    const lum = (0.3 * r + 0.55 * g + 0.15 * b) / 255;
+    const ch = GLYPHS[Math.floor(rnd() * GLYPHS.length)];
+    if (lum < 0.04) { if (rnd() < 0.08) { ctx.fillStyle = "rgba(141,149,168,0.08)"; ctx.fillText(ch, (x + 0.5) * cell, (y + 0.5) * cell); } continue; }
+    const a = Math.min(1, 0.12 + lum * 0.9);
+    ctx.fillStyle = `rgba(${r},${g},${b},${a})`; // keep the mark's hue, dim like the ambient field
+    ctx.fillText(ch, (x + 0.5) * cell, (y + 0.5) * cell);
+  }
+}
+
+async function render() {
+  const grid = document.getElementById("grid");
+  for (const c of CANDIDATES) {
+    const card = document.createElement("article"); card.className = "card";
+    card.innerHTML = `
+      <div class="stage">
+        <img src="${c.slug}.svg" alt="${c.name}, full-color mark">
+        <canvas hidden aria-label="${c.name} rendered as a glyph field"></canvas>
+        <button class="toggle" id="toggle-${c.id}" type="button" aria-pressed="false">Glyph field</button>
+      </div>
+      <div class="sizes"><div class="dark"></div><div class="light"></div></div>
+      <div class="meta">
+        <h2><span class="id">${c.id}</span>${c.name}</h2>
+        <span class="by">${c.by}</span>
+        ${c.note ? `<p>${c.note}</p>` : ""}
+      </div>`;
+    grid.append(card);
+    const img = card.querySelector("img"), canvas = card.querySelector("canvas"), btn = card.querySelector(".toggle");
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      if (on) { try { drawGlyphs(img, canvas); } catch { btn.textContent = "Glyph field unavailable"; btn.disabled = true; return; } }
+      btn.setAttribute("aria-pressed", String(on)); canvas.hidden = !on; img.hidden = on;
+    });
+    const mono = await loadMono(c.slug);
+    for (const side of [".dark", ".light"]) {
+      const host = card.querySelector(".sizes " + side);
+      if (mono) host.innerHTML = [64, 32, 16].map(s => sizedSvg(mono, s)).join("");
+      else host.innerHTML = [64, 32, 16].map(s => `<img src="${c.slug}-mono.svg" width="${s}" height="${s}" alt="">`).join("");
+    }
+  }
+}
+render();
+</script>
