@@ -1,7 +1,6 @@
-# 02 Filaments
+# 02 Filaments (round 2: simplified)
 
-Sixteen thin open arcs alternating long (r 58→240, 92° sweep) and short (r 74→178, 66° sweep), each fading to full transparency at its tip.
-Hue changes around the ring (green, cyan, blue, violet, magenta) so the mark reads as a rotating aurora band rather than a solid wheel.
-Same construction as 01: spiral centerline with angle eased by t^1.5 and a t^a·(1−t)^b width profile; 7px glow.
-Mono version keeps all 16 strokes; legible at 32px, busy at 16px. If it needs to work at 16px, drop to the 8 long strokes.
-The alternating lengths map well to an ASCII density field: long strokes dense, short strokes sparse.
+Six thin, evenly spaced arcs (r 76→238, 118° sweep), down from sixteen. Each tapers to a point and fades to 30% opacity at the tip.
+The three hues (green, cyan, violet) repeat twice around the ring, so the rotation reads as one aurora band changing color.
+The construction is the same as 01 with a thinner profile: t^0.35·(1−t)^0.8, max width 20. The mono version uses the same paths.
+It is the lightest mark in the set and gets thin at 16 px.

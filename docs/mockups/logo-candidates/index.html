@@ -55,7 +55,7 @@
   <header>
     <h1>Session logo candidates</h1>
     <p>Open, radiating strokes around a hollow center, derived from an eight-petal pinwheel with the petals opened. Each card shows the full-color mark on the app's dark surface, the single-color mark at 64, 32 and 16&nbsp;px on dark and light, and a glyph-field rendering that approximates how the idle background could echo the mark.</p>
-    <div class="legend"><span>01–03 drawn in this session</span><span>04 Fable agent</span><span>05–06 Opus agents</span></div>
+    <div class="legend"><span>Round 2: fewer, simpler strokes</span><span>01–03, 07–08 drawn in this session</span><span>04 Fable agent</span><span>05–06 Opus agents</span></div>
   </header>
   <div class="grid" id="grid"></div>
 </div>
@@ -63,17 +63,21 @@
 <script>
 const CANDIDATES = [
   { id: "01", slug: "01-open-pinwheel", name: "Open pinwheel", by: "Session lead",
-    note: "Eight tapered crescents: the reference petals reduced to their leading edges. Mint to cyan to violet, fading at the tips." },
+    note: "Five tapered crescents: the reference petals reduced to their leading edges. Mint to cyan to violet, one gradient per blade." },
   { id: "02", slug: "02-filaments", name: "Filaments", by: "Session lead",
-    note: "Sixteen hairline arcs alternating long and short, with hue rotating around the ring. Busiest of the set at 16 px." },
+    note: "Six thin arcs that fade toward the tips, with green, cyan and violet repeating around the ring. The lightest mark here; thin at 16 px." },
   { id: "03", slug: "03-split-flap", name: "Split flap", by: "Session lead",
-    note: "Each closed petal opened into its two edges, which no longer meet. Uses the current app-icon amber to coral gradient." },
+    note: "Three petals, each opened into its two edges, which no longer meet. Uses the current app-icon amber to coral gradient." },
   { id: "04", slug: "04-curtain", name: "Curtain", by: "Fable agent",
-    note: "Eight blades alternating long and short, each a bright leading edge with a ragged curtain of rays on its outer side, green to teal to violet." },
+    note: "Five tapered blades rooted on an exact inner circle, so the hollow center has a crisp edge. Pale green root, teal middle, violet tip." },
   { id: "05", slug: "05-rays", name: "Rays", by: "Opus agent",
-    note: "Eight blades of seven hairline rays each, leaving the center straight and bending near the tips; uneven ray lengths give each blade a feathered edge." },
+    note: "" },
   { id: "06", slug: "06-ribbons", name: "Ribbons", by: "Opus agent",
-    note: "Six ribbons on constant-curvature arcs, each twisting half a turn so it narrows to an edge-on sliver and reopens showing its back face. Amber to coral front, rose to violet back." },
+    note: "" },
+  { id: "07", slug: "07-triskele", name: "Triskele", by: "Session lead",
+    note: "Three broad blades, each sweeping 150° around the hollow center. The fewest elements and the boldest silhouette in the set." },
+  { id: "08", slug: "08-monoline", name: "Monoline", by: "Session lead",
+    note: "Four constant-width spiral strokes with round caps, in the app-icon amber to coral gradient. Works at a single stroke weight." },
 ];
 
 const GLYPHS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
