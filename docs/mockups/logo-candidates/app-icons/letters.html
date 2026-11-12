@@ -1,0 +1,108 @@
+<meta charset="utf-8">
+<title>Session Letter Icons</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: one row per variant. Each row has its name and parameters, then three 1024 px icon tiles
+     (color, black, white) shown at 180 px, then the color tile at Dock and Finder sizes. */
+  :root {
+    --bg: #e9ebf0;
+    --surface: #f6f7f9;
+    --line: #d3d7e0;
+    --ink: #151821;
+    --muted: #5d6474;
+    --accent: #e8743f;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #23262f; --surface: #2b2f39; --line: #3a3f4c; --ink: #e8eaf0; --muted: #9aa1b2; --accent: #f9a841; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #23262f; --surface: #2b2f39; --line: #3a3f4c; --ink: #e8eaf0; --muted: #9aa1b2; --accent: #f9a841; color-scheme: dark; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 40px 72px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 36px; }
+  header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: center; }
+  header img { width: 112px; height: 112px; }
+  header h1 { margin: 0 0 6px; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); max-width: 68ch; }
+  section { display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 13px; font-weight: 500; font-family: var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .cols, .row { display: grid; grid-template-columns: 170px repeat(3, minmax(0, 180px)) minmax(0, 1fr); gap: 16px; align-items: center; }
+  .cols { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; padding: 0 16px; }
+  .row { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .row .name { display: grid; gap: 2px; min-width: 0; }
+  .row .name b { font-weight: 600; }
+  .row .name span { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .row .tile { width: 100%; max-width: 180px; aspect-ratio: 1; }
+  .ladder { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  @media (max-width: 860px) {
+    .cols { display: none; }
+    .row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .row .name, .row .ladder { grid-column: 1 / -1; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <img src="current-app-icon.svg" alt="Current Session app icon">
+    <div>
+      <h1>Session letter icons</h1>
+      <p>The pinwheel drawn with JetBrains Mono, the app's monospace font, in the current macOS app-icon frame. Letterforms are converted to outlines. The first group sets letters along each blade, sized to the blade's width, which allows much larger letters while keeping the pinwheel shape. The second uses a terminal grid with larger cells. The third is the previous round's finer grids, for comparison. The current icon is on the left.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2>Letters along the blades</h2>
+    <div class="cols"><span>Variant</span><span>Color</span><span>Black</span><span>White</span><span>128 / 64 / 32 / 16 px</span></div>
+    <div id="path" style="display:grid;gap:10px"></div>
+  </section>
+
+  <section>
+    <h2>Grid, larger cells</h2>
+    <div class="cols"><span>Variant</span><span>Color</span><span>Black</span><span>White</span><span>128 / 64 / 32 / 16 px</span></div>
+    <div id="grid" style="display:grid;gap:10px"></div>
+  </section>
+
+  <section>
+    <h2>Grid, previous round</h2>
+    <div class="cols"><span>Variant</span><span>Color</span><span>Black</span><span>White</span><span>128 / 64 / 32 / 16 px</span></div>
+    <div id="prev" style="display:grid;gap:10px"></div>
+  </section>
+</div>
+
+<script>
+const PATH = [
+  ["l8-session-five", "session × 5", "the word on each of 5 blades, 76 → 32 units"],
+  ["l9-session-three", "session × 3", "the word on each of 3 blades, 116 → 46 units"],
+  ["l5-path-five", "Random letters, five", "letter size = blade width · 5 blades"],
+  ["l6-path-five-heavy", "Random letters, five heavy", "wider blades, so larger letters"],
+  ["l7-path-three", "Random letters, three", "3 blades · largest random letters"],
+];
+const GRID = [
+  ["l1-grid-22", "22 columns", "5 blades, bold"],
+  ["l2-grid-16-three", "16 columns", "3 blades, heavy"],
+  ["l3-grid-13-three", "13 columns", "3 blades, heavy · largest grid letters"],
+];
+const PREV = [
+  ["g1-alnum", "30 columns", "5 blades"],
+  ["g2-alnum-field", "30 columns on a field", "faint background characters"],
+  ["g5-mixed", "34 columns, soft edges", "letters in the core, punctuation at the edges"],
+  ["g6-fine", "44 columns", "6 blades"],
+  ["g3-ramp", "Density ramp", ". : - = + * # % @"],
+  ["g4-direction", "Stroke direction", "/ \\ | -"],
+];
+function rows(list, host) {
+  for (const [slug, name, detail] of list) {
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<div class="name"><b>${name}</b><span>${detail}</span></div>` +
+      ["color", "mono-dark", "mono-light"].map(k =>
+        `<img class="tile" src="${slug}-${k}.svg" alt="${name}, ${k.replace("mono-dark", "black").replace("mono-light", "white")}">`).join("") +
+      `<div class="ladder">${[128, 64, 32, 16].map(n => `<img src="${slug}-color.svg" width="${n}" height="${n}" alt="">`).join("")}</div>`;
+    host.append(row);
+  }
+}
+rows(PATH, document.getElementById("path"));
+rows(GRID, document.getElementById("grid"));
+rows(PREV, document.getElementById("prev"));
+</script>
