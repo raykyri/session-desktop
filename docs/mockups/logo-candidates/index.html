@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Session Logo Candidates</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,7 +91,7 @@ function sizedSvg(text, px) {
 // Sample the color mark's luminance on a coarse grid and draw one glyph per cell, alpha by luminance.
 function drawGlyphs(img, canvas) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const size = canvas.clientWidth * dpr; canvas.width = canvas.height = size;
+  const size = Math.round(canvas.parentElement.clientWidth * dpr); canvas.width = canvas.height = size;
   const cell = 9 * dpr, cols = Math.floor(size / cell);
   const off = document.createElement("canvas"); off.width = off.height = cols;
   const o = off.getContext("2d");
