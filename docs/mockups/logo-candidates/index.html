@@ -73,7 +73,7 @@ const CANDIDATES = [
   { id: "05", slug: "05-rays", name: "Rays", by: "Opus agent",
     note: "Eight blades of seven hairline rays each, leaving the center straight and bending near the tips; uneven ray lengths give each blade a feathered edge." },
   { id: "06", slug: "06-ribbons", name: "Ribbons", by: "Opus agent",
-    note: "" },
+    note: "Six ribbons on constant-curvature arcs, each twisting half a turn so it narrows to an edge-on sliver and reopens showing its back face. Amber to coral front, rose to violet back." },
 ];
 
 const GLYPHS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -93,11 +93,21 @@ function drawGlyphs(img, canvas) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const size = Math.round(canvas.parentElement.clientWidth * dpr); canvas.width = canvas.height = size;
   const cell = 9 * dpr, cols = Math.floor(size / cell);
-  const off = document.createElement("canvas"); off.width = off.height = cols;
+  const S = 4, res = cols * S; // supersample so hairline strokes survive, then take each cell's peak
+  const off = document.createElement("canvas"); off.width = off.height = res;
   const o = off.getContext("2d");
-  o.fillStyle = "#000"; o.fillRect(0, 0, cols, cols);
-  const pad = cols * 0.08; o.drawImage(img, pad, pad, cols - 2 * pad, cols - 2 * pad);
-  const px = o.getImageData(0, 0, cols, cols).data; // throws when tainted (file://)
+  o.fillStyle = "#000"; o.fillRect(0, 0, res, res);
+  const pad = res * 0.08; o.drawImage(img, pad, pad, res - 2 * pad, res - 2 * pad);
+  const src = o.getImageData(0, 0, res, res).data; // throws when tainted (file://)
+  const px = new Float32Array(cols * cols * 4);
+  for (let cy = 0; cy < cols; cy++) for (let cx = 0; cx < cols; cx++) {
+    let best = -1, br = 0, bg = 0, bb = 0, sum = 0;
+    for (let sy = 0; sy < S; sy++) for (let sx = 0; sx < S; sx++) {
+      const j = ((cy * S + sy) * res + cx * S + sx) * 4, l = 0.3 * src[j] + 0.55 * src[j + 1] + 0.15 * src[j + 2];
+      sum += l; if (l > best) { best = l; br = src[j]; bg = src[j + 1]; bb = src[j + 2]; }
+    }
+    const k = (cy * cols + cx) * 4; px[k] = br; px[k + 1] = bg; px[k + 2] = bb; px[k + 3] = 0.6 * best + 0.4 * sum / (S * S);
+  }
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--ground");
   ctx.fillRect(0, 0, size, size);
@@ -106,11 +116,11 @@ function drawGlyphs(img, canvas) {
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let y = 0; y < cols; y++) for (let x = 0; x < cols; x++) {
     const i = (y * cols + x) * 4, r = px[i], g = px[i + 1], b = px[i + 2];
-    const lum = (0.3 * r + 0.55 * g + 0.15 * b) / 255;
+    const lum = Math.pow(px[i + 3] / 255, 0.75);
     const ch = GLYPHS[Math.floor(rnd() * GLYPHS.length)];
     if (lum < 0.04) { if (rnd() < 0.08) { ctx.fillStyle = "rgba(141,149,168,0.08)"; ctx.fillText(ch, (x + 0.5) * cell, (y + 0.5) * cell); } continue; }
     const a = Math.min(1, 0.12 + lum * 0.9);
-    ctx.fillStyle = `rgba(${r},${g},${b},${a})`; // keep the mark's hue, dim like the ambient field
+    ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${a})`; // keep the mark's hue, dim like the ambient field
     ctx.fillText(ch, (x + 0.5) * cell, (y + 0.5) * cell);
   }
 }
