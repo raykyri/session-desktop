@@ -3408,8 +3408,8 @@ document.getElementById('k-reset').addEventListener('click', () => {
    Brand, avatar and status colors are left as they are. */
 const TINTS = {
   warmlo: { h: 72, m: 0.6, a: 0 },
-  /* Sage carries 70% less chroma in dark mode, where the same tint reads much greener. */
-  sagelo: { h: 145, m: 0.8, a: .0035, dark: { m: 0.24, a: .00105 } },
+  /* Sage: light mode carries 30% less chroma than the original sage tint, dark mode 70% less. */
+  sagelo: { h: 145, m: 0.56, a: .00245, dark: { m: 0.24, a: .00105 } },
 };
 const TINT_SKIP = /^--(mock|accent|av|warn|bad|good|on-accent|font|fs|r-|ease)/;
 const s2l = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
