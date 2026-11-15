@@ -1428,6 +1428,8 @@ button.n-row:active { background: var(--n-fill); }
 .r2-h b { font-size: 15.5px; font-weight: 650; color: var(--t-heading); }
 .r2-d { margin: -10px 8px 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .r2-foot { margin-top: auto; padding: 10px 8px 0; border-top: 1px solid var(--divider); font-size: var(--fs-xs); color: var(--t-faint); }
+/* BEGIN reference spaces css */
+/* END reference spaces css */
 </style>
 
 <div class="shell" id="shell">
@@ -1444,6 +1446,21 @@ button.n-row:active { background: var(--n-fill); }
       <div class="knob"><span>Feed rows</span><div class="seg" id="k-rows"></div></div>
       <div class="knob"><span>Rail</span><div class="seg" id="k-rail"></div></div>
       <div class="knob"><span>Answer credit</span><div class="seg" id="k-credit"></div></div>
+      <div class="knob-break" aria-hidden="true"></div>
+      <span class="knob-group">Reference spaces</span>
+      <div class="knob"><span>Jump to</span><select id="k-rfgo" class="k-sel" aria-label="Jump to a reference-space screen"></select></div>
+      <div class="knob"><span>Role</span><div class="seg" id="k-rfrole"></div></div>
+      <div class="knob"><span>Landing</span><div class="seg" id="k-rfland"></div></div>
+      <div class="knob"><span>Answer mark</span><div class="seg" id="k-rfmark"></div></div>
+      <div class="knob"><span>Freshness</span><div class="seg" id="k-rffresh"></div></div>
+      <div class="knob"><span>FAQ order</span><div class="seg" id="k-rforg"></div></div>
+      <div class="knob"><span>Search before asking</span><div class="seg" id="k-rfmatch"></div></div>
+      <div class="knob"><span>Not covered</span><div class="seg" id="k-rfgap"></div></div>
+      <div class="knob"><span>Source changed</span><div class="seg" id="k-rfstale"></div></div>
+      <div class="knob"><span>Review queue</span><div class="seg" id="k-rfqueue"></div></div>
+      <div class="knob"><span>Create flow</span><div class="seg" id="k-rfwiz"></div></div>
+      <div class="knob"><span>Org badge</span><div class="seg" id="k-rfbadge"></div></div>
+      <div class="knob"><span>On Home</span><div class="seg" id="k-rfhome"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -1608,7 +1625,7 @@ const sp = id => SPACES.find(s => s.id === id);
 const avColor = n => `var(--av${n})`;
 const initials = h => h.replace('@', '').replace(/[._]/g, ' ').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 const avatar = (h, cls = '') => `<span class="av ${cls}" style="background:${avColor(USERS[h] || 1)}" aria-hidden="true">${initials(h)}</span>`;
-const glyph = (s, cls = '') => `<span class="glyph ${cls}" style="background:${avColor(s.av)}" aria-hidden="true">${s.name[0].toUpperCase()}</span>`;
+const glyph = (s, cls = '') => `<span class="glyph ${cls}${s.ref ? ' glyph-org' : ''}" style="background:${avColor(s.av)}" aria-hidden="true">${s.name[0].toUpperCase()}</span>`;
 
 /* ---------------- meters ---------------- */
 function ring(p, size, w) {
@@ -1642,18 +1659,19 @@ function swCurrent() {
   if (st.subPage === 'keys') return `${MI.key.replace('<svg', '<svg class="sw-house"')}API keys`;
   if (st.profilePage) return isSelf() ? `${MI.user.replace('<svg', '<svg class="sw-house"')}Profile` : esc(st.profileUser);
   if (st.home) return 'Home';
-  return `#${sp(st.space).name}`;
+  return sp(st.space).ref ? `${esc(sp(st.space).title)}${rfMark(sp(st.space), 'tab')}` : `#${sp(st.space).name}`;
 }
 const PLUS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>';
 function swFoot() {
-  return `<div class="pop-foot pf-pair"><button class="btn sm" type="button" data-sub="browse">Discover</button><button class="btn sm" type="button">${PLUS}Create</button></div>`;
+  return `<div class="pop-foot pf-pair"><button class="btn sm" type="button" data-sub="browse">Discover</button><button class="btn sm" type="button" data-act="create-space">${PLUS}Create</button></div>`;
 }
 function switcher() {
   const cur = sp(st.space);
-  const row = s => `<button class="pop-row" type="button" data-space="${s.id}" data-name="${s.name}" aria-current="${!st.home && s.id === st.space}">${glyph(s)}<span class="nm">#${s.name}</span><span class="num faint" style="font-size:var(--fs-xs)">${s.posts.toLocaleString()}</span></button>`;
-  const joined = st.auth === 'in' ? SPACES.filter(s => JOINED.includes(s.id)) : [];
-  const rest = SPACES.filter(s => !joined.includes(s));
-  return `<div class="sw-wrap sw-r"><button class="btn hb sw-btn" type="button" data-act="pop" aria-expanded="${st.pop}" aria-haspopup="true" aria-label="Switch space"><span class="sw-d">All spaces</span><span class="sw-m">${swCurrent()}</span>${I.chev}</button>${st.pop ? `<div class="pop" role="menu"><input id="sw-q" type="search" placeholder="Find a space" aria-label="Find a space" autocomplete="off"><button class="pop-row" type="button" data-home="1" data-name="home" aria-current="${!!st.home}"><span class="glyph home-g">${I.house}</span><span class="nm">Home</span></button>${joined.length ? `<div class="grp eyebrow">Joined</div>${joined.map(row).join('')}` : ''}<div class="grp eyebrow">${joined.length ? 'More spaces' : 'All spaces'}</div>${rest.map(row).join('')}${swFoot()}</div>` : ''}</div>`;
+  const row = s => `<button class="pop-row" type="button" data-space="${s.id}" data-name="${s.name}" aria-current="${!st.home && s.id === st.space}">${glyph(s)}<span class="nm">${spLabel(s)}${rfMark(s, 'tab')}</span><span class="num faint" style="font-size:var(--fs-xs)">${s.posts.toLocaleString()}</span></button>`;
+  const joined = st.auth === 'in' ? SPACES.filter(s => JOINED.includes(s.id) && !s.ref) : [];
+  const refs = SPACES.filter(s => s.ref && !s.draft);
+  const rest = SPACES.filter(s => !joined.includes(s) && !s.ref);
+  return `<div class="sw-wrap sw-r"><button class="btn hb sw-btn" type="button" data-act="pop" aria-expanded="${st.pop}" aria-haspopup="true" aria-label="Switch space"><span class="sw-d">All spaces</span><span class="sw-m">${swCurrent()}</span>${I.chev}</button>${st.pop ? `<div class="pop" role="menu"><input id="sw-q" type="search" placeholder="Find a space" aria-label="Find a space" autocomplete="off"><button class="pop-row" type="button" data-home="1" data-name="home" aria-current="${!!st.home}"><span class="glyph home-g">${I.house}</span><span class="nm">Home</span></button>${joined.length ? `<div class="grp eyebrow">Joined</div>${joined.map(row).join('')}` : ''}<div class="grp eyebrow">Reference spaces</div>${refs.map(row).join('')}<div class="grp eyebrow">${joined.length ? 'More spaces' : 'All spaces'}</div>${rest.map(row).join('')}${swFoot()}</div>` : ''}</div>`;
 }
 const GLOBE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>';
 const tokenSources = () => {
@@ -1704,7 +1722,7 @@ const hdrGroups = () => {
   const g = (n, icon, label) => n > 0 ? `<button class="btn${st.savedPage ? ' on' : ''}" type="button" data-act="saved-page" title="${label}" aria-label="${label}: ${n}">${icon}<span class="num">${n}</span></button>` : '';
   return g(st.saved.size, I.mark, 'Saved');
 };
-const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><div class="hscroll" role="navigation" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}${headerSpaces().map(x => `<button class="utab" type="button" data-space="${x.id}" aria-current="${!st.home && !st.profilePage && !st.savedPage && !st.subPage && x.id === st.space}">#${x.name}</button>`).join('')}</div><div class="hdr-right">${switcher()}${hdrGroups()}${account(true)}</div></div>`;
+const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><div class="hscroll" role="navigation" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}${headerSpaces().map(x => `<button class="utab" type="button" data-space="${x.id}" aria-current="${!st.home && !st.profilePage && !st.savedPage && !st.subPage && x.id === st.space}">${spLabel(x)}${rfMark(x, 'tab')}</button>`).join('')}</div><div class="hdr-right">${switcher()}${hdrGroups()}${account(true)}</div></div>`;
 const banner = s => `<div class="banner" style="--sp:${avColor(s.av)}">${glyph(s, 'xl')}<div style="min-width:0"><h2>#${s.name}</h2><p>${esc(s.desc)}</p></div><div class="banner-acts">${joinBtn(s)}<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button></div></div>`;
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
 const layoutSpace = () => {
@@ -1734,13 +1752,14 @@ const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>$
 function homeFeed() {
   const joined = st.auth === 'in' ? SPACES.filter(x => JOINED.includes(x.id)) : [];
   const more = SPACES.filter(x => !joined.includes(x)).slice(0, 4);
-  const spRow = x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>#${x.name}</span><small class="num">${x.posts.toLocaleString()}</small></button>`;
+  const spRow = x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>${spLabel(x)}${rfMark(x, 'tab')}</span><small class="num">${x.posts.toLocaleString()}</small></button>`;
   return `<div class="body home-feed">
     <div class="mcol"><div class="main">
       ${homeTop()}
-      ${feed2(null, homePosts())}
+      ${rfHomeFeed(feed2(null, homePosts()))}
     </div></div>
     <aside class="drawer wk home-side" aria-label="Spaces"><div class="dbody">
+      ${rfHomeSide()}
       ${joined.length ? `<div class="note-card"><div class="sk-head"><h3>Your spaces</h3></div><div class="sp-rows">${joined.map(spRow).join('')}</div></div>` : ''}
       <div class="note-card"><div class="sk-head"><h3>${joined.length ? 'More spaces' : 'Spaces'}</h3><button class="tlink" type="button" data-sub="browse">Browse all</button></div><div class="sp-rows">${(joined.length ? more : SPACES).map(spRow).join('')}</div></div>
     </div></aside>
@@ -1925,7 +1944,7 @@ const kbdOverlay = () => kbdSheet();
 
 /* ---------- your spaces ---------- */
 const MYROLES = { scifi: 'Moderator', ml: 'Admin', math: 'Owner' };
-const role = x => MYROLES[x.id] || (x.mods.some(m => m[0] === ME.u) ? 'Moderator' : 'Member');
+const role = x => x.ref ? (x.id === 'sablefield' && st.rfRole === 'staff' ? 'Staff' : 'Member') : MYROLES[x.id] || (x.mods.some(m => m[0] === ME.u) ? 'Moderator' : 'Member');
 const ROLE_IC = {
   Moderator: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z"/></svg>',
   Admin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M3.6 12.4l1.3-1.3M11.1 4.9l1.3-1.3"/></svg>',
@@ -1938,7 +1957,7 @@ const roleHTML = x => { const r = role(x); return r === 'Member' ? '' : `<span c
 const headerSpaces = () => { const order = st.tabOrder.length ? st.tabOrder : topSpaces().map(x => x.id); return order.map(sp).filter(x => x && !st.tabHidden.has(x.id)); };
 function ysList() {
   const joined = SPACES.filter(x => JOINED.includes(x.id)), more = SPACES.filter(x => !JOINED.includes(x.id));
-  const row = (x, j) => `<div class="ys-row"><span class="ys-gw">${glyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">#${x.name}</button>${j ? roleHTML(x) : ''}</span><p>${esc(x.desc)}</p></div>${j ? `<button class="btn sm" type="button" data-leave="${x.id}">Leave</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Join</button>`}</div>`;
+  const row = (x, j) => `<div class="ys-row"><span class="ys-gw">${glyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">${spLabel(x)}</button>${rfMark(x, 'row')}${j ? roleHTML(x) : ''}</span><p>${esc(x.desc)}</p></div>${j ? `<button class="btn sm" type="button" data-leave="${x.id}">Leave</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Join</button>`}</div>`;
   return `<section class="ys-sec"><h3>Joined</h3>${joined.map(x => row(x, true)).join('') || '<p class="muted">You have not joined any spaces.</p>'}</section><section class="ys-sec"><h3 class="ys-h">Discover<button class="tlink" type="button" data-sub="browse">Browse all</button></h3>${more.map(x => row(x, false)).join('')}</section>`;
 }
 const GRIP = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></svg>';
@@ -1953,17 +1972,17 @@ function ysOrder() {
 }
 const joinCtl = x => st.auth !== 'in' ? '' : JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Joined</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Join</button>`;
 function layoutBrowse() {
-  const top = [...SPACES].sort((a, b) => b.online - a.online).slice(0, 3);
-  const name = x => `<button class="dg-name" type="button" data-space="${x.id}">#${x.name}</button>`;
+  const top = [...SPACES].filter(x => !x.ref).sort((a, b) => b.online - a.online).slice(0, 3);
+  const name = x => `<button class="dg-name" type="button" data-space="${x.id}">${spLabel(x)}</button>${rfMark(x, 'row')}`;
   const feat = top.map(x => `<article class="br-fcard" style="--band:${avColor(x.av)}"><div class="br-fband"></div>${glyph(x, 'lg')}<div class="br-ch">${name(x)}${joinCtl(x)}</div><p>${esc(x.desc)}</p></article>`).join('');
-  const rest = SPACES;
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page br-page"><div class="sub-top"><h2>Browse spaces</h2><button class="btn" type="button">Create a space</button></div>
-    <section class="br-feat"><h3 class="br-h">Most active this week</h3><div class="br-fgrid">${feat}</div></section>
+  const rest = SPACES.filter(x => !x.ref);
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page br-page"><div class="sub-top"><h2>Browse spaces</h2><button class="btn" type="button" data-act="create-space">Create a space</button></div>
+    <section class="br-feat"><h3 class="br-h">Most active this week</h3><div class="br-fgrid">${feat}</div></section>${rfBrowseSection()}
     <section class="br-grp"><h3 class="br-h">All spaces</h3>${rest.map(x => `<div class="br-row">${glyph(x)}<div class="br-nm">${name(x)}<small>${esc(x.desc)}</small></div>${joinCtl(x)}</div>`).join('')}</section></div></div>`;
 }
 function layoutYourSpaces() {
   if (st.ysEdit) return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page"><div class="sub-top"><div class="ys-et"><button class="th-back" type="button" data-act="ys-done">${I.chev.replace('<svg', '<svg class="bk"')}Your spaces</button><h2>Header tabs</h2></div><button class="btn primary" type="button" data-act="ys-done">Save</button></div>${ysOrder()}</div></div>`;
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ysm-compact"><div class="sub-top"><h2>Your spaces</h2><span class="ys-acts"><button class="btn" type="button" data-act="ys-edit"><span class="d-only">Edit header tabs</span><span class="m-only">Edit tabs</span></button><button class="btn" type="button"><span class="d-only">Create a space</span><span class="m-only">${PLUS}Create</span></button></span></div>${ysList()}</div></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ysm-compact"><div class="sub-top"><h2>Your spaces</h2><span class="ys-acts"><button class="btn" type="button" data-act="ys-edit"><span class="d-only">Edit header tabs</span><span class="m-only">Edit tabs</span></button><button class="btn" type="button" data-act="create-space"><span class="d-only">Create a space</span><span class="m-only">${PLUS}Create</span></button></span></div>${ysList()}</div></div>`;
 }
 
 /* ---------- API keys ---------- */
@@ -2073,7 +2092,7 @@ function composer(force) {
   if (!st.compOpen && !force) return `<button class="composer c2-closed" type="button" data-act="compose"><span class="ph">Make a query, or write a post…</span></button>`;
   const modes = [['ask', 'Ask', 'An agent researches the question and posts a sourced answer. Uses tokens.', I.agent], ['post', 'Post', 'A plain post. People reply. Uses no tokens.', I.write]];
   const modeSeg = `<div class="seg c2-mode" role="group" aria-label="Thread kind">${modes.map(([k, l, d, ic]) => `<button type="button" data-mode="${k}" aria-pressed="${st.mode === k}" title="${d}">${ic}${l}</button>`).join('')}</div>`;
-  const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: #${s.name}">${glyph(s)}<span>#${s.name}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${SPACES.filter(x => JOINED.includes(x.id)).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b>#${x.name}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}#${s.name}</span>`;
+  const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: #${s.name}">${glyph(s)}<span>#${s.name}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${SPACES.filter(x => JOINED.includes(x.id) && !x.ref).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b>#${x.name}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}#${s.name}</span>`;
   const closeB = force ? '' : `<button class="iconbtn c2-x" type="button" data-act="comp-close" aria-label="Close composer" title="Close">${I.close}</button>`;
   const ta = `<textarea id="compose-text" rows="2" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Query' : 'Post text'}">${esc(st.draft)}</textarea>`;
   const warn = ask && !pay ? `<span class="c2-note warn">#${s.name} has no extra tokens. Add an API key to ask here.</span>` : '';
@@ -3050,7 +3069,7 @@ function rail1() {
     <button class="rl-search" type="button" aria-label="Search">${I.search}<span>Search</span><kbd>/</kbd></button>
     <div class="rl-sec">${item('data-home="1"', I.house, 'Home', '', onFeed && st.home)}${inn ? item('data-act="saved-page"', I.mark, 'Saved', `<span class="rl-c num">${st.saved.size}</span>`, st.savedPage && !st.subPage) : ''}</div>
     ${asks.length ? `<div class="rl-sec"><div class="rl-h"><span class="eyebrow">Your asks</span><button class="tlink" type="button" data-act="profile">All</button></div>${asks.map(askRow).join('')}</div>` : ''}
-    <div class="rl-sec"><div class="rl-h"><span class="eyebrow">${inn ? 'Your spaces' : 'Spaces'}</span></div>${joined.map(x => item(`data-space="${x.id}"`, glyph(x), '#' + x.name, x.byok ? `<span class="${lvl(x.pct)}" title="Extra tokens: ${pctS(x.pct)} used">${ring(x.pct, 14, 2.5)}</span>` : '', onFeed && !st.home && x.id === st.space)).join('')}${inn ? item('data-sub="browse"', I.follow, 'Browse spaces', '', st.subPage === 'browse') : ''}</div>
+    <div class="rl-sec"><div class="rl-h"><span class="eyebrow">${inn ? 'Your spaces' : 'Spaces'}</span></div>${joined.map(x => item(`data-space="${x.id}"`, glyph(x), spLabel(x) + rfMark(x, 'tab'), x.byok ? `<span class="${lvl(x.pct)}" title="Extra tokens: ${pctS(x.pct)} used">${ring(x.pct, 14, 2.5)}</span>` : '', onFeed && !st.home && x.id === st.space)).join('')}${inn ? item('data-sub="browse"', I.follow, 'Browse spaces', '', st.subPage === 'browse') : ''}</div>
     <div class="rl-foot">${acct}</div></nav>`;
 }
 /* Left rail variants, switched by the "Rail" control:
@@ -3072,7 +3091,7 @@ function railCompact() {
     ${railBtn('data-home="1"', I.house, 'Home', onFeed && st.home)}
     ${inn ? railBtn('data-act="saved-page"', I.mark, 'Saved', st.savedPage && !st.subPage, `<span class="rc-n num">${st.saved.size}</span>`) : ''}
     <span class="rc-sep" aria-hidden="true"></span>
-    ${joined.map(x => railBtn(`data-space="${x.id}"`, glyph(x), '#' + x.name, onFeed && !st.home && x.id === st.space)).join('')}
+    ${joined.map(x => railBtn(`data-space="${x.id}"`, glyph(x), spLabel(x), onFeed && !st.home && x.id === st.space)).join('')}
     ${inn ? railBtn('data-sub="browse"', I.follow, 'Browse spaces', st.subPage === 'browse') : ''}
     <div class="rc-foot">${railAcctIcon()}</div></nav>`;
 }
@@ -3086,7 +3105,7 @@ function railSpaces() {
   return `<nav class="rail rail-s" aria-label="Main">${top}
     ${inn ? `<button class="btn primary rs-new" type="button" data-mtab="ask">${PLUS}New ask</button>` : `<div class="rl-out"><button class="btn" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signin">Sign up</button></div>`}
     <div class="rl-sec">${item('data-home="1"', I.house, 'Home', '', onFeed && st.home)}${inn ? item('data-act="saved-page"', I.mark, 'Saved', `<span class="rl-c num">${st.saved.size}</span>`, st.savedPage && !st.subPage) + item('data-act="profile"', I.agent, 'Your asks', `<span class="rl-c num">${asks}</span>`, st.profilePage && isSelf()) : ''}</div>
-    <div class="rl-sec"><div class="rl-h"><span class="eyebrow">${inn ? 'Your spaces' : 'Spaces'}</span>${inn ? '<button class="tlink" type="button" data-sub="browse">Browse</button>' : ''}</div>${joined.map(x => { const n = fresh(x); return item(`data-space="${x.id}"`, glyph(x), '#' + x.name, n ? `<span class="rs-dot num" title="${n} new in the last 3 hours">${n}</span>` : '', onFeed && !st.home && x.id === st.space); }).join('')}</div>
+    <div class="rl-sec"><div class="rl-h"><span class="eyebrow">${inn ? 'Your spaces' : 'Spaces'}</span>${inn ? '<button class="tlink" type="button" data-sub="browse">Browse</button>' : ''}</div>${joined.map(x => { const n = fresh(x); return item(`data-space="${x.id}"`, glyph(x), spLabel(x) + rfMark(x, 'tab'), n ? `<span class="rs-dot num" title="${n} new in the last 3 hours">${n}</span>` : '', onFeed && !st.home && x.id === st.space); }).join('')}</div>
   </nav>`;
 }
 function railSplit() {
@@ -3099,11 +3118,11 @@ function railSplit() {
       <button class="logo-btn rc-logo" type="button" data-home="1" aria-label="Home">${logo('')}</button>
       ${railBtn('data-home="1"', I.house, 'Home', !s && onFeed && st.home)}
       <span class="rc-sep" aria-hidden="true"></span>
-      ${joined.map(x => railBtn(`data-space="${x.id}"`, glyph(x), '#' + x.name, s && x.id === s.id)).join('')}
+      ${joined.map(x => railBtn(`data-space="${x.id}"`, glyph(x), spLabel(x), s && x.id === s.id)).join('')}
       ${inn ? railBtn('data-sub="browse"', I.follow, 'Browse spaces', st.subPage === 'browse') : ''}
       <div class="rc-foot">${railAcctIcon()}</div></div>`;
   const panel = s ? `<div class="r2-panel">
-      <div class="r2-h">${glyph(s)}<b>#${s.name}</b></div><p class="r2-d">${esc(s.desc)}</p>
+      <div class="r2-h">${glyph(s)}<b>${spLabel(s)}</b>${rfMark(s, 'tab')}</div><p class="r2-d">${esc(s.desc)}</p>
       <div class="rl-sec">${item(`data-space="${s.id}"`, I.reply, 'Threads', `<span class="rl-c num">${s.posts.toLocaleString()}</span>`, onFeed && !st.home)}${inn ? item('data-act="saved-page"', I.mark, 'Saved here', `<span class="rl-c num">${[...st.saved].filter(i => POSTS[i].s === s.id).length}</span>`, false) : ''}</div>
       <div class="rl-sec"><div class="rl-h"><span class="eyebrow">Pages</span></div>${s.pages.map(([t]) => item('', I.page, esc(t), '', false)).join('')}</div>
       ${mine.length ? `<div class="rl-sec"><div class="rl-h"><span class="eyebrow">Your asks here</span></div>${mine.map(askRow).join('')}</div>` : ''}
@@ -3124,7 +3143,7 @@ function mobileTabs() {
 function mobileChips() {
   const other = st.thread != null || st.savedPage || st.profilePage || st.subPage;
   const ids = st.auth === 'in' ? SPACES.filter(x => JOINED.includes(x.id)) : headerSpaces();
-  return `<div class="mchips" role="navigation" aria-label="Spaces"><button type="button" class="mchip" data-home="1" aria-current="${!other && !!st.home}">Home</button>${ids.map(x => `<button type="button" class="mchip" data-space="${x.id}" aria-current="${!other && !st.home && st.space === x.id}">#${x.name}</button>`).join('')}</div>`;
+  return `<div class="mchips" role="navigation" aria-label="Spaces"><button type="button" class="mchip" data-home="1" aria-current="${!other && !!st.home}">Home</button>${ids.map(x => `<button type="button" class="mchip" data-space="${x.id}" aria-current="${!other && !st.home && st.space === x.id}">${spLabel(x)}${rfMark(x, 'tab')}</button>`).join('')}</div>`;
 }
 const shellWrap = html => st.shell === 'rail' ? `<div class="rs${st.railV === 'compact' ? ' rs-c' : st.railV === 'split' ? ' rs-2' : ''}">${railFor()()}<div class="rs-main">${html}</div></div>` : html;
 function scrollMockTop() {
@@ -3169,6 +3188,7 @@ const KNOBDEF = () => [
   ['k-rows', 'rowsV', [['card', 'Card'], ['plain', 'Plain']]],
   ['k-rail', 'railV', [['full', 'Full'], ['compact', 'Icons'], ['spaces', 'Spaces first'], ['split', 'Two-column']], () => { st.shell = 'rail'; st.umenu = false; }],
   ['k-credit', 'creditV', [['facts', 'Details panel'], ['strip', 'Answer header'], ['byline', 'Answer byline']], toThread],
+  ...RF_KNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -3182,6 +3202,7 @@ function renderControls() {
     const lettered = items.map(([v, l, sub]) => { if (sub) return [v, n ? `${String.fromCharCode(64 + n)}${sub}. ${l}` : l]; const L = n < 26 ? String.fromCharCode(65 + n) : ''; n++; if (L) HOTKEYS[L] = [key, v, pick]; return [v, L ? `${L}. ${l}` : l]; });
     seg($(el), lettered, key, pick);
   }
+  rfJumpControl();
 }
 /* open a dropdown upward when it would be cut off by the bottom of the window frame */
 function flipMenus() {
@@ -3391,6 +3412,8 @@ function renderNative() {
   if (nst.sheet === 'compose' && !nst.sub) { const d = $('n-draft'); if (d) d.focus({ preventScroll: true }); }
 }
 
+/* BEGIN reference spaces */
+/* END reference spaces */
 const ST0 = structuredClone(st), JOINED0 = [...JOINED], NST0 = structuredClone(nst);
 $('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
 document.getElementById('k-reset').addEventListener('click', () => {
@@ -3466,7 +3489,8 @@ function renderAllInner() {
     return;
   }
   $('url').textContent = st.subPage === 'browse' ? 'session.app/spaces/browse' : st.subPage === 'yourspaces' ? (st.ysEdit ? 'session.app/spaces/header' : 'session.app/spaces') : st.subPage === 'keys' ? 'session.app/settings/keys' : st.thread != null ? `session.app/s/${sp(POSTS[st.thread].s).name}/t/${st.thread + 1000}` : st.profilePage ? `session.app/u/${st.profileUser}` : st.savedPage ? 'session.app/saved' : st.home ? 'session.app' : `session.app/s/${sp(st.space).name}`;
-  $('app').innerHTML = shellWrap(st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : L[st.opt]()) + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'addkey' ? addKeyDialog() : '');
+  if (st.subPage === 'rfnew') $('url').textContent = 'session.app/new/reference'; else if (!st.subPage && st.thread == null && !st.profilePage && !st.savedPage && !st.home && sp(st.space).ref) $('url').textContent = rfUrl();
+  $('app').innerHTML = shellWrap(st.subPage === 'rfnew' ? layoutRfNew() : st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : sp(st.space).ref ? layoutRef() : L[st.opt]()) + rfModal() + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'addkey' ? addKeyDialog() : '');
   document.documentElement.dataset.sh = st.shV;
   document.documentElement.dataset.mnav = st.mnav;
   document.documentElement.dataset.device = st.device;
@@ -3487,6 +3511,7 @@ function pickOption(id) {
 $('app').addEventListener('click', e => {
   const t = e.target;
   if (st.device === 'native') { nClick(e); return; }
+  if (rfClick(t, e)) return;
   if (rdClick(t)) return;
   if (t.closest('[data-home],[data-space],[data-open],[data-user],[data-act="saved-page"],[data-act="profile"]')) st.subPage = null;
   const yse = t.closest('[data-act="ys-edit"],[data-act="ys-done"]'); if (yse) { st.ysEdit = yse.dataset.act === 'ys-edit'; renderAll(); return; }
@@ -3554,6 +3579,7 @@ $('app').addEventListener('click', e => {
 });
 $('app').addEventListener('input', e => {
   if (st.device === 'native') { nInput(e); return; }
+  if (rfInput(e)) return;
   if (e.target.id === 'compose-text') { st.draft = e.target.value; return; }
   if (e.target.id === 'dlg-q') { st.draft = e.target.value; return; }
   if (e.target.id === 'key-in') { st.keyDraft = e.target.value; return; }
