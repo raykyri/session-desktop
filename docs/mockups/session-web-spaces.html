@@ -2709,28 +2709,27 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-fuk { margin: 6px 0 0 4px; padding-left: 14px; border-left: 2px solid var(--border-strong); }
 .qt-fuk > .fu:first-child { border-top: 0; padding-top: 4px; }
 .qt-fuk .fu + .fu { padding-top: 14px; }
-/* calm (fk) and questions first (fl) */
+/* questions first (fl) */
 .qt-cacts { display: flex; align-items: center; gap: 14px; font-size: var(--fs-xs); color: var(--t-faint); opacity: .6; transition: opacity .12s; }
 .qt-cacts .tlink { font-size: var(--fs-xs); color: var(--t-muted); }
 .qt-cacts .grow { flex: 1; }
 .qt-cacts .act.sf-im { width: 22px; height: 22px; }
-.qt-fu:hover > .qt-cacts, .qt-fu:focus-within > .qt-cacts, .qt-flb:hover > .qt-cacts, .qt-flb:focus-within > .qt-cacts { opacity: 1; }
-.qt-calm .qt-fuk { margin: 4px 0 0 2px; padding-left: 16px; border-left: 1px solid var(--divider); }
+.qt-flb:hover > .qt-cacts, .qt-flb:focus-within > .qt-cacts { opacity: 1; }
 .qt-calm .qt-olr { grid-template-columns: minmax(0, 1fr) auto; }
 .qt-calm .qt-olr .av { display: none; }
 .qt-fls h3 { margin-bottom: 6px; }
-.qt-fl { border-top: 1px solid var(--divider); }
-.qt-fls h3 + .qt-fl { border-top: 0; }
+.qt-qrow { border-top: 1px solid var(--divider); }
+.qt-fls h3 + .qt-qrow { border-top: 0; }
 .qt-flr { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 8px; width: 100%; padding: 10px 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: var(--t-primary); }
 .qt-flr .chv { grid-row: span 2; width: 12px; height: 12px; margin-top: 4px; color: var(--t-faint); transform: rotate(-90deg); transition: transform .12s; }
 .qt-flr[aria-expanded="true"] .chv { transform: none; }
 .qt-flq { line-height: 1.5; }
 .qt-flr:hover .qt-flq { color: var(--t-heading); }
-.qt-fl.on > .qt-flr .qt-flq { color: var(--t-heading); font-weight: 550; }
+.qt-qrow.on > .qt-flr .qt-flq { color: var(--t-heading); font-weight: 550; }
 .qt-flm { font-size: var(--fs-xs); color: var(--t-faint); margin-top: 2px; }
 .qt-flb { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px 22px; }
 .qt-flk { margin-top: 2px; padding-left: 14px; border-left: 1px solid var(--divider); }
-.qt-flk > .qt-fl:first-child { border-top: 0; }
+.qt-flk > .qt-qrow:first-child { border-top: 0; }
 .qt-ib-h { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 0; font: inherit; color: var(--t-strong); }
 .qt-ib-h:hover .qt-ib-q { text-decoration: underline; text-underline-offset: 3px; }
 .qt-ib-h .chv { width: 10px; height: 10px; margin-top: 5px; flex: none; color: var(--t-faint); }
@@ -7761,7 +7760,7 @@ function qtBranch(T, k, top, path) {
 function qtNestView(T, cur) {
   const top = qtTop(T), path = T.path(cur.id).filter(n => n.lv >= top.lv), next = path[1];
   const tp = T.path(top.id);
-  const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? (st.thrV === 'fo' ? 'All follow-ups' : 'Whole thread') : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
+  const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
   const rootAsk = top.id === 'r' && cur.id === 'r' && !st.qtAskAt;
   const head = top.id === 'r' ? `${miAbout(T.p)}<div class="qt-nh"><div class="qt-nh-top">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
   const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${fbar}
@@ -7770,36 +7769,31 @@ function qtNestView(T, cur) {
     ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
     <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
     ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>${top.id === 'r' ? relatedHTML(T.p) : ''}`;
-  const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : qtComb() && !st.qtCmp && !(st.thrV === 'fo' && st.qtFocus) ? qtFuView(T, cur) : main;
-  return `${qtBar(T, cur)}<div class="qt-grid${qtCalm() ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
+  const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : qtComb() && !st.qtCmp ? qtFuView(T, cur) : main;
+  return `${qtBar(T, cur)}<div class="qt-grid${st.thrV === 'fl' ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
 }
 
-/* ---------- follow-ups with the tree in the side column (fx, fo) ----------
+/* ---------- follow-ups with the tree in the side column (fx, fl) ----------
    The main column reads like the Follow-ups page: the question, its answer, then every first-level ask
    as a follow-up, oldest first, and the composer for a new follow-up. The outline on the right shows
-   the whole tree. Asks below a follow-up either expand under it (fx) or open as a branch in the tree
-   view (fo), which has a link back to the follow-ups. */
-/* Calm (fk) and questions first (fl): one faint line of text actions per ask, brighter on hover; the
-   save, compare and other actions stay in the menu. Questions first lists the follow-ups as questions;
-   opening one shows its answer and the asks below it. */
+   the whole tree. Asks below a follow-up expand under it (fx), or the follow-ups are listed as
+   questions that open to their answer and the asks below them (fl). */
+/* Questions first (fl): the follow-ups as questions; opening one shows its answer, one faint line of text
+   actions (brighter on hover; save, compare and the rest are in the menu) and the asks below it. */
 function qtCalmActs(T, n) {
-  const k = T.sub(n.id), open = st.qtExp.has(n.id), kids = qtVisKids(T, n.id).length;
-  const below = kids && st.thrV === 'fk' ? `<button class="tlink" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>` : '';
-  return `<div class="qt-cacts">${!n.running ? `<button class="tlink" type="button" data-qtaskat="${n.id}">Ask about this answer</button>` : ''}${below}<span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
+  return `<div class="qt-cacts">${!n.running ? `<button class="tlink" type="button" data-qtaskat="${n.id}">Ask about this answer</button>` : ''}<span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
 }
 function qtFlRow(T, n, cur) {
   const k = T.sub(n.id), open = st.qtExp.has(n.id), kids = qtVisKids(T, n.id);
   const row = `<button class="qt-flr" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}<span class="qt-flq">${esc(n.q)}</span><span class="qt-flm">${n.u} · ${n.age}${k ? ` · ${k} ask${k > 1 ? 's' : ''} below` : ''}</span></button>`;
   const body = open ? `<div class="qt-flb"><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtCalmActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${kids.length ? `<div class="qt-flk">${kids.map(x => qtFlRow(T, x, cur)).join('')}</div>` : ''}</div>` : '';
-  return `<div class="qt-fl${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}">${row}${body}</div>`;
+  return `<div class="qt-qrow${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}">${row}${body}</div>`;
 }
 function qtFuCard(T, n, cur) {
   if (st.thrV === 'fl') return qtFlRow(T, n, cur);
-  const kids = qtVisKids(T, n.id), k = T.sub(n.id), open = qtExpands() && st.qtExp.has(n.id), calm = st.thrV === 'fk';
-  const below = !kids.length || calm ? '' : st.thrV === 'fx'
-    ? `<button class="tlink qt-fub" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>`
-    : `<button class="tlink qt-fub" type="button" data-qtfocus="${n.id}">${QTI.tree}${k} ask${k > 1 ? 's' : ''} below</button>`;
-  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span>${n.lv > 1 && !calm ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${calm ? qtCalmActs(T, n) : qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
+  const kids = qtVisKids(T, n.id), k = T.sub(n.id), open = st.qtExp.has(n.id);
+  const below = !kids.length ? '' : `<button class="tlink qt-fub" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>`;
+  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span>${n.lv > 1 ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
 }
 function qtFuView(T, cur) {
   const r = T.nodes[0], l1 = qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age));
@@ -7930,10 +7924,7 @@ function qtGo(T, id) {
   if (st.modal === 'qt-outline' || st.modal === 'qt-map') st.modal = null;
   const n = T.by[id], p = T.path(id), top = qtTop(T);
   if (!p.some(x => x.id === top.id) || n.lv - top.lv > QT_DEPTH) st.qtFocus = n.lv > QT_DEPTH ? p[n.lv - QT_DEPTH].id : null;
-  if (qtComb()) {
-    if (qtExpands()) { p.forEach(x => st.qtExp.add(x.id)); st.qtFocus = null; }
-    else st.qtFocus = n.lv >= 2 ? p[Math.max(1, n.lv - QT_DEPTH)].id : null;
-  }
+  if (qtComb()) { p.forEach(x => st.qtExp.add(x.id)); st.qtFocus = null; }
   st.qtScroll = 'node';
 }
 function qtScrollTo(el) {
@@ -8056,20 +8047,17 @@ Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: 
   qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtSaved: new Set(['11:c2']), qtExp: new Set() });
 /* "Thread page" control (st.thrV): question trees (qt), the existing flat follow-ups (fu), or follow-ups
-   with the tree in the side column (fx: asks below a follow-up expand under it; fo: they open as a branch). Every question
+   with the tree in the side column (fx: asks below a follow-up expand under it; fl: follow-ups listed as questions). Every question
    trees addition (thread page, feed row line, Saved and Search sections, the notification) checks it. */
 const qtOn = () => st.thrV !== 'fu';
-const qtComb = () => ['fx', 'fo', 'fk', 'fl'].includes(st.thrV);
-/* the variants where asks below a follow-up expand in place */
-const qtExpands = () => ['fx', 'fk', 'fl'].includes(st.thrV);
-const qtCalm = () => st.thrV === 'fk' || st.thrV === 'fl';
+const qtComb = () => st.thrV === 'fx' || st.thrV === 'fl';
 const QT_NOTIF = { id: 'nqt1', k: 'reply', u: 'hal_b', age: '5m', unread: true, open: 0, qtNode: 'h1', text: 'asked about your ask <b>How does the Daemon’s darknet decide who gets which task?</b>', why: 'Is that closer to a labour market or to a reputation ledger?' };
 function qtSyncNotif() {
   const has = st.notifs.some(n => n.id === QT_NOTIF.id);
   if (qtOn() && !has) st.notifs.unshift(QT_NOTIF); else if (!qtOn() && has) st.notifs = st.notifs.filter(n => n.id !== QT_NOTIF.id);
 }
 function QTKNOBS() {
-  return [['k-thrv', 'thrV', [['qt', 'Question trees'], ['fu', 'Follow-ups'], ['fx', 'Follow-ups with tree: expand in place'], ['fo', 'Follow-ups with tree: open the branch'], ['fk', 'Follow-ups with tree: calm'], ['fl', 'Follow-ups with tree: questions first']], () => {
+  return [['k-thrv', 'thrV', [['qt', 'Question trees'], ['fu', 'Follow-ups'], ['fx', 'Follow-ups with tree: expand in place'], ['fl', 'Follow-ups with tree: questions first']], () => {
     qtSyncNotif(); Object.assign(st, { qtCmp: null, qtPick: null, qtAskAt: null, qtMenu: null });
     if (st.modal && st.modal.startsWith('qt-')) st.modal = null;
     if (st.thread == null) Object.assign(st, NAVBASE(), { thread: 11, space: POSTS[11].s, home: false });
@@ -8085,7 +8073,7 @@ function qtReset() {
 }
 JUMPS.push(
   ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'Five levels deep: continue this branch'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
-  ['Question trees: follow-ups with the tree', [['qt-fx', 'Expand in place: follow-ups and the tree'], ['qt-fx-deep', 'Expand in place: a deep ask from the outline'], ['qt-fo', 'Open the branch: follow-ups and the tree'], ['qt-fo-deep', 'Open the branch: a deep ask from the outline'], ['qt-fk', 'Calm: follow-ups and the tree'], ['qt-fk-deep', 'Calm: a deep ask from the outline'], ['qt-fl', 'Questions first: follow-ups and the tree'], ['qt-fl-deep', 'Questions first: a deep ask from the outline']]],
+  ['Question trees: follow-ups with the tree', [['qt-fx', 'Expand in place: follow-ups and the tree'], ['qt-fx-deep', 'Expand in place: a deep ask from the outline'], ['qt-fl', 'Questions first: follow-ups and the tree'], ['qt-fl-deep', 'Questions first: a deep ask from the outline']]],
   ['Question trees: map', [['qt-map', 'Map dialog'], ['qt-map-deep', 'Map: open a deep branch']]],
   ['Question trees: asking', [['qt-compose', 'Ask about an answer deep in a branch'], ['qt-running', 'New ask while the agent researches']]],
   ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
@@ -8093,15 +8081,15 @@ JUMPS.push(
 );
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  { const m = k.match(/^qt-(fx|fo|fk|fl)\b/); st.thrV = m ? m[1] : 'qt'; } qtSyncNotif();
+  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = m ? m[1] : 'qt'; } qtSyncNotif();
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
   qtReset();
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: POSTS[i].s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
   const M = 11;
   switch (k) {
     case 'qt-root': open(M); break;
-    case 'qt-fx': case 'qt-fo': case 'qt-fk': case 'qt-fl': open(M); break;
-    case 'qt-fx-deep': case 'qt-fo-deep': case 'qt-fk-deep': case 'qt-fl-deep': open(M, 'e1'); break;
+    case 'qt-fx': case 'qt-fl': open(M); break;
+    case 'qt-fx-deep': case 'qt-fl-deep': open(M, 'e1'); break;
     case 'qt-deep': open(M, 'e1'); break;
     case 'qt-sib': open(M, 'b2', { qtHi: 'a2', modal: matchMedia('(max-width: 920px)').matches || st.device === 'phone' ? 'qt-outline' : null }); break;
     case 'qt-up': open(M, 'e1'); qtGo(qtT(M), 'a2'); break;
