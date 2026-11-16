@@ -1575,7 +1575,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 /* request form */
 .cs-form { display: flex; flex-direction: column; gap: 12px; }
 .cs-ta { display: block; width: 100%; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 8px 10px; font: inherit; font-size: var(--fs-sm); line-height: 1.45; resize: vertical; min-height: 54px; }
-.cs-ta:focus, .cs-sel:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cs-ta:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .cs-ta::placeholder, .cs-hin input::placeholder, .cs-sq input::placeholder { color: var(--placeholder); }
 .cs-q > span { color: var(--t-strong); }
 .cs-rules { border: 1px solid var(--divider); border-radius: var(--r-lg); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); }
@@ -1633,7 +1633,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .nt-btn { position: relative; }
 .nt-btn svg { width: 14px; height: 14px; }
 .nt-btn.on { background: var(--fill-subtle); border-color: var(--border-strong); }
-.nt-dot { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; display: inline-grid; place-items: center; }
 .pop.nt-pop { left: auto; right: 0; width: 360px; padding: 0; overflow: hidden; }
 .nt-h, .nt-f { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
 .nt-h { border-bottom: 1px solid var(--divider); }
@@ -1739,12 +1738,15 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mem-list { display: flex; flex-direction: column; }
 .mem-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-top: 1px solid var(--divider); }
 .mem-list .mem-row:first-child { border-top: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.mem-dd { width: 132px; flex: none; }
+.mem-dd .dd-btn { height: 30px; }
 .mem-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .mem-tx .au, .mem-tx > b { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
 .mem-tx small { font-size: var(--fs-xs); }
-.mem-role { font-size: var(--fs-sm); color: var(--t-secondary); min-width: 110px; }
+/* same width as the role dropdown, text aligned with the dropdown label */
+.mem-role { font-size: var(--fs-sm); color: var(--t-secondary); width: 132px; flex: none; padding-left: 11px; }
 .mem-acts { display: inline-flex; gap: 12px; min-width: 96px; justify-content: flex-end; }
-.cs-sel { height: 30px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 0 8px; font: inherit; font-size: var(--fs-sm); min-width: 110px; }
 .cs-sq { height: 34px; width: 280px; max-width: 100%; }
 .cs-sq input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-sm); outline: none; height: 100%; }
 .cs-sq:focus-within { border-color: var(--accent); }
@@ -1777,15 +1779,17 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .st-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .st-side .st-sec { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; }
 .st-stacked .st-sec { display: flex; flex-direction: column; gap: 14px; }
-.st-cards { gap: 12px; }
-.st-cards .st-sec, .cs-set.st-cards > .st-sec:first-of-type { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); }
-.st-cards .cs-setf { border-top: 0; margin-top: 0; padding-top: 4px; }
-.st-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px 10px 16px; background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); font-size: var(--fs-sm); color: var(--t-secondary); }
+.st-barw { position: sticky; bottom: 12px; z-index: 5; height: 0; }
+.st-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px 10px 16px; transition: opacity var(--ease), visibility var(--ease); background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); font-size: var(--fs-sm); color: var(--t-secondary); }
+.st-bar-a { display: flex; gap: 8px; margin-left: auto; }
+.st-barw.off .st-bar { opacity: 0; visibility: hidden; pointer-events: none; }
 .st-req { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-secondary); cursor: pointer; white-space: nowrap; }
 .st-add { align-self: flex-start; }
+/* line up with the question inputs: number column (18px) + grid gap (10px) */
+.cs-qs .st-add { margin-left: 28px; }
 .cs-qrow input[type="text"] { height: 34px; }
 @media (max-width: 760px) { .st-side .st-sec { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
-@media (max-width: 640px) { .cs-qrow { grid-template-columns: 18px minmax(0, 1fr) auto; } .cs-qrow .st-req { grid-column: 2; } .cs-qrow .iconbtn { grid-column: 3; grid-row: 1; } .st-bar { flex-wrap: wrap; } }
+@media (max-width: 640px) { .cs-qrow { grid-template-columns: 18px minmax(0, 1fr) auto; } .cs-qrow .st-req { grid-column: 2; } .cs-qrow .iconbtn { grid-column: 3; grid-row: 1; } }
 .cs-setf { display: flex; gap: 8px; justify-content: flex-end; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--divider); }
 .cs-set > .cs-strip { margin-top: 6px; }
 .cs-vcards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -1834,7 +1838,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .cs-qrow input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .cs-payk { display: flex; gap: 10px; flex-wrap: wrap; }
 .cs-payk .fld { flex: 0 1 260px; }
-.cs-payk .cs-sel { height: 34px; width: 100%; }
 /* create */
 .cs-create .cs-sec:first-of-type { padding-top: 4px; }
 .cs-stepper { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
@@ -1889,7 +1892,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sp-row > span.cs-gw, .rl-row > span.cs-gw { flex: none; }
 .cs-ysb { display: inline-flex; gap: 6px; flex: none; }
 /* Your spaces: every row action has the same width. */
-.ys-row > .btn, .ys-row .cs-ysb > .btn { min-width: 72px; justify-content: center; }
+.ys-row > .btn, .ys-row .cs-ysb > .btn:not(.ys-mg) { min-width: 72px; justify-content: center; }
+.ys-mg svg { width: 14px; height: 14px; }
 .rl-row .cs-lk, .rl-row .cs-lbl, .rl-row .cs-req, .rl-row .cs-clk { margin-left: -2px; }
 .rl-row .rs-dot { flex: none; }
 .um-item .cs-n { margin-left: auto; flex: none; }
@@ -1946,7 +1950,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .rq-tans { max-width: none; }
   .mem-row { flex-wrap: wrap; row-gap: 6px; }
   .mem-tx { flex-basis: calc(100% - 40px); }
-  .mem-role, .mem-row .cs-sel { margin-left: 38px; min-width: 0; }
+  .mem-role, .mem-row .mem-dd { margin-left: 38px; min-width: 0; } .mem-role { padding-left: 0; }
   .mem-acts { margin-left: auto; min-width: 0; }
   .cs-sq, .cs-search .cs-sq { width: 100%; }
   .cs-handle { flex-wrap: wrap; }
@@ -1992,18 +1996,43 @@ html[data-device="native"] .af-layer { display: none; }
 .rs:has(.af-wfull) .rail, .af-wfull > .hdr, .af-wfull ~ .mtabs { display: none !important; }
 .af-m { display: none; }
 .af-page { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "strips strips" "panel stage"; background: var(--pane); overflow: hidden; min-height: 0; height: 720px; }
-/* The bar floats over the bottom of the page. */
+/* The bar floats over the bottom of the page, inside the stage, so it never covers a docked panel.
+   Only the title shrinks; everything else keeps its size and folds into the More menu by level. */
 .af-bar { grid-area: stage; align-self: end; justify-self: center; position: relative; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 14px 16px; max-width: calc(100% - 28px); min-width: 0; padding: 5px 8px 5px 12px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--popover); box-shadow: var(--shadow-pop); }
 .af-bar .af-pop { top: auto; bottom: calc(100% + 8px); }
-.af-over-left .af-bar { justify-self: end; }
-.af-over-right .af-bar { justify-self: start; }
-.af-id { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
+/* overlay panel: the bar keeps to the free side of the page */
+.af-over-left .af-bar { justify-self: end; max-width: calc(100% - 468px); }
+.af-over-right .af-bar { justify-self: start; max-width: calc(100% - 468px); }
+.af-id { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; }
+/* while afFitBar() measures, the title is held at its minimum width */
+.af-fit .af-id { flex: none; }
+.af-fit .af-title { flex: none; width: 120px; }
+.af-brow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.af-b-two .af-bar { flex-direction: column; align-items: stretch; gap: 2px; padding-top: 7px; }
+.af-b-two .af-brow2 { justify-content: space-between; margin-left: -6px; }
+.af-b-two .af-id { flex: 1 1 auto; }
+.af-b-two .af-title { flex: 1 1 auto; max-width: none; }
+.af-b-icons .af-act > span { display: none; }
+.af-b-icons .af-act { width: 30px; padding: 0; justify-content: center; }
+.af-headbar { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 14px; background: var(--chrome); border-bottom: 1px solid var(--divider); min-width: 0; }
+.af-headbar .af-id { flex: 1 1 auto; }
+.af-headbar .af-title { max-width: none; flex: 0 1 auto; }
+.af-headbar .af-pop { top: calc(100% + 6px); bottom: auto; }
+.af-b-split .af-bar { padding-left: 6px; }
+.af-morew { display: none; }
+.lv1 .af-morew { display: inline-flex; }
+.lv1 .bf-1, .lv3 .bf-3, .lv6 .bf-5, .lv7 .af-skw, .lv7 .af-back { display: none; }
+.lv2 .af-skchip > span { max-width: 84px; }
+.lv4 .af-act > span { display: none; }
+.lv5 .af-skchip > span { display: none; }
+.lv6 .af-acts { display: none; }
+.af-menu [class*="mf-"] { display: none; }
+.lv1 .af-menu .mf-1, .lv3 .af-menu .mf-3, .lv6 .af-menu .mf-5 { display: flex; }
 .af-back { align-self: center; flex: none; }
 .af-back .cs-lk { margin-left: 2px; }
-.af-title { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 90px; max-width: 320px; flex: 0 1 auto; }
-.af-lin { flex: 0 10 auto; min-width: 60px; max-width: 190px; }
-.af-back > span, .af-p-side .af-credit { display: none; }
-.af-skchip > span { max-width: 140px; }
+.af-title { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 120px; max-width: 340px; flex: 0 1 auto; }
+.af-lin { flex: none; max-width: 190px; }
+.af-skchip > span { max-width: 150px; }
 .af-newv { color: var(--warn) !important; }
 .af-vchip, .af-skchip, .af-lin { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control); color: var(--t-secondary); font-size: var(--fs-xs); font-weight: 550; white-space: nowrap; flex: none; max-width: 100%; }
 .af-vchip:hover, .af-skchip:hover, .af-lin:hover { background: var(--control-hover); color: var(--t-strong); }
@@ -2015,7 +2044,8 @@ html[data-device="native"] .af-layer { display: none; }
 .af-skchip.none { border-style: dashed; background: transparent; color: var(--t-faint); }
 .af-lin { background: transparent; }
 .af-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
-.af-skw, .af-morew { position: relative; display: inline-flex; flex: none; min-width: 0; }
+.af-skw { position: relative; display: inline-flex; flex: none; min-width: 0; }
+.af-morew { position: relative; flex: none; }
 .af-credit { border: 0; background: transparent; padding: 2px; border-radius: 999px; display: inline-flex; flex: none; }
 .af-credit:hover { background: var(--fill-hover); }
 .af-avs { display: inline-flex; align-items: center; }
@@ -2053,8 +2083,9 @@ html[data-device="native"] .af-layer { display: none; }
 .af-s-req { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 260px; }
 .af-s-new { background: color-mix(in srgb, var(--warn) 9%, var(--inset)); }
 .af-s-cm, .af-s-edit { background: color-mix(in srgb, var(--accent) 9%, var(--inset)); }
-.af-strip select, .af-select { height: 28px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); font: inherit; font-size: var(--fs-sm); padding: 0 6px; max-width: 100%; }
-.af-select { height: 34px; width: 100%; padding: 0 8px; }
+.af-dd { width: 132px; flex: none; }
+.af-dd .dd-btn { height: 28px; }
+.fld .dd-btn { font-weight: 400; }
 .af-sum { display: inline-flex; gap: 10px; font-size: var(--fs-xs); }
 .af-sum i { font-style: normal; display: inline-flex; align-items: center; gap: 5px; }
 .af-sum i::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--t-faint); }
@@ -2234,7 +2265,7 @@ html[data-device="native"] .af-layer { display: none; }
 .sk-formc { gap: 14px !important; }
 .sk-formc .fld { flex: none; }
 .sk-start { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.sk-start .af-select { width: auto; flex: 1; min-width: 180px; height: 30px; }
+.sk-start .dd { flex: 1; min-width: 180px; }
 .sk-inrow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 28px; gap: 6px; align-items: center; }
 .sk-grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .sk-save { display: flex; gap: 8px; }
@@ -2263,6 +2294,9 @@ html[data-device="native"] .af-layer { display: none; }
   .af-title { flex: 1; max-width: none; }
   .af-tools { border-left: 0; padding-left: 0; }
   .af-page .af-morew { display: inline-flex; }
+  .af-page .af-menu .mf-m, .af-page .af-menu .mf-mo { display: flex; }
+  .af-id { min-width: 0; }
+  .af-title { min-width: 0; }
   .af-page .af-bar .af-pop { top: calc(100% + 6px); bottom: auto; }
   .af-page .af-mbar { grid-area: mbar; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--chrome); border-top: 1px solid var(--divider); padding: 4px 4px 6px; }
   .af-mbar button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none; padding: 5px 0 3px; color: var(--t-muted); font-size: 10.8px; font-weight: 550; border-radius: var(--r-md); }
@@ -2295,9 +2329,6 @@ html[data-device="native"] .af-layer { display: none; }
 .kc-btn[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .cs-knobs.kc-off > .knob:not(.cs-jk) { display: none; }
 .sk-menu [hidden] { display: none !important; }
-/* docked panel: the bar has less room, so the title and the skill name shorten first */
-.af-p-side .af-title { min-width: 60px; }
-.af-p-side .af-skchip > span { max-width: 100px; }
 /*AF-CSS-END*/
 </style>
 
@@ -2315,16 +2346,15 @@ html[data-device="native"] .af-layer { display: none; }
     </div>
     <div class="knobs cs-knobs af-knobs" aria-label="Artifact controls">
       <span class="cs-kt">Artifacts</span>
+      <div class="knob"><span>Bar</span><div class="seg" id="k-abar"></div></div>
       <div class="knob"><span>Undo a change</span><div class="seg" id="k-aundo"></div></div>
       <div class="knob"><span>Overlay side switch</span><div class="seg" id="k-aside"></div></div>
       <div class="knob"><span>Skill picker</span><div class="seg" id="k-apick"></div></div>
       <div class="knob"><span>Newer skill version</span><div class="seg" id="k-astale"></div></div>
       <div class="knob"><span>Feed item</span><div class="seg" id="k-arow"></div></div>
     </div>
-    <div class="knobs cs-knobs" aria-label="Closed spaces controls">
-      <span class="cs-kt">Closed spaces</span>
-      <div class="knob"><span>Settings layout</span><div class="seg" id="k-setl"></div></div>
-      <div class="knob"><span>Saving</span><div class="seg" id="k-save"></div></div>
+    <div class="knobs cs-knobs" aria-label="Screens">
+      <span class="cs-kt">Screens</span>
       <div class="knob cs-jk"><span>Jump to</span><div id="k-jump" class="jd"></div></div>
     </div>
   </div>
@@ -2476,29 +2506,28 @@ const POSTS = [
 /* Closed spaces: only members can read their threads.
    vis     'listed'   - shown in browse, search and the switcher; people can ask to join
            'unlisted' - shown only to members; reachable by invite
-   policy  'request' (answer questions, a moderator approves) | 'invite' | 'domain' (verified email)
-   pay     'pool' (space key) | 'member' (each member's own key) | 'both' (pool, then members' keys)
+   policy  'request' (answer questions, a moderator approves) | 'invite'
    invite  who can invite: 'mods' | 'members' */
 SPACES.push(
   { id: 'replication', name: 'replication-club', title: 'Replication club', av: 2, byok: 'lettie', members: 214, online: 12, posts: 142, used: 2.9e6, budget: 6e6, created: 'Oct 2026',
-    vis: 'listed', policy: 'request', pay: 'pool', invite: 'mods',
+    vis: 'listed', policy: 'request', invite: 'mods',
     qs: [{ q: 'Which result would you like to replicate or check first?', req: true }, { q: 'Link to earlier replication or analysis work', req: false }],
     desc: 'Members re-run published results and report what held up. Closed so that drafts and failed attempts can be discussed before anything is made public.',
     rules: ['Post a plan before you start a replication.', "Do not share drafts or data outside the space without the author's consent.", 'Report failed replications in the same detail as successful ones.', 'Asks use the space pool. Keep each ask to a single result.'],
     pages: [['Replication plan template', '2d'], ['Open replications', '5h'], ['Data access agreements', '1w'], ['Results log', '1d']],
     mods: [['lettie', 'admin'], ['mira_k', 'mod']] },
   { id: 'northwind', name: 'northwind-eng', title: 'Northwind engineering', av: 5, members: 86, online: 9, posts: 64, used: 0, budget: 0, created: 'Oct 2026',
-    vis: 'listed', policy: 'domain', domain: 'northwind.dev', pay: 'member', invite: 'mods', qs: [],
+    vis: 'listed', policy: 'request', invite: 'mods', qs: [{ q: 'Which team are you on at Northwind?', req: true }],
     desc: 'Engineering space for Northwind staff: incident reviews, design notes and vendor research.',
     rules: ['Use your work account.', 'Customer data never goes in a thread or an ask.'],
     pages: [['On-call handbook', '3d'], ['Vendor evaluations', '2w']], mods: [['oduya', 'admin']] },
   { id: 'grants', name: 'grant-review', title: 'Grant review panel', av: 6, byok: 'tomasz', members: 9, online: 3, posts: 23, used: 1.1e6, budget: 4e6, created: 'Nov 2026',
-    vis: 'unlisted', policy: 'invite', pay: 'pool', invite: 'members', qs: [],
+    vis: 'unlisted', policy: 'invite', invite: 'members', qs: [],
     desc: 'Working space for the 2027 open-science grant panel. Applications and scores are confidential.',
     rules: ['Do not name applicants outside this space.', 'Declare conflicts of interest before scoring.'],
     pages: [['Scoring rubric', '4d'], ['Conflict register', '1d']], mods: [['tomasz', 'admin']] },
   { id: 'ward7', name: 'ward-7-tenants', title: 'Ward 7 tenants', av: 4, members: 31, online: 2, posts: 48, used: 0, budget: 0, created: 'Oct 2026',
-    vis: 'unlisted', policy: 'invite', pay: 'member', invite: 'members', qs: [],
+    vis: 'unlisted', policy: 'invite', invite: 'members', qs: [],
     desc: "Tenants' association for buildings in Ward 7: repairs, rent notices and meeting notes.",
     rules: ["Do not post other tenants' unit numbers."], pages: [['Meeting notes', '6d']], mods: [['jun.park', 'admin']] },
 );
@@ -2529,7 +2558,7 @@ const st = { opt: 'b', space: 'public', auth: 'in', pop: false, drawer: true, mo
 try { const ap = localStorage.getItem('session-web-appearance'); if (ap === 'light' || ap === 'dark' || ap === 'system') st.appearance = ap; } catch (e) {}
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2).replace(/\.?0+$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
+const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2).replace(/\.(\d*?)0+$/, '.$1').replace(/\.$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
 const pctS = p => Math.round(p * 100) + '%';
 const lvl = p => p >= 0.85 ? 'm-bad' : p >= 0.6 ? 'm-warn' : 'm-ok';
 const sp = id => SPACES.find(s => s.id === id);
@@ -2662,7 +2691,7 @@ const layoutSpace = () => {
 };
 L.b = layoutSpace;
 
-const ageMin = a => { if (a === 'now') return 0; const n = parseFloat(a); return a.endsWith('m') ? n : a.endsWith('h') ? n * 60 : n * 1440; };
+const ageMin = a => { if (a === 'now') return 0; const n = parseFloat(a); return a.endsWith('mo') ? n * 43200 : a.endsWith('w') ? n * 10080 : a.endsWith('m') ? n : a.endsWith('h') ? n * 60 : n * 1440; };
 const homePosts = () => {
   const ids = st.auth === 'in' ? JOINED : SPACES.map(x => x.id);
   return POSTS.filter(p => ids.includes(p.s) && canRead(sp(p.s))).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
@@ -2697,7 +2726,8 @@ function homeFeed() {
 const MI = {
   user: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7" stroke-linecap="round"/></svg>',
   grid: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
-  gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.7M8 12.5v1.7M14.2 8h-1.7M3.5 8H1.8M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2M12.4 12.4l-1.2-1.2M4.8 4.8 3.6 3.6" stroke-linecap="round"/></svg>',
+  cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+  mods: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="3.4" r="1.7"/><circle cx="3.4" cy="12.2" r="1.7"/><circle cx="12.6" cy="12.2" r="1.7"/><path d="M7.2 4.9 4.2 10.7M8.8 4.9l3 5.8M5.1 12.2h5.8"/></svg>',
   key: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2"/></svg>',
   kbd: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.8" y="4" width="12.4" height="8" rx="1.5"/><path d="M4.5 7h.01M7 7h.01M9.5 7h.01M12 7h.01M5 9.5h6" stroke-linecap="round"/></svg>',
   out: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 13.5H3.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg>',
@@ -2871,11 +2901,11 @@ const MYROLES = { scifi: 'Moderator', ml: 'Admin', math: 'Owner' };
 const role = x => MYROLES[x.id] || (x.mods.some(m => m[0] === ME.u) ? 'Moderator' : 'Member');
 const ROLE_IC = {
   Moderator: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z"/></svg>',
-  /* Admins and the owner share one crown (no base line); the owner is labelled "Admin (Owner)". */
+  /* Admins and the owner share one crown (no base line). */
   Admin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 12.2 2.4 5.6l3.4 2.6L8 3.8l2.2 4.4 3.4-2.6-.6 6.6z"/></svg>',
 };
 ROLE_IC.Owner = ROLE_IC.Admin;
-const roleLabel = r => r === 'Owner' ? 'Admin (Owner)' : r;
+const roleLabel = r => r;
 const roleHTML = x => { const r = role(x); return r === 'Member' ? '' : `<span class="rl-inline">${ROLE_IC[r]}${roleLabel(r)}</span>`; };
 /* Header tabs list every space, joined or not: joined spaces first, then the rest, or the user's
    order from "Edit header tabs". This is intentional: the tabs are for browsing. The sidebar, the left rail
@@ -2889,7 +2919,7 @@ function ysList() {
   const btns = (x, j) => {
     if (!j) return csJoinCtl(x);
     const leave = isClosed(x) ? `<button class="btn sm" type="button" data-csleave="${x.id}">Leave</button>` : `<button class="btn sm" type="button" data-leave="${x.id}">Leave</button>`;
-    return isModOf(x.id) && isClosed(x) ? `<span class="cs-ysb"><button class="btn sm cs-b" type="button" data-csmanage="${x.id}">Manage</button>${leave}</span>` : leave;
+    return isModOf(x.id) ? `<span class="cs-ysb"><button class="btn sm cs-b cs-ib ys-mg" type="button" data-csmanage="${x.id}" aria-label="Manage #${x.name}" title="Manage">${MI.cog}</button>${leave}</span>` : leave;
   };
   const row = (x, j) => `<div class="ys-row"><span class="ys-gw">${csGlyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">#${x.name}</button>${csMark(x, true)}${j ? roleHTML(x) : csPendMark(x)}</span><p>${esc(x.desc)}</p></div>${btns(x, j)}</div>`;
   return `<section class="ys-sec"><h3>Joined</h3>${joined.map(x => row(x, true)).join('') || '<p class="muted">You have not joined any spaces.</p>'}</section>${pendG.length ? `<section class="ys-sec"><h3>Requested</h3>${pendG.map(x => `<div class="ys-row"><span class="ys-gw">${csGlyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">#${x.name}</button>${csMark(x, true)}</span><p>Request sent ${st.reqAge === 'just now' ? 'just now' : st.reqAge + ' ago'} · waiting for a moderator</p></div><button class="btn sm" type="button" data-cswithdraw="${x.id}">Withdraw</button></div>`).join('')}</section>` : ''}<section class="ys-sec"><h3 class="ys-h">Discover<button class="tlink" type="button" data-sub="browse">Browse all</button></h3>${more.map(x => row(x, false)).join('')}</section>`;
@@ -4000,7 +4030,7 @@ function fq2(f, i) {
    Plain numbers are totals (Saved); accent pills count new items (unread notifications, new threads). */
 function railMainMenu(inn, onFeed, item) {
   const unread = inn ? ntUnread() : 0;
-  return `<div class="rl-sec">${item('data-home="1"', I.house, 'Home', '', onFeed && st.home)}${inn ? item('data-act="saved-page"', I.mark, 'Saved', `<span class="rl-c num">${st.saved.size}</span>`, st.savedPage && !st.subPage) + item('data-csnotif="page"', CI.bell, 'Notifications', unread ? `<span class="rs-dot num" title="${unread} unread">${unread}</span>` : '', st.subPage === 'notifs') : ''}</div>`;
+  return `<div class="rl-sec">${item('data-home="1"', I.house, 'Home', '', onFeed && st.home)}${inn ? item('data-act="saved-page"', I.mark, 'Saved', `<span class="rl-c num">${st.saved.size}</span>`, st.savedPage && !st.subPage) + item('data-csnotif="page"', CI.bell, 'Notifications', unread ? `<span class="rl-c num" title="${unread} unread">${unread}</span>` : '', st.subPage === 'notifs') : ''}</div>`;
 }
 function railSpaceList(joined, inn, onFeed, item) {
   const fresh = x => postsFor(x.id).filter(p => ageMin(p.age) < 180).length;
@@ -4072,8 +4102,6 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = POSTS.findIndex(p => p.k === 'ask' && RICH[POSTS.indexOf(p)] && p.s === 'markets'); Object.assign(st, { thread: i < 0 ? 0 : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
-  ['k-setl', 'setV', [['side', 'Labels at the side'], ['stacked', 'Stacked'], ['cards', 'Cards']], () => { if (!(st.subPage === 'manage' && st.mgTab === 'settings')) { jump('md-settings'); st.modal = null; } }],
-  ['k-save', 'saveV', [['bar', 'Save bar'], ['footer', 'Buttons at the end']], () => { if (!(st.subPage === 'manage' && st.mgTab === 'settings')) { jump('md-settings'); st.modal = null; } }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...AFKNOBS(),
@@ -4317,7 +4345,6 @@ const CI = {
   eyeOff: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2.3 8S4.3 4 8 4s5.7 4 5.7 4-2 4-5.7 4-5.7-4-5.7-4z"/><circle cx="8" cy="8" r="1.8"/><path d="M3 13 13 3"/></svg>',
   users: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="5.8" r="2.3"/><path d="M2 13c.4-2 2-3.2 4-3.2s3.6 1.2 4 3.2"/><path d="M10.6 3.7a2.2 2.2 0 0 1 0 4.3M11.8 9.9c1.2.4 2 1.5 2.2 3.1"/></svg>',
   share: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5V10M5 5.3 8 2.5l3 2.8M3.5 8.5v5h9v-5"/></svg>',
-  mail: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.6 4.6 5.4 4 5.4-4"/></svg>',
   plusU: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="6.5" cy="5.8" r="2.3"/><path d="M2.5 13c.4-2 2-3.2 4-3.2 1 0 1.9.3 2.6.8M12 8.5v4M10 10.5h4"/></svg>',
 };
 const LK = (cls = 'cs-lk', title = 'Closed space') => `<span class="${cls}" title="${title}" aria-label="${title}">${LOCK}</span>`;
@@ -4346,7 +4373,7 @@ function setRel(id, r) {
 }
 const openReqs = () => st.reqs.filter(r => r.st === 'open');
 const reqCount = id => id === 'replication' && isModOf(id) && isClosed(sp(id)) ? openReqs().length : 0;
-const policyLabel = s => s.policy === 'domain' ? `Open to @${s.domain}` : s.policy === 'invite' ? 'Invite only' : 'Join by request';
+const policyLabel = s => s.policy === 'invite' ? 'Invite only' : 'Join by request';
 const visLabel = s => s.vis === 'unlisted' ? 'Closed, unlisted' : 'Closed';
 
 /* ---------- markers in lists, tabs and the switcher ("Lock marker" control) ---------- */
@@ -4371,21 +4398,19 @@ function csJoinCtl(x) {
   if (r === 'member' || r === 'mod') return `<button class="btn sm" type="button" data-csleave="${x.id}">Joined</button>`;
   if (r === 'pending') return `<button class="btn sm cs-reqd cs-b" type="button" data-csmyreq="${x.id}">${CI.clock}Requested</button>`;
   if (r === 'denied') return '<span class="faint cs-small">Declined</span>';
-  if (x.policy === 'domain') return `<button class="btn sm cs-b" type="button" data-csdomain="${x.id}">${CI.mail}Join with email</button>`;
   if (x.policy === 'invite') return '<span class="faint cs-small">Invite only</span>';
   return `<button class="btn sm primary" type="button" data-csreq="${x.id}">Request</button>`;
 }
 /* Primary action on a closed space page for someone who is not a member. */
 function csCta(s) {
   const r = relOf(s.id);
-  if (r === 'out') return `<button class="btn primary" type="button" data-act="signin">${s.policy === 'domain' ? 'Log in to join' : s.policy === 'invite' ? 'Log in' : 'Log in to request'}</button>`;
+  if (r === 'out') return `<button class="btn primary" type="button" data-act="signin">${s.policy === 'invite' ? 'Log in' : 'Log in to request'}</button>`;
   if (r === 'member' || r === 'mod') return '';
   if (r === 'pending') {
     const k = 'pend:' + s.id, open = st.csMenu === k;
     return `<div class="cs-mw"><button class="btn cs-reqd cs-b" type="button" data-csmenu="${k}" aria-haspopup="true" aria-expanded="${open}">${CI.clock}Requested${CV}</button>${open ? `<div class="um-scrim cs-scrim"></div><div class="pop cs-pop" role="menu"><button class="um-item" type="button" role="menuitem" data-csmyreq="${s.id}">${I.page}<span>View your request</span></button><button class="um-item" type="button" role="menuitem" data-cswithdraw="${s.id}">${I.close}<span>Withdraw request</span></button></div>` : ''}</div>`;
   }
   if (r === 'denied') return '<button class="btn" type="button" disabled>Request declined</button>';
-  if (s.policy === 'domain') return `<button class="btn primary cs-b" type="button" data-csdomain="${s.id}">${CI.mail}Join with a @${s.domain} email</button>`;
   if (s.policy === 'invite') return `<span class="cs-invonly">${LOCK}Invite only</span>`;
   return `<button class="btn primary" type="button" data-csreq="${s.id}">Request to join</button>`;
 }
@@ -4406,7 +4431,7 @@ function csJoinedBtn(s) {
   const k = 'joined:' + s.id, open = st.csMenu === k;
   const items = [
     canInvite(s) ? `<button class="um-item" type="button" role="menuitem" data-csinvite="${s.id}">${CI.plusU}<span>Invite people</span></button>` : '',
-    isModOf(s.id) ? `<button class="um-item" type="button" role="menuitem" data-csmanage="${s.id}">${MI.gear}<span>Manage space</span></button>` : '',
+    isModOf(s.id) ? `<button class="um-item" type="button" role="menuitem" data-csmanage="${s.id}">${MI.mods}<span>Manage space</span></button>` : '',
     `<button class="um-item" type="button" role="menuitem" data-csleave="${s.id}">${MI.out}<span>Leave space</span></button>`];
   return `<div class="cs-mw"><button class="btn cs-b" type="button" data-csmenu="${k}" aria-haspopup="true" aria-expanded="${open}">Joined${CV}</button>${open ? `<div class="um-scrim cs-scrim"></div><div class="pop cs-pop" role="menu">${items.join('')}</div>` : ''}</div>`;
 }
@@ -4433,7 +4458,6 @@ function csWikiAccess(s) {
 /* ---------- non-member view of a listed closed space ("Non-member page" control) ---------- */
 function csHow(s) {
   if (s.policy === 'request') return `<ol class="cs-how"><li>${!s.qs || !s.qs.length ? 'Confirm that you have read the rules.' : `Answer ${s.qs.length === 1 ? 'one question' : `${s.qs.length} questions`} and confirm that you have read the rules.`}</li><li>A moderator reviews your request.</li><li>You get a notification with the decision.</li></ol>`;
-  if (s.policy === 'domain') return `<p class="muted">Anyone who verifies an email address at @${s.domain} joins straight away. Members see your handle, not your email address.</p>`;
   return '<p class="muted">People join with an invite link or an invite sent to their handle.</p>';
 }
 function csStatusCard(s) {
@@ -4449,7 +4473,7 @@ function csAboutDrawer(s) {
     <div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
     <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>
     <div class="note-card"><h3>Pages</h3><p class="cs-acc">${LOCK}<span>${s.pages.length} pages, visible to members.</span></p></div>
-    <div class="note-card"><h3>Asks</h3><p class="cs-acc">${I.agent}<span>${s.pay === 'member' ? "Members use their own API key." : 'Paid from the space pool. Members do not need their own key.'}</span></p></div>
+    <div class="note-card"><h3>Asks</h3><p class="cs-acc">${I.agent}<span>Paid from the space pool until its monthly limit, then from the asker’s own API key.</span></p></div>
   </div></aside>`;
 }
 const csSkeleton = () => `<div class="cs-skel" aria-hidden="true">${[78, 64, 90, 55, 72, 60].map((w, i) => `<div class="cs-sk"><i class="dot"></i><div><i style="width:${w}%"></i><i style="width:${w - 22}%"></i>${i % 2 ? '' : `<i style="width:${w - 40}%"></i>`}</div></div>`).join('')}</div>`;
@@ -4510,7 +4534,7 @@ function layoutInvite() {
   let body;
   if (iv.state === 'expired') body = `<span class="cs-na-ic">${CI.link}</span><h2>This invite link has expired</h2><p class="muted">Links to #${s.name} stop working after their expiry date or use limit. Ask <b>${iv.by}</b> for a new link.</p><div class="cs-na-b"><button class="btn" type="button" data-home="1">Go to Home</button></div>`;
   else body = `<p class="cs-invby">${avatar(iv.by, 'sm')}<span><b>${iv.by}</b> invited you to join</span></p>${csGlyph(s, 'xl')}<h2>#${s.name}</h2><p class="muted">${esc(s.desc)}</p>
-    <ul class="cs-facts"><li>${LOCK}<span>Threads are visible to members only.</span></li><li>${CI.link}<span>This link expires on Nov 21 and works once.</span></li><li>${I.agent}<span>${s.pay === 'member' ? 'Asks use your own API key.' : 'Asks are paid from the space pool.'}</span></li></ul>
+    <ul class="cs-facts"><li>${LOCK}<span>Threads are visible to members only.</span></li><li>${CI.link}<span>This link expires on Nov 21 and works once.</span></li><li>${I.agent}<span>Asks are paid from the space pool, then from your own API key once the pool reaches its monthly limit.</span></li></ul>
     <div class="cs-na-b">${mem ? `<span class="faint">You are already a member.</span><button class="btn primary" type="button" data-space="${s.id}">Open #${s.name}</button>` : out ? `<button class="btn primary" type="button" data-act="signin">Log in with X to accept</button>` : `<button class="btn primary" type="button" data-csaccept="${s.id}">Accept invite</button><button class="btn" type="button" data-home="1">Not now</button>`}</div>`;
   return `<div class="A C Af H">${topHeader()}<div class="cs-napage"><div class="cs-na cs-invcard">${body}</div></div></div>`;
 }
@@ -4537,7 +4561,7 @@ function ntPop() {
 function ntBell() {
   if (st.auth !== 'in') return '';
   const n = ntUnread();
-  return `<div class="nt-wrap"><button class="btn hb nt-btn${st.ntOpen || st.subPage === 'notifs' ? ' on' : ''}" type="button" data-csnotif="bell" aria-haspopup="true" aria-expanded="${st.ntOpen}" aria-label="Notifications${n ? `, ${n} unread` : ''}" title="Notifications">${CI.bell}${n ? `<span class="nt-dot num">${n}</span>` : ''}</button>${st.ntOpen ? `<div class="um-scrim" data-csnotif="close"></div>${ntPop()}` : ''}</div>`;
+  return `<div class="nt-wrap"><button class="btn hb nt-btn${st.ntOpen || st.subPage === 'notifs' ? ' on' : ''}" type="button" data-csnotif="bell" aria-haspopup="true" aria-expanded="${st.ntOpen}" aria-label="Notifications${n ? `, ${n} unread` : ''}" title="Notifications">${CI.bell}${n ? `<span class="num">${n}</span>` : ''}</button>${st.ntOpen ? `<div class="um-scrim" data-csnotif="close"></div>${ntPop()}` : ''}</div>`;
 }
 function layoutNotifs() {
   const f = st.ntF, list = ntItems().filter(x => f === 'all' || (f === 'spaces' ? x.k !== 'reply' : x.k === 'reply'));
@@ -4592,14 +4616,14 @@ function csMembers(s) {
   const canRole = meRole === 'owner' || meRole === 'admin';
   const row = m => {
     const me = m.u === ME.u, own = m.role === 'owner';
-    const roleC = own ? '<span class="mem-role">Owner</span>' : me || !canRole ? `<span class="mem-role">${ROLES.find(r => r[0] === m.role)[1]}${me ? ' (you)' : ''}</span>` : `<select class="cs-sel" data-memrole="${m.u}" aria-label="Role of ${m.u}">${ROLES.map(([k, l]) => `<option value="${k}" ${m.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const roleC = own ? '<span class="mem-role">Owner</span>' : me || !canRole ? `<span class="mem-role">${ROLES.find(r => r[0] === m.role)[1]}${me ? ' (you)' : ''}</span>` : `<span class="mem-dd"><span class="sr-only" id="dl-role-${m.u}">Role of ${m.u}</span>${ddSel('role.' + m.u, ROLES, m.role, 'dl-role-' + m.u)}</span>`;
     const acts = own || me ? '' : `<button class="tlink" type="button" data-memrm="${m.u}">Remove</button><button class="tlink danger-l" type="button" data-memban="${m.u}">Ban</button>`;
     return `<div class="mem-row" data-mname="${m.u}">${avatar(m.u)}<div class="mem-tx">${au(m.u, NAMES[m.u] || m.u)}<small class="faint">${m.u} · joined ${m.since}</small></div>${roleC}<span class="mem-acts">${acts}</span></div>`;
   };
   const banned = s.id === 'replication' ? st.banned : [];
   return `<div class="mem-top"><label class="search cs-sq">${I.search}<input id="cs-memq" type="search" placeholder="Find a member" aria-label="Find a member" autocomplete="off"></label><span class="faint cs-small num">Showing ${list.length} of ${fmt(s.members)}</span></div>
     <div class="mem-list">${list.map(row).join('')}</div>
-    <p class="cs-fine">${MI.gear}<span>Moderators approve requests and remove members. Admins also change roles and settings. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
+    <p class="cs-fine">${MI.mods}<span>Moderators approve requests and remove members. Admins also change roles and settings. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
     ${banned.length ? `<section class="cs-sec"><h3>Banned</h3><p class="muted cs-small">Banned people cannot request to join or use invite links. Their threads stay in the space.</p>${banned.map(b => `<div class="mem-row">${avatar(b.u, 'sm')}<div class="mem-tx"><b>${b.u}</b><small class="faint">Banned ${b.when}</small></div><button class="tlink" type="button" data-memunban="${b.u}">Unban</button></div>`).join('')}</section>` : ''}`;
 }
 /* invites ("Invite flow" control decides what the Invite button opens; this tab always exists) */
@@ -4608,7 +4632,8 @@ const linkLive = l => !l.dead;
 const linkMeta = l => l.dead ? (l.dead === 'Used' ? `Used by ${l.usedBy}` : `Expired ${l.exp}`) : `One use · ${l.exp ? `expires ${l.exp}` : 'no expiry'}`;
 /* In-page dropdown: a button and a listbox, re-rendered from state (st.dd is the open one).
    Up/Down moves between options, Enter or Space picks one, Escape closes. */
-const DD_SET = { lexp: v => { st.linkExp = v; }, key: v => { csDraft().key = v; }, limit: v => { csDraft().limit = v; } };
+const DD_SET = { role: (v, u) => { const m2 = memFor(sp(st.mgSpace)).find(x => x.u === u), l = ROLES.find(x => x[0] === v)[1]; m2.role = v; toast(`${u} is now ${v === 'admin' ? 'an admin' : 'a ' + l.toLowerCase()}.`); },
+  lexp: v => { st.linkExp = v; }, key: v => { csDraft().key = v; }, limit: v => { csDraft().limit = v; } };
 function ddSel(id, opts, val, labelId) {
   const cur = opts.find(o => o[0] === val) || opts[0], open = st.dd === id;
   return `<div class="dd${open ? ' open' : ''}"><button type="button" class="dd-btn" data-dd="${id}" aria-haspopup="listbox" aria-expanded="${open}" aria-labelledby="${labelId} dd-v-${id}"><span id="dd-v-${id}">${esc(cur[1])}</span>${I.chev}</button>${open ? `<div class="dd-pop" role="listbox" aria-labelledby="${labelId}">${opts.map(([v, l]) => `<button type="button" class="dd-o" role="option" aria-selected="${v === cur[0]}" data-ddv="${id}:${v}"><span>${esc(l)}</span>${v === cur[0] ? I.check : ''}</button>`).join('')}</div>` : ''}</div>`;
@@ -4645,7 +4670,7 @@ function csInvite(id) {
 
 /* ---------- settings: visibility, joining, questions, tokens ---------- */
 const VIS = [['open', 'Open', 'Anyone can read threads. Anyone signed in can join and post.', GLOBE], ['listed', 'Closed', 'Only members can read threads. The space shows in browse and search, and people can ask to join.', LOCK], ['unlisted', 'Closed, unlisted', 'Only members can read threads. The space is hidden from browse and search. People join by invite.', CI.eyeOff]];
-const VFACTS = [['Read threads', 'Anyone', 'Members', 'Members'], ['Shown in browse and search', 'Yes', 'Yes', 'No'], ['Name, description and rules', 'Anyone', 'Anyone', 'Members and invitees'], ['How people join', 'Join button', 'Request, invite or email domain', 'Invite or email domain']];
+const VFACTS = [['Who can read threads', 'Anyone', 'Members', 'Members'], ['Shown in browse and search', 'Yes', 'Yes', 'No'], ['Name, description and rules', 'Anyone', 'Anyone', 'Members and invitees'], ['How people join', 'Join button', 'Request or invite', 'Invite']];
 const csDraft = () => st.subPage === 'create' ? st.cr : st.set;
 /* Visibility: two segmented controls, one for access (open or closed) and one for listing.
    Open spaces are always listed, so the listing control is disabled for them. */
@@ -4655,50 +4680,46 @@ function visPicker(d) {
   const row = (t, sub, aria, opts) => `<div class="cs-vrow"><div class="cs-vlab"><b>${t}</b><small>${sub}</small></div><div class="seg cs-vseg" role="radiogroup" aria-label="${aria}">${opts}</div></div>`;
   return `<div class="cs-vrows">
     ${row('Access', 'Who can read threads, follow-ups and replies.', 'Access', opt('open', 'Open', !closed, GLOBE) + opt(d.vis === 'unlisted' ? 'unlisted' : 'listed', 'Closed', closed, LOCK))}
-    ${row('Listing', closed ? 'Whether people who are not members can find the space in browse and search.' : 'Open spaces are always listed.', 'Listing', opt('listed', 'Listed', d.vis !== 'unlisted', '', !closed) + opt('unlisted', 'Unlisted', d.vis === 'unlisted', '', !closed))}
+    ${row('Listing', closed ? 'Whether the space appears in browse and search.' : 'Open spaces are always listed.', 'Listing', opt('listed', 'Listed', d.vis !== 'unlisted', '', !closed) + opt('unlisted', 'Unlisted', d.vis === 'unlisted', '', !closed))}
   </div><dl class="cs-vdl">${VFACTS.map(r => `<dt>${r[0]}</dt><dd>${r[k + 1]}</dd>`).join('')}</dl>`;
 }
-const POL = [['request', 'Request and approve', 'People answer your questions. A moderator approves each request.'], ['invite', 'Invite only', 'People join with an invite link. Each link can be used once.'], ['domain', 'Verified email domain', 'Anyone who verifies an email address at your domain joins straight away. Others can still be invited.']];
+const POL = [['request', 'Request and approve', 'People answer your questions. A moderator approves each request.'], ['invite', 'Invite only', 'People join with an invite link. Each link can be used once.']];
 const optRow = (attr, val, on, t, sub, dis, extra = '') => `<button type="button" class="ts-row cs-opt" role="radio" aria-checked="${on}" ${attr}="${val}" ${dis ? 'disabled' : ''}><span class="cs-radio"></span><span class="ts-tx"><b>${t}</b><small>${sub}</small></span>${extra}</button>`;
 function policyPicker(d) {
   const un = d.vis === 'unlisted';
   return `<div class="ts-list cs-opts" role="radiogroup" aria-label="How people join">${POL.map(([k, t, sub]) => optRow('data-cspol', k, d.policy === k, t, k === 'request' && un ? 'Not available for unlisted spaces: nobody can find the space to request.' : sub, k === 'request' && un)).join('')}</div>
-    ${d.policy === 'domain' ? `<label class="fld"><span>Email domain</span><span class="cs-pre"><span>@</span><input id="cs-dom" type="text" value="${esc(d.domain)}" placeholder="example.org" autocomplete="off"></span><small class="faint">People verify an address at this domain with a code. Members see their handle, not their email.</small></label>` : ''}
     <div class="cs-row"><span class="cs-rowl">Who can invite</span><div class="seg" role="radiogroup">${[['mods', 'Moderators'], ['members', 'All members']].map(([k, l]) => `<button type="button" aria-pressed="${d.invite === k}" data-csinvwho="${k}">${l}</button>`).join('')}</div></div>`;
 }
 function qsEditor(d, note = true) {
-  return `<div class="cs-qs">${d.qs.map((q, i) => `<div class="cs-qrow"><span class="ts-n num">${i + 1}</span><input id="cs-q-${i}" type="text" value="${esc(q.q)}" placeholder="Question for applicants" aria-label="Question ${i + 1}"><label class="st-req"><span>Required</span><span class="ts-sw"><input type="checkbox" data-csqreq="${i}" ${q.req ? 'checked' : ''} aria-label="Question ${i + 1} is required"><span class="sw-track" aria-hidden="true"></span></span></label><button class="iconbtn" type="button" data-csqrm="${i}" aria-label="Remove question ${i + 1}" title="Remove">${I.close}</button></div>`).join('')}${d.qs.length < 3 ? `<button class="btn sm cs-b st-add" type="button" data-csqadd="1">${PLUS}Add a question</button>` : '<p class="faint cs-small">Up to 3 questions.</p>'}${note ? '<p class="cs-fine">Applicants see these on the request form. Moderators see the answers in the review queue.</p>' : ''}</div>`;
+  return `<div class="cs-qs">${d.qs.map((q, i) => `<div class="cs-qrow"><span class="ts-n num">${i + 1}</span><input id="cs-q-${i}" type="text" value="${esc(q.q)}" placeholder="Question for applicants${q.req ? '' : ' (Optional)'}" aria-label="Question ${i + 1}"><label class="st-req"><span>Required</span><span class="ts-sw"><input type="checkbox" data-csqreq="${i}" ${q.req ? 'checked' : ''} aria-label="Question ${i + 1} is required"><span class="sw-track" aria-hidden="true"></span></span></label><button class="iconbtn" type="button" data-csqrm="${i}" aria-label="Remove question ${i + 1}" title="Remove">${I.close}</button></div>`).join('')}${d.qs.length < 3 ? `<button class="btn sm cs-b st-add" type="button" data-csqadd="1">${PLUS}Add a question</button>` : '<p class="faint cs-small">Up to 3 questions.</p>'}${note ? '<p class="cs-fine">Applicants see these on the request form. Moderators see the answers in the review queue.</p>' : ''}</div>`;
 }
-const PAY = [['pool', 'Space pool', 'Asks use an API key you add to the space, up to a monthly limit. Members do not need their own key.'], ['member', "Each member's own key", 'Members add their own API key to ask. Posts are free for everyone.'], ['both', "Pool first, then members' keys", "Asks use the space pool until the monthly limit, then the member's own key."]];
 function payPicker(d) {
   const keys = st.userKeys.filter(k => k.valid);
-  return `<div class="ts-list cs-opts" role="radiogroup" aria-label="Who pays for asks">${PAY.map(([k, t, sub]) => optRow('data-cspay', k, d.pay === k, t, sub)).join('')}</div>
-    ${d.pay !== 'member' && d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>The pool uses an API key added by ${sp(d.id).byok}, with a limit of ${fmt(sp(d.id).budget)} tokens a month. Only they can change the key.</span></p>` : ''}
-    ${d.pay !== 'member' && !(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the pool</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
+  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>The pool uses an API key added by ${sp(d.id).byok}, with a limit of ${fmt(sp(d.id).budget)} tokens a month. Only they can change the key.</span></p>` : ''}
+    ${!(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the pool</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
     ${d.vis !== 'open' ? `<p class="cs-fine">${LOCK}<span>Who pays does not change who can read. Answers to asks in a closed space are visible to members only.</span></p>` : ''}`;
 }
-/* Space settings. "Settings layout" control: side - title and description in a left column;
-   stacked - title above the controls; cards - each section in a card.
-   "Saving" control: bar - a bar with Discard and Save appears once something changes;
-   footer - Discard and Save at the end of the page, disabled until something changes. */
+/* Space settings: each section's title and description sit in a left column.
+   Discard and Save are always at the end of the page, disabled until something changes.
+   While there are changes and the end of the page is out of view, a bar with the same
+   buttons floats at the bottom of the viewport; it hides once the end buttons are visible. */
 const stSec = (title, sub, body) => `<section class="st-sec"><div class="st-head"><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div><div class="st-body">${body}</div></section>`;
 const csDirty = () => !!st.set && JSON.stringify(st.set) !== st.set0;
 function csSettings(s) {
-  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', domain: s.domain || '', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), pay: s.pay || (s.byok ? 'pool' : 'member'), invite: s.invite || 'mods', key: 'k1', limit: '8' }; st.set0 = JSON.stringify(st.set); }
+  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8' }; st.set0 = JSON.stringify(st.set); }
   const d = st.set, dirty = csDirty();
   const secs = stSec('Visibility', 'Who can read the space, and whether people who are not members can find it.', visPicker(d))
     + (d.vis !== 'open' ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(d)) : '')
     + (d.vis !== 'open' && d.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(d, false)) : '')
-    + stSec('Who pays for asks', 'Which API key is used when members ask the agent. Posts are free.', payPicker(d));
+    + stSec('Who pays for asks', 'Asks use the space pool until its monthly limit, then the asker’s own API key. Posts are free.', payPicker(d));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
-  const foot = st.saveV === 'bar' ? (dirty ? `<div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="grow"></span>${btns}</div>` : '') : `<div class="cs-setf">${btns}</div>`;
-  return `<div class="cs-set st-${st.setV}">${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: #${s.name} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}</div>`;
+  const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
+  return `<div class="cs-set st-side">${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: #${s.name} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}</div>`;
 }
 function csApplySettings(s, d) {
   if (d.vis === 'open') { delete s.vis; } else s.vis = d.vis;
-  Object.assign(s, { policy: d.policy, domain: d.domain, qs: d.qs.filter(q => q.q.trim()), pay: d.pay, invite: d.invite });
-  if (d.pay !== 'member' && !s.byok) { s.byok = ME.u; s.budget = (+d.limit || 8) * 1e6; s.pct = s.used / s.budget; }
-  if (d.pay === 'member') delete s.byok;
+  Object.assign(s, { policy: d.policy, qs: d.qs.filter(q => q.q.trim()), invite: d.invite });
+  if (!s.byok) { s.byok = ME.u; s.budget = (+d.limit || 8) * 1e6; s.pct = s.used / s.budget; }
   if (isClosed(s) && JOINED.includes(s.id) && !st.rel[s.id]) st.rel[s.id] = isModOf(s.id) ? 'mod' : 'member';
   st.set = null;
 }
@@ -4713,7 +4734,7 @@ function csVisDlg(kind, s) {
 }
 
 /* ---------- create a space ("Create flow" control) ---------- */
-const CR0 = () => ({ step: 0, name: '', desc: '', rules: '', vis: 'open', policy: 'request', domain: '', qs: [{ q: 'What would you like to work on here?', req: true }], pay: 'pool', key: 'k1', limit: '8', invite: 'mods', err: '' });
+const CR0 = () => ({ step: 0, name: '', desc: '', rules: '', vis: 'open', policy: 'request', qs: [{ q: 'What would you like to work on here?', req: true }], key: 'k1', limit: '8', invite: 'mods', err: '' });
 const slug = v => v.toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-+/, '').slice(0, 32);
 const CRSTEPS = ['Basics', 'Visibility', 'Joining', 'Tokens'];
 function crBasics(c) {
@@ -4724,10 +4745,10 @@ function crBasics(c) {
 /* Create preview: how the space appears in browse, its page for people who are not members (or for
    everyone when open), the request form, and who pays for asks. Updates as the form changes. */
 function crPreview(c) {
-  const closed = c.vis !== 'open', name = esc(slug(c.name) || 'new-space'), dom = esc(c.domain || 'example.org');
-  const fake = { id: 'preview', name: slug(c.name) || 'new-space', av: 3, vis: closed ? c.vis : undefined, policy: c.policy, domain: c.domain || 'example.org', members: 1, posts: 0, created: 'Nov 2026', qs: c.qs, desc: c.desc || 'No description yet.' };
-  const cta = !closed ? 'Join' : c.policy === 'request' ? 'Request to join' : c.policy === 'domain' ? 'Join with email' : 'Invite only';
-  const how = !closed ? 'Anyone can join' : c.policy === 'request' ? 'Join by request' : c.policy === 'domain' ? `Join with an @${dom} email` : 'Invite only';
+  const closed = c.vis !== 'open', name = esc(slug(c.name) || 'new-space');
+  const fake = { id: 'preview', name: slug(c.name) || 'new-space', av: 3, vis: closed ? c.vis : undefined, policy: c.policy, members: 1, posts: 0, created: 'Nov 2026', qs: c.qs, desc: c.desc || 'No description yet.' };
+  const cta = !closed ? 'Join' : c.policy === 'request' ? 'Request to join' : 'Invite only';
+  const how = !closed ? 'Anyone can join' : c.policy === 'request' ? 'Join by request' : 'Invite only';
   const vis = !closed ? 'Open' : c.vis === 'unlisted' ? 'Closed, unlisted' : 'Closed';
   const rules = (c.rules || '').split('\n').map(x => x.trim()).filter(Boolean);
   const desc = c.desc.trim() ? esc(c.desc) : '<span class="faint">No description yet.</span>';
@@ -4737,7 +4758,7 @@ function crPreview(c) {
   const page = `<div class="cr-pv-page"><div class="cr-pv-h">${csGlyph(fake, 'lg')}<div><b>#${name}</b><small>${vis} · 1 member · ${how}</small></div></div><p class="cr-pv-d">${desc}</p><span class="btn sm${cta === 'Invite only' ? '' : ' primary'}">${cta}</span>${rules.length ? `<div class="cr-pv-rules"><small>Rules</small><ol>${rules.slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>${rules.length > 3 ? `<small class="faint">and ${rules.length - 3} more</small>` : ''}</div>` : ''}${closed ? `<p class="cr-pv-note">${LOCK}<span>Threads are visible to members only.</span></p>` : ''}</div>`;
   const qs = c.qs.filter(q => q.q.trim());
   const form = closed && c.policy === 'request' ? `<div class="cr-pv-sec"><span class="cr-pv-l">Request form</span>${qs.length ? `<ol class="cr-pv-qs">${qs.map(q => `<li><span>${esc(q.q)}</span><em>${q.req ? 'Required' : 'Optional'}</em></li>`).join('')}</ol>` : '<p class="cr-pv-note">No questions. People request with one click.</p>'}</div>` : '';
-  const pay = c.pay === 'member' ? 'Members ask with their own API key.' : c.pay === 'both' ? `Asks use the space pool, up to ${c.limit}M tokens a month, then members' own keys.` : `Asks use the space pool, up to ${c.limit}M tokens a month.`;
+  const pay = `Asks use the space pool, up to ${c.limit}M tokens a month, then the asker’s own API key. Posts are free.`;
   return `<aside class="cs-crprev" aria-label="Preview"><h3 class="cr-pv-t">Preview</h3>
     <div class="cr-pv-sec"><span class="cr-pv-l">In browse</span>${browse}</div>
     <div class="cr-pv-sec"><span class="cr-pv-l">${closed ? 'Space page, for people who are not members' : 'Space page'}</span>${page}</div>
@@ -4749,7 +4770,7 @@ function layoutCreate() {
     + stSec('Visibility', 'Who can read the space, and whether people who are not members can find it.', visPicker(c))
     + (closed ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(c)) : '')
     + (closed && c.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(c, false)) : '')
-    + stSec('Who pays for asks', 'Which API key is used when members ask the agent. Posts are free.', payPicker(c));
+    + stSec('Who pays for asks', 'Asks use the space pool until its monthly limit, then the asker’s own API key. Posts are free.', payPicker(c));
   const foot = `<div class="cr-foot"><button class="btn ghost" type="button" data-home="1">Cancel</button><button class="btn primary" type="button" data-crgo="1" ${c.name ? '' : 'disabled'}>Create space</button></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-create"><div class="sub-top"><h2>Create a space</h2></div><div class="cs-crgrid"><div class="cs-set st-stacked cr-form">${all}${foot}</div>${crPreview(c)}</div></div></div>`;
 }
@@ -4758,9 +4779,9 @@ function csCreate() {
   if (!name) { c.err = 'Add a name.'; return; }
   if (SPACES.some(s => s.name === name)) { c.err = `#${name} already exists.`; return; }
   const id = 'sp-' + name, rules = c.rules.split('\n').map(x => x.trim()).filter(Boolean);
-  const s = { id, name, title: name, av: 3, members: 1, online: 1, posts: 0, used: 0, budget: c.pay === 'member' ? 0 : (+c.limit || 8) * 1e6, created: 'Nov 2026', desc: c.desc.trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [], pct: 0 };
-  if (c.vis !== 'open') Object.assign(s, { vis: c.vis, policy: c.policy, domain: c.domain, qs: c.qs.filter(q => q.q.trim()), pay: c.pay, invite: c.invite });
-  if (c.pay !== 'member') s.byok = ME.u;
+  const s = { id, name, title: name, av: 3, members: 1, online: 1, posts: 0, used: 0, budget: (+c.limit || 8) * 1e6, created: 'Nov 2026', desc: c.desc.trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [], pct: 0 };
+  if (c.vis !== 'open') Object.assign(s, { vis: c.vis, policy: c.policy, qs: c.qs.filter(q => q.q.trim()), invite: c.invite });
+  s.byok = ME.u;
   SPACES.push(s);
   MYROLES[id] = 'Owner'; MYROLES0[id] = 'Owner';
   setRel(id, 'mod');
@@ -4808,13 +4829,8 @@ function csModal() {
   if (k === 'cs-req') return `<div class="modal-scrim"><div class="modal cs-m" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">Request to join #${s.name}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${csReqForm(s, 'modal')}</div></div>`;
   if (k === 'cs-myreq') return dlg(`Your request to join #${s.name}`, `<p class="faint cs-small">Sent ${st.reqAge === 'just now' ? 'just now' : st.reqAge + ' ago'}. A moderator has not decided yet.</p>${csAnswers(s)}`, `<button class="btn" type="button" data-cswithdraw="${s.id}">Withdraw request</button>${cancelB('Close')}`);
   if (k === 'cs-withdraw') return dlg('Withdraw your request?', `<p class="muted">Moderators of #${s.name} will no longer see it. You can request again at any time.</p>`, `${cancelB('Keep request')}<button class="btn danger" type="button" data-cswithdraw-ok="${s.id}">Withdraw</button>`, 'alertdialog');
-  if (k === 'cs-domain') {
-    const d = st.dom;
-    if (d.step === 0) return dlg(`Join #${s.name}`, `<p class="muted">#${s.name} is open to people with an email address at <b>@${s.domain}</b>. We send a code to check that the address is yours.</p><label class="fld"><span>Work email</span><input id="cs-email" type="email" value="${esc(d.email)}" placeholder="you@${s.domain}" autocomplete="off"></label>${d.err ? `<p class="ts-err" role="alert">${d.err}</p>` : ''}<p class="cs-fine">${CI.eyeOff}<span>Members see your handle, not your email address. You can remove the address later; you stay a member.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-csdom="send">Send code</button>`);
-    return dlg(`Join #${s.name}`, `<p class="muted">Enter the 6-digit code sent to <b>${esc(d.email)}</b>.</p><label class="fld"><span>Code</span><input id="cs-code" type="text" inputmode="numeric" maxlength="6" value="${esc(d.code)}" autocomplete="one-time-code"></label>${d.err ? `<p class="ts-err" role="alert">${d.err}</p>` : ''}<button class="tlink cs-small" type="button" data-csdom="back">Use a different address</button>`, `${cancelB()}<button class="btn primary" type="button" data-csdom="verify">Verify and join</button>`);
-  }
   if (k === 'cs-leave') {
-    const back = s.policy === 'domain' ? `You can rejoin at any time with your verified @${s.domain} address.` : s.vis === 'unlisted' || s.policy === 'invite' ? 'To come back, you need a new invite.' : 'To come back, you need to request to join again.';
+    const back = s.vis === 'unlisted' || s.policy === 'invite' ? 'To come back, you need a new invite.' : 'To come back, you need to request to join again.';
     return dlg(`Leave #${s.name}?`, `<p class="muted">You will no longer be able to read its threads, including threads you started. ${back}</p><ul class="cs-list"><li>Your threads and follow-ups stay in the space.</li><li>Threads from #${s.name} stay in Saved, but you cannot open them.</li></ul>`, `${cancelB()}<button class="btn danger" type="button" data-csleave-ok="${s.id}">Leave space</button>`, 'alertdialog');
   }
   if (k === 'cs-invite') return csInviteDlg(s);
@@ -4907,14 +4923,6 @@ function csClick(t) {
   if ((b = d('[data-csmyreq]'))) { st.modal = 'cs-myreq:' + b.dataset.csmyreq; st.csMenu = null; return go(); }
   if ((b = d('[data-cswithdraw]'))) { st.modal = 'cs-withdraw:' + b.dataset.cswithdraw; st.csMenu = null; return go(); }
   if ((b = d('[data-cswithdraw-ok]'))) { const id = b.dataset.cswithdrawOk; setRel(id, 'none'); st.modal = null; toast('Request withdrawn.'); return go(); }
-  if ((b = d('[data-csdomain]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } st.dom = { step: 0, email: '', code: '', err: '' }; st.modal = 'cs-domain:' + b.dataset.csdomain; return go(); }
-  if ((b = d('[data-csdom]'))) {
-    const v = b.dataset.csdom, s = sp(st.modal.split(':')[1]), dm = st.dom;
-    if (v === 'back') { dm.step = 0; dm.err = ''; }
-    if (v === 'send') { if (!dm.email.trim().toLowerCase().endsWith('@' + s.domain)) dm.err = `Use an email address that ends in @${s.domain}.`; else { dm.step = 1; dm.err = ''; } }
-    if (v === 'verify') { if (!/^\d{6}$/.test(dm.code.trim())) dm.err = 'Enter the 6 digits from the email.'; else { setRel(s.id, 'member'); Object.assign(st, NAVBASE(), { space: s.id, welcome: s.id }); toast(`Email verified. You joined #${s.name}.`); } }
-    return go();
-  }
   if ((b = d('[data-csleave]'))) { st.modal = 'cs-leave:' + b.dataset.csleave; st.csMenu = null; return go(); }
   if ((b = d('[data-csleave-ok]'))) { const id = b.dataset.csleaveOk, s = sp(id); setRel(id, 'none'); st.modal = null; if (s.vis === 'unlisted') Object.assign(st, NAVBASE(), { home: true }); toast(`You left #${s.name}.`); return go(); }
   if ((b = d('[data-csinvite]'))) { const id = b.dataset.csinvite; if (st.csMenu === 'share:' + id && !closed) { st.csMenu = null; return go(); } csInvite(id); return go(); }
@@ -4949,7 +4957,7 @@ function csClick(t) {
   /* invites */
   if (st.dd && !t.closest('.dd')) { st.dd = null; renderAll(); }
   if ((b = d('[data-dd]'))) { const id = b.dataset.dd; st.dd = st.dd === id ? null : id; renderAll(); const f = st.dd ? document.querySelector('.dd-pop [aria-selected="true"]') || document.querySelector('.dd-pop .dd-o') : document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
-  if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s); DD_SET[id](v); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
+  if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s); DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
     if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const exp = { 1: 'Nov 17', 7: 'Nov 23', 30: 'Dec 16', 0: '' }[st.linkExp]; const l = { id: 'l' + code, code, by: ME.u, exp }; st.links.unshift(l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
@@ -4960,7 +4968,7 @@ function csClick(t) {
   /* settings and create */
   if ((b = d('[data-csvis]'))) { const dr = csDraft(); dr.vis = b.dataset.csvis; if (dr.vis === 'unlisted' && dr.policy === 'request') dr.policy = 'invite'; return go(); }
   if ((b = d('[data-cspol]'))) { csDraft().policy = b.dataset.cspol; return go(); }
-  if ((b = d('[data-cspay]'))) { csDraft().pay = b.dataset.cspay; return go(); }
+
   if ((b = d('[data-csinvwho]'))) { csDraft().invite = b.dataset.csinvwho; return go(); }
   if ((b = d('[data-csqadd]'))) { csDraft().qs.push({ q: '', req: false }); renderAll(); const i = $('cs-q-' + (csDraft().qs.length - 1)); if (i) i.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-csqrm]'))) { csDraft().qs.splice(+b.dataset.csqrm, 1); return go(); }
@@ -5005,16 +5013,12 @@ function csInput(e) {
   let m;
   if ((m = /^cs-ans-(\d)$/.exec(id))) { st.reqAns[+m[1]] = v; const b = $('cs-send'); if (b) b.disabled = !csReqValid(sp(b.dataset.csreqSend)); return true; }
   if (id === 'cs-rules') { st.reqRules = el.checked; const b = $('cs-send'); if (b) b.disabled = !csReqValid(sp(b.dataset.csreqSend)); return true; }
-  if (id === 'cs-email') { st.dom.email = v; return true; }
-  if (id === 'cs-code') { st.dom.code = v; return true; }
   if (el.name === 'cs-vc') { st.visKeep = v; return rr(); }
   if (el.name === 'cs-vo') { st.openKeep = v; return true; }
   if (id === 'cs-memq') { const q = v.trim().toLowerCase(); document.querySelectorAll('.mem-list .mem-row').forEach(r => { r.hidden = q && !r.dataset.mname.includes(q); }); return true; }
   if (id === 'cs-q') { st.q = v; return rr(); }
-  if (id === 'cs-dom') { csDraft().domain = v.replace(/^@/, ''); return st.subPage === 'create' ? rr() : true; }
   if ((m = /^cs-q-(\d)$/.exec(id))) { const was = csDirty(); csDraft().qs[+m[1]].q = v; return st.subPage === 'create' || was !== csDirty() ? rr() : true; }
   if (el.dataset.csqreq != null) { csDraft().qs[+el.dataset.csqreq].req = el.checked; renderAll(); return true; }
-  if (el.dataset.memrole) { const s = sp(st.mgSpace), m2 = memFor(s).find(x => x.u === el.dataset.memrole); m2.role = v; toast(`${m2.u} is now ${ROLES.find(r => r[0] === v)[1].toLowerCase() === 'admin' ? 'an admin' : 'a ' + ROLES.find(r => r[0] === v)[1].toLowerCase()}.`); renderAll(); return true; }
   if (id === 'cs-crname' || id === 'cs-crdesc' || id === 'cs-crrules') {
     const c = st.cr;
     if (id === 'cs-crname') { const sv = slug(v); if (sv !== v) { el.value = sv; } c.name = sv; c.err = ''; } else c[id === 'cs-crdesc' ? 'desc' : 'rules'] = v;
@@ -5026,7 +5030,7 @@ function csInput(e) {
 /* ---------- "Jump to" control: entry points with the right role ---------- */
 const JUMPS = [
   ['Signed out', [['out-space', 'Closed space page'], ['out-thread', 'Link to a closed thread'], ['out-unlisted', 'Link to an unlisted space'], ['out-invite', 'Invite link']]],
-  ['Not a member', [['nm-browse', 'Browse: listed closed spaces'], ['nm-search', 'Search results'], ['nm-switcher', 'Space switcher'], ['nm-space', 'Closed space page'], ['nm-request', 'Request form'], ['nm-domain', 'Join with an email domain'], ['nm-thread', 'Link to a closed thread'], ['nm-unlisted', 'Unlisted space link, no access'], ['nm-invite', 'Invite link'], ['nm-expired', 'Expired invite link']]],
+  ['Not a member', [['nm-browse', 'Browse: listed closed spaces'], ['nm-search', 'Search results'], ['nm-switcher', 'Space switcher'], ['nm-space', 'Closed space page'], ['nm-request', 'Request form'], ['nm-thread', 'Link to a closed thread'], ['nm-unlisted', 'Unlisted space link, no access'], ['nm-invite', 'Invite link'], ['nm-expired', 'Expired invite link']]],
   ['Pending applicant', [['pd-space', 'Space page while pending'], ['pd-switcher', 'Switcher while pending'], ['pd-yours', 'Your spaces while pending'], ['pd-withdraw', 'Withdraw the request'], ['pd-approved', 'Request approved'], ['pd-declined', 'Request declined']]],
   ['Member', [['mb-space', 'Closed space, member view'], ['mb-welcome', 'First visit after approval'], ['mb-ask', 'Ask in a closed space'], ['mb-thread', 'Closed thread: share'], ['mb-home', 'Home feed with closed threads'], ['mb-leave', 'Leave a closed space'], ['mb-unlisted', 'Unlisted space, member view'], ['mb-invite', 'Member invites to an unlisted space']]],
   ['Moderator', [['md-space', 'Space page with request count'], ['md-queue', 'Review queue'], ['md-decline', 'Decline a request'], ['md-members', 'Members: roles, remove, ban'], ['md-invite', 'Invite people'], ['md-links', 'Invite links'], ['md-settings', 'Space settings'], ['md-toclosed', 'Switch #math from open to closed'], ['md-toopen', 'Switch #replication-club to open']]],
@@ -5058,7 +5062,6 @@ function jump(k) {
     case 'nm-switcher': case 'pd-switcher': Object.assign(st, { home: true, pop: true }); break;
     case 'pd-yours': st.subPage = 'yourspaces'; break;
     case 'nm-request': csOpenRequest('replication'); break;
-    case 'nm-domain': setRel('northwind', 'none'); space('northwind'); st.dom = { step: 0, email: '', code: '', err: '' }; st.modal = 'cs-domain:northwind'; break;
     case 'pd-withdraw': space('replication'); st.modal = 'cs-withdraw:replication'; break;
     case 'pd-approved': setRel('replication', 'member'); pushN({ id: 'napp', k: 'approved', sp: 'replication', u: 'lettie', age: 'just now', unread: true, text: `approved your request to join <b>#${sp('replication').name}</b>` }); st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`lettie approved your request to join #${sp('replication').name}.`, 'open:replication', 'Open space'); break;
     case 'pd-declined': setRel('replication', 'denied'); pushN({ id: 'ndec', k: 'declined', sp: 'replication', age: 'just now', unread: true, text: `Your request to join <b>#${sp('replication').name}</b> was declined.` }); st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`Your request to join #${sp('replication').name} was declined.`, 'open:replication', 'View'); break;
@@ -5138,12 +5141,20 @@ function buildJump() {
 /* after each render: focus the first field of a dialog that has one */
 function csAfterRender() {
   const m = st.modal || '';
+  if (csAfterRender.io) { csAfterRender.io.disconnect(); csAfterRender.io = null; }
+  const endBtns = document.querySelector('#app .cs-setf');
+  if (endBtns && 'IntersectionObserver' in window) {
+    csAfterRender.io = new IntersectionObserver(([e]) => {
+      csSettings.endVis = e.isIntersecting;
+      const w = document.querySelector('#app .st-barw'); if (w) w.classList.toggle('off', e.isIntersecting);
+    });
+    csAfterRender.io.observe(endBtns);
+  }
   /* keep the current space tab in view when the header tabs overflow */
   const h = document.querySelector('#app .hdr .hscroll'), c = h && h.querySelector('.utab[aria-current="true"]:not(.utab-home)');
   if (c) { const hr = h.getBoundingClientRect(), cr = c.getBoundingClientRect(); if (cr.right > hr.right) h.scrollLeft += cr.right - hr.right + 24; }
   if (m.startsWith('cs-req:')) { const f = $('cs-ans-0'); if (f && !csAfterRender.req) f.focus({ preventScroll: true }); }
   csAfterRender.req = m.startsWith('cs-req:');
-  if (m.startsWith('cs-domain')) { const f = $(st.dom.step ? 'cs-code' : 'cs-email'); if (f) f.focus({ preventScroll: true }); }
 }
 
 /* ---------- state ---------- */
@@ -5156,7 +5167,7 @@ const REQS0 = [
 ].map(r => ({ ...r, st: 'open', why: '' }));
 Object.assign(st, {
   rel: { replication: 'none', northwind: 'none', grants: 'member', ward7: 'none' },
-  lockV: 'glyph', setV: 'side', saveV: 'bar', reqV: 'modal', pendV: 'label', notifV: 'bell', queueV: 'cards',
+  lockV: 'glyph', reqV: 'modal', pendV: 'label', notifV: 'bell', queueV: 'cards',
   reqAns: ['', ''], reqRules: false, reqAge: '2h', reqOpen: false,
   csMenu: null, ntOpen: false, ntF: 'all', reqSeen: false, toast: null, welcome: null, created: null,
   mgSpace: 'replication', mgTab: 'requests', reqs: structuredClone(REQS0), rqSel: new Set(), rqCur: 'noor.a', rqExp: new Set(),
@@ -5170,7 +5181,7 @@ Object.assign(st, {
     { id: 'n1', k: 'reply', u: 'hal_b', age: '3m', unread: true, open: 0, text: 'followed up on your ask <b>Intention marketplaces in science fiction</b>' },
     { id: 'n2', k: 'reply', u: 'jun.park', age: '1d', open: 8, text: 'followed up on your ask <b>What 1960s SF got right about video calls</b>' },
   ],
-  invite: { sp: 'ward7', by: 'jun.park', state: 'ok' }, dom: { step: 0, email: '', code: '', err: '' },
+  invite: { sp: 'ward7', by: 'jun.park', state: 'ok' },
   brF: 'all', q: 'replication', askedInv: [],
 });
 const SPACES0 = structuredClone(SPACES);
@@ -5457,7 +5468,7 @@ document.head.appendChild(Object.assign(document.createElement('style'), { id: '
 /* ---------- artifact page ---------- */
 Object.assign(st, {
   /* variant controls */
-  undoV: 'toast', sideV: 'header', pickV: 'grouped', staleV: 'dot', rowV: 'sum',
+  barV: 'overflow', undoV: 'toast', sideV: 'header', pickV: 'grouped', staleV: 'dot', rowV: 'sum',
   /* artifact page state */
   afV: null, afCmp: null, afMode: null, afAnchor: null, afSel: null, afReply: null, afDraft: '', afKind: 'comment', afPop: null, afFull: false,
   afTab: 'disc', afPanel: true, afPanelM: false, afNonce: 0, afFork: null,
@@ -5496,24 +5507,32 @@ function afSkPop(a) {
     : `<div class="af-upd"><p><b>v${cur} of the skill is available.</b> ${esc(note)}</p><p class="faint">This page keeps v${sv[1]}, the version that built it. New asks use v${cur}.</p></div>`;
   return `<div class="pop af-pop af-skpop" role="dialog" aria-label="Skill"><div class="af-skh"><span class="sk-ic">${AI.skill}</span><div><b>${esc(k.name)}</b><small>${skOwnerLabel(k)} · built with v${sv[1]} of ${cur}</small></div></div><p class="muted">${esc(k.desc)}</p>${upd}<div class="af-poprow">${afBtn('sk-open:' + k.id, 'Open skill', 'btn sm')}${afBtn('sk-use:' + k.id, stale ? `Ask again with v${cur}` : 'Use for a new ask', 'btn sm')}</div></div>`;
 }
+/* The artifact bar. It has two groups: identity (panel toggle, back, title, version, skill,
+   contributors) and actions. Items carry a fold level (bf-N); when the bar does not fit, afFitBar()
+   raises the level and the folded items move into the More menu (mf-N rows). Order of folding:
+   1 contributors, fork origin, like, save, share, full screen   2 shorter skill name
+   3 Edit and Fork   4 Comment and Revise as icons   5 skill name (icon and version stay)
+   6 Comment and Revise   7 skill chip and back. The title, the version and More always stay. */
 function afBar(a, p, s) {
-  const building = !a.vers.length, viewN = st.afV || a.cur, sv = afSkill(a), k = sv && skOf(sv[0]);
+  const building = !a.vers.length, viewN = st.afV || a.cur;
   const can = afCanChange(a), out = st.auth === 'out', pid = a.pid, saved = st.saved.has(pid), liked = st.liked.has(pid);
   const signin = 'data-act="signin"';
-  const back = `<button class="th-back af-back" type="button" data-space="${p.s}" aria-label="Back to #${s.name}">${I.chev.replace('<svg', '<svg class="bk"')}<span>#${s.name}</span>${isClosed(s) ? LK('cs-lk', 'Closed space: members only') : ''}</button>`;
-  const lin = a.forkOf ? `<button class="af-lin" type="button" data-open="${a.forkOf.pid}" title="Open the original artifact">${AI.fork}<span>Fork of ${esc(afShort(art(a.forkOf.pid).title, 30))} v${a.forkOf.v}</span></button>` : '';
+  const back = `<button class="th-back af-back" type="button" data-space="${p.s}" aria-label="Back to #${s.name}" title="Back to #${s.name}">${I.chev.replace('<svg', '<svg class="bk"')}${isClosed(s) ? LK('cs-lk', 'Closed space: members only') : ''}</button>`;
+  const lin = a.forkOf ? `<button class="af-lin bf-1" type="button" data-open="${a.forkOf.pid}" title="Open the original artifact">${AI.fork}<span>Fork of ${esc(afShort(art(a.forkOf.pid).title, 30))} v${a.forkOf.v}</span></button>` : '';
   const vchip = building ? '<span class="af-vchip static">Building v1</span>' : `<button class="af-vchip" type="button" data-af="tab:versions" aria-label="Version ${viewN} of ${a.cur}. Open version history" title="Version history">${AI.hist}<b class="num">v${viewN}</b>${viewN !== a.cur ? `<small class="num">of ${a.cur}</small>` : ''}</button>`;
   const contrib = afContrib(a).map(c => c[0]);
-  const credit = building ? '' : `<button class="af-credit" type="button" data-af="tab:details" title="Asked by ${p.u}. ${contrib.length} contributor${contrib.length === 1 ? '' : 's'}." aria-label="Contributors: ${contrib.join(', ')}">${afAvs(contrib)}</button>`;
-  const b = (act, icon, label, on, attrs = '') => `<button class="af-act" type="button" ${out && act !== 'mode:comment' ? signin : `data-af="${act}"`} aria-pressed="${!!on}" ${attrs}>${icon}<span>${label}</span></button>`;
-  const acts = building ? '' : `<div class="af-acts af-d">${b('mode:comment', AI.comment, 'Comment', st.afMode === 'comment')}${b('revise', AI.revise, 'Revise')}${can ? b('mode:edit', I.write, 'Edit', st.afMode === 'edit') : ''}${b('fork', AI.fork, 'Fork')}</div>`;
-  const like = `<button class="iconbtn af-d" type="button" ${out ? signin : `data-toggle="liked" data-id="${pid}"`} aria-pressed="${liked}" aria-label="${liked ? 'Unlike' : 'Like'}" title="${liked ? 'Unlike' : 'Like'}">${I.heart}</button>`;
-  const save = `<button class="iconbtn af-d" type="button" ${out ? signin : 'data-af="save"'} aria-pressed="${saved}" aria-label="${saved ? 'Remove from saved' : 'Save'}" title="${saved ? 'Saved' : 'Save'}">${I.mark}</button>`;
-  const share = `<button class="iconbtn af-d" type="button" ${isClosed(s) ? `data-csshare="${pid}"` : 'data-af="share"'} aria-label="Share" title="Share">${AI.link}</button>`;
-  const more = `<span class="af-morew af-m"><button class="iconbtn" type="button" data-af="pop:more" aria-haspopup="menu" aria-expanded="${st.afPop === 'more'}" aria-label="More actions">${AI.dots}</button>${st.afPop === 'more' ? `<div class="pop af-pop af-menu" role="menu">${can ? afBtn('mode:edit', `${I.write}Edit`, 'pop-row') : ''}${afBtn('tab:versions', `${AI.hist}Versions`, 'pop-row')}${afBtn('tab:forks', `${AI.fork}Forks`, 'pop-row')}${afBtn('tab:details', `${AI.skill}Details and skill`, 'pop-row')}${isClosed(s) ? `<button class="pop-row" type="button" data-csshare="${pid}">${AI.link}Share</button>` : afBtn('share', `${AI.link}Share`, 'pop-row')}${afBtn('full', `${AI.full}Full screen`, 'pop-row')}</div>` : ''}</span>`;
-  const tools = `<div class="af-tools">${building ? '' : like + save + share}<button class="iconbtn af-d" type="button" data-af="full" aria-label="Full screen" title="Full screen">${AI.full}</button>${building ? '' : more}</div>`;
+  const credit = building ? '' : `<button class="af-credit bf-1" type="button" data-af="tab:details" title="Asked by ${p.u}. ${contrib.length} contributor${contrib.length === 1 ? '' : 's'}." aria-label="Contributors: ${contrib.join(', ')}">${afAvs(contrib)}</button>`;
+  const b = (lv, act, icon, label, on) => `<button class="af-act bf-${lv}" type="button" ${out && act !== 'mode:comment' ? signin : `data-af="${act}"`} aria-pressed="${!!on}" title="${label}">${icon}<span>${label}</span></button>`;
+  const acts = building ? '' : `<div class="af-acts af-d">${b(5, 'mode:comment', AI.comment, 'Comment', st.afMode === 'comment')}${b(5, 'revise', AI.revise, 'Revise')}${can ? b(3, 'mode:edit', I.write, 'Edit', st.afMode === 'edit') : ''}${b(3, 'fork', AI.fork, 'Fork')}</div>`;
+  const ib = (attrs, icon, label, on) => `<button class="iconbtn af-d bf-1" type="button" ${attrs} ${on == null ? '' : `aria-pressed="${on}"`} aria-label="${label}" title="${label}">${icon}</button>`;
+  const shareA = isClosed(s) ? `data-csshare="${pid}"` : 'data-af="share"';
+  const row = (cls, attrs, icon, label) => `<button class="pop-row ${cls}" type="button" role="menuitem" ${attrs}>${icon}${label}</button>`;
+  const A = (act, needIn = true) => out && needIn ? signin : `data-af="${act}"`;
+  const menu = `<div class="pop af-pop af-menu" role="menu">${row('mf-5', 'data-af="mode:comment"', AI.comment, 'Comment')}${row('mf-5', A('revise'), AI.revise, 'Revise')}${can ? row('mf-3 mf-m', 'data-af="mode:edit"', I.write, 'Edit') : ''}${row('mf-3', A('fork'), AI.fork, 'Fork')}${row('mf-mo', 'data-af="tab:versions"', AI.hist, 'Versions')}${row('mf-mo', 'data-af="tab:forks"', AI.fork, 'Forks')}${row('mf-1 mf-m', 'data-af="tab:details"', AI.skill, 'Details and contributors')}${row('mf-1', out ? signin : `data-toggle="liked" data-id="${pid}"`, I.heart, liked ? 'Unlike' : 'Like')}${row('mf-1', A('save'), I.mark, saved ? 'Remove from saved' : 'Save')}${row('mf-1 mf-m', shareA, AI.link, 'Share')}${row('mf-1 mf-m', 'data-af="full"', AI.full, 'Full screen')}</div>`;
+  const more = building ? '' : `<span class="af-morew"><button class="iconbtn" type="button" data-af="pop:more" aria-haspopup="menu" aria-expanded="${st.afPop === 'more'}" aria-label="More actions" title="More actions">${AI.dots}</button>${st.afPop === 'more' ? menu : ''}</span>`;
+  const tools = `<div class="af-tools">${building ? '' : ib(out ? signin : `data-toggle="liked" data-id="${pid}"`, I.heart, liked ? 'Unlike' : 'Like', liked) + ib(out ? signin : 'data-af="save"', I.mark, saved ? 'Remove from saved' : 'Save', saved) + ib(shareA, AI.link, 'Share')}${ib('data-af="full"', AI.full, 'Full screen')}${more}</div>`;
   const ptog = building ? '' : `<button class="iconbtn af-d af-ptog" type="button" data-af="panel" aria-pressed="${afPanelOpen()}" aria-label="${afPanelOpen() ? 'Hide' : 'Show'} the panel" title="${afPanelOpen() ? 'Hide' : 'Show'} the panel">${AI.panel}</button>`;
-  return `<div class="af-bar"><div class="af-id">${ptog}${back}<h1 class="af-title" title="${esc(a.title)}">${esc(a.title)}</h1>${lin}${vchip}${building ? '' : afSkChip(a)}${credit}</div>${acts}${tools}</div>`;
+  return { id: `<div class="af-id">${ptog}${back}<h1 class="af-title" title="${esc(a.title)}">${esc(a.title)}</h1>${lin}${vchip}${building ? '' : afSkChip(a)}${credit}</div>`, acts: acts + tools };
 }
 function afMBar(a) {
   if (!a.vers.length) return '';
@@ -5530,8 +5549,8 @@ function afStrips(a, p) {
   if (a.run) out.push(afRunStrip(a));
   if (!a.vers.length) return out.join('');
   if (st.afCmp) {
-    const { x, y } = st.afCmp, d = afDiff(a, x, y), opts = sel => a.vers.map(v => `<option value="${v.n}" ${v.n === sel ? 'selected' : ''}>v${v.n}${v.n === cur ? ' (current)' : ''}</option>`).join('');
-    out.push(`<div class="af-strip af-s-cmp"><b>Compare</b><select id="af-cx" aria-label="Older version">${opts(x)}</select><span aria-hidden="true">→</span><select id="af-cy" aria-label="Newer version">${opts(y)}</select><span class="af-sum num"><i class="d-add">${d.add} added</i><i class="d-chg">${d.chg} changed</i><i class="d-del">${d.del} removed</i></span><span class="grow"></span>${afBtn('cmp-close', 'Close', 'btn sm')}</div>`);
+    const { x, y } = st.afCmp, d = afDiff(a, x, y), opts = a.vers.map(v => [String(v.n), `v${v.n}${v.n === cur ? ' (current)' : ''}`]);
+    out.push(`<div class="af-strip af-s-cmp"><b>Compare</b><span class="af-dd"><span class="sr-only" id="dl-cmpx">Older version</span>${ddSel('cmpx', opts, String(x), 'dl-cmpx')}</span><span aria-hidden="true">→</span><span class="af-dd"><span class="sr-only" id="dl-cmpy">Newer version</span>${ddSel('cmpy', opts, String(y), 'dl-cmpy')}</span><span class="af-sum num"><i class="d-add">${d.add} added</i><i class="d-chg">${d.chg} changed</i><i class="d-del">${d.del} removed</i></span><span class="grow"></span>${afBtn('cmp-close', 'Close', 'btn sm')}</div>`);
     return out.join('');
   }
   if (st.afMode === 'edit') { out.push(`<div class="af-strip af-s-edit">${I.write}<span class="af-s-tx"><b>Editing v${cur}.</b> Change the text in the page. The result is saved as v${afNextN(a)}. Edits use no tokens.</span><span class="grow"></span>${afBtn('edit-save', 'Save version', 'btn sm primary')}${afBtn('edit-cancel', 'Cancel', 'btn sm')}</div>`); return out.join(''); }
@@ -5627,9 +5646,12 @@ function afPanel(a, p) {
 }
 function afPage(p) {
   const pid = POSTS.indexOf(p), a = art(pid), s = sp(p.s), open = afPanelOpen() && a.vers.length;
-  const cls = `af-page af-p-${open ? st.afPanelMode : 'none'}${open && st.afPanelMode === 'over' ? ' af-over-' + st.afOverSide : ''}${st.afFull ? ' af-full' : ''}`;
+  /* "Bar" control: one bar with an overflow menu, two rows, the identity in a header strip, or icon-only actions. Phones always use the top bar. */
+  const v = afMobile() ? 'overflow' : st.barV, bar = afBar(a, p, s);
+  const cls = `af-page af-b-${v} af-p-${open ? st.afPanelMode : 'none'}${open && st.afPanelMode === 'over' ? ' af-over-' + st.afOverSide : ''}${st.afFull ? ' af-full' : ''}`;
   const full = st.afFull ? `<div class="af-exit">${afBtn('full', `${AI.unfull}<span>Exit full screen</span>`, 'btn sm')}</div>` : '';
-  return `<div class="A C Af H af-wrap${st.afFull ? ' af-wfull' : ''}">${topHeader()}<div class="${cls}" id="af-page">${afBar(a, p, s)}<div class="af-strips">${afStrips(a, p)}</div><div class="af-stage">${afStage(a)}${full}</div>${open ? `<div class="af-scrim af-m" data-af="panel"></div>${afPanel(a, p)}` : ''}${afMBar(a)}</div></div>`;
+  const barH = v === 'two' ? `<div class="af-bar"><div class="af-brow">${bar.id}</div><div class="af-brow af-brow2">${bar.acts}</div></div>` : v === 'split' ? `<div class="af-bar">${bar.acts}</div>` : `<div class="af-bar">${bar.id}${bar.acts}</div>`;
+  return `<div class="A C Af H af-wrap${st.afFull ? ' af-wfull' : ''}">${topHeader()}<div class="${cls}" id="af-page">${barH}<div class="af-strips">${v === 'split' ? `<div class="af-headbar">${bar.id}</div>` : ''}${afStrips(a, p)}</div><div class="af-stage">${afStage(a)}${full}</div>${open ? `<div class="af-scrim af-m" data-af="panel"></div>${afPanel(a, p)}` : ''}${afMBar(a)}</div></div>`;
 }
 
 /* ---------- dialogs ---------- */
@@ -5642,7 +5664,7 @@ function afModal() {
     const radio = (v, l, sub) => `<label class="af-radio"><input type="radio" name="af-fsk" data-af="fork-sk:${v}" ${d.sk === v ? 'checked' : ''}><span><b>${l}</b><small>${sub}</small></span></label>`;
     return dlg('Fork this artifact', `<p class="muted">A fork is your own copy. It starts as v1 with the content of v${a.cur} and keeps a link to the original. ${p.u} and the other contributors stay credited on the original.</p>
       <label class="fld"><span>Title</span><input id="af-fork-t" type="text" value="${esc(d.t)}" autocomplete="off"></label>
-      <label class="fld"><span>Space</span><select id="af-fork-s" class="af-select">${dests.map(x => `<option value="${x.id}" ${x.id === d.s ? 'selected' : ''}>#${x.name}${isClosed(x) ? ' (members only)' : ''}</option>`).join('')}</select></label>
+      <div class="fld"><span id="dl-forks">Space</span>${ddSel('forks', dests.map(x => [x.id, `#${x.name}${isClosed(x) ? ' (members only)' : ''}`]), d.s, 'dl-forks')}</div>
       ${closed ? `<p class="cs-fine">${LOCK}<span>This artifact is in a closed space. A fork can only be made in #${s.name}, so its content stays with the members.</span></p>` : ''}
       ${sk ? `<fieldset class="af-fs"><legend>Skill</legend>${radio('keep', `Keep using “${esc(sk.name)}”`, `The fork records the same skill and skill version (${skOwnerLabel(sk)}).`)}${sk.own.k === 'space' && isClosed(sp(sk.own.id)) ? '' : radio('copy', 'Copy the skill to your skills', 'You can change the instructions. The copy records which skill and version it came from.')}${radio('none', 'Drop the skill', 'Later revisions follow only your requests.')}</fieldset>` : ''}`,
       `${cancelB()}${afBtn('fork-go:' + a.pid, 'Fork', 'btn primary')}`);
@@ -5727,6 +5749,20 @@ function afRetheme() {
   const css = afTok();
   layer.querySelectorAll('iframe').forEach(f => { try { const t = f.contentDocument.getElementById('tok'); if (t) t.textContent = css; } catch (e) {} });
 }
+/* Fold bar items into the More menu until the bar fits with the title at its minimum width
+   (see afBar for the order). The title then takes the room that is left. */
+function afFitBar() {
+  const pg = $('af-page'); if (!pg) return;
+  const L = ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6', 'lv7']; pg.classList.remove(...L);
+  if (afMobile()) return;
+  const over = () => [...pg.querySelectorAll('.af-bar, .af-headbar')].some(e => e.scrollWidth > e.clientWidth + 1);
+  pg.classList.add('af-fit');
+  for (const c of L) { if (!over()) break; pg.classList.add(c); }
+  pg.classList.remove('af-fit');
+}
+/* Widths change when the web font finishes loading: fit again. */
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { afFitBar(); });
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { afFitBar(); });
 let afKeep = null, afPbTop = 0;
 function afBeforeRender() {
   const el = document.activeElement;
@@ -5742,6 +5778,7 @@ function afAfterRender() {
     pg.style.height = (phone ? app.clientHeight - top - mtH : Math.max(540, window.innerHeight - 58 - top - mtH)) + 'px';
     if (phone) app.scrollTop = 0;
   }
+  afFitBar();
   document.querySelectorAll('#app .af-prev').forEach(el => { const w = +el.dataset.w || 800; el.firstElementChild.style.width = w + 'px'; el.style.setProperty('--k', el.clientWidth / w); });
   afSync();
   const pb = $('af-pb');
@@ -5959,9 +5996,10 @@ function skFromArt(a) {
 function layoutSkillEdit() {
   const d = st.skDraft || (st.skDraft = skDraft0()), ex = d.id && skOf(d.id), tplA = d.tpl !== '' && art(+d.tpl);
   const owns = [['me', 'Your skills'], ...SPACES.filter(x => isModOf(x.id) || (ex && ex.own.k === 'space' && ex.own.id === x.id)).map(x => ['s:' + x.id, '#' + x.name])];
-  const selEl = (id, opts, val) => `<select id="${id}" class="af-select">${opts.map(([v, l]) => `<option value="${v}" ${String(v) === String(val) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  /* every choice in the form is the in-page dropdown; values are strings */
+  const selEl = (id, opts, val, label) => `${label ? `<span class="sr-only" id="dl-${id}">${label}</span>` : ''}${ddSel(id, opts.map(([v, l]) => [String(v), l]), String(val), 'dl-' + id)}`;
   const arts = Object.values(ARTS).filter(a => a.vers.length && canRead(sp(POSTS[a.pid].s)));
-  const start = ex ? '' : `<div class="sk-start"><span class="sk-lbl">Start from</span><div class="seg">${[['blank', 'Blank'], ['art', 'An artifact'], ['skill', 'Another skill']].map(([k, l]) => `<button type="button" data-af="sk-start:${k}" aria-pressed="${d.start === k}">${l}</button>`).join('')}</div>${d.start === 'art' ? selEl('sk-from-art', [['', 'Choose an artifact'], ...arts.map(a => [a.pid, afShort(a.title, 50)])], d.from && d.from.k === 'art' ? d.from.pid : '') : d.start === 'skill' ? selEl('sk-from-sk', [['', 'Choose a skill'], ...SK.filter(skCanSee).map(k => [k.id, `${k.name} (${skOwnerLabel(k)})`])], d.from && d.from.k === 'skill' ? d.from.id : '') : ''}</div>${d.start === 'art' && d.from ? '<p class="af-note">The agent drafted the instructions from the artifact, its ask and the changes people requested. Edit them before saving.</p>' : ''}`;
+  const start = ex ? '' : `<div class="sk-start"><span class="sk-lbl">Start from</span><div class="seg">${[['blank', 'Blank'], ['art', 'An artifact'], ['skill', 'Another skill']].map(([k, l]) => `<button type="button" data-af="sk-start:${k}" aria-pressed="${d.start === k}">${l}</button>`).join('')}</div>${d.start === 'art' ? selEl('skfromart', [['', 'Choose an artifact'], ...arts.map(a => [a.pid, afShort(a.title, 50)])], d.from && d.from.k === 'art' ? d.from.pid : '', 'Artifact to start from') : d.start === 'skill' ? selEl('skfromsk', [['', 'Choose a skill'], ...SK.filter(skCanSee).map(k => [k.id, `${k.name} (${skOwnerLabel(k)})`])], d.from && d.from.k === 'skill' ? d.from.id : '', 'Skill to start from') : ''}</div>${d.start === 'art' && d.from ? '<p class="af-note">The agent drafted the instructions from the artifact, its ask and the changes people requested. Edit them before saving.</p>' : ''}`;
   const n = ex ? skBuilt(ex).length : 0;
   const effect = ex ? `<p class="cs-fine">${I.agent}<span>Saving publishes v${skCur(ex) + 1}. ${n} artifact${n === 1 ? ' was' : 's were'} built with this skill. ${SK_UPTX}</span></p>` : '';
   const form = `${start}
@@ -5969,8 +6007,8 @@ function layoutSkillEdit() {
     <label class="fld"><span>When to use it <small class="faint">Shown in the skill picker.</small></span><input id="sk-desc" type="text" value="${esc(d.desc)}" autocomplete="off"></label>
     <label class="fld"><span>Instructions <small class="faint">What the agent does and what the page contains.</small></span><textarea id="sk-instr" class="af-ta" rows="11">${esc(d.instr)}</textarea></label>
     <div class="fld"><span>Inputs <small class="faint">What the asker fills in. Leave empty for free text.</small></span>${d.inputs.map((x, i) => `<div class="sk-inrow"><input id="sk-in-${i}" type="text" value="${esc(x.n)}" placeholder="Name" aria-label="Input ${i + 1} name" autocomplete="off"><input id="sk-ph-${i}" type="text" value="${esc(x.ph)}" placeholder="Hint (optional)" aria-label="Input ${i + 1} hint" autocomplete="off">${afIc('sk-in-del:' + i, I.close, 'Remove input')}</div>`).join('')}<div>${afBtn('sk-in-add', `${PLUS}Add an input`, 'btn sm')}</div></div>
-    <label class="fld"><span>Example artifact <small class="faint">New builds start from its structure.</small></span>${selEl('sk-tpl', [['', 'None'], ...arts.map(a => [a.pid, afShort(a.title, 50)])], d.tpl)}</label>
-    <div class="sk-grid2"><label class="fld"><span>Belongs to</span>${selEl('sk-own', owns, d.own)}</label><label class="fld"><span>Who can edit</span>${d.own === 'me' ? selEl('sk-edit', [['me', 'Only you']], 'me') : selEl('sk-edit', [['mods', SK_EDITL.mods], ['members', SK_EDITL.members]], d.edit === 'me' ? 'mods' : d.edit)}</label></div>
+    <div class="fld"><span id="dl-sktpl">Example artifact <small class="faint">New builds start from its structure.</small></span>${selEl('sktpl', [['', 'None'], ...arts.map(a => [a.pid, afShort(a.title, 50)])], d.tpl)}</div>
+    <div class="sk-grid2"><div class="fld"><span id="dl-skown">Belongs to</span>${selEl('skown', owns, d.own)}</div><div class="fld"><span id="dl-skedit">Who can edit</span>${d.own === 'me' ? selEl('skedit', [['me', 'Only you']], 'me') : selEl('skedit', [['mods', SK_EDITL.mods], ['members', SK_EDITL.members]], d.edit === 'me' ? 'mods' : d.edit)}</div></div>
     <label class="af-chk"><input type="checkbox" data-af="sk-web" ${d.web ? 'checked' : ''}>The agent may search the web</label>
     ${ex ? `<label class="fld"><span>What changed in v${skCur(ex) + 1}</span><input id="sk-note" type="text" value="${esc(d.note)}" placeholder="One sentence. Shown on artifacts built with earlier versions." autocomplete="off"></label>` : ''}
     ${effect}${d.err ? `<p class="ts-err" role="alert">${d.err}</p>` : ''}
@@ -6003,6 +6041,15 @@ function skUse(id, sid) {
 }
 
 /* ---------- pages, urls, clicks ---------- */
+/* Handlers for the in-page dropdowns (ddSel) of the artifact and skill screens. */
+const afCmpSet = (x, y) => { const a = afA(); if (!a || x === y) return; if (afLineage(a, x).has(y)) [x, y] = [y, x]; st.afCmp = { x, y }; };
+Object.assign(DD_SET, {
+  cmpx: v => afCmpSet(+v, st.afCmp.y), cmpy: v => afCmpSet(st.afCmp.x, +v),
+  forks: v => { st.afFork.s = v; },
+  sktpl: v => { st.skDraft.tpl = v; }, skown: v => { st.skDraft.own = v; }, skedit: v => { st.skDraft.edit = v; },
+  skfromart: v => { if (v !== '') st.skDraft = Object.assign(skFromArt(art(+v)), { own: st.skDraft.own }); },
+  skfromsk: v => { const k = skOf(v), d = st.skDraft; if (k) Object.assign(d, { name: k.name + ' (copy)', desc: k.desc, instr: k.instr, inputs: structuredClone(k.inputs), tpl: k.tpl == null ? '' : String(k.tpl), from: { k: 'skill', id: k.id } }); },
+});
 Object.assign(CS_PAGES, { skills: layoutSkills, skill: layoutSkill, skilledit: layoutSkillEdit });
 Object.assign(CS_SUBNAME, { skills: 'Skills', skill: 'Skill', skilledit: 'Edit skill' });
 function afUrl() {
@@ -6105,15 +6152,10 @@ function afInput(e) {
   if (id === 'af-in') { st.afDraft = t.value; return true; }
   if (id === 'af-reply') { st.afReplyT = t.value; return true; }
   if (id === 'af-fork-t') { st.afFork.t = t.value; return true; }
-  if (id === 'af-fork-s') { st.afFork.s = t.value; return true; }
-  if (id === 'af-cx' || id === 'af-cy') { let x = +$('af-cx').value, y = +$('af-cy').value; if (x === y) return true; const a = afA(); if (a && afLineage(a, x).has(y)) [x, y] = [y, x]; st.afCmp = { x, y }; renderAll(); return true; }
   if (id === 'sk-q') { const q = t.value.trim().toLowerCase(), m = t.closest('.sk-menu'); let n = 0; m.querySelectorAll('.ts-opt[data-name]').forEach(o => { o.hidden = !!q && !o.dataset.name.includes(q); if (!o.hidden) n++; }); m.querySelector('.sk-none').hidden = n > 0; return true; }
   const d = st.skDraft; if (!d || !/^sk-/.test(id)) return false;
   if (id === 'sk-name') d.name = t.value; else if (id === 'sk-desc') d.desc = t.value; else if (id === 'sk-instr') d.instr = t.value; else if (id === 'sk-note') d.note = t.value;
   else if (/^sk-in-\d+$/.test(id)) d.inputs[+id.slice(6)].n = t.value; else if (/^sk-ph-\d+$/.test(id)) d.inputs[+id.slice(6)].ph = t.value;
-  else if (id === 'sk-tpl') { d.tpl = t.value; renderAll(); } else if (id === 'sk-own') { d.own = t.value; renderAll(); } else if (id === 'sk-edit') d.edit = t.value;
-  else if (id === 'sk-from-art') { if (t.value !== '') { const keep = { own: d.own }; st.skDraft = Object.assign(skFromArt(art(+t.value)), keep); } renderAll(); }
-  else if (id === 'sk-from-sk') { const k = skOf(t.value); if (k) Object.assign(d, { name: k.name + ' (copy)', desc: k.desc, instr: k.instr, inputs: structuredClone(k.inputs), tpl: k.tpl == null ? '' : String(k.tpl), from: { k: 'skill', id: k.id } }); renderAll(); }
   else return false;
   d.err = '';
   return true;
@@ -6154,6 +6196,7 @@ function afJump(k) {
   if (!/^(af|sk)-/.test(k)) return false;
   afReset();
   { const l = $('af-layer'); if (l) l.innerHTML = ''; }
+  st.dd = null;
   Object.assign(st, afView0(), { skSel: null, skDraft: null, skTest: false, draft: '' });
   const open = (pid, o) => { Object.assign(st, { thread: pid, space: POSTS[pid].s }, o); afPage.last = pid; };
   const fp = AF_BASE, rep = POSTS.findIndex(p => p.s === 'replication' && p.k === 'ask');
@@ -6201,6 +6244,7 @@ const afScreen = () => st.subPage ? st.subPage : afA() ? 'art' : st.savedPage ||
 const AJ = (target, ok) => () => { if (!ok || !ok()) jump(target); };
 /* Open decisions that the settled choices left or created. The first option is the recommended one. */
 const AFKNOBS = () => [
+  ['k-abar', 'barV', [['overflow', 'One bar, overflow menu'], ['two', 'Two rows'], ['split', 'Title in a header strip'], ['icons', 'Icon-only actions']], AJ('af-view', () => afA())],
   ['k-aundo', 'undoV', [['toast', 'Undo for the author'], ['banner', 'Notice for every reader'], ['notify', 'Notice for the owner']], () => { jump('af-view'); }],
   ['k-aside', 'sideV', [['header', 'Button in the panel header'], ['drag', 'Drag handle'], ['menu', 'Position menu']], () => { if (!afA()) jump('af-view'); Object.assign(st, { afPanel: true, afPanelMode: 'over', afFull: false, afPop: st.sideV === 'menu' ? 'pmenu' : null }); }],
   ['k-apick', 'pickV', [['grouped', 'Grouped by owner'], ['flat', 'Most used first'], ['search', 'Search']], () => { jump('sk-ask'); }],
