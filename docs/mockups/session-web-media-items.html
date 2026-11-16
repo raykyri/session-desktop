@@ -2316,6 +2316,62 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-sty-compact .mi-u-dot { top: 15px; }
 .mi-u.picked .mi-u-t { color: var(--accent-strong); }
 .mi-sty-boxed .mi-u.picked, .mi-sty-compact.mi-lay-cards .mi-u.picked { border-color: var(--accent); background: var(--accent-soft); }
+/* Native by type, Post cards, Social feed */
+.mi-u2 { grid-template-columns: minmax(0, 1fr); }
+.mi-u2.picking { grid-template-columns: 18px minmax(0, 1fr); }
+.mi-p { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mi-p > .av { width: 32px; height: 32px; font-size: 12.35px; }
+.mi-p > .mi-ic { width: 32px; height: 32px; border-radius: 8px; }
+.mi-p-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 14px; }
+.mi-p-h { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; font-size: var(--fs-sm); min-width: 0; }
+.mi-p-h b { color: var(--t-heading); font-weight: 650; }
+.mi-p-h .faint { font-size: var(--fs-sm); }
+.mi-p-th { font-size: var(--fs-xs); color: var(--t-faint); border: 1px solid var(--border-subtle); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.mi-p-t { margin: 0; color: var(--t-primary); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-line; }
+.mi-p-q { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); line-height: 1.45; }
+.mi-p-q p { margin: 3px 0 0; color: var(--t-secondary); overflow-wrap: anywhere; }
+.mi-p-qh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mi-p-qh b { font-weight: 600; color: var(--t-strong); }
+.mi-p-qh .av.sm { width: 18px; height: 18px; font-size: 8.5px; }
+.mi-sty-native .mi-u, .mi-sty-social .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-native.mi-lay-rows .mi-u:first-child, .mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
+.mi-sty-native.mi-lay-cards, .mi-sty-social.mi-lay-cards { gap: 0 24px; }
+.mi-sty-native .mi-u-dot, .mi-sty-social .mi-u-dot { top: 20px; }
+/* Post cards: X posts as post cards, other items as link cards */
+.mi-sty-postcards { gap: 10px; }
+.mi-sty-postcards .mi-u { padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); align-content: start; }
+.mi-sty-postcards .mi-u:hover { border-color: var(--border-strong); }
+.mi-sty-postcards .mi-u-dot { top: 18px; right: 14px; }
+.mi-pc { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mi-pc > .av { width: 36px; height: 36px; font-size: 13px; }
+.mi-pc-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 30px; }
+.mi-pc-x { position: absolute; right: 30px; top: 14px; color: var(--t-faint); }
+.mi-pc-x svg { width: 13px; height: 13px; }
+.mi-lc { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mi-lc-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 14px; }
+.mi-lc-d { font-size: var(--fs-xs); color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-lc-m { font-size: var(--fs-xs); }
+.mi-sty-postcards .mi-lc .mi-u-t { font-size: var(--fs-sm); -webkit-line-clamp: 2; }
+/* Social feed: link previews */
+.mi-lp { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); min-width: 0; }
+.mi-lp-m { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
+.mi-lp-m svg { width: 12px; height: 12px; }
+/* Headlines: titles grouped by source */
+.mi-sty-headlines { gap: 18px; }
+.mi-sty-headlines.mi-lay-cards { gap: 10px; align-items: start; }
+.mi-hg { display: flex; flex-direction: column; min-width: 0; }
+.mi-sty-headlines.mi-lay-cards .mi-hg { padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.mi-hg-h { display: flex; align-items: center; gap: 7px; margin: 0 0 4px; font-size: var(--fs-xs); font-weight: 650; color: var(--t-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.mi-hg-h svg { width: 13px; height: 13px; color: var(--t-faint); }
+.mi-hd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 18px 7px 0; border-top: 1px solid var(--divider); }
+.mi-hd.picking { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.mi-hg-h + .mi-hd { border-top: 0; }
+.mi-hd-t { color: var(--t-heading); font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
+.mi-hd:hover .mi-hd-t { text-decoration: underline; text-underline-offset: 2px; }
+.mi-hd-a { font-size: var(--fs-xs); }
+.mi-hd .mi-u-dot { top: 50%; margin-top: -3px; }
+.mi-hd.picked .mi-hd-t { color: var(--accent-strong); }
+.mi-sty-postcards .mi-u.picked { border-color: var(--accent); background: var(--accent-soft); }
 /* Items tab layouts */
 /* item page */
 .mi-page { position: relative; padding: 18px 40px 48px; max-width: 1120px; margin: 0 auto; }
@@ -2521,6 +2577,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .mi-units.mi-lay-cards { grid-template-columns: minmax(0, 1fr); }
   .mi-sty-plain.mi-lay-cards .mi-u:first-child, .mi-sty-reader.mi-lay-cards .mi-u:first-child { border-top: 0; }
   .mi-sty-reader .mi-u-t { font-size: var(--fs-input); }
+  .mi-sty-native.mi-lay-cards .mi-u:first-child, .mi-sty-social.mi-lay-cards .mi-u:first-child { border-top: 0; }
+  .mi-pc-x { display: none; }
+  .mi-pc-b { padding-right: 14px; }
   .mi-note-a { width: 100%; }
 }
 /* END media items css */
@@ -5974,7 +6033,7 @@ const MIPLAT = {
   pod: { n: 'Podcast', ic: 'audio' }, yt: { n: 'YouTube', ic: 'video' }, web: { n: 'Website', ic: 'article' },
   docs: { n: 'Docs', ic: 'article' }, rss: { n: 'RSS', ic: 'feed' },
 };
-Object.assign(USERS, { 'tamsin_rook': 3, 'priya.venn': 6, 'quietmodel': 1 });
+Object.assign(USERS, { 'tamsin_rook': 3, 'priya.venn': 6, 'quietmodel': 1, 'kestrel_ml': 4, 'prereg_pat': 2, 'orbitlab_ai': 5 });
 /* Feeds a space follows. wk: items a week. */
 const MIFEEDS = {
   ml: [
@@ -6078,7 +6137,7 @@ const MEDIA = [
     ] },
   { id: 'm9', pl: 'x', kind: 'post', fd: 'f1', au: 'Tamsin Rook', h: '@tamsin_rook', date: 'Nov 15', age: '18h', len: '1 post', tok: 0.1e3, sp: ['ml'], url: 'x.com/tamsin_rook/status/18580',
     sum: 'Says the maintainers replied and agreed with most of the matches; links their post.',
-    body: [{ p: 'The RB-2 maintainers replied. They agree with 298 of my 492 matches and dispute the rest. Their post is fair and I will go through the 194 again this week.' }] },
+    body: [{ p: 'The RB-2 maintainers replied. They agree with 298 of my 492 matches and dispute the rest. Their post is fair and I will go through the 194 again this week.', q: { au: 'Orbit Lab', h: '@orbitlab_ai', t: 'Our response to the RB-2 contamination report: we agree with 298 of the 492 matches and will release RB-2.1 on Dec 1. orbitlab.ai/blog/rb-2-response' } }] },
   { id: 'm10', pl: 'lw', kind: 'article', fd: 'f3', pub: 'LessWrong', au: 'heldout', h: 'lesswrong.com', date: 'Nov 6', age: '10d', len: '5 min read', tok: 1.7e3, sp: ['ml'], url: 'lesswrong.com/posts/p7x2/three-kinds-of-contamination', by: 'hal_b',
     t: 'Three kinds of benchmark contamination', desc: 'Exact copies, paraphrases and shared templates call for different checks.',
     sum: 'Distinguishes exact copies, paraphrases and shared templates, and says that only the first two are usually checked.',
@@ -6220,6 +6279,29 @@ function miUnit(m, o = {}) {
   return `<article class="mi-u${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
 const miRow = (m, o = {}) => miUnit(m, { ...o, sty: o.sty || 'plain' });
+/* Styles that take the item's own shape (native, postcards, social). X posts read as posts: avatar,
+   name and handle, the full first post, a quoted post as an inset box and the thread length. */
+const miDomain = m => m.url.split('/')[0];
+const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
+const miPostHead = m => `<span class="mi-p-h"><b>${esc(m.au)}</b><span class="faint">${esc(m.h)}</span><span class="faint">· ${m.age}</span>${m.kind === 'thread' ? `<span class="mi-p-th num" title="Thread of ${m.body.length} posts">1/${m.body.length}</span>` : ''}</span>`;
+const miPostText = m => { const b = m.body[0]; return `${m.deleted ? '<p class="mi-p-t faint">This post is unavailable.</p>' : `<p class="mi-p-t">${esc(b.p)}</p>`}${b.q && !m.deleted ? `<div class="mi-p-q"><span class="mi-p-qh">${avatar(b.q.h.slice(1), 'sm')}<b>${esc(b.q.au)}</b><span class="faint">${esc(b.q.h)}</span></span><p>${esc(b.q.t)}</p></div>` : ''}`; };
+const miAV = m => m.kind === 'audio' || m.kind === 'video';
+function miUnit2(m, o) {
+  const sty = st.miSty, unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
+  const pick = o.pick ? miPickBox(m) : '', on = st.miPickMode && o.pick && st.miPick.includes(m.id), ex = miExcerpt(m);
+  let inner;
+  if (m.pl === 'x') inner = sty === 'postcards' ? `<div class="mi-pc">${miAv(m)}<div class="mi-pc-b">${miPostHead(m)}${miPostText(m)}</div><span class="mi-pc-x" aria-hidden="true">${XL}</span></div>` : `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
+  else if (sty === 'native') inner = miAV(m) ? `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-u-src">${esc(m.pub || m.au)}<span class="faint">· ${m.len} · ${m.age}</span></span>${ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div>`
+    : `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-u-src">${esc(m.pub && m.pub !== m.au ? m.pub : MIPLAT[m.pl].n)}<span class="faint">· ${esc(m.au)} · ${m.age}</span></span><b class="mi-u-t">${esc(miTitle(m))}</b>${ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : ''}</div></div>`;
+  else if (sty === 'postcards') inner = `<div class="mi-lc">${miIc(m, 'sm')}<div class="mi-lc-b"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-lc-m faint">${esc(m.au)} · ${m.age}</span></div></div>`;
+  else inner = `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-p-h"><b>${esc(m.pub && m.pub !== m.au && !miAV(m) ? m.pub : m.au)}</b><span class="faint">· ${m.age}</span></span><div class="mi-lp"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b>${miAV(m) ? `<span class="mi-lp-m faint">${MII[MIPLAT[m.pl].ic]}${esc(m.pub || m.au)}</span>` : ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div></div>`;
+  return `<article class="mi-u mi-u2${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${inner}${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+}
+/* Headlines: titles only, grouped by source; in Cards each source is a box. */
+function miHeadlines(list) {
+  const groups = []; list.forEach(m => { const f = miFeedOf(m), k = f ? f.label : m.by ? 'Shared links' : (m.pub || m.au); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, m, f, l: [] }); g.l.push(m); });
+  return groups.map(g => `<section class="mi-hg"><h4 class="mi-hg-h">${g.f ? MII[MIPLAT[g.f.pl].ic] : CI.link}<span>${esc(g.k)}</span></h4>${g.l.map(m => { const unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2, on = st.miPickMode && st.miPick.includes(m.id); return `<article class="mi-u mi-hd${unread ? ' unread' : ''}${st.miPickMode ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, true)} tabindex="0">${miPickBox(m)}<span class="mi-hd-t">${esc(miTitle(m))}</span><span class="mi-hd-a faint num">${m.age}</span>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`; }).join('')}</section>`).join('');
+}
 function miHead(m, big = true, noVia) {
   const f = miFeedOf(m);
   const via = noVia ? '' : m.by ? `Shared by ${esc(m.by)}` : f ? `From the feed ${esc(f.label)}` : '';
@@ -6304,7 +6386,8 @@ function miItemsList(s) {
 const miSpaceItems = sid => miSpItems(sid).filter(m => !(st.miHidden || []).includes(m.id));
 /* Items tab layouts ("Items tab" control): List or Cards, with the same filters, selection and Add a link. */
 function miItemsBody(list) {
-  return `<div class="mi-units mi-lay-${st.miLay} mi-sty-${st.miSty}">${list.map(m => miUnit(m, { pick: true })).join('')}</div>`;
+  const sty = st.miSty, two = ['native', 'postcards', 'social'].includes(sty);
+  return `<div class="mi-units mi-lay-${st.miLay} mi-sty-${sty}">${sty === 'headlines' ? miHeadlines(list) : list.map(m => two ? miUnit2(m, { pick: true }) : miUnit(m, { pick: true })).join('')}</div>`;
 }
 function miFeedsCard(s) {
   const f = MIFEEDS[s.id]; if (!f || !canRead(s) || st.home) return '';
@@ -6566,7 +6649,7 @@ const miOnItems = () => { if (!(st.subPage == null && st.thread == null && !st.h
 function MIKNOBS() {
   return [
     ['k-milay', 'miLay', [['rows', 'List'], ['cards', 'Cards']], miOnItems],
-    ['k-misty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['reader', 'Reader'], ['compact', 'Compact']], miOnItems],
+    ['k-misty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['reader', 'Reader'], ['compact', 'Compact'], ['native', 'Native by type'], ['postcards', 'Post cards'], ['social', 'Social feed'], ['headlines', 'Headlines']], miOnItems],
   ];
 }
 
