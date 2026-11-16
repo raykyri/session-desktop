@@ -1005,6 +1005,15 @@ html[data-device="phone"] .frame { display: flex; flex-direction: column; overfl
 html[data-device="phone"] .frame-bar { flex: none; position: static; }
 html[data-device="phone"] .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 html[data-device="phone"] .frame > .app::-webkit-scrollbar { display: none; }
+/* Desktop: the browser frame has a fixed height (16:10 of its width, at most the window height)
+   and the page scrolls inside it, so sticky bars, floating bars and toasts stay in view.
+   transform makes position: fixed children (dialog scrims, sheets) fixed to the frame. */
+@media (min-width: 641px) {
+  html:not([data-device="phone"]):not([data-device="native"]) .frame { display: flex; flex-direction: column; height: max(520px, min(calc(100dvh - 24px), calc(min(1320px, 100vw - 32px) * 0.625))); transform: translateZ(0); }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame-bar { flex: none; }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  html:not([data-device="phone"]):not([data-device="native"]) .modal-scrim { position: fixed; }
+}
 @media (max-width: 640px) {
 
   /* composer: Ask/Post first, space on the right */
@@ -1414,6 +1423,8 @@ button.n-row:active { background: var(--n-fill); }
 /* ================= closed spaces ================= */
 /* control bar */
 .cs-knobs { padding-top: 12px; border-top: 1px solid var(--divider); }
+.qt-rowl-u { margin-left: 8px; }
+.qt-rowl-a { margin-left: 6px; }
 .cs-kt { font-weight: 650; color: var(--t-heading); font-size: var(--fs-sm); margin-right: 2px; }
 .cs-jk { min-width: 0; max-width: 100%; }
 /* Jump to dropdown */
@@ -1428,7 +1439,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
 .jd-o[aria-selected="true"] { color: var(--t-heading); font-weight: 550; }
-@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } }
+@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } .knob-meta, .knob.cs-jk { min-width: 0; max-width: 100%; } .knob .jd-btn { min-width: 0; overflow: hidden; } }
 .cs-jump { height: 28px; min-width: 0; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--t-heading); font: inherit; font-size: var(--fs-sm); font-weight: 550; padding: 0 6px; }
 /* markers */
 .cs-nmrow { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
@@ -2001,7 +2012,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .banner.sf-compact { padding-top: 16px; padding-bottom: 14px; align-items: center; }
 .banner.sf-compact h2 { font-size: 19.55px; }
 .banner.sf-compact p.sf-desc { display: none; }
-.banner .sf-bsearch { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
 .banner.has-tabs { border-bottom: 0; }
 /* space tabs */
 .sp-tabs { display: flex; gap: 2px; padding: 0 22px; background: var(--pane); border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; }
@@ -2082,14 +2092,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-sech h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .sf-recent { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .sf-recent .row-x { padding-left: 0; padding-right: 0; }
-.sf-rtoc { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider); }
-.sf-rtoc .eyebrow { padding: 0 8px 4px; }
-.sf-rtoc > .tlink { padding: 4px 8px; font-size: var(--fs-xs); align-self: flex-start; }
-.sf-rtoc-i { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; font: inherit; color: var(--t-secondary); }
-.sf-rtoc-i:hover { background: var(--fill-hover); color: var(--t-strong); }
-.sf-rtoc-i span { font-size: var(--fs-sm); line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.sf-rtoc-i small { font-size: var(--fs-xs); color: var(--t-faint); }
-.sf-ponly { display: none; }
 .sf-tchips { display: none; }
 .sf-empty h3 { margin: 0 0 4px; font-size: var(--fs-input); color: var(--t-heading); }
 .sf-empty p { margin: 0; }
@@ -2211,7 +2213,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .sf-tchips::-webkit-scrollbar { display: none; }
   .sf-tchips .mchip { flex: none; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control); color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); font-weight: 550; }
   .sf-tchips .mchip[aria-current="true"] { background: var(--t-heading); border-color: var(--t-heading); color: var(--popover); }
-  .sf-ponly { display: block; }
   .sf-about { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .sf-ab-side { position: static; }
 }
@@ -2220,7 +2221,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .rf-idx, .sf-about, .sf-wiki { padding: 16px 14px 40px; }
   .rf-topics { grid-template-columns: minmax(0, 1fr); }
   .rf-sbox .btn { padding: 0 14px; }
-  .banner .sf-bsearch { grid-column: 1 / -1; }
   .wz-opts.c2x { grid-template-columns: minmax(0, 1fr); }
   .wz-code .btn { margin-left: 0; }
   .sf-tprow { grid-template-columns: 16px 20px minmax(0, 1fr) 28px; }
@@ -2237,98 +2237,61 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-page { padding-bottom: 48px; }
 .qt-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; max-width: 1060px; margin: 0 auto; padding: 20px 40px 0; }
 .qt-bar .th-back, .qt-bar .sf-crumb { margin-right: auto; }
-.qt-stats { font-size: var(--fs-xs); color: var(--t-faint); }
 .qt-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .qt-tools .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--t-strong); }
-.qt-tools svg { width: 13px; height: 13px; }
+.qt-tools svg, .qt-pickbar svg, .qt-focusbar .btn svg { width: 13px; height: 13px; }
 .qt-olbtn { display: none; }
-.qt-wide .qt-bar { max-width: none; }
 .qt-grid { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 36px; padding: 14px 40px 0; max-width: 1060px; margin: 0 auto; }
 .qt-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.qt-aside { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 16px; max-height: calc(100vh - 32px); overflow-y: auto; scrollbar-width: thin; }
+.qt-aside { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 16px; max-height: calc(100dvh - 140px); overflow-y: auto; scrollbar-width: thin; }
 .qt-from { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-muted); border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-lg); padding: 8px 12px; }
 .qt-from svg { width: 13px; height: 13px; }
 .qt-from .tlink { color: var(--t-strong); }
 
-/* level badge and anchor line */
+/* level badge and ask header */
 .qt-lv { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--fill-subtle); border: 1px solid var(--divider); color: var(--t-muted); font-size: 10.8px; font-weight: 650; flex: none; }
 .qt-lv.on { background: var(--accent-soft); border-color: var(--accent); color: var(--t-strong); }
 .qt-nh { display: flex; flex-direction: column; gap: 8px; }
 .qt-nh-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--fs-sm); color: var(--t-faint); }
-.qt-nh-top .grow { flex: 1; }
 .qt-about { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; border: 0; border-left: 2px solid var(--accent); background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; padding: 6px 10px; color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); line-height: 1.45; }
 .qt-about:hover { background: var(--fill-hover); color: var(--t-strong); }
 .qt-about small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-about q { quotes: "\201C" "\201D"; }
 .qt-q { margin: 0; font-size: 18.55px; line-height: 1.45; color: var(--t-heading); font-weight: 550; text-wrap: pretty; overflow-wrap: anywhere; }
 .qt-node { display: flex; flex-direction: column; gap: 12px; }
-.qt-node .th-ans { margin-top: 2px; }
 .qt-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-acts .btn svg { width: 13px; height: 13px; }
+.qt-acts .btn svg, .p-foot .btn svg { width: 13px; height: 13px; }
 .qt-acts .grow { flex: 1; }
 .qt-acts .qt-save svg { width: 15px; height: 15px; }
 .qt-save[aria-pressed="true"] { color: var(--t-secondary); }
 .qt-save[aria-pressed="true"] svg { fill: currentColor; }
-.qt-more { display: flex; align-items: center; gap: 8px; padding: 0 0 12px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-more .qt-lv { border-style: dashed; }
-
-/* passage anchors and selection */
-.qt-anc { background: color-mix(in srgb, var(--accent) 16%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; cursor: pointer; box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 55%, transparent); }
-.qt-anc:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
-.qt-anc.on { background: color-mix(in srgb, var(--accent) 30%, transparent); box-shadow: inset 0 -2px 0 var(--accent); }
-.qt-anc-n { display: inline-grid; place-items: center; min-width: 15px; height: 15px; margin-left: 3px; padding: 0 3px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 9.5px; font-weight: 700; vertical-align: 1px; line-height: 1; }
-.qt-whole .qt-anc { background: none; box-shadow: none; cursor: auto; }
-.qt-pend { position: relative; background: color-mix(in srgb, var(--warn) 30%, transparent); color: inherit; border-radius: 3px; }
-.qt-selpop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; display: inline-flex; gap: 4px; padding: 4px; background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); white-space: nowrap; font-style: normal; font-weight: 400; }
-.qt-selpop svg { width: 13px; height: 13px; }
-.qt-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-strong); background: var(--popover); border-radius: var(--r-lg); font-size: var(--fs-sm); color: var(--t-secondary); margin-bottom: 10px; }
-.qt-selbar q { color: var(--t-strong); flex: 1; min-width: 140px; }
-.qt-term { border-bottom: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); cursor: pointer; }
-.qt-term:hover { background: var(--accent-soft); }
-sup.qt-citeb { cursor: pointer; }
-sup.qt-citeb:hover { outline: 1px solid var(--accent); }
-.qt-cite-on { outline: 1px solid var(--accent); }
-.qt-srcn { margin-left: 6px; font-size: var(--fs-xs); color: var(--accent); }
-
-/* branch list under an answer */
-.qt-kids { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--divider); padding-top: 14px; }
-.qt-kids h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
-.qt-kids h3 .num { font-weight: 450; color: var(--t-faint); }
-.qt-kid { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--divider); background: transparent; padding: 10px 6px; border-radius: 0; font: inherit; color: var(--t-primary); }
-.qt-kid:first-of-type { border-top: 0; }
-.qt-kid:hover { background: var(--fill-hover); }
-.qt-kid[aria-current="true"] { background: var(--accent-soft); }
-.qt-kid .av { margin-top: 1px; }
-.qt-kid-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.qt-kid-q { color: var(--t-strong); font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
-.qt-kid-a { color: var(--t-faint); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
-.qt-kid-a q { color: var(--t-secondary); }
-.qt-kid-n { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; padding-top: 2px; }
-.qt-coll { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-top: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-faint); }
 .qt-empty { color: var(--t-faint); font-size: var(--fs-sm); margin: 0; padding: 4px 0; }
+.qt-note { margin: 0; font-size: var(--fs-xs); color: var(--t-faint); line-height: 1.5; }
+.qt-note svg { width: 11px; height: 11px; vertical-align: -1px; }
 
-/* ancestors on the path */
-.qt-trail { display: flex; flex-direction: column; gap: 0; }
-.qt-ancc { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 10px; padding: 0 0 12px; }
-.qt-ancc::before { content: ""; position: absolute; left: 9.5px; top: 22px; bottom: 0; width: 1px; background: var(--border-strong); }
-.qt-ancc .qt-lv { grid-row: 1 / span 3; }
-.qt-ancq { border: 0; background: transparent; padding: 0; text-align: left; font: inherit; color: var(--t-strong); font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
-.qt-ancq:hover { text-decoration: underline; text-underline-offset: 3px; }
-.qt-ancm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-ancs { color: var(--t-muted); font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
-.qt-ancx { border: 1px solid var(--divider); border-radius: var(--r-lg); padding: 10px 12px 2px; background: var(--pane); }
-.qt-ancx .qt-about { margin-bottom: 6px; }
-.qt-trail-h { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 8px; }
-
-/* sibling tabs */
-.qt-sibs { display: flex; flex-direction: column; gap: 6px; }
-.qt-sibs-h { font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
-.qt-tab { flex: none; max-width: 230px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 4px; border: 1px solid var(--divider); background: var(--pane); border-radius: 999px; color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); white-space: nowrap; }
-.qt-tab span { overflow: hidden; text-overflow: ellipsis; }
-.qt-tab:hover { border-color: var(--border-strong); color: var(--t-strong); }
-.qt-tab[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--t-strong); }
-.qt-tab .av { width: 20px; height: 20px; font-size: 8.5px; }
+/* nested branches: the branch you are on, under the answer it asks about */
+.qt-nest { display: flex; flex-direction: column; gap: 6px; }
+.qt-others { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-sm); color: var(--t-faint); padding: 2px 0; }
+.qt-others .tlink { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 0; font: inherit; font-size: var(--fs-sm); color: var(--t-muted); }
+.qt-others .tlink:hover { color: var(--t-strong); }
+.qt-others svg { width: 13px; height: 13px; }
+.qt-ib { border-left: 2px solid var(--border-strong); padding-left: 12px; margin: 4px 0 6px; display: flex; flex-direction: column; gap: 8px; }
+.qt-ib.on { border-left-color: var(--accent); }
+.qt-ib-h { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 0; font: inherit; color: var(--t-strong); }
+.qt-ib-h:hover .qt-ib-q { text-decoration: underline; text-underline-offset: 3px; }
+.qt-ib-h .chv { width: 10px; height: 10px; margin-top: 5px; flex: none; color: var(--t-faint); }
+.qt-ib-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qt-ib-q { font-weight: 550; font-size: var(--fs-input); line-height: 1.4; overflow-wrap: anywhere; }
+.qt-ib-m { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 400; }
+.qt-ib-body { display: flex; flex-direction: column; gap: 8px; }
+.qt-ib-body .prose { font-size: var(--fs-base); }
+.qt-ib-body .prose > :last-child { margin-bottom: 0; }
+.qt-ibmore { align-self: flex-start; }
+.qt-ibmore svg { width: 13px; height: 13px; }
+.qt-focusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-lg); padding: 8px 12px; }
+.qt-focusbar > svg { width: 13px; height: 13px; }
+.qt-focusbar .grow { flex: 1; }
+.qt-rootask { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 14px; }
+.qt-rootask h3, .qt-merge h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 
 /* outline */
 .qt-ol { display: flex; flex-direction: column; gap: 6px; }
@@ -2343,19 +2306,20 @@ sup.qt-citeb:hover { outline: 1px solid var(--accent); }
 .qt-olr:hover { background: var(--fill-hover); color: var(--t-strong); }
 .qt-olr.path { color: var(--t-strong); }
 .qt-olr.path .qt-olt { font-weight: 550; }
+.qt-olr.hi { box-shadow: inset 0 0 0 1px var(--warn); color: var(--t-strong); }
 .qt-olr[aria-current="true"] { background: var(--accent-soft); color: var(--t-heading); }
 .qt-olr .av { width: 16px; height: 16px; font-size: 7px; margin-top: 1px; }
 .qt-olt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .qt-olm { display: inline-flex; align-items: center; gap: 4px; font-size: 10.8px; color: var(--t-faint); padding-top: 1px; }
 .qt-olm svg { width: 11px; height: 11px; color: var(--warn); }
 .qt-olr.coll { opacity: .7; font-style: italic; }
-.qt-olr.ctx { box-shadow: inset 2px 0 0 var(--good); }
 .qt-ol-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--t-faint); }
 .qt-ol-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .qt-ol-legend svg { width: 11px; height: 11px; color: var(--warn); }
-.qt-star { color: var(--warn); }
-.qt-bestnote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-sm); color: var(--t-muted); border: 1px solid var(--divider); border-radius: var(--r-lg); padding: 8px 10px; background: var(--pane); }
-.qt-bestnote svg { width: 13px; height: 13px; color: var(--warn); }
+.qt-hidot, .qt-pathdot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--warn); }
+.qt-pathdot { border: 0; height: 2px; border-radius: 1px; background: var(--accent); }
+.qt-olm-sheet .qt-ol { max-height: 60vh; overflow-y: auto; }
+.qt-olm-sheet .qt-ol-h h3 { display: none; }
 
 /* composer */
 .qt-comp { border: 1px solid var(--border-strong); border-radius: var(--r-xl); background: var(--field); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -2363,43 +2327,18 @@ sup.qt-citeb:hover { outline: 1px solid var(--accent); }
 .qt-comp textarea:focus { outline: none; }
 .qt-comp textarea::placeholder { color: var(--placeholder); }
 .qt-comp:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-.qt-quote { display: flex; gap: 8px; align-items: flex-start; margin: 0; border-left: 2px solid var(--warn); padding: 4px 8px; background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; }
-.qt-quote .qt-qt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.qt-quote small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-quote .iconbtn { flex: none; }
-.qt-ctx { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-ctx-l { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: start; }
-.qt-ctx-l svg { width: 12px; height: 12px; margin-top: 2px; }
-.qt-ctxb { border: 0; background: none; padding: 0; font: inherit; font-size: var(--fs-xs); text-decoration: underline; text-underline-offset: 2px; }
-.qt-ctx-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.qt-ctx-list span { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; border: 1px solid var(--divider); border-radius: 999px; padding: 1px 8px 1px 3px; color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qt-ctx-list .qt-lv { min-width: 16px; height: 16px; font-size: 9.5px; }
-.qt-ctx-list .sm { border-style: dashed; }
 .qt-cbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .qt-cbar .grow { flex: 1; }
-.qt-pay { font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-warn { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); color: var(--t-secondary); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: var(--r-md); padding: 8px 10px; }
-.qt-warn b { color: var(--t-strong); font-weight: 600; }
+.qt-cbar .btn.primary { margin-left: auto; }
+.qt-cbar .btn:not(.primary) + .btn.primary { margin-left: 0; }
 .qt-err { color: var(--bad); font-size: var(--fs-xs); }
 
-/* node menu */
+/* ask menu */
 .qt-mw { position: relative; display: inline-flex; }
 .qt-mw .pop { left: auto; right: 0; width: 280px; }
 .qt-mw .um-item[aria-disabled="true"] { opacity: .55; cursor: default; }
 .qt-mw .um-item small { display: block; color: var(--t-faint); font-size: var(--fs-xs); white-space: normal; }
 
-/* summary */
-.qt-sum { border: 1px solid var(--border-strong); border-radius: var(--r-xl); background: var(--pane); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.qt-sum-h { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
-.qt-sum-h h3 { margin: 0; font-size: var(--fs-base); color: var(--t-heading); }
-.qt-sum-h .grow { flex: 1; }
-.qt-sum-m { font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-sum-sec { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--divider); padding-top: 10px; }
-.qt-sum-sec h4 { margin: 0; font-size: var(--fs-sm); color: var(--t-strong); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
-.qt-sum-sec h4 small { font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-sum-sec p { margin: 0; color: var(--t-body); line-height: 1.55; font-size: var(--fs-sm); }
-.qt-sum-links { display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.qt-sum-links .tlink { font-size: var(--fs-xs); }
 
 /* pick and compare */
 .qt-pickbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r-lg); color: var(--t-strong); font-size: var(--fs-sm); }
@@ -2410,164 +2349,94 @@ sup.qt-citeb:hover { outline: 1px solid var(--accent); }
 .qt-cmp-h .grow { flex: 1; }
 .qt-cmp-base { border: 1px solid var(--divider); border-radius: var(--r-lg); padding: 10px 12px; background: var(--pane); display: flex; flex-direction: column; gap: 4px; }
 .qt-cmp-base small { color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-cmp-base b { color: var(--t-strong); font-weight: 550; }
 .qt-cmp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .qt-cmp-col { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .qt-cmp-col h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-faint); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 .qt-cmp-step { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--divider); padding-top: 10px; }
 .qt-cmp-step:first-of-type { border-top: 0; padding-top: 0; }
-.qt-cmp-step .qt-ancq { font-size: var(--fs-base); }
 .qt-cmp-step .prose { font-size: var(--fs-sm); }
+.qt-ancq { border: 0; background: transparent; padding: 0; text-align: left; font: inherit; color: var(--t-strong); font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
+.qt-ancq:hover { text-decoration: underline; text-underline-offset: 3px; }
+.qt-ancm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: var(--fs-xs); color: var(--t-faint); }
+.qt-merge { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 14px; }
 .qt-cmp-seg { display: none; }
 
-/* columns */
-.qt-colwrap { padding: 14px 0 0; }
-.qt-cols { display: flex; gap: 0; overflow-x: auto; scroll-behavior: smooth; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); background: var(--pane); scrollbar-width: thin; }
-.qt-col { flex: none; width: 380px; height: 680px; overflow-y: auto; border-right: 1px solid var(--divider); padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 10px; background: var(--feed); scrollbar-width: thin; }
-.qt-col.cur { background: var(--pane); width: 440px; }
-.qt-col.newc { width: 360px; background: var(--pane); }
-.qt-col-h { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-col-h .grow { flex: 1; }
-.qt-col-q { margin: 0; font-size: var(--fs-input); line-height: 1.4; color: var(--t-heading); font-weight: 550; overflow-wrap: anywhere; }
-.qt-col .prose { font-size: var(--fs-sm); }
-.qt-col .qt-kids h3 { font-size: var(--fs-sm); }
-.qt-col .qt-kid { padding: 8px 4px; }
-.qt-col .qt-kid-q { font-size: var(--fs-sm); }
-.qt-colnav { display: none; }
-.qt-colfoot { max-width: 1060px; margin: 0 auto; padding: 18px 40px 0; }
-.qt-colhint { font-size: var(--fs-xs); color: var(--t-faint); padding: 8px 40px 0; }
-
-/* map */
-.qt-mapwrap { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 0; margin-top: 14px; border-top: 1px solid var(--divider); }
-.qt-mappane { position: relative; min-width: 0; border-right: 1px solid var(--divider); background: var(--pane); }
-.qt-maptool { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-bottom: 1px solid var(--divider); background: var(--pane); font-size: var(--fs-xs); color: var(--t-faint); }
+/* map dialog */
+.modal.qt-mapdlg { width: min(1180px, 100%); height: calc(100% - 40px); max-height: 860px; padding: 14px 16px 12px; gap: 10px; }
+.modal-scrim.qt-mapscrim { padding: 20px 24px; align-items: center; }
+.qt-mapdlg h3 .num { font-size: var(--fs-xs); font-weight: 400; margin-left: 6px; }
+.qt-maptool { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: var(--fs-xs); color: var(--t-faint); }
 .qt-maptool .grow { flex: 1; }
-.qt-maptool span { display: inline-flex; align-items: center; gap: 4px; }
+.qt-maptool span { display: inline-flex; align-items: center; gap: 5px; }
 .qt-maptool svg { width: 11px; height: 11px; color: var(--warn); }
 .qt-maptool .seg button { font-size: var(--fs-xs); }
-.qt-map { height: 660px; overflow: auto; scrollbar-width: thin; }
+.qt-map { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--feed); scrollbar-width: thin; }
 .qt-mapc { position: relative; transform-origin: 0 0; }
 .qt-mapc svg.qt-edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
 .qt-edges path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
 .qt-edges path.on { stroke: var(--accent); stroke-width: 2.2; }
-.qt-edges path.ctx { stroke: var(--good); }
 .qt-mn { position: absolute; width: 196px; height: 62px; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 6px 8px; border: 1px solid var(--divider); background: var(--card); border-radius: var(--r-lg); font: inherit; font-size: 12px; line-height: 1.3; color: var(--t-secondary); overflow: hidden; }
 .qt-mn:hover { border-color: var(--border-strong); color: var(--t-strong); }
 .qt-mn.path { border-color: color-mix(in srgb, var(--accent) 60%, var(--divider)); color: var(--t-strong); }
 .qt-mn[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--t-heading); box-shadow: 0 0 0 2px var(--accent-soft); }
-.qt-mn.coll { border-style: dashed; opacity: .75; }
-.qt-mn.pick { border-color: var(--warn); }
+.qt-mn.pick:hover { border-color: var(--warn); }
 .qt-mn-t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .qt-mn-m { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--t-faint); margin-top: auto; }
 .qt-mn-m .av { width: 14px; height: 14px; font-size: 6.5px; }
 .qt-mn-m svg { width: 10px; height: 10px; color: var(--warn); }
-.qt-mn-m .anc { color: var(--accent); }
-.qt-mapread { padding: 14px 18px 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0; background: var(--feed); }
-.qt-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-crumbs button { border: 0; background: transparent; padding: 2px 4px; border-radius: var(--r-sm); font: inherit; font-size: var(--fs-xs); color: var(--t-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qt-crumbs button:hover { background: var(--fill-hover); color: var(--t-strong); }
-.qt-crumbs button[aria-current="true"] { color: var(--t-strong); font-weight: 600; }
-.qt-mapread .qt-q { font-size: var(--fs-input); }
-.qt-mapread .prose { font-size: var(--fs-sm); }
+.qt-maphint { flex: none; }
 
-/* inline nested */
-.qt-inl .prose > .qt-ib, .qt-ibs { margin: 2px 0 12px; }
-.qt-ib { border-left: 2px solid var(--border-strong); padding-left: 12px; margin: 6px 0 10px; display: flex; flex-direction: column; gap: 8px; }
-.qt-ib.on { border-left-color: var(--accent); }
-.qt-ib-h { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 0; font: inherit; color: var(--t-strong); }
-.qt-ib-h:hover .qt-ib-q { text-decoration: underline; text-underline-offset: 3px; }
-.qt-ib-h .chv { width: 10px; height: 10px; margin-top: 5px; flex: none; color: var(--t-faint); transition: transform var(--ease); transform: rotate(-90deg); }
-.qt-ib-h[aria-expanded="true"] .chv { transform: none; }
-.qt-ib-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.qt-ib-q { font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
-.qt-ib-m { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 400; }
-.qt-ib-body { display: flex; flex-direction: column; gap: 8px; }
-.qt-ib-body .prose { font-size: var(--fs-base); }
-.qt-ibmore { align-self: flex-start; }
-.qt-focusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); }
-
-/* feed, search, saved */
+/* feed, Saved */
 .qt-rowl { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; width: 100%; text-align: left; border: 0; background: var(--fill-subtle); border-radius: var(--r-md); padding: 6px 9px; font: inherit; font-size: var(--fs-sm); color: var(--t-muted); }
 .qt-rowl:hover { background: var(--fill-hover); color: var(--t-strong); }
 .qt-rowl b { color: var(--t-strong); font-weight: 550; }
 .qt-rowl q { color: var(--t-secondary); overflow-wrap: anywhere; }
 .qt-rowl svg { width: 12px; height: 12px; flex: none; transform: translateY(1px); }
-.qt-rowc { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); }
-.qt-rowc svg { width: 12px; height: 12px; }
-.qt-brow { padding-left: 34px; }
-.qt-brow .row-t { font-size: var(--fs-base); }
-.qt-brow .qt-in { font-size: var(--fs-xs); color: var(--t-faint); }
 .qt-svsec { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
 .qt-svsec h3 { margin: 0; font-size: var(--fs-sm); color: var(--t-heading); }
 .qt-svrow { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); padding: 10px 12px; font: inherit; color: var(--t-primary); }
 .qt-svrow:hover { border-color: var(--border-strong); }
 .qt-svrow b { font-weight: 550; color: var(--t-strong); }
 .qt-svrow small { color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-in { color: var(--t-faint); font-size: var(--fs-xs); }
 
-/* promote dialog */
+/* start a thread from a branch */
 .qt-form { display: flex; flex-direction: column; gap: 12px; }
-.qt-form label.qt-fl { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 550; }
-.qt-form input[type="text"] { height: 34px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 0 10px; font: inherit; font-size: var(--fs-sm); }
+.qt-form label.qt-fl, .qt-form div.qt-fl { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 550; }
+.qt-form input[type="text"] { height: 34px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 0 10px; font: inherit; font-size: var(--fs-sm); font-weight: 400; }
 .qt-form input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .qt-radio { display: flex; flex-direction: column; gap: 6px; }
-.qt-radio button { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-md); padding: 8px 10px; font: inherit; font-size: var(--fs-sm); color: var(--t-secondary); }
+.qt-radio button { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-md); padding: 8px 10px; font: inherit; font-size: var(--fs-sm); font-weight: 400; color: var(--t-secondary); }
 .qt-radio button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--t-strong); }
 .qt-radio button i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--t-faint); flex: none; margin-top: 2px; }
 .qt-radio button[aria-checked="true"] i { border: 4px solid var(--accent); }
 .qt-radio small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
-.qt-note { font-size: var(--fs-xs); color: var(--t-faint); line-height: 1.5; }
-.qt-note svg { width: 11px; height: 11px; vertical-align: -1px; }
-.qt-olm-sheet .qt-ol { max-height: 60vh; overflow-y: auto; }
-.qt-olm-sheet .qt-ol-h h3 { display: none; }
 
 @media (min-width: 921px) and (max-width: 1240px) {
   .qt-grid { grid-template-columns: minmax(0, 1fr) 240px; gap: 26px; padding-left: 28px; padding-right: 28px; }
   .qt-bar { padding-left: 28px; padding-right: 28px; }
-  .qt-mapwrap { grid-template-columns: minmax(0, 1fr) 380px; }
 }
 @media (max-width: 920px) {
   .qt-grid { grid-template-columns: minmax(0, 1fr); }
   .qt-aside { position: static; max-height: none; }
   .qt-aside .qt-ol { display: none; }
   .qt-olbtn { display: inline-flex; }
-  .qt-mapwrap { grid-template-columns: minmax(0, 1fr); }
-  .qt-mappane { border-right: 0; border-bottom: 1px solid var(--divider); }
-  .qt-map { height: 380px; }
 }
 @media (max-width: 640px) {
   .qt-bar { padding: 14px 14px 0; gap: 8px; }
   .qt-bar .th-back, .qt-bar .sf-crumb { width: 100%; }
-  .qt-stats { width: 100%; }
-  .qt-tools { width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+    .qt-tools { width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .qt-tools .btn { flex: none; }
   .qt-grid { padding: 12px 14px 0; gap: 22px; }
   .qt-q { font-size: var(--fs-input); }
-  .qt-ancc:not(:last-child) .qt-ancs { display: none; }
-  .qt-ancc { padding-bottom: 10px; }
-  .qt-tab { max-width: 200px; }
+  .qt-ib { padding-left: 9px; }
+  .qt-ib .qt-ib .qt-ib { padding-left: 6px; }
+  .qt-ib-q { font-size: var(--fs-base); }
   .qt-cmp-cols { grid-template-columns: minmax(0, 1fr); }
   .qt-cmp-seg { display: inline-flex; }
   .qt-cmp-cols[data-side="a"] .qt-cmp-col.b, .qt-cmp-cols[data-side="b"] .qt-cmp-col.a { display: none; }
-  .qt-cols { border: 0; background: transparent; overflow: visible; display: block; }
-  .qt-col { display: none; width: auto; height: auto; overflow: visible; border: 0; padding: 0 14px; background: transparent; }
-  .qt-col.cur, .qt-col.cur.newc { display: flex; width: auto; background: transparent; }
-  .qt-cols.composing .qt-col.cur { display: none; }
-  .qt-cols.composing .qt-col.newc { display: flex; }
-  .qt-colnav { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 12px; }
-  .qt-colnav .qt-tabs { padding-bottom: 0; }
-  .qt-colwrap { padding-top: 12px; }
-  .qt-colfoot, .qt-colhint { padding-left: 14px; padding-right: 14px; }
-  .qt-colhint { display: none; }
-  .qt-map { height: 300px; }
-  .qt-mapread { padding: 14px 14px 24px; }
-  .qt-maptool { padding: 8px 10px; }
-  .qt-ib { padding-left: 9px; }
-  .qt-ib .qt-ib .qt-ib { padding-left: 6px; }
-  .qt-brow { padding-left: 14px; }
   .qt-mw .pop { width: auto; }
-  .qt-pay { flex-basis: 100%; order: -1; }
-  .qt-selpop { position: fixed; left: 12px; right: 12px; top: auto; bottom: 16px; z-index: 60; justify-content: center; white-space: normal; flex-wrap: wrap; }
+    .modal-scrim.qt-mapscrim { padding: 0; align-items: flex-end; }
+  .modal.qt-mapdlg { width: 100%; height: calc(100% - 44px); max-height: none; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 12px 12px 10px; }
 }
 
 /* END question-trees css */
@@ -2581,33 +2450,10 @@ sup.qt-citeb:hover { outline: 1px solid var(--accent); }
       <div class="knob"><div class="seg k-grp"><button class="k-reset" id="k-reset" type="button" title="Reset controls to their defaults (keeps the theme)" aria-label="Reset controls to their defaults"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4"/><path d="M4 6.2v7h3v-3.4h2v3.4h3v-7"/></svg></button><span class="k-sep" aria-hidden="true"></span><div id="k-theme" class="k-inner"></div></div></div>
       <div class="knob"><div class="seg" id="k-auth"></div></div>
       <div class="knob"><div class="seg" id="k-dev"></div></div>
+      <div class="knob cs-jk"><div id="k-jump" class="jd"></div></div>
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-    </div>
-    <div class="knobs cs-knobs" aria-label="Closed spaces controls">
-      <span class="cs-kt">Screens</span>
-      <div class="knob cs-jk"><span>Jump to</span><div id="k-jump" class="jd"></div></div>
-    </div>
-<!-- BEGIN question-trees knobs -->
-    <div class="knobs cs-knobs" aria-label="Question tree controls">
-      <span class="cs-kt">Question trees</span>
-      <div class="knob"><span>Approach</span><div class="seg" id="k-qta"></div></div>
-      <div class="knob"><span>Branch from</span><div class="seg" id="k-qtfrom"></div></div>
-      <div class="knob"><span>Agent sees</span><div class="seg" id="k-qtctx"></div></div>
-      <div class="knob"><span>Paid by</span><div class="seg" id="k-qtpay"></div></div>
-      <div class="knob"><span>Open a thread at</span><div class="seg" id="k-qtopen"></div></div>
-      <div class="knob"><span>Siblings (path view)</span><div class="seg" id="k-qtsib"></div></div>
-      <div class="knob"><span>Home feed</span><div class="seg" id="k-qtfeed"></div></div>
-    </div>
-<!-- END question-trees knobs -->
-    <div class="knobs cs-knobs" aria-label="Space features controls">
-      <span class="cs-kt">Space features</span>
-      <div class="knob"><span>Recent</span><div class="seg" id="k-sfrec"></div></div>
-      <div class="knob"><span>Latest switch</span><div class="seg" id="k-sfsw"></div></div>
-      <div class="knob"><span>FAQ banner</span><div class="seg" id="k-sfban"></div></div>
-      <div class="knob"><span>About and wiki</span><div class="seg" id="k-sfab"></div></div>
-      <div class="knob"><span>Verified line</span><div class="seg" id="k-sfver"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -2645,7 +2491,8 @@ const I = {
   get logo() { return pinwheel(5); },
   search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
   chev: '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5v3.5a3 3 0 0 0 3 3h6.5"/><path d="m10.5 6 3 3-3 3"/></svg>',
+  /* Follow-up and reply counts: three boxes joined by connectors, the same shape as the tree icon in the thread. */
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.2" width="4.2" height="3.2" rx="1"/><rect x="9.8" y="10.4" width="4.4" height="3.2" rx="1"/><path d="M3.9 5.4v6.6h5.9"/></svg>',
   follow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>',
   mark: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2.5h8v11L8 10.5l-4 3z" stroke-linejoin="round"/></svg>',
   page: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z M9.5 1.5v3h3" stroke-linejoin="round"/></svg>',
@@ -2969,26 +2816,25 @@ function csTabs() {
    closed spaces and the verified domain ("Verified line" control). On spaces with the FAQ landing the
    "FAQ banner" control can make it compact or put the search box in it. The space tabs follow it. */
 const banner = (s, noCta) => {
-  const bv = faqOn(s) ? st.faqBanner : 'full', tabs = sfTabs(s);
+  const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const search = bv === 'search' && sfTabCur() === 'threads' && st.faqView === 'topics' ? `<div class="sf-bsearch">${faqBox(s, true)}<div id="faq-res" class="rf-results">${faqResults(s)}</div></div>` : '';
-  const mw = st.aboutV === 'tabs' ? '' : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}${st.aboutV === 'drawer' ? 'About' : 'Wiki'}</button>`;
-  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}${search}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
+  const mw = `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
 const layoutSpace = () => {
   const s = sp(st.space);
   if (isClosed(s) && !canRead(s)) return s.vis === 'unlisted' ? csNoAccess(s) : csGateLayout(s);
-  /* Tabs ("About and wiki" control): Threads shows the FAQ landing or the composer and feed, with the
-     wiki in the sidebar; Wiki and About are pages of their own. */
+  /* Tabs Threads and About: Threads shows the FAQ landing or the composer and feed; About is a page of
+     its own. The wiki stays in the sidebar on both. */
   const tab = sfTabCur();
-  const body = tab === 'about' ? sfAbout(s) : tab === 'wiki' ? sfWikiPage(s) : faqOn(s) ? faqLanding(s) : `<div class="main">
+  const body = tab === 'about' ? sfAbout(s) : faqOn(s) ? faqLanding(s) : `<div class="main">
         ${csSpaceStrips(s)}
         ${composer()}
         ${feedBar()}
         ${feed2(s.id)}
       </div>`;
-  const side = tab === 'threads' || (tab === 'about' && st.aboutV === 'nowiki') ? wikiDrawer(s) : '';
+  const side = wikiDrawer(s);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}">
     ${topHeader()}
     <div class="body">
@@ -3296,10 +3142,9 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
-  const ab = st.aboutV === 'drawer';
   return st.drawer
-    ? `<aside class="drawer wk" aria-label="${ab ? 'About and wiki' : 'Space wiki'}"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">${ab ? 'About and wiki' : 'Wiki'}</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
-        ${ab ? sfAboutCards(s) : ''}${wikiCards(s)}</div></aside>`
+    ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
+        ${wikiCards(s)}</div></aside>`
     : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
 }
 function wikiCards(s) {
@@ -4384,8 +4229,8 @@ const shellWrap = html => st.shell === 'rail' ? `<div class="rs">${rail1()}<div 
 function scrollMockTop() {
   const app = $('app'), fr = document.querySelector('.frame');
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  if (st.device === 'phone') app.scrollTo({ top: 0, behavior: smooth });
-  else if (fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
+  app.scrollTo({ top: 0, behavior: smooth });
+  if (st.device !== 'phone' && fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
 }
 function rdClick(t) {
   /* Clicking the tab or rail row for the page already shown scrolls it to the top. On a thread page
@@ -4402,7 +4247,7 @@ function rdClick(t) {
     if (k === 'ask') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } Object.assign(st, base, st.thread != null || st.savedPage || st.profilePage || st.subPage ? { home: true } : {}, { compOpen: true, mode: 'ask' }); }
     if (k === 'saved') Object.assign(st, base, { savedPage: true });
     if (k === 'me') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } st.umenu = !st.umenu; st.pop = false; renderAll(); return true; }
-    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else window.scrollTo({ top: fr.offsetTop - 8 }); return true; } }
+    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else { $('app').scrollTop = 0; window.scrollTo({ top: fr.offsetTop - 8 }); } return true; } }
   { const tv = t.closest('[data-thv]'); if (tv) { st.thV = tv.dataset.thv; renderAll(); return true; } }
   if (st.mpOpen && !t.closest('.mp')) { st.mpOpen = false; renderAll(); }
   if (MP.base.click(t)) return true;
@@ -4420,7 +4265,6 @@ const toThread = () => { if (st.thread == null) { const i = POSTS.findIndex(p =>
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage']]],
-  ...QTKNOBS(),
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
 ];
@@ -5454,7 +5298,7 @@ function buildJump() {
     cur = act = i; paint();
     jump(flat[i].k); renderAll();
     const fr = document.querySelector('.frame'); if (fr && fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' });
-    const a = $('app'); if (a && st.device === 'phone') a.scrollTop = 0;
+    const a = $('app'); if (a && st.device !== 'native') a.scrollTop = 0;
     if (keepFocus) (open ? pop : btn).focus({ preventScroll: true });
   };
   const step = (d, abs) => {
@@ -5566,7 +5410,7 @@ const isPlain = s => isVer(s) && !!s.plain;
 const spName = s => isPlain(s) ? esc(s.title) : '#' + s.name;
 const sealText = s => `Verified: the admins of this space control ${s.dom.domain}`;
 const spSeal = (s, cls = '') => isVer(s) ? `<span class="sf-seal${cls ? ' ' + cls : ''}" title="${esc(sealText(s))}" aria-label="${esc(sealText(s))}">${SEAL}</span>` : '';
-const verShown = s => isVer(s) && st.verLine === 'show';
+const verShown = s => isVer(s);
 const verLine = s => verShown(s) ? `<span class="sf-ver">${SEAL}Verified: ${esc(s.dom.domain)}</span>` : '';
 const isAdminOf = id => isModOf(id) && ['Admin', 'Owner'].includes(MYROLES[id]);
 /* Address suffix for the space tabs and the FAQ views; the slug never changes. */
@@ -5651,30 +5495,24 @@ function faqIndex(s) {
 /* Recent: the newest threads, asks and posts. Posts have no topic, so they appear only here and in Latest. */
 const faqRecentList = s => postsFor(s.id).filter(p => !p.running || p.mine).slice(0, 4);
 function faqRecent(s) {
-  const more = st.faqSw === 'link' ? 'See all threads' : 'See all';
+  const more = 'See all threads';
   return `<section class="sf-recent"><div class="sf-sech"><h3>Recent</h3><button class="tlink" type="button" data-faqview="latest">${more}</button></div><div class="rows rows-plain" role="list">${faqRecentList(s).map(p => rowHTML({ ...p, orig: p })).join('')}</div></section>`;
-}
-function faqRecentToc(s) {
-  return `<div class="sf-rtoc"><div class="eyebrow">Recent</div>${faqRecentList(s).map(p => { const i = POSTS.indexOf(p); return `<button type="button" class="sf-rtoc-i" data-open="${i}"><span>${esc(p.q)}</span><small>${p.k === 'ask' ? 'Ask' : 'Post'} · ${p.age}</small></button>`; }).join('')}<button class="tlink" type="button" data-faqview="latest">See all</button></div>`;
 }
 /* Latest / Topics switch ("Latest switch" control). */
 function faqSwitch() {
-  const v = st.faqView, it = [['topics', 'Topics'], ['latest', 'Latest']];
-  if (st.faqSw === 'tabs') return `<div class="pf-tabs sf-vtabs" role="tablist" aria-label="View">${it.map(([k, l]) => `<button type="button" role="tab" data-faqview="${k}" aria-selected="${v === k}">${l}</button>`).join('')}</div>`;
-  if (st.faqSw === 'link') return v === 'latest' ? `<button class="th-back sf-vback" type="button" data-faqview="topics">${I.chev.replace('<svg', '<svg class="bk"')}Topics</button>` : '';
-  return `<div class="sf-fh"><span class="eyebrow">${v === 'latest' ? 'All threads, newest first' : 'Answers by topic'}</span><div class="seg sf-vsw" role="group" aria-label="View">${it.map(([k, l]) => `<button type="button" data-faqview="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</div></div>`;
+  return st.faqView === 'latest' ? `<button class="th-back sf-vback" type="button" data-faqview="topics">${I.chev.replace('<svg', '<svg class="bk"')}Topics</button>` : '';
 }
 function faqLanding(s) {
-  const rec = st.faqRecent, latest = st.faqView === 'latest', inBanner = st.faqBanner === 'search';
-  const tabsTop = st.faqSw === 'tabs' || (st.faqSw === 'link' && latest);
+  const latest = st.faqView === 'latest';
+  const tabsTop = latest;
   const sw = faqSwitch();
   let main;
   if (latest) main = `${sw}${csSpaceStrips(s)}${composer()}${feedBar()}${feed2(s.id)}`;
   else {
-    const recent = rec !== 'toc' ? faqRecent(s) : `<div class="sf-ponly">${faqRecent(s)}</div>`;
-    main = `${tabsTop ? sw : ''}${inBanner ? '' : `${faqBox(s)}<div id="faq-res" class="rf-results">${faqResults(s)}</div>`}${csSpaceStrips(s)}${tabsTop ? '' : sw}${faqChips(s)}${rec === 'above' && !st.faqTopic ? recent : ''}${faqIndex(s)}${rec !== 'above' && !st.faqTopic ? recent : ''}`;
+    const recent = st.faqTopic ? '' : faqRecent(s);
+    main = `${tabsTop ? sw : ''}${faqBox(s)}<div id="faq-res" class="rf-results">${faqResults(s)}</div>${csSpaceStrips(s)}${tabsTop ? '' : sw}${faqChips(s)}${faqIndex(s)}${recent}`;
   }
-  return `<div class="rf-idx sf-land${latest ? ' sf-latest' : ''}">${faqToc(s, rec === 'toc' && !latest ? faqRecentToc(s) : '')}<div class="rf-idx-main">${main}</div></div>`;
+  return `<div class="rf-idx sf-land${latest ? ' sf-latest' : ''}">${faqToc(s, '')}<div class="rf-idx-main">${main}</div></div>`;
 }
 /* Ask from the FAQ box. Signed out: log in. With matches and no force: show them and offer to ask anyway. */
 function faqAsk(force) {
@@ -5778,10 +5616,9 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / Wiki / About ("About and wiki" control) ---------- */
-const sfTabCur = () => st.aboutV === 'drawer' ? 'threads' : st.spTab === 'wiki' && st.aboutV !== 'tabs' ? 'threads' : st.spTab;
+const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  if (st.aboutV === 'drawer') return '';
-  const cur = sfTabCur(), items = [['threads', 'Threads'], ...(st.aboutV === 'tabs' ? [['wiki', 'Wiki']] : []), ['about', 'About']];
+  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -5800,12 +5637,6 @@ function sfAbout(s) {
     <div class="rf-card"><h3>Moderators</h3>${modsList(s)}</div></aside></div>`;
 }
 /* "No tabs" variant: About is the first section of the sidebar (the sheet on phones). */
-function sfAboutCards(s) {
-  return `<div class="note-card sf-abcard"><h3>About</h3><div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Members</span><b class="num">${s.members.toLocaleString('en-US')}</b></div><div><span>Created</span><b>${s.created}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div><p class="faint cs-small">${joinLabel(s)}. ${tokenUse(s)}</p>${s.notCover ? `<p class="cs-small"><b>Not covered here:</b> ${esc(s.notCover)}</p>` : ''}</div>`;
-}
-function sfWikiPage(s) {
-  return `<div class="sf-wiki wk">${wikiCards(s)}</div>`;
-}
 
 /* ---------- settings: landing page, topics, posts, domain, scope note ---------- */
 function sfTog(key, on, title, sub) {
@@ -5954,11 +5785,6 @@ const sfScreen = () => { const c = csScreen(); if (c !== 'space' && c !== 'close
 const SJ = (target, ok) => () => { if (!ok(sfScreen())) { sfJump(target); } };
 function SFKNOBS() {
   return [
-    ['k-sfrec', 'faqRecent', [['below', 'Below topics'], ['above', 'Above topics'], ['toc', 'In the topic column']], SJ('sf-faq', x => x === 'faq')],
-    ['k-sfsw', 'faqSw', [['seg', 'Segmented'], ['tabs', 'Sub-tabs'], ['link', 'See all link']], SJ('sf-faq', x => x === 'faq' || x === 'faq-latest')],
-    ['k-sfban', 'faqBanner', [['full', 'Banner'], ['compact', 'Compact'], ['search', 'Search in banner']], SJ('sf-faq', x => x === 'faq')],
-    ['k-sfab', 'aboutV', [['tabs', 'Tabs: Threads, Wiki, About'], ['nowiki', 'Tabs: Threads, About; wiki in sidebar'], ['drawer', 'No tabs; About in sidebar']], SJ('sf-about', x => x === 'sp-about' || x === 'sp-wiki' || x === 'space' || x === 'faq' || x === 'closed-space')],
-    ['k-sfver', 'verLine', [['show', 'Shown'], ['hide', 'Hidden']], SJ('sf-about', x => x === 'sp-about' || x === 'faq' || x === 'faq-latest')],
   ];
 }
 
@@ -5989,9 +5815,9 @@ function sfJump(k) {
     case 'sf-posts-home': Object.assign(st, { home: true, compOpen: true, compSpace: 'sablefield', mode: 'ask' }); break;
     case 'sf-related': st.thread = thr('q1'); setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'sf-related-open': st.space = 'public'; st.thread = 0; setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
-    case 'sf-about': st.spTab = st.aboutV === 'drawer' ? 'threads' : 'about'; if (st.aboutV === 'drawer') { st.drawer = true; st.mWiki = true; } break;
-    case 'sf-about-plain': st.space = 'scifi'; st.spTab = st.aboutV === 'drawer' ? 'threads' : 'about'; if (st.aboutV === 'drawer') { st.drawer = true; st.mWiki = true; } break;
-    case 'sf-wiki': st.space = 'scifi'; if (st.aboutV === 'tabs') st.spTab = 'wiki'; else { st.drawer = true; st.mWiki = true; } break;
+    case 'sf-about': st.spTab = 'about'; break;
+    case 'sf-about-plain': st.space = 'scifi'; st.spTab = 'about'; break;
+    case 'sf-wiki': st.space = 'scifi'; st.spTab = 'threads'; st.drawer = true; st.mWiki = true; break;
     case 'sf-seal-closed': Object.assign(st, { home: true, pop: true }); break;
     case 'sf-dom-none': case 'sf-dom-checking': case 'sf-dom-ok': {
       const s = sp('replication'); setRel('replication', 'mod'); mg('settings', 'replication');
@@ -6021,7 +5847,7 @@ const REPS0 = [
   { id: 'rp2', sp: 'sablefield', key: 'r:' + sfIdx('p1') + ':2', why: 'offensive', note: '', by: 'cleo', age: '5h', st: 'open' },
 ];
 Object.assign(st, {
-  faqRecent: 'below', faqSw: 'seg', faqBanner: 'full', aboutV: 'tabs', verLine: 'show',
+
   spTab: 'threads', faqView: 'topics', faqTopic: null, faqQ: '', faqTried: false,
   compTopic: null, tpMenu: null, imenu: null, rep: { why: 'incorrect', note: '' },
   reports: structuredClone(REPS0), modSt: {}, repSeen: false, sfDom: null, sfDomHold: false,
@@ -6068,36 +5894,29 @@ function csReset() {
 }
 /* BEGIN question-trees */
 /* ================= question trees =================
-   Model (third round, see the design notes in the report):
+   Model:
    - Node: one ask, a question and its agent answer. The thread's first ask is the root ('r');
-     every other ask has exactly one parent ask. Flat follow-ups are level-1 asks.
-   - Anchor (anc): where on the parent answer a branch starts: the whole answer (no anc), a
-     selected passage ('passage'), a marked term ('term') or a citation ('cite', n = number).
-     The anchor text is stored with the ask, so it stays readable if the parent changes.
-   - Path: the asks from the root to one ask. Every ask has its own address: /t/<thread>/a/<ask>.
-   - The tree stays in one thread and one space. A branch can become a new thread ("Start a
-     thread from this branch"); the original branch stays and links to it.
-   - The thread owner (root asker) can pin a best path and collapse branches. Nothing is deleted
-     by collapsing; moderators keep the existing hide and remove actions.
-   - Context and cost are shown in the branch composer before the ask is sent; see the
-     "Agent sees" and "Paid by" controls.
-   Design rounds:
-   1. Node = ask; a follow-up gets a parent. Tested with an outline beside the thread. The flat
-      follow-up list could not show where on an answer a question came from, and deep paths
-      were unreadable as one long page.
-   2. Added anchors (passage, term, citation) and the path as the unit of reading, with siblings
-      as tabs. Nested inline branches broke on phones past three levels, so the inline approach
-      continues deep branches in a focused view; columns show one column at a time on phones.
-   3. Added what crosses thread boundaries: per-ask addresses, Saved and search for asks inside
-      threads, notifications for asks under yours, compare and "ask about both", and starting a
-      thread from a branch (closed spaces: same space only; FAQ spaces: pick a topic).
+     every other ask has exactly one parent ask and is asked about that parent's whole answer.
+     Flat follow-ups are level-1 asks.
+   - The thread page shows asks nested under the answer they ask about (see qtNestView). Below
+     the nesting depth, "Continue this branch" shows that branch on its own. A map of the whole
+     thread opens in a dialog.
+   - Every ask has its own address: /t/<thread>/a/<ask>.
+   - The agent gets the asks on the path from the question to the parent ask; the composer
+     shows how many and the estimated tokens. Each ask is paid like any ask in the space.
+   - The tree stays in one thread and one space. A branch can become a new thread; the original
+     branch stays and links to it. The thread owner can collapse branches;
+     nothing is deleted, and moderators keep the existing hide and remove actions.
+   Design rounds: 1. a parent per follow-up, outline beside the thread; 2. anchors to
+   passages and several layouts (path, columns, map, nested); 3. addresses, Saved, search,
+   notifications, compare, new threads from branches. Review settled on whole-answer branches,
+   the nested layout with a map dialog, path context and normal per-asker cost.
    QTD is keyed by thread index. Nodes with fu: n take their text from FU[thread][n]. */
 const QTD = {};
-const QTI = { swap: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h9l-2.5-2.5M13 11H4l2.5 2.5"/></svg>',
+const QTI = {
+  map: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="3.5" cy="8" r="1.8"/><circle cx="12.5" cy="3.8" r="1.8"/><circle cx="12.5" cy="12.2" r="1.8"/><path d="M5.2 7.3 10.8 4.5M5.2 8.7l5.6 2.8"/></svg>',
+  swap: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h9l-2.5-2.5M13 11H4l2.5 2.5"/></svg>',
   tree: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2" width="4.4" height="3.4" rx="1"/><rect x="9.8" y="6.3" width="4.4" height="3.4" rx="1"/><rect x="9.8" y="11" width="4.4" height="3.4" rx="1"/><path d="M4 5.4v7.3h5.8M4 8h5.8"/></svg>',
-  star: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="m8 1.6 1.9 4 4.4.5-3.3 3 .9 4.3L8 11.2l-3.9 2.2.9-4.3-3.3-3 4.4-.5z"/></svg>',
-  sum: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h6"/></svg>',
-  clock: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
   up: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
   ask: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5.5a2 2 0 0 0 2 2h8M10 7.5l3 3-3 3"/></svg>',
   link: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>',
@@ -6106,33 +5925,32 @@ const QTI = { swap: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"
   cmp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2.5" width="5" height="11" rx="1"/><rect x="9" y="2.5" width="5" height="11" rx="1"/></svg>',
   out: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5"/></svg>',
   fold: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4-3 4 3M4 10l4 3 4-3"/></svg>',
-  pin: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5V14M5 2.5h6l-1 4 2 2.5H4l2-2.5z"/></svg>',
 };
 
 /* Tree 1: oduya's question in #markets. 15 asks, five levels below the question, six people. */
-QTD[11] = { best: 'd1', sumAge: '40m', sumAt: 13, nodes: [
+QTD[11] = { nodes: [
   { id: 'a1', par: 'r', fu: 0, tok: 41e3 },
-  { id: 'a2', par: 'r', fu: 1, tok: 38e3, anc: { k: 'passage', t: 'refunding or voiding the market (often called N/A or "invalid")' } },
-  { id: 'a3', par: 'r', u: 'mira_k', age: '1h', tok: 52e3, anc: { k: 'passage', t: 'Critics argue that large token holders who also trade the market have a conflict of interest' },
+  { id: 'a2', par: 'r', fu: 1, tok: 38e3 },
+  { id: 'a3', par: 'r', u: 'mira_k', age: '1h', tok: 52e3,
     q: 'How large are the holdings of the top UMA voters compared with the markets they resolve?',
     html: `<p>Public on-chain data allows a rough comparison, but no source publishes it systematically. The sources show three things:</p>
 <ul><li>UMA voting weight is concentrated. The largest addresses hold a large share of staked tokens, so a few voters can decide a disputed vote.</li>
 <li>Some disputed markets held more in open interest than the value of the tokens needed to change the outcome of the vote, which is the condition critics point to.</li>
 <li>Whether large voters also held positions in those markets is not visible directly. It is inferred from wallet analysis by third parties.</li></ul>
 <p>UMA has changed its voting rules since 2024, including how votes are revealed, in response to these complaints.</p>` },
-  { id: 'a4', par: 'r', u: 'jun.park', age: '58m', tok: 19e3, anc: { k: 'term', t: 'Optimistic oracle with dispute bonds' },
+  { id: 'a4', par: 'r', u: 'jun.park', age: '58m', tok: 19e3,
     q: 'What does "optimistic" mean in an optimistic oracle?',
     html: `<p>"Optimistic" means the oracle treats a proposed answer as correct unless someone challenges it. A proposer posts the outcome with a bond. If no one disputes it within the challenge window, usually a few hours, the outcome is final without a vote.</p>
 <p>The design is cheap when proposers are honest, because most questions never reach a vote. It depends on at least one party watching each market and being willing to post a dispute bond.</p>` },
-  { id: 'a5', par: 'r', u: 'sol', age: '55m', tok: 27e3, anc: { k: 'cite', n: 3, t: 'Kalshi Rulebook' },
+  { id: 'a5', par: 'r', u: 'sol', age: '55m', tok: 27e3,
     q: 'Which part of the Kalshi rulebook covers outcomes the contract terms did not anticipate?',
     html: `<p>The rulebook lets the exchange determine the outcome when the source agency's data is unavailable or the contract terms do not clearly cover what happened. Each contract names a source agency and a fallback; if both fail, the exchange decides, and some contracts allow settlement at a price other than 0 or 100.</p>
 <p>Section numbers differ between rulebook versions, so check the version in force when the contract was listed.</p>` },
-  { id: 'b1', par: 'a2', u: 'oduya', age: '52m', tok: 46e3, anc: { k: 'passage', t: 'Augur\'s design addresses part of this by making "invalid" a reported outcome subject to the same dispute bonds as any other' },
+  { id: 'b1', par: 'a2', u: 'oduya', age: '52m', tok: 46e3,
     q: 'How often did Augur v1 markets resolve as invalid?',
     html: `<p>Augur did not publish a complete figure. Community dashboards from 2018 to 2020 put the share of finalized v1 markets that resolved invalid at a few percent. The share was higher among markets with vague wording and markets created to collect the invalid payout.</p>
 <p>Augur v2 changed how invalid shares trade, so the two versions are hard to compare.</p>` },
-  { id: 'b2', par: 'a2', u: 'hal_b', age: '45m', tok: 33e3, anc: { k: 'passage', t: 'prices move toward reflecting the void probability rather than the event probability' },
+  { id: 'b2', par: 'a2', u: 'hal_b', age: '45m', tok: 33e3,
     q: 'Can you separate the void probability from the event probability in the price?',
     html: `<p>Not from one price. A share that pays 1 if the event happens trades at about P(event and not void) plus the void payout times P(void). One market gives one equation with two unknowns.</p>
 <p>Two ways to recover both:</p>
@@ -6146,25 +5964,25 @@ QTD[11] = { best: 'd1', sumAge: '40m', sumAt: 13, nodes: [
 <li>Several markets on whether a deal had been "reached", where an announcement came before any signed text.</li>
 <li>Markets that depended on a data source that revised its figures after the outcome was proposed.</li></ul>
 <p>In each case the losing side argued that large voters held positions in the market. The public record shows the arguments; it does not show the voters' positions directly.</p>` },
-  { id: 'b4', par: 'a1', u: 'sol', age: '35m', tok: 44e3, anc: { k: 'passage', t: 'permission to list' },
+  { id: 'b4', par: 'a1', u: 'sol', age: '35m', tok: 44e3,
     q: "What is the current status of the litigation over Kalshi's election contracts?",
     html: `<p>The main federal case was about whether the CFTC could stop Kalshi from listing contracts on control of the US Congress. A district court ruled for Kalshi in 2024 and the contracts were listed. The CFTC appealed and withdrew the appeal in 2025. Several state regulators have since challenged sports and election contracts in separate cases.</p>
 <p>The sources for this answer end in late 2026. Court dockets will have anything newer.</p>` },
-  { id: 'c1', par: 'b2', u: 'lettie', age: '30m', tok: 29e3, anc: { k: 'passage', t: 'A second market on the void itself' },
+  { id: 'c1', par: 'b2', u: 'lettie', age: '30m', tok: 29e3,
     q: 'Has any platform listed a market on whether another market will be voided?',
     html: `<p>Yes, mostly on platforms where users create markets. Manifold has had user-created markets on whether a named market would resolve N/A, and some disputed Polymarket markets led to side markets on how the dispute would end. These markets are small and thinly traded.</p>
 <p>No regulated exchange lists them. A contract on the exchange's own resolution decisions would raise conflict-of-interest questions.</p>` },
-  { id: 'c2', par: 'b2', u: 'oduya', age: '26m', tok: 24e3, anc: { k: 'passage', t: 'trades at about P(event and not void) plus the void payout times P(void)' },
+  { id: 'c2', par: 'b2', u: 'oduya', age: '26m', tok: 24e3,
     q: 'Work through a numeric example with a 20% void probability.',
     html: `<p>Assume a share pays 1 if the event happens and 0 if it does not. Let P(void) = 0.2 and P(event | not void) = 0.6.</p>
 <table><thead><tr><th>Outcome</th><th>Probability</th><th>Payout per share</th></tr></thead><tbody><tr><td>Event, not void</td><td>0.48</td><td>1</td></tr><tr><td>No event, not void</td><td>0.32</td><td>0</td></tr><tr><td>Void</td><td>0.20</td><td>See below</td></tr></tbody></table>
 <p>If a void refunds the purchase price p, a risk-neutral price satisfies p = 0.48 + 0.2p, so p = 0.6. The price equals the conditional probability, because the refund returns exactly what was paid.</p>
 <p>The difference appears when a void pays a fixed amount, for example a fixed 0.5 per share as in Augur's invalid outcome. Then p = 0.48 + 0.2 × 0.5 = 0.58, which is below the 0.6 conditional probability.</p>` },
-  { id: 'c3', par: 'b3', u: 'mira_k', age: '22m', tok: 37e3, anc: { k: 'passage', t: 'traders disagreed about what counted as a suit' },
+  { id: 'c3', par: 'b3', u: 'mira_k', age: '22m', tok: 37e3,
     q: 'How did the clarification process work in that market?',
     html: `<p>The market's rules named the outcome but not a definition of "suit". Traders asked for a clarification in the comments, and the platform added a note to the rules while the market was open. When the outcome was proposed, it was disputed, and the UMA vote upheld the proposal.</p>
 <p>The case is cited mainly because the clarification came after trading began, which is the issue raised under "Trade-offs" in the first answer.</p>` },
-  { id: 'd1', par: 'c2', u: 'hal_b', age: '18m', tok: 16e3, anc: { k: 'passage', t: 'for example a fixed 0.5 per share as in Augur\'s invalid outcome' },
+  { id: 'd1', par: 'c2', u: 'hal_b', age: '18m', tok: 16e3,
     q: "What is a trader's expected return if the void probability is actually 5% and they buy at 0.58?",
     html: `<p>With P(void) = 0.05, P(event | not void) = 0.6 and a fixed void payout of 0.5:</p>
 <ul><li>Expected payout per share = 0.95 × 0.6 × 1 + 0.05 × 0.5 = 0.57 + 0.025 = 0.595.</li>
@@ -6173,29 +5991,22 @@ QTD[11] = { best: 'd1', sumAge: '40m', sumAt: 13, nodes: [
   { id: 'd2', par: 'c1', u: 'oduya', age: '15m', tok: 14e3,
     q: 'Would a market on a void need its own rule for ambiguous resolution?',
     html: `<p>It needs one, but its ambiguity is usually small: it resolves from a decision by the first market's resolver, and that decision either happens or does not. The remaining risk is timing, for example if the first market is still open when the side market closes. Side markets on Manifold usually handle this with an end date and N/A if the first market is still open.</p>` },
-  { id: 'e1', par: 'd1', u: 'lettie', age: '12m', tok: 12e3, anc: { k: 'passage', t: 'before fees' },
+  { id: 'e1', par: 'd1', u: 'lettie', age: '12m', tok: 12e3,
     q: 'Does the return change if the stake is locked for six months before resolution?',
     html: `<p>Yes. 2.6% over six months is about 5.3% a year, and it has to be compared with what the money would earn elsewhere. With a risk-free rate of 4% a year, the excess return is about 1.3% a year, and fees or the spread can remove it.</p>
 <p>Long-dated markets therefore tend to price void risk less accurately, because few traders can profit from correcting it.</p>` },
 ] };
-QTD[11].sum = [
-  ['Voiding and prices', ['a2', 'b2', 'c2', 'd1', 'e1', 'b1', 'c1', 'd2'], 'A void changes what the price measures. If a void refunds the purchase price, the price still equals the event probability; if it pays a fixed amount, it does not (0.58 instead of 0.6 in the worked example). A trader who correctly expects fewer voids earns about 2.6% before fees, and a six-month lock-up can remove that. Side markets on voids exist only on user-created platforms.'],
-  ['Oracle voters', ['a3', 'b3', 'c3'], 'UMA voting weight is concentrated, and some disputed markets held more than the value needed to change a vote. The most cited complaint concerns a 2025 market where "suit" was clarified after trading began. Voters\' own positions are not visible in the public record.'],
-  ['Regulated exchanges', ['a1', 'b4', 'a5'], 'Regulators have ruled on what may be listed rather than on individual resolutions. The Kalshi rulebook lets the exchange decide outcomes its contract terms did not anticipate.'],
-  ['Terms', ['a4'], '"Optimistic" means a proposed outcome stands unless someone posts a dispute bond within the challenge window.'],
-];
-QTD[11].open = 'No branch has data on how often markets resolve against a reasonable reading of their wording. The first answer notes the same gap.';
 
 /* Tree 2: your own question in #public. The three follow-ups are level 1. */
 QTD[0] = { nodes: [
   { id: 'f0', par: 'r', fu: 0, tok: 36e3 },
-  { id: 'f1', par: 'r', fu: 1, tok: 22e3, anc: { k: 'passage', t: 'The scan covered English-language works and works widely available in English translation.' } },
+  { id: 'f1', par: 'r', fu: 1, tok: 22e3 },
   { id: 'f2', par: 'r', fu: 2, tok: 18e3 },
-  { id: 'g1', par: 'f0', u: 'ines.v', age: '40m', tok: 31e3, anc: { k: 'passage', t: 'participants take on tasks and receive credits and rank for completing them' },
+  { id: 'g1', par: 'f0', u: 'ines.v', age: '40m', tok: 31e3,
     q: "How does the Daemon's darknet decide who gets which task?",
     html: `<p>Tasks are posted to the darknet with a required level. Members see only tasks at or below their level, and they claim them in a shared interface. Completing tasks raises a member's level and reputation score; other members can rate the work, and low ratings lower the score.</p>
 <p>The novels do not describe a price for a task. Allocation runs on rank and self-selection rather than bids.</p>` },
-  { id: 'g2', par: 'f1', u: 'lettie', age: '35m', tok: 26e3, anc: { k: 'passage', t: "Stanisław Lem's satirical fiction" },
+  { id: 'g2', par: 'f1', u: 'lettie', age: '35m', tok: 26e3,
     q: 'Which Lem stories are closest to an intention market?',
     html: `<p>None describes a market in the strict sense. Two come closest: <i>The Futurological Congress</i> (1971), where chemicals manage what people want and perceive, and several of the <i>Star Diaries</i> voyages, which satirize planned economies that try to meet stated needs.</p>` },
   { id: 'h1', par: 'g1', u: 'hal_b', age: '5m', tok: 15e3,
@@ -6208,7 +6019,7 @@ const QT_REP = POSTS.findIndex(p => p.s === 'replication' && p.k === 'ask');
 const QT_SF = POSTS.findIndex(p => p.rf === 'q2');
 QTD[QT_REP] = { nodes: [
   { id: 'f0', par: 'r', fu: 0, tok: 20e3 },
-  { id: 'x1', par: 'r', u: 'lettie', age: '3h', tok: 34e3, anc: { k: 'passage', t: 'need about 3x the stated steps' },
+  { id: 'x1', par: 'r', u: 'lettie', age: '3h', tok: 34e3,
     q: 'Is the 3x step count consistent across seeds?',
     html: `<p>Mostly. Across the five seeds in the re-run, the step at which test accuracy jumps ranged from 2.6x to 3.4x the step reported in the paper for the two largest models. The smaller models matched the paper within 10% on every seed.</p>` },
   { id: 'x2', par: 'x1', u: 'ines.v', age: '2h', tok: 22e3,
@@ -6216,7 +6027,7 @@ QTD[QT_REP] = { nodes: [
     html: `<p>Seeds 0 to 4, with weight decay 1.0 as in the released configuration. The paper's appendix lists weight decay 0.5 for one table, which may explain part of the difference; the re-run did not test 0.5.</p>` },
 ] };
 QTD[QT_SF] = { nodes: [
-  { id: 's1', par: 'r', u: 'jun.park', age: '1mo', tok: 21e3, anc: { k: 'passage', t: 'A subquery reads from a table that has no scope column.' },
+  { id: 's1', par: 'r', u: 'jun.park', age: '1mo', tok: 21e3,
     q: 'How do I add a scope column to an existing table without downtime?',
     html: `<p>Add the column as nullable, backfill it in batches, then add the <code>not null</code> constraint as <code>not valid</code> and validate it separately. Each step takes only a short lock.</p>
 <pre><code>alter table notes add column owner_id uuid;
@@ -6237,7 +6048,7 @@ const QT_CANNED = {
 
 /* ---------- tree access ---------- */
 const QTD0 = structuredClone(QTD);
-const qtOn = () => st.qtA !== 'flat';
+const QT_DEPTH = 3; /* levels shown nested below the top of the view before "Continue this branch" */
 const qtTxt = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 const qtClip = (t, n = 90) => t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t;
 const qtAge = a => a === 'now' ? 0 : ageMin(a);
@@ -6262,7 +6073,7 @@ function qtT(i) {
   const sub = id => (kids[id] || []).reduce((s, k) => s + 1 + sub(k.id), 0);
   const latest = nodes.slice(1).filter(n => !n.running).sort((a, b) => qtAge(a.age) - qtAge(b.age))[0] || root;
   const people = new Set(nodes.map(n => n.u)).size, depth = Math.max(...nodes.map(n => n.lv));
-  return { i, p, d, nodes, by, kids: id => kids[id] || [], path, sub, latest, people, depth, best: d.best || null, owner: p.u, tok: nodes.reduce((s, n) => s + (n.tok || 0), 0) };
+  return { i, p, d, nodes, by, kids: id => kids[id] || [], path, sub, latest, people, depth, owner: p.u, tok: nodes.reduce((s, n) => s + (n.tok || 0), 0) };
 }
 const qtCur = T => (T.by[st.qtNode] ? T.by[st.qtNode] : T.nodes[0]);
 const qtIsTree = T => T.nodes.length > 2 && T.depth >= 2;
@@ -6271,152 +6082,74 @@ const qtOwner = T => T.owner === ME.u && st.auth === 'in';
 const qtCanPromote = (T, n) => st.auth === 'in' && n.id !== 'r' && (qtMine(n) || qtOwner(T) || isModOf(T.p.s));
 const qtCanPrune = T => st.auth === 'in' && (qtOwner(T) || isModOf(T.p.s));
 const qtLvName = n => n.id === 'r' ? 'Question' : `Level ${n.lv}`;
-const qtHidden = (T, n) => { let x = T.by[n.par]; if (n.col) return true; while (x) { if (x.col) return true; x = T.by[x.par]; } return false; };
 const qtVisKids = (T, id) => T.kids(id).filter(k => !k.col || st.qtShowCol);
 const qtAddr = (T, id) => `session.app/s/${sp(T.p.s).name}/t/${T.i + 1000}${id && id !== 'r' ? '/a/' + id : ''}`;
+/* The top of the nested view: the question, or the ask that "Continue this branch" opened. */
+const qtTop = T => (st.qtFocus && T.by[st.qtFocus] ? T.by[st.qtFocus] : T.nodes[0]);
 
-/* ---------- context and cost (the "Agent sees" and "Paid by" controls) ---------- */
-function qtCtx(T, par) {
-  const path = T.path(par), mode = st.qtCtx;
-  let inc = [], sums = [];
-  if (mode === 'parent') inc = [T.by[par]];
-  else if (mode === 'tree') inc = T.nodes.filter(n => !n.running);
-  else inc = path;
-  if (mode === 'sum') { const on = new Set(path.map(n => n.id)); sums = T.nodes.filter(n => !on.has(n.id) && !n.running); }
-  const tok = inc.reduce((s, n) => s + qtTokTxt(n.html) + Math.round(n.q.length / 4), 0) + sums.length * 40 + 300;
-  return { inc, sums, tok };
-}
-const QT_DEPTH_LIMIT = 4;
-function qtPayLine(T, lv) {
-  const s = sp(T.p.s), mine = s.byok ? `${spName(s)} extra tokens` : 'your API key';
-  if (st.qtPay === 'owner') return T.owner === ME.u ? 'Paid from your API key (you started this thread)' : `Paid from ${T.owner}’s API key: the thread owner pays for branches`;
-  if (st.qtPay === 'pool') return lv > QT_DEPTH_LIMIT ? 'Paid from your API key: deeper than the space pays for' : `Paid from the ${spName(s)} pool (levels 1 to ${QT_DEPTH_LIMIT})`;
-  return `Paid from ${mine}, like any ask`;
-}
-const qtPaidBy = (T, n) => st.qtPay === 'owner' && n.id !== 'r' ? `${T.owner === ME.u ? 'your' : T.owner + '’s'} API key` : st.qtPay === 'pool' && n.id !== 'r' ? (n.lv > QT_DEPTH_LIMIT ? `${n.u}’s API key` : `${spName(sp(T.p.s))} pool`) : n.id === 'r' ? paidOf(T.p) : `${n.u === ME.u ? 'your' : n.u + '’s'} API key`;
+/* ---------- cost ---------- */
+const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? `${spName(sp(T.p.s))} extra tokens` : `${n.u === ME.u ? 'your' : n.u + '’s'} API key`;
 
-/* ---------- answer rendering: anchors, selection, marks ---------- */
-/* Position of t in the answer HTML, skipping matches inside a tag. */
-const qtFind = (h, t) => { let at = h.indexOf(t); while (at >= 0 && h.lastIndexOf('<', at) > h.lastIndexOf('>', at)) at = h.indexOf(t, at + 1); return at; };
-function qtAnswer(T, n, opts = {}) {
+/* ---------- small parts ---------- */
+function qtAnswer(T, n) {
   if (n.running) return answerHTML({ running: true, s: T.p.s });
   if (modOf(n.rep)) return modPh(n.rep, n.id === 'r' ? 'answer' : 'follow-up answer');
-  let h = n.html;
-  const mode = st.qtFrom, kids = T.kids(n.id).filter(k => k.anc && !(k.col && !st.qtShowCol));
-  const onPath = new Set(opts.path || []);
-  if (mode !== 'whole') {
-    const groups = {};
-    kids.filter(k => k.anc.k !== 'cite').forEach(k => { (groups[k.anc.t] = groups[k.anc.t] || []).push(k); });
-    Object.entries(groups).forEach(([t, l]) => {
-      const at = qtFind(h, t); if (at < 0) return;
-      const on = l.some(k => onPath.has(k.id));
-      h = h.slice(0, at) + `<mark class="qt-anc${on ? ' on' : ''}" data-qtgo="${l.find(k => onPath.has(k.id))?.id || l[0].id}" title="${l.length} question${l.length > 1 ? 's' : ''} about this passage">${t}<sup class="qt-anc-n">${l.length}</sup></mark>` + h.slice(at + t.length);
-    });
-    kids.filter(k => k.anc.k === 'cite').forEach(k => { h = h.replace(`<sup class="cite">${k.anc.n}</sup>`, `<sup class="cite qt-cite-on" data-qtgo="${k.id}" title="1 question about source ${k.anc.n}">${k.anc.n}</sup>`); });
-  }
-  let bar = '';
-  const sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.node === n.id ? st.qtSel : null;
-  if (sel && sel.k === 'passage') {
-    const at = qtFind(h, sel.text);
-    const pop = sel.open ? '' : `<span class="qt-selpop" role="group" aria-label="Selected passage"><button class="btn sm primary" type="button" data-qt="sel-ask">${QTI.ask}Ask about this</button><button class="btn sm" type="button" data-qt="sel-x">Cancel</button></span>`;
-    if (at >= 0) h = h.slice(0, at) + `<mark class="qt-pend">${sel.text}${pop}</mark>` + h.slice(at + sel.text.length);
-    else if (!sel.open) bar = `<div class="qt-selbar"><span>Selected</span><q>${esc(qtClip(sel.text, 140))}</q><button class="btn sm primary" type="button" data-qt="sel-ask">${QTI.ask}Ask about this</button><button class="btn sm" type="button" data-qt="sel-x">Cancel</button></div>`;
-  }
-  if (mode === 'marks') {
-    h = h.replace(/<(b|i|code)>([^<]{2,80})<\/\1>/g, (m, tg, x) => `<${tg}><span class="qt-term" role="button" tabindex="0" data-qtterm="${x.replace(/"/g, '&quot;')}" title="Ask about this term">${x}</span></${tg}>`)
-      .replace(/<sup class="cite">(\d+)<\/sup>/g, (m, k) => `<sup class="cite qt-citeb" role="button" tabindex="0" data-qtcite="${k}" title="Ask about source ${k}">${k}</sup>`);
-  }
-  return `${bar}<div class="prose qt-prose${mode === 'whole' ? ' qt-whole' : ''}" data-qtsel="${T.i}:${n.id}">${h}</div>`;
+  return `<div class="prose qt-prose">${n.html}</div>`;
 }
 const qtSrcs = (T, n) => {
   if (n.id !== 'r' || n.running) return '';
-  const src = srcItems(T.p), kids = T.kids('r').filter(k => k.anc && k.anc.k === 'cite');
-  return src.length ? `<ol class="m-src qt-src">${src.map((x, k) => { const c = kids.filter(z => z.anc.n === k + 1); return `<li><b>${esc(x.t)}</b><span>${x.d}</span>${c.length ? `<button class="tlink qt-srcn" type="button" data-qtgo="${c[0].id}">${c.length} question${c.length > 1 ? 's' : ''}</button>` : ''}</li>`; }).join('')}</ol>` : '';
+  const src = srcItems(T.p);
+  return src.length ? `<ol class="m-src qt-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : '';
 };
-
-/* ---------- small parts ---------- */
 const qtLv = (n, on) => `<span class="qt-lv num${on ? ' on' : ''}" title="${qtLvName(n)}">${n.id === 'r' ? 'Q' : n.lv}</span>`;
-function qtAbout(T, n, link = true) {
-  if (n.id === 'r') return '';
-  const par = T.by[n.par], pq = esc(qtClip(par.q, 60)), tag = link ? 'button' : 'div', at = link ? ` type="button" data-qtgo="${par.id}"` : '';
-  if (!n.anc || st.qtFrom === 'whole') return `<${tag} class="qt-about"${at}><span><small>Follow-up to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}</small>${pq}</span></${tag}>`;
-  if (n.anc.k === 'cite') return `<${tag} class="qt-about"${at}><span><small>About source ${n.anc.n} in ${par.id === 'r' ? 'the first answer' : 'level ' + par.lv}</small>${esc(n.anc.t)}</span></${tag}>`;
-  return `<${tag} class="qt-about"${at}><span><small>About a ${n.anc.k === 'term' ? 'term' : 'passage'} in ${par.id === 'r' ? 'the first answer' : 'the answer at level ' + par.lv}</small><q>${esc(qtClip(n.anc.t, 160))}</q></span></${tag}>`;
-}
 function qtMenu(T, n) {
   const key = `${T.i}:${n.id}`, open = st.qtMenu === key, sv = st.qtSaved.has(key);
-  if (!open) return `<span class="qt-mw"><button class="act sf-im" type="button" data-qtmenu="${key}" aria-haspopup="true" aria-expanded="false" aria-label="More actions for this ask" title="More">${SFI.more}</button></span>`;
+  const btn = `<button class="act sf-im" type="button" data-qtmenu="${key}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions for this ask" title="More">${SFI.more}</button>`;
+  if (!open) return `<span class="qt-mw">${btn}</span>`;
   const it = (attr, icon, label, sub = '', dis = false) => `<button class="um-item" type="button" role="menuitem" ${dis ? 'aria-disabled="true" data-qt="noop"' : attr}>${icon}<span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`;
   const canP = qtCanPromote(T, n), canX = qtCanPrune(T);
-  return `<span class="qt-mw"><button class="act sf-im" type="button" data-qtmenu="${key}" aria-haspopup="true" aria-expanded="true" aria-label="More actions for this ask" title="More">${SFI.more}</button><div class="pop cs-pop qt-pop" role="menu">
+  return `<span class="qt-mw">${btn}<div class="pop cs-pop qt-pop" role="menu">
     ${it(`data-qtcopy="${n.id}"`, QTI.link, 'Copy link to this ask')}
     ${it(`data-qtsave="${n.id}"`, sv ? QTI.saved : QTI.save, sv ? 'Remove from Saved' : 'Save this ask')}
     ${it(`data-qtpick="${n.id}"`, QTI.cmp, 'Compare with another ask')}
-    ${n.id === 'r' ? '' : it(`data-qtpro="${n.id}"`, QTI.out, 'Start a thread from this branch', canP ? '' : 'Only the asker of this branch, the thread owner and moderators can do this.', !canP)}
-    ${qtOwner(T) && n.id !== 'r' ? it(`data-qtbest="${n.id}"`, QTI.pin, T.best === n.id ? 'Unpin the best path' : 'Pin the path to here as the best path') : ''}
-    ${canX && n.id !== 'r' ? it(`data-qtcol="${n.id}"`, QTI.fold, n.col ? 'Show this branch' : 'Collapse this branch', n.col ? '' : 'It stays in the thread behind a "collapsed" row.') : ''}
-    ${n.id === 'r' ? '' : it(`data-sfreport="${n.rep}"`, SFI.flag, 'Report a problem')}
+    ${it(`data-qtpro="${n.id}"`, QTI.out, 'Start a thread from this branch', canP ? '' : 'Only the asker of this branch, the thread owner and moderators can do this.', !canP)}
+    ${canX ? it(`data-qtcol="${n.id}"`, QTI.fold, n.col ? 'Show this branch' : 'Collapse this branch', n.col ? '' : 'It stays in the thread behind a "collapsed" row.') : ''}
+    ${it(`data-sfreport="${n.rep}"`, SFI.flag, 'Report a problem')}
   </div></span>`;
 }
-function qtNodeActs(T, n, o = {}) {
+function qtNodeActs(T, n) {
   const key = `${T.i}:${n.id}`, sv = st.qtSaved.has(key);
-  const ask = st.auth === 'in' && !n.running ? `<button class="btn sm" type="button" data-qtaskat="${n.id}">${QTI.ask}Ask about this answer</button>` : '';
-  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Paid from ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${o.menu === false ? '' : qtMenu(T, n)}</div>`;
+  const ask = !n.running ? `<button class="btn sm" type="button" data-qtaskat="${n.id}">${QTI.ask}Ask about this answer</button>` : '';
+  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Paid from ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
 }
-function qtKidRow(T, k, cur) {
-  const n = T.sub(k.id), q = k.anc && st.qtFrom !== 'whole' ? (k.anc.k === 'cite' ? `About source ${k.anc.n}: ${esc(k.anc.t)}` : `About <q>${esc(qtClip(k.anc.t, 70))}</q>`) : 'About the whole answer';
-  return `<button class="qt-kid" type="button" data-qtgo="${k.id}" aria-current="${!!cur}">${avatar(k.u, 'sm')}<span class="qt-kid-b"><span class="qt-kid-q">${esc(k.q)}</span><span class="qt-kid-a">${q} · ${k.u} · ${k.age}</span></span><span class="qt-kid-n">${n ? `${n} more` : ''}</span></button>`;
+function qtHead(T, n) {
+  const par = T.by[n.par];
+  return `<div class="qt-nh"><div class="qt-nh-top">${qtLv(n, true)}<span>${qtLvName(n)}</span><span aria-hidden="true">·</span>${avatar(n.u, 'sm')}${au(n.u)}<span>${n.age}</span></div>${par ? `<button class="qt-about" type="button" data-qtgo="${par.id}"><span><small>Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}</small>${esc(qtClip(par.q, 90))}</span></button>` : ''}${qtExtra(T, n)}<h2 class="qt-q">${esc(n.q)}</h2></div>`;
 }
-function qtKids(T, n, curId, title) {
-  const all = T.kids(n.id), vis = qtVisKids(T, n.id), col = all.length - vis.length;
-  return `<section class="qt-kids"><h3>${title || 'Questions about this answer'} <span class="num">${all.length}</span></h3>${vis.map(k => qtKidRow(T, k, k.id === curId)).join('') || (col ? '' : `<p class="qt-empty">No questions yet. Select a passage${st.qtFrom === 'marks' ? ', a marked term or a source number' : ''} in the answer, or use Ask about this answer.</p>`)}${col ? `<div class="qt-coll">${QTI.fold}<span>${col} collapsed branch${col > 1 ? 'es' : ''}</span><button class="tlink" type="button" data-qt="showcol">${st.qtShowCol ? 'Hide' : 'Show'}</button></div>` : ''}</section>`;
-}
-function qtHead(T, n, opts = {}) {
-  const cur = opts.cur !== false;
-  return `<div class="qt-nh"><div class="qt-nh-top">${qtLv(n, cur)}<span>${qtLvName(n)}</span><span aria-hidden="true">·</span>${avatar(n.u, 'sm')}${au(n.u)}<span>${n.age}</span>${T.best && T.path(T.best).some(x => x.id === n.id) && n.id !== 'r' ? `<span class="qt-star" title="On the best path">${QTI.star}</span>` : ''}</div>${opts.about === false ? '' : qtAbout(T, n)}${n.uses ? `<div class="qt-kid-a">Asked from a comparison. The agent also got the branch ending at ${n.uses.filter(x => T.by[x]).map(x => `<button class="tlink" type="button" data-qtgo="${x}">level ${T.by[x].lv}</button>`).join(' and ')}.</div>` : ''}${n.promoted != null && POSTS[n.promoted] ? `<div class="qt-from">${QTI.out}<span>Continued as a thread:</span><button class="tlink" type="button" data-open="${n.promoted}">${esc(qtClip(POSTS[n.promoted].t, 70))}</button></div>` : ''}${opts.q === false ? '' : `<h2 class="qt-q">${esc(n.q)}</h2>`}</div>`;
-}
+/* Lines shown with an ask: asked from a comparison, or continued as a new thread. */
+const qtExtra = (T, n) => `${n.uses ? `<div class="qt-note">Asked from a comparison. The agent also got the branch ending at ${n.uses.filter(x => T.by[x]).map(x => `<button class="tlink" type="button" data-qtgo="${x}">level ${T.by[x].lv}</button>`).join(' and ')}.</div>` : ''}${n.promoted != null && POSTS[n.promoted] ? `<div class="qt-from">${QTI.out}<span>Continued as a thread:</span><button class="tlink" type="button" data-open="${n.promoted}">${esc(qtClip(POSTS[n.promoted].t, 70))}</button></div>` : ''}`;
 
 /* ---------- composer ---------- */
 function qtComposer(T, par, opts = {}) {
   if (st.auth !== 'in') return `<div class="qt-comp"><p class="muted" style="margin:0">Sign in to ask about this answer.</p><div class="qt-cbar"><span class="grow"></span><button class="btn primary" type="button" data-act="signin">Sign in</button></div></div>`;
   const pn = T.by[par]; if (!pn || pn.running) return '';
-  const sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.node === par && st.qtSel.open ? st.qtSel : null;
-  const lv = pn.lv + 1, c = qtCtx(T, par);
-  const what = sel ? (sel.k === 'cite' ? `source ${sel.n}` : sel.k === 'term' ? 'this term' : 'this passage') : 'this answer';
-  const quote = sel ? `<blockquote class="qt-quote"><span class="qt-qt"><small>${sel.k === 'cite' ? `Source ${sel.n}` : sel.k === 'term' ? 'Term' : 'Passage'} from ${par === 'r' ? 'the first answer' : 'level ' + pn.lv}</small>${sel.k === 'cite' ? esc(qtClip(sel.text, 220)) : `<q>${esc(qtClip(sel.text, 220))}</q>`}</span><button class="iconbtn" type="button" data-qt="sel-x" aria-label="Ask about the whole answer instead" title="Ask about the whole answer instead">${I.close}</button></blockquote>` : '';
-  const ctxLabel = { path: `the ${c.inc.length} ask${c.inc.length > 1 ? 's' : ''} on this path`, parent: 'this answer only', tree: `all ${c.inc.length} asks in this thread`, sum: `the ${c.inc.length} ask${c.inc.length > 1 ? 's' : ''} on this path and one-line summaries of ${c.sums.length} other asks` }[st.qtCtx];
-  const list = st.qtCtxOpen ? `<div class="qt-ctx-list">${c.inc.map(x => `<span>${qtLv(x)}${esc(qtClip(x.q, 46))}</span>`).join('')}${c.sums.length ? `<span class="sm">${c.sums.length} summaries</span>` : ''}${sel ? `<span class="sm">quoted ${sel.k === 'cite' ? 'source' : sel.k}</span>` : ''}</div>` : '';
-  const warn = st.qtPay === 'pool' && lv > QT_DEPTH_LIMIT ? `<div class="qt-warn"><span><b>Level ${lv} is past the space limit.</b> ${spName(sp(T.p.s))} pays for branches down to level ${QT_DEPTH_LIMIT}. This ask uses your API key, or you can start a new thread from this branch.</span></div>` : '';
-  return `<div class="qt-comp" id="qt-comp">${quote}<textarea id="qt-in" rows="2" placeholder="Ask about ${what}…" aria-label="Ask about ${what}">${esc(st.qtDraft)}</textarea>${st.qtErr ? `<span class="qt-err">${st.qtErr}</span>` : ''}
-    <div class="qt-ctx"><div class="qt-ctx-l">${QTI.tree}<span>New ask at level ${lv}. The agent gets ${ctxLabel}${sel ? ' and the quoted text' : ''}, about ${fmt(c.tok)} tokens of context. <button class="tlink qt-ctxb" type="button" data-qt="ctx" aria-expanded="${!!st.qtCtxOpen}">${st.qtCtxOpen ? 'Hide' : 'Show'}</button></span></div>${list}</div>
-    ${warn}<div class="qt-cbar fu2-bar">${opts.nomp ? '' : modelPicker()}<span class="qt-pay">${esc(qtPayLine(T, lv))}</span><span class="grow"></span>${opts.cancel || sel ? `<button class="btn" type="button" data-qt="comp-x">Cancel</button>` : ''}<button class="btn primary" type="button" data-qt="ask" data-qtpar="${par}">Ask</button></div></div>`;
+  return `<div class="qt-comp" id="qt-comp"><textarea id="qt-in" rows="2" placeholder="Ask about this answer…" aria-label="Ask about the answer to ${par === 'r' ? 'the question' : 'level ' + pn.lv}">${esc(st.qtDraft)}</textarea>${st.qtErr ? `<span class="qt-err">${st.qtErr}</span>` : ''}
+    <div class="qt-cbar fu2-bar">${modelPicker()}<span class="grow"></span>${opts.cancel ? `<button class="btn" type="button" data-qt="comp-x">Cancel</button>` : ''}<button class="btn primary" type="button" data-qt="ask" data-qtpar="${par}">Ask</button></div></div>`;
 }
 
-/* ---------- outline ---------- */
-function qtOutline(T, cur, opts = {}) {
-  const on = new Set((st.qtCmp ? st.qtCmp.filter(x => T.by[x]).flatMap(x => T.path(x)) : T.path(cur.id)).map(n => n.id)), best = new Set(T.best ? T.path(T.best).map(n => n.id) : []);
-  const ctx = st.qtSel && st.qtSel.open && st.qtSel.th === T.i ? new Set(qtCtx(T, st.qtSel.node).inc.map(n => n.id)) : new Set();
+/* ---------- outline: the way to reach sibling branches ---------- */
+function qtOutline(T, cur) {
+  const on = new Set((st.qtCmp ? st.qtCmp.filter(x => T.by[x]).flatMap(x => T.path(x)) : T.path(cur.id)).map(n => n.id));
   const row = (n, d) => {
     const vis = qtVisKids(T, n.id), all = T.kids(n.id), hid = all.length - vis.length;
-    const cls = ['qt-olr', d === 0 ? 'top' : '', on.has(n.id) ? 'path' : '', n.col ? 'coll' : '', ctx.has(n.id) ? 'ctx' : ''].filter(Boolean).join(' ');
-    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ` aria-expanded="true"` : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${best.has(n.id) && n.id !== 'r' ? QTI.star : ''}${n.running ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
+    const cls = ['qt-olr', d === 0 ? 'top' : '', on.has(n.id) ? 'path' : '', n.col ? 'coll' : '', st.qtHi && n.par === st.qtHi && !on.has(n.id) ? 'hi' : ''].filter(Boolean).join(' ');
+    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ' aria-expanded="true"' : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${n.running ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
   };
-  return `<nav class="qt-ol" aria-label="Outline of this thread"><div class="qt-ol-h"><h3>Outline</h3><span class="num">${T.nodes.length} asks · ${T.depth} levels</span></div><ul role="tree">${row(T.nodes[0], 0)}</ul>${opts.legend === false ? '' : `<div class="qt-ol-legend"><span>${QTI.star}Best path${T.best ? `, pinned by ${T.owner}` : ': not pinned'}</span>${ctx.size ? '<span>Green mark: sent to the agent</span>' : ''}</div>`}</nav>`;
+  return `<nav class="qt-ol" id="qt-ol" aria-label="Outline of this thread"><div class="qt-ol-h"><h3>Outline</h3><span class="num">${T.nodes.length} asks · ${T.depth} levels</span></div><ul role="tree">${row(T.nodes[0], 0)}</ul><div class="qt-ol-legend">${st.qtHi ? '<span><i class="qt-hidot"></i>Other questions about the same answer</span>' : ''}</div></nav>`;
 }
 function qtFacts(T) {
   const p = T.p, s = sp(p.s);
   return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Answered by</span><b>${MODEL_NAME}</b></div></div>`;
-}
-
-/* ---------- summary ---------- */
-function qtSummary(T) {
-  const d = T.d, run = st.qtSumRun, n = T.nodes.length;
-  const secs = d.sum || T.kids('r').map(k => [qtClip(k.q, 60), [k.id, ...T.nodes.filter(x => T.path(x.id).some(y => y.id === k.id) && x.id !== k.id).map(x => x.id)], qtClip(qtTxt(k.html), 220)]);
-  const since = d.sumAt ? n - d.sumAt : 0;
-  const body = run ? `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Summarizing ${n} asks</b><span class="faint">· about 6K tokens</span></div></div>`
-    : secs.map(([h, ids, txt]) => `<div class="qt-sum-sec"><h4>${esc(h)}<small>${ids.length} ask${ids.length > 1 ? 's' : ''} · ${[...new Set(ids.map(x => T.by[x] && T.by[x].u).filter(Boolean))].join(', ')}</small></h4><p>${esc(txt)}</p><div class="qt-sum-links">${ids.filter(x => T.by[x]).slice(0, 4).map(x => `<button class="tlink" type="button" data-qtgo="${x}">Level ${T.by[x].lv}: ${esc(qtClip(T.by[x].q, 44))}</button>`).join('')}</div></div>`).join('') + (d.open ? `<div class="qt-sum-sec"><h4>Not answered in this thread</h4><p>${esc(d.open)}</p></div>` : '');
-  return `<section class="qt-sum" aria-label="Summary of this thread"><div class="qt-sum-h">${QTI.sum}<h3>Summary of all branches</h3><span class="grow"></span><button class="iconbtn" type="button" data-qt="sum" aria-label="Close the summary">${I.close}</button></div>
-    <div class="qt-sum-m">${run ? 'Researching' : `Agent summary of ${d.sumAt || n} asks, made ${d.sumAge || '1h'} ago · ${fmt(6e3)} tokens from ${spName(sp(T.p.s))}`}${!run && since > 0 ? ` · ${since} new ask${since > 1 ? 's' : ''} since then <button class="tlink" type="button" data-qt="sum-run">Update</button>` : ''}</div>${body}</section>`;
 }
 
 /* ---------- compare ---------- */
@@ -6424,86 +6157,59 @@ function qtCompare(T) {
   const [a, b] = st.qtCmp, pa = T.path(a), pb = T.path(b);
   let k = 0; while (pa[k] && pb[k] && pa[k].id === pb[k].id) k++;
   const base = pa[k - 1], A = pa.slice(k), B = pb.slice(k);
-  const step = n => `<div class="qt-cmp-step"><div class="qt-ancm">${qtLv(n)}${avatar(n.u, 'sm')}<span>${n.u} · ${n.age}</span></div><button class="qt-ancq" type="button" data-qtgo="${n.id}">${esc(n.q)}</button>${n.anc && st.qtFrom !== 'whole' && n.anc.k !== 'cite' ? `<div class="qt-kid-a">About <q>${esc(qtClip(n.anc.t, 80))}</q></div>` : ''}<div class="prose">${n.html}</div></div>`;
+  const step = n => `<div class="qt-cmp-step"><div class="qt-ancm">${qtLv(n)}${avatar(n.u, 'sm')}<span>${n.u} · ${n.age}</span></div><button class="qt-ancq" type="button" data-qtgo="${n.id}">${esc(n.q)}</button><div class="prose">${n.html}</div></div>`;
   const col = (l, cls, lbl) => `<div class="qt-cmp-col ${cls}"><h3>${lbl} <span class="num">${l.length} ask${l.length > 1 ? 's' : ''}</span></h3>${l.map(step).join('') || '<p class="qt-empty">This ask is on the other branch’s path.</p>'}</div>`;
-  const merge = st.auth === 'in' ? `<section class="qt-kids"><h3>Ask about both branches</h3><p class="qt-note" style="margin:0 0 8px">The new ask is placed under the shared ask (level ${base.lv}) and the agent gets both branches as context. It links back to both.</p>${qtComposer(T, base.id, { merge: true })}</section>` : '';
+  const merge = st.auth === 'in' ? `<section class="qt-merge"><h3>Ask about both branches</h3><p class="qt-note">The new ask is placed under the shared ask (${base.id === 'r' ? 'the question' : 'level ' + base.lv}), and the agent gets both branches as context. It links back to both.</p>${qtComposer(T, base.id, { merge: true })}</section>` : '';
   return `<div class="qt-cmp"><div class="qt-cmp-h"><h2>Compare two branches</h2><span class="grow"></span><span class="seg qt-cmp-seg" role="group" aria-label="Branch shown">${['a', 'b'].map(x => `<button type="button" data-qtside="${x}" aria-pressed="${st.qtSide === x}">Branch ${x.toUpperCase()}</button>`).join('')}</span><button class="btn" type="button" data-qt="cmp-x">Close</button></div>
     <div class="qt-cmp-base"><small>Both branches start from ${base.id === 'r' ? 'the question' : 'level ' + base.lv}</small><button class="qt-ancq" type="button" data-qtgo="${base.id}">${esc(base.q)}</button></div>
     <div class="qt-cmp-cols" data-side="${st.qtSide}">${col(A, 'a', 'Branch A')}${col(B, 'b', 'Branch B')}</div>${merge}</div>`;
 }
-const qtPickBar = T => st.qtPick && T.by[st.qtPick] ? `<div class="qt-pickbar" role="status"><span>Choose a second ask to compare with <b>${esc(qtClip(T.by[st.qtPick].q, 60))}</b>, ${st.qtA === 'map' ? 'on the map' : 'in the outline'}.</span><span class="grow"></span>${st.qtA === 'map' ? '' : `<button class="btn sm${st.qtA === 'cols' ? '' : ' qt-olbtn'}" type="button" data-qt="olsheet">${QTI.tree}Open the outline</button>`}<button class="btn sm" type="button" data-qt="pick-x">Cancel</button></div>` : '';
+const qtPickBar = T => st.qtPick && T.by[st.qtPick] ? `<div class="qt-pickbar" role="status"><span>Choose a second ask to compare with <b>${esc(qtClip(T.by[st.qtPick].q, 60))}</b>, in the outline or on the map.</span><span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Open the map</button><button class="btn sm qt-olbtn" type="button" data-qt="olsheet">${QTI.tree}Open the outline</button><button class="btn sm" type="button" data-qt="pick-x">Cancel</button></div>` : '';
 
-/* ---------- bar above every tree view ---------- */
+/* ---------- bar above the thread ---------- */
 function qtBar(T, cur) {
   const p = T.p, n = T.nodes.length;
   const t = (k, icon, lbl, on, extra = '') => `<button class="btn sm${extra}" type="button" data-qt="${k}" aria-pressed="${!!on}">${icon}${lbl}</button>`;
   const from = p.from ? `<div class="qt-from">${QTI.out}<span>Branched from</span><button class="tlink" type="button" data-qtopen="${p.from.th}:${p.from.node}">${esc(qtClip(POSTS[p.from.th].t || POSTS[p.from.th].q, 70))}, level ${p.from.lv}</button></div>` : '';
-  const tools = n > 1 ? `<div class="qt-tools">${(st.qtA === 'map' ? '' : t('olsheet', QTI.tree, 'Outline', st.modal === 'qt-outline', st.qtA === 'cols' ? '' : ' qt-olbtn'))}${t('sum', QTI.sum, 'Summary', st.qtSum)}${T.best ? t('best', QTI.star, 'Best path', cur.id === T.best) : ''}${t('latest', QTI.clock, 'Latest', cur.id === T.latest.id)}${cur.id !== 'r' ? t('top', QTI.up, 'Question', false) : ''}</div>` : '';
-  return `<div class="qt-bar">${thHead(p)}<span class="qt-stats num">${n} ask${n > 1 ? 's' : ''} · ${T.people} ${T.people > 1 ? 'people' : 'person'} · ${T.depth} level${T.depth === 1 ? '' : 's'}</span>${tools}</div>${from ? `<div class="qt-bar" style="padding-top:10px">${from}</div>` : ''}`;
+  const tools = n > 1 ? `<div class="qt-tools">${t('map', QTI.map, 'Map', st.modal === 'qt-map')}${t('olsheet', QTI.tree, 'Outline', st.modal === 'qt-outline', ' qt-olbtn')}${cur.id !== 'r' ? t('top', QTI.up, 'Question', false) : ''}</div>` : '';
+  return `<div class="qt-bar">${thHead(p)}${tools}</div>${from ? `<div class="qt-bar" style="padding-top:10px">${from}</div>` : ''}`;
 }
 
-/* ---------- A. Path and outline: one path at a time, siblings as tabs, outline beside it ---------- */
-function qtSibs(T, cur) {
-  if (cur.id === 'r') return '';
-  const sibs = qtVisKids(T, cur.par); if (sibs.length < 2) return '';
-  const par = T.by[cur.par];
-  return `<div class="qt-sibs"><span class="qt-sibs-h">${sibs.length} questions about ${par.id === 'r' ? 'the first answer' : 'the answer at level ' + par.lv}</span><div class="qt-tabs" role="tablist" aria-label="Questions about the same answer">${sibs.map(k => `<button class="qt-tab" type="button" role="tab" data-qtgo="${k.id}" aria-selected="${k.id === cur.id}" title="${esc(k.q)}">${avatar(k.u)}<span>${esc(qtClip(k.q, 46))}</span></button>`).join('')}</div></div>`;
+/* ---------- nested view ----------
+   The question's answer, then the branch you are on, nested under the answer it asks about, down
+   to the current ask. Other questions about the same answer are counted, not listed; the count
+   opens them in the outline. Below QT_DEPTH levels, "Continue this branch" shows the rest of the
+   branch with that ask at the top. */
+function qtOthers(T, par, curKid) {
+  const others = qtVisKids(T, par.id).filter(k => !curKid || k.id !== curKid.id), col = T.kids(par.id).length - qtVisKids(T, par.id).length;
+  if (!others.length && !col) return '';
+  const lbl = curKid ? `${others.length} other question${others.length === 1 ? '' : 's'} about this answer` : `${others.length} question${others.length === 1 ? '' : 's'} about this answer`;
+  return `<div class="qt-others">${others.length ? `<button class="tlink" type="button" data-qtsibs="${par.id}">${QTI.tree}${lbl}</button>` : ''}${col ? `<span>${col} collapsed</span><button class="tlink" type="button" data-qt="showcol">${st.qtShowCol ? 'Hide' : 'Show'}</button>` : ''}</div>`;
 }
-function qtAncCard(T, n, next) {
-  const open = st.qtExp.has(n.id);
-  return `<div class="qt-ancc">${qtLv(n)}<button class="qt-ancq" type="button" data-qtgo="${n.id}" title="Go to this ask">${esc(n.id === 'r' && n.t ? n.t : n.q)}</button><div class="qt-ancm">${au(n.u)}<span>${n.age}</span><button class="tlink" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${open ? 'Hide answer' : 'Show answer'}</button>${T.kids(n.id).length > 1 ? `<span>${T.kids(n.id).length} questions about it</span>` : ''}</div>${open ? `<div class="qt-ancx">${qtAnswer(T, n, { path: [next.id] })}</div>` : `<div class="qt-ancs">${esc(qtClip(qtTxt(n.html), 150))}</div>`}</div>`;
+function qtBranch(T, k, top, path) {
+  const n = T.sub(k.id), deep = k.lv - top.lv >= QT_DEPTH, cur = k.id === st.qtNode;
+  const next = path[path.indexOf(k) + 1];
+  const head = `<button class="qt-ib-h" type="button" data-qtib="${k.id}" aria-expanded="true" title="Collapse: go back to ${k.par === 'r' ? 'the question' : 'level ' + T.by[k.par].lv}">${I.chev.replace('<svg', '<svg class="chv"')}${avatar(k.u, 'sm')}<span class="qt-ib-b"><span class="qt-ib-q">${esc(k.q)}</span><span class="qt-ib-m">${qtLvName(k)} · ${k.u} · ${k.age}${n ? ` · ${n} ask${n > 1 ? 's' : ''} below` : ''}</span></span></button>`;
+  const asking = st.qtAskAt === k.id;
+  const below = deep ? (qtVisKids(T, k.id).length ? `<button class="btn sm qt-ibmore" type="button" data-qtfocus="${k.id}">${QTI.out}Continue this branch (${n} more)</button>` : '') : `${next ? qtOthers(T, k, next) + qtBranch(T, next, top, path) : qtOthers(T, k, null)}`;
+  return `<div class="qt-ib${cur ? ' on' : ''}" id="qt-n-${k.id}">${head}<div class="qt-ib-body">${qtExtra(T, k)}${qtAnswer(T, k)}${qtNodeActs(T, k)}${asking ? qtComposer(T, k.id, { cancel: true }) : ''}${below}</div></div>`;
 }
-function qtNodeBlock(T, cur) {
-  const root = cur.id === 'r', p = T.p;
-  const sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.open ? st.qtSel : null;
-  const compAt = sel ? sel.node : st.qtAskAt;
-  const ans = root && p.t ? `<h1 class="rd-title qt-title">${esc(p.t)}</h1>` : '';
-  return `<article class="qt-node" id="qt-node">${root ? `<div class="qt-nh"><div class="qt-nh-top">${qtLv(cur, true)}<span>Question</span><span aria-hidden="true">·</span>${avatar(cur.u, 'sm')}${au(cur.u)}<span>${cur.age}</span></div></div><p class="th-q" id="th-q">${esc(cur.q)}</p>` : qtHead(T, cur)}
-    <section class="th-ans${cur.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, cur)}${qtSrcs(T, cur)}</section>
-    ${root ? thActs(p).replace('<div class="p-foot">', `<div class="p-foot">${st.auth === 'in' && !cur.running ? `<button class="btn sm" type="button" data-qtaskat="r">${QTI.ask}Ask about this answer</button>` : ''}`) : qtNodeActs(T, cur)}
-    ${compAt === cur.id ? qtComposer(T, cur.id) : ''}
-    ${cur.running ? '' : qtKids(T, cur)}
-  </article>`;
-}
-function qtPathView(T, cur) {
-  const path = T.path(cur.id), anc = path.slice(0, -1);
-  const sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.open ? st.qtSel : null;
-  /* Long paths show the question and the two asks above the current one; the middle folds. */
-  const fold = anc.length > 3 && !st.qtTrailAll ? anc.length - 3 : 0;
-  const cards = anc.map((n, k) => (fold && k >= 1 && k <= fold) ? (k === 1 ? `<div class="qt-more"><span class="qt-lv num">…</span><button class="tlink" type="button" data-qt="trail">Show ${fold} more ask${fold > 1 ? 's' : ''} on this path</button></div>` : '') : qtAncCard(T, n, path[k + 1])).join('');
-  const trail = anc.length ? `<div class="qt-trail" aria-label="Asks above this one">${cards}</div>` : '';
-  const best = cur.id === 'r' && T.best && st.qtOpen !== 'best' ? `<div class="qt-bestnote">${QTI.star}<span>${T.owner === ME.u ? 'You pinned' : T.owner + ' pinned'} a best path through ${T.path(T.best).length - 1} asks.</span><button class="tlink" type="button" data-qt="best">Read it</button></div>` : '';
-  const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${st.qtSum ? qtSummary(T) : ''}${best}${trail}${st.qtSib === 'tabs' ? qtSibs(T, cur) : ''}${qtNodeBlock(T, cur)}
-    ${st.qtSib === 'list' && cur.id !== 'r' ? qtKids(T, T.by[cur.par], cur.id, `Other questions about ${cur.par === 'r' ? 'the first answer' : 'level ' + T.by[cur.par].lv}`) : ''}
-    ${!sel && st.qtAskAt !== cur.id && !cur.running ? qtComposer(T, cur.id) : ''}${cur.id === 'r' ? relatedHTML(T.p) : ''}`;
+function qtNestView(T, cur) {
+  const top = qtTop(T), path = T.path(cur.id).filter(n => n.lv >= top.lv), next = path[1];
+  const tp = T.path(top.id);
+  const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
+  const rootAsk = top.id === 'r' && cur.id === 'r' && !st.qtAskAt;
+  const head = top.id === 'r' ? `<div class="qt-nh"><div class="qt-nh-top">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
+  const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${fbar}
+    <article class="qt-node qt-inl" id="qt-n-${top.id}">${head}
+    <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r">${QTI.ask}Ask about this answer</button>`}`) : qtNodeActs(T, top)}
+    ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
+    <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
+    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>${top.id === 'r' ? relatedHTML(T.p) : ''}`;
   return `${qtBar(T, cur)}<div class="qt-grid"><div class="qt-main">${main}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtFacts(T)}</aside></div>`;
 }
 
-/* ---------- B. Columns: each ask on the path is a column; a branch opens to the right ---------- */
-function qtColumn(T, n, next, isCur) {
-  const kids = qtVisKids(T, n.id);
-  return `<section class="qt-col${isCur ? ' cur' : ''}" data-qtcolumn="${n.id}" aria-label="${qtLvName(n)}">
-    <div class="qt-col-h">${qtLv(n, isCur)}<span>${qtLvName(n)}</span>${avatar(n.u, 'sm')}<span>${n.u} · ${n.age}</span><span class="grow"></span>${qtMenu(T, n)}</div>
-    ${qtAbout(T, n)}<h2 class="qt-col-q">${esc(n.id === 'r' && n.t ? n.t : n.q)}</h2>
-    ${qtAnswer(T, n, { path: next ? [next.id] : [] })}
-    ${isCur ? qtNodeActs(T, n, { menu: false }) : ''}
-    ${n.running ? '' : qtKids(T, n, next && next.id)}
-    ${isCur && st.qtAskAt === n.id && !(st.qtSel && st.qtSel.open) ? qtComposer(T, n.id, { cancel: true }) : ''}
-  </section>`;
-}
-function qtColsView(T, cur) {
-  const path = T.path(cur.id), sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.open ? st.qtSel : null;
-  /* While a branch is being written, the composer is the next column. */
-  const newCol = sel && T.by[sel.node] ? `<section class="qt-col newc cur" aria-label="New branch"><div class="qt-col-h">${QTI.ask}<span>New ask at level ${T.by[sel.node].lv + 1}</span></div>${qtComposer(T, sel.node, { cancel: true })}</section>` : '';
-  const sibs = cur.id === 'r' ? '' : qtSibs(T, cur);
-  const nav = `<div class="qt-colnav"><div class="qt-crumbs" aria-label="Path">${path.map(n => `<button type="button" data-qtgo="${n.id}" aria-current="${n.id === cur.id}">${n.id === 'r' ? 'Question' : 'L' + n.lv + ' ' + esc(qtClip(n.q, 22))}</button>`).join('<span aria-hidden="true">›</span>')}</div>${cur.id !== 'r' ? `<button class="btn sm" type="button" data-qtgo="${cur.par}" style="align-self:flex-start">${QTI.up}Up to ${cur.par === 'r' ? 'the question' : 'level ' + T.by[cur.par].lv}</button>` : ''}${sibs}</div>`;
-  const body = st.qtCmp ? `<div class="qt-grid" style="grid-template-columns:minmax(0,1fr)"><div class="qt-main">${qtCompare(T)}</div></div>`
-    : `${st.qtSum || st.qtPick ? `<div class="qt-grid" style="grid-template-columns:minmax(0,1fr)"><div class="qt-main">${qtPickBar(T)}${st.qtSum ? qtSummary(T) : ''}</div></div>` : ''}<div class="qt-colwrap">${nav}<div class="qt-cols${newCol ? ' composing' : ''}" id="qt-cols">${path.map((n, k) => qtColumn(T, n, path[k + 1], n.id === cur.id && !newCol)).join('')}${newCol}</div><p class="qt-colhint">Select a passage or a question in any column to open it to the right. Columns to the right of the one you change are replaced.</p></div>
-      <div class="qt-colfoot">${cur.id === 'r' ? relatedHTML(T.p) : ''}</div>`;
-  return `${qtBar(T, cur)}${body}`;
-}
-
-/* ---------- C. Map: the whole tree as a diagram, the selected ask beside it ---------- */
+/* ---------- map dialog ---------- */
 function qtMapLayout(T) {
   const W = 196, H = 62, GX = 46, GY = 14, pos = {};
   let row = 0;
@@ -6518,92 +6224,39 @@ function qtMapLayout(T) {
   const maxX = Math.max(...Object.values(pos).map(p => p.x)) + W, maxY = Math.max(...Object.values(pos).map(p => p.y)) + H;
   return { pos, W, H, w: maxX + 24, h: maxY + 24 };
 }
-function qtMapView(T, cur) {
-  const L = qtMapLayout(T), z = st.qtZoom, on = new Set(T.path(cur.id).map(n => n.id)), best = new Set(T.best ? T.path(T.best).map(n => n.id) : []);
-  const ctx = st.qtSel && st.qtSel.open && st.qtSel.th === T.i ? new Set(qtCtx(T, st.qtSel.node).inc.map(n => n.id)) : new Set();
+function qtMapDialog(T) {
+  const cur = qtCur(T), L = qtMapLayout(T), z = st.qtZoom, on = new Set(T.path(cur.id).map(n => n.id));
   const nodes = T.nodes.filter(n => L.pos[n.id]);
-  const edges = nodes.filter(n => n.par && L.pos[n.par]).map(n => { const a = L.pos[n.par], b = L.pos[n.id], x1 = a.x + L.W + 12, y1 = a.y + L.H / 2 + 12, x2 = b.x + 12, y2 = b.y + L.H / 2 + 12, mx = (x1 + x2) / 2; return `<path class="${on.has(n.id) ? 'on' : ctx.has(n.id) && ctx.has(n.par) ? 'ctx' : ''}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`; }).join('');
-  const box = n => { const p = L.pos[n.id], hid = T.kids(n.id).length - qtVisKids(T, n.id).length; return `<button class="qt-mn${on.has(n.id) ? ' path' : ''}${st.qtPick ? ' pick' : ''}" type="button" data-qtgo="${n.id}" aria-current="${n.id === cur.id}" style="left:${p.x + 12}px;top:${p.y + 12}px" title="${esc(n.q)}"><span class="qt-mn-t">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-mn-m">${avatar(n.u)}<span>${n.id === 'r' ? 'Question' : 'L' + n.lv} · ${n.u}</span>${n.anc && st.qtFrom !== 'whole' ? `<span class="anc">${n.anc.k === 'cite' ? '[' + n.anc.n + ']' : '“…”'}</span>` : ''}${best.has(n.id) && n.id !== 'r' ? QTI.star : ''}${n.running ? '<span class="spin"></span>' : ''}${hid ? `<span>+${hid} collapsed</span>` : ''}</span></button>`; };
-  const tool = `<div class="qt-maptool"><span class="seg" role="group" aria-label="Zoom">${[[0.6, '60%'], [0.8, '80%'], [1, '100%']].map(([v, l]) => `<button type="button" data-qtzoom="${v}" aria-pressed="${z === v}">${l}</button>`).join('')}</span><span class="grow"></span><span>${QTI.star} best path</span><span>Blue: the path to the selected ask</span>${ctx.size ? '<span>Green: sent to the agent</span>' : ''}</div>`;
-  const path = T.path(cur.id), sel = st.qtSel && st.qtSel.th === T.i && st.qtSel.open ? st.qtSel : null;
-  const read = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${st.qtSum ? qtSummary(T) : ''}<div class="qt-crumbs" aria-label="Path">${path.map(n => `<button type="button" data-qtgo="${n.id}" aria-current="${n.id === cur.id}">${n.id === 'r' ? 'Question' : 'L' + n.lv + ' ' + esc(qtClip(n.q, 20))}</button>`).join('<span aria-hidden="true">›</span>')}</div>
-    ${qtHead(T, cur)}${qtAnswer(T, cur)}${qtSrcs(T, cur)}${qtNodeActs(T, cur)}${(sel ? sel.node : st.qtAskAt) === cur.id || !st.qtAskAt ? qtComposer(T, cur.id) : ''}${cur.running ? '' : qtKids(T, cur)}${cur.id !== 'r' ? qtSibs(T, cur) : ''}`;
-  return `${qtBar(T, cur)}<div class="qt-mapwrap"><div class="qt-mappane">${tool}<div class="qt-map" id="qt-map"><div class="qt-mapc" style="width:${L.w * z}px;height:${L.h * z}px"><div style="position:absolute;inset:0;width:${L.w}px;height:${L.h}px;transform:scale(${z});transform-origin:0 0"><svg class="qt-edges" width="${L.w}" height="${L.h}" aria-hidden="true">${edges}</svg>${nodes.map(box).join('')}</div></div></div></div><div class="qt-mapread">${read}</div></div>`;
-}
-
-/* ---------- D. Nested in the answer: branches open under the paragraph they quote ---------- */
-const QT_INL_DEPTH = 3;
-function qtInlineBranch(T, k, base) {
-  const open = st.qtIb.has(k.id), n = T.sub(k.id), deep = k.lv - base >= QT_INL_DEPTH;
-  const head = `<button class="qt-ib-h" type="button" data-qtib="${k.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${avatar(k.u, 'sm')}<span class="qt-ib-b"><span class="qt-ib-q">${esc(k.q)}</span><span class="qt-ib-m">${qtLvName(k)} · ${k.u} · ${k.age}${n ? ` · ${n} more ask${n > 1 ? 's' : ''} below` : ''}</span></span></button>`;
-  if (!open) return `<div class="qt-ib" id="qt-n-${k.id}">${head}</div>`;
-  const kidsHTML = deep && qtVisKids(T, k.id).length ? `<button class="btn sm qt-ibmore" type="button" data-qtfocus="${k.id}">${QTI.out}Continue this branch (${n} more)</button>` : '';
-  return `<div class="qt-ib${st.qtNode === k.id ? ' on' : ''}" id="qt-n-${k.id}">${head}<div class="qt-ib-body">${k.anc && k.anc.k === 'cite' && st.qtFrom !== 'whole' ? `<div class="qt-kid-a">About source ${k.anc.n}: ${esc(k.anc.t)}</div>` : ''}${qtInlineAnswer(T, k, base, deep)}${qtNodeActs(T, k)}${(st.qtSel && st.qtSel.open && st.qtSel.node === k.id) || st.qtAskAt === k.id ? qtComposer(T, k.id, { cancel: true }) : ''}${kidsHTML}</div></div>`;
-}
-/* Branches anchored to a passage are placed after the block (paragraph, list, table) that holds the passage. */
-function qtInlineAnswer(T, n, base, noKids) {
-  if (n.running) return answerHTML({ running: true, s: T.p.s });
-  const html = qtAnswer(T, n, { path: [...st.qtIb] });
-  const kids = noKids ? [] : qtVisKids(T, n.id), placed = new Set();
-  const tpl = document.createElement('template'); tpl.innerHTML = html;
-  const prose = tpl.content.querySelector('.qt-prose');
-  if (prose && st.qtFrom !== 'whole') {
-    [...prose.children].forEach(el => {
-      const here = kids.filter(k => !placed.has(k.id) && k.anc && (k.anc.k === 'cite' ? el.querySelector(`[data-qtgo="${k.id}"]`) : el.textContent.includes(k.anc.t)));
-      if (!here.length) return;
-      here.forEach(k => placed.add(k.id));
-      el.insertAdjacentHTML('afterend', `<div class="qt-ibs">${here.map(k => qtInlineBranch(T, k, base)).join('')}</div>`);
-    });
-  }
-  const rest = kids.filter(k => !placed.has(k.id));
-  const col = noKids ? 0 : T.kids(n.id).length - kids.length;
-  return tpl.innerHTML + (rest.length ? `<div class="qt-ibs">${rest.length && n.id === 'r' ? `<h3 class="qt-inl-h">Follow-ups about the whole answer <span class="num faint">${rest.length}</span></h3>` : ''}${rest.map(k => qtInlineBranch(T, k, base)).join('')}</div>` : '') + (col ? `<div class="qt-coll">${QTI.fold}<span>${col} collapsed branch${col > 1 ? 'es' : ''}</span><button class="tlink" type="button" data-qt="showcol">${st.qtShowCol ? 'Hide' : 'Show'}</button></div>` : '');
-}
-function qtInlineView(T, cur) {
-  const focus = st.qtFocus && T.by[st.qtFocus] ? T.by[st.qtFocus] : T.nodes[0], base = focus.lv;
-  const fp = T.path(focus.id);
-  const fbar = focus.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${focus.lv}.</span>${fp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}</div>` : '';
-  const sel = st.qtSel && st.qtSel.open && st.qtSel.th === T.i ? st.qtSel : null;
-  const rootComp = (sel && sel.node === focus.id) || st.qtAskAt === focus.id || (!sel && !st.qtAskAt);
-  const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${st.qtSum ? qtSummary(T) : ''}${fbar}
-    <article class="qt-node qt-inl">${focus.id === 'r' ? `<div class="qt-nh"><div class="qt-nh-top">${qtLv(focus)}<span>Question</span><span aria-hidden="true">·</span>${avatar(focus.u, 'sm')}${au(focus.u)}<span>${focus.age}</span></div></div><p class="th-q">${esc(focus.q)}</p>` : qtHead(T, focus)}
-    <section class="th-ans" id="th-a">${creditHead()}${qtInlineAnswer(T, focus, base)}${qtSrcs(T, focus)}</section>${focus.id === 'r' ? thActs(T.p) : qtNodeActs(T, focus)}${rootComp ? qtComposer(T, focus.id) : ''}</article>${focus.id === 'r' ? relatedHTML(T.p) : ''}`;
-  return `${qtBar(T, cur)}<div class="qt-grid"><div class="qt-main">${main}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtFacts(T)}</aside></div>`;
+  const edges = nodes.filter(n => n.par && L.pos[n.par]).map(n => { const a = L.pos[n.par], b = L.pos[n.id], x1 = a.x + L.W + 12, y1 = a.y + L.H / 2 + 12, x2 = b.x + 12, y2 = b.y + L.H / 2 + 12, mx = (x1 + x2) / 2; return `<path class="${on.has(n.id) ? 'on' : ''}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`; }).join('');
+  const box = n => { const p = L.pos[n.id], hid = T.kids(n.id).length - qtVisKids(T, n.id).length; return `<button class="qt-mn${on.has(n.id) ? ' path' : ''}${st.qtPick ? ' pick' : ''}" type="button" data-qtmap="${n.id}" aria-current="${n.id === cur.id}" style="left:${p.x + 12}px;top:${p.y + 12}px" title="${esc(n.q)}"><span class="qt-mn-t">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-mn-m">${avatar(n.u)}<span>${n.id === 'r' ? 'Question' : 'L' + n.lv} · ${n.u}</span>${n.running ? '<span class="spin"></span>' : ''}${hid ? `<span>+${hid} collapsed</span>` : ''}</span></button>`; };
+  const tool = `<div class="qt-maptool"><span class="seg" role="group" aria-label="Zoom">${[[0.6, '60%'], [0.8, '80%'], [1, '100%']].map(([v, l]) => `<button type="button" data-qtzoom="${v}" aria-pressed="${z === v}">${l}</button>`).join('')}</span><span class="grow"></span><span><i class="qt-pathdot"></i>Path to the ask you are on</span></div>`;
+  const pick = st.qtPick && T.by[st.qtPick] ? `<div class="qt-pickbar qt-mappick" role="status"><span>Choose a second ask to compare with <b>${esc(qtClip(T.by[st.qtPick].q, 60))}</b>.</span><span class="grow"></span><button class="btn sm" type="button" data-qt="pick-x">Cancel</button></div>` : '';
+  return `<div class="modal-scrim qt-mapscrim"><div class="modal qt-mapdlg" role="dialog" aria-modal="true" aria-labelledby="qt-map-t"><div class="modal-h"><h3 id="qt-map-t">Map of this thread <span class="num faint">${T.nodes.length} asks · ${T.depth} levels</span></h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close the map">${I.close}</button></div>${pick}${tool}<div class="qt-map" id="qt-map"><div class="qt-mapc" style="width:${L.w * z}px;height:${L.h * z}px"><div style="position:absolute;inset:0;width:${L.w}px;height:${L.h}px;transform:scale(${z});transform-origin:0 0"><svg class="qt-edges" width="${L.w}" height="${L.h}" aria-hidden="true">${edges}</svg>${nodes.map(box).join('')}</div></div></div><p class="qt-note qt-maphint">Select an ask to open it in the thread.</p></div></div>`;
 }
 
 /* ---------- thread page dispatch ---------- */
 const QT_layoutThread = layoutThread;
 function qtEnter(i) {
-  /* First render of a thread: pick the starting ask from the "Open a thread at" control. */
-  const T = qtT(i);
-  Object.assign(st, { qtTh: i, qtTrailAll: false, qtSel: null, qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtSum: false, qtExp: new Set(), qtIb: new Set() });
-  const o = st.qtOpen;
-  st.qtNode = o === 'best' ? (T.best || T.latest.id) : o === 'latest' ? T.latest.id : 'r';
-  if (o === 'summary' && T.nodes.length > 2) st.qtSum = true;
-  qtExpandTo(T, st.qtNode);
+  /* Opening a thread starts at the question. */
+  Object.assign(st, { qtTh: i, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null });
 }
-function qtExpandTo(T, id) { T.path(id).forEach(n => { if (n.id !== 'r') st.qtIb.add(n.id); }); }
 layoutThread = function () {
   const p = POSTS[st.thread];
-  if (!qtOn() || p.k !== 'ask' || !canRead(sp(p.s))) return QT_layoutThread();
+  if (p.k !== 'ask' || !canRead(sp(p.s))) return QT_layoutThread();
   if (st.qtTh !== st.thread) qtEnter(st.thread);
   const T = qtT(st.thread), cur = qtCur(T);
   if (cur.id !== st.qtNode) st.qtNode = cur.id;
-  const v = { path: qtPathView, cols: qtColsView, map: qtMapView, inline: qtInlineView }[st.qtA] || qtPathView;
-  return `<div class="A C Af H">${topHeader()}<div class="th-page qt-page qt-a-${st.qtA}${st.qtA === 'cols' || st.qtA === 'map' ? ' qt-wide' : ''}">${v(T, cur)}</div></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="th-page qt-page">${qtNestView(T, cur)}</div></div>`;
 };
 
 /* ---------- new asks ---------- */
 let qtSeq = 0;
 function qtAsk(T, par, text) {
-  const sel = st.qtSel && st.qtSel.open && st.qtSel.th === T.i && st.qtSel.node === par ? st.qtSel : null;
-  const n = { id: 'n' + (++qtSeq), par, u: ME.u, age: 'now', q: text, tok: 0, running: true,
-    anc: sel ? (sel.k === 'cite' ? { k: 'cite', n: sel.n, t: sel.text } : { k: sel.k, t: sel.text }) : null, uses: st.qtCmp ? [...st.qtCmp] : null };
+  const n = { id: 'n' + (++qtSeq), par, u: ME.u, age: 'now', q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null };
   const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic;
   T.d.nodes.push(n);
-  Object.assign(st, { qtNode: n.id, qtSel: null, qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null, qtFocus: null });
-  qtExpandTo(qtT(T.i), n.id); st.qtIb.add(n.id);
-  st.qtScroll = 'node';
+  Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
+  qtGo(qtT(T.i), n.id);
   setTimeout(() => { n.running = false; n.html = html; n.tok = 9e3 + qtTokTxt(html) * 20; if (st.thread === T.i) renderAll(); }, 2200);
 }
 
@@ -6622,7 +6275,7 @@ function qtPromote() {
   POSTS.push(p); const ni = POSTS.length - 1; QT_MADE.push(ni);
   RICH[ni] = n.html; FU[ni] = [];
   const desc = pro.inc === 'all' ? T.nodes.filter(x => x.id !== n.id && T.path(x.id).some(y => y.id === n.id)) : [];
-  QTD[ni] = { nodes: desc.map(x => ({ id: x.id, par: x.par === n.id ? 'r' : x.par, u: x.u, age: x.age, q: x.q, html: x.html, tok: x.tok, anc: x.anc || null })) };
+  QTD[ni] = { nodes: desc.map(x => ({ id: x.id, par: x.par === n.id ? 'r' : x.par, u: x.u, age: x.age, q: x.q, html: x.html, tok: x.tok })) };
   n.promoted = ni;
   Object.assign(st, NAVBASE(), { thread: ni, space: pro.sp, modal: null, qtPro: null });
   qtEnter(ni);
@@ -6630,12 +6283,14 @@ function qtPromote() {
 }
 function qtModal() {
   const m = st.modal;
+  if (st.thread == null || !POSTS[st.thread]) return '';
   if (m === 'qt-outline') { const T = qtT(st.thread); return `<div class="qt-olm-sheet">${dlg('Outline', qtOutline(T, qtCur(T)), '')}</div>`; }
+  if (m === 'qt-map') return qtMapDialog(qtT(st.thread));
   if (m === 'qt-promote' && st.qtPro) {
     const pro = st.qtPro, T = qtT(pro.th), n = T.by[pro.node], src = sp(T.p.s), tgt = sp(pro.sp), sub = T.sub(n.id);
     const radio = (v, l, d) => `<button type="button" role="radio" aria-checked="${pro.inc === v}" data-qtinc="${v}"><i></i><span>${l}<small>${d}</small></span></button>`;
     const body = `<div class="qt-form"><p class="muted">The new thread starts with this ask and its answer, copied without a new research run. The branch stays in this thread, with a link to the new one.</p>
-      <label class="qt-fl">Title<input type="text" id="qt-pro-t" value="${esc(pro.title)}" autocomplete="off"></label>
+      <label class="qt-fl">Title, used in lists and notifications<input type="text" id="qt-pro-t" value="${esc(pro.title)}" autocomplete="off"></label>
       <div class="qt-fl"><span id="qt-pro-spl">Space</span>${ddSel('qtsp', qtProSpaces(T), pro.sp, 'qt-pro-spl')}</div>
       ${isClosed(src) ? `<p class="qt-note">${LOCK} ${spName(src)} is closed. A branch from a closed space can only become a thread in the same space, so members-only text does not become public.</p>` : pro.sp !== src.id ? `<p class="qt-note">The new thread is readable by everyone who can read ${spName(tgt)}. The original branch stays in ${spName(src)}.</p>` : ''}
       ${faqOn(tgt) && topicsOf(tgt).length ? `<div class="qt-fl"><span id="qt-pro-tpl">Topic</span>${ddSel('qttopic', topicsOf(tgt), pro.topic, 'qt-pro-tpl')}</div><p class="qt-note">${spName(tgt)} uses the FAQ landing. The new thread is listed under this topic, and Related answers and search find it like any other answer.</p>` : ''}
@@ -6648,70 +6303,65 @@ function qtModal() {
 DD_SET.qtsp = v => { st.qtPro.sp = v; const s = sp(v); if (faqOn(s) && !topicsOf(s).some(t => t[0] === st.qtPro.topic)) st.qtPro.topic = (topicsOf(s)[0] || [])[0] || null; };
 DD_SET.qttopic = v => { st.qtPro.topic = v; };
 
-/* ---------- clicks ---------- */
+/* ---------- navigation ---------- */
+/* Go to an ask: its path opens nested; if it is deeper than the nesting depth below the top of
+   the view, the view starts further down ("Continue this branch"). */
 function qtGo(T, id) {
-  if (st.qtPick) { if (id !== st.qtPick) { st.qtCmp = [st.qtPick, id]; st.qtSide = 'a'; } st.qtPick = null; st.modal = null; return; }
-  Object.assign(st, { qtNode: id, qtAskAt: null, qtCmp: null, qtMenu: null, qtErr: '' });
-  if (st.qtSel && !st.qtSel.open) st.qtSel = null;
-  if (st.modal === 'qt-outline') st.modal = null;
-  qtExpandTo(T, id); st.qtIb.add(id);
-  if (st.qtA === 'inline') { const n = T.by[id]; const f = st.qtFocus && T.by[st.qtFocus] ? T.by[st.qtFocus] : T.nodes[0]; if (!T.path(id).some(x => x.id === f.id) || n.lv - f.lv > QT_INL_DEPTH) { const p = T.path(id); st.qtFocus = n.lv > QT_INL_DEPTH ? p[n.lv - QT_INL_DEPTH].id : null; } }
+  if (st.qtPick) { if (id !== st.qtPick) { st.qtCmp = [st.qtPick, id]; st.qtSide = 'a'; } st.qtPick = null; st.modal = null; st.qtScroll = 'top'; return; }
+  Object.assign(st, { qtNode: id, qtAskAt: null, qtCmp: null, qtMenu: null, qtErr: '', qtHi: null });
+  if (st.modal === 'qt-outline' || st.modal === 'qt-map') st.modal = null;
+  const n = T.by[id], p = T.path(id), top = qtTop(T);
+  if (!p.some(x => x.id === top.id) || n.lv - top.lv > QT_DEPTH) st.qtFocus = n.lv > QT_DEPTH ? p[n.lv - QT_DEPTH].id : null;
   st.qtScroll = 'node';
 }
+function qtScrollTo(el) {
+  if (!el) return;
+  const app = $('app'), y = el.getBoundingClientRect().top;
+  if (/(auto|scroll)/.test(getComputedStyle(app).overflowY) && app.scrollHeight > app.clientHeight) app.scrollTop += y - app.getBoundingClientRect().top - 12;
+  else window.scrollTo({ top: scrollY + y - 12 });
+}
+
+/* ---------- clicks ---------- */
 function qtClick(t, e) {
-  if (st.thread != null && st.qtMenu && !t.closest('.qt-mw')) { st.qtMenu = null; if (!t.closest('button, a, input, textarea, [data-qtgo]')) { renderAll(); return true; } }
+  if (st.thread != null && st.qtMenu && !t.closest('.qt-mw')) { st.qtMenu = null; if (!t.closest('button, a, input, textarea')) { renderAll(); return true; } }
   const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
   let b;
   if ((b = d('[data-ntopen]'))) { const x = st.notifs.find(n => n.id === b.dataset.ntopen && n.qtNode); if (x) { x.unread = false; Object.assign(st, NAVBASE(), { thread: x.open, space: POSTS[x.open].s, ntOpen: false }); qtEnter(x.open); qtGo(qtT(x.open), x.qtNode); return go(); } return false; }
-  if ((b = d('[data-qtopen]'))) { e.preventDefault(); const [th, id] = b.dataset.qtopen.split(':'); Object.assign(st, NAVBASE(), { thread: +th, space: POSTS[+th].s }); qtEnter(+th); if (id) qtGo(qtT(+th), id); renderAll(); document.querySelector('.frame').scrollIntoView({ block: 'start' }); if (st.device === 'phone') $('app').scrollTop = 0; return true; }
-  if (st.thread == null || !qtOn()) return false;
-  const T = POSTS[st.thread] && POSTS[st.thread].k === 'ask' ? qtT(st.thread) : null;
-  if (!T) return false;
+  if ((b = d('[data-qtopen]'))) { e.preventDefault(); const [th, id] = b.dataset.qtopen.split(':'); Object.assign(st, NAVBASE(), { thread: +th, space: POSTS[+th].s }); qtEnter(+th); if (id) qtGo(qtT(+th), id); renderAll(); $('app').scrollTop = 0; const fr = document.querySelector('.frame'); if (fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' }); return true; }
+  if (st.thread == null || !POSTS[st.thread] || POSTS[st.thread].k !== 'ask') return false;
+  const T = qtT(st.thread);
   if ((b = d('[data-qtmenu]'))) { st.qtMenu = st.qtMenu === b.dataset.qtmenu ? null : b.dataset.qtmenu; return go(); }
+  if ((b = d('[data-qtmap]'))) { qtGo(T, b.dataset.qtmap); return go(); }
   if ((b = d('[data-qtgo]'))) { e.preventDefault(); qtGo(T, b.dataset.qtgo); return go(); }
-  if ((b = d('[data-qtexp]'))) { const id = b.dataset.qtexp; st.qtExp.has(id) ? st.qtExp.delete(id) : st.qtExp.add(id); return go(); }
-  if ((b = d('[data-qtib]'))) { const id = b.dataset.qtib; if (st.qtIb.has(id)) { st.qtIb.delete(id); } else { st.qtIb.add(id); st.qtNode = id; } return go(); }
-  if ((b = d('[data-qtfocus]'))) { const id = b.dataset.qtfocus; st.qtFocus = id === 'r' ? null : id; if (id !== 'r') { st.qtIb.add(id); st.qtNode = id; } st.qtScroll = 'top'; return go(); }
+  /* The header of an open branch closes it: the view goes back to the ask above. */
+  if ((b = d('[data-qtib]'))) { const n = T.by[b.dataset.qtib]; qtGo(T, n.par); st.qtScroll = 'node'; return go(); }
+  /* Change the top of the view and keep the path: the ask you were on stays open if it fits. */
+  if ((b = d('[data-qtfocus]'))) { const id = b.dataset.qtfocus, x = T.by[id], p = T.path(st.qtNode); st.qtFocus = id === 'r' ? null : id; st.qtNode = p.some(n => n.id === id) ? p[Math.min(p.length - 1, x.lv + QT_DEPTH)].id : id; Object.assign(st, { qtAskAt: null, qtHi: null }); st.qtScroll = 'top'; return go(); }
+  if ((b = d('[data-qtsibs]'))) { st.qtHi = b.dataset.qtsibs; if (matchMedia('(max-width: 920px)').matches || st.device === 'phone') st.modal = 'qt-outline'; else st.qtScroll = 'outline'; return go(); }
   if ((b = d('[data-qtzoom]'))) { st.qtZoom = +b.dataset.qtzoom; return go(); }
   if ((b = d('[data-qtside]'))) { st.qtSide = b.dataset.qtside; return go(); }
-  if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtSel: null, qtErr: '', qtFocusIn: true }); if (st.qtA === 'map' || st.qtA === 'cols') st.qtNode = b.dataset.qtaskat; return go(); }
-  if ((b = d('[data-qtterm]')) || (b = d('[data-qtcite]'))) {
-    if (st.auth !== 'in') { st.modal = 'signin'; return go(); }
-    const host = b.closest('[data-qtsel]'), [, node] = host.dataset.qtsel.split(':');
-    if (b.dataset.qtcite) { const k = +b.dataset.qtcite, src = node === 'r' ? srcItems(T.p)[k - 1] : null; st.qtSel = { th: T.i, node, k: 'cite', n: k, text: src ? src.t : `Source ${k}`, open: true }; }
-    else st.qtSel = { th: T.i, node, k: 'term', text: b.dataset.qtterm.replace(/[.:]$/, ''), open: true };
-    Object.assign(st, { qtAskAt: null, qtNode: st.qtA === 'path' || st.qtA === 'inline' ? st.qtNode : node, qtFocusIn: true, qtErr: '' });
-    return go();
-  }
+  if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtErr: '', qtFocusIn: true }); return go(); }
   if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { st.qtSaved.delete(k); toast('Removed from Saved.'); } else { st.qtSaved.add(k); toast('Saved. It is listed under Saved with its path.'); } st.qtMenu = null; return go(); }
   if ((b = d('[data-qtcopy]'))) { st.qtMenu = null; toast(`Link copied: ${qtAddr(T, b.dataset.qtcopy)}`); return go(); }
   if ((b = d('[data-qtpick]'))) { Object.assign(st, { qtPick: b.dataset.qtpick, qtMenu: null, qtCmp: null }); return go(); }
   if ((b = d('[data-qtpro]'))) { qtProOpen(T, b.dataset.qtpro); return go(); }
-  if ((b = d('[data-qtbest]'))) { const id = b.dataset.qtbest; T.d.best = T.d.best === id ? null : id; st.qtMenu = null; toast(T.d.best ? 'Best path pinned. People who open this thread see a link to it.' : 'Best path unpinned.'); return go(); }
-  if ((b = d('[data-qtcol]'))) { const n = T.by[b.dataset.qtcol]; n.col = !n.col; st.qtMenu = null; if (n.col && T.path(st.qtNode).some(x => x.id === n.id)) st.qtNode = n.par; toast(n.col ? 'Branch collapsed. It is still in the thread and its link still works.' : 'Branch shown again.'); return go(); }
+  if ((b = d('[data-qtcol]'))) { const n = T.by[b.dataset.qtcol]; n.col = !n.col; st.qtMenu = null; if (n.col && T.path(st.qtNode).some(x => x.id === n.id)) qtGo(T, n.par); toast(n.col ? 'Branch collapsed. It is still in the thread and its link still works.' : 'Branch shown again.'); return go(); }
   if ((b = d('[data-qtinc]'))) { st.qtPro.inc = b.dataset.qtinc; return go(); }
   if (d('[data-qtpro-ok]')) { qtPromote(); return go(); }
   if ((b = d('[data-qt]'))) {
     const a = b.dataset.qt;
     if (a === 'noop') return true;
-    if (a === 'sel-ask') { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } st.qtSel.open = true; st.qtAskAt = null; st.qtFocusIn = true; if (st.qtA === 'map' || st.qtA === 'cols') st.qtNode = st.qtSel.node; }
-    if (a === 'sel-x') { st.qtSel = null; }
-    if (a === 'comp-x') Object.assign(st, { qtSel: null, qtAskAt: null, qtDraft: '', qtErr: '' });
-    if (a === 'ctx') st.qtCtxOpen = !st.qtCtxOpen;
+    if (a === 'comp-x') Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '' });
     if (a === 'ask') {
       const txt = st.qtDraft.trim(); if (!txt) { st.qtErr = 'Write a question first.'; st.qtFocusIn = true; return go(); }
       qtAsk(T, b.dataset.qtpar, txt);
     }
-    if (a === 'sum') { st.qtSum = !st.qtSum; st.qtCmp = null; if (st.qtSum) st.qtScroll = 'top'; }
-    if (a === 'sum-run') { st.qtSumRun = true; setTimeout(() => { st.qtSumRun = false; T.d.sumAt = qtT(T.i).nodes.length; T.d.sumAge = 'now'; renderAll(); }, 1800); }
-    if (a === 'best' && T.best) qtGo(T, T.best);
-    if (a === 'latest') qtGo(T, T.latest.id);
-    if (a === 'top') { qtGo(T, 'r'); st.qtFocus = null; }
-    if (a === 'olsheet') { st.modal = 'qt-outline'; }
+    if (a === 'top') { qtGo(T, 'r'); st.qtFocus = null; st.qtScroll = 'top'; }
+    if (a === 'olsheet') st.modal = 'qt-outline';
+    if (a === 'map') { st.modal = 'qt-map'; st.qtMapOpened = true; }
     if (a === 'cmp-x') st.qtCmp = null;
     if (a === 'pick-x') st.qtPick = null;
     if (a === 'showcol') st.qtShowCol = !st.qtShowCol;
-    if (a === 'trail') st.qtTrailAll = true;
     return go();
   }
   return false;
@@ -6721,64 +6371,50 @@ function qtInput(e) {
   if (e.target.id === 'qt-pro-t') { st.qtPro.title = e.target.value; return true; }
   return false;
 }
-/* Selecting text inside an answer offers "Ask about this". */
-function qtSelUp() {
-  if (st.device === 'native' || !qtOn() || st.qtFrom === 'whole' || st.thread == null) return;
-  setTimeout(() => {
-    const s = window.getSelection(); if (!s || s.isCollapsed || !s.rangeCount) return;
-    const c = s.getRangeAt(0).commonAncestorContainer, el = c.nodeType === 1 ? c : c.parentElement, host = el && el.closest('[data-qtsel]');
-    if (!host) return;
-    const text = s.toString().replace(/\s+/g, ' ').trim(); if (text.length < 3) return;
-    const [th, node] = host.dataset.qtsel.split(':');
-    st.qtSel = { th: +th, node, text: text.slice(0, 400), k: 'passage', open: false }; st.qtAskAt = null;
-    s.removeAllRanges(); renderAll();
-  }, 0);
-}
 function qtAfterRender() {
-  const onT = st.thread != null && !st.subPage && qtOn() && POSTS[st.thread] && POSTS[st.thread].k === 'ask' && canRead(sp(POSTS[st.thread].s));
-  /* Leaving a thread forgets the position; opening it again applies "Open a thread at". */
+  /* Leaving a thread forgets the position; opening it again starts at the question. */
   if (st.thread == null) st.qtTh = null;
-  if (onT) { const T = qtT(st.thread); $('url').textContent = qtAddr(T, st.qtNode) + (st.qtCmp ? `/compare/${st.qtCmp.join(',')}` : ''); }
+  const onT = st.thread != null && !st.subPage && POSTS[st.thread] && POSTS[st.thread].k === 'ask' && canRead(sp(POSTS[st.thread].s));
   if (!onT) return;
-  const cols = $('qt-cols');
-  if (cols && qtAfterRender.last !== st.qtNode + (st.qtSel && st.qtSel.open ? '+' : '')) { cols.scrollLeft = cols.scrollWidth; }
-  qtAfterRender.last = st.qtNode + (st.qtSel && st.qtSel.open ? '+' : '');
+  const T = qtT(st.thread);
+  $('url').textContent = qtAddr(T, st.qtNode) + (st.qtCmp ? `/compare/${st.qtCmp.join(',')}` : '');
   const map = $('qt-map'), cur = map && map.querySelector('.qt-mn[aria-current="true"]');
-  if (cur && st.qtScroll) { const mr = map.getBoundingClientRect(), cr = cur.getBoundingClientRect(); if (cr.right > mr.right) map.scrollLeft += cr.right - mr.right + 40; else if (cr.left < mr.left) map.scrollLeft += cr.left - mr.left - 40; if (cr.bottom > mr.bottom) map.scrollTop += cr.bottom - mr.bottom + 40; else if (cr.top < mr.top + 40) map.scrollTop += cr.top - mr.top - 60; }
-  if (st.qtScroll) {
-    const tgt = st.qtScroll === 'top' ? document.querySelector('#app .qt-bar') : st.qtA === 'inline' ? $('qt-n-' + st.qtNode) || document.querySelector('#app .qt-bar') : st.qtA === 'path' ? $('qt-node') : null;
-    if (tgt && st.qtA !== 'map') {
-      const app = $('app');
-      if (st.device === 'phone') { app.scrollTop += tgt.getBoundingClientRect().top - app.getBoundingClientRect().top - 8; }
-      else { const top = tgt.getBoundingClientRect().top; if (top < 0 || top > innerHeight - 120) window.scrollTo({ top: scrollY + top - 12 }); }
-    }
-    st.qtScroll = null;
+  if (cur && st.qtMapOpened) {
+    st.qtMapOpened = false;
+    const mr = map.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+    map.scrollLeft += cr.left - mr.left - Math.max(16, (mr.width - cr.width) / 2);
+    map.scrollTop += cr.top - mr.top - Math.max(16, (mr.height - cr.height) / 2);
+    cur.focus({ preventScroll: true });
   }
-  if (st.qtFocusIn) { st.qtFocusIn = false; const i = $('qt-in'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length); const r = i.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) i.scrollIntoView({ block: 'center' }); } }
+  if (st.qtScroll) {
+    const k = st.qtScroll; st.qtScroll = null;
+    if (k === 'outline') { const r = document.querySelector('#qt-ol .qt-olr.hi'); if (r) r.scrollIntoView({ block: 'nearest' }); }
+    /* After the current click handler: "Jump to" resets the scroll position after rendering. */
+    else setTimeout(() => qtScrollTo(k === 'top' ? document.querySelector('#app .qt-bar') : $('qt-n-' + st.qtNode)), 0);
+  }
+  if (st.qtFocusIn) { st.qtFocusIn = false; const i = $('qt-in'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length); setTimeout(() => qtScrollTo(i.closest('.qt-comp')), 0); } }
 }
 
 /* ---------- feed, Saved, search, reports, dialogs ---------- */
+/* Home feed: a thread with branches gets a line naming its latest ask. */
 const QT_rowHTML = rowHTML;
 rowHTML = function (p) {
   const h = QT_rowHTML(p), i = pidOf(p);
-  if (!qtOn() || p.k !== 'ask' || p.running || i < 0 || !canRead(sp(p.s))) return h;
+  if (p.k !== 'ask' || p.running || i < 0 || !canRead(sp(p.s))) return h;
   const T = qtT(i); if (!qtIsTree(T)) return h;
   const L = T.latest;
-  if (st.qtFeed === 'counts') return h.replace(/<span class="row-n num"[^>]*>[\s\S]*?<\/span>/, `<span class="row-n num qt-rowc" aria-label="${T.nodes.length} asks in ${T.depth} levels">${QTI.tree}${T.nodes.length} asks · ${T.depth} levels</span>`);
-  if (st.qtFeed === 'latest') return h.replace(/<\/div><\/article>$/, `<button class="qt-rowl" type="button" data-qtopen="${i}:${L.id}">${QTI.ask}<span><b>${L.u}</b> asked at level ${L.lv}: <q>${esc(qtClip(L.q, 90))}</q> · ${L.age} · ${T.nodes.length} asks</span></button></div></article>`);
-  const recent = T.nodes.slice(1).filter(n => !n.running).sort((a, b) => qtAge(a.age) - qtAge(b.age)).slice(0, 2);
-  return h + recent.map(n => `<article class="row row-x row-rowsq row-i-lefttxt row-ask qt-brow" role="listitem" data-qtopen="${i}:${n.id}"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#t${i}" data-qtopen="${i}:${n.id}">${esc(n.q)}</a><span class="row-s">${esc(qtClip(qtTxt(n.html), 140))}</span><span class="row-meta">${au(n.u)}<span>${n.age}</span><span class="qt-in">Level ${n.lv} in ${esc(qtClip(p.t || p.q, 48))}</span></span></div></article>`).join('');
+  return h.replace(/<\/div><\/article>$/, `<button class="qt-rowl" type="button" data-qtopen="${i}:${L.id}">${QTI.ask}<span>${esc(qtClip(L.q, 90))}<b class="qt-rowl-u">${L.u}</b><span class="qt-rowl-a">${L.age}</span></span></button></div></article>`);
 };
 const QT_layoutSaved = layoutSaved;
 layoutSaved = function () {
-  const h = QT_layoutSaved(); if (!qtOn() || !st.qtSaved.size) return h;
+  const h = QT_layoutSaved(); if (!st.qtSaved.size) return h;
   const rows = [...st.qtSaved].map(k => { const [th, id] = k.split(':'), T = qtT(+th), n = T.by[id]; if (!n || !canRead(sp(T.p.s))) return ''; return `<button class="qt-svrow" type="button" data-qtopen="${k}"><small>${spName(sp(T.p.s))} · Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 60))}</small><b>${esc(n.q)}</b><small>${n.u} · ${n.age} · ${esc(qtClip(qtTxt(n.html), 120))}</small></button>`; }).join('');
   return h.replace(/<\/div><\/div>$/, `<section class="qt-svsec"><h3>Saved asks inside threads <span class="num faint">${st.qtSaved.size}</span></h3>${rows}</section></div></div>`);
 };
 const QT_layoutSearch = layoutSearch;
 layoutSearch = CS_PAGES.search = function () {
   const h = QT_layoutSearch(), q = st.q.trim().toLowerCase(), stem = q.replace(/(ions|ion|s)$/, '');
-  if (!qtOn() || !stem) return h;
+  if (!stem) return h;
   const hits = [];
   POSTS.forEach((p, i) => { if (p.k !== 'ask' || p.running || !canRead(sp(p.s)) || !QTD[i]) return; const T = qtT(i); T.nodes.slice(1).forEach(n => { if (!n.running && (n.q + ' ' + qtTxt(n.html)).toLowerCase().includes(stem)) hits.push({ T, n }); }); });
   if (!hits.length) return h;
@@ -6792,27 +6428,11 @@ itemOf = function (key) { const [k, a, b] = key.split(':'); if (k !== 'n') retur
 const QT_csModal = csModal;
 csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : QT_csModal(); };
 
-/* ---------- state, controls and "Jump to" ---------- */
-Object.assign(st, { qtA: 'path', qtFrom: 'passage', qtCtx: 'path', qtPay: 'asker', qtOpen: 'root', qtSib: 'tabs', qtFeed: 'latest',
-  qtTh: null, qtNode: 'r', qtSel: null, qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtSum: false, qtSumRun: false,
-  qtExp: new Set(), qtIb: new Set(), qtZoom: 0.8, qtSide: 'a', qtCtxOpen: false, qtShowCol: false, qtTrailAll: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false,
+/* ---------- state and "Jump to" ---------- */
+Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null,
+  qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtSaved: new Set(['11:c2']) });
 st.notifs.unshift({ id: 'nqt1', k: 'reply', u: 'hal_b', age: '5m', unread: true, open: 0, qtNode: 'h1', text: 'asked about your ask <b>How does the Daemon’s darknet decide who gets which task?</b>', why: 'Is that closer to a labour market or to a reputation ledger?' });
-const qtOnTree = () => st.thread != null && !st.subPage && POSTS[st.thread] && POSTS[st.thread].k === 'ask' && canRead(sp(POSTS[st.thread].s)) && qtIsTree(qtT(st.thread));
-/* The tree controls apply to the tree approaches; picking one while "Flat follow-ups" is on switches to the first approach. */
-const qtUnflat = () => { if (st.qtA === 'flat') st.qtA = 'path'; };
-const QJ = target => () => { qtUnflat(); if (!qtOnTree()) qtJump(target); };
-function QTKNOBS() {
-  return [
-    ['k-qta', 'qtA', [['path', 'Path and outline'], ['cols', 'Columns'], ['map', 'Map'], ['inline', 'Nested in the answer'], ['flat', 'Flat follow-ups (current)']], () => { st.qtMenu = null; if (st.qtA === 'flat') return; if (!qtOnTree()) qtJump('qt-deep'); }],
-    ['k-qtfrom', 'qtFrom', [['passage', 'Selected passage'], ['marks', 'Marked terms and sources'], ['whole', 'Whole answer only']], () => { st.qtSel = null; QJ('qt-deep')(); if (st.qtFrom === 'marks') { const T = qtT(st.thread), n = T.by[st.qtNode]; if (!n || !/<(b|i|code)>|class="cite"/.test(n.html || '')) qtJump('qt-term'); } }],
-    ['k-qtctx', 'qtCtx', [['path', 'The path'], ['sum', 'Path and branch summaries'], ['parent', 'Parent answer only'], ['tree', 'Whole thread']], () => { qtUnflat(); st.qtCtxOpen = true; if (!qtOnTree() || !document.getElementById('qt-comp')) qtJump('qt-compose'); }],
-    ['k-qtpay', 'qtPay', [['asker', 'Each asker'], ['pool', 'Space pool to level 4'], ['owner', 'Thread owner']], () => { qtUnflat(); if (!qtOnTree() || !document.getElementById('qt-comp')) qtJump(st.qtPay === 'pool' ? 'qt-limit' : 'qt-compose'); }],
-    ['k-qtopen', 'qtOpen', [['root', 'The question'], ['summary', 'The summary'], ['best', 'End of the best path'], ['latest', 'Latest ask']], () => { qtUnflat(); if (qtOnTree()) st.qtTh = null; else qtJump('qt-root'); }],
-    ['k-qtsib', 'qtSib', [['tabs', 'Tabs above the ask'], ['list', 'List below the ask'], ['outline', 'Outline only']], () => { if (st.qtA !== 'path') st.qtA = 'path'; const T = qtOnTree() && qtT(st.thread), n = T && T.by[st.qtNode]; if (!n || n.id === 'r' || qtVisKids(T, n.par).length < 2) qtJump('qt-sib'); }],
-    ['k-qtfeed', 'qtFeed', [['latest', 'Latest branch line'], ['counts', 'Counts only'], ['each', 'Each new ask as a row']], () => { qtUnflat(); if (!st.home || st.thread != null || st.subPage) qtJump('qt-home'); }],
-  ];
-}
 function qtReset() {
   sfReset();
   QT_MADE.splice(0).forEach(i => { delete FU[i]; delete RICH[i]; });
@@ -6820,44 +6440,35 @@ function qtReset() {
   st.qtTh = null;
 }
 JUMPS.push(
-  ['Question trees: reading', [['qt-root', 'Open a thread with branches'], ['qt-deep', 'Five levels deep'], ['qt-sib', 'Switch between sibling questions'], ['qt-up', 'Go back up: earlier answer opened'], ['qt-best', 'Best path pinned by the owner'], ['qt-summary', 'Summary of all branches'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
-  ['Question trees: asking', [['qt-select', 'Select a passage in an answer'], ['qt-compose', 'Ask about a passage: context and cost'], ['qt-running', 'New branch while the agent researches'], ['qt-term', 'Ask about a marked term'], ['qt-cite', 'Ask about a source'], ['qt-whole', 'Ask about a whole answer, deep in a branch'], ['qt-limit', 'Past the space’s depth limit']]],
-  ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-pin', 'Owner pins the best path'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
+  ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'Five levels deep: continue this branch'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
+  ['Question trees: map', [['qt-map', 'Map dialog'], ['qt-map-deep', 'Map: open a deep branch']]],
+  ['Question trees: asking', [['qt-compose', 'Ask about an answer deep in a branch'], ['qt-running', 'New ask while the agent researches']]],
+  ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
   ['Question trees: finding', [['qt-home', 'Home feed with branch activity'], ['qt-notif', 'Notification: an ask under yours'], ['qt-notif-open', 'Open the ask from the notification'], ['qt-saved', 'Saved asks inside threads'], ['qt-search', 'Search finds asks inside threads']]],
-  ['Question trees: approaches', [['qt-a-path', 'Path and outline, level 4'], ['qt-a-cols', 'Columns, level 4'], ['qt-a-map', 'Map, level 4'], ['qt-a-inline', 'Nested in the answer, level 4'], ['qt-a-flat', 'Flat follow-ups (current)']]],
 );
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false, qtCtxOpen: false, qtSumRun: false });
+  Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
   qtReset();
-  const A = { 'qt-a-path': 'path', 'qt-a-cols': 'cols', 'qt-a-map': 'map', 'qt-a-inline': 'inline', 'qt-a-flat': 'flat' };
-  if (A[k]) st.qtA = A[k]; else if (st.qtA === 'flat') st.qtA = 'path';
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: POSTS[i].s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
-  const M = 11, wording = 'Better wording reduces disputes more than any resolution mechanism';
+  const M = 11;
   switch (k) {
-    case 'qt-a-path': case 'qt-a-cols': case 'qt-a-map': case 'qt-a-inline': case 'qt-a-flat': open(M, 'd1'); break;
     case 'qt-root': open(M); break;
     case 'qt-deep': open(M, 'e1'); break;
-    case 'qt-sib': open(M, 'a3'); break;
-    case 'qt-up': open(M, 'd1'); st.qtExp = new Set(['b2']); st.qtScroll = 'top'; break;
-    case 'qt-best': open(M, QTD[M].best); break;
-    case 'qt-summary': open(M, 'r', { qtSum: true }); break;
+    case 'qt-sib': open(M, 'b2', { qtHi: 'a2', modal: matchMedia('(max-width: 920px)').matches || st.device === 'phone' ? 'qt-outline' : null }); break;
+    case 'qt-up': open(M, 'e1'); qtGo(qtT(M), 'a2'); break;
     case 'qt-outline': open(M, 'c2', { modal: 'qt-outline' }); break;
     case 'qt-out': st.auth = 'out'; open(M); break;
-    case 'qt-select': if (st.qtFrom === 'whole') st.qtFrom = 'passage'; open(M, 'r', { qtSel: { th: M, node: 'r', text: wording, k: 'passage', open: false } }); setTimeout(() => { const m = document.querySelector('#app .qt-pend'); if (m) m.scrollIntoView({ block: 'center' }); }, 0); break;
-    case 'qt-compose': if (st.qtFrom === 'whole') st.qtFrom = 'passage'; open(M, 'r', { qtSel: { th: M, node: 'r', text: wording, k: 'passage', open: true }, qtDraft: 'Is there evidence that clearer wording reduces disputes?', qtCanned: 'wording', qtFocusIn: true }); break;
-    case 'qt-running': if (st.qtFrom === 'whole') st.qtFrom = 'passage'; open(M, 'r', { qtSel: { th: M, node: 'r', text: wording, k: 'passage', open: true }, qtCanned: 'wording' }); qtAsk(qtT(M), 'r', 'Is there evidence that clearer wording reduces disputes?'); break;
-    case 'qt-term': st.qtFrom = 'marks'; open(M, 'r', { qtSel: { th: M, node: 'r', text: 'Wording gaps', k: 'term', open: true }, qtDraft: 'Which kinds of markets have the most disputes from wording gaps?', qtFocusIn: true }); break;
-    case 'qt-cite': if (st.qtFrom === 'whole') st.qtFrom = 'passage'; open(M, 'r', { qtSel: { th: M, node: 'r', text: 'Augur: a Decentralized Oracle and Prediction Market Platform', k: 'cite', n: 4, open: true }, qtDraft: 'How do dispute bonds grow between rounds in the Augur paper?', qtFocusIn: true }); break;
-    case 'qt-whole': open(M, 'c2', { qtAskAt: 'c2', qtDraft: 'Show the same example with a 10% void probability.', qtFocusIn: true }); break;
-    case 'qt-limit': st.qtPay = 'pool'; open(M, 'e1', { qtAskAt: 'e1', qtDraft: 'What fee level would remove the excess return entirely?', qtFocusIn: true }); break;
+    case 'qt-map': open(M, 'c2', { modal: 'qt-map', qtMapOpened: true }); break;
+    case 'qt-map-deep': open(M, 'c2'); qtGo(qtT(M), 'e1'); break;
+    case 'qt-compose': open(M, 'c2', { qtAskAt: 'c2', qtDraft: 'Show the same example with a 10% void probability.', qtFocusIn: true }); break;
+    case 'qt-running': open(M, 'r', { qtCanned: 'wording' }); qtAsk(qtT(M), 'r', 'Is there evidence that clearer wording reduces disputes?'); break;
     case 'qt-pick': open(M, 'd1', { qtPick: 'd1' }); break;
     case 'qt-compare': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a' }); break;
     case 'qt-merge': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a', qtDraft: 'Taken together, can traders on a regulated exchange price void risk separately?', qtCanned: 'both', qtFocusIn: true }); break;
     case 'qt-promote': open(M, 'b3'); qtProOpen(qtT(M), 'b3'); break;
     case 'qt-promoted': open(M, 'b3'); qtProOpen(qtT(M), 'b3'); st.qtPro.title = 'Disputed prediction markets decided by UMA votes'; qtPromote(); break;
     case 'qt-collapse': QTD[0].nodes.find(n => n.id === 'g2').col = true; open(0, 'f1'); break;
-    case 'qt-pin': open(0, 'h1', { qtMenu: '0:h1' }); break;
     case 'qt-faq': open(QT_SF, 's1'); qtProOpen(qtT(QT_SF), 's1'); st.qtPro.topic = 'migr'; st.qtPro.inc = 'all'; break;
     case 'qt-closed': setRel('replication', 'member'); open(QT_REP, 'x2'); qtProOpen(qtT(QT_REP), 'x2'); break;
     case 'qt-home': st.home = true; break;
@@ -6867,10 +6478,7 @@ function qtJump(k) {
     case 'qt-search': Object.assign(st, { subPage: 'search', q: 'void' }); break;
   }
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.qtMenu || st.qtPick || (st.qtSel && !st.qtSel.open))) { st.qtMenu = null; st.qtPick = null; if (st.qtSel && !st.qtSel.open) st.qtSel = null; renderAll(); } });
-$('app').addEventListener('mouseup', qtSelUp);
-$('app').addEventListener('touchend', qtSelUp);
-$('app').addEventListener('keyup', e => { if (e.shiftKey) qtSelUp(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.qtMenu || st.qtPick)) { st.qtMenu = null; st.qtPick = null; renderAll(); } });
 
 /* END question-trees */
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu || st.ntOpen)) { st.csMenu = null; st.ntOpen = false; renderAll(); } });

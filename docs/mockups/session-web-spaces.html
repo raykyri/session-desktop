@@ -1005,6 +1005,15 @@ html[data-device="phone"] .frame { display: flex; flex-direction: column; overfl
 html[data-device="phone"] .frame-bar { flex: none; position: static; }
 html[data-device="phone"] .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 html[data-device="phone"] .frame > .app::-webkit-scrollbar { display: none; }
+/* Desktop: the browser frame has a fixed height (16:10 of its width, at most the window height)
+   and the page scrolls inside it, so sticky bars, floating bars and toasts stay in view.
+   transform makes position: fixed children (dialog scrims, sheets) fixed to the frame. */
+@media (min-width: 641px) {
+  html:not([data-device="phone"]):not([data-device="native"]) .frame { display: flex; flex-direction: column; height: max(520px, min(calc(100dvh - 24px), calc(min(1320px, 100vw - 32px) * 0.625))); transform: translateZ(0); }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame-bar { flex: none; }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  html:not([data-device="phone"]):not([data-device="native"]) .modal-scrim { position: fixed; }
+}
 @media (max-width: 640px) {
 
   /* composer: Ask/Post first, space on the right */
@@ -1428,7 +1437,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
 .jd-o[aria-selected="true"] { color: var(--t-heading); font-weight: 550; }
-@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } }
+@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } .knob-meta, .knob.cs-jk { min-width: 0; max-width: 100%; } .knob .jd-btn { min-width: 0; overflow: hidden; } }
 .cs-jump { height: 28px; min-width: 0; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--t-heading); font: inherit; font-size: var(--fs-sm); font-weight: 550; padding: 0 6px; }
 /* markers */
 .cs-nmrow { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
@@ -2001,7 +2010,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .banner.sf-compact { padding-top: 16px; padding-bottom: 14px; align-items: center; }
 .banner.sf-compact h2 { font-size: 19.55px; }
 .banner.sf-compact p.sf-desc { display: none; }
-.banner .sf-bsearch { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
 .banner.has-tabs { border-bottom: 0; }
 /* space tabs */
 .sp-tabs { display: flex; gap: 2px; padding: 0 22px; background: var(--pane); border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; }
@@ -2082,14 +2090,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-sech h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .sf-recent { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .sf-recent .row-x { padding-left: 0; padding-right: 0; }
-.sf-rtoc { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider); }
-.sf-rtoc .eyebrow { padding: 0 8px 4px; }
-.sf-rtoc > .tlink { padding: 4px 8px; font-size: var(--fs-xs); align-self: flex-start; }
-.sf-rtoc-i { display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; font: inherit; color: var(--t-secondary); }
-.sf-rtoc-i:hover { background: var(--fill-hover); color: var(--t-strong); }
-.sf-rtoc-i span { font-size: var(--fs-sm); line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.sf-rtoc-i small { font-size: var(--fs-xs); color: var(--t-faint); }
-.sf-ponly { display: none; }
 .sf-tchips { display: none; }
 .sf-empty h3 { margin: 0 0 4px; font-size: var(--fs-input); color: var(--t-heading); }
 .sf-empty p { margin: 0; }
@@ -2158,8 +2158,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-vnote { border-top: 1px solid var(--divider); padding-top: 10px; }
 .sf-vnote > svg { color: var(--t-muted); }
 .sf-abcard .th-facts { gap: 6px; }
-.sf-wiki { display: flex; flex-direction: column; gap: 12px; padding: 22px 28px 48px; max-width: 760px; margin: 0 auto; width: 100%; }
-.sf-wiki .note-card { background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
 /* settings */
 .sf-tog { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; padding: 10px 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); }
 .sf-tog-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -2211,16 +2209,14 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .sf-tchips::-webkit-scrollbar { display: none; }
   .sf-tchips .mchip { flex: none; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control); color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); font-weight: 550; }
   .sf-tchips .mchip[aria-current="true"] { background: var(--t-heading); border-color: var(--t-heading); color: var(--popover); }
-  .sf-ponly { display: block; }
   .sf-about { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .sf-ab-side { position: static; }
 }
 @media (max-width: 640px) {
   .sp-tabs { padding: 0 8px; }
-  .rf-idx, .sf-about, .sf-wiki { padding: 16px 14px 40px; }
+  .rf-idx, .sf-about { padding: 16px 14px 40px; }
   .rf-topics { grid-template-columns: minmax(0, 1fr); }
   .rf-sbox .btn { padding: 0 14px; }
-  .banner .sf-bsearch { grid-column: 1 / -1; }
   .wz-opts.c2x { grid-template-columns: minmax(0, 1fr); }
   .wz-code .btn { margin-left: 0; }
   .sf-tprow { grid-template-columns: 16px 20px minmax(0, 1fr) 28px; }
@@ -2242,21 +2238,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><div class="seg k-grp"><button class="k-reset" id="k-reset" type="button" title="Reset controls to their defaults (keeps the theme)" aria-label="Reset controls to their defaults"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4"/><path d="M4 6.2v7h3v-3.4h2v3.4h3v-7"/></svg></button><span class="k-sep" aria-hidden="true"></span><div id="k-theme" class="k-inner"></div></div></div>
       <div class="knob"><div class="seg" id="k-auth"></div></div>
       <div class="knob"><div class="seg" id="k-dev"></div></div>
+      <div class="knob cs-jk"><div id="k-jump" class="jd"></div></div>
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-    </div>
-    <div class="knobs cs-knobs" aria-label="Closed spaces controls">
-      <span class="cs-kt">Screens</span>
-      <div class="knob cs-jk"><span>Jump to</span><div id="k-jump" class="jd"></div></div>
-    </div>
-    <div class="knobs cs-knobs" aria-label="Space features controls">
-      <span class="cs-kt">Space features</span>
-      <div class="knob"><span>Recent</span><div class="seg" id="k-sfrec"></div></div>
-      <div class="knob"><span>Latest switch</span><div class="seg" id="k-sfsw"></div></div>
-      <div class="knob"><span>FAQ banner</span><div class="seg" id="k-sfban"></div></div>
-      <div class="knob"><span>About and wiki</span><div class="seg" id="k-sfab"></div></div>
-      <div class="knob"><span>Verified line</span><div class="seg" id="k-sfver"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -2294,7 +2279,7 @@ const I = {
   get logo() { return pinwheel(5); },
   search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
   chev: '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5v3.5a3 3 0 0 0 3 3h6.5"/><path d="m10.5 6 3 3-3 3"/></svg>',
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.2" width="4.2" height="3.2" rx="1"/><rect x="9.8" y="10.4" width="4.4" height="3.2" rx="1"/><path d="M3.9 5.4v6.6h5.9"/></svg>',
   follow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>',
   mark: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2.5h8v11L8 10.5l-4 3z" stroke-linejoin="round"/></svg>',
   page: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z M9.5 1.5v3h3" stroke-linejoin="round"/></svg>',
@@ -2616,28 +2601,27 @@ function csTabs() {
 }
 /* Banner: name (title when "Show as …" is on) and seal, description, and a meta line with visibility for
    closed spaces and the verified domain ("Verified line" control). On spaces with the FAQ landing the
-   "FAQ banner" control can make it compact or put the search box in it. The space tabs follow it. */
+   banner is compact. The space tabs follow it. */
 const banner = (s, noCta) => {
-  const bv = faqOn(s) ? st.faqBanner : 'full', tabs = sfTabs(s);
+  const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const search = bv === 'search' && sfTabCur() === 'threads' && st.faqView === 'topics' ? `<div class="sf-bsearch">${faqBox(s, true)}<div id="faq-res" class="rf-results">${faqResults(s)}</div></div>` : '';
-  const mw = st.aboutV === 'tabs' ? '' : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}${st.aboutV === 'drawer' ? 'About' : 'Wiki'}</button>`;
-  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}${search}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
+  const mw = `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
 const layoutSpace = () => {
   const s = sp(st.space);
   if (isClosed(s) && !canRead(s)) return s.vis === 'unlisted' ? csNoAccess(s) : csGateLayout(s);
-  /* Tabs ("About and wiki" control): Threads shows the FAQ landing or the composer and feed, with the
-     wiki in the sidebar; Wiki and About are pages of their own. */
+  /* Tabs Threads and About: Threads shows the FAQ landing or the composer and feed; About is a page of
+     its own. The wiki stays in the sidebar on both. */
   const tab = sfTabCur();
-  const body = tab === 'about' ? sfAbout(s) : tab === 'wiki' ? sfWikiPage(s) : faqOn(s) ? faqLanding(s) : `<div class="main">
+  const body = tab === 'about' ? sfAbout(s) : faqOn(s) ? faqLanding(s) : `<div class="main">
         ${csSpaceStrips(s)}
         ${composer()}
         ${feedBar()}
         ${feed2(s.id)}
       </div>`;
-  const side = tab === 'threads' || (tab === 'about' && st.aboutV === 'nowiki') ? wikiDrawer(s) : '';
+  const side = wikiDrawer(s);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}">
     ${topHeader()}
     <div class="body">
@@ -2945,10 +2929,9 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
-  const ab = st.aboutV === 'drawer';
   return st.drawer
-    ? `<aside class="drawer wk" aria-label="${ab ? 'About and wiki' : 'Space wiki'}"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">${ab ? 'About and wiki' : 'Wiki'}</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
-        ${ab ? sfAboutCards(s) : ''}${wikiCards(s)}</div></aside>`
+    ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
+        ${wikiCards(s)}</div></aside>`
     : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
 }
 function wikiCards(s) {
@@ -4033,8 +4016,8 @@ const shellWrap = html => st.shell === 'rail' ? `<div class="rs">${rail1()}<div 
 function scrollMockTop() {
   const app = $('app'), fr = document.querySelector('.frame');
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  if (st.device === 'phone') app.scrollTo({ top: 0, behavior: smooth });
-  else if (fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
+  app.scrollTo({ top: 0, behavior: smooth });
+  if (st.device !== 'phone' && fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
 }
 function rdClick(t) {
   /* Clicking the tab or rail row for the page already shown scrolls it to the top. On a thread page
@@ -4051,7 +4034,7 @@ function rdClick(t) {
     if (k === 'ask') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } Object.assign(st, base, st.thread != null || st.savedPage || st.profilePage || st.subPage ? { home: true } : {}, { compOpen: true, mode: 'ask' }); }
     if (k === 'saved') Object.assign(st, base, { savedPage: true });
     if (k === 'me') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } st.umenu = !st.umenu; st.pop = false; renderAll(); return true; }
-    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else window.scrollTo({ top: fr.offsetTop - 8 }); return true; } }
+    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else { $('app').scrollTop = 0; window.scrollTo({ top: fr.offsetTop - 8 }); } return true; } }
   { const tv = t.closest('[data-thv]'); if (tv) { st.thV = tv.dataset.thv; renderAll(); return true; } }
   if (st.mpOpen && !t.closest('.mp')) { st.mpOpen = false; renderAll(); }
   if (MP.base.click(t)) return true;
@@ -5101,7 +5084,7 @@ function buildJump() {
     cur = act = i; paint();
     jump(flat[i].k); renderAll();
     const fr = document.querySelector('.frame'); if (fr && fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' });
-    const a = $('app'); if (a && st.device === 'phone') a.scrollTop = 0;
+    const a = $('app'); if (a && st.device !== 'native') a.scrollTop = 0;
     if (keepFocus) (open ? pop : btn).focus({ preventScroll: true });
   };
   const step = (d, abs) => {
@@ -5213,7 +5196,7 @@ const isPlain = s => isVer(s) && !!s.plain;
 const spName = s => isPlain(s) ? esc(s.title) : '#' + s.name;
 const sealText = s => `Verified: the admins of this space control ${s.dom.domain}`;
 const spSeal = (s, cls = '') => isVer(s) ? `<span class="sf-seal${cls ? ' ' + cls : ''}" title="${esc(sealText(s))}" aria-label="${esc(sealText(s))}">${SEAL}</span>` : '';
-const verShown = s => isVer(s) && st.verLine === 'show';
+const verShown = s => isVer(s);
 const verLine = s => verShown(s) ? `<span class="sf-ver">${SEAL}Verified: ${esc(s.dom.domain)}</span>` : '';
 const isAdminOf = id => isModOf(id) && ['Admin', 'Owner'].includes(MYROLES[id]);
 /* Address suffix for the space tabs and the FAQ views; the slug never changes. */
@@ -5298,30 +5281,24 @@ function faqIndex(s) {
 /* Recent: the newest threads, asks and posts. Posts have no topic, so they appear only here and in Latest. */
 const faqRecentList = s => postsFor(s.id).filter(p => !p.running || p.mine).slice(0, 4);
 function faqRecent(s) {
-  const more = st.faqSw === 'link' ? 'See all threads' : 'See all';
+  const more = 'See all threads';
   return `<section class="sf-recent"><div class="sf-sech"><h3>Recent</h3><button class="tlink" type="button" data-faqview="latest">${more}</button></div><div class="rows rows-plain" role="list">${faqRecentList(s).map(p => rowHTML({ ...p, orig: p })).join('')}</div></section>`;
 }
-function faqRecentToc(s) {
-  return `<div class="sf-rtoc"><div class="eyebrow">Recent</div>${faqRecentList(s).map(p => { const i = POSTS.indexOf(p); return `<button type="button" class="sf-rtoc-i" data-open="${i}"><span>${esc(p.q)}</span><small>${p.k === 'ask' ? 'Ask' : 'Post'} · ${p.age}</small></button>`; }).join('')}<button class="tlink" type="button" data-faqview="latest">See all</button></div>`;
-}
-/* Latest / Topics switch ("Latest switch" control). */
+/* Latest view: reached from "See all threads" under Recent; a back link returns to the topics. */
 function faqSwitch() {
-  const v = st.faqView, it = [['topics', 'Topics'], ['latest', 'Latest']];
-  if (st.faqSw === 'tabs') return `<div class="pf-tabs sf-vtabs" role="tablist" aria-label="View">${it.map(([k, l]) => `<button type="button" role="tab" data-faqview="${k}" aria-selected="${v === k}">${l}</button>`).join('')}</div>`;
-  if (st.faqSw === 'link') return v === 'latest' ? `<button class="th-back sf-vback" type="button" data-faqview="topics">${I.chev.replace('<svg', '<svg class="bk"')}Topics</button>` : '';
-  return `<div class="sf-fh"><span class="eyebrow">${v === 'latest' ? 'All threads, newest first' : 'Answers by topic'}</span><div class="seg sf-vsw" role="group" aria-label="View">${it.map(([k, l]) => `<button type="button" data-faqview="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</div></div>`;
+  return st.faqView === 'latest' ? `<button class="th-back sf-vback" type="button" data-faqview="topics">${I.chev.replace('<svg', '<svg class="bk"')}Topics</button>` : '';
 }
 function faqLanding(s) {
-  const rec = st.faqRecent, latest = st.faqView === 'latest', inBanner = st.faqBanner === 'search';
-  const tabsTop = st.faqSw === 'tabs' || (st.faqSw === 'link' && latest);
+  const latest = st.faqView === 'latest';
+  const tabsTop = latest;
   const sw = faqSwitch();
   let main;
   if (latest) main = `${sw}${csSpaceStrips(s)}${composer()}${feedBar()}${feed2(s.id)}`;
   else {
-    const recent = rec !== 'toc' ? faqRecent(s) : `<div class="sf-ponly">${faqRecent(s)}</div>`;
-    main = `${tabsTop ? sw : ''}${inBanner ? '' : `${faqBox(s)}<div id="faq-res" class="rf-results">${faqResults(s)}</div>`}${csSpaceStrips(s)}${tabsTop ? '' : sw}${faqChips(s)}${rec === 'above' && !st.faqTopic ? recent : ''}${faqIndex(s)}${rec !== 'above' && !st.faqTopic ? recent : ''}`;
+    const recent = st.faqTopic ? '' : faqRecent(s);
+    main = `${tabsTop ? sw : ''}${faqBox(s)}<div id="faq-res" class="rf-results">${faqResults(s)}</div>${csSpaceStrips(s)}${tabsTop ? '' : sw}${faqChips(s)}${faqIndex(s)}${recent}`;
   }
-  return `<div class="rf-idx sf-land${latest ? ' sf-latest' : ''}">${faqToc(s, rec === 'toc' && !latest ? faqRecentToc(s) : '')}<div class="rf-idx-main">${main}</div></div>`;
+  return `<div class="rf-idx sf-land${latest ? ' sf-latest' : ''}">${faqToc(s, '')}<div class="rf-idx-main">${main}</div></div>`;
 }
 /* Ask from the FAQ box. Signed out: log in. With matches and no force: show them and offer to ask anyway. */
 function faqAsk(force) {
@@ -5424,11 +5401,10 @@ function sfResolve(r, how) {
   toast(`${REP_DONE[how][0]}. ${who} a notification that the report was resolved.`, 'repundo:' + r.id, 'Undo');
 }
 
-/* ---------- space tabs: Threads / Wiki / About ("About and wiki" control) ---------- */
-const sfTabCur = () => st.aboutV === 'drawer' ? 'threads' : st.spTab === 'wiki' && st.aboutV !== 'tabs' ? 'threads' : st.spTab;
+/* ---------- space tabs: Threads / About ---------- */
+const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  if (st.aboutV === 'drawer') return '';
-  const cur = sfTabCur(), items = [['threads', 'Threads'], ...(st.aboutV === 'tabs' ? [['wiki', 'Wiki']] : []), ['about', 'About']];
+  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -5447,12 +5423,6 @@ function sfAbout(s) {
     <div class="rf-card"><h3>Moderators</h3>${modsList(s)}</div></aside></div>`;
 }
 /* "No tabs" variant: About is the first section of the sidebar (the sheet on phones). */
-function sfAboutCards(s) {
-  return `<div class="note-card sf-abcard"><h3>About</h3><div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Members</span><b class="num">${s.members.toLocaleString('en-US')}</b></div><div><span>Created</span><b>${s.created}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div><p class="faint cs-small">${joinLabel(s)}. ${tokenUse(s)}</p>${s.notCover ? `<p class="cs-small"><b>Not covered here:</b> ${esc(s.notCover)}</p>` : ''}</div>`;
-}
-function sfWikiPage(s) {
-  return `<div class="sf-wiki wk">${wikiCards(s)}</div>`;
-}
 
 /* ---------- settings: landing page, topics, posts, domain, scope note ---------- */
 function sfTog(key, on, title, sub) {
@@ -5601,11 +5571,6 @@ const sfScreen = () => { const c = csScreen(); if (c !== 'space' && c !== 'close
 const SJ = (target, ok) => () => { if (!ok(sfScreen())) { sfJump(target); } };
 function SFKNOBS() {
   return [
-    ['k-sfrec', 'faqRecent', [['below', 'Below topics'], ['above', 'Above topics'], ['toc', 'In the topic column']], SJ('sf-faq', x => x === 'faq')],
-    ['k-sfsw', 'faqSw', [['seg', 'Segmented'], ['tabs', 'Sub-tabs'], ['link', 'See all link']], SJ('sf-faq', x => x === 'faq' || x === 'faq-latest')],
-    ['k-sfban', 'faqBanner', [['full', 'Banner'], ['compact', 'Compact'], ['search', 'Search in banner']], SJ('sf-faq', x => x === 'faq')],
-    ['k-sfab', 'aboutV', [['tabs', 'Tabs: Threads, Wiki, About'], ['nowiki', 'Tabs: Threads, About; wiki in sidebar'], ['drawer', 'No tabs; About in sidebar']], SJ('sf-about', x => x === 'sp-about' || x === 'sp-wiki' || x === 'space' || x === 'faq' || x === 'closed-space')],
-    ['k-sfver', 'verLine', [['show', 'Shown'], ['hide', 'Hidden']], SJ('sf-about', x => x === 'sp-about' || x === 'faq' || x === 'faq-latest')],
   ];
 }
 
@@ -5613,7 +5578,7 @@ function SFKNOBS() {
 JUMPS.push(
   ['FAQ landing', [['sf-faq', 'FAQ landing (Sablefield)'], ['sf-faq-match', 'FAQ landing: search with matches'], ['sf-faq-tried', 'FAQ landing: Ask with matches'], ['sf-faq-new', 'FAQ landing: no match, ask'], ['sf-faq-topic', 'FAQ landing: one topic'], ['sf-faq-latest', 'Latest view on an FAQ space'], ['sf-faq-out', 'FAQ landing, signed out']]],
   ['Topics and posts', [['sf-compose-topic', 'Topic picker in the composer'], ['sf-thread-topic', 'Thread: topic breadcrumb, change topic'], ['sf-posts-off', 'Posts turned off: space composer'], ['sf-posts-home', 'Posts turned off: Home composer'], ['sf-related', 'Related answers'], ['sf-related-open', 'Related answers in an open space']]],
-  ['Domain and About', [['sf-about', 'About (verified domain)'], ['sf-about-plain', 'About (no domain)'], ['sf-wiki', 'Wiki tab'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
+  ['Domain and About', [['sf-about', 'About (verified domain)'], ['sf-about-plain', 'About (no domain)'], ['sf-wiki', 'Wiki in the sidebar'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
   ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
   ['Settings', [['sf-settings', 'Sablefield settings'], ['sf-topics', 'Topic editor'], ['sf-landing-on', 'Turn on the FAQ landing'], ['sf-create', 'Create a space with the FAQ landing']]],
 );
@@ -5636,9 +5601,9 @@ function sfJump(k) {
     case 'sf-posts-home': Object.assign(st, { home: true, compOpen: true, compSpace: 'sablefield', mode: 'ask' }); break;
     case 'sf-related': st.thread = thr('q1'); setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'sf-related-open': st.space = 'public'; st.thread = 0; setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
-    case 'sf-about': st.spTab = st.aboutV === 'drawer' ? 'threads' : 'about'; if (st.aboutV === 'drawer') { st.drawer = true; st.mWiki = true; } break;
-    case 'sf-about-plain': st.space = 'scifi'; st.spTab = st.aboutV === 'drawer' ? 'threads' : 'about'; if (st.aboutV === 'drawer') { st.drawer = true; st.mWiki = true; } break;
-    case 'sf-wiki': st.space = 'scifi'; if (st.aboutV === 'tabs') st.spTab = 'wiki'; else { st.drawer = true; st.mWiki = true; } break;
+    case 'sf-about': st.spTab = 'about'; break;
+    case 'sf-about-plain': st.space = 'scifi'; st.spTab = 'about'; break;
+    case 'sf-wiki': st.space = 'scifi'; st.spTab = 'threads'; st.drawer = true; st.mWiki = true; break;
     case 'sf-seal-closed': Object.assign(st, { home: true, pop: true }); break;
     case 'sf-dom-none': case 'sf-dom-checking': case 'sf-dom-ok': {
       const s = sp('replication'); setRel('replication', 'mod'); mg('settings', 'replication');
@@ -5668,7 +5633,6 @@ const REPS0 = [
   { id: 'rp2', sp: 'sablefield', key: 'r:' + sfIdx('p1') + ':2', why: 'offensive', note: '', by: 'cleo', age: '5h', st: 'open' },
 ];
 Object.assign(st, {
-  faqRecent: 'below', faqSw: 'seg', faqBanner: 'full', aboutV: 'tabs', verLine: 'show',
   spTab: 'threads', faqView: 'topics', faqTopic: null, faqQ: '', faqTried: false,
   compTopic: null, tpMenu: null, imenu: null, rep: { why: 'incorrect', note: '' },
   reports: structuredClone(REPS0), modSt: {}, repSeen: false, sfDom: null, sfDomHold: false,

@@ -1005,6 +1005,15 @@ html[data-device="phone"] .frame { display: flex; flex-direction: column; overfl
 html[data-device="phone"] .frame-bar { flex: none; position: static; }
 html[data-device="phone"] .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 html[data-device="phone"] .frame > .app::-webkit-scrollbar { display: none; }
+/* Desktop: the browser frame has a fixed height (16:10 of its width, at most the window height)
+   and the page scrolls inside it, so sticky bars, floating bars and toasts stay in view.
+   transform makes position: fixed children (dialog scrims, sheets) fixed to the frame. */
+@media (min-width: 641px) {
+  html:not([data-device="phone"]):not([data-device="native"]) .frame { display: flex; flex-direction: column; height: max(520px, min(calc(100dvh - 24px), calc(min(1320px, 100vw - 32px) * 0.625))); transform: translateZ(0); }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame-bar { flex: none; }
+  html:not([data-device="phone"]):not([data-device="native"]) .frame > .app { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  html:not([data-device="phone"]):not([data-device="native"]) .modal-scrim { position: fixed; }
+}
 @media (max-width: 640px) {
 
   /* composer: Ask/Post first, space on the right */
@@ -1428,7 +1437,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
 .jd-o[aria-selected="true"] { color: var(--t-heading); font-weight: 550; }
-@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } }
+@media (max-width: 640px) { .knob .jd, .knob .jd-btn { width: 100%; } .knob-meta, .knob.cs-jk { min-width: 0; max-width: 100%; } .knob .jd-btn { min-width: 0; overflow: hidden; } }
 .cs-jump { height: 28px; min-width: 0; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--t-heading); font: inherit; font-size: var(--fs-sm); font-weight: 550; padding: 0 6px; }
 /* markers */
 .cs-nmrow { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
@@ -1996,8 +2005,9 @@ html[data-device="native"] .af-layer { display: none; }
 .rs:has(.af-wfull) .rail, .af-wfull > .hdr, .af-wfull ~ .mtabs { display: none !important; }
 .af-m { display: none; }
 .af-page { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "strips strips" "panel stage"; background: var(--pane); overflow: hidden; min-height: 0; height: 720px; }
-/* The bar floats over the bottom of the page, inside the stage, so it never covers a docked panel.
-   Only the title shrinks; everything else keeps its size and folds into the More menu by level. */
+/* The action bar floats over the bottom of the page, inside the stage, so it never covers a docked
+   panel. The header strip holds the identity. In both, items keep their size and fold by level;
+   only the title shrinks. */
 .af-bar { grid-area: stage; align-self: end; justify-self: center; position: relative; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 14px 16px; max-width: calc(100% - 28px); min-width: 0; padding: 5px 8px 5px 12px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--popover); box-shadow: var(--shadow-pop); }
 .af-bar .af-pop { top: auto; bottom: calc(100% + 8px); }
 /* overlay panel: the bar keeps to the free side of the page */
@@ -2005,20 +2015,15 @@ html[data-device="native"] .af-layer { display: none; }
 .af-over-right .af-bar { justify-self: start; max-width: calc(100% - 468px); }
 .af-id { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; }
 /* while afFitBar() measures, the title is held at its minimum width */
-.af-fit .af-id { flex: none; }
-.af-fit .af-title { flex: none; width: 120px; }
-.af-brow { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.af-b-two .af-bar { flex-direction: column; align-items: stretch; gap: 2px; padding-top: 7px; }
-.af-b-two .af-brow2 { justify-content: space-between; margin-left: -6px; }
-.af-b-two .af-id { flex: 1 1 auto; }
-.af-b-two .af-title { flex: 1 1 auto; max-width: none; }
-.af-b-icons .af-act > span { display: none; }
-.af-b-icons .af-act { width: 30px; padding: 0; justify-content: center; }
+.af-page.af-fit .af-id { flex: none; }
+.af-page.af-fit .af-title { flex: none; width: 120px; }
 .af-headbar { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 14px; background: var(--chrome); border-bottom: 1px solid var(--divider); min-width: 0; }
 .af-headbar .af-id { flex: 1 1 auto; }
-.af-headbar .af-title { max-width: none; flex: 0 1 auto; }
-.af-headbar .af-pop { top: calc(100% + 6px); bottom: auto; }
-.af-b-split .af-bar { padding-left: 6px; }
+.af-headbar .af-title { max-width: none; flex: 1 1 auto; }
+/* skill, contributors and version sit at the right end of the strip */
+.af-idr { display: flex; align-items: center; gap: 10px; flex: none; margin-left: auto; }
+.af-headbar .af-pop { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; }
+.af-bar { padding-left: 6px; }
 .af-morew { display: none; }
 .lv1 .af-morew { display: inline-flex; }
 .lv1 .bf-1, .lv3 .bf-3, .lv6 .bf-5, .lv7 .af-skw, .lv7 .af-back { display: none; }
@@ -2033,7 +2038,6 @@ html[data-device="native"] .af-layer { display: none; }
 .af-title { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 120px; max-width: 340px; flex: 0 1 auto; }
 .af-lin { flex: none; max-width: 190px; }
 .af-skchip > span { max-width: 150px; }
-.af-newv { color: var(--warn) !important; }
 .af-vchip, .af-skchip, .af-lin { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--control-border); background: var(--control); color: var(--t-secondary); font-size: var(--fs-xs); font-weight: 550; white-space: nowrap; flex: none; max-width: 100%; }
 .af-vchip:hover, .af-skchip:hover, .af-lin:hover { background: var(--control-hover); color: var(--t-strong); }
 .af-vchip.static { color: var(--t-faint); }
@@ -2043,7 +2047,6 @@ html[data-device="native"] .af-layer { display: none; }
 .af-skchip span, .af-lin span { overflow: hidden; text-overflow: ellipsis; }
 .af-skchip.none { border-style: dashed; background: transparent; color: var(--t-faint); }
 .af-lin { background: transparent; }
-.af-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
 .af-skw { position: relative; display: inline-flex; flex: none; min-width: 0; }
 .af-morew { position: relative; flex: none; }
 .af-credit { border: 0; background: transparent; padding: 2px; border-radius: 999px; display: inline-flex; flex: none; }
@@ -2081,7 +2084,6 @@ html[data-device="native"] .af-layer { display: none; }
 .af-strip .grow { flex: 1; }
 .af-s-tx { min-width: 0; flex: 0 1 auto; }
 .af-s-req { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 260px; }
-.af-s-new { background: color-mix(in srgb, var(--warn) 9%, var(--inset)); }
 .af-s-cm, .af-s-edit { background: color-mix(in srgb, var(--accent) 9%, var(--inset)); }
 .af-dd { width: 132px; flex: none; }
 .af-dd .dd-btn { height: 28px; }
@@ -2104,8 +2106,9 @@ html[data-device="native"] .af-layer { display: none; }
 .af-over-right .af-panel { justify-self: end; }
 .af-pctl { position: relative; display: inline-flex; flex: none; }
 .af-pctl .iconbtn[aria-pressed="true"] { color: var(--accent); }
-.af-pmenu { top: calc(100% + 6px); bottom: auto; }
-.af-grip { display: grid; place-items: center; height: 14px; border: 0; background: var(--fill-subtle); color: var(--t-faint); cursor: grab; flex: none; }
+.af-grip { display: grid; place-items: center; height: 15px; padding: 0 0 1px; border: 0; background: var(--fill-subtle); color: var(--t-faint); cursor: grab; flex: none; touch-action: none; }
+.af-dragging { transition: none; opacity: .92; }
+.af-dragging .af-grip { cursor: grabbing; }
 .af-grip:hover { background: var(--fill-hover); color: var(--t-strong); }
 .af-grip svg { width: 14px; height: 14px; transform: rotate(90deg); }
 .af-ph { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--divider); flex: none; }
@@ -2274,7 +2277,6 @@ html[data-device="native"] .af-layer { display: none; }
 .sk-test-h b { color: var(--t-heading); }
 .sk-test-h span { flex: 1; min-width: 200px; font-size: var(--fs-xs); }
 .sk-test-empty { height: 220px; border: 1px dashed var(--dash); border-radius: var(--r-lg); display: grid; place-items: center; font-size: var(--fs-sm); }
-.af-knobs .knob > span { white-space: nowrap; }
 @media (max-width: 920px) {
   .sk-two, .sk-edtwo { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .sk-test { position: static; }
@@ -2321,13 +2323,6 @@ html[data-device="native"] .af-layer { display: none; }
   .sk-inrow input:nth-child(2) { grid-column: 1; }
   .sk-inrow .iconbtn { grid-column: 2; grid-row: 1; }
 }
-/* Mock control bar: each labelled section collapses to its label row. "Jump to" stays visible. */
-.ctl .cs-knobs { position: relative; padding-right: 38px; }
-.kc-btn { position: absolute; top: 10px; right: 0; width: 28px; height: 28px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-muted); display: grid; place-items: center; }
-.kc-btn:hover { background: var(--fill-hover); color: var(--t-strong); }
-.kc-btn svg { width: 11px; height: 11px; transition: transform var(--ease); }
-.kc-btn[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.cs-knobs.kc-off > .knob:not(.cs-jk) { display: none; }
 .sk-menu [hidden] { display: none !important; }
 /*AF-CSS-END*/
 </style>
@@ -2340,22 +2335,10 @@ html[data-device="native"] .af-layer { display: none; }
       <div class="knob"><div class="seg k-grp"><button class="k-reset" id="k-reset" type="button" title="Reset controls to their defaults (keeps the theme)" aria-label="Reset controls to their defaults"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4"/><path d="M4 6.2v7h3v-3.4h2v3.4h3v-7"/></svg></button><span class="k-sep" aria-hidden="true"></span><div id="k-theme" class="k-inner"></div></div></div>
       <div class="knob"><div class="seg" id="k-auth"></div></div>
       <div class="knob"><div class="seg" id="k-dev"></div></div>
+      <div class="knob cs-jk"><div id="k-jump" class="jd"></div></div>
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-    </div>
-    <div class="knobs cs-knobs af-knobs" aria-label="Artifact controls">
-      <span class="cs-kt">Artifacts</span>
-      <div class="knob"><span>Bar</span><div class="seg" id="k-abar"></div></div>
-      <div class="knob"><span>Undo a change</span><div class="seg" id="k-aundo"></div></div>
-      <div class="knob"><span>Overlay side switch</span><div class="seg" id="k-aside"></div></div>
-      <div class="knob"><span>Skill picker</span><div class="seg" id="k-apick"></div></div>
-      <div class="knob"><span>Newer skill version</span><div class="seg" id="k-astale"></div></div>
-      <div class="knob"><span>Feed item</span><div class="seg" id="k-arow"></div></div>
-    </div>
-    <div class="knobs cs-knobs" aria-label="Screens">
-      <span class="cs-kt">Screens</span>
-      <div class="knob cs-jk"><span>Jump to</span><div id="k-jump" class="jd"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -2394,7 +2377,7 @@ const I = {
   get logo() { return pinwheel(5); },
   search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
   chev: '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg>',
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.2" width="4.2" height="3.2" rx="1"/><rect x="9.8" y="10.4" width="4.4" height="3.2" rx="1"/><path d="M3.9 5.4v6.6h5.9"/></svg>',
   follow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>',
   mark: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2.5h8v11L8 10.5l-4 3z" stroke-linejoin="round"/></svg>',
   page: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z M9.5 1.5v3h3" stroke-linejoin="round"/></svg>',
@@ -4067,8 +4050,8 @@ const shellWrap = html => st.shell === 'rail' ? `<div class="rs">${rail1()}<div 
 function scrollMockTop() {
   const app = $('app'), fr = document.querySelector('.frame');
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  if (st.device === 'phone') app.scrollTo({ top: 0, behavior: smooth });
-  else if (fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
+  app.scrollTo({ top: 0, behavior: smooth });
+  if (st.device !== 'phone' && fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8, behavior: smooth });
 }
 function rdClick(t) {
   /* Clicking the tab or rail row for the page already shown scrolls it to the top. On a thread page
@@ -4085,7 +4068,7 @@ function rdClick(t) {
     if (k === 'ask') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } Object.assign(st, base, st.thread != null || st.savedPage || st.profilePage || st.subPage ? { home: true } : {}, { compOpen: true, mode: 'ask' }); }
     if (k === 'saved') Object.assign(st, base, { savedPage: true });
     if (k === 'me') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } st.umenu = !st.umenu; st.pop = false; renderAll(); return true; }
-    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else window.scrollTo({ top: fr.offsetTop - 8 }); return true; } }
+    renderAll(); const fr = document.querySelector('.frame'); if (st.device === 'phone') fr.scrollTop = 0; else { $('app').scrollTop = 0; window.scrollTo({ top: fr.offsetTop - 8 }); } return true; } }
   { const tv = t.closest('[data-thv]'); if (tv) { st.thV = tv.dataset.thv; renderAll(); return true; } }
   if (st.mpOpen && !t.closest('.mp')) { st.mpOpen = false; renderAll(); }
   if (MP.base.click(t)) return true;
@@ -5119,7 +5102,7 @@ function buildJump() {
     cur = act = i; paint();
     jump(flat[i].k); renderAll();
     const fr = document.querySelector('.frame'); if (fr && fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' });
-    const a = $('app'); if (a && st.device === 'phone') a.scrollTop = 0;
+    const a = $('app'); if (a && st.device !== 'native') a.scrollTop = 0;
     if (keepFocus) (open ? pop : btn).focus({ preventScroll: true });
   };
   const step = (d, abs) => {
@@ -5215,9 +5198,7 @@ const AI = (() => {
     pin: s('<path d="M6 2.5h4l-.5 4 2 2.5h-7l2-2.5zM8 9v4.5"/>'),
     float: s('<rect x="2" y="3" width="12" height="10" rx="1.5"/><rect x="4" y="5" width="4.5" height="6" rx=".8"/>'),
     dock: s('<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6.5 3v10"/>'),
-    toRight: s('<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 8h4M8.5 6.3 10.2 8 8.5 9.7"/>'),
     grip: s('<path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" stroke-width="2"/>'),
-    toLeft: s('<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 8H6M7.5 6.3 5.8 8l1.7 1.7"/>'),
     link: s('<path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-.7.7"/><path d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0l-2 2a2.5 2.5 0 0 0 3.5 3.5l.7-.7"/>'),
   };
 })();
@@ -5468,7 +5449,6 @@ document.head.appendChild(Object.assign(document.createElement('style'), { id: '
 /* ---------- artifact page ---------- */
 Object.assign(st, {
   /* variant controls */
-  barV: 'overflow', undoV: 'toast', sideV: 'header', pickV: 'grouped', staleV: 'dot', rowV: 'sum',
   /* artifact page state */
   afV: null, afCmp: null, afMode: null, afAnchor: null, afSel: null, afReply: null, afDraft: '', afKind: 'comment', afPop: null, afFull: false,
   afTab: 'disc', afPanel: true, afPanelM: false, afNonce: 0, afFork: null,
@@ -5496,8 +5476,8 @@ const AF_STEPS = {
    An artifact keeps that skill version; the chip can show that the skill has a newer one. */
 function afSkChip(a) {
   const sv = afSkill(a), k = sv && skOf(sv[0]), stale = afStale(a), cur = stale && skCur(stale);
-  const ver = k ? (stale && st.staleV === 'text' ? `<small class="num">v${sv[1]}</small><small class="af-newv num">v${cur} available</small>` : `<small class="num">v${sv[1]}</small>`) : '';
-  return `<span class="af-skw"><button class="af-skchip${k ? '' : ' none'}" type="button" data-af="pop:skill" aria-haspopup="dialog" aria-expanded="${st.afPop === 'skill'}" title="${k ? `Built with v${sv[1]} of this skill${stale ? `. v${cur} is available.` : ''}` : 'Built without a skill'}">${AI.skill}<span>${k ? esc(k.name) : 'No skill'}</span>${ver}${stale && st.staleV === 'dot' ? '<i class="af-dot" aria-hidden="true"></i>' : ''}</button>${st.afPop === 'skill' ? afSkPop(a) : ''}</span>`;
+  const ver = k ? `<small class="num">v${sv[1]}</small>` : '';
+  return `<span class="af-skw"><button class="af-skchip${k ? '' : ' none'}" type="button" data-af="pop:skill" aria-haspopup="dialog" aria-expanded="${st.afPop === 'skill'}" title="${k ? `Built with v${sv[1]} of this skill${stale ? `. v${cur} is available.` : ''}` : 'Built without a skill'}">${AI.skill}<span>${k ? esc(k.name) : 'No skill'}</span>${ver}</button>${st.afPop === 'skill' ? afSkPop(a) : ''}</span>`;
 }
 function afSkPop(a) {
   const sv = afSkill(a), k = sv && skOf(sv[0]), stale = afStale(a);
@@ -5507,12 +5487,13 @@ function afSkPop(a) {
     : `<div class="af-upd"><p><b>v${cur} of the skill is available.</b> ${esc(note)}</p><p class="faint">This page keeps v${sv[1]}, the version that built it. New asks use v${cur}.</p></div>`;
   return `<div class="pop af-pop af-skpop" role="dialog" aria-label="Skill"><div class="af-skh"><span class="sk-ic">${AI.skill}</span><div><b>${esc(k.name)}</b><small>${skOwnerLabel(k)} · built with v${sv[1]} of ${cur}</small></div></div><p class="muted">${esc(k.desc)}</p>${upd}<div class="af-poprow">${afBtn('sk-open:' + k.id, 'Open skill', 'btn sm')}${afBtn('sk-use:' + k.id, stale ? `Ask again with v${cur}` : 'Use for a new ask', 'btn sm')}</div></div>`;
 }
-/* The artifact bar. It has two groups: identity (panel toggle, back, title, version, skill,
-   contributors) and actions. Items carry a fold level (bf-N); when the bar does not fit, afFitBar()
-   raises the level and the folded items move into the More menu (mf-N rows). Order of folding:
-   1 contributors, fork origin, like, save, share, full screen   2 shorter skill name
-   3 Edit and Fork   4 Comment and Revise as icons   5 skill name (icon and version stay)
-   6 Comment and Revise   7 skill chip and back. The title, the version and More always stay. */
+/* Artifact chrome on desktop: a header strip with the identity (panel toggle, back and title on
+   the left; skill, contributors and version on the right) and a floating bar with the actions.
+   Phones put both groups in one top bar. Items carry a fold level (bf-N); when a strip or the bar
+   does not fit, afFitBar() raises that element's level, and folded actions move into the More menu
+   (mf-N rows). Header strip: 1 fork origin, 2 shorter skill name, 3 contributors, 5 skill name
+   (icon and version stay), 7 skill chip and back. Floating bar: 1 like, save, share and full
+   screen, 3 Edit and Fork, 4 Comment and Revise as icons, 6 Comment and Revise. */
 function afBar(a, p, s) {
   const building = !a.vers.length, viewN = st.afV || a.cur;
   const can = afCanChange(a), out = st.auth === 'out', pid = a.pid, saved = st.saved.has(pid), liked = st.liked.has(pid);
@@ -5521,7 +5502,7 @@ function afBar(a, p, s) {
   const lin = a.forkOf ? `<button class="af-lin bf-1" type="button" data-open="${a.forkOf.pid}" title="Open the original artifact">${AI.fork}<span>Fork of ${esc(afShort(art(a.forkOf.pid).title, 30))} v${a.forkOf.v}</span></button>` : '';
   const vchip = building ? '<span class="af-vchip static">Building v1</span>' : `<button class="af-vchip" type="button" data-af="tab:versions" aria-label="Version ${viewN} of ${a.cur}. Open version history" title="Version history">${AI.hist}<b class="num">v${viewN}</b>${viewN !== a.cur ? `<small class="num">of ${a.cur}</small>` : ''}</button>`;
   const contrib = afContrib(a).map(c => c[0]);
-  const credit = building ? '' : `<button class="af-credit bf-1" type="button" data-af="tab:details" title="Asked by ${p.u}. ${contrib.length} contributor${contrib.length === 1 ? '' : 's'}." aria-label="Contributors: ${contrib.join(', ')}">${afAvs(contrib)}</button>`;
+  const credit = building ? '' : `<button class="af-credit bf-3" type="button" data-af="tab:details" title="Asked by ${p.u}. ${contrib.length} contributor${contrib.length === 1 ? '' : 's'}." aria-label="Contributors: ${contrib.join(', ')}">${afAvs(contrib)}</button>`;
   const b = (lv, act, icon, label, on) => `<button class="af-act bf-${lv}" type="button" ${out && act !== 'mode:comment' ? signin : `data-af="${act}"`} aria-pressed="${!!on}" title="${label}">${icon}<span>${label}</span></button>`;
   const acts = building ? '' : `<div class="af-acts af-d">${b(5, 'mode:comment', AI.comment, 'Comment', st.afMode === 'comment')}${b(5, 'revise', AI.revise, 'Revise')}${can ? b(3, 'mode:edit', I.write, 'Edit', st.afMode === 'edit') : ''}${b(3, 'fork', AI.fork, 'Fork')}</div>`;
   const ib = (attrs, icon, label, on) => `<button class="iconbtn af-d bf-1" type="button" ${attrs} ${on == null ? '' : `aria-pressed="${on}"`} aria-label="${label}" title="${label}">${icon}</button>`;
@@ -5532,7 +5513,7 @@ function afBar(a, p, s) {
   const more = building ? '' : `<span class="af-morew"><button class="iconbtn" type="button" data-af="pop:more" aria-haspopup="menu" aria-expanded="${st.afPop === 'more'}" aria-label="More actions" title="More actions">${AI.dots}</button>${st.afPop === 'more' ? menu : ''}</span>`;
   const tools = `<div class="af-tools">${building ? '' : ib(out ? signin : `data-toggle="liked" data-id="${pid}"`, I.heart, liked ? 'Unlike' : 'Like', liked) + ib(out ? signin : 'data-af="save"', I.mark, saved ? 'Remove from saved' : 'Save', saved) + ib(shareA, AI.link, 'Share')}${ib('data-af="full"', AI.full, 'Full screen')}${more}</div>`;
   const ptog = building ? '' : `<button class="iconbtn af-d af-ptog" type="button" data-af="panel" aria-pressed="${afPanelOpen()}" aria-label="${afPanelOpen() ? 'Hide' : 'Show'} the panel" title="${afPanelOpen() ? 'Hide' : 'Show'} the panel">${AI.panel}</button>`;
-  return { id: `<div class="af-id">${ptog}${back}<h1 class="af-title" title="${esc(a.title)}">${esc(a.title)}</h1>${lin}${vchip}${building ? '' : afSkChip(a)}${credit}</div>`, acts: acts + tools };
+  return { id: `<div class="af-id">${ptog}${back}<h1 class="af-title" title="${esc(a.title)}">${esc(a.title)}</h1>${lin}<span class="af-idr">${building ? '' : afSkChip(a)}${credit}${vchip}</span></div>`, acts: acts + tools };
 }
 function afMBar(a) {
   if (!a.vers.length) return '';
@@ -5560,10 +5541,6 @@ function afStrips(a, p) {
     return out.join('');
   }
   if (st.afMode === 'comment') { out.push(`<div class="af-strip af-s-cm">${AI.comment}<span class="af-s-tx"><b>Select a part of the page</b> to comment on it.</span><span class="grow"></span>${afBtn('anchor-none', 'Comment on the whole page', 'btn sm')}${afBtn('mode:comment', 'Done', 'btn sm')}</div>`); return out.join(''); }
-  /* A change by someone else applies at once. Depending on the "Undo a change" control, readers
-     (or only the owner) see a notice for a day with the change and a Revert button. */
-  const v = afVer(a, cur), recent = v && v.n > 1 && v.by !== ME.u && v.by !== 'agent' && (v.age === 'now' || ageMin(v.age) < 1440);
-  if (recent && !a.run && (st.undoV === 'banner' || (st.undoV === 'notify' && afIsOwner(a)))) out.push(`<div class="af-strip af-s-new">${avatar(v.by, 'sm')}<span class="af-s-tx"><b>${v.by} ${afHow(v).toLowerCase()} this page ${v.age === 'now' ? 'just now' : v.age + ' ago'}.</b> ${v.req ? `“${esc(afShort(v.req, 64))}”` : esc(v.note || '')}${st.undoV === 'notify' ? ' <span class="faint">Only you see this notice.</span>' : ''}</span><span class="grow"></span>${afBtn(`cmp:${v.base}:${v.n}`, 'View changes', 'btn sm')}${afCanChange(a) ? afBtn('revert:' + v.n, 'Revert', 'btn sm') : ''}</div>`);
   return out.join('');
 }
 function afStage(a) {
@@ -5636,22 +5613,21 @@ function afPanel(a, p) {
   const run = a.run ? `<div class="af-it af-run"><div class="meta"><span class="agent">${I.agent}</span><b>Agent</b><span>is revising the page</span></div><ol class="run-steps">${AF_STEPS[a.run.kind].map((x, i) => `<li class="${i < a.run.step ? 'done' : i === a.run.step ? 'cur' : ''}">${x}</li>`).join('')}</ol></div>` : '';
   const body = t === 'versions' ? afVersions(a, p) : t === 'forks' ? afForks(a, p) : t === 'details' ? afDetails(a, p)
     : `<div class="af-disc">${a.disc.map(x => afDiscItem(a, x)).join('') || '<p class="muted af-empty">No comments yet. Select a part of the page to comment on it, or ask the agent to change the page.</p>'}${run}</div>`;
-  /* The reader chooses how the panel sits: docked at the left, or floating over the page on either side. */
-  const side = st.afOverSide, other = side === 'left' ? 'right' : 'left';
-  const menu = st.afPop === 'pmenu' ? `<div class="pop af-pop af-menu af-pmenu" role="menu">${[['side', 'Docked at the left', !over], ['over-left', 'Floating, left', over && side === 'left'], ['over-right', 'Floating, right', over && side === 'right']].map(([k, l, on]) => `<button class="pop-row" type="button" role="menuitemradio" aria-checked="${on}" aria-current="${on}" data-af="pset:${k}">${l}</button>`).join('')}</div>` : '';
-  const ctl = st.sideV === 'menu' ? `<span class="af-pctl af-d">${afIc('pop:pmenu', over ? AI.float : AI.dock, 'Panel position', `aria-haspopup="menu" aria-expanded="${st.afPop === 'pmenu'}"`)}${menu}</span>`
-    : `<span class="af-pctl af-d">${over && st.sideV === 'header' ? afIc('pside', side === 'left' ? AI.toRight : AI.toLeft, `Move the panel to the ${other}`) : ''}${afIc('pmode', over ? AI.dock : AI.float, over ? 'Dock the panel at the left' : 'Float the panel over the page', `aria-pressed="${over}"`)}</span>`;
-  const grip = over && st.sideV === 'drag' ? `<button class="af-grip af-d" type="button" data-af="pside" aria-label="Move the panel to the ${other}" title="Drag the panel to the ${other} side">${AI.grip}</button>` : '';
+  /* The reader chooses how the panel sits: docked at the left, or floating over the page.
+     A floating panel has a drag handle along its top edge; dragging it past the middle of the
+     page moves the panel to the other side (the arrow keys do the same). */
+  const other = st.afOverSide === 'left' ? 'right' : 'left';
+  const ctl = `<span class="af-pctl af-d">${afIc('pmode', over ? AI.dock : AI.float, over ? 'Dock the panel at the left' : 'Float the panel over the page', `aria-pressed="${over}"`)}</span>`;
+  const grip = over ? `<button class="af-grip af-d" type="button" id="af-grip" aria-label="Panel on the ${st.afOverSide}. Drag, or press an arrow key, to move it to the ${other}." title="Drag to move the panel to the ${other} side">${AI.grip}</button>` : '';
   return `<aside class="af-panel" aria-label="Artifact panel">${grip}<div class="af-ph"><div class="af-tabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-af="tab:${k}" aria-selected="${t === k}">${l}${n !== '' && n ? `<small class="num">${n}</small>` : ''}</button>`).join('')}</div>${ctl}${afIc('panel', I.close, 'Close the panel')}</div><div class="af-pb" id="af-pb">${body}</div>${t === 'disc' ? afComposer(a, p) : ''}</aside>`;
 }
 function afPage(p) {
   const pid = POSTS.indexOf(p), a = art(pid), s = sp(p.s), open = afPanelOpen() && a.vers.length;
-  /* "Bar" control: one bar with an overflow menu, two rows, the identity in a header strip, or icon-only actions. Phones always use the top bar. */
-  const v = afMobile() ? 'overflow' : st.barV, bar = afBar(a, p, s);
-  const cls = `af-page af-b-${v} af-p-${open ? st.afPanelMode : 'none'}${open && st.afPanelMode === 'over' ? ' af-over-' + st.afOverSide : ''}${st.afFull ? ' af-full' : ''}`;
+  const m = afMobile(), bar = afBar(a, p, s);
+  const cls = `af-page af-p-${open ? st.afPanelMode : 'none'}${open && st.afPanelMode === 'over' ? ' af-over-' + st.afOverSide : ''}${st.afFull ? ' af-full' : ''}`;
   const full = st.afFull ? `<div class="af-exit">${afBtn('full', `${AI.unfull}<span>Exit full screen</span>`, 'btn sm')}</div>` : '';
-  const barH = v === 'two' ? `<div class="af-bar"><div class="af-brow">${bar.id}</div><div class="af-brow af-brow2">${bar.acts}</div></div>` : v === 'split' ? `<div class="af-bar">${bar.acts}</div>` : `<div class="af-bar">${bar.id}${bar.acts}</div>`;
-  return `<div class="A C Af H af-wrap${st.afFull ? ' af-wfull' : ''}">${topHeader()}<div class="${cls}" id="af-page">${barH}<div class="af-strips">${v === 'split' ? `<div class="af-headbar">${bar.id}</div>` : ''}${afStrips(a, p)}</div><div class="af-stage">${afStage(a)}${full}</div>${open ? `<div class="af-scrim af-m" data-af="panel"></div>${afPanel(a, p)}` : ''}${afMBar(a)}</div></div>`;
+  const barH = m ? `<div class="af-bar">${bar.id}${bar.acts}</div>` : `<div class="af-bar">${bar.acts}</div>`;
+  return `<div class="A C Af H af-wrap${st.afFull ? ' af-wfull' : ''}">${topHeader()}<div class="${cls}" id="af-page">${barH}<div class="af-strips">${m ? '' : `<div class="af-headbar">${bar.id}</div>`}${afStrips(a, p)}</div><div class="af-stage">${afStage(a)}${full}</div>${open ? `<div class="af-scrim af-m" data-af="panel"></div>${afPanel(a, p)}` : ''}${afMBar(a)}</div></div>`;
 }
 
 /* ---------- dialogs ---------- */
@@ -5749,15 +5725,15 @@ function afRetheme() {
   const css = afTok();
   layer.querySelectorAll('iframe').forEach(f => { try { const t = f.contentDocument.getElementById('tok'); if (t) t.textContent = css; } catch (e) {} });
 }
-/* Fold bar items into the More menu until the bar fits with the title at its minimum width
-   (see afBar for the order). The title then takes the room that is left. */
+/* Fold items until the header strip and the floating bar each fit, with the title at its minimum
+   width (see afBar for the order). The title then takes the room that is left. */
 function afFitBar() {
   const pg = $('af-page'); if (!pg) return;
-  const L = ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6', 'lv7']; pg.classList.remove(...L);
+  const L = ['lv1', 'lv2', 'lv3', 'lv4', 'lv5', 'lv6', 'lv7'], els = [...pg.querySelectorAll('.af-bar, .af-headbar')];
+  els.forEach(e => e.classList.remove(...L));
   if (afMobile()) return;
-  const over = () => [...pg.querySelectorAll('.af-bar, .af-headbar')].some(e => e.scrollWidth > e.clientWidth + 1);
   pg.classList.add('af-fit');
-  for (const c of L) { if (!over()) break; pg.classList.add(c); }
+  els.forEach(e => { for (const c of L) { if (e.scrollWidth <= e.clientWidth + 1) break; e.classList.add(c); } });
   pg.classList.remove('af-fit');
 }
 /* Widths change when the web font finishes loading: fit again. */
@@ -5773,10 +5749,11 @@ function afAfterRender() {
   const app = $('app'), pg = $('af-page');
   if (st.thread == null) afPage.last = null;
   if (st.device !== 'native' && pg) {
-    const phone = st.device === 'phone', top = pg.getBoundingClientRect().top - app.getBoundingClientRect().top + (phone ? app.scrollTop : 0);
+    /* the page scrolls inside #app on phones and in the fixed-height desktop frame */
+    const phone = st.device === 'phone', inner = getComputedStyle(app).overflowY !== 'visible', top = pg.getBoundingClientRect().top - app.getBoundingClientRect().top + (inner ? app.scrollTop : 0);
     const mt = document.querySelector('#app > .mtabs'), mtH = mt && getComputedStyle(mt).display !== 'none' ? mt.offsetHeight : 0;
-    pg.style.height = (phone ? app.clientHeight - top - mtH : Math.max(540, window.innerHeight - 58 - top - mtH)) + 'px';
-    if (phone) app.scrollTop = 0;
+    pg.style.height = (inner ? Math.max(phone ? 0 : 360, app.clientHeight - top - mtH) : Math.max(540, window.innerHeight - 58 - top - mtH)) + 'px';
+    if (inner) app.scrollTop = 0;
   }
   afFitBar();
   document.querySelectorAll('#app .af-prev').forEach(el => { const w = +el.dataset.w || 800; el.firstElementChild.style.width = w + 'px'; el.style.setProperty('--k', el.clientWidth / w); });
@@ -5870,15 +5847,8 @@ function afAddBack(f) {
   f.added = true;
   toast(`Added to the original as v${n}.`, `afopen:${o.pid}`, 'Open the original');
 }
-/* After a change by the viewer. "Undo a change" control:
-   toast  - the author gets Undo for a moment; Undo removes the version
-   banner - every reader sees a notice with Revert for a day
-   notify - the owner is notified and sees the notice */
-function afChanged(a, n) {
-  const p = POSTS[a.pid], own = afIsOwner(a);
-  if (st.undoV === 'toast') toast(`v${n} is the current version.`, `afundo:${a.pid}:${n}`, 'Undo');
-  else toast(st.undoV === 'banner' ? `v${n} is the current version. ${own ? 'Readers' : 'Other readers'} see a notice with a Revert button for a day.` : own ? `v${n} is the current version.` : `v${n} is the current version. ${p.u} is notified and can revert it.`, `afcmp:${a.pid}:${afVer(a, n).base}:${n}`, 'View changes');
-}
+/* After a change by the viewer: the change applies at once, and the author gets Undo in a toast. */
+function afChanged(a, n) { toast(`v${n} is the current version.`, `afundo:${a.pid}:${n}`, 'Undo'); }
 /* Undo: remove the latest version and the parts it added. */
 function afUndo(a, n) {
   const v = afVer(a, n); if (!v || n !== Math.max(...a.vers.map(x => x.n))) return;
@@ -5891,14 +5861,11 @@ const skBuilt = sk => Object.values(ARTS).filter(a => a.vers.length && afSkill(a
 /* ---------- skills: composer ----------
    An ask names its skill in a picker: one of the skills the space can use, or "No skill". */
 const skResolved = sid => st.skSel && st.skSel !== 'none' && skOf(st.skSel) && skFor(sid).includes(skOf(st.skSel)) ? skOf(st.skSel) : null;
+/* Skill picker: a search field over the skills the space can use, most used first. */
 function skMenu(s) {
-  const all = skFor(s.id), cur = skResolved(s.id), v = st.pickV;
-  const opt = k => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${cur === k}" data-name="${esc((k.name + ' ' + k.desc).toLowerCase())}" data-af="sk-pick:${k.id}"><span class="sk-ic">${AI.skill}</span><span class="ts-tx"><b>${esc(k.name)}</b><small>${v === 'grouped' ? esc(k.desc) : `${skOwnerLabel(k)} · ${k.uses} builds`}</small></span>${cur === k ? I.check : ''}</button>`;
-  const grp = (h, l) => l.length ? `<div class="mp-h">${h}</div>${l.map(opt).join('')}` : '';
-  const flat = [...all].sort((x, y) => y.uses - x.uses).map(opt).join('');
-  const list = v === 'grouped' ? grp(`#${s.name}`, all.filter(k => k.own.k === 'space' && k.own.id === s.id)) + grp(`Shared with #${s.name}`, all.filter(k => k.own.k === 'space' && k.own.id !== s.id)) + grp('Your skills', all.filter(k => k.own.k === 'user'))
-    : v === 'search' ? `<label class="search sk-mq">${I.search}<input id="sk-q" type="search" placeholder="Search skills" aria-label="Search skills" autocomplete="off"></label>${flat}<p class="muted sk-none" hidden>No skill matches.</p>` : `<div class="mp-h">Most used in #${s.name}</div>${flat}`;
-  return `<div class="ts-ddmenu sk-menu" role="menu" aria-label="Skill">${list}<div class="ts-ddsep"></div><button type="button" class="ts-opt" role="menuitemradio" aria-checked="${st.skSel === 'none'}" data-af="sk-pick:none"><span class="sk-ic">${I.agent}</span><span class="ts-tx"><b>No skill</b><small>The agent builds from the ask alone.</small></span>${st.skSel === 'none' ? I.check : ''}</button><div class="ts-ddsep"></div><button type="button" class="ts-opt" data-af="sk-dir"><span class="ts-tx"><b>Browse all skills</b></span></button></div>`;
+  const all = skFor(s.id), cur = skResolved(s.id);
+  const opt = k => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${cur === k}" data-name="${esc((k.name + ' ' + k.desc + ' ' + skOwnerLabel(k)).toLowerCase())}" data-af="sk-pick:${k.id}"><span class="sk-ic">${AI.skill}</span><span class="ts-tx"><b>${esc(k.name)}</b><small>${skOwnerLabel(k)} · ${k.uses} builds</small></span>${cur === k ? I.check : ''}</button>`;
+  return `<div class="ts-ddmenu sk-menu" role="menu" aria-label="Skill"><label class="search sk-mq">${I.search}<input id="sk-q" type="search" placeholder="Search skills" aria-label="Search skills" autocomplete="off"></label>${[...all].sort((x, y) => y.uses - x.uses).map(opt).join('')}<p class="muted sk-none" hidden>No skill matches.</p><div class="ts-ddsep"></div><button type="button" class="ts-opt" role="menuitemradio" aria-checked="${st.skSel === 'none'}" data-af="sk-pick:none"><span class="sk-ic">${I.agent}</span><span class="ts-tx"><b>No skill</b><small>The agent builds from the ask alone.</small></span>${st.skSel === 'none' ? I.check : ''}</button><div class="ts-ddsep"></div><button type="button" class="ts-opt" data-af="sk-dir"><span class="ts-tx"><b>Browse all skills</b></span></button></div>`;
 }
 function afCompSkill(s) {
   const k = skResolved(s.id);
@@ -5914,15 +5881,13 @@ function afNew(pid) {
 }
 
 /* ---------- feed rows and lists ---------- */
-/* Feed row for an artifact: text only. The "Feed item" control sets the second line: the summary,
-   nothing, or the latest change. The page opens full-bleed from the row. */
+/* Feed row for an artifact: text only, the title and the summary. The page opens full-bleed from the row. */
 function afRow(p) {
   const id = pidOf(p), a = art(id), o = POSTS[id], cur = afVer(a, a.cur);
   const nC = afComments(a).length, contrib = afContrib(a).length;
   const k = `<span class="row-k" title="Artifact: built by an agent from an ask"><span class="agent">${I.agent}</span></span>`;
   const title = `<a class="row-t row-link af-row-t" href="#t${id}" data-open="${id}">${esc(a.title)}</a>`;
-  const chg = cur && cur.n > 1 ? `v${cur.n} · ${afHow(cur)} by ${afWho(cur.by)} ${cur.age === 'now' ? 'just now' : cur.age + ' ago'}${cur.req ? `: ${cur.req}` : cur.note ? `: ${cur.note}` : ''}` : 'v1 · Built from the ask';
-  const sum = st.rowV === 'title' && !o.running ? '' : `<span class="row-s">${o.running ? 'The agent is building this page.' : esc(st.rowV === 'change' ? chg : o.sum)}</span>`;
+  const sum = `<span class="row-s">${o.running ? 'The agent is building this page.' : esc(o.sum)}</span>`;
   const counts = o.running ? '<span class="af-cnt"><span class="spin" aria-hidden="true"></span>Building</span>' : `<span class="af-cnt num"><span title="Version ${a.cur}${cur && cur.n > 1 ? `, ${afHow(cur).toLowerCase()} by ${afWho(cur.by)} ${cur.age} ago` : ''}">v${a.cur}</span>${contrib > 1 ? `<span title="${contrib} contributors">${MI.user}${contrib}</span>` : ''}<span title="${nC} comment${nC === 1 ? '' : 's'}">${I.reply}${nC}</span>${a.forks.length ? `<span title="${a.forks.length} fork${a.forks.length === 1 ? '' : 's'}">${AI.fork}${a.forks.length}</span>` : ''}</span>`;
   const meta = `<span class="row-meta">${au(p.u)}<span>${p.age}</span>${a.forkOf ? '<span>fork</span>' : ''}${p.tag ? `<button class="row-sp" type="button" data-space="${p.s}">${isClosed(sp(p.s)) ? LK('cs-lk cs-lk-hash', 'Members only') : '#'}${sp(p.s).name}</button>` : ''}${counts}</span>`;
   return `<article class="row row-x row-rowsq row-i-lefttxt row-ask af-row" role="listitem" data-open="${id}">${k}<div class="row-m">${title}${sum}${meta}</div></article>`;
@@ -6094,9 +6059,6 @@ function afClick(t, e) {
     case 'anchor-clear': st.afAnchor = null; st.afFocus = 'af-in'; return done();
     case 'kind': st.afKind = x; st.afFocus = 'af-in'; return done();
     case 'pmode': st.afPanelMode = st.afPanelMode === 'over' ? 'side' : 'over'; return done();
-    case 'pside': st.afOverSide = st.afOverSide === 'left' ? 'right' : 'left'; return done();
-    case 'pset': st.afPanelMode = x === 'side' ? 'side' : 'over'; if (x !== 'side') st.afOverSide = x.slice(5); return done();
-    case 'revert': { const v = afVer(a, +x); afAddVersion(a, { how: 'restore', alias: v.base, by: ME.u, note: `Reverted v${v.n}. Restored the content of v${v.base}.`, tok: 0, paid: '', skill: afVer(a, v.base).skill }); a.disc.push({ k: 'e', u: ME.u, age: 'now', t: `reverted v${v.n}`, v: a.cur }); Object.assign(st, { afV: null, afCmp: null }); toast(`Reverted. v${a.cur} has the content of v${v.base}; v${v.n} stays in the history.`); return done(); }
     case 'revise':
       if (needIn()) return true;
       Object.assign(st, { afV: null, afCmp: null });
@@ -6140,7 +6102,7 @@ function afClick(t, e) {
     case 'sk-test': st.skTest = true; return done();
     case 'sk-save': skSave(); return done();
     case 'sk-cancel': { const d = st.skDraft; Object.assign(st, { subPage: d && d.id ? 'skill' : 'skills', skDraft: null, skTest: false }); return done(); }
-    case 'sk-menu': st.skPop = !st.skPop; st.mpOpen = false; st.afFocus = st.skPop && st.pickV === 'search' ? 'sk-q' : null; return done();
+    case 'sk-menu': st.skPop = !st.skPop; st.mpOpen = false; st.afFocus = st.skPop ? 'sk-q' : null; return done();
     case 'sk-pick': st.skSel = x; renderAll(); { const c = $('compose-text'); if (c) c.focus({ preventScroll: true }); } return true;
     case 'sk-add': st.modal = 'sk-add:' + x; return done();
     case 'sk-share': { const k = skOf(x), i = k.shared.indexOf(y); if (i >= 0) k.shared.splice(i, 1); else k.shared.push(y); return done(); }
@@ -6160,6 +6122,29 @@ function afInput(e) {
   d.err = '';
   return true;
 }
+/* Overlay panel drag handle. The panel follows the pointer; on release it settles on the side
+   of the page where its centre is. Left and Right arrow keys on the handle move it too. */
+function afSetSide(side) { if (st.afOverSide !== side) { st.afOverSide = side; } renderAll(); const g = $('af-grip'); if (g) g.focus({ preventScroll: true }); }
+$('app').addEventListener('pointerdown', e => {
+  const g = e.target.closest && e.target.closest('.af-grip'); if (!g || e.button > 0) return;
+  const panel = g.closest('.af-panel'), stage = document.querySelector('#app .af-stage'); if (!panel || !stage) return;
+  const x0 = e.clientX; let dx = 0;
+  try { g.setPointerCapture(e.pointerId); } catch (err) {}
+  panel.classList.add('af-dragging');
+  const move = ev => { dx = ev.clientX - x0; panel.style.transform = `translateX(${dx}px)`; };
+  const up = () => {
+    g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
+    const pr = panel.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    panel.classList.remove('af-dragging'); panel.style.transform = '';
+    if (Math.abs(dx) > 4) afSetSide(pr.left + pr.width / 2 < sr.left + sr.width / 2 ? 'left' : 'right');
+  };
+  g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  e.preventDefault();
+});
+$('app').addEventListener('keydown', e => {
+  if (!e.target.closest || !e.target.closest('.af-grip')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); afSetSide(e.key === 'ArrowLeft' ? 'left' : 'right'); }
+});
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || st.modal || st.device === 'native') return;
   if (st.afPop || st.skPop) { st.afPop = null; st.skPop = false; renderAll(); }
@@ -6229,7 +6214,7 @@ function afJump(k) {
     case 'af-saved': st.savedPage = true; break;
     case 'af-profile': Object.assign(st, { profilePage: true, profileUser: ME.u, ptab: 'contrib' }); break;
     case 'af-notifs': st.home = true; csOpenNotifs(); break;
-    case 'sk-ask': Object.assign(st, { space: 'scifi', compOpen: true, mode: 'ask', draft: 'Find novels and stories in which cities are run by prediction markets.', skSel: null, skPop: true }); break;
+    case 'sk-ask': Object.assign(st, { space: 'scifi', compOpen: true, mode: 'ask', draft: 'Find novels and stories in which cities are run by prediction markets.', skSel: null, skPop: true, afFocus: 'sk-q' }); break;
     case 'sk-art': open(12, afMobile() ? { afTab: 'details', afPanelM: true } : { afPop: 'skill' }); break;
     case 'sk-update': open(8, afMobile() ? { afTab: 'details', afPanelM: true } : { afPop: 'skill' }); break;
     case 'sk-dir': st.subPage = 'skills'; break;
@@ -6242,35 +6227,7 @@ function afJump(k) {
 }
 const afScreen = () => st.subPage ? st.subPage : afA() ? 'art' : st.savedPage || st.profilePage ? 'other' : st.home ? 'home' : 'space';
 const AJ = (target, ok) => () => { if (!ok || !ok()) jump(target); };
-/* Open decisions that the settled choices left or created. The first option is the recommended one. */
-const AFKNOBS = () => [
-  ['k-abar', 'barV', [['overflow', 'One bar, overflow menu'], ['two', 'Two rows'], ['split', 'Title in a header strip'], ['icons', 'Icon-only actions']], AJ('af-view', () => afA())],
-  ['k-aundo', 'undoV', [['toast', 'Undo for the author'], ['banner', 'Notice for every reader'], ['notify', 'Notice for the owner']], () => { jump('af-view'); }],
-  ['k-aside', 'sideV', [['header', 'Button in the panel header'], ['drag', 'Drag handle'], ['menu', 'Position menu']], () => { if (!afA()) jump('af-view'); Object.assign(st, { afPanel: true, afPanelMode: 'over', afFull: false, afPop: st.sideV === 'menu' ? 'pmenu' : null }); }],
-  ['k-apick', 'pickV', [['grouped', 'Grouped by owner'], ['flat', 'Most used first'], ['search', 'Search']], () => { jump('sk-ask'); }],
-  ['k-astale', 'staleV', [['dot', 'Dot'], ['text', 'Text on the chip'], ['quiet', 'Only in the popover']], () => { jump('sk-update'); st.afPop = null; }],
-  ['k-arow', 'rowV', [['sum', 'Title and summary'], ['title', 'Title only'], ['change', 'Title and latest change']], AJ('af-feed', () => ['home', 'space'].includes(afScreen()))],
-];
-/* Collapsible control-bar sections. The collapsed state is kept per section in localStorage.
-   Hotkeys are handled on the document, so they keep working for knobs in a collapsed section. */
-(() => {
-  const KEY = 'session-web-ctl-collapsed';
-  let off = []; try { off = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(off)) off = []; } catch (e) { off = []; }
-  document.querySelectorAll('.ctl .cs-knobs').forEach(sec => {
-    const kt = sec.querySelector('.cs-kt'); if (!kt) return;
-    const name = kt.textContent.trim(), b = document.createElement('button');
-    b.type = 'button'; b.className = 'kc-btn'; b.innerHTML = I.chev;
-    const set = open => { sec.classList.toggle('kc-off', !open); b.setAttribute('aria-expanded', String(open)); b.setAttribute('aria-label', `${open ? 'Collapse' : 'Expand'} ${name} controls`); b.title = b.getAttribute('aria-label'); };
-    set(!off.includes(name));
-    b.addEventListener('click', () => {
-      const open = sec.classList.contains('kc-off'); set(open);
-      off = off.filter(x => x !== name); if (!open) off.push(name);
-      try { localStorage.setItem(KEY, JSON.stringify(off)); } catch (e) {}
-      if ($('af-page')) renderAll();
-    });
-    kt.after(b);
-  });
-})();
+const AFKNOBS = () => [];
 /*AF-JS-END*/
 buildJump();
 const ST0 = structuredClone(st), JOINED0 = [...JOINED], NST0 = structuredClone(nst);
