@@ -1,4 +1,4 @@
-<title>Session Web Spaces</title>
+<title>Session Web - Reference Spaces</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /* Valley Sans 100–900 variable (SIL OFL 1.1), the file bundled in web/packages/client/src/assets/fonts. Not on Google Fonts, so embedded. */
@@ -1387,11 +1387,6 @@ button.n-row:active { background: var(--n-fill); }
 @media (max-width: 920px) { .rs { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } }
 
 /* home: ask-first */
-.how { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; counter-reset: h; }
-.how li { counter-increment: h; background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); padding: 12px 14px; font-size: var(--fs-sm); color: var(--t-muted); line-height: 1.5; }
-.how li b { display: block; color: var(--t-strong); font-weight: 650; margin-bottom: 2px; }
-.how li::before { content: counter(h); display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11.35px; font-weight: 700; margin-bottom: 8px; }
-@media (max-width: 640px) { .how { grid-template-columns: minmax(0, 1fr); } }
 
 .utab.utab-home svg { width: 14px; height: 14px; }
 .hdr-sep { width: 1px; height: 18px; background: var(--divider); flex: none; align-self: center; margin: 0 4px; }
@@ -1429,6 +1424,484 @@ button.n-row:active { background: var(--n-fill); }
 .r2-d { margin: -10px 8px 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .r2-foot { margin-top: auto; padding: 10px 8px 0; border-top: 1px solid var(--divider); font-size: var(--fs-xs); color: var(--t-faint); }
 /* BEGIN reference spaces css */
+/* ================= reference spaces ================= */
+/* control bar: a second group of knobs */
+.knob-break { flex-basis: 100%; height: 0; }
+.knob-group { font-size: var(--fs-xs); font-weight: 650; color: var(--t-heading); text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: var(--r-sm); background: var(--accent-soft); }
+.k-sel { height: 28px; border-radius: var(--r-md); border: 1px solid var(--control-border); background: var(--control); color: var(--t-strong); font: inherit; font-size: var(--fs-sm); padding: 0 6px; max-width: 220px; }
+
+/* org badges */
+.rf-seal { display: inline-grid; place-items: center; color: var(--t-muted); flex: none; vertical-align: -2px; margin-left: 3px; }
+.rf-seal svg { width: 15px; height: 15px; }
+.rf-seal.sm svg { width: 12px; height: 12px; }
+.rf-seal.sm { margin-left: 3px; vertical-align: -1px; }
+.rf-kindtag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; margin-left: 8px; border-radius: var(--r-sm); border: 1px solid var(--border-strong); color: var(--t-muted); font-size: 10.3px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; vertical-align: 1px; }
+.glyph.glyph-org { border-radius: 4px; }
+.glyph.lg.glyph-org, .glyph.xl.glyph-org { border-radius: 9px; }
+.pop-row .rf-seal, .mchip .rf-seal { margin-left: 3px; }
+/* containers that already space their children by 4-6px: pull the seal back so it sits about 3px from the name */
+.utab .rf-seal, .sw-m .rf-seal { margin-left: -3px; }
+.rf-slim .rf-seal { margin-left: -1px; }
+.sw-btn .rf-seal svg, .rl-n .rf-seal svg, .r2-h .rf-seal svg { width: 12px; height: 12px; color: var(--t-muted); }
+.mchip[aria-current="true"] .rf-seal { color: inherit; }
+
+/* page frame */
+.rf-page { min-height: 780px; background: var(--feed); display: flex; flex-direction: column; }
+.rf-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: start; padding: 26px 32px 20px; background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--sp) 22%, transparent), transparent 60%), var(--pane); }
+.rf-hero > .glyph { position: relative; top: 2px; }
+.rf-hero-n { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+.rf-hero-n h2 { margin: 0; font-size: 22.65px; letter-spacing: -.02em; color: var(--t-heading); font-weight: 750; }
+.rf-hero-n .rf-seal svg { width: 18px; height: 18px; }
+.rf-hero p { margin: 4px 0 10px; color: var(--t-secondary); max-width: 68ch; }
+.rf-hero-m { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--fs-xs); color: var(--t-faint); }
+.rf-hero-m span { display: inline-flex; align-items: center; gap: 5px; }
+.rf-hero-m svg { width: 12px; height: 12px; }
+.rf-hero-m span:nth-child(2) svg { color: var(--t-muted); }
+.rf-hero-a { display: flex; gap: 6px; align-self: center; }
+.rf-hero-a .btn svg, .rf-slim .btn svg { width: 13px; height: 13px; }
+.rf-draft { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin-left: 10px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); font-size: var(--fs-xs); font-weight: 600; }
+.rf-slim { display: flex; align-items: center; gap: 4px; padding: 12px 32px; background: var(--pane); }
+.rf-slim-n { display: inline-flex; align-items: center; gap: 9px; border: 0; background: transparent; padding: 0; font: inherit; color: var(--t-heading); }
+.rf-slim-n b { font-size: var(--fs-input); font-weight: 700; }
+.rf-slim-n:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.rf-slim .grow, .rq .grow, .rf-edit-f .grow, .wz-foot .grow, .wz-bar .grow { flex: 1; }
+.rf-tabs { display: flex; align-items: center; gap: 12px; padding: 0 28px; background: var(--pane); border-bottom: 1px solid var(--divider); position: sticky; top: 0; z-index: 20; }
+.rf-tabs-in { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1; }
+.rf-tabs-in::-webkit-scrollbar { display: none; }
+.rf-tab { position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 10px; border: 0; background: transparent; color: var(--t-muted); font-size: var(--fs-sm); font-weight: 600; }
+.rf-tab:hover { color: var(--t-strong); }
+.rf-tab[aria-current="true"] { color: var(--t-heading); }
+.rf-tab[aria-current="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
+.rf-tab-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+.rf-tabs-sep { width: 1px; height: 18px; background: var(--divider); align-self: center; margin: 0 6px; flex: none; }
+.rf-staff { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: 650; color: var(--t-muted); white-space: nowrap; }
+.rf-staff svg { width: 13px; height: 13px; }
+.rf-body { flex: 1; }
+.rf-wide { padding: 24px 32px 48px; max-width: 1180px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 22px; }
+.rf-narrow { padding: 24px 32px 56px; max-width: 760px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.rf-title { margin: 2px 0 0; font-size: 22.65px; line-height: 1.3; letter-spacing: -.015em; color: var(--t-heading); text-wrap: pretty; }
+.rf-h { margin: 0 0 10px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--t-faint); font-weight: 650; }
+.rf-cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-items: start; }
+.rf-colm { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rf-colm > .rf-h ~ .rf-h { margin-top: 22px; }
+.rf-cola { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rf-card { background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.rf-card h3, .rf-sup h3 { margin: 0; font-size: var(--fs-sm); font-weight: 650; color: var(--t-heading); }
+.rf-card p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.rf-mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rf-mini li { display: flex; align-items: baseline; gap: 10px; font-size: var(--fs-sm); padding: 4px 0; }
+.rf-mini li > button, .rf-mini li > span:first-child { flex: 1; min-width: 0; text-align: left; border: 0; background: none; padding: 0; color: var(--t-primary); font: inherit; line-height: 1.4; }
+.rf-mini li > button:hover { color: var(--t-heading); text-decoration: underline; text-underline-offset: 2px; }
+.rf-mini li > span:last-child { font-size: var(--fs-xs); white-space: nowrap; }
+
+/* search box and results */
+.rf-sbox { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 5px 0 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--field); color: var(--t-faint); }
+.rf-sbox.big { height: 52px; padding-left: 18px; }
+.rf-sbox:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+.rf-sbox > svg { width: 16px; height: 16px; flex: none; }
+.rf-sbox input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-input); outline: none; }
+.rf-sbox input::placeholder { color: var(--placeholder); }
+.rf-sbox input::-webkit-search-cancel-button { display: none; }
+.rf-sbox .btn { border-radius: 999px; padding: 0 18px; height: 34px; }
+.rf-sbox.big .btn { height: 40px; }
+.rf-results:empty { display: none; }
+.rf-res-list { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); overflow: hidden; box-shadow: var(--shadow-pop); }
+.rf-res-list.big { box-shadow: none; }
+.rf-res-h { padding: 8px 14px 4px; font-size: var(--fs-xs); }
+.rf-res { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--divider); background: transparent; padding: 10px 14px; color: inherit; font: inherit; }
+.rf-res-h + .rf-res { border-top: 0; }
+.rf-res:hover { background: var(--fill-hover); }
+.rf-res-q { color: var(--t-heading); font-weight: 600; line-height: 1.4; }
+.rf-res-q mark { background: color-mix(in srgb, var(--accent) 18%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+.rf-res-s { color: var(--t-muted); font-size: var(--fs-sm); line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.rf-res-m, .rf-row-m { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 3px; font-size: var(--fs-xs); color: var(--t-faint); }
+.rf-res-ask { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--divider); background: var(--fill-subtle); padding: 11px 14px; color: inherit; font: inherit; }
+.rf-res-ask:first-child { border-top: 0; }
+.rf-res-ask:hover { background: var(--fill-hover); }
+.rf-res-ask > svg:first-child { width: 14px; height: 14px; color: var(--accent); flex: none; }
+.rf-res-ask > svg:last-child { width: 14px; height: 14px; color: var(--t-faint); flex: none; margin-left: auto; }
+.rf-res-ask span { display: flex; flex-direction: column; min-width: 0; }
+.rf-res-ask b { color: var(--t-heading); font-weight: 600; overflow-wrap: anywhere; }
+.rf-res-ask small { color: var(--t-faint); font-size: var(--fs-xs); }
+
+/* answer marks and freshness */
+.rf-badge { display: inline-flex; align-items: center; gap: 4px; height: 19px; padding: 0 8px 0 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 10.8px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.rf-badge svg { width: 12px; height: 12px; }
+.rf-badge svg path:last-child { stroke: var(--accent) !important; }
+.rf-badge svg path:first-child { fill: var(--on-accent); }
+.rf-row.rf-rule { padding-left: 12px; }
+.rf-ans-body.rf-rule { padding-left: 18px; }
+.row.rf-rule { border-left-width: 3px; }
+.rf-fr { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
+.rf-fr svg { width: 12px; height: 12px; }
+.rf-fr.warn, .rf-ver.warn { color: var(--warn); }
+.rf-dot { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--t-secondary); white-space: nowrap; }
+.rf-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+.rf-dot.warn i { background: var(--warn); }
+.rf-dot.warn { color: var(--warn); }
+.rf-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.rf-marks:has(.rf-tl) { flex-direction: column; align-items: flex-start; }
+
+/* answer lists */
+.rf-rows { display: flex; flex-direction: column; }
+.rf-row { display: flex; flex-direction: column; gap: 2px; padding: 12px 2px; border-top: 1px solid var(--divider); cursor: pointer; }
+.rf-rows > .rf-row:first-child { border-top: 0; }
+.rf-row:hover .rf-row-q { color: var(--t-heading); text-decoration: underline; text-underline-offset: 2px; }
+.rf-row-q { color: var(--t-strong); font-weight: 600; line-height: 1.4; text-decoration: none; }
+.rf-row-q:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.rf-row-s { color: var(--t-muted); font-size: var(--fs-sm); line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.rf-topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rf-tcard { background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.rf-tcard-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border: 0; background: none; padding: 0; font: inherit; text-align: left; }
+.rf-tcard-h b { color: var(--t-heading); font-weight: 650; }
+.rf-tcard-h:hover b { text-decoration: underline; text-underline-offset: 2px; }
+.rf-tcard ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rf-tcard li button { border: 0; background: none; padding: 0; font: inherit; font-size: var(--fs-sm); color: var(--t-secondary); text-align: left; line-height: 1.4; }
+.rf-tcard li button:hover { color: var(--t-heading); text-decoration: underline; text-underline-offset: 2px; }
+.rf-tcard > .tlink { align-self: flex-start; font-size: var(--fs-xs); }
+.rf-faq { display: flex; flex-direction: column; gap: 18px; }
+.rf-faq-h { display: flex; flex-direction: column; gap: 6px; }
+.rf-faq-h h4 { margin: 0; font-size: var(--fs-base); color: var(--t-heading); display: flex; align-items: center; gap: 8px; }
+.rf-si { width: 22px; height: 22px; border-radius: 6px; background: var(--control); color: var(--t-tertiary); display: inline-grid; place-items: center; flex: none; }
+.rf-si svg { width: 13px; height: 13px; }
+
+/* landing: FAQ index */
+.rf-idx { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 32px; padding: 24px 32px 48px; max-width: 1180px; margin: 0 auto; width: 100%; align-items: start; }
+.rf-toc { position: sticky; top: 56px; display: flex; flex-direction: column; gap: 1px; }
+.rf-toc .eyebrow { padding: 0 8px 6px; }
+.rf-toc-i { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 32px; padding: 0 8px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); text-align: left; }
+.rf-toc-i:hover { background: var(--fill-hover); color: var(--t-strong); }
+.rf-toc-i[aria-current="true"] { background: var(--card-sel); color: var(--t-heading); font-weight: 600; }
+.rf-toc-i .num { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 450; }
+.rf-toc-f { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 14px 8px 0; border-top: 1px solid var(--divider); }
+.rf-toc-f .btn svg { width: 12px; height: 12px; }
+.rf-idx-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+/* landing: ask first */
+
+/* landing: space feed */
+
+/* empty space */
+.rf-emptyv h3 { margin: 0; font-size: 19.55px; color: var(--t-heading); }
+.rf-emptyv > p { margin: 0; }
+.rf-seed { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.rf-seed > div { flex: 1; min-width: 0; }
+.rf-seed p { margin: 2px 0 0; font-size: var(--fs-sm); }
+.rf-seed .run { flex: 1; }
+
+/* ask flow */
+.rf-match-f { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.rf-runnote { margin: 0; font-size: var(--fs-sm); }
+.rf-ans-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-faint); }
+.rf-ans-meta .au { font-size: var(--fs-sm); }
+
+/* answer page */
+.rf-ans { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 40px; padding: 22px 40px 56px; max-width: 1100px; margin: 0 auto; width: 100%; }
+.rf-ans-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rf-ans-side { position: sticky; top: 56px; align-self: start; display: flex; flex-direction: column; gap: 16px; padding-top: 40px; }
+.rf-crumb { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-faint); flex-wrap: wrap; }
+.rf-ans-q { margin: 0; font-size: 24.7px; line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); text-wrap: pretty; }
+.rf-ans-body { border-top: 1px solid var(--divider); padding-top: 16px; }
+.rf-ans-body.rf-rule { border-top: 0; padding-top: 2px; }
+.rf-prose { font-size: 15.45px; line-height: 1.65; color: var(--t-primary); }
+.rf-prose h4 { font-size: 15.45px; margin: 18px 0 4px; }
+.prose code, .rf-notin code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; background: var(--fill-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+.prose pre { margin: 6px 0 12px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--inset); border: 1px solid var(--border-subtle); overflow-x: auto; }
+.prose pre code { background: none; border: 0; padding: 0; font-size: 12.9px; line-height: 1.55; overflow-wrap: normal; white-space: pre; }
+.rf-notice { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: var(--r-lg); background: var(--fill-subtle); border: 1px solid var(--divider); font-size: var(--fs-sm); line-height: 1.5; color: var(--t-secondary); }
+.rf-notice > svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--t-muted); }
+.rf-notice > div { flex: 1; min-width: 0; }
+.rf-notice b { color: var(--t-strong); font-weight: 600; }
+.rf-notice .tlink { flex: none; font-size: var(--fs-sm); white-space: nowrap; }
+.rf-srcs { display: flex; flex-direction: column; gap: 8px; }
+.rf-srcs h3, .rf-rel h3 { margin: 0; font-size: var(--fs-base); color: var(--t-heading); font-weight: 650; display: flex; gap: 6px; align-items: baseline; }
+.rf-srcs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
+.rf-srcs li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.rf-srcs li + li { border-top: 1px solid var(--divider); }
+.rf-srcs li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rf-srcs li b { font-weight: 550; font-size: var(--fs-sm); color: var(--t-strong); }
+.rf-srcs li span:not(.rf-si):not(.rf-srcs-n) { font-size: var(--fs-xs); color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-srcs-n { width: 14px; font-size: var(--fs-xs); color: var(--t-faint); text-align: right; flex: none; }
+.rf-fus .fu-box2 { margin-top: 12px; }
+.rf-rel { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.rf-edit { display: flex; flex-direction: column; gap: 8px; }
+.rf-edit textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--field); color: var(--t-primary); font: inherit; font-size: var(--fs-base); line-height: 1.55; padding: 10px 12px; resize: vertical; }
+.rf-edit textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.rf-edit-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* not covered */
+.rf-gapbox { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border: 1px dashed var(--border-strong); border-radius: var(--r-xl); background: var(--pane); }
+.rf-gap-h { display: flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-input); }
+.rf-gap-h svg { width: 18px; height: 18px; color: var(--t-muted); }
+.rf-gapbox > p { margin: 0; color: var(--t-secondary); line-height: 1.55; }
+.rf-searched { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); }
+.rf-searched li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.rf-searched b { font-weight: 550; color: var(--t-strong); }
+.rf-searched li > span:nth-child(2) { color: var(--t-muted); }
+.rf-searched .faint { font-size: var(--fs-xs); text-align: right; }
+.rf-gap-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.rf-gap-acts .btn svg { width: 13px; height: 13px; }
+.rf-notin { display: flex; gap: 10px; margin: 10px 0 12px; padding: 10px 12px; border-left: 3px dashed var(--border-strong); background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; font-size: var(--fs-sm); }
+.rf-notin > svg { width: 16px; height: 16px; color: var(--t-muted); flex: none; margin-top: 2px; }
+.rf-notin p { margin: 2px 0 0; color: var(--t-secondary); line-height: 1.5; }
+.rf-notin b { color: var(--t-heading); }
+.rf-unoff { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px dashed var(--warn); border-radius: var(--r-xl); }
+.rf-unoff-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rf-unoff-h svg { width: 15px; height: 15px; color: var(--warn); }
+.rf-unoff-h b { color: var(--t-heading); }
+.rf-unoff-h .faint { font-size: var(--fs-xs); }
+.rf-unoff .prose p:last-child { margin-bottom: 0; }
+.rf-websrc { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--t-faint); }
+.rf-websrc b { font-weight: 500; color: var(--t-secondary); margin-right: 6px; }
+.rf-websrc span { font-size: var(--fs-xs); }
+
+.modal .fld textarea, .wz .fld textarea, .set .fld textarea { border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 8px 10px; font: inherit; font-size: var(--fs-sm); line-height: 1.5; resize: vertical; width: 100%; }
+.modal .fld textarea:focus, .wz .fld textarea:focus, .set .fld textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.rf-chk { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-secondary); cursor: pointer; }
+.rf-chk input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.rf-include { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-radius: var(--r-md); background: var(--fill-subtle); font-size: var(--fs-xs); color: var(--t-muted); }
+.rf-include span + span::before { content: "·"; margin-right: 6px; color: var(--t-faint); }
+
+/* about */
+.rf-about section { display: flex; flex-direction: column; margin-bottom: 22px; }
+.rf-srctbl { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
+.rf-srcrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; font-size: var(--fs-xs); }
+.rf-srcrow + .rf-srcrow { border-top: 1px solid var(--divider); }
+.rf-srcrow-t { display: flex; flex-direction: column; min-width: 0; }
+.rf-srcrow-t b { font-size: var(--fs-sm); font-weight: 550; color: var(--t-strong); }
+.rf-srcrow-t span { color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--t-secondary); }
+
+/* toast */
+.rf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 80; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: var(--r-lg); background: var(--t-heading); color: var(--popover); font-size: var(--fs-sm); font-weight: 550; box-shadow: var(--shadow-pop); }
+.rf-toast svg { width: 14px; height: 14px; flex: none; }
+
+/* home and browse */
+.rf-br { gap: 0; }
+.rf-br-d { margin: -4px 0 10px; font-size: var(--fs-sm); }
+.rf-brgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.rf-brc { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); position: relative; }
+.rf-brc-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.rf-brc-n { display: flex; align-items: center; flex-wrap: wrap; padding-right: 76px; }
+.rf-brc-dom { font-size: var(--fs-xs); }
+.rf-brc p { margin: 2px 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.rf-brc .faint.num { font-size: var(--fs-xs); }
+.rf-brc > .btn { position: absolute; top: 12px; right: 12px; }
+
+/* dialogs */
+.rf-types { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.rf-type { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--pane); text-align: left; font: inherit; color: inherit; }
+.rf-type:hover { border-color: var(--accent); background: var(--accent-soft); }
+.rf-type svg { width: 20px; height: 20px; color: var(--t-muted); }
+.rf-type b { color: var(--t-heading); }
+.rf-type span { font-size: var(--fs-sm); color: var(--t-muted); line-height: 1.45; }
+
+/* staff: shared */
+.rq-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.rq-top h2 { margin: 0; font-size: 22.65px; font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
+.rq-top p { margin: 2px 0 0; }
+.rq-top .btn svg { width: 13px; height: 13px; }
+.ks.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+/* queue: list + detail */
+/* queue: one at a time */
+/* queue: table */
+/* queue: board */
+
+/* staff: gaps */
+
+/* staff: sources */
+.sc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sc-card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); min-width: 0; }
+.sc-card-t { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.sc-card-t b { font-size: var(--fs-sm); font-weight: 600; color: var(--t-strong); }
+.sc-card-t span { font-size: var(--fs-xs); color: var(--t-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-card-t small { font-size: var(--fs-xs); line-height: 1.4; }
+
+/* staff: analytics */
+.st-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.st-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); min-width: 0; }
+.st-tile > span { font-size: var(--fs-xs); color: var(--t-muted); }
+.st-tile b { font-size: 24.7px; font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
+.st-tile small { font-size: var(--fs-xs); }
+.st-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); min-width: 0; }
+.st-card h3 { margin: 0; font-size: var(--fs-sm); color: var(--t-heading); }
+.st-card-h { display: flex; justify-content: space-between; align-items: baseline; }
+.st-card-h .tlink { font-size: var(--fs-xs); }
+.st-chart { padding: 6px 0 0 34px; }
+.st-plot { position: relative; height: 200px; margin-bottom: 22px; }
+.st-gl { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--divider); }
+.st-gl span { position: absolute; right: calc(100% + 8px); top: -8px; font-size: 10.8px; color: var(--t-faint); }
+.st-cols2 { position: absolute; inset: 0; display: flex; gap: 2.5%; padding: 0 1%; }
+.st-col { flex: 1; min-width: 0; display: flex; flex-direction: column; outline: none; }
+.st-colb { position: relative; flex: 1; display: flex; align-items: flex-end; border-radius: 4px 4px 0 0; }
+.st-colb i { display: block; width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; }
+.st-col:hover .st-colb, .st-col:focus-visible .st-colb { background: var(--fill-hover); }
+.st-val { position: absolute; left: 0; right: 0; margin-bottom: 4px; text-align: center; font-size: 11.35px; font-weight: 650; color: var(--t-secondary); }
+.st-tip { display: none; position: absolute; left: 50%; top: -26px; transform: translateX(-50%); padding: 2px 7px; border-radius: var(--r-sm); background: var(--t-heading); color: var(--popover); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; z-index: 2; }
+.st-col:hover .st-tip, .st-col:focus-visible .st-tip { display: block; }
+.st-col:hover .st-val, .st-col:focus-visible .st-val { visibility: hidden; }
+.st-ax { position: absolute; bottom: -20px; width: calc((100% - 2% - 7 * 2.5%) / 8); text-align: center; font-size: 10.8px; color: var(--t-faint); white-space: nowrap; }
+.st-col { position: relative; }
+.st-col .st-ax { left: 0; width: 100%; }
+.st-tbl { width: 100%; max-width: 360px; border-collapse: collapse; font-size: var(--fs-sm); }
+.st-tbl th, .st-tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--divider); }
+.st-tbl th { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 550; }
+.st-cols { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; }
+.st-bl { display: flex; flex-direction: column; gap: 8px; }
+.st-blr { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 46px 38px; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--t-secondary); }
+.st-blbar { height: 8px; border-radius: 4px; background: var(--control); overflow: hidden; }
+.st-blbar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.st-blr b { text-align: right; font-weight: 600; color: var(--t-strong); }
+.st-blr small { text-align: right; font-size: var(--fs-xs); }
+.st-ol li { font-size: var(--fs-sm); }
+
+/* create flow and settings */
+.wz { gap: 18px; }
+.wz-head { display: flex; flex-direction: column; gap: 6px; max-width: 760px; }
+.wz-head h2 { margin: 0; font-size: 22.65px; color: var(--t-heading); letter-spacing: -.01em; }
+.wz-head p { margin: 0; }
+.wz-g { display: flex; flex-direction: column; gap: 16px; }
+.wz-g > .fld > span:first-child, .wz-g > div.fld > span:first-child { color: var(--t-secondary); font-weight: 550; }
+.wz-pre { display: flex; align-items: center; height: 34px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--field); padding-left: 10px; font-size: var(--fs-sm); }
+.wz-pre input { border: 0 !important; height: 32px !important; padding-left: 0 !important; background: transparent !important; outline: none !important; }
+.wz-pre:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.wz-seg { align-self: flex-start; }
+.wz-opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.wz-opts.c2x { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wz-opt { display: flex; flex-direction: column; gap: 1px; padding: 9px 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); text-align: left; font: inherit; color: inherit; }
+.wz-opt:hover { border-color: var(--border-strong); }
+.wz-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.wz-opt b { font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); }
+.wz-opt small { color: var(--t-muted); font-size: var(--fs-xs); line-height: 1.4; }
+.wz-tog { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.wz-tog .tl-sw-tx small { white-space: normal; }
+.wz-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--inset); border: 1px solid var(--border-subtle); font-size: var(--fs-sm); }
+.wz-code > span { font-size: var(--fs-xs); font-weight: 700; color: var(--t-faint); }
+.wz-code code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.4px; color: var(--t-primary); overflow-wrap: anywhere; }
+.wz-code .btn { margin-left: auto; }
+.wz-vrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wz-vrow p { margin: 0; font-size: var(--fs-sm); }
+.wz-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--t-secondary); font-weight: 600; }
+.wz-ok svg { width: 16px; height: 16px; }
+.wz-wait { display: inline-flex; align-items: center; gap: 8px; color: var(--t-secondary); font-size: var(--fs-sm); margin: 0; }
+.wz-srcs { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.wz-src { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.wz-src + .wz-src { border-top: 1px solid var(--divider); }
+.wz-src-b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wz-src-b b { font-size: var(--fs-sm); font-weight: 600; color: var(--t-strong); }
+.wz-src-b small { font-size: var(--fs-xs); }
+.wz-src-b input { margin-top: 4px; height: 30px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 0 8px; font: inherit; font-size: var(--fs-sm); max-width: 360px; }
+.wz-src-b input:disabled { opacity: .7; }
+.wz-paths { font-size: var(--fs-xs); }
+.wz-src-s { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; padding-top: 2px; }
+.wz-src-s .tlink { font-size: var(--fs-xs); }
+.wz-key { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--field); color: var(--t-secondary); font-weight: 400; }
+.wz-key > svg { width: 14px; height: 14px; flex: none; }
+.wz-key > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wz-key code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.4px; }
+.wz-staff { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
+.wz-st { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.wz-st + .wz-st { border-top: 1px solid var(--divider); }
+.wz-st-e { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--t-primary); font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.wz-st .seg button { font-size: var(--fs-xs); padding: 2px 8px; }
+.wz-st-you { width: 28px; font-size: var(--fs-xs); text-align: center; }
+.wz-inv { display: flex; gap: 8px; }
+.wz-inv input { flex: 1; min-width: 0; height: 32px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 0 10px; font: inherit; font-size: var(--fs-sm); }
+.wz-ck { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; border: 1.5px solid var(--border-strong); color: var(--t-faint); font-size: 11px; font-weight: 650; flex: none; }
+.wz-ck svg { width: 12px; height: 12px; }
+.wz-sec.ok .wz-ck { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.wz-foot { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+/* steps */
+/* one page */
+.wz-pg { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; max-width: 1060px; align-items: start; }
+.wz-toc { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; }
+.wz-toc a { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: var(--r-md); color: var(--t-secondary); text-decoration: none; font-size: var(--fs-sm); }
+.wz-toc a:hover { background: var(--fill-hover); color: var(--t-strong); }
+.wz-toc a svg { width: 12px; height: 12px; color: var(--accent); }
+.wz-all { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.wz-sec { padding: 20px 22px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); scroll-margin-top: 16px; }
+.wz-sec > h3 { margin: 0; font-size: var(--fs-input); color: var(--t-heading); display: flex; align-items: center; gap: 10px; }
+.wz-sec > p { margin: 2px 0 14px 32px; }
+.wz-bar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px; margin: 0 -16px; border-top: 1px solid var(--divider); background: color-mix(in srgb, var(--feed) 92%, transparent); backdrop-filter: blur(6px); font-size: var(--fs-sm); z-index: 5; }
+/* draft + checklist */
+/* template first */
+/* settings */
+.set { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 28px; align-items: start; }
+.set-nav { display: flex; flex-direction: column; gap: 1px; position: sticky; top: 56px; }
+.set-nav button { height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; font: inherit; font-size: var(--fs-sm); color: var(--t-secondary); }
+.set-nav button:hover { background: var(--fill-hover); color: var(--t-strong); }
+.set-nav button[aria-current="true"] { background: var(--card-sel); color: var(--t-heading); font-weight: 600; }
+.set-b { padding: 20px 22px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.set-b > h3 { margin: 0; font-size: var(--fs-input); color: var(--t-heading); }
+
+@media (max-width: 1100px) {
+  .rf-brgrid, .sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .st-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .st-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .st-cols > :first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 920px) {
+  .rf-cols, .rf-ans { grid-template-columns: minmax(0, 1fr); }
+  .rf-ans-side { position: static; padding-top: 0; }
+  .rf-idx { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .rf-toc { position: static; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; }
+  .rf-toc::-webkit-scrollbar { display: none; }
+  .rf-toc .eyebrow, .rf-toc-f { display: none; }
+  .rf-toc-i { flex: none; height: 30px; border: 1px solid var(--divider); border-radius: 999px; padding: 0 12px; }
+  .rf-toc-i .num { margin-left: 6px; }
+  .wz-pg, .set { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .wz-toc { display: none; }
+  .set-nav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; gap: 4px; }
+  .set-nav::-webkit-scrollbar { display: none; }
+  .set-nav button { flex: none; border: 1px solid var(--divider); border-radius: 999px; }
+}
+@media (max-width: 640px) {
+  .knob-group { display: none; }
+  .rf-hero { grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 18px 14px 16px; }
+  .rf-hero .glyph.xl { width: 44px; height: 44px; font-size: 19.55px; }
+  .rf-hero-n h2 { font-size: 20.6px; }
+  .rf-hero p { font-size: var(--fs-sm); }
+  .rf-hero-a { grid-column: 1 / -1; align-self: start; }
+  .rf-hero-a .btn { flex: 1; }
+  .rf-hero-m span:nth-child(4) { display: none; }
+  .rf-slim { padding: 10px 14px; }
+  .rf-tabs { padding: 0 8px; gap: 6px; }
+  .rf-staff { display: none; }
+  .rf-wide, .rf-narrow, .rf-idx { padding: 16px 14px 40px; }
+  .rf-ans { padding: 14px 14px 48px; gap: 22px; }
+  .rf-ans-q { font-size: 20.6px; }
+  .rf-prose { font-size: var(--fs-input); }
+  .rf-sbox.big { height: 48px; padding-left: 14px; }
+  .rf-sbox input { font-size: 15.95px; }
+  .rf-sbox .btn { padding: 0 14px; }
+  .rf-topics { grid-template-columns: minmax(0, 1fr); }
+  .rf-searched li { grid-template-columns: 22px minmax(0, 1fr); }
+  .rf-searched .faint { grid-column: 2; text-align: left; }
+  .rf-srcrow { grid-template-columns: 22px minmax(0, 1fr); row-gap: 2px; }
+  .rf-srcrow > .faint { grid-column: 2; }
+  .rf-types { grid-template-columns: minmax(0, 1fr); }
+  .rf-brgrid, .sc-grid, .wz-opts.c2x { grid-template-columns: minmax(0, 1fr); }
+  .rq-top { flex-wrap: wrap; }
+  .rq-top h2 { font-size: 20.6px; }
+  .st-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .st-tiles > :last-child { grid-column: 1 / -1; }
+  .st-cols { grid-template-columns: minmax(0, 1fr); }
+  .st-blr { grid-template-columns: minmax(0, 1fr) 60px 42px 34px; }
+  .st-tile b { font-size: 20.6px; }
+  .st-ax { font-size: 9.8px; }
+  .st-col:nth-child(even) .st-ax { visibility: hidden; }
+  .wz-sec, .set-b { padding: 16px; }
+  .wz-src { flex-wrap: wrap; }
+  .wz-src-b { flex-basis: calc(100% - 40px); }
+  .wz-src-s { flex-direction: row; align-items: center; margin-left: 34px; }
+  .wz-st { flex-wrap: wrap; }
+  .wz-st-e { flex-basis: calc(100% - 70px); }
+  .wz-st .seg { margin-left: 30px; }
+  .wz-seg { flex-wrap: wrap; }
+  .wz-bar { margin: 0 -14px; padding: 10px 14px; }
+  .wz-code .btn { margin-left: 0; }
+  .rf-toast { bottom: 16px; }
+}
 /* END reference spaces css */
 </style>
 
@@ -1450,17 +1923,6 @@ button.n-row:active { background: var(--n-fill); }
       <span class="knob-group">Reference spaces</span>
       <div class="knob"><span>Jump to</span><select id="k-rfgo" class="k-sel" aria-label="Jump to a reference-space screen"></select></div>
       <div class="knob"><span>Role</span><div class="seg" id="k-rfrole"></div></div>
-      <div class="knob"><span>Landing</span><div class="seg" id="k-rfland"></div></div>
-      <div class="knob"><span>Answer mark</span><div class="seg" id="k-rfmark"></div></div>
-      <div class="knob"><span>Freshness</span><div class="seg" id="k-rffresh"></div></div>
-      <div class="knob"><span>FAQ order</span><div class="seg" id="k-rforg"></div></div>
-      <div class="knob"><span>Search before asking</span><div class="seg" id="k-rfmatch"></div></div>
-      <div class="knob"><span>Not covered</span><div class="seg" id="k-rfgap"></div></div>
-      <div class="knob"><span>Source changed</span><div class="seg" id="k-rfstale"></div></div>
-      <div class="knob"><span>Review queue</span><div class="seg" id="k-rfqueue"></div></div>
-      <div class="knob"><span>Create flow</span><div class="seg" id="k-rfwiz"></div></div>
-      <div class="knob"><span>Org badge</span><div class="seg" id="k-rfbadge"></div></div>
-      <div class="knob"><span>On Home</span><div class="seg" id="k-rfhome"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -1750,18 +2212,18 @@ const hrow = p => `<button class="hrow" type="button" data-space="${p.s}"><span 
 const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
 
 function homeFeed() {
-  const joined = st.auth === 'in' ? SPACES.filter(x => JOINED.includes(x.id)) : [];
-  const more = SPACES.filter(x => !joined.includes(x)).slice(0, 4);
+  const joined = st.auth === 'in' ? SPACES.filter(x => JOINED.includes(x.id) && !x.ref) : [];
+  const more = SPACES.filter(x => !joined.includes(x) && !x.ref).slice(0, 4);
   const spRow = x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>${spLabel(x)}${rfMark(x, 'tab')}</span><small class="num">${x.posts.toLocaleString()}</small></button>`;
   return `<div class="body home-feed">
     <div class="mcol"><div class="main">
       ${homeTop()}
-      ${rfHomeFeed(feed2(null, homePosts()))}
+      ${feed2(null, homePosts())}
     </div></div>
     <aside class="drawer wk home-side" aria-label="Spaces"><div class="dbody">
-      ${rfHomeSide()}
       ${joined.length ? `<div class="note-card"><div class="sk-head"><h3>Your spaces</h3></div><div class="sp-rows">${joined.map(spRow).join('')}</div></div>` : ''}
-      <div class="note-card"><div class="sk-head"><h3>${joined.length ? 'More spaces' : 'Spaces'}</h3><button class="tlink" type="button" data-sub="browse">Browse all</button></div><div class="sp-rows">${(joined.length ? more : SPACES).map(spRow).join('')}</div></div>
+      ${rfHomeSide()}
+      <div class="note-card"><div class="sk-head"><h3>${joined.length ? 'More spaces' : 'Spaces'}</h3><button class="tlink" type="button" data-sub="browse">Browse all</button></div><div class="sp-rows">${(joined.length ? more : SPACES.filter(x => !x.ref)).map(spRow).join('')}</div></div>
     </div></aside>
   </div>`;
 }
@@ -1944,30 +2406,34 @@ const kbdOverlay = () => kbdSheet();
 
 /* ---------- your spaces ---------- */
 const MYROLES = { scifi: 'Moderator', ml: 'Admin', math: 'Owner' };
-const role = x => x.ref ? (x.id === 'sablefield' && st.rfRole === 'staff' ? 'Staff' : 'Member') : MYROLES[x.id] || (x.mods.some(m => m[0] === ME.u) ? 'Moderator' : 'Member');
+const role = x => x.ref ? (x.mine ? 'Owner' : rfIsStaff(x) ? 'Staff' : 'Member') : MYROLES[x.id] || (x.mods.some(m => m[0] === ME.u) ? 'Moderator' : 'Member');
 const ROLE_IC = {
   Moderator: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z"/></svg>',
-  Admin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.8M8 12.4v1.8M1.8 8h1.8M12.4 8h1.8M3.6 3.6l1.3 1.3M11.1 11.1l1.3 1.3M3.6 12.4l1.3-1.3M11.1 4.9l1.3-1.3"/></svg>',
-  Owner: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12.5h11M3 11 2.4 5l3.4 2.6L8 3.2l2.2 4.4L13.6 5 13 11z"/></svg>',
+  /* Admins and the owner share one crown (no base line); the owner is labelled "Admin (Owner)". */
+  Admin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 12.2 2.4 5.6l3.4 2.6L8 3.8l2.2 4.4 3.4-2.6-.6 6.6z"/></svg>',
 };
-const roleHTML = x => { const r = role(x); return r === 'Member' ? '' : `<span class="rl-inline">${ROLE_IC[r]}${r}</span>`; };
-/* Header tabs list every space, joined or not, ordered by activity or by the user's order from
-   "Edit header tabs". This is intentional: the tabs are for browsing. The sidebar, the left rail
+ROLE_IC.Owner = ROLE_IC.Admin;
+const roleLabel = r => r === 'Owner' ? 'Admin (Owner)' : r;
+const roleHTML = x => { const r = role(x); return r === 'Member' ? '' : `<span class="rl-inline">${ROLE_IC[r]}${roleLabel(r)}</span>`; };
+/* Header tabs list every space, joined or not: joined spaces first, then the rest, or the user's
+   order from "Edit header tabs". This is intentional: the tabs are for browsing. The sidebar, the left rail
    and the mobile chips list only the spaces the user has joined. */
-const headerSpaces = () => { const order = st.tabOrder.length ? st.tabOrder : topSpaces().map(x => x.id); return order.map(sp).filter(x => x && !st.tabHidden.has(x.id)); };
+/* Default header-tab order: joined spaces first, then the rest, each by activity. "Edit header tabs" replaces it. */
+const defaultTabOrder = () => { const top = topSpaces(); return [...top.filter(x => JOINED.includes(x.id)), ...top.filter(x => !JOINED.includes(x.id))].map(x => x.id); };
+const headerSpaces = () => { const order = st.tabOrder.length ? st.tabOrder : defaultTabOrder(); return order.map(sp).filter(x => x && !st.tabHidden.has(x.id)); };
 function ysList() {
   const joined = SPACES.filter(x => JOINED.includes(x.id)), more = SPACES.filter(x => !JOINED.includes(x.id));
-  const row = (x, j) => `<div class="ys-row"><span class="ys-gw">${glyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">${spLabel(x)}</button>${rfMark(x, 'row')}${j ? roleHTML(x) : ''}</span><p>${esc(x.desc)}</p></div>${j ? `<button class="btn sm" type="button" data-leave="${x.id}">Leave</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Join</button>`}</div>`;
+  const row = (x, j) => `<div class="ys-row"><span class="ys-gw">${glyph(x, 'lg')}</span><div class="ys-tx"><span class="ys-nm"><button class="dg-name" type="button" data-space="${x.id}">${spLabel(x)}</button>${rfMark(x, 'row')}${j ? roleHTML(x) : ''}</span><p>${esc(x.desc)}</p></div>${j ? `<button class="btn sm" type="button" data-leave="${x.id}">${x.ref ? 'Unfollow' : 'Leave'}</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">${x.ref ? 'Follow' : 'Join'}</button>`}</div>`;
   return `<section class="ys-sec"><h3>Joined</h3>${joined.map(x => row(x, true)).join('') || '<p class="muted">You have not joined any spaces.</p>'}</section><section class="ys-sec"><h3 class="ys-h">Discover<button class="tlink" type="button" data-sub="browse">Browse all</button></h3>${more.map(x => row(x, false)).join('')}</section>`;
 }
 const GRIP = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></svg>';
 let dragId = null;
 document.addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r) return; dragId = r.dataset.drag; r.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} });
 document.addEventListener('dragover', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const b = r.getBoundingClientRect(); document.querySelectorAll('.drop-a, .drop-b').forEach(x => x.classList.remove('drop-a', 'drop-b')); if (r.dataset.drag !== dragId) r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-a' : 'drop-b'); });
-document.addEventListener('drop', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const ids = st.tabOrder.length ? [...st.tabOrder] : topSpaces().map(x => x.id); const after = r.classList.contains('drop-b'); const from = ids.indexOf(dragId); ids.splice(from, 1); let to = ids.indexOf(r.dataset.drag); if (after) to++; ids.splice(to, 0, dragId); st.tabOrder = ids; dragId = null; renderAll(); });
+document.addEventListener('drop', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const after = r.classList.contains('drop-b'); const from = ids.indexOf(dragId); ids.splice(from, 1); let to = ids.indexOf(r.dataset.drag); if (after) to++; ids.splice(to, 0, dragId); st.tabOrder = ids; dragId = null; renderAll(); });
 document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.dragging, .drop-a, .drop-b').forEach(x => x.classList.remove('dragging', 'drop-a', 'drop-b')); });
 function ysOrder() {
-  const order = st.tabOrder.length ? st.tabOrder : topSpaces().map(x => x.id);
+  const order = st.tabOrder.length ? st.tabOrder : defaultTabOrder();
   return `<p class="muted ys-note">Choose which spaces appear as tabs in the header. Drag to reorder.</p><div class="ts-list ys-olist">${order.map((id, k) => { const x = sp(id), on = !st.tabHidden.has(id); return `<div class="ts-row ts-srow ys-drag" draggable="true" data-drag="${id}"><span class="ys-grip" aria-hidden="true">${GRIP}</span><span class="ts-n num">${k + 1}</span><span class="ts-move"><button class="iconbtn" type="button" data-tabmove="${id}:-1" aria-label="Move #${x.name} up" ${k === 0 ? 'disabled' : ''}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-tabmove="${id}:1" aria-label="Move #${x.name} down" ${k === order.length - 1 ? 'disabled' : ''}>${I.chev}</button></span>${glyph(x)}<span class="ts-tx"><b>#${x.name}</b><small>${JOINED.includes(id) ? role(x) : 'Not joined'}</small></span><label class="ts-sw"><input type="checkbox" data-tabshow="${id}" ${on ? 'checked' : ''} aria-label="Show #${x.name} in the header"><span class="sw-track" aria-hidden="true"></span></label></div>`; }).join('')}</div>`;
 }
 const joinCtl = x => st.auth !== 'in' ? '' : JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Joined</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Join</button>`;
@@ -3413,6 +3879,646 @@ function renderNative() {
 }
 
 /* BEGIN reference spaces */
+/* Reference spaces: a space an organization runs as the reference for its product. Visitors
+   search and ask; the agent answers only from the organization's connected sources (docs, help
+   center, changelog, repository).
+   Organizations, products and people below are invented. */
+USERS['maya.r'] = 5; USERS['devin_o'] = 3; USERS['tove'] = 2; USERS['ruth.k'] = 6;
+NAMES['maya.r'] = 'Maya R.'; NAMES['devin_o'] = 'Devin O.'; NAMES['tove'] = 'Tove'; NAMES['ruth.k'] = 'Ruth K.';
+SPACES.push(
+  { id: 'sablefield', name: 'sablefield', title: 'Sablefield', av: 5, members: 6120, online: 150, posts: 1284, used: 7.9e6, budget: 20e6, created: 'Oct 2026',
+    desc: 'Official answers about Sablefield, the hosted Postgres-compatible database with sync to client devices. Answers come from Sablefield’s documentation, help center, changelog and GitHub repository.',
+    rules: ['Questions and answers are public. Do not include keys, connection strings or customer data.', 'Account-specific questions go to Sablefield support.'],
+    pages: [], mods: [['maya.r', 'owner'], ['devin_o', 'admin']],
+    ref: { org: 'Sablefield', kind: 'Startup', domain: 'sablefield.dev', verified: 'Nov 2', verifyBy: 'DNS record on sablefield.dev', version: 'Sablefield 4.2', answers: 1284, updated: '1h',
+      perDay: 10,
+      staff: [['maya.r', 'Owner', 'maya@sablefield.dev'], ['devin_o', 'Admin', 'devin@sablefield.dev'], ['ines.v', 'Admin', 'ines@sablefield.dev']] } },
+  { id: 'larkdown', name: 'larkdown', title: 'Larkdown', av: 2, members: 2210, online: 64, posts: 402, used: 1.2e6, budget: 4e6, created: 'Oct 2026',
+    desc: 'Answers about Larkdown, the open-source Markdown notes editor, from its documentation, RFCs, release notes and maintainer replies on GitHub.',
+    rules: ['Bug reports go to the issue tracker, not here.'], pages: [], mods: [['tove', 'owner']],
+    ref: { org: 'Larkdown project', kind: 'Open-source project', domain: 'larkdown.org', verified: 'Oct 21', verifyBy: 'GitHub organization larkdown', version: 'Larkdown 1.9', answers: 402, updated: '4h',
+      perDay: 5, staff: [['tove', 'Owner', 'tove@larkdown.org']] } },
+  { id: 'tallyfern', name: 'tallyfern', title: 'Tallyfern', av: 4, members: 980, online: 21, posts: 233, used: 2.4e6, budget: 10e6, created: 'Nov 2026',
+    desc: 'Help with Tallyfern bookkeeping for small businesses: bank connections, invoices and reports. Answers come from the Tallyfern help center.',
+    rules: ['Never post bank details or invoices with customer names.'], pages: [], mods: [['ruth.k', 'owner']],
+    ref: { org: 'Tallyfern', kind: 'Company', domain: 'tallyfern.com', verified: 'Nov 6', verifyBy: 'Email at tallyfern.com', version: 'Current release', answers: 233, updated: '1d',
+      perDay: 10, staff: [['ruth.k', 'Owner', 'ruth@tallyfern.com']] } },
+);
+SPACES.forEach(s => { s.pct = s.used / s.budget; });
+JOINED.push('sablefield');
+
+const RF_SRC = {
+  sablefield: [
+    { id: 'docs', kind: 'docs', name: 'Documentation', where: 'docs.sablefield.dev', n: '412 pages', sync: '1h ago', how: 'Crawled daily and when a page is published' },
+    { id: 'help', kind: 'help', name: 'Help center', where: 'help.sablefield.dev', n: '96 articles', sync: '1h ago', how: 'Sitemap, checked hourly' },
+    { id: 'log', kind: 'log', name: 'Changelog', where: 'sablefield.dev/changelog', n: '58 releases', sync: 'Nov 12', how: 'RSS feed' },
+    { id: 'gh', kind: 'repo', name: 'GitHub repository', where: 'github.com/sablefield/sablefield', n: 'README, /docs, releases, maintainer replies in issues', sync: '3h ago', how: 'Webhook on push and release' },
+    { id: 'api', kind: 'api', name: 'API reference', where: 'api.sablefield.dev/openapi.json', n: '186 endpoints', sync: '1d ago', how: 'OpenAPI file, checked daily' },
+    { id: 'web', kind: 'web', name: 'Website pages', where: 'sablefield.dev/pricing, /security, /legal', n: '14 pages', sync: '1d ago', how: 'Listed pages, checked daily' },
+  ],
+  larkdown: [
+    { id: 'docs', kind: 'docs', name: 'Documentation', where: 'larkdown.org/docs', n: '138 pages', sync: '4h ago', how: 'Built from /docs on each release' },
+    { id: 'gh', kind: 'repo', name: 'GitHub repository', where: 'github.com/larkdown/larkdown', n: 'README, RFCs, releases, maintainer replies', sync: '4h ago', how: 'Webhook on push' },
+  ],
+  tallyfern: [
+    { id: 'help', kind: 'help', name: 'Help center', where: 'help.tallyfern.com', n: '240 articles', sync: '1d ago', how: 'Sitemap, checked daily' },
+    { id: 'log', kind: 'log', name: 'Product updates', where: 'tallyfern.com/updates', n: '31 posts', sync: '2d ago', how: 'RSS feed' },
+  ],
+};
+const RF_TOPICS = {
+  sablefield: [['start', 'Getting started'], ['sync', 'Sync rules'], ['replicas', 'Replicas and regions'], ['auth', 'Auth and keys'], ['sdk', 'Client SDKs'], ['billing', 'Plans and billing'], ['migr', 'Migrations'], ['sec', 'Security and compliance']],
+  larkdown: [['basics', 'Basics'], ['gitsync', 'Git sync'], ['plugins', 'Plugins']],
+  tallyfern: [['bank', 'Bank connections'], ['inv', 'Invoices'], ['rep', 'Reports']],
+};
+const RF_HTML = {
+  q1: `<p>Yes. Since Sablefield 4.2 you can pin a read replica to one region with <code>--pin-region</code>. A pinned replica stays in that region during failover and is not moved by automatic placement. <sup class="cite">1</sup></p>
+<h4>Create a pinned replica</h4>
+<pre><code>sable replicas create --project acme-prod --pin-region eu-central-2</code></pre>
+<p>To pin an existing replica, run <code>sable replicas update &lt;replica-id&gt; --pin-region eu-central-2</code>. The replica restarts once, which usually takes under a minute. <sup class="cite">1</sup></p>
+<h4>What changed in 4.2</h4>
+<p>Before 4.2 the flag was <code>--region</code>. It only set the initial placement, and replicas could move during failover. <code>--region</code> still works but is deprecated and prints a warning. <sup class="cite">2</sup></p>
+<h4>Limits</h4>
+<ul><li>Pinning is available on the Team and Enterprise plans. <sup class="cite">1</sup></li><li>A project can pin up to 5 replicas per region. <sup class="cite">1</sup></li><li>In the API, set <code>pin_region</code> on <code>POST /v1/replicas</code>. <sup class="cite">3</sup></li></ul>`,
+  q2: `<p><code>E_SYNC_SCOPE</code> means the rule's query can return rows outside the scope the rule declares. Sablefield checks this when the rule is deployed, not when clients sync, so the deploy fails before any client is affected. <sup class="cite">1</sup></p>
+<h4>Common causes</h4>
+<ol><li>The <code>where</code> clause does not filter on the scope column. A rule with <code>scope: user</code> must filter by <code>auth.user_id()</code>. <sup class="cite">1</sup></li><li>A subquery reads from a table that has no scope column. <sup class="cite">2</sup></li><li>The rule uses <code>or</code> with a branch that does not reference the scope. <sup class="cite">2</sup></li></ol>
+<h4>Example</h4>
+<pre><code>-- fails with E_SYNC_SCOPE
+select * from notes where archived = false;
+
+-- passes
+select * from notes where owner_id = auth.user_id() and archived = false;</code></pre>
+<p>Run <code>sable rules check</code> locally to get the same error with a line number before you deploy. <sup class="cite">3</sup></p>`,
+  q3: `<p>When a project on the Free plan goes over 100,000 rows, inserts fail with <code>E_PLAN_LIMIT</code>. Reads, updates and deletes keep working, and no data is removed. <sup class="cite">1</sup></p>
+<p>Sablefield emails the project owners when the project reaches 80% and 100% of the limit. <sup class="cite">2</sup></p>
+<p>To add rows again, delete data or upgrade to the Team plan. The limit is lifted within a minute of the upgrade. <sup class="cite">1</sup></p>`,
+  q4: `<p>Create a second service key, deploy it, then revoke the old one. Sablefield accepts both keys while both exist, so requests do not fail during the switch. <sup class="cite">1</sup></p>
+<ol><li>Create a new key: <code>sable keys create --role service --name service-2026-11</code>. <sup class="cite">1</sup></li><li>Update the secret in every server and job that uses it, and deploy.</li><li>Check that the old key is no longer used. <code>sable keys usage &lt;old-key-id&gt;</code> shows the time of its last request. <sup class="cite">2</sup></li><li>Revoke the old key: <code>sable keys revoke &lt;old-key-id&gt;</code>.</li></ol>
+<p>A project can have up to 10 active service keys. A revoked key stops working in all regions within 30 seconds. <sup class="cite">3</sup></p>`,
+  q5: `<p>Yes. The Swift SDK stores writes in a local queue while the device is offline and sends them in order when it reconnects. <sup class="cite">1</sup></p>
+<p>The queue holds up to 10,000 writes. After that, new writes throw <code>SableError.queueFull</code>. <sup class="cite">1</sup></p>
+<p>Conflicts are resolved with last-write-wins per column. <sup class="cite">2</sup></p>`,
+  new: `<p>Declare the rule with <code>scope: user</code> and filter on the owner column with <code>auth.user_id()</code>. Clients then receive only the rows where the filter matches the signed-in user. <sup class="cite">1</sup></p>
+<pre><code>rule "my_notes" {
+  scope: user
+  query: select * from notes where owner_id = auth.user_id()
+}</code></pre>
+<p>Deploy with <code>sable rules deploy</code>. If the filter is missing, the deploy fails with <code>E_SYNC_SCOPE</code>. <sup class="cite">2</sup></p>`,
+};
+const RF_Q = [
+  { id: 'q1', s: 'sablefield', t: 'replicas', q: 'Can I pin a read replica to a specific region?', sum: 'Yes, since 4.2: use --pin-region when you create or update a replica. Pinned replicas stay in their region during failover. Team and Enterprise plans only.', asks: 37, help: 94, nrat: 48, checked: '3h', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '6w', by: 'jun.park', upd: 'Nov 12',
+    src: [['docs', 'Read replicas › Region pinning', 'docs.sablefield.dev/guides/replicas#pinning'], ['log', 'Release 4.2.0', 'sablefield.dev/changelog/4-2-0'], ['api', 'POST /v1/replicas', 'api.sablefield.dev/reference#replicas-create']],
+    kw: 'replica region pin pinning failover location placement',
+    fu: [{ u: 'oduya', age: '2d', q: 'Does pinning change the replica’s connection string?', a: 'No. The connection string stays the same; pinning only changes where the replica can be placed during failover. The docs page on region pinning says this in its first paragraph.' }] },
+  { id: 'q2', s: 'sablefield', t: 'sync', q: 'Why does a sync rule fail to deploy with E_SYNC_SCOPE?', sum: 'The rule’s query can return rows outside its declared scope. Filter on the scope column, for example owner_id = auth.user_id().', asks: 52, help: 91, nrat: 70, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Sync', age: '2mo', by: 'mira_k', upd: 'Oct 28',
+    src: [['docs', 'Sync rules › Scopes', 'docs.sablefield.dev/sync/rules#scopes'], ['help', 'Fixing sync rule deploy errors', 'help.sablefield.dev/articles/sync-deploy-errors'], ['gh', 'CLI reference: sable rules check', 'github.com/sablefield/sablefield/blob/main/docs/cli.md']],
+    kw: 'sync rule error deploy scope e_sync_scope fail reject' },
+  { id: 'q3', s: 'sablefield', t: 'billing', q: 'What happens when a project goes over the Free plan row limit?', sum: 'Inserts fail with E_PLAN_LIMIT; reads, updates and deletes keep working. Owners get emails at 80% and 100% of the limit.', asks: 29, help: 71, nrat: 24, reports: 2, checked: '6h', ver: 'Sablefield 4.2', path: 'Help center › Billing', age: '3w', by: 'hal_b', upd: 'Oct 24',
+    src: [['help', 'Plan limits', 'help.sablefield.dev/articles/plan-limits'], ['help', 'Usage emails', 'help.sablefield.dev/articles/usage-emails'], ['web', 'Pricing', 'sablefield.dev/pricing']],
+    kw: 'free plan row limit over exceed quota insert fail rows' },
+  { id: 'q4', s: 'sablefield', t: 'auth', q: 'How do I rotate the service key without downtime?', sum: 'Create a second service key, deploy it, check that the old key is unused, then revoke it. Both keys work while both exist.', asks: 18, help: 96, nrat: 21, checked: '2d', ver: 'Sablefield 4.2', path: 'Docs › Security', age: '5w', by: 'lettie', upd: 'Nov 4',
+    src: [['docs', 'API keys › Rotating keys', 'docs.sablefield.dev/security/keys#rotate'], ['docs', 'CLI: sable keys usage', 'docs.sablefield.dev/cli/keys#usage'], ['api', 'Limits', 'api.sablefield.dev/reference#limits']],
+    kw: 'rotate service key secret downtime revoke' },
+  { id: 'q5', s: 'sablefield', t: 'sdk', q: 'Does the Swift SDK queue writes while the device is offline?', sum: 'Yes. Writes are queued locally and sent in order on reconnect.', asks: 24, help: 88, nrat: 19, checked: '2d', ver: 'Swift SDK 3.7', path: 'Help center › Client SDKs', age: '2mo', by: 'ines.v', upd: 'Oct 20',
+    src: [['help', 'Offline writes in the Swift SDK', 'help.sablefield.dev/articles/swift-offline'], ['docs', 'Conflict resolution', 'docs.sablefield.dev/sync/conflicts']],
+    kw: 'swift ios offline write queue sdk conflict' },
+  { id: 'q6', s: 'sablefield', t: 'start', q: 'How do I connect to my database with psql?', sum: 'Copy the connection string from Project › Connect and pass it to psql. TLS is required.', asks: 61, help: 97, nrat: 80, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Getting started', age: '2mo', by: 'sol', upd: 'Oct 2', src: [['docs', 'Connect › psql', 'docs.sablefield.dev/start/connect#psql']], kw: 'connect psql connection string tls' },
+  { id: 'q7', s: 'sablefield', t: 'start', q: 'Which Postgres extensions are supported?', sum: 'pgvector, PostGIS, pg_trgm, uuid-ossp and 14 others. The Extensions page has the full list.', asks: 44, help: 90, nrat: 38, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Reference', age: '2mo', by: 'mira_k', upd: 'Nov 12', src: [['docs', 'Extensions', 'docs.sablefield.dev/reference/extensions'], ['log', 'Release 4.2.0', 'sablefield.dev/changelog/4-2-0']], kw: 'postgres extension extensions supported pgvector postgis' },
+  { id: 'q8', s: 'sablefield', t: 'sync', q: 'Can a sync rule join two tables?', sum: 'Yes, if every joined table has the scope column and the join filters on it. Otherwise the deploy fails with E_SYNC_SCOPE.', asks: 3, help: 0, nrat: 0, checked: '5h', ver: 'Sablefield 4.2', path: 'Docs › Sync', age: '5h', by: 'hal_b', upd: 'Nov 15', src: [['docs', 'Sync rules › Joins', 'docs.sablefield.dev/sync/rules#joins'], ['docs', 'Sync rules › Scopes', 'docs.sablefield.dev/sync/rules#scopes']], kw: 'sync rule join two tables' },
+  { id: 'q9', s: 'sablefield', t: 'sync', q: 'What does the error E_SYNC_SCOPE mean?', sum: 'The sync rule can return rows outside its declared scope, so the deploy is rejected.', asks: 1, help: 0, nrat: 0, checked: '3h', ver: 'Sablefield 4.2', path: 'Docs › Sync', age: '3h', by: 'oduya', upd: 'Nov 15', src: [['docs', 'Sync rules › Scopes', 'docs.sablefield.dev/sync/rules#scopes']], kw: 'e_sync_scope error mean sync' },
+  { id: 'q10', s: 'sablefield', t: 'replicas', q: 'How much replication lag should I expect on read replicas?', sum: 'Usually under 100 ms within a continent and under 400 ms between continents. The dashboard shows lag per replica.', asks: 15, help: 89, nrat: 12, checked: '3h', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '1mo', by: 'oduya', upd: 'Nov 12', src: [['docs', 'Read replicas › Lag', 'docs.sablefield.dev/guides/replicas#lag']], kw: 'replication lag replica delay latency' },
+  { id: 'q11', s: 'sablefield', t: 'billing', q: 'Do unused credits roll over to the next month?', sum: 'No. Included usage resets on the first of each month. Prepaid Enterprise credits roll over for 12 months.', asks: 33, help: 92, nrat: 30, checked: '1d', ver: 'Sablefield 4.2', path: 'Help center › Billing', age: '7w', by: 'jun.park', upd: 'Oct 8', src: [['help', 'How billing works', 'help.sablefield.dev/articles/billing']], kw: 'credits roll over month unused billing' },
+  { id: 'q12', s: 'sablefield', t: 'replicas', q: 'Can I change a project’s region after creating it?', sum: 'No. Create a project in the new region and copy data with sable migrate copy. Replicas can be added in other regions.', asks: 20, help: 85, nrat: 16, checked: '3h', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '5w', by: 'lettie', upd: 'Oct 30', src: [['docs', 'Projects › Regions', 'docs.sablefield.dev/guides/projects#regions']], kw: 'change project region move' },
+  { id: 'q13', s: 'sablefield', t: 'migr', q: 'How do I run migrations in CI?', sum: 'Run sable migrate apply with a service key in the pipeline. It is idempotent and takes an advisory lock, so parallel jobs wait.', asks: 26, help: 93, nrat: 22, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '6w', by: 'mira_k', upd: 'Oct 22', src: [['docs', 'Migrations › CI', 'docs.sablefield.dev/guides/migrations#ci']], kw: 'migration migrations ci pipeline deploy' },
+  { id: 'q14', s: 'sablefield', t: 'auth', q: 'Can I use my own OIDC provider for client sign-in?', sum: 'Yes. Add the issuer URL and audience under Auth › Providers. Claims are available in rules through auth.claims().', asks: 4, help: 0, nrat: 0, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Security', age: '1d', by: 'tomasz', upd: 'Nov 14', src: [['docs', 'Auth › Custom providers', 'docs.sablefield.dev/security/auth#oidc'], ['api', 'POST /v1/auth/providers', 'api.sablefield.dev/reference#auth-providers'], ['gh', 'Example: OIDC with sync rules', 'github.com/sablefield/sablefield/tree/main/examples/oidc']], kw: 'oidc provider sign-in sign in auth login sso' },
+  { id: 'q15', s: 'sablefield', t: 'sdk', q: 'Is there a Kotlin SDK for Android?', sum: 'Yes. sablefield-kotlin 2.x supports Android API 26 and later, including offline writes.', asks: 17, help: 95, nrat: 14, checked: '2d', ver: 'Kotlin SDK 2.4', path: 'Docs › Client SDKs', age: '7w', by: 'sol', upd: 'Nov 13', src: [['docs', 'Kotlin SDK', 'docs.sablefield.dev/sdk/kotlin']], kw: 'kotlin android sdk' },
+  { id: 'q16', s: 'sablefield', t: 'migr', q: 'Can I roll back a migration that already ran in production?', sum: 'Only if the migration has a down step; sable migrate rollback runs it. Data changes are not rolled back automatically.', asks: 1, help: 0, nrat: 0, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '1d', by: 'jun.park', upd: 'Nov 14', src: [['docs', 'Migrations › Rollback', 'docs.sablefield.dev/guides/migrations#rollback']], kw: 'rollback roll back migration production undo' },
+  { id: 'q17', s: 'sablefield', t: 'sec', q: 'Is Sablefield SOC 2 compliant?', sum: 'Yes. Sablefield has a SOC 2 Type II report, available under NDA from the security page. A GDPR data processing agreement is also available.', asks: 22, help: 94, nrat: 18, checked: '1d', ver: 'Sablefield 4.2', path: 'Website › Security', age: '2mo', by: 'hal_b', upd: 'Oct 1', src: [['web', 'Security', 'sablefield.dev/security']], kw: 'soc2 soc 2 compliance compliant security audit gdpr' },
+  { id: 'q18', s: 'sablefield', t: 'sec', q: 'Where is my data stored?', sum: 'In the region you pick when you create the project. Backups stay in the same region.', asks: 14, help: 90, nrat: 9, checked: '1d', ver: 'Sablefield 4.2', path: 'Website › Security', age: '2mo', by: 'lettie', upd: 'Oct 1', src: [['web', 'Security › Data residency', 'sablefield.dev/security#residency']], kw: 'data stored location residency region backup' },
+  { id: 'l1', s: 'larkdown', t: 'gitsync', q: 'How do I sync a vault with a Git repository?', sum: 'Enable Git sync in Settings › Sync, choose the remote and an interval. Conflicts open in a merge view.', asks: 41, help: 92, nrat: 30, checked: '4h', ver: 'Larkdown 1.9', path: 'Docs › Sync', age: '1mo', by: 'lettie', upd: 'Nov 1', src: [['docs', 'Git sync', 'larkdown.org/docs/git-sync']], kw: 'git sync vault repository' },
+  { id: 'l2', s: 'larkdown', t: 'basics', q: 'Does Larkdown render LaTeX math?', sum: 'Yes. Inline math uses $…$ and display math uses $$…$$.', asks: 18, help: 88, nrat: 10, checked: '4h', ver: 'Larkdown 1.9', path: 'Docs › Writing', age: '3w', by: 'mira_k', upd: 'Oct 25', src: [['docs', 'Math', 'larkdown.org/docs/math']], kw: 'latex math render katex' },
+  { id: 'l3', s: 'larkdown', t: 'plugins', q: 'How do I write a plugin?', sum: 'Start from the plugin template repository. Plugins are TypeScript modules that register commands and views.', asks: 26, help: 90, nrat: 20, checked: '4h', ver: 'Larkdown 1.9', path: 'Docs › Plugins', age: '5w', by: 'tomasz', upd: 'Oct 30', src: [['docs', 'Plugin API', 'larkdown.org/docs/plugins'], ['gh', 'Plugin template', 'github.com/larkdown/plugin-template']], kw: 'plugin write extension api' },
+  { id: 'l4', s: 'larkdown', t: 'basics', q: 'Can I use Larkdown on a phone?', sum: 'Not yet. A mobile app is proposed in RFC 0042 in the repository.', asks: 12, help: 80, nrat: 6, checked: '4h', ver: 'Larkdown 1.9', path: 'GitHub › RFCs', age: '2w', by: 'sol', upd: 'Nov 2', src: [['gh', 'RFC 0042: Mobile app', 'github.com/larkdown/larkdown/blob/main/rfcs/0042-mobile.md']], kw: 'mobile phone ios android' },
+  { id: 't1', s: 'tallyfern', t: 'bank', q: 'How do I connect my bank account?', sum: 'Go to Banking › Add account and sign in to your bank in the window that opens. Transactions import within an hour.', asks: 58, help: 91, nrat: 44, checked: '1d', ver: 'Current release', path: 'Help center › Banking', age: '1w', by: 'oduya', upd: 'Nov 7', src: [['help', 'Connect a bank account', 'help.tallyfern.com/bank-connect']], kw: 'bank connect account' },
+  { id: 't2', s: 'tallyfern', t: 'rep', q: 'Can I export reports for my accountant?', sum: 'Yes. Reports › Export creates a ZIP with the profit and loss statement, balance sheet and ledger as CSV and PDF.', asks: 31, help: 94, nrat: 25, checked: '1d', ver: 'Current release', path: 'Help center › Reports', age: '1w', by: 'hal_b', upd: 'Nov 7', src: [['help', 'Export reports', 'help.tallyfern.com/export']], kw: 'export report accountant csv pdf' },
+  { id: 't3', s: 'tallyfern', t: 'inv', q: 'How do I void an invoice?', sum: 'Open the invoice and choose More › Void. A voided invoice stays in the ledger with a zero balance.', asks: 12, help: 85, nrat: 8, checked: '1d', ver: 'Current release', path: 'Help center › Invoices', age: '4d', by: 'jun.park', upd: 'Nov 11', src: [['help', 'Void or delete an invoice', 'help.tallyfern.com/void-invoice']], kw: 'void invoice cancel delete' },
+];
+const RF_GAPS = [
+  { id: 'g1', re: /hipaa|\bbaa\b|\bphi\b|health/i },
+  { id: 'g2', re: /self.?host|on.?prem|own servers|kubernetes/i },
+  { id: 'g3', re: /nonprofit|non-profit|education|student|discount/i },
+  { id: 'g4', re: /windows|desktop|\.net|c#/i },
+  { id: 'g5', re: /mysql|mariadb/i },
+];
+const RF_WEEKS = [['Sep 21', 312], ['Sep 28', 344], ['Oct 5', 401], ['Oct 12', 388], ['Oct 19', 455], ['Oct 26', 472], ['Nov 2', 510], ['Nov 9', 498]];
+Object.assign(st, {
+  rfRole: 'visitor',
+  rf: { view: 'land', q: '', qid: null, topic: null, ask: null, fu: '', fuAdd: {}, added: [], qs: {}, toast: null, notify: {},
+    set: 'org', wiz: null, report: { why: 'wrong', det: '' }, seeded: {} },
+});
+const RF_NEWSUM = { sablefield: 'Declare the rule with scope: user and filter on the owner column with auth.user_id().', larkdown: 'Enable Git sync in Settings › Sync and choose the remote; Larkdown commits on the interval you set.', tallyfern: 'Reports › Export creates a ZIP with the main reports as CSV and PDF.' };
+RF_HTML.new_larkdown = '<p>Enable Git sync in Settings › Sync, choose the remote, and set how often Larkdown commits and pulls. <sup class="cite">1</sup> If the same note changed on two devices, Larkdown opens both versions in a merge view instead of overwriting one. <sup class="cite">1</sup></p>';
+RF_HTML.new_tallyfern = '<p>Open Reports › Export and pick the period. Tallyfern creates a ZIP with the profit and loss statement, the balance sheet and the general ledger, each as CSV and PDF. <sup class="cite">1</sup></p>';
+
+/* ---------- reference spaces: helpers ---------- */
+const RFI = {
+  seal: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.2 9.7 2.5l2.1-.1.6 2 1.7 1.3-.7 2 .7 2-1.7 1.3-.6 2-2.1-.1L8 14.8l-1.7-1.3-2.1.1-.6-2-1.7-1.3.7-2-.7-2 1.7-1.3.6-2 2.1.1z"/><path d="M5.5 8.2 7.2 9.8l3.3-3.4" fill="none" style="stroke:var(--pane)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  docs: I.book,
+  help: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1v.3M8 11.3v.1" stroke-linecap="round"/></svg>',
+  log: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.8" cy="4" r=".6" fill="currentColor"/><circle cx="2.8" cy="8" r=".6" fill="currentColor"/><circle cx="2.8" cy="12" r=".6" fill="currentColor"/></svg>',
+  repo: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.8" r="1.5"/><circle cx="4.5" cy="12.2" r="1.5"/><circle cx="11.5" cy="6" r="1.5"/><path d="M4.5 5.3v5.4M11.5 7.5c0 2.2-2.6 2.2-5.6 3.6"/></svg>',
+  api: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3C4 3 4 4 4 5.2S3.5 7.5 2.5 8c1 .5 1.5 1.6 1.5 2.8S4 13 5.5 13M10.5 3C12 3 12 4 12 5.2s.5 2.3 1.5 2.8c-1 .5-1.5 1.6-1.5 2.8S12 13 10.5 13"/></svg>',
+  web: GLOBE,
+  file: I.page,
+  warn: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M8 2.3 14.2 13H1.8z"/><path d="M8 6.5v3M8 11.2v.1"/></svg>',
+  bell: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3zM6.5 14h3" stroke-linecap="round"/></svg>',
+  eyeoff: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2 8s2.2-4.2 6-4.2S14 8 14 8s-2.2 4.2-6 4.2S2 8 2 8z"/><circle cx="8" cy="8" r="1.8"/><path d="M2.5 13.5 13.5 2.5"/></svg>',
+  chart: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2.5 13.5h11M4.5 11V8M8 11V4.5M11.5 11V6.5"/></svg>',
+  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5 3.8 3.5h8.4L14 9.5v3.5H2zM2 9.5h3.5l1 1.5h3l1-1.5H14"/></svg>',
+  gap: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.8" stroke-dasharray="2.4 2"/><path d="M8 5.5v3.2M8 10.8v.1"/></svg>',
+  arrow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
+};
+const rfSpace = () => sp(st.space);
+const rfIsStaff = s => !!(s && s.ref && (s.mine || (s.id === 'sablefield' && st.rfRole === 'staff')));
+const spLabel = x => x.ref ? esc(x.title) : '#' + x.name;
+const rfTopic = (sid, t) => ((RF_TOPICS[sid] || []).find(x => x[0] === t) || [t, t])[1];
+const rfSrcOf = (sid, id) => (RF_SRC[sid] || []).find(x => x.id === id) || { kind: 'web', name: 'Source', where: '' };
+/* A question with the changes staff and visitors made in this session applied on top. */
+function rfQ(id) {
+  const b = RF_Q.find(x => x.id === id) || st.rf.added.find(x => x.id === id);
+  if (!b) return null;
+  const o = { ...b, ...(st.rf.qs[id] || {}) };
+  return o;
+}
+const rfAll = sid => [...RF_Q.filter(x => x.s === sid), ...st.rf.added.filter(x => x.s === sid)].map(x => rfQ(x.id)).filter(x => !x.hidden);
+const rfHtml = q => q.html || RF_HTML[q.id] || `<p>${esc(q.sum)}</p>`;
+const rfNum = n => n.toLocaleString('en-US');
+
+/* ---------- org badge (Org badge control) ---------- */
+function rfMark(x, ctx) {
+  if (!x || !x.ref || x.draft) return '';
+  const t = `Verified organization: ${esc(x.ref.domain)}`;
+  return `<span class="rf-seal${ctx === 'tab' ? ' sm' : ''}" title="${t}" aria-label="${t}">${RFI.seal}</span>`;
+}
+
+
+/* ---------- search ---------- */
+const RF_STOP = new Set('a an the i my me we our to of in on for and or is are do does did can could how what why when where with be it its this that you your from at by as which will would there should if i’m im get use using any have has'.split(' '));
+const rfToks = s => s.toLowerCase().replace(/[^a-z0-9_ ]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !RF_STOP.has(w) && w !== 'sablefield').map(w => w.replace(/(ies|es|s)$/, ''));
+function rfSearch(sid, q) {
+  const qt = [...new Set(rfToks(q))]; if (!qt.length) return [];
+  return rfAll(sid).map(x => { const it = new Set(rfToks(`${x.q} ${x.kw || ''} ${rfTopic(sid, x.t)}`)); const hit = qt.filter(w => it.has(w) || [...it].some(v => v.length > 3 && (v.startsWith(w) || w.startsWith(v)))).length; return { x, sc: hit / qt.length }; })
+    .filter(r => r.sc >= 0.34).sort((a, b) => b.sc - a.sc || b.x.asks - a.x.asks).slice(0, 5).map(r => r.x);
+}
+const rfHi = (text, q) => { let h = esc(text); rfToks(q).filter(w => w.length > 2).forEach(w => { h = h.replace(new RegExp(`\\b(${w.replace(/[^a-z0-9_]/g, '')}[a-z]*)`, 'gi'), '<mark>$1</mark>'); }); return h; };
+const RF_TRY = { sablefield: ['Can I pin a read replica to a region?', 'Will Sablefield sign a HIPAA business associate agreement?', 'How do I restrict a sync rule to the current user’s rows?'], larkdown: ['How do I sync my notes with Git?'], tallyfern: ['How do I export reports?'] };
+
+/* ---------- page frame ---------- */
+function layoutRef() {
+  const s = rfSpace(), v = st.rf.view, staff = rfIsStaff(s);
+  const staffV = ['sources', 'stats', 'settings'].includes(v);
+  if (staffV && !staff) st.rf.view = 'land';
+  const full = ['land', 'about'].includes(st.rf.view);
+  return `<div class="A C Af H"><div class="rf-page">${topHeader()}${full ? rfHero(s) : rfSlim(s)}${rfTabs(s)}<div class="rf-body rf-v-${st.rf.view}">${rfView(s)}</div>${st.rf.toast ? `<div class="rf-toast" role="status">${I.check}${esc(st.rf.toast)}</div>` : ''}</div></div>`;
+}
+const rfFollow = s => st.auth === 'out' ? `<button class="btn primary" type="button" data-act="signin">${RFI.bell}Follow</button>` : JOINED.includes(s.id) ? `<button class="btn" type="button" data-leave="${s.id}">${I.check}Following</button>` : `<button class="btn primary" type="button" data-join="${s.id}">${RFI.bell}Follow</button>`;
+function rfHero(s) {
+  const r = s.ref;
+  return `<div class="rf-hero" style="--sp:${avColor(s.av)}">${glyph(s, 'xl')}<div class="rf-hero-tx"><div class="rf-hero-n"><h2>${esc(s.title)}</h2>${rfMark(s, 'hero')}${s.draft ? '<span class="rf-draft">Draft · only staff can see this space</span>' : ''}</div><p>${esc(s.desc)}</p>
+    <div class="rf-hero-m"><span>${GLOBE}${esc(r.domain)}</span><span title="${esc(r.verifyBy)}">${RFI.seal}Verified ${esc(r.verified)}</span><span class="num">${rfNum(r.answers)} answers</span><span>Sources updated ${esc(r.updated)} ago</span></div></div>
+    <div class="rf-hero-a">${s.draft ? '' : rfFollow(s)}</div></div>`;
+}
+function rfSlim(s) {
+  return `<div class="rf-slim" style="--sp:${avColor(s.av)}"><button class="rf-slim-n" type="button" data-rfv="land">${glyph(s)}<b>${esc(s.title)}</b></button>${rfMark(s, 'row')}<span class="grow"></span>${s.draft ? '' : rfFollow(s)}</div>`;
+}
+function rfTabs(s) {
+  const v = st.rf.view, staff = rfIsStaff(s);
+  const cur = ['land', 'match', 'run', 'ans', 'gap'].includes(v) ? 'land' : v;
+  const tab = (k, l, n, ic) => `<button type="button" class="rf-tab" data-rfv="${k}" aria-current="${cur === k}">${ic || ''}${l}${n ? `<span class="rf-tab-n num">${n}</span>` : ''}</button>`;
+  return `<nav class="rf-tabs" aria-label="${esc(s.title)} sections"><div class="rf-tabs-in">${tab('land', 'Answers')}${tab('about', 'About')}${staff ? `<span class="rf-tabs-sep" aria-hidden="true"></span>${tab('sources', 'Sources')}${tab('stats', 'Analytics')}${tab('settings', 'Settings')}` : ''}</div>${staff ? `<span class="rf-staff">${RFI.seal}Staff</span>` : ''}</nav>`;
+}
+function rfView(s) {
+  const v = st.rf.view;
+  if (v === 'ans') { const q = rfQ(st.rf.qid); if (q) return rfAnswer(q); }
+  if (v === 'run') return rfRun(s);
+  if (v === 'gap') return rfGapView(s);
+  if (v === 'about') return rfAbout(s);
+  if (v === 'sources') return rfSources(s);
+  if (v === 'stats') return rfStats(s);
+  if (v === 'settings') return rfSettings(s);
+  return rfLanding(s);
+}
+function rfUrl() {
+  const s = rfSpace(), v = st.rf.view, base = `session.app/s/${s.name}`;
+  if (v === 'ans') { const q = rfQ(st.rf.qid); return `${base}/a/${q ? q.q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) : ''}`; }
+  return { land: base, about: base + '/about', match: base + '/ask', run: base + '/ask', gap: base + '/ask', sources: base + '/manage/sources', stats: base + '/manage/analytics', settings: base + '/manage/settings' }[v] || base;
+}
+
+/* ---------- landing (Landing control) ---------- */
+function rfSearchBox(s, big) {
+  return `<div class="rf-sbox${big ? ' big' : ''}">${I.search}<input id="rf-q" type="search" autocomplete="off" placeholder="Search or ask a question" aria-label="Search answers or ask a question" value="${esc(st.rf.q)}"><button class="btn primary" type="button" data-rf="ask">Ask</button></div>`;
+}
+/* Matches under the search box, updated as people type. */
+function rfResults() {
+  const s = rfSpace(), q = st.rf.q.trim();
+  if (!q) return '';
+  const m = rfSearch(s.id, q);
+  const row = x => `<button type="button" class="rf-res" data-rfq="${x.id}"><span class="rf-res-q">${rfHi(x.q, q)}</span><span class="rf-res-s">${esc(x.sum)}</span><span class="rf-res-m"><span class="num">${x.asks} asked</span></span></button>`;
+  const ask = `<button type="button" class="rf-res-ask" data-rf="ask">${I.agent}<span><b>Ask “${esc(q)}”</b><small>${m.length ? 'None of these? ' : 'No existing answer matches. '}The agent researches ${esc(s.ref.org)}’s sources, usually in under a minute.</small></span>${RFI.arrow}</button>`;
+  return `<div class="rf-res-list" role="listbox" aria-label="Matching answers">${m.length ? `<div class="rf-res-h faint">${m.length} existing answer${m.length === 1 ? '' : 's'}</div>${m.map(row).join('')}` : ''}${ask}</div>`;
+}
+/* Landing: an FAQ index with topics on the left and search above the answers. */
+function rfLanding(s) {
+  const all = rfAll(s.id);
+  if (!all.length) return rfEmpty(s);
+  const tps = RF_TOPICS[s.id] || [];
+  return `<div class="rf-idx"><nav class="rf-toc" aria-label="Topics"><div class="eyebrow">Topics</div><button type="button" class="rf-toc-i" data-rftopic="" aria-current="${!st.rf.topic}">All answers<span class="num">${all.length}</span></button>${tps.map(([k, l]) => `<button type="button" class="rf-toc-i" data-rftopic="${k}" aria-current="${st.rf.topic === k}">${esc(l)}<span class="num">${all.filter(x => x.t === k).length}</span></button>`).join('')}<div class="rf-toc-f"><button class="btn primary" type="button" data-rf="focus-ask">${I.agent}Ask a question</button></div></nav>
+    <div class="rf-idx-main">${rfSearchBox(s)}<div id="rf-results" class="rf-results">${rfResults()}</div>${rfFaq(s)}</div></div>`;
+}
+const rfLower = n => /^(GitHub|API|OpenAPI)/.test(n) ? n : n[0].toLowerCase() + n.slice(1);
+const rfSrcNames = s => { const n = (RF_SRC[s.id] || []).map(x => rfLower(x.name)); return n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0] || 'sources'; };
+function rfRow(x) {
+  return `<article class="rf-row" data-rfq="${x.id}"><a class="rf-row-q row-link" href="#${x.id}" data-rfq="${x.id}">${esc(x.q)}</a><span class="rf-row-s">${esc(x.sum)}</span><span class="rf-row-m"><span class="num">${x.asks} asked</span></span></article>`;
+}
+const rfSrcIcon = k => `<span class="rf-si">${RFI[k] || RFI.web}</span>`;
+
+/* ---------- FAQ: answers grouped by topic ---------- */
+function rfFaq(s) {
+  const all = rfAll(s.id), tps = RF_TOPICS[s.id] || [];
+  if (st.rf.topic) {
+    const list = all.filter(x => x.t === st.rf.topic);
+    return `<div class="rf-faq"><div class="rf-faq-h"><button class="th-back" type="button" data-rftopic="">${I.chev.replace('<svg', '<svg class="bk"')}All topics</button><h4>${esc(rfTopic(s.id, st.rf.topic))}<span class="faint num"> ${list.length}</span></h4></div><div class="rf-rows">${list.map(x => rfRow(x)).join('')}</div></div>`;
+  }
+  return `<div class="rf-topics">${tps.map(([k, l]) => { const list = all.filter(x => x.t === k).sort((a, b) => b.asks - a.asks); if (!list.length) return ''; return `<section class="rf-tcard"><button type="button" class="rf-tcard-h" data-rftopic="${k}"><b>${esc(l)}</b><span class="faint num">${list.length}</span></button><ul>${list.slice(0, 3).map(x => `<li><button type="button" data-rfq="${x.id}">${esc(x.q)}</button></li>`).join('')}</ul>${list.length > 3 ? `<button type="button" class="tlink" data-rftopic="${k}">All ${list.length}</button>` : ''}</section>`; }).join('')}</div>`;
+}
+function rfEmpty(s) {
+  const staff = rfIsStaff(s);
+  if (!staff) return `<div class="rf-narrow rf-emptyv"><h3>No answers yet</h3><p class="muted">Ask the first question. The agent researches ${esc(s.ref.org)}’s sources and posts the answer here.</p>${rfSearchBox(s, true)}</div>`;
+  return `<div class="rf-narrow rf-emptyv"><h3>No answers yet</h3><p class="muted">Visitors can ask now. You can also seed the FAQ before you share the space: the agent writes answers for the questions your sources answer most directly, and publishes them.</p>
+    <div class="rf-seed">${st.rf.seeded[s.id] ? `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Writing 25 answers</b><span class="faint">· each is published when it is ready</span></div></div>` : `<div><b>Seed from your sources</b><p class="faint">Writes answers for the 25 most-visited pages in ${esc(rfLower(((RF_SRC[s.id] || [])[0] || { name: 'your documentation' }).name))}. About 180K tokens.</p></div><button class="btn primary" type="button" data-rf="seed">Seed 25 answers</button>`}</div>
+    <div class="rf-seed"><div><b>Share the space</b><p class="faint">Link to session.app/s/${esc(s.name)} from your docs and help center.</p></div><button class="btn" type="button" data-rf="copy">Copy link</button></div></div>`;
+}
+
+/* ---------- ask flow ---------- */
+function rfClassify(s, text) {
+  if (s.id !== 'sablefield') return { kind: 'ans' };
+  const g = RF_GAPS.find(x => x.re.test(text));
+  if (g) return { kind: 'gap', gid: g.id };
+  const known = /sync|rule|replica|region|key|sdk|swift|kotlin|plan|row|migrat|psql|postgres|extension|auth|oidc|credit|billing|scope|deploy|query|table|connect/i;
+  return known.test(text) ? { kind: 'ans' } : { kind: 'gap', gid: null };
+}
+function rfStartAsk(force) {
+  const s = rfSpace(), tries = RF_TRY[s.id] || ['How do I get started?'], text = st.rf.q.trim() || tries[2] || tries[0];
+  if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return; }
+  st.rf.q = text;
+  const c = rfClassify(s, text);
+  st.rf.ask = { text, step: 0, kind: c.kind, gid: c.gid, web: false, sid: s.id };
+  rfNav(() => { st.rf.view = 'run'; });
+  rfTick();
+}
+function rfTick() {
+  clearTimeout(rfTick.t);
+  rfTick.t = setTimeout(() => {
+    const a = st.rf.ask; if (!a || st.rf.view !== 'run') return;
+    a.step++;
+    if (a.step < 4) { renderAll(); rfTick(); return; }
+    if (a.kind === 'gap') { rfNav(() => { st.rf.view = 'gap'; }); return; }
+    const id = 'n' + (st.rf.added.length + 1), s = sp(a.sid);
+    st.rf.added.push({ id, s: a.sid, t: s.id === 'sablefield' ? 'sync' : (RF_TOPICS[s.id] || [['x']])[0][0], q: a.text, sum: (RF_NEWSUM[s.id] || RF_NEWSUM.sablefield), html: RF_HTML['new_' + s.id] || (s.id === 'sablefield' ? RF_HTML.new : `<p>${esc(s.ref.org)}’s documentation describes this on the page cited below. <sup class="cite">1</sup></p>`), asks: 1, help: 0, nrat: 0, checked: 'now', ver: s.ref.version, path: 'Docs › Sync', age: 'now', by: ME.u, upd: 'Nov 15', mine: true,
+      src: s.id === 'sablefield' ? [['docs', 'Sync rules › Scopes', 'docs.sablefield.dev/sync/rules#scopes'], ['help', 'Fixing sync rule deploy errors', 'help.sablefield.dev/articles/sync-deploy-errors']] : [[((RF_SRC[s.id] || [])[0] || { id: 'docs' }).id, 'Documentation', s.ref.domain]], kw: a.text, tok: 41e3 });
+    rfNav(() => { st.rf.view = 'ans'; st.rf.qid = id; st.rf.q = ''; });
+  }, rfTick.fast ? 60 : 650);
+}
+function rfRun(s) {
+  const a = st.rf.ask || { text: st.rf.q, step: 0, kind: 'ans' }, gap = a.kind === 'gap';
+  const n = (RF_SRC[s.id] || []).length;
+  const steps = [`Searched ${rfNum(s.ref.answers)} existing answers: no close match`, `Searched ${n} ${esc(s.ref.org)} sources: ${(RF_SRC[s.id] || []).map(x => x.name).join(', ')}`, gap ? 'Read the 4 closest pages' : 'Reading 5 pages', gap ? 'No source answers the question' : 'Write the answer with citations'];
+  return `<div class="rf-narrow"><button class="th-back" type="button" data-rfv="land">${I.chev.replace('<svg', '<svg class="bk"')}${esc(s.title)} answers</button><h2 class="rf-title">${esc(a.text)}</h2><div class="rf-ans-meta">${avatar(ME.u, 'sm')}<span>You asked · just now</span></div>
+    <div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching ${esc(s.ref.org)}’s sources</b><span class="faint num">· ${4 + a.step * 6}K tokens so far, paid by ${esc(s.ref.org)}</span></div><ol class="run-steps">${steps.map((t, i) => `<li class="${i < a.step ? 'done' : i === a.step ? 'cur' : ''}">${t}</li>`).join('')}</ol></div>
+    <p class="faint rf-runnote">The answer is posted publicly in this space. You can leave this page; it appears in your notifications when it is ready.</p></div>`;
+}
+
+/* ---------- answer page ---------- */
+function rfSrcList(q, title = 'Sources') {
+  return `<section class="rf-srcs"><h3>${title} <span class="faint num">${q.src.length}</span></h3><ol>${q.src.map(([sid, t, loc], i) => { const so = rfSrcOf(q.s, sid); return `<li><span class="rf-srcs-n num">${i + 1}</span>${rfSrcIcon(so.kind)}<div><b>${esc(t)}</b><span>${esc(so.name)} · ${esc(loc)}</span></div></li>`; }).join('')}</ol></section>`;
+}
+const rfPlain = h => h.replace(/<\/(p|li|h4|pre)>/g, '\n\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim();
+function rfAnswer(q) {
+  const s = sp(q.s), org = esc(s.ref.org);
+  const fus = [...(q.fu || []), ...(st.rf.fuAdd[q.id] || [])];
+  const body = `<div class="prose rf-prose">${rfHtml(q)}</div>`;
+  const related = rfSearch(q.s, q.q).filter(x => x.id !== q.id).slice(0, 3);
+  const asker = q.by === ME.u ? 'You' : q.by;
+  return `<div class="rf-ans"><article class="rf-ans-main">
+    <div class="rf-crumb"><button class="tlink" type="button" data-rfv="land">${esc(s.title)} answers</button><span>›</span><button class="tlink" type="button" data-rftopic="${q.t}">${esc(rfTopic(q.s, q.t))}</button></div>
+    <h1 class="rf-ans-q">${esc(q.q)}</h1>
+    <div class="rf-ans-meta">${avatar(q.by, 'sm')}<span>${q.by === ME.u ? 'You asked' : `${au(q.by)} asked`} · ${q.age === 'now' ? 'just now' : q.age + ' ago'}</span>${q.asks > 1 ? `<span>· ${q.asks} people asked this</span>` : ''}</div>
+    
+    <section class="rf-ans-body">${body}</section>
+    ${rfSrcList(q)}
+    <div><button class="tlink" type="button" data-rf="report">Report a problem</button></div>
+    <section class="tr-sec rf-fus"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(f => `<div class="fq"><div class="meta">${avatar(f.u, 'sm')}${au(f.u)}<span>asked · ${f.age}</span></div><p class="fq-q">${esc(f.q)}</p><div class="fq-a"><span class="agent">${I.agent}</span><div>${f.a ? `<p>${esc(f.a)}</p>` : '<p class="faint"><span class="spin" style="display:inline-block;vertical-align:-2px;margin-right:6px"></span>Researching</p>'}</div></div></div>`).join('') || `<p class="muted">No follow-ups yet.</p>`}
+      <div class="fu-box2"><textarea id="rf-fu" rows="2" placeholder="Ask a follow-up about this answer" aria-label="Ask a follow-up">${esc(st.rf.fu)}</textarea><div class="fu2-bar"><span class="grow"></span><button class="btn primary" type="button" data-rf="fu">Ask</button></div></div></section>
+    ${related.length ? `<section class="rf-rel"><h3>Related answers</h3><div class="rf-rows">${related.map(x => rfRow(x)).join('')}</div></section>` : ''}
+  </article>
+  <aside class="rf-ans-side"><div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-rfv="land">${esc(s.title)}</button></div><div><span>Asked by</span><b>${esc(asker)}</b></div><div><span>Answered</span><b>Agent</b></div><div><span>Applies to</span><b>${esc(q.ver)}</b></div><div><span>Last checked</span><b>${q.checked === 'now' ? 'Just now' : q.checked + ' ago'}</b></div><div><span>Sources</span><b class="num">${q.src.length}</b></div><div><span>Paid by</span><b>${org}</b></div></div>
+    </aside></div>`;
+}
+
+/* ---------- not covered (Not covered control) ---------- */
+function rfGapView(s) {
+  const a = st.rf.ask || { text: RF_TRY.sablefield[1], gid: 'g1' }, g = RF_GAPS.find(x => x.id === a.gid), org = esc(s.ref.org);
+  const head = `<button class="th-back" type="button" data-rfv="land">${I.chev.replace('<svg', '<svg class="bk"')}${esc(s.title)} answers</button><h2 class="rf-title">${esc(a.text)}</h2><div class="rf-ans-meta">${avatar(ME.u, 'sm')}<span>You asked · just now</span></div>`;
+  const searched = `<ul class="rf-searched">${(RF_SRC[s.id] || []).map(x => `<li>${rfSrcIcon(x.kind)}<span><b>${esc(x.name)}</b> · ${esc(x.n)}</span><span class="faint">${x.id === 'web' && g && g.id === 'g1' ? 'closest: Security page (SOC 2, GDPR)' : 'no match'}</span></li>`).join('')}</ul>`;
+  const acts = `<div class="rf-gap-acts"><button class="btn primary" type="button" data-rf="notify-gap" aria-pressed="${!!st.rf.notify.gap}">${RFI.bell}${st.rf.notify.gap ? 'You will be notified' : 'Notify me if this gets answered'}</button></div>`;
+  const closest = g && g.id === 'g1' ? `<section class="rf-rel"><h3>Closest existing answer</h3><div class="rf-rows">${rfRow(rfQ('q17'))}</div></section>` : '';
+  const box = `<div class="rf-gapbox"><div class="rf-gap-h">${RFI.gap}<b>${org}’s sources don’t cover this</b></div><p>The agent searched every connected source and found nothing that answers the question. It did not answer from general knowledge.</p>${searched}${acts}</div>`;
+  return `<div class="rf-narrow">${head}${box}${closest}</div>`;
+}
+
+/* ---------- about ---------- */
+function rfAbout(s) {
+  const r = s.ref, org = esc(r.org);
+  return `<div class="rf-wide rf-about"><div class="rf-cols"><div class="rf-colm">
+    <section><h3 class="rf-h">Sources</h3><div class="rf-srctbl">${(RF_SRC[s.id] || []).map(x => `<div class="rf-srcrow">${rfSrcIcon(x.kind)}<div class="rf-srcrow-t"><b>${esc(x.name)}</b><span>${esc(x.where)}</span></div><span class="faint">${esc(x.n)}</span><span class="faint">Synced ${esc(x.sync)}</span></div>`).join('')}</div></section>
+    <section><h3 class="rf-h">Not answered here</h3><ul class="rf-plain"><li>Questions about a specific account, invoice or project.</li><li>Legal and compliance commitments that are not in the sources.</li><li>Outages: see the status page.</li></ul></section>
+  </div><aside class="rf-cola"><div class="rf-card"><h3>Organization</h3><div class="th-facts"><div><span>Name</span><b>${org}</b></div><div><span>Type</span><b>${esc(r.kind)}</b></div><div><span>Website</span><b>${esc(r.domain)}</b></div><div><span>Verified</span><b>${esc(r.verified)}</b></div><div><span>Method</span><b>${esc(r.verifyBy)}</b></div></div></div>
+    <div class="rf-card"><h3>Staff</h3><div class="mods">${r.staff.map(([u, ro]) => `<div>${avatar(u, 'sm')}<span>${esc(u)}</span><small>${ro}</small></div>`).join('')}</div></div></aside></div></div>`;
+}
+
+const rfToday = 'Nov 16';
+
+/* ---------- staff: sources ---------- */
+function rfSources(s) {
+  const srcs = RF_SRC[s.id] || [];
+  return `<div class="rf-wide rq"><div class="rq-top"><div><h2>Sources</h2><p class="muted">Each source is re-checked on its schedule.</p></div><button class="btn" type="button" data-rfset="sources">${PLUS}Add a source</button></div>
+    <div class="sc-grid">${srcs.map(x => `<div class="sc-card">${rfSrcIcon(x.kind)}<div class="sc-card-t"><b>${esc(x.name)}</b><span>${esc(x.where)}</span><small class="faint">${esc(x.n)} · ${esc(x.how)}</small></div><span class="sc-sync"><span class="rf-dot ok"><i></i>Synced ${esc(x.sync)}</span></span></div>`).join('')}</div></div>`;
+}
+
+/* ---------- staff: analytics ---------- */
+function rfStats(s) {
+  if (s.id !== 'sablefield') return `<div class="rf-wide rq"><div class="rq-top"><div><h2>Analytics</h2><p class="muted">Numbers appear once visitors start asking.</p></div></div></div>`;
+  const tile = (l, v, d) => `<div class="st-tile"><span>${l}</span><b class="num">${v}</b>${d ? `<small class="faint">${d}</small>` : ''}</div>`;
+  const max = 600;
+  const bars = RF_WEEKS.map(([w, n], i) => `<div class="st-col" tabindex="0" title="Week of ${w}: ${n} questions" aria-label="Week of ${w}: ${n} questions"><div class="st-colb"><span class="st-tip num">${n}</span><i style="height:${(n / max * 100).toFixed(1)}%"></i>${i === RF_WEEKS.length - 1 ? `<span class="st-val num" style="bottom:${(n / max * 100).toFixed(1)}%">${n}</span>` : ''}</div><span class="st-ax">${w}</span></div>`).join('');
+  const grid = [600, 400, 200, 0].map(v => `<div class="st-gl" style="bottom:${v / max * 100}%"><span class="num">${v}</span></div>`).join('');
+  const res = [['Matched an existing answer', 1187], ['New answer written', 498], ['Follow-up on an answer', 186], ['Sources did not cover it', 37]], rmax = 1187, rtot = 1934;
+  return `<div class="rf-wide rq st"><div class="rq-top"><div><h2>Analytics</h2><p class="muted">November 1–16</p></div></div>
+    <div class="st-tiles">${tile('Questions', '1,946', '+9% on October')}${tile('Answered by an existing answer', '61%', 'No tokens used')}${tile('Rated helpful', '89%', 'of 612 ratings')}${tile('Not covered by sources', '37', '1.9% of questions')}${tile('Tokens used', '7.9M', 'of 20M this month')}</div>
+    <section class="st-card"><div class="st-card-h"><h3>Questions per week</h3><button class="tlink" type="button" data-rf="st-table">${st.rf.stTable ? 'Show chart' : 'Show table'}</button></div>${st.rf.stTable ? `<table class="st-tbl"><thead><tr><th>Week of</th><th>Questions</th></tr></thead><tbody>${RF_WEEKS.map(([w, n]) => `<tr><td>${w}</td><td class="num">${n}</td></tr>`).join('')}</tbody></table>` : `<div class="st-chart" role="img" aria-label="Questions per week, rising from 312 to 498 over eight weeks"><div class="st-plot">${grid}<div class="st-cols2">${bars}</div></div></div>`}</section>
+    <div class="st-cols"><section class="st-card"><h3>How questions were resolved</h3><div class="st-bl">${res.map(([l, n]) => `<div class="st-blr"><span>${l}</span><span class="st-blbar"><i style="width:${Math.max(2, Math.round(n / rmax * 100))}%"></i></span><b class="num">${n.toLocaleString('en-US')}</b><small class="faint num">${(n / rtot * 100).toFixed(n / rtot < .1 ? 1 : 0)}%</small></div>`).join('')}</div></section>
+      <section class="st-card"><h3>Most cited pages</h3><ol class="rf-mini st-ol">${[['Sync rules › Scopes', 412], ['Connect › psql', 288], ['Read replicas', 240], ['Plan limits', 198], ['API keys › Rotating keys', 131]].map(([t, n]) => `<li><span>${t}</span><span class="num faint">${n}</span></li>`).join('')}</ol></section>
+      <section class="st-card"><h3>Lowest rated answers</h3><ol class="rf-mini st-ol">${['q3', 'q12', 'q5'].map(id => { const q = rfQ(id); return `<li><button type="button" data-rfq="${id}">${esc(q.q)}</button><span class="num faint">${q.help}%</span></li>`; }).join('')}</ol></section></div></div>`;
+}
+
+/* ---------- create a reference space, and settings ---------- */
+const WZ_STEPS = [['org', 'Organization', 'Who runs this space and where it lives.'], ['verify', 'Verify', 'Prove that you control the organization’s domain. Verified spaces get the official badge.'], ['sources', 'Sources', 'Answers come only from what you connect here.'], ['answers', 'Scope and answers', 'What the agent answers, and how.'], ['budget', 'Budget', 'The organization pays for the tokens visitors use.'], ['staff', 'Staff', 'Who can manage this space.']];
+const WZ_SRC = [['docs', 'docs', 'Documentation site', 'docs.pinemark.dev', 'Crawled from this address; include or exclude paths below.'], ['help', 'help', 'Help center', 'help.pinemark.dev', 'Articles listed in the sitemap.'], ['log', 'log', 'Changelog or release notes', 'pinemark.dev/changelog', 'Page or RSS feed.'], ['gh', 'repo', 'GitHub repository', 'github.com/pinemark/pinemark-sdk', 'README, /docs, releases, and maintainer replies in issues.'], ['api', 'api', 'API specification', 'api.pinemark.dev/openapi.json', 'OpenAPI or GraphQL schema.'], ['files', 'file', 'Files', '', 'PDF, Markdown or HTML files you upload.']];
+const wzNew = () => ({ name: 'Pinemark', slug: 'pinemark', kind: 'Startup', site: 'pinemark.dev', desc: 'Official answers about the Pinemark maps SDK, from Pinemark’s documentation, API specification and changelog.', vmethod: 'dns', vstate: 'none', vemail: 'ana@pinemark.dev',
+  src: { docs: 'none', help: 'none', log: 'none', gh: 'none', api: 'none', files: 'none' }, gap: 'options', web: false, direct: ['acct', 'outage'], len: 'standard', code: true, ver: true, 
+  budget: 10, perDay: 10, out: 'search', alert: true, key: 'sk-ant-…9d1e', staff: [['ines@pinemark.dev', 'Owner'], ['ana@pinemark.dev', 'Admin']], invite: '' });
+const SET_SABLE = () => ({ name: 'Sablefield', slug: 'sablefield', kind: 'Startup', site: 'sablefield.dev', desc: SPACES.find(x => x.id === 'sablefield').desc, vmethod: 'dns', vstate: 'ok', vemail: '', src: { docs: 'ok', help: 'ok', log: 'ok', gh: 'ok', api: 'ok', files: 'none' }, gap: 'options', web: false, direct: ['acct', 'outage', 'legal'], len: 'standard', code: true, ver: true, 
+  budget: 20, perDay: 10, out: 'search', alert: true, key: 'sk-ant-…3b7c', staff: [['maya@sablefield.dev', 'Owner'], ['devin@sablefield.dev', 'Admin'], ['ines@sablefield.dev', 'Admin']], invite: '' });
+const wzOpt = (f, v, l, d, cur) => `<button type="button" class="wz-opt" data-wset="${f}:${v}" aria-pressed="${String(cur) === String(v)}"><b>${l}</b>${d ? `<small>${d}</small>` : ''}</button>`;
+const wzTog = (f, on, l, d) => `<label class="wz-tog"><span class="tl-sw-tx"><b>${l}</b>${d ? `<small>${d}</small>` : ''}</span><span class="ts-sw"><input type="checkbox" data-wtog="${f}" ${on ? 'checked' : ''}><span class="sw-track" aria-hidden="true"></span></span></label>`;
+const wzFld = (l, f, v, ph, opt) => `<label class="fld"><span>${l}${opt ? ' <small class="faint">optional</small>' : ''}</span><input type="text" data-wf="${f}" value="${esc(v || '')}" placeholder="${esc(ph || '')}" autocomplete="off"></label>`;
+function wzSec(k, w, ctx) {
+  const set = ctx === 'settings';
+  if (k === 'org') return `<div class="wz-g">${wzFld('Organization name', 'name', w.name)}<label class="fld"><span>Space address</span><span class="wz-pre"><span class="faint">session.app/s/</span><input type="text" data-wf="slug" value="${esc(w.slug)}" autocomplete="off" ${set ? 'disabled' : ''}></span></label>
+    <div class="fld"><span>Type</span><div class="wz-seg seg">${['Company', 'Startup', 'Open-source project', 'Nonprofit', 'Public institution'].map(t => `<button type="button" data-wset="kind:${t}" aria-pressed="${w.kind === t}">${t}</button>`).join('')}</div></div>${wzFld('Website', 'site', w.site)}<label class="fld"><span>Description</span><textarea rows="3" data-wf="desc">${esc(w.desc)}</textarea></label></div>`;
+  if (k === 'verify') {
+    const m = w.vmethod, dom = esc(w.site || 'your domain');
+    const how = m === 'dns' ? `<p class="muted">Add this TXT record to <b>${dom}</b>, then check. DNS changes can take a few minutes.</p><div class="wz-code"><span>TXT</span><code>_session-verify.${dom}</code><code>session-verify=7f3c9a1e</code><button class="btn sm" type="button" data-wcopy="1">Copy</button></div>`
+      : m === 'email' ? `<p class="muted">We send a link to an address at <b>${dom}</b>. Opening it verifies the domain.</p>${wzFld('Email at ' + dom, 'vemail', w.vemail)}`
+        : m === 'file' ? `<p class="muted">Upload a file with this content to your website, then check.</p><div class="wz-code"><code>https://${dom}/.well-known/session-verify.txt</code><code>7f3c9a1e</code><button class="btn sm" type="button" data-wcopy="1">Copy</button></div>`
+          : `<p class="muted">Install the Session app on the GitHub organization that owns the project. An organization owner has to approve it.</p>`;
+    const stt = w.vstate === 'ok' ? `<p class="wz-ok">${RFI.seal}Verified: ${dom}${set ? ' · Nov 2, by DNS record' : ''}</p>` : w.vstate === 'checking' ? `<p class="wz-wait"><span class="spin" aria-hidden="true"></span>Checking…</p>` : `<p class="faint">Not verified. Until it is, the space has no badge and cannot be published.</p>`;
+    return `<div class="wz-g"><div class="wz-opts c2x">${wzOpt('vmethod', 'dns', 'DNS record', 'Recommended for companies', m)}${wzOpt('vmethod', 'email', 'Email at the domain', 'Fastest if DNS is managed elsewhere', m)}${wzOpt('vmethod', 'file', 'File on the website', 'If you can publish to the site', m)}${wzOpt('vmethod', 'github', 'GitHub organization', 'For open-source projects', m)}</div>${how}<div class="wz-vrow">${stt}${w.vstate === 'ok' ? '' : `<button class="btn primary" type="button" data-wverify="1">${m === 'email' ? 'Send link' : m === 'github' ? 'Connect GitHub' : 'Check'}</button>`}</div></div>`;
+  }
+  if (k === 'sources') {
+    return `<div class="wz-g"><div class="wz-srcs">${WZ_SRC.map(([id, ic, l, ph, d]) => { const s2 = w.src[id]; return `<div class="wz-src${s2 === 'ok' ? ' on' : ''}">${rfSrcIcon(ic)}<div class="wz-src-b"><b>${l}</b><small class="faint">${d}</small>${id === 'files' ? '' : `<input type="text" data-wsrcurl="${id}" value="${esc(set ? ph.replace('pinemark', 'sablefield') : ph.replace('pinemark', w.slug || 'pinemark'))}" aria-label="${l} address" ${s2 === 'ok' ? 'disabled' : ''}>`}${id === 'docs' && s2 === 'ok' ? `<span class="wz-paths faint">Include: /guides, /reference, /sdk · Exclude: /blog, /legacy</span>` : ''}</div><div class="wz-src-s">${s2 === 'ok' ? `<span class="rf-dot ok"><i></i>${{ docs: '230 pages', help: '84 articles', log: '41 entries', gh: 'README, 18 docs, 52 releases', api: '96 endpoints', files: '6 files' }[id]}</span><button class="tlink" type="button" data-wsrc="${id}">Remove</button>` : s2 === 'indexing' ? `<span class="wz-wait"><span class="spin" aria-hidden="true"></span>Indexing</span>` : `<button class="btn sm" type="button" data-wsrc="${id}">${id === 'files' ? 'Upload' : 'Connect'}</button>`}</div></div>`; }).join('')}</div><p class="faint">Sources are re-checked daily. Add a webhook from your docs build to re-check on every publish.</p></div>`;
+  }
+  if (k === 'answers') return `<div class="wz-g"><div class="rf-notice">${I.book}<div><b>Answers use only connected sources.</b> The agent does not answer from general knowledge. Each answer cites the pages it used.</div></div>
+    <div class="fld"><span>Answer length</span><div class="wz-seg seg">${[['short', 'Short'], ['standard', 'Standard'], ['detailed', 'Detailed']].map(([v, l]) => `<button type="button" data-wset="len:${v}" aria-pressed="${w.len === v}">${l}</button>`).join('')}</div></div>
+    ${wzTog('code', w.code, 'Include code samples', 'Taken from the sources where possible.')}${wzTog('ver', w.ver, 'Name the version an answer applies to', 'Uses version numbers found in the changelog.')}</div>`;
+  if (k === 'budget') {
+    const est = Math.round(w.budget * 1e6 / 40e3 / 10) * 10;
+    return `<div class="wz-g"><div class="fld"><span>Monthly token budget</span><div class="wz-seg seg">${[5, 10, 20, 50].map(n => `<button type="button" data-wset="budget:${n}" aria-pressed="${w.budget === n}">${n}M</button>`).join('')}</div><small class="faint">About ${rfNum(est)} new answers a month at about 40K tokens each. Matching an existing answer uses no tokens.${set ? ' Used this month: 7.9M (40%).' : ''}</small></div>
+      <div class="fld"><span>New questions per account per day</span><div class="wz-seg seg">${[3, 10, 25, 0].map(n => `<button type="button" data-wset="perDay:${n}" aria-pressed="${w.perDay === n}">${n || 'No limit'}</button>`).join('')}</div></div>
+      <div class="fld"><span>When the budget runs out</span><div class="wz-opts">${wzOpt('out', 'search', 'Search only', 'Existing answers stay available; new questions are not answered until the next month.', w.out)}${wzOpt('out', 'follow', 'Follow-ups only', 'Follow-ups on existing answers continue; new questions pause.', w.out)}</div></div>
+      <label class="fld"><span>Pay with</span><span class="wz-key">${MI.key}<span>Organization API key <code>${esc(w.key)}</code></span><button class="tlink" type="button" data-wcopy="1">Replace</button></span></label>${wzTog('alert', w.alert, 'Email owners at 80% of the budget', '')}</div>`;
+  }
+  if (k === 'staff') return `<div class="wz-g"><div class="fld"><span>Staff</span><div class="wz-staff">${w.staff.map(([e, r], i) => `<div class="wz-st">${avatar(e.split('@')[0].replace(/^ines$/, 'ines.v').replace(/^maya$/, 'maya.r').replace(/^devin$/, 'devin_o'), 'sm')}<span class="wz-st-e">${esc(e)}</span><div class="wz-seg seg">${['Owner', 'Admin'].map(x => `<button type="button" data-wrole="${i}:${x}" aria-pressed="${r === x}">${x}</button>`).join('')}</div>${i ? `<button class="iconbtn" type="button" data-wrm="${i}" aria-label="Remove ${esc(e)}">${I.close}</button>` : '<span class="wz-st-you faint">You</span>'}</div>`).join('')}</div>
+    <div class="wz-inv"><input type="email" data-wf="invite" value="${esc(w.invite)}" placeholder="name@${esc(w.site || 'example.com')}" aria-label="Email to invite"><button class="btn" type="button" data-winvite="1">Invite</button></div>${w.invErr ? `<p class="ts-err">${esc(w.invErr)}</p>` : ''}<small class="faint">Staff need an address at ${esc(w.site)}. Owners and admins manage sources and settings and invite staff.</small></div>
+    </div>`;
+  return '';
+}
+const wzReady = w => w.vstate === 'ok' && Object.values(w.src).includes('ok');
+function wzDone(w, k) { return k === 'verify' ? w.vstate === 'ok' : k === 'sources' ? Object.values(w.src).includes('ok') : k === 'org' ? !!(w.name && w.slug) : true; }
+function layoutRfNew() {
+  if (!st.rf.wiz) st.rf.wiz = wzNew();
+  const w = st.rf.wiz;
+  const back = `<button class="th-back" type="button" data-sub="browse">${I.chev.replace('<svg', '<svg class="bk"')}Browse spaces</button>`;
+  const inner = `<div class="wz-head">${back}<h2>New reference space</h2><p class="muted">A reference space answers questions from your organization’s own sources. Fill in each section; you can publish when the domain is verified and one source is connected.</p></div>
+      <div class="wz-pg"><nav class="wz-toc">${WZ_STEPS.map(([k, l]) => `<a href="#wz-${k}" data-wscroll="${k}" class="${wzDone(w, k) ? 'ok' : ''}">${wzDone(w, k) && (k === 'verify' || k === 'sources') ? I.check : ''}${l}</a>`).join('')}</nav><div class="wz-all">${WZ_STEPS.map(([k, l, d], i) => { const ok = (k === 'verify' || k === 'sources') && wzDone(w, k); return `<section class="wz-sec${ok ? ' ok' : ''}" id="wz-${k}"><h3><span class="wz-ck">${ok ? I.check : i + 1}</span>${l}</h3><p class="muted">${d}</p>${wzSec(k, w)}</section>`; }).join('')}</div></div>
+      <div class="wz-bar"><span class="faint">${wzReady(w) ? 'Ready to publish' : 'Verify the domain and connect a source to publish'}</span><span class="grow"></span><button class="btn" type="button" data-wpub="draft">Save as draft</button><button class="btn primary" type="button" data-wpub="pub" ${wzReady(w) ? '' : 'disabled'}>Publish</button></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide wz">${inner}</div></div>`;
+}
+function rfPublish(w, draft) {
+  const id = 'wz-' + (w.slug || 'space').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  let s = SPACES.find(x => x.id === id);
+  if (!s) { s = { id, name: w.slug, av: 3, members: 1, online: 0, posts: 0, used: 0, pct: 0, created: 'Nov 2026', rules: [], pages: [], mods: [[ME.u, 'owner']], mine: true }; SPACES.push(s); }
+  Object.assign(s, { title: w.name, desc: w.desc, budget: w.budget * 1e6, draft: !!draft || (draft === undefined && false),
+    ref: { org: w.name, kind: w.kind, domain: w.site, verified: w.vstate === 'ok' ? rfToday : 'not yet', verifyBy: { dns: 'DNS record', email: 'Email at the domain', file: 'File on the website', github: 'GitHub organization' }[w.vmethod], version: 'Current release', answers: 0, updated: 'just now', perDay: w.perDay || 25, staff: w.staff.map(([e, r]) => [e.split('@')[0], r, e]) } });
+  RF_SRC[id] = WZ_SRC.filter(([sid]) => w.src[sid] === 'ok').map(([sid, kind, name, ph]) => ({ id: sid, kind, name, where: ph.replace('pinemark', w.slug), n: { docs: '230 pages', help: '84 articles', log: '41 entries', gh: 'README, 18 docs, 52 releases', api: '96 endpoints', files: '6 files' }[sid], sync: 'just now', how: 'Checked daily' }));
+  RF_TOPICS[id] = [];
+  if (!JOINED.includes(id)) JOINED.push(id);
+  return s;
+}
+/* Settings reuse the setup sections. */
+function rfSettings(s) {
+  if (!st.rf.sd || st.rf.sd.slug !== s.name) st.rf.sd = s.id === 'sablefield' ? SET_SABLE() : { ...wzNew(), ...(st.rf.wiz || {}), vstate: 'ok' };
+  const w = st.rf.sd, cur = st.rf.set;
+  const secs = [['org', 'Organization'], ['verify', 'Verification'], ['sources', 'Sources'], ['answers', 'Scope and answers'], ['budget', 'Budget'], ['staff', 'Staff']];
+  const sec = secs.find(x => x[0] === cur) || secs[0];
+  return `<div class="rf-wide rq"><div class="rq-top"><div><h2>Settings</h2><p class="muted">Changes apply to new answers.</p></div></div>
+    <div class="set"><nav class="set-nav">${secs.map(([k, l]) => `<button type="button" data-rfset="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav><section class="set-b"><h3>${sec[1]}</h3>${wzSec(sec[0], w, 'settings')}${cur === 'verify' ? '' : `<div class="wz-foot"><span class="grow"></span><button class="btn primary" type="button" data-rf="set-save">Save</button></div>`}</section></div></div>`;
+}
+
+/* ---------- reference spaces elsewhere: home, browse ---------- */
+const rfFollowed = () => st.auth === 'in' ? SPACES.filter(x => x.ref && !x.draft && JOINED.includes(x.id)) : [];
+/* Home: reference spaces the user follows appear only in the right column (hidden on phones). */
+function rfHomeSide() {
+  const fol = rfFollowed(), list = fol.length ? fol : SPACES.filter(x => x.ref && !x.draft);
+  return `<div class="note-card"><div class="sk-head"><h3>Reference spaces</h3></div><div class="sp-rows">${list.map(x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>${spLabel(x)}${rfMark(x, 'tab')}</span></button>`).join('')}</div></div>`;
+}
+function rfBrowseSection() {
+  const refs = SPACES.filter(x => x.ref && !x.draft);
+  return `<section class="br-grp rf-br"><h3 class="br-h">Reference spaces</h3><p class="rf-br-d muted">Run by an organization. Answers come only from the organization’s own docs and help pages.</p><div class="rf-brgrid">${refs.map(x => `<article class="rf-brc">${glyph(x, 'lg')}<div class="rf-brc-b"><div class="rf-brc-n"><button class="dg-name" type="button" data-space="${x.id}">${esc(x.title)}</button>${rfMark(x, 'row')}</div><span class="faint rf-brc-dom">${esc(x.ref.kind)} · ${esc(x.ref.domain)}</span><p>${esc(x.desc)}</p><span class="faint num">${rfNum(x.ref.answers)} answers · ${(RF_SRC[x.id] || []).length} sources</span></div>${st.auth === 'in' ? (JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Following</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Follow</button>`) : ''}</article>`).join('')}</div></section>`;
+}
+
+/* ---------- dialogs ---------- */
+function rfModal() {
+  const m = st.modal || '', s = rfSpace(), close = `<button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button>`;
+  const wrap = (id, title, body, foot, cls = '') => `<div class="modal-scrim"><div class="modal ${cls}" role="dialog" aria-modal="true" aria-labelledby="${id}"><div class="modal-h"><h3 id="${id}">${title}</h3>${close}</div>${body}<div class="modal-f">${foot}</div></div></div>`;
+  if (m === 'rf-create') return wrap('rfc-t', 'Create a space', `<div class="rf-types"><button type="button" class="rf-type" data-rfcreate="community">${MI.grid}<b>Community space</b><span>People post and ask; anyone’s tokens pay for asks. Moderated by members.</span></button><button type="button" class="rf-type" data-rfcreate="ref">${RFI.seal}<b>Reference space</b><span>For an organization’s product. Answers come only from your docs and help pages. Your organization pays for answers.</span></button></div>`, '<span class="faint">Reference spaces need a domain you control.</span>', 'rf-mtypes');
+  if (m === 'rf-community') return wrap('rfcc-t', 'Community space', '<p class="muted">Creating a community space is outside this mock. Choose Reference space to see that flow.</p>', '<span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Close</button>', 'sm');
+  if (m === 'rf-report') {
+    const r = st.rf.report, q = rfQ(st.rf.qid);
+    return wrap('rfr-t', 'Report a problem', `<p class="muted">With “${esc(q ? q.q : '')}”</p><div class="wz-opts">${[['wrong', 'The answer is wrong'], ['old', 'It is out of date'], ['src', 'A cited source is wrong or missing'], ['harm', 'It contains private or harmful content']].map(([k, l]) => `<button type="button" class="wz-opt" data-rfrep="${k}" aria-pressed="${r.why === k}"><b>${l}</b></button>`).join('')}</div><label class="fld"><span>Details <small class="faint">optional</small></span><textarea rows="3" id="rf-repdet" placeholder="What is wrong, and where did you see the correct information?">${esc(r.det)}</textarea></label><p class="faint">Reports go to ${esc(s.ref.org)} staff. The answer stays visible while they check it.</p>`, '<span style="flex:1"></span><button class="btn ghost" type="button" data-act="modal-close">Cancel</button><button class="btn primary" type="button" data-rf="report-send">Send report</button>');
+  }
+  return '';
+}
+
+/* ---------- navigation and state changes ---------- */
+function rfTop() {
+  const app = $('app'), fr = document.querySelector('.frame');
+  if (st.device === 'phone') app.scrollTop = 0;
+  else if (fr && fr.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + fr.getBoundingClientRect().top - 8 });
+}
+function rfNav(fn) { fn(); renderAll(); rfTop(); }
+function rfToastSet(t) {
+  st.rf.toast = t; clearTimeout(rfToastSet.t);
+  rfToastSet.t = setTimeout(() => { st.rf.toast = null; const el = document.querySelector('.rf-toast'); if (el) el.remove(); }, 3200);
+}
+const rfBase = () => ({ home: false, thread: null, savedPage: false, profilePage: false, subPage: null, umenu: false, pop: false, sortOpen: false, mWiki: false });
+function rfOpenSpace(id, view, extra) { Object.assign(st, rfBase(), { space: id }); Object.assign(st.rf, { view: view || 'land', topic: null }, extra || {}); }
+const wzData = () => st.subPage === 'rfnew' ? st.rf.wiz : st.rf.sd;
+function rfClick(t, e) {
+  if (st.rf.toast && !t.closest('.rf-toast')) { st.rf.toast = null; }
+  const d = sel => t.closest(sel);
+  let el;
+  if ((el = d('[data-act="create-space"]'))) { Object.assign(st, { modal: 'rf-create', pop: false, umenu: false }); renderAll(); return true; }
+  if ((el = d('[data-rfcreate]'))) { if (el.dataset.rfcreate === 'community') { st.modal = 'rf-community'; renderAll(); return true; } st.modal = null; st.rf.wiz = wzNew(); rfNav(() => Object.assign(st, rfBase(), { subPage: 'rfnew' })); return true; }
+  /* entering a reference space from anywhere opens its landing */
+  if ((el = d('[data-space]')) && sp(el.dataset.space) && sp(el.dataset.space).ref && !d('[data-rfq]')) { rfNav(() => rfOpenSpace(el.dataset.space)); return true; }
+  if ((el = d('[data-rfq]'))) {
+    if (d('input, textarea')) return false;
+    e && e.preventDefault();
+    const q = rfQ(el.dataset.rfq); if (!q) return true;
+    rfNav(() => rfOpenSpace(q.s, 'ans', { qid: q.id, fu: '' })); return true;
+  }
+  if ((el = d('[data-rfv]'))) { const v = el.dataset.rfv; rfNav(() => { Object.assign(st, rfBase(), { space: st.space }); st.rf.view = v; if (v === 'land') st.rf.topic = null; if (v === 'queue') st.rf.queue.open = false; }); return true; }
+  if ((el = d('[data-rftopic]'))) { const k = el.dataset.rftopic || null; rfNav(() => { st.rf.view = 'land'; st.rf.topic = k; }); return true; }
+  if ((el = d('[data-rftry]'))) { st.rf.q = el.dataset.rftry; rfStartAsk(); return true; }
+  if ((el = d('[data-rfrep]'))) { st.rf.report.why = el.dataset.rfrep; renderAll(); return true; }
+  if ((el = d('[data-rfset]'))) { rfNav(() => { st.rf.view = 'settings'; st.rf.set = el.dataset.rfset; }); return true; }
+  /* wizard and settings */
+  if ((el = d('[data-wset]'))) { const [f, v] = el.dataset.wset.split(/:(.*)/s), w = wzData(); w[f] = /^\d+$/.test(v) ? +v : v; if (f === 'vmethod' && w.vstate !== 'ok') w.vstate = 'none'; renderAll(); return true; }
+  if ((el = d('[data-wtog]'))) { const w = wzData(); w[el.dataset.wtog] = !w[el.dataset.wtog]; renderAll(); return true; }
+  if ((el = d('[data-wrole]'))) { const [i, r] = el.dataset.wrole.split(':'); wzData().staff[+i][1] = r; renderAll(); return true; }
+  if ((el = d('[data-wrm]'))) { wzData().staff.splice(+el.dataset.wrm, 1); renderAll(); return true; }
+  if ((el = d('[data-winvite]'))) { const w = wzData(), v = (w.invite || '').trim(); w.invErr = ''; if (!/^[^@\s]+@[^@\s]+$/.test(v)) w.invErr = 'Enter an email address.'; else if (!v.endsWith('@' + w.site)) w.invErr = `Staff need an address at ${w.site}.`; else { w.staff.push([v, 'Admin']); w.invite = ''; } renderAll(); return true; }
+  if ((el = d('[data-wverify]'))) { const w = wzData(); w.vstate = 'checking'; renderAll(); setTimeout(() => { w.vstate = 'ok'; if (st.subPage === 'rfnew') renderAll(); }, rfTick.fast ? 50 : 900); return true; }
+  if ((el = d('[data-wsrc]'))) { const w = wzData(), id = el.dataset.wsrc; if (w.src[id] === 'ok') { w.src[id] = 'none'; renderAll(); return true; } w.src[id] = 'indexing'; renderAll(); setTimeout(() => { w.src[id] = 'ok'; if (st.subPage === 'rfnew' || st.rf.view === 'settings') renderAll(); }, rfTick.fast ? 50 : 1100); return true; }
+  if ((el = d('[data-wcopy]'))) { rfToastSet('Copied'); renderAll(); return true; }
+  if ((el = d('[data-wscroll]'))) { e && e.preventDefault(); const sec = document.getElementById('wz-' + el.dataset.wscroll); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); return true; }
+  if ((el = d('[data-wpub]'))) { const w = st.rf.wiz, draft = el.dataset.wpub === 'draft'; if (!draft && !wzReady(w)) return true; const s = rfPublish(w, draft); rfToastSet(draft ? `${w.name} saved as a draft` : `${w.name} is published at session.app/s/${w.slug}`); rfNav(() => rfOpenSpace(s.id)); return true; }
+  /* data-rf actions */
+  if ((el = d('[data-rf]'))) {
+    const a = el.dataset.rf, s = rfSpace(), q = st.rf.qid && rfQ(st.rf.qid);
+    if (a === 'ask') { const inp = $('rf-q'); if (inp) st.rf.q = inp.value; rfStartAsk(); return true; }
+    if (a === 'ask-force') { rfStartAsk(true); return true; }
+    if (a === 'focus-ask') { const i = $('rf-q'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } return true; }
+    if (a === 'notify-gap') { st.rf.notify.gap = !st.rf.notify.gap; renderAll(); return true; }
+    if (a === 'report') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } st.rf.report = { why: 'wrong', det: '' }; st.modal = 'rf-report'; renderAll(); return true; }
+    if (a === 'report-send') { st.modal = null; rfToastSet(`Report sent to ${s.ref.org} staff`); renderAll(); return true; }
+    if (a === 'web') { st.rf.ask.web = true; renderAll(); return true; }
+    if (a === 'fu') {
+      const inp = $('rf-fu'), text = (inp ? inp.value : st.rf.fu).trim() || 'Does this also apply to the Kotlin SDK?';
+      if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; }
+      const id = st.rf.qid, list = st.rf.fuAdd[id] = st.rf.fuAdd[id] || [], f = { u: ME.u, age: 'now', q: text, a: null };
+      list.push(f); st.rf.fu = ''; renderAll();
+      setTimeout(() => { f.a = id === 'q5' && /kotlin/i.test(text) ? 'Yes. The Kotlin SDK page says offline writes are queued the same way, with a limit of 50,000 writes since Kotlin SDK 2.4.' : `The cited ${s.ref.org} sources do not say more about this than the answer above.`; if (st.rf.view === 'ans') renderAll(); }, rfTick.fast ? 50 : 1200);
+      return true;
+    }
+    if (a === 'seed') { st.rf.seeded[s.id] = true; renderAll(); return true; }
+    if (a === 'copy') { rfToastSet('Link copied'); renderAll(); return true; }
+    if (a === 'st-table') { st.rf.stTable = !st.rf.stTable; renderAll(); return true; }
+    if (a === 'set-save') { rfToastSet('Settings saved'); renderAll(); return true; }
+    return true;
+  }
+  return false;
+}
+function rfInput(e) {
+  const t = e.target, id = t.id;
+  if (id === 'rf-q') { st.rf.q = t.value; const r = $('rf-results'); if (r) r.innerHTML = rfResults(); return true; }
+  if (id === 'rf-fu') { st.rf.fu = t.value; return true; }
+  if (id === 'rf-repdet') { st.rf.report.det = t.value; return true; }
+  if (t.dataset.wf) { const w = wzData(); w[t.dataset.wf] = t.value; if (t.dataset.wf === 'name' && st.subPage === 'rfnew' && !w.slugEdited) { w.slug = t.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); const sl = document.querySelector('[data-wf="slug"]'); if (sl) sl.value = w.slug; } if (t.dataset.wf === 'slug') w.slugEdited = true; return true; }
+  return false;
+}
+document.addEventListener('keydown', e => {
+  if (st.device === 'native') return;
+  if (e.key === 'Enter' && e.target.id === 'rf-q' && !e.shiftKey) { e.preventDefault(); st.rf.q = e.target.value; rfStartAsk(); return; }
+  const typing = e.target.closest && e.target.closest('input, textarea, select');
+  if (typing || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || st.modal) return;
+}, true);
+
+/* ---------- control bar: variant knobs and the jump menu ---------- */
+const RF_KNOBS = () => [
+  ['k-rfrole', 'rfRole', [['visitor', 'Visitor'], ['staff', 'Staff']], () => { if (!rfIsStaff(sp('sablefield')) && ['sources', 'stats', 'settings'].includes(st.rf.view)) st.rf.view = 'land'; }],
+];
+function rfStay(view, jump) { const onAns = !st.home && !st.subPage && st.thread == null && !st.savedPage && !st.profilePage && sp(st.space).ref && st.rf.view === view; if (!onAns) rfGoto(jump, true); }
+const RF_JUMPS = [
+  ['Visitor', [['land', 'Landing'], ['out', 'Landing, signed out'], ['search', 'Search with matches'], ['run', 'Ask: researching'], ['ans', 'Answer'], ['gap', 'Not covered by sources'], ['report', 'Report a problem'], ['about', 'About the space'], ['other', 'Open-source project space']]],
+  ['Staff', [['create', 'Create: choose space type'], ['wiz', 'Create: setup'], ['empty', 'New space with no answers'], ['sources', 'Sources'], ['stats', 'Analytics'], ['settings', 'Settings']]],
+  ['Elsewhere', [['home', 'Home feed'], ['browse', 'Browse spaces'], ['switcher', 'Space switcher'], ['yours', 'Your spaces']]],
+];
+function rfJumpControl() {
+  const el = $('k-rfgo'); if (!el || el.dataset.ready) return;
+  el.dataset.ready = '1';
+  el.innerHTML = `<option value="">Choose a screen…</option>${RF_JUMPS.map(([g, list]) => `<optgroup label="${g}">${list.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</optgroup>`).join('')}`;
+  el.addEventListener('change', () => { const v = el.value; el.value = ''; if (v) rfGoto(v); });
+}
+function rfGoto(k, keepVariants) {
+  Object.assign(st, rfBase(), { auth: 'in', modal: null, space: 'sablefield' });
+  if (st.device === 'native') st.device = 'desktop';
+  const r = st.rf, staff = ['sources', 'stats', 'settings', 'empty'].includes(k);
+  if (staff) st.rfRole = 'staff'; else if (!keepVariants && !['home', 'browse', 'switcher', 'yours', 'create', 'wiz'].includes(k)) st.rfRole = 'visitor';
+  Object.assign(r, { view: 'land', topic: null, toast: null });
+  if (k === 'land' || k === 'out') { r.q = ''; if (k === 'out') st.auth = 'out'; }
+  if (k === 'search') r.q = 'replica region';
+  if (k === 'run') { r.q = RF_TRY.sablefield[2]; r.ask = { text: r.q, step: 1, kind: 'ans', sid: 'sablefield' }; r.view = 'run'; }
+  if (k === 'ans') { r.view = 'ans'; r.qid = 'q1'; }
+  if (k === 'gap') { r.q = RF_TRY.sablefield[1]; r.ask = { text: r.q, step: 4, kind: 'gap', gid: 'g1', web: false, sid: 'sablefield' }; r.view = 'gap'; }
+  if (k === 'report') { r.view = 'ans'; r.qid = 'q3'; r.report = { why: 'wrong', det: '' }; st.modal = 'rf-report'; }
+  if (k === 'about') r.view = 'about';
+  if (k === 'other') st.space = 'larkdown';
+  if (k === 'create') { st.home = true; st.modal = 'rf-create'; }
+  if (k === 'wiz') { st.subPage = 'rfnew'; r.wiz = wzNew(); }
+  if (k === 'empty') { let s = SPACES.find(x => x.mine); if (!s) { const w = wzNew(); Object.assign(w, { vstate: 'ok', src: { ...w.src, docs: 'ok', api: 'ok', log: 'ok' } }); s = rfPublish(w); } st.space = s.id; r.seeded[s.id] = false; }
+  if (['sources', 'stats', 'settings'].includes(k)) r.view = k;
+  if (k === 'home') st.home = true;
+  if (k === 'browse') st.subPage = 'browse';
+  if (k === 'switcher') { st.home = true; st.pop = true; }
+  if (k === 'yours') st.subPage = 'yourspaces';
+  renderAll(); rfTop();
+}
+
+/* reset: remove spaces created in the setup flow */
+$('k-reset').addEventListener('click', () => {
+  for (let i = SPACES.length - 1; i >= 0; i--) if (SPACES[i].mine) { delete RF_SRC[SPACES[i].id]; SPACES.splice(i, 1); }
+  clearTimeout(rfTick.t); renderAll();
+});
+
+/* ---------- native phone app: reference spaces as a plain answer list ---------- */
+const nSpaceBase = nSpace;
+nSpace = function (id) {
+  const x = sp(id); if (!x.ref) return nSpaceBase(id);
+  const list = rfAll(id), right = nBtn('sheet:wiki', NI.info, 'About this space');
+  const groups = (RF_TOPICS[id] || []).map(([k, l]) => [l, list.filter(q => q.t === k)]).filter(g => g[1].length);
+  return { body: `${nPushBar(esc(x.title), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)} ${rfMark(x, 'row')}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${rfNum(x.ref.answers)} answers</span><span>${esc(x.ref.domain)}</span></div></div>${groups.map(([l, qs]) => nGroup(esc(l), qs.map(q => `<div class="n-row"><span class="n-row-b"><b>${esc(q.q)}</b><small>${q.asks} asked</small></span></div>`))).join('')}` };
+};
+
+ROLE_IC.Staff = RFI.seal;
+
+const nSheetBase = nSheet;
+nSheet = function () {
+  const [k] = (nst.sheet || '').split(':'), x = sp(nst.stack.length ? nTop().id : st.space);
+  if (k !== 'wiki' || !x || !x.ref) return nSheetBase();
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(x.title)}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${esc(x.title)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>${nGroup('Sources', (RF_SRC[x.id] || []).map(s2 => `<div class="n-row"><span class="n-row-b"><b>${esc(s2.name)}</b><small>${esc(s2.where)} · ${esc(s2.n)}</small></span></div>`))}${nGroup('Staff', x.ref.staff.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${r}</span></div>`))}<p class="n-grp-f">${`Verified: ${esc(x.ref.domain)}. Answers come only from these sources.`}</p></div></div>`;
+};
 /* END reference spaces */
 const ST0 = structuredClone(st), JOINED0 = [...JOINED], NST0 = structuredClone(nst);
 $('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
@@ -3520,7 +4626,7 @@ $('app').addEventListener('click', e => {
   const lv = t.closest('[data-leave]'); if (lv) { const k = JOINED.indexOf(lv.dataset.leave); if (k >= 0) JOINED.splice(k, 1); renderAll(); return; }
   const rv = t.closest('[data-revoke]'); if (rv) { st.modal = 'revoke:' + rv.dataset.revoke; renderAll(); return; }
   const rvc = t.closest('[data-act="revoke-confirm"]'); if (rvc) { const id = st.modal.split(':')[1]; st.userKeys = st.userKeys.filter(k => k.id !== id); st.srcSel.delete(id); st.modal = null; renderAll(); return; }
-  const tmv2 = t.closest('[data-tabmove]'); if (tmv2) { const [id, d] = tmv2.dataset.tabmove.split(':'); const ids = st.tabOrder.length ? [...st.tabOrder] : topSpaces().map(x => x.id); const k = ids.indexOf(id), n = k + +d; if (n >= 0 && n < ids.length) { [ids[k], ids[n]] = [ids[n], ids[k]]; st.tabOrder = ids; } renderAll(); return; }
+  const tmv2 = t.closest('[data-tabmove]'); if (tmv2) { const [id, d] = tmv2.dataset.tabmove.split(':'); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const k = ids.indexOf(id), n = k + +d; if (n >= 0 && n < ids.length) { [ids[k], ids[n]] = [ids[n], ids[k]]; st.tabOrder = ids; } renderAll(); return; }
   const tsh = t.closest('[data-tabshow]'); if (tsh) { const id = tsh.dataset.tabshow; st.tabHidden.has(id) ? st.tabHidden.delete(id) : st.tabHidden.add(id); renderAll(); return; }
   const so2 = t.closest('[data-signout]'); if (so2) { st.modal = 'signout'; st.umenu = false; renderAll(); return; }
   const sib = t.closest('[data-act="signin"]'); if (sib) { st.modal = 'signin'; st.pop = false; renderAll(); return; }
@@ -3624,5 +4730,12 @@ window.addEventListener('hashchange', () => { const h = location.hash.slice(1); 
 const h0 = location.hash.slice(1);
 buildPhoneSim();
 pickOption(L[h0] ? h0 : 'b');
+/* The page that hosts this file can set data-theme on <html> after load to match its own
+   theme. Adopt that value, so the tint (applied as inline token values) is recomputed for it
+   instead of mixing with the other theme's tokens. */
+new MutationObserver(() => {
+  const t = document.documentElement.dataset.theme;
+  if ((t === 'light' || t === 'dark') && t !== st.appearance) { st.appearance = t; renderAll(); }
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 </script>
