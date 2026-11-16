@@ -482,17 +482,8 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .th-ans.running { border-top: 0; padding-top: 0; }
 .th-ans .agent { background: var(--accent-soft); color: var(--accent); }
 .cr-label { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; font-size: 10.8px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--t-faint); }
-.cr-label .agent, .cr-strip .agent { width: 18px; height: 18px; }
-.cr-label .agent svg, .cr-strip .agent svg { width: 11px; height: 11px; }
-.cr-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; padding: 8px 10px; border-radius: var(--r-lg); background: var(--fill-subtle); font-size: var(--fs-sm); }
-.cr-strip b { color: var(--t-strong); font-weight: 600; }
-.cr-strip .faint { font-size: var(--fs-xs); }
-.cr-by { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.cr-by > div { display: flex; flex-direction: column; line-height: 1.3; }
-.cr-by b { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
-.cr-by .faint { font-size: var(--fs-xs); }
-.th-ans.crv-byline > :not(.cr-by) { padding-left: 38px; }
-.cr-foot { margin: 12px 0 0; font-size: var(--fs-xs); }
+.cr-label .agent { width: 18px; height: 18px; }
+.cr-label .agent svg { width: 11px; height: 11px; }
 .th-fus, .th-rps, .tr-sec { border-top: 1px solid var(--divider); padding-top: 18px; margin-top: 6px; }
 .th-fus h3, .th-rps h3, .tr-sec h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .th-fus h3 .num, .th-rps h3 .num, .tr-sec h3 .num { font-weight: 450; color: var(--t-faint); }
@@ -1022,7 +1013,6 @@ html[data-device="phone"] .frame > .app::-webkit-scrollbar { display: none; }
 
 
 /* E1-E3: rows without generated titles; the question leads, more of the answer shows */
-.row-x { padding: 13px 16px 13px 14px; }
 .row-x .row-t { font-weight: 500; }
 .row-x .row-tp { font-weight: 450; color: var(--t-primary); -webkit-line-clamp: 4; }
 .row-x .row-s { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
@@ -1296,17 +1286,17 @@ button.n-row:active { background: var(--n-fill); }
 .row-ask .agent, .tr .agent, .c2-mode .agent { background: var(--accent-soft); color: var(--accent); }
 
 
-/* feed: dense rows */
-.rows { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); overflow: hidden; }
-.row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 0 12px; padding: 11px 14px; border-top: 1px solid var(--divider); cursor: pointer; align-items: start; }
-.row:first-child { border-top: 0; }
-.row:hover { background: color-mix(in srgb, var(--fill-hover) 45%, transparent); }
-/* Plain feed rows: no card, outline, dividers or row padding; space between items separates them. */
-.rows-plain { border: 0; border-radius: 0; background: none; overflow: visible; gap: 20px; }
-.rows-plain .row { padding: 0; border-top: 0; }
-.rows-plain .row:hover { background: none; }
-.rows-plain .row:hover .row-t { color: var(--t-heading); }
-.rows-plain .row:has(.row-link:focus-visible) { outline-offset: 4px; }
+/* Feed rows: no card, outline, dividers or row padding; space between items separates them. */
+.rows { display: flex; flex-direction: column; gap: 22px; margin-top: 4px; }
+.fbar:has(+ .rows) { margin-top: 3px; }
+.row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 0 12px; cursor: pointer; align-items: start; }
+/* Feed row hover: a soft tinted panel behind the row (half the usual hover fill). It extends past the
+   row's text so nothing in the row moves. */
+.row { position: relative; }
+.row > * { position: relative; z-index: 1; }
+.row::before { content: ""; position: absolute; z-index: 0; inset: -9px -12px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--fill-hover) 50%, transparent); pointer-events: none; opacity: 0; transition: opacity var(--ease); }
+.row:hover::before { opacity: 1; }
+.row:has(.row-link:focus-visible) { outline-offset: 4px; }
 .row-k { padding-top: 1px; display: grid; place-items: center; }
 .row-link { color: inherit; text-decoration: none; }
 .row-link:focus-visible { outline: none; }
@@ -1531,7 +1521,6 @@ button.n-row:active { background: var(--n-fill); }
 .rf-badge svg path:first-child { fill: var(--on-accent); }
 .rf-row.rf-rule { padding-left: 12px; }
 .rf-ans-body.rf-rule { padding-left: 18px; }
-.row.rf-rule { border-left-width: 3px; }
 .rf-fr { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
 .rf-fr svg { width: 12px; height: 12px; }
 .rf-fr.warn, .rf-ver.warn { color: var(--warn); }
@@ -1584,10 +1573,9 @@ button.n-row:active { background: var(--n-fill); }
 /* empty space */
 .rf-emptyv h3 { margin: 0; font-size: 19.55px; color: var(--t-heading); }
 .rf-emptyv > p { margin: 0; }
-.rf-seed { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
-.rf-seed > div { flex: 1; min-width: 0; }
-.rf-seed p { margin: 2px 0 0; font-size: var(--fs-sm); }
-.rf-seed .run { flex: 1; }
+.rf-share { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.rf-share > div { flex: 1; min-width: 0; }
+.rf-share p { margin: 2px 0 0; font-size: var(--fs-sm); }
 
 /* ask flow */
 .rf-match-f { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
@@ -1622,7 +1610,6 @@ button.n-row:active { background: var(--n-fill); }
 .rf-srcs li b { font-weight: 550; font-size: var(--fs-sm); color: var(--t-strong); }
 .rf-srcs li span:not(.rf-si):not(.rf-srcs-n) { font-size: var(--fs-xs); color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-srcs-n { width: 14px; font-size: var(--fs-xs); color: var(--t-faint); text-align: right; flex: none; }
-.rf-fus .fu-box2 { margin-top: 12px; }
 .rf-rel { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .rf-edit { display: flex; flex-direction: column; gap: 8px; }
 .rf-edit textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--field); color: var(--t-primary); font: inherit; font-size: var(--fs-base); line-height: 1.55; padding: 10px 12px; resize: vertical; }
@@ -1678,7 +1665,8 @@ button.n-row:active { background: var(--n-fill); }
 
 /* home and browse */
 .rf-br { gap: 0; }
-.rf-br-d { margin: -4px 0 10px; font-size: var(--fs-sm); }
+.rf-br-d { margin: 0 0 10px; font-size: var(--fs-sm); }
+.br-seg { align-self: flex-start; }
 .rf-brgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .rf-brc { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); position: relative; }
 .rf-brc-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
@@ -1718,7 +1706,7 @@ button.n-row:active { background: var(--n-fill); }
 .sc-card-t small { font-size: var(--fs-xs); line-height: 1.4; }
 
 /* staff: analytics */
-.st-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.st-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 560px; }
 .st-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); min-width: 0; }
 .st-tile > span { font-size: var(--fs-xs); color: var(--t-muted); }
 .st-tile b { font-size: 24.7px; font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
@@ -1746,7 +1734,7 @@ button.n-row:active { background: var(--n-fill); }
 .st-tbl { width: 100%; max-width: 360px; border-collapse: collapse; font-size: var(--fs-sm); }
 .st-tbl th, .st-tbl td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--divider); }
 .st-tbl th { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 550; }
-.st-cols { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; }
+.st-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .st-bl { display: flex; flex-direction: column; gap: 8px; }
 .st-blr { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 46px 38px; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--t-secondary); }
 .st-blbar { height: 8px; border-radius: 4px; background: var(--control); overflow: hidden; }
@@ -1754,6 +1742,7 @@ button.n-row:active { background: var(--n-fill); }
 .st-blr b { text-align: right; font-weight: 600; color: var(--t-strong); }
 .st-blr small { text-align: right; font-size: var(--fs-xs); }
 .st-ol li { font-size: var(--fs-sm); }
+.st-ol small { display: block; font-size: var(--fs-xs); color: var(--t-faint); }
 
 /* create flow and settings */
 .wz { gap: 18px; }
@@ -1836,9 +1825,7 @@ button.n-row:active { background: var(--n-fill); }
 
 @media (max-width: 1100px) {
   .rf-brgrid, .sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .st-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .st-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .st-cols > :first-child { grid-column: 1 / -1; }
+  .st-cols { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 920px) {
   .rf-cols, .rf-ans { grid-template-columns: minmax(0, 1fr); }
@@ -1883,9 +1870,6 @@ button.n-row:active { background: var(--n-fill); }
   .rf-brgrid, .sc-grid, .wz-opts.c2x { grid-template-columns: minmax(0, 1fr); }
   .rq-top { flex-wrap: wrap; }
   .rq-top h2 { font-size: 20.6px; }
-  .st-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .st-tiles > :last-child { grid-column: 1 / -1; }
-  .st-cols { grid-template-columns: minmax(0, 1fr); }
   .st-blr { grid-template-columns: minmax(0, 1fr) 60px 42px 34px; }
   .st-tile b { font-size: 20.6px; }
   .st-ax { font-size: 9.8px; }
@@ -1916,9 +1900,7 @@ button.n-row:active { background: var(--n-fill); }
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-      <div class="knob"><span>Feed rows</span><div class="seg" id="k-rows"></div></div>
       <div class="knob"><span>Rail</span><div class="seg" id="k-rail"></div></div>
-      <div class="knob"><span>Answer credit</span><div class="seg" id="k-credit"></div></div>
       <div class="knob-break" aria-hidden="true"></div>
       <span class="knob-group">Organization spaces</span>
       <div class="knob"><span>Jump to</span><select id="k-rfgo" class="k-sel" aria-label="Jump to a organization-space screen"></select></div>
@@ -1960,7 +1942,7 @@ const I = {
   get logo() { return pinwheel(5); },
   search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
   chev: '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 3.2v1.8a3.5 3.5 0 0 0 3.5 3.5h5"/></svg>',
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5v3.5a3 3 0 0 0 3 3h6.5"/><path d="m10.5 6 3 3-3 3"/></svg>',
   follow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>',
   mark: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 2.5h8v11L8 10.5l-4 3z" stroke-linejoin="round"/></svg>',
   page: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z M9.5 1.5v3h3" stroke-linejoin="round"/></svg>',
@@ -2076,7 +2058,7 @@ const OPTIONS = [
   { id: 'b', label: 'B', name: 'Strip + sidebar, banner', blurb: 'Space tabs in the header; banner at the top of the main column; flush wiki panel.', auth: 'in',
     note: 'Space tabs in the header. A banner across the top of the main column: icon, name, description and Join. The wiki is one full-height panel against the right edge that collapses to a narrow strip; Join stays in the banner so it is reachable when the wiki is collapsed.' },
 ];
-const st = { opt: 'b', space: 'public', auth: 'in', pop: false, drawer: true, mode: 'ask', compOpen: false, draft: '', home: true, homeView: 'feed', liked: new Set([2]), saved: new Set([0, 3, 6, 9, 11, 12, 13, 15]), savedPage: false, profilePage: false, profileUser: 'ines.v', ptab: 'threads', thread: null, srcWeb: true, addingKey: false, keyDraft: '', keyErr: '', srcSel: new Set(['space:public']), subPage: null, ysEdit: false, keyName: '', keyShow: false, renaming: null, renameDraft: '', keyNew: null, tabOrder: [], tabHidden: new Set(), userKeys: [{ id: 'k2', kind: 'key', label: 'Gemini API key', sub: 'AIza…Q7mE · Added Nov 3', valid: true }, { id: 'k1', kind: 'key', label: 'Anthropic API key', sub: 'sk-ant-…4f2a · Added Oct 2', valid: true }, { id: 'k0', kind: 'key', label: 'Old API key', sub: 'sk-…91c0 · Rejected by the provider', valid: false }], modal: null, savedView: 'list', savedFilter: 'all', savedSel: 0, umenu: false, appearance: 'system', sort: 'Latest', sortOpen: false, thV: 'docsrc', spOpen: false, device: 'desktop', mnav: 'chips', mWiki: false, tint: 'warmlo', railV: 'full', rowsV: 'card', creditV: 'facts', shV: 'd', model: 'argon', mpOpen: false, shell: 'tabs2', kindF: 'all', compSpace: null, srcSpace2: null };
+const st = { opt: 'b', space: 'public', auth: 'in', pop: false, drawer: true, mode: 'ask', compOpen: false, draft: '', home: true, homeView: 'feed', liked: new Set([2]), saved: new Set([0, 3, 6, 9, 11, 12, 13, 15]), savedPage: false, profilePage: false, profileUser: 'ines.v', ptab: 'threads', thread: null, srcWeb: true, addingKey: false, keyDraft: '', keyErr: '', srcSel: new Set(['space:public']), subPage: null, ysEdit: false, keyName: '', keyShow: false, renaming: null, renameDraft: '', keyNew: null, tabOrder: [], tabHidden: new Set(), userKeys: [{ id: 'k2', kind: 'key', label: 'Gemini API key', sub: 'AIza…Q7mE · Added Nov 3', valid: true }, { id: 'k1', kind: 'key', label: 'Anthropic API key', sub: 'sk-ant-…4f2a · Added Oct 2', valid: true }, { id: 'k0', kind: 'key', label: 'Old API key', sub: 'sk-…91c0 · Rejected by the provider', valid: false }], modal: null, savedView: 'list', savedFilter: 'all', savedSel: 0, umenu: false, appearance: 'system', sort: 'Latest', sortOpen: false, thV: 'docsrc', spOpen: false, device: 'desktop', mnav: 'chips', mWiki: false, tint: 'warmlo', railV: 'full', shV: 'd', model: 'argon', mpOpen: false, shell: 'tabs2', kindF: 'all', compSpace: null, srcSpace2: null };
 try { const ap = localStorage.getItem('session-web-appearance'); if (ap === 'light' || ap === 'dark' || ap === 'system') st.appearance = ap; } catch (e) {}
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2338,27 +2320,19 @@ function fuCard(f) {
   return `<div class="fu"><div class="meta">${avatar(f.u, 'sm')}<b>${f.u}</b><span>${f.age}</span></div><p class="fu-q">${esc(f.q)}</p><div class="fu-a">${f.html ? `<div class="prose fu-prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`}</div></div>`;
 }
 
-/* Agent credit on the thread page. Three options, switched by the "Answer credit" control:
-   facts  - a small "Agent answer" label; model and token source sit in the details panel
-   strip  - one line above the answer: model, tokens, who paid, number of sources
-   byline - the answer gets its own byline like a reply, with tokens and payer under it */
+/* Agent credit on the thread page: a small "Agent answer" label above the answer; the model and
+   who paid are listed in the details panel. */
 const MODEL_NAME = 'Gemini 4 Argon';
-function creditHead(p) {
-  const v = st.creditV, run = p.running;
-  if (v === 'facts') return `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer</div>`;
-  if (v === 'strip') return `<div class="cr-strip"><span class="agent">${I.agent}</span><b>${MODEL_NAME}</b><span class="faint num">${run ? 'Researching · 18K tokens so far' : `${fmt(p.tok)} tokens · paid from ${paidOf(p)} · ${srcItems(p).length} sources`}</span></div>`;
-  return `<div class="cr-by"><span class="agent ag-lg">${I.agent}</span><div><b>${MODEL_NAME}</b><span class="faint">${run ? 'Researching' : `Answered · ${p.age}`}</span></div></div>`;
-}
-const creditFoot = p => st.creditV === 'byline' && !p.running ? `<p class="cr-foot faint num">${fmt(p.tok)} tokens · paid from ${paidOf(p)}</p>` : '';
+const creditHead = () => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer</div>`;
 function thDoc(p) {
   const fus = fuFor(p), rps = p.k === 'post' ? rpFor(p) : [];
   return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}<p class="th-q${p.k === 'post' ? ' th-post' : ''}" id="th-q">${esc(p.q)}</p>
-      ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''} crv-${st.creditV}" id="th-a">${creditHead(p)}${answerHTML(p)}${creditFoot(p)}</section>` : ''}${thActs(p)}
+      ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''}" id="th-a">${creditHead(p)}${answerHTML(p)}</section>` : ''}${thActs(p)}
       ${p.k === 'ask' ? `<section class="th-fus" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(fuCard).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map(r => replyHTML(r)).join('')}</section>`}
       ${fuInput(p)}</article>
     <aside class="th-aside">
-      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">#${sp(p.s).name}</button></div><div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' && st.creditV === 'facts' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' && st.creditV === 'facts' ? `<div><span>Paid from</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
+      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">#${sp(p.s).name}</button></div><div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Paid from</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
 }
 function layoutThread() {
   const p = POSTS[st.thread];
@@ -2443,8 +2417,9 @@ function layoutBrowse() {
   const feat = top.map(x => `<article class="br-fcard" style="--band:${avColor(x.av)}"><div class="br-fband"></div>${glyph(x, 'lg')}<div class="br-ch">${name(x)}${joinCtl(x)}</div><p>${esc(x.desc)}</p></article>`).join('');
   const rest = SPACES.filter(x => !x.ref);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page br-page"><div class="sub-top"><h2>Browse spaces</h2><button class="btn" type="button" data-act="create-space">Create a space</button></div>
-    <section class="br-feat"><h3 class="br-h">Most active this week</h3><div class="br-fgrid">${feat}</div></section>${rfBrowseSection()}
-    <section class="br-grp"><h3 class="br-h">All spaces</h3>${rest.map(x => `<div class="br-row">${glyph(x)}<div class="br-nm">${name(x)}<small>${esc(x.desc)}</small></div>${joinCtl(x)}</div>`).join('')}</section></div></div>`;
+    <div class="seg br-seg" role="group" aria-label="Kind of space">${[['spaces', 'Spaces'], ['orgs', 'Organizations']].map(([k, l]) => `<button type="button" data-brview="${k}" aria-pressed="${st.brView === k}">${l}</button>`).join('')}</div>
+    ${st.brView === 'orgs' ? rfBrowseSection() : `<section class="br-feat"><h3 class="br-h">Most active this week</h3><div class="br-fgrid">${feat}</div></section>
+    <section class="br-grp"><h3 class="br-h">All spaces</h3>${rest.map(x => `<div class="br-row">${glyph(x)}<div class="br-nm">${name(x)}<small>${esc(x.desc)}</small></div>${joinCtl(x)}</div>`).join('')}</section>`}</div></div>`;
 }
 function layoutYourSpaces() {
   if (st.ysEdit) return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page"><div class="sub-top"><div class="ys-et"><button class="th-back" type="button" data-act="ys-done">${I.chev.replace('<svg', '<svg class="bk"')}Your spaces</button><h2>Header tabs</h2></div><button class="btn primary" type="button" data-act="ys-done">Save</button></div>${ysOrder()}</div></div>`;
@@ -2524,7 +2499,7 @@ function feed2(id, src) {
   let list = src || postsFor(id).map(p => ({ ...p, orig: p }));
   if (st.kindF !== 'all') list = list.filter(p => p.k === st.kindF);
   if (!list.length) return `<p class="muted fempty">No ${st.kindF === 'ask' ? 'asks' : st.kindF === 'post' ? 'posts' : 'threads'} here yet.</p>`;
-  return `<div class="rows${st.rowsV === 'plain' ? ' rows-plain' : ''}" role="list">${list.map(rowHTML).join('')}</div>`;
+  return `<div class="rows" role="list">${list.map(rowHTML).join('')}</div>`;
 }
 /* model menu: a chip in the composer that holds model, token source and web search.
    Variants register in MP; each renders inside an element with class "mp". */
@@ -3647,13 +3622,10 @@ function seg(el, items, key, onPick) {
   el.innerHTML = items.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(st[key]) === String(v)}">${t}</button>`).join('');
   el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && onPick(); renderAll(); };
 }
-const toThread = () => { if (st.thread == null) { const i = POSTS.findIndex(p => p.k === 'ask' && RICH[POSTS.indexOf(p)] && p.s === 'markets'); Object.assign(st, { thread: i < 0 ? 0 : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage']]],
-  ['k-rows', 'rowsV', [['card', 'Card'], ['plain', 'Plain']]],
   ['k-rail', 'railV', [['full', 'Full'], ['compact', 'Icons'], ['spaces', 'Spaces first'], ['split', 'Two-column']], () => { st.shell = 'rail'; st.umenu = false; }],
-  ['k-credit', 'creditV', [['facts', 'Details panel'], ['strip', 'Answer header'], ['byline', 'Answer byline']], toThread],
   ...RF_KNOBS(),
 ];
 let HOTKEYS = {};
@@ -3740,14 +3712,14 @@ function nHome() {
   return { body: `${nRootBar(nBtn('sheet:compose', NI.compose, 'New ask or post'))}<h1 class="n-lt">Home</h1><div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nFeed(posts)}` };
 }
 function nSpacesRoot() {
-  const order = st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces();
-  const mine = order.filter(x => JOINED.includes(x.id)), other = SPACES.filter(x => !JOINED.includes(x.id));
+  const order = (st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces()).filter(x => x && !x.ref);
+  const mine = order.filter(x => JOINED.includes(x.id)), other = SPACES.filter(x => !JOINED.includes(x.id) && !x.ref);
   const row = x => nst.edit
     ? `<div class="n-row ys-drag" draggable="true" data-drag="${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>#${esc(x.name)}</b></span><span class="n-grip">${NI.grip}</span></div>`
     : `<button class="n-row" type="button" data-n="push:space:${x.id}"><span class="ys-gw">${glyph(x, 'n-gl')}</span><span class="n-row-b"><span class="ys-nm"><b>#${esc(x.name)}</b>${roleHTML(x)}</span><small>${fmt(x.members)} members</small></span><span class="n-chev">${NI.chev}</span></button>`;
   const disc = x => `<div class="n-row"><button class="n-row-main" type="button" data-n="push:space:${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>#${esc(x.name)}</b><small>${fmt(x.members)} members</small></span></button><button class="n-cap" type="button" data-n="join:${x.id}">Join</button></div>`;
   const right = nSignedIn() ? `<button class="n-tb" type="button" data-n="edit">${nst.edit ? '<b>Done</b>' : 'Edit'}</button>` : '';
-  return { body: `${nRootBar(right)}<h1 class="n-lt">Spaces</h1><div class="n-pad"><label class="n-search">${NI.search}<input type="search" placeholder="Search spaces" aria-label="Search spaces"></label></div>${nSignedIn() ? nGroup('Your spaces', mine.map(row), nst.edit ? 'Drag to reorder. This order is used across the app.' : '') : ''}${nst.edit ? '' : nGroup(nSignedIn() ? 'Discover' : 'Spaces', (nSignedIn() ? other : SPACES).map(disc))}` };
+  return { body: `${nRootBar(right)}<h1 class="n-lt">Spaces</h1><div class="n-pad"><label class="n-search">${NI.search}<input type="search" placeholder="Search spaces" aria-label="Search spaces"></label></div>${nSignedIn() ? nGroup('Your spaces', mine.map(row), nst.edit ? 'Drag to reorder. This order is used across the app.' : '') : ''}${nst.edit ? '' : nGroup(nSignedIn() ? 'Discover' : 'Spaces', (nSignedIn() ? other : SPACES.filter(x => !x.ref)).map(disc))}` };
 }
 function nSpace(id) {
   const x = sp(id), j = JOINED.includes(id);
@@ -3783,7 +3755,7 @@ function nYou() {
   if (!nSignedIn()) return { body: `${nRootBar('')}<h1 class="n-lt">You</h1>${nSignedOut('Sign in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
   const mine = POSTS.filter(p => p.u === ME.u).length;
   return { body: `${nRootBar('')}<h1 class="n-lt">You</h1><div class="n-me">${avatar(ME.u, 'n-av xl')}<div><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></div></div>${nGroup('', [
-    `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${JOINED.length}</span><span class="n-chev">${NI.chev}</span></button>`,
+    `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${JOINED.filter(id => !sp(id).ref).length}</span><span class="n-chev">${NI.chev}</span></button>`,
     `<button class="n-row" type="button" data-n="push:keys"><span class="n-row-b"><b>API keys</b></span><span class="n-val">${st.userKeys.length}</span><span class="n-chev">${NI.chev}</span></button>`,
   ])}${nAppearance()}${nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:signout"><span class="n-row-b"><b>Sign out</b></span></button>`])}` };
 }
@@ -3810,7 +3782,7 @@ function nSheet() {
   }
   if (k === 'compose') {
     const ask = nst.cMode === 'ask', x = sp(nst.cSpace);
-    if (nst.sub === 'space') return `<div class="n-scrim"></div><div class="n-sheet n-page" role="dialog" aria-label="Choose a space"><div class="n-sheet-bar"><button class="n-back" type="button" data-n="sub:">${NI.back}<span>Back</span></button><b>Space</b><span></span></div><div class="n-sheet-sc">${nGroup('', SPACES.filter(y => JOINED.includes(y.id)).map(y => `<button class="n-row" type="button" data-n="cspace:${y.id}">${glyph(y, 'n-gl')}<span class="n-row-b"><b>#${esc(y.name)}</b></span>${y.id === nst.cSpace ? `<span class="n-check">✓</span>` : ''}</button>`))}</div></div>`;
+    if (nst.sub === 'space') return `<div class="n-scrim"></div><div class="n-sheet n-page" role="dialog" aria-label="Choose a space"><div class="n-sheet-bar"><button class="n-back" type="button" data-n="sub:">${NI.back}<span>Back</span></button><b>Space</b><span></span></div><div class="n-sheet-sc">${nGroup('', SPACES.filter(y => JOINED.includes(y.id) && !y.ref).map(y => `<button class="n-row" type="button" data-n="cspace:${y.id}">${glyph(y, 'n-gl')}<span class="n-row-b"><b>#${esc(y.name)}</b></span>${y.id === nst.cSpace ? `<span class="n-check">✓</span>` : ''}</button>`))}</div></div>`;
     const rows = [`<button class="n-row" type="button" data-n="sub:space"><span class="n-row-b"><b>Space</b></span><span class="n-val">#${esc(x.name)}</span><span class="n-chev">${NI.chev}</span></button>`];
     if (ask) rows.push(`<div class="n-row"><span class="n-row-b"><b>Model</b></span><span class="n-val">Gemini 4 Argon</span></div>`, `<div class="n-row"><span class="n-row-b"><b>Web search</b></span>${nSwitch(nst.web, 'web', 'Web search')}</div>`, `<div class="n-row"><span class="n-row-b"><b>Provider</b></span><span class="n-val">${x.byok ? `#${esc(x.name)} extra tokens` : 'Your API key'}</span></div>`);
     return `<div class="n-scrim"></div><div class="n-sheet n-page" role="dialog" aria-label="New ${ask ? 'ask' : 'post'}"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Cancel</button>${nSeg([['ask', 'Ask'], ['post', 'Post']], nst.cMode, 'cmode')}<button class="n-tb" type="button" data-n="submit" id="n-submit"${nst.draft.trim() ? '' : ' disabled'}><b>${ask ? 'Ask' : 'Post'}</b></button></div><div class="n-sheet-sc"><textarea id="n-draft" class="n-draft" placeholder="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>${nGroup('', rows, ask ? '' : 'Posts use no tokens.')}</div></div>`;
@@ -3890,18 +3862,18 @@ SPACES.push(
     desc: 'Official answers about Sablefield, the hosted Postgres-compatible database with sync to client devices. Answers come from Sablefield’s documentation, help center, changelog and GitHub repository.',
     rules: ['Questions and answers are public. Do not include keys, connection strings or customer data.', 'Account-specific questions go to Sablefield support.'],
     pages: [], mods: [['maya.r', 'owner'], ['devin_o', 'admin']],
-    ref: { org: 'Sablefield', kind: 'Startup', domain: 'sablefield.dev', verified: 'Nov 2', verifyBy: 'DNS record on sablefield.dev', version: 'Sablefield 4.2', answers: 1284, updated: '1h',
+    ref: { org: 'Sablefield', domain: 'sablefield.dev', verified: 'Nov 2', verifyBy: 'DNS record on sablefield.dev', version: 'Sablefield 4.2', answers: 1284, updated: '1h',
       perDay: 10,
       staff: [['maya.r', 'Owner', 'maya@sablefield.dev'], ['devin_o', 'Admin', 'devin@sablefield.dev'], ['ines.v', 'Admin', 'ines@sablefield.dev']] } },
   { id: 'larkdown', name: 'larkdown', title: 'Larkdown', av: 2, members: 2210, online: 64, posts: 402, used: 1.2e6, budget: 4e6, created: 'Oct 2026',
     desc: 'Answers about Larkdown, the open-source Markdown notes editor, from its documentation, RFCs, release notes and maintainer replies on GitHub.',
     rules: ['Bug reports go to the issue tracker, not here.'], pages: [], mods: [['tove', 'owner']],
-    ref: { org: 'Larkdown project', kind: 'Open-source project', domain: 'larkdown.org', verified: 'Oct 21', verifyBy: 'GitHub organization larkdown', version: 'Larkdown 1.9', answers: 402, updated: '4h',
+    ref: { org: 'Larkdown project', domain: 'larkdown.org', verified: 'Oct 21', verifyBy: 'GitHub organization larkdown', version: 'Larkdown 1.9', answers: 402, updated: '4h',
       perDay: 5, staff: [['tove', 'Owner', 'tove@larkdown.org']] } },
   { id: 'tallyfern', name: 'tallyfern', title: 'Tallyfern', av: 4, members: 980, online: 21, posts: 233, used: 2.4e6, budget: 10e6, created: 'Nov 2026',
     desc: 'Help with Tallyfern bookkeeping for small businesses: bank connections, invoices and reports. Answers come from the Tallyfern help center.',
     rules: ['Never post bank details or invoices with customer names.'], pages: [], mods: [['ruth.k', 'owner']],
-    ref: { org: 'Tallyfern', kind: 'Company', domain: 'tallyfern.com', verified: 'Nov 6', verifyBy: 'Email at tallyfern.com', version: 'Current release', answers: 233, updated: '1d',
+    ref: { org: 'Tallyfern', domain: 'tallyfern.com', verified: 'Nov 6', verifyBy: 'DNS record on tallyfern.com', version: 'Current release', answers: 233, updated: '1d',
       perDay: 10, staff: [['ruth.k', 'Owner', 'ruth@tallyfern.com']] } },
 );
 SPACES.forEach(s => { s.pct = s.used / s.budget; });
@@ -3968,8 +3940,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 const RF_Q = [
   { id: 'q1', s: 'sablefield', t: 'replicas', q: 'Can I pin a read replica to a specific region?', sum: 'Yes, since 4.2: use --pin-region when you create or update a replica. Pinned replicas stay in their region during failover. Team and Enterprise plans only.', asks: 37, help: 94, nrat: 48, checked: '3h', ver: 'Sablefield 4.2', path: 'Docs › Guides', age: '6w', by: 'jun.park', upd: 'Nov 12',
     src: [['docs', 'Read replicas › Region pinning', 'docs.sablefield.dev/guides/replicas#pinning'], ['log', 'Release 4.2.0', 'sablefield.dev/changelog/4-2-0'], ['api', 'POST /v1/replicas', 'api.sablefield.dev/reference#replicas-create']],
-    kw: 'replica region pin pinning failover location placement',
-    fu: [{ u: 'oduya', age: '2d', q: 'Does pinning change the replica’s connection string?', a: 'No. The connection string stays the same; pinning only changes where the replica can be placed during failover. The docs page on region pinning says this in its first paragraph.' }] },
+    kw: 'replica region pin pinning failover location placement' },
   { id: 'q2', s: 'sablefield', t: 'sync', q: 'Why does a sync rule fail to deploy with E_SYNC_SCOPE?', sum: 'The rule’s query can return rows outside its declared scope. Filter on the scope column, for example owner_id = auth.user_id().', asks: 52, help: 91, nrat: 70, checked: '1d', ver: 'Sablefield 4.2', path: 'Docs › Sync', age: '2mo', by: 'mira_k', upd: 'Oct 28',
     src: [['docs', 'Sync rules › Scopes', 'docs.sablefield.dev/sync/rules#scopes'], ['help', 'Fixing sync rule deploy errors', 'help.sablefield.dev/articles/sync-deploy-errors'], ['gh', 'CLI reference: sable rules check', 'github.com/sablefield/sablefield/blob/main/docs/cli.md']],
     kw: 'sync rule error deploy scope e_sync_scope fail reject' },
@@ -4012,9 +3983,9 @@ const RF_GAPS = [
 ];
 const RF_WEEKS = [['Sep 21', 312], ['Sep 28', 344], ['Oct 5', 401], ['Oct 12', 388], ['Oct 19', 455], ['Oct 26', 472], ['Nov 2', 510], ['Nov 9', 498]];
 Object.assign(st, {
-  rfRole: 'visitor',
-  rf: { view: 'land', q: '', qid: null, topic: null, ask: null, fu: '', fuAdd: {}, added: [], qs: {}, toast: null, notify: {},
-    set: 'org', wiz: null, report: { why: 'wrong', det: '' }, seeded: {} },
+  rfRole: 'visitor', brView: 'spaces',
+  rf: { view: 'land', q: '', qid: null, topic: null, ask: null, added: [], qs: {}, toast: null, notify: {},
+    set: 'org', wiz: null, report: { why: 'wrong', det: '' } },
 });
 const RF_NEWSUM = { sablefield: 'Declare the rule with scope: user and filter on the owner column with auth.user_id().', larkdown: 'Enable Git sync in Settings › Sync and choose the remote; Larkdown commits on the interval you set.', tallyfern: 'Reports › Export creates a ZIP with the main reports as CSV and PDF.' };
 RF_HTML.new_larkdown = '<p>Enable Git sync in Settings › Sync, choose the remote, and set how often Larkdown commits and pulls. <sup class="cite">1</sup> If the same note changed on two devices, Larkdown opens both versions in a merge view instead of overwriting one. <sup class="cite">1</sup></p>';
@@ -4085,7 +4056,7 @@ const rfFollow = s => st.auth === 'out' ? `<button class="btn primary" type="but
 function rfHero(s) {
   const r = s.ref;
   return `<div class="rf-hero" style="--sp:${avColor(s.av)}">${glyph(s, 'xl')}<div class="rf-hero-tx"><div class="rf-hero-n"><h2>${esc(s.title)}</h2>${rfMark(s, 'hero')}${s.draft ? '<span class="rf-draft">Draft · only staff can see this space</span>' : ''}</div><p>${esc(s.desc)}</p>
-    <div class="rf-hero-m"><span>${GLOBE}${esc(r.domain)}</span><span title="${esc(r.verifyBy)}">${RFI.seal}Verified ${esc(r.verified)}</span><span class="num">${rfNum(r.answers)} answers</span><span>Sources updated ${esc(r.updated)} ago</span></div></div>
+    <div class="rf-hero-m"><span>${GLOBE}${esc(r.domain)}</span><span title="${esc(r.verifyBy)}">${RFI.seal}Verified ${esc(r.verified)}</span><span class="num">${rfNum(r.answers)} answers</span><span>Sources updated ${r.updated === 'just now' ? 'just now' : esc(r.updated) + ' ago'}</span></div></div>
     <div class="rf-hero-a">${s.draft ? '' : rfFollow(s)}</div></div>`;
 }
 function rfSlim(s) {
@@ -4154,9 +4125,8 @@ function rfFaq(s) {
 function rfEmpty(s) {
   const staff = rfIsStaff(s);
   if (!staff) return `<div class="rf-narrow rf-emptyv"><h3>No answers yet</h3><p class="muted">Ask the first question. The agent researches ${esc(s.ref.org)}’s sources and posts the answer here.</p>${rfSearchBox(s, true)}</div>`;
-  return `<div class="rf-narrow rf-emptyv"><h3>No answers yet</h3><p class="muted">Visitors can ask now. You can also seed the FAQ before you share the space: the agent writes answers for the questions your sources answer most directly, and publishes them.</p>
-    <div class="rf-seed">${st.rf.seeded[s.id] ? `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Writing 25 answers</b><span class="faint">· each is published when it is ready</span></div></div>` : `<div><b>Seed from your sources</b><p class="faint">Writes answers for the 25 most-visited pages in ${esc(rfLower(((RF_SRC[s.id] || [])[0] || { name: 'your documentation' }).name))}. About 180K tokens.</p></div><button class="btn primary" type="button" data-rf="seed">Seed 25 answers</button>`}</div>
-    <div class="rf-seed"><div><b>Share the space</b><p class="faint">Link to session.app/s/${esc(s.name)} from your docs and help center.</p></div><button class="btn" type="button" data-rf="copy">Copy link</button></div></div>`;
+  return `<div class="rf-narrow rf-emptyv"><h3>No answers yet</h3><p class="muted">Visitors can ask now. Answers appear here as they are written.</p>
+    <div class="rf-share"><div><b>Share the space</b><p class="faint">Link to session.app/s/${esc(s.name)} from your docs and help center.</p></div><button class="btn" type="button" data-rf="copy">Copy link</button></div></div>`;
 }
 
 /* ---------- ask flow ---------- */
@@ -4205,7 +4175,6 @@ function rfSrcList(q, title = 'Sources') {
 const rfPlain = h => h.replace(/<\/(p|li|h4|pre)>/g, '\n\n').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim();
 function rfAnswer(q) {
   const s = sp(q.s), org = esc(s.ref.org);
-  const fus = [...(q.fu || []), ...(st.rf.fuAdd[q.id] || [])];
   const body = `<div class="prose rf-prose">${rfHtml(q)}</div>`;
   const related = rfSearch(q.s, q.q).filter(x => x.id !== q.id).slice(0, 3);
   const asker = q.by === ME.u ? 'You' : q.by;
@@ -4217,8 +4186,6 @@ function rfAnswer(q) {
     <section class="rf-ans-body">${body}</section>
     ${rfSrcList(q)}
     <div><button class="tlink" type="button" data-rf="report">Report a problem</button></div>
-    <section class="tr-sec rf-fus"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(f => `<div class="fq"><div class="meta">${avatar(f.u, 'sm')}${au(f.u)}<span>asked · ${f.age}</span></div><p class="fq-q">${esc(f.q)}</p><div class="fq-a"><span class="agent">${I.agent}</span><div>${f.a ? `<p>${esc(f.a)}</p>` : '<p class="faint"><span class="spin" style="display:inline-block;vertical-align:-2px;margin-right:6px"></span>Researching</p>'}</div></div></div>`).join('') || `<p class="muted">No follow-ups yet.</p>`}
-      <div class="fu-box2"><textarea id="rf-fu" rows="2" placeholder="Ask a follow-up about this answer" aria-label="Ask a follow-up">${esc(st.rf.fu)}</textarea><div class="fu2-bar"><span class="grow"></span><button class="btn primary" type="button" data-rf="fu">Ask</button></div></div></section>
     ${related.length ? `<section class="rf-rel"><h3>Related answers</h3><div class="rf-rows">${related.map(x => rfRow(x)).join('')}</div></section>` : ''}
   </article>
   <aside class="rf-ans-side"><div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-rfv="land">${esc(s.title)}</button></div><div><span>Asked by</span><b>${esc(asker)}</b></div><div><span>Answered</span><b>Agent</b></div><div><span>Applies to</span><b>${esc(q.ver)}</b></div><div><span>Last checked</span><b>${q.checked === 'now' ? 'Just now' : q.checked + ' ago'}</b></div><div><span>Sources</span><b class="num">${q.src.length}</b></div><div><span>Paid by</span><b>${org}</b></div></div>
@@ -4242,7 +4209,7 @@ function rfAbout(s) {
   return `<div class="rf-wide rf-about"><div class="rf-cols"><div class="rf-colm">
     <section><h3 class="rf-h">Sources</h3><div class="rf-srctbl">${(RF_SRC[s.id] || []).map(x => `<div class="rf-srcrow">${rfSrcIcon(x.kind)}<div class="rf-srcrow-t"><b>${esc(x.name)}</b><span>${esc(x.where)}</span></div><span class="faint">${esc(x.n)}</span><span class="faint">Synced ${esc(x.sync)}</span></div>`).join('')}</div></section>
     <section><h3 class="rf-h">Not answered here</h3><ul class="rf-plain"><li>Questions about a specific account, invoice or project.</li><li>Legal and compliance commitments that are not in the sources.</li><li>Outages: see the status page.</li></ul></section>
-  </div><aside class="rf-cola"><div class="rf-card"><h3>Organization</h3><div class="th-facts"><div><span>Name</span><b>${org}</b></div><div><span>Type</span><b>${esc(r.kind)}</b></div><div><span>Website</span><b>${esc(r.domain)}</b></div><div><span>Verified</span><b>${esc(r.verified)}</b></div><div><span>Method</span><b>${esc(r.verifyBy)}</b></div></div></div>
+  </div><aside class="rf-cola"><div class="rf-card"><h3>Organization</h3><div class="th-facts"><div><span>Name</span><b>${org}</b></div><div><span>Website</span><b>${esc(r.domain)}</b></div><div><span>Verified</span><b>${esc(r.verified)}</b></div><div><span>Method</span><b>${esc(r.verifyBy)}</b></div></div></div>
     <div class="rf-card"><h3>Staff</h3><div class="mods">${r.staff.map(([u, ro]) => `<div>${avatar(u, 'sm')}<span>${esc(u)}</span><small>${ro}</small></div>`).join('')}</div></div></aside></div></div>`;
 }
 
@@ -4262,38 +4229,35 @@ function rfStats(s) {
   const max = 600;
   const bars = RF_WEEKS.map(([w, n], i) => `<div class="st-col" tabindex="0" title="Week of ${w}: ${n} questions" aria-label="Week of ${w}: ${n} questions"><div class="st-colb"><span class="st-tip num">${n}</span><i style="height:${(n / max * 100).toFixed(1)}%"></i>${i === RF_WEEKS.length - 1 ? `<span class="st-val num" style="bottom:${(n / max * 100).toFixed(1)}%">${n}</span>` : ''}</div><span class="st-ax">${w}</span></div>`).join('');
   const grid = [600, 400, 200, 0].map(v => `<div class="st-gl" style="bottom:${v / max * 100}%"><span class="num">${v}</span></div>`).join('');
-  const res = [['Matched an existing answer', 1187], ['New answer written', 498], ['Follow-up on an answer', 186], ['Sources did not cover it', 37]], rmax = 1187, rtot = 1934;
+  const res = [['Matched an existing answer', 1187], ['New answer written', 498], ['Sources did not cover it', 37]], rmax = 1187, rtot = 1722;
+  const gaps = [['Will Sablefield sign a HIPAA business associate agreement?', '3h', 14], ['Can I self-host Sablefield?', '1d', 9], ['Do you offer nonprofit discounts?', '2d', 6], ['Is there a .NET SDK for Windows apps?', '4d', 4], ['How do I import a MySQL dump?', '6d', 4]];
   return `<div class="rf-wide rq st"><div class="rq-top"><div><h2>Analytics</h2><p class="muted">November 1–16</p></div></div>
-    <div class="st-tiles">${tile('Questions', '1,946', '+9% on October')}${tile('Answered by an existing answer', '61%', 'No tokens used')}${tile('Rated helpful', '89%', 'of 612 ratings')}${tile('Not covered by sources', '37', '1.9% of questions')}${tile('Tokens used', '7.9M', 'of 20M this month')}</div>
+    <div class="st-tiles">${tile('Questions', '1,722', '+9% on October')}${tile('Answered by an existing answer', '69%', 'No tokens used')}</div>
     <section class="st-card"><div class="st-card-h"><h3>Questions per week</h3><button class="tlink" type="button" data-rf="st-table">${st.rf.stTable ? 'Show chart' : 'Show table'}</button></div>${st.rf.stTable ? `<table class="st-tbl"><thead><tr><th>Week of</th><th>Questions</th></tr></thead><tbody>${RF_WEEKS.map(([w, n]) => `<tr><td>${w}</td><td class="num">${n}</td></tr>`).join('')}</tbody></table>` : `<div class="st-chart" role="img" aria-label="Questions per week, rising from 312 to 498 over eight weeks"><div class="st-plot">${grid}<div class="st-cols2">${bars}</div></div></div>`}</section>
     <div class="st-cols"><section class="st-card"><h3>How questions were resolved</h3><div class="st-bl">${res.map(([l, n]) => `<div class="st-blr"><span>${l}</span><span class="st-blbar"><i style="width:${Math.max(2, Math.round(n / rmax * 100))}%"></i></span><b class="num">${n.toLocaleString('en-US')}</b><small class="faint num">${(n / rtot * 100).toFixed(n / rtot < .1 ? 1 : 0)}%</small></div>`).join('')}</div></section>
-      <section class="st-card"><h3>Most cited pages</h3><ol class="rf-mini st-ol">${[['Sync rules › Scopes', 412], ['Connect › psql', 288], ['Read replicas', 240], ['Plan limits', 198], ['API keys › Rotating keys', 131]].map(([t, n]) => `<li><span>${t}</span><span class="num faint">${n}</span></li>`).join('')}</ol></section>
-      <section class="st-card"><h3>Lowest rated answers</h3><ol class="rf-mini st-ol">${['q3', 'q12', 'q5'].map(id => { const q = rfQ(id); return `<li><button type="button" data-rfq="${id}">${esc(q.q)}</button><span class="num faint">${q.help}%</span></li>`; }).join('')}</ol></section></div></div>`;
+      <section class="st-card"><h3>Not covered by the sources</h3><ol class="rf-mini st-ol">${gaps.map(([q, last, n]) => `<li><span>${esc(q)}<small>Last asked ${last} ago</small></span><span class="num faint">${n} asked</span></li>`).join('')}</ol></section></div></div>`;
 }
 
 /* ---------- create a organization space, and settings ---------- */
 const WZ_STEPS = [['org', 'Organization', 'Who runs this space and where it lives.'], ['verify', 'Verify', 'Prove that you control the organization’s domain. Verified spaces get the official badge.'], ['sources', 'Sources', 'Answers come only from what you connect here.'], ['answers', 'Scope and answers', 'What the agent answers, and how.'], ['budget', 'Budget', 'The organization pays for the tokens visitors use.'], ['staff', 'Staff', 'Who can manage this space.']];
 const WZ_SRC = [['docs', 'docs', 'Documentation site', 'docs.pinemark.dev', 'Crawled from this address; include or exclude paths below.'], ['help', 'help', 'Help center', 'help.pinemark.dev', 'Articles listed in the sitemap.'], ['log', 'log', 'Changelog or release notes', 'pinemark.dev/changelog', 'Page or RSS feed.'], ['gh', 'repo', 'GitHub repository', 'github.com/pinemark/pinemark-sdk', 'README, /docs, releases, and maintainer replies in issues.'], ['api', 'api', 'API specification', 'api.pinemark.dev/openapi.json', 'OpenAPI or GraphQL schema.'], ['files', 'file', 'Files', '', 'PDF, Markdown or HTML files you upload.']];
-const wzNew = () => ({ name: 'Pinemark', slug: 'pinemark', kind: 'Startup', site: 'pinemark.dev', desc: 'Official answers about the Pinemark maps SDK, from Pinemark’s documentation, API specification and changelog.', vmethod: 'dns', vstate: 'none', vemail: 'ana@pinemark.dev',
+const wzNew = () => ({ name: 'Pinemark', slug: 'pinemark', site: 'pinemark.dev', desc: 'Official answers about the Pinemark maps SDK, from Pinemark’s documentation, API specification and changelog.', vmethod: 'dns', vstate: 'none',
   src: { docs: 'none', help: 'none', log: 'none', gh: 'none', api: 'none', files: 'none' }, gap: 'options', web: false, direct: ['acct', 'outage'], len: 'standard', code: true, ver: true, 
   budget: 10, perDay: 10, out: 'search', alert: true, key: 'sk-ant-…9d1e', staff: [['ines@pinemark.dev', 'Owner'], ['ana@pinemark.dev', 'Admin']], invite: '' });
-const SET_SABLE = () => ({ name: 'Sablefield', slug: 'sablefield', kind: 'Startup', site: 'sablefield.dev', desc: SPACES.find(x => x.id === 'sablefield').desc, vmethod: 'dns', vstate: 'ok', vemail: '', src: { docs: 'ok', help: 'ok', log: 'ok', gh: 'ok', api: 'ok', files: 'none' }, gap: 'options', web: false, direct: ['acct', 'outage', 'legal'], len: 'standard', code: true, ver: true, 
+const SET_SABLE = () => ({ name: 'Sablefield', slug: 'sablefield', site: 'sablefield.dev', desc: SPACES.find(x => x.id === 'sablefield').desc, vmethod: 'dns', vstate: 'ok', src: { docs: 'ok', help: 'ok', log: 'ok', gh: 'ok', api: 'ok', files: 'none' }, gap: 'options', web: false, direct: ['acct', 'outage', 'legal'], len: 'standard', code: true, ver: true, 
   budget: 20, perDay: 10, out: 'search', alert: true, key: 'sk-ant-…3b7c', staff: [['maya@sablefield.dev', 'Owner'], ['devin@sablefield.dev', 'Admin'], ['ines@sablefield.dev', 'Admin']], invite: '' });
 const wzOpt = (f, v, l, d, cur) => `<button type="button" class="wz-opt" data-wset="${f}:${v}" aria-pressed="${String(cur) === String(v)}"><b>${l}</b>${d ? `<small>${d}</small>` : ''}</button>`;
 const wzTog = (f, on, l, d) => `<label class="wz-tog"><span class="tl-sw-tx"><b>${l}</b>${d ? `<small>${d}</small>` : ''}</span><span class="ts-sw"><input type="checkbox" data-wtog="${f}" ${on ? 'checked' : ''}><span class="sw-track" aria-hidden="true"></span></span></label>`;
 const wzFld = (l, f, v, ph, opt) => `<label class="fld"><span>${l}${opt ? ' <small class="faint">optional</small>' : ''}</span><input type="text" data-wf="${f}" value="${esc(v || '')}" placeholder="${esc(ph || '')}" autocomplete="off"></label>`;
 function wzSec(k, w, ctx) {
   const set = ctx === 'settings';
-  if (k === 'org') return `<div class="wz-g">${wzFld('Organization name', 'name', w.name)}<label class="fld"><span>Space address</span><span class="wz-pre"><span class="faint">session.app/s/</span><input type="text" data-wf="slug" value="${esc(w.slug)}" autocomplete="off" ${set ? 'disabled' : ''}></span></label>
-    <div class="fld"><span>Type</span><div class="wz-seg seg">${['Company', 'Startup', 'Open-source project', 'Nonprofit', 'Public institution'].map(t => `<button type="button" data-wset="kind:${t}" aria-pressed="${w.kind === t}">${t}</button>`).join('')}</div></div>${wzFld('Website', 'site', w.site)}<label class="fld"><span>Description</span><textarea rows="3" data-wf="desc">${esc(w.desc)}</textarea></label></div>`;
+  if (k === 'org') return `<div class="wz-g">${wzFld('Organization name', 'name', w.name)}<label class="fld"><span>Space address</span><span class="wz-pre"><span class="faint">session.app/s/</span><input type="text" data-wf="slug" value="${esc(w.slug)}" autocomplete="off" ${set ? 'disabled' : ''}></span></label>${wzFld('Website', 'site', w.site)}<label class="fld"><span>Description</span><textarea rows="3" data-wf="desc">${esc(w.desc)}</textarea></label></div>`;
   if (k === 'verify') {
     const m = w.vmethod, dom = esc(w.site || 'your domain');
     const how = m === 'dns' ? `<p class="muted">Add this TXT record to <b>${dom}</b>, then check. DNS changes can take a few minutes.</p><div class="wz-code"><span>TXT</span><code>_session-verify.${dom}</code><code>session-verify=7f3c9a1e</code><button class="btn sm" type="button" data-wcopy="1">Copy</button></div>`
-      : m === 'email' ? `<p class="muted">We send a link to an address at <b>${dom}</b>. Opening it verifies the domain.</p>${wzFld('Email at ' + dom, 'vemail', w.vemail)}`
-        : m === 'file' ? `<p class="muted">Upload a file with this content to your website, then check.</p><div class="wz-code"><code>https://${dom}/.well-known/session-verify.txt</code><code>7f3c9a1e</code><button class="btn sm" type="button" data-wcopy="1">Copy</button></div>`
           : `<p class="muted">Install the Session app on the GitHub organization that owns the project. An organization owner has to approve it.</p>`;
     const stt = w.vstate === 'ok' ? `<p class="wz-ok">${RFI.seal}Verified: ${dom}${set ? ' · Nov 2, by DNS record' : ''}</p>` : w.vstate === 'checking' ? `<p class="wz-wait"><span class="spin" aria-hidden="true"></span>Checking…</p>` : `<p class="faint">Not verified. Until it is, the space has no badge and cannot be published.</p>`;
-    return `<div class="wz-g"><div class="wz-opts c2x">${wzOpt('vmethod', 'dns', 'DNS record', 'Recommended for companies', m)}${wzOpt('vmethod', 'email', 'Email at the domain', 'Fastest if DNS is managed elsewhere', m)}${wzOpt('vmethod', 'file', 'File on the website', 'If you can publish to the site', m)}${wzOpt('vmethod', 'github', 'GitHub organization', 'For open-source projects', m)}</div>${how}<div class="wz-vrow">${stt}${w.vstate === 'ok' ? '' : `<button class="btn primary" type="button" data-wverify="1">${m === 'email' ? 'Send link' : m === 'github' ? 'Connect GitHub' : 'Check'}</button>`}</div></div>`;
+    return `<div class="wz-g"><div class="wz-opts c2x">${wzOpt('vmethod', 'dns', 'DNS record', 'Recommended for companies', m)}${wzOpt('vmethod', 'github', 'GitHub organization', 'For open-source projects', m)}</div>${how}<div class="wz-vrow">${stt}${w.vstate === 'ok' ? '' : `<button class="btn primary" type="button" data-wverify="1">${m === 'github' ? 'Connect GitHub' : 'Check'}</button>`}</div></div>`;
   }
   if (k === 'sources') {
     return `<div class="wz-g"><div class="wz-srcs">${WZ_SRC.map(([id, ic, l, ph, d]) => { const s2 = w.src[id]; return `<div class="wz-src${s2 === 'ok' ? ' on' : ''}">${rfSrcIcon(ic)}<div class="wz-src-b"><b>${l}</b><small class="faint">${d}</small>${id === 'files' ? '' : `<input type="text" data-wsrcurl="${id}" value="${esc(set ? ph.replace('pinemark', 'sablefield') : ph.replace('pinemark', w.slug || 'pinemark'))}" aria-label="${l} address" ${s2 === 'ok' ? 'disabled' : ''}>`}${id === 'docs' && s2 === 'ok' ? `<span class="wz-paths faint">Include: /guides, /reference, /sdk · Exclude: /blog, /legacy</span>` : ''}</div><div class="wz-src-s">${s2 === 'ok' ? `<span class="rf-dot ok"><i></i>${{ docs: '230 pages', help: '84 articles', log: '41 entries', gh: 'README, 18 docs, 52 releases', api: '96 endpoints', files: '6 files' }[id]}</span><button class="tlink" type="button" data-wsrc="${id}">Remove</button>` : s2 === 'indexing' ? `<span class="wz-wait"><span class="spin" aria-hidden="true"></span>Indexing</span>` : `<button class="btn sm" type="button" data-wsrc="${id}">${id === 'files' ? 'Upload' : 'Connect'}</button>`}</div></div>`; }).join('')}</div><p class="faint">Sources are re-checked daily. Add a webhook from your docs build to re-check on every publish.</p></div>`;
@@ -4329,7 +4293,7 @@ function rfPublish(w, draft) {
   let s = SPACES.find(x => x.id === id);
   if (!s) { s = { id, name: w.slug, av: 3, members: 1, online: 0, posts: 0, used: 0, pct: 0, created: 'Nov 2026', rules: [], pages: [], mods: [[ME.u, 'owner']], mine: true }; SPACES.push(s); }
   Object.assign(s, { title: w.name, desc: w.desc, budget: w.budget * 1e6, draft: !!draft || (draft === undefined && false),
-    ref: { org: w.name, kind: w.kind, domain: w.site, verified: w.vstate === 'ok' ? rfToday : 'not yet', verifyBy: { dns: 'DNS record', email: 'Email at the domain', file: 'File on the website', github: 'GitHub organization' }[w.vmethod], version: 'Current release', answers: 0, updated: 'just now', perDay: w.perDay || 25, staff: w.staff.map(([e, r]) => [e.split('@')[0], r, e]) } });
+    ref: { org: w.name, domain: w.site, verified: w.vstate === 'ok' ? rfToday : 'not yet', verifyBy: { dns: 'DNS record', github: 'GitHub organization' }[w.vmethod], version: 'Current release', answers: 0, updated: 'just now', perDay: w.perDay || 25, staff: w.staff.map(([e, r]) => [e.split('@')[0], r, e]) } });
   RF_SRC[id] = WZ_SRC.filter(([sid]) => w.src[sid] === 'ok').map(([sid, kind, name, ph]) => ({ id: sid, kind, name, where: ph.replace('pinemark', w.slug), n: { docs: '230 pages', help: '84 articles', log: '41 entries', gh: 'README, 18 docs, 52 releases', api: '96 endpoints', files: '6 files' }[sid], sync: 'just now', how: 'Checked daily' }));
   RF_TOPICS[id] = [];
   if (!JOINED.includes(id)) JOINED.push(id);
@@ -4354,7 +4318,7 @@ function rfHomeSide() {
 }
 function rfBrowseSection() {
   const refs = SPACES.filter(x => x.ref && !x.draft);
-  return `<section class="br-grp rf-br"><h3 class="br-h">Organization spaces</h3><p class="rf-br-d muted">Run by an organization. Answers come only from the organization’s own docs and help pages.</p><div class="rf-brgrid">${refs.map(x => `<article class="rf-brc">${glyph(x, 'lg')}<div class="rf-brc-b"><div class="rf-brc-n"><button class="dg-name" type="button" data-space="${x.id}">${esc(x.title)}</button>${rfMark(x, 'row')}</div><span class="faint rf-brc-dom">${esc(x.ref.kind)} · ${esc(x.ref.domain)}</span><p>${esc(x.desc)}</p><span class="faint num">${rfNum(x.ref.answers)} answers · ${(RF_SRC[x.id] || []).length} sources</span></div>${st.auth === 'in' ? (JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Following</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Follow</button>`) : ''}</article>`).join('')}</div></section>`;
+  return `<section class="br-grp rf-br"><p class="rf-br-d muted">Run by an organization. Answers come only from the organization’s own docs and help pages.</p><div class="rf-brgrid">${refs.map(x => `<article class="rf-brc">${glyph(x, 'lg')}<div class="rf-brc-b"><div class="rf-brc-n"><button class="dg-name" type="button" data-space="${x.id}">${esc(x.title)}</button>${rfMark(x, 'row')}</div><span class="faint rf-brc-dom">${esc(x.ref.domain)}</span><p>${esc(x.desc)}</p><span class="faint num">${rfNum(x.ref.answers)} answers · ${(RF_SRC[x.id] || []).length} source${(RF_SRC[x.id] || []).length === 1 ? '' : 's'}</span></div>${st.auth === 'in' ? (JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Following</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Follow</button>`) : ''}</article>`).join('')}</div></section>`;
 }
 
 /* ---------- dialogs ---------- */
@@ -4382,7 +4346,7 @@ function rfToastSet(t) {
   rfToastSet.t = setTimeout(() => { st.rf.toast = null; const el = document.querySelector('.rf-toast'); if (el) el.remove(); }, 3200);
 }
 const rfBase = () => ({ home: false, thread: null, savedPage: false, profilePage: false, subPage: null, umenu: false, pop: false, sortOpen: false, mWiki: false });
-function rfOpenSpace(id, view, extra) { Object.assign(st, rfBase(), { space: id }); Object.assign(st.rf, { view: view || 'land', topic: null }, extra || {}); }
+function rfOpenSpace(id, view, extra) { if (id !== st.space) st.rf.q = ''; Object.assign(st, rfBase(), { space: id }); Object.assign(st.rf, { view: view || 'land', topic: null }, extra || {}); }
 const wzData = () => st.subPage === 'rfnew' ? st.rf.wiz : st.rf.sd;
 function rfClick(t, e) {
   if (st.rf.toast && !t.closest('.rf-toast')) { st.rf.toast = null; }
@@ -4392,11 +4356,12 @@ function rfClick(t, e) {
   if ((el = d('[data-rfcreate]'))) { if (el.dataset.rfcreate === 'community') { st.modal = 'rf-community'; renderAll(); return true; } st.modal = null; st.rf.wiz = wzNew(); rfNav(() => Object.assign(st, rfBase(), { subPage: 'rfnew' })); return true; }
   /* entering a organization space from anywhere opens its landing */
   if ((el = d('[data-space]')) && sp(el.dataset.space) && sp(el.dataset.space).ref && !d('[data-rfq]')) { rfNav(() => rfOpenSpace(el.dataset.space)); return true; }
+  if ((el = d('[data-brview]'))) { st.brView = el.dataset.brview; renderAll(); return true; }
   if ((el = d('[data-rfq]'))) {
     if (d('input, textarea')) return false;
     e && e.preventDefault();
     const q = rfQ(el.dataset.rfq); if (!q) return true;
-    rfNav(() => rfOpenSpace(q.s, 'ans', { qid: q.id, fu: '' })); return true;
+    rfNav(() => rfOpenSpace(q.s, 'ans', { qid: q.id })); return true;
   }
   if ((el = d('[data-rfv]'))) { const v = el.dataset.rfv; rfNav(() => { Object.assign(st, rfBase(), { space: st.space }); st.rf.view = v; if (v === 'land') st.rf.topic = null; if (v === 'queue') st.rf.queue.open = false; }); return true; }
   if ((el = d('[data-rftopic]'))) { const k = el.dataset.rftopic || null; rfNav(() => { st.rf.view = 'land'; st.rf.topic = k; }); return true; }
@@ -4424,15 +4389,6 @@ function rfClick(t, e) {
     if (a === 'report') { if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; } st.rf.report = { why: 'wrong', det: '' }; st.modal = 'rf-report'; renderAll(); return true; }
     if (a === 'report-send') { st.modal = null; rfToastSet(`Report sent to ${s.ref.org} staff`); renderAll(); return true; }
     if (a === 'web') { st.rf.ask.web = true; renderAll(); return true; }
-    if (a === 'fu') {
-      const inp = $('rf-fu'), text = (inp ? inp.value : st.rf.fu).trim() || 'Does this also apply to the Kotlin SDK?';
-      if (st.auth === 'out') { st.modal = 'signin'; renderAll(); return true; }
-      const id = st.rf.qid, list = st.rf.fuAdd[id] = st.rf.fuAdd[id] || [], f = { u: ME.u, age: 'now', q: text, a: null };
-      list.push(f); st.rf.fu = ''; renderAll();
-      setTimeout(() => { f.a = id === 'q5' && /kotlin/i.test(text) ? 'Yes. The Kotlin SDK page says offline writes are queued the same way, with a limit of 50,000 writes since Kotlin SDK 2.4.' : `The cited ${s.ref.org} sources do not say more about this than the answer above.`; if (st.rf.view === 'ans') renderAll(); }, rfTick.fast ? 50 : 1200);
-      return true;
-    }
-    if (a === 'seed') { st.rf.seeded[s.id] = true; renderAll(); return true; }
     if (a === 'copy') { rfToastSet('Link copied'); renderAll(); return true; }
     if (a === 'st-table') { st.rf.stTable = !st.rf.stTable; renderAll(); return true; }
     if (a === 'set-save') { rfToastSet('Settings saved'); renderAll(); return true; }
@@ -4443,7 +4399,6 @@ function rfClick(t, e) {
 function rfInput(e) {
   const t = e.target, id = t.id;
   if (id === 'rf-q') { st.rf.q = t.value; const r = $('rf-results'); if (r) r.innerHTML = rfResults(); return true; }
-  if (id === 'rf-fu') { st.rf.fu = t.value; return true; }
   if (id === 'rf-repdet') { st.rf.report.det = t.value; return true; }
   if (t.dataset.wf) { const w = wzData(); w[t.dataset.wf] = t.value; if (t.dataset.wf === 'name' && st.subPage === 'rfnew' && !w.slugEdited) { w.slug = t.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); const sl = document.querySelector('[data-wf="slug"]'); if (sl) sl.value = w.slug; } if (t.dataset.wf === 'slug') w.slugEdited = true; return true; }
   return false;
@@ -4463,7 +4418,7 @@ function rfStay(view, jump) { const onAns = !st.home && !st.subPage && st.thread
 const RF_JUMPS = [
   ['Visitor', [['land', 'Landing'], ['out', 'Landing, signed out'], ['search', 'Search with matches'], ['run', 'Ask: researching'], ['ans', 'Answer'], ['gap', 'Not covered by sources'], ['report', 'Report a problem'], ['about', 'About the space'], ['other', 'Open-source project space']]],
   ['Staff', [['create', 'Create: choose space type'], ['wiz', 'Create: setup'], ['empty', 'New space with no answers'], ['sources', 'Sources'], ['stats', 'Analytics'], ['settings', 'Settings']]],
-  ['Elsewhere', [['home', 'Home feed'], ['browse', 'Browse spaces'], ['switcher', 'Space switcher'], ['yours', 'Your spaces']]],
+  ['Elsewhere', [['home', 'Home feed'], ['browse', 'Browse spaces'], ['browseOrgs', 'Browse: organization spaces'], ['switcher', 'Space switcher'], ['yours', 'Your spaces']]],
 ];
 function rfJumpControl() {
   const el = $('k-rfgo'); if (!el || el.dataset.ready) return;
@@ -4475,8 +4430,8 @@ function rfGoto(k, keepVariants) {
   Object.assign(st, rfBase(), { auth: 'in', modal: null, space: 'sablefield' });
   if (st.device === 'native') st.device = 'desktop';
   const r = st.rf, staff = ['sources', 'stats', 'settings', 'empty'].includes(k);
-  if (staff) st.rfRole = 'staff'; else if (!keepVariants && !['home', 'browse', 'switcher', 'yours', 'create', 'wiz'].includes(k)) st.rfRole = 'visitor';
-  Object.assign(r, { view: 'land', topic: null, toast: null });
+  if (staff) st.rfRole = 'staff'; else if (!keepVariants && !['home', 'browse', 'browseOrgs', 'switcher', 'yours', 'create', 'wiz'].includes(k)) st.rfRole = 'visitor';
+  Object.assign(r, { view: 'land', topic: null, toast: null, q: '' });
   if (k === 'land' || k === 'out') { r.q = ''; if (k === 'out') st.auth = 'out'; }
   if (k === 'search') r.q = 'replica region';
   if (k === 'run') { r.q = RF_TRY.sablefield[2]; r.ask = { text: r.q, step: 1, kind: 'ans', sid: 'sablefield' }; r.view = 'run'; }
@@ -4487,10 +4442,10 @@ function rfGoto(k, keepVariants) {
   if (k === 'other') st.space = 'larkdown';
   if (k === 'create') { st.home = true; st.modal = 'rf-create'; }
   if (k === 'wiz') { st.subPage = 'rfnew'; r.wiz = wzNew(); }
-  if (k === 'empty') { let s = SPACES.find(x => x.mine); if (!s) { const w = wzNew(); Object.assign(w, { vstate: 'ok', src: { ...w.src, docs: 'ok', api: 'ok', log: 'ok' } }); s = rfPublish(w); } st.space = s.id; r.seeded[s.id] = false; }
+  if (k === 'empty') { let s = SPACES.find(x => x.mine); if (!s) { const w = wzNew(); Object.assign(w, { vstate: 'ok', src: { ...w.src, docs: 'ok', api: 'ok', log: 'ok' } }); s = rfPublish(w); } st.space = s.id; }
   if (['sources', 'stats', 'settings'].includes(k)) r.view = k;
   if (k === 'home') st.home = true;
-  if (k === 'browse') st.subPage = 'browse';
+  if (k === 'browse' || k === 'browseOrgs') { st.subPage = 'browse'; st.brView = k === 'browse' ? 'spaces' : 'orgs'; }
   if (k === 'switcher') { st.home = true; st.pop = true; }
   if (k === 'yours') st.subPage = 'yourspaces';
   renderAll(); rfTop();
@@ -4502,23 +4457,9 @@ $('k-reset').addEventListener('click', () => {
   clearTimeout(rfTick.t); renderAll();
 });
 
-/* ---------- native phone app: organization spaces as a plain answer list ---------- */
-const nSpaceBase = nSpace;
-nSpace = function (id) {
-  const x = sp(id); if (!x.ref) return nSpaceBase(id);
-  const list = rfAll(id), right = nBtn('sheet:wiki', NI.info, 'About this space');
-  const groups = (RF_TOPICS[id] || []).map(([k, l]) => [l, list.filter(q => q.t === k)]).filter(g => g[1].length);
-  return { body: `${nPushBar(esc(x.title), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)} ${rfMark(x, 'row')}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${rfNum(x.ref.answers)} answers</span><span>${esc(x.ref.domain)}</span></div></div>${groups.map(([l, qs]) => nGroup(esc(l), qs.map(q => `<div class="n-row"><span class="n-row-b"><b>${esc(q.q)}</b><small>${q.asks} asked</small></span></div>`))).join('')}` };
-};
 
 ROLE_IC.Staff = RFI.seal;
 
-const nSheetBase = nSheet;
-nSheet = function () {
-  const [k] = (nst.sheet || '').split(':'), x = sp(nst.stack.length ? nTop().id : st.space);
-  if (k !== 'wiki' || !x || !x.ref) return nSheetBase();
-  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(x.title)}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${esc(x.title)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>${nGroup('Sources', (RF_SRC[x.id] || []).map(s2 => `<div class="n-row"><span class="n-row-b"><b>${esc(s2.name)}</b><small>${esc(s2.where)} · ${esc(s2.n)}</small></span></div>`))}${nGroup('Staff', x.ref.staff.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${r}</span></div>`))}<p class="n-grp-f">${`Verified: ${esc(x.ref.domain)}. Answers come only from these sources.`}</p></div></div>`;
-};
 /* END organization spaces */
 const ST0 = structuredClone(st), JOINED0 = [...JOINED], NST0 = structuredClone(nst);
 $('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
