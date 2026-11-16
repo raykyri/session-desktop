@@ -1472,7 +1472,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jd-pos { color: var(--t-faint); font-weight: 400; }
 .jd-btn svg { width: 10px; height: 10px; flex: none; color: var(--t-muted); }
-.jd-pop { position: absolute; left: 0; top: calc(100% + 4px); z-index: 80; width: max(100%, 300px); max-width: calc(100vw - 32px); max-height: min(60vh, 460px); overflow-y: auto; padding: 4px; background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
+.jd-pop { position: absolute; right: 0; left: auto; top: calc(100% + 4px); z-index: 80; width: max(100%, 300px); max-width: calc(100vw - 32px); max-height: min(60vh, 460px); overflow-y: auto; padding: 4px; background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
 .jd-pop:focus { outline: none; }
 .jd-gh { padding: 8px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t-faint); }
 .ds-hcard-m { margin: 4px 0 14px; }
@@ -8746,8 +8746,9 @@ function resetControls() {
    Brand, avatar and status colors are left as they are. */
 const TINTS = {
   warmlo: { h: 72, m: 0.6, a: 0 },
-  /* Sage: light mode carries 30% less chroma than the original sage tint, dark mode 70% less. */
-  sagelo: { h: 145, m: 0.56, a: .00245, dark: { m: 0.24, a: .00105 } },
+  /* Sage: light mode carries 30% less chroma than the original sage tint, dark mode 70% less.
+     Its yellow (OKLab b) is a further 30% lower than at hue 145: same green, hue 154, chroma x0.91. */
+  sagelo: { h: 154, m: 0.511, a: 0.00224, dark: { m: 0.219, a: 0.00096 } },
 };
 const TINT_SKIP = /^--(mock|accent|av|warn|bad|good|on-accent|font|fs|r-|ease)/;
 const s2l = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
