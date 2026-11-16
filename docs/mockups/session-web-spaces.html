@@ -3043,11 +3043,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
       <div class="knob"><span>Sheet animation</span><div class="seg" id="k-msanim"></div></div>
     </div>
-    <div class="knobs cs-knobs" aria-label="Ask thread controls">
-      <span class="cs-kt">Ask threads</span>
-      <div class="knob" id="kw-thrv"><span>Thread page</span><div class="seg" id="k-thrv"></div></div>
-      <div class="knob"><span>Follow-up composer</span><div class="seg" id="k-fucomp"></div></div>
-    </div>
   </div>
   <div class="frame">
     <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url" id="url"></div><div style="width:42px"></div></div>
@@ -8384,13 +8379,10 @@ function qtFuView(T, cur) {
   const head = `${miAbout(T.p)}<div class="meta">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span></div><p class="th-q" id="th-q">${esc(r.q)}</p>`;
   const tog = `<div class="seg qt-fut" role="group" aria-label="Show follow-ups as">${[['a', 'Answers'], ['q', 'Questions']].map(([k, l]) => `<button type="button" data-qtfuq="${k}" aria-pressed="${(st.qtFuQ ? 'q' : 'a') === k}">${l}</button>`).join('')}</div>`;
   const fus = `<section class="th-fus${st.qtFuQ ? ' qt-fls' : ''}" id="th-f"><h3>Follow-ups <span class="faint num">${l1.length}</span>${l1.length ? tog : ''}</h3>${l1.map(n => qtFuCard(T, n, cur)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`;
-  /* Follow-up composer control: below the follow-ups (as before), or an "Ask about this answer" button in the
-     answer's action row that opens the composer there, above the follow-ups */
-  const btn = st.fuComp === 'button';
-  const comp = !r.running && !btn ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : '';
-  const acts = btn && !r.running ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot"><button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer" aria-expanded="${st.qtAskAt === 'r'}">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`) : thActs(T.p);
-  const inl = btn && st.qtAskAt === 'r' && !r.running ? `<div class="qt-rootask qt-rootask-in">${qtComposer(T, 'r', { cancel: true })}</div>` : '';
-  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}${comp}</article>`;
+  /* An "Ask about this answer" button in the answer's action row opens the composer there, above the follow-ups */
+  const acts = !r.running ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot"><button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer" aria-expanded="${st.qtAskAt === 'r'}">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`) : thActs(T.p);
+  const inl = st.qtAskAt === 'r' && !r.running ? `<div class="qt-rootask qt-rootask-in">${qtComposer(T, 'r', { cancel: true })}</div>` : '';
+  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}</article>`;
 }
 /* ---------- sources of the question's answer, in the side column ---------- */
 function qtSrcList(T) {
@@ -8515,6 +8507,13 @@ function qtGo(T, id) {
   st.qtExp = new Set([...st.qtExp, ...p.map(x => x.id)]);
   st.qtScroll = 'node';
 }
+/* scroll only as far as needed to show el (a composer that just opened), keeping the page where it is if it is already visible */
+function qtReveal(el) {
+  if (!el) return;
+  const app = $('app'), v = app.getBoundingClientRect(), r = el.getBoundingClientRect(), pad = 16;
+  if (r.bottom > v.bottom - pad) app.scrollTop += Math.min(r.bottom - v.bottom + pad, r.top - v.top - pad);
+  else if (r.top < v.top + pad) app.scrollTop -= v.top + pad - r.top;
+}
 function qtScrollTo(el) {
   if (!el) return;
   const app = $('app'), y = el.getBoundingClientRect().top;
@@ -8592,7 +8591,7 @@ function qtAfterRender() {
     /* After the current click handler: "Jump to" resets the scroll position after rendering. */
     else setTimeout(() => qtScrollTo(k === 'top' ? document.querySelector('#app .qt-bar') : $('qt-n-' + st.qtNode)), 0);
   }
-  if (st.qtFocusIn) { st.qtFocusIn = false; const i = $('qt-in'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length); setTimeout(() => qtScrollTo(i.closest('.qt-comp')), 0); } }
+  if (st.qtFocusIn) { st.qtFocusIn = false; const i = $('qt-in'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length); setTimeout(() => qtReveal(i.closest('.qt-comp')), 0); } }
 }
 
 /* ---------- feed, Saved, search, reports, dialogs ---------- */
@@ -8632,11 +8631,10 @@ csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : 
 Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtDraft: '', qtErr: '', qtHi: null,
   qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtSaved: new Set(['11:c2']), qtExp: new Set(), qtFuQ: false });
-/* "Thread page" control (st.thrV): follow-ups with the tree in the side column (fx, the default), or the
-   flat follow-ups (fu). The nested question-tree view is still used to compare two branches. Every question
-   trees addition (thread page, feed row line, Saved and Search sections, the notification) checks it. */
-const qtOn = () => st.thrV !== 'fu';
-const qtComb = () => st.thrV === 'fx';
+/* Ask threads show the follow-ups with the tree in the side column (st.thrV 'fx'). The flat
+   Follow-ups page (QT_layoutThread) is used for posts and for threads the person cannot read. */
+const qtOn = () => true;
+const qtComb = () => true;
 const QT_NOTIF = { id: 'nqt1', k: 'reply', u: 'hal_b', age: '5m', unread: true, open: 0, qtNode: 'h1', text: 'asked about your ask <b>How does the Daemon’s darknet decide who gets which task?</b>', why: 'Is that closer to a labour market or to a reputation ledger?' };
 function qtSyncNotif() {
   const has = st.notifs.some(n => n.id === QT_NOTIF.id);
@@ -8654,16 +8652,8 @@ function MWKNOBS() {
 /* The Map button: on Mobile Web the Thread map control can replace it with the outline, or open it zoomed out. */
 /* The map: a dialog on desktop. Mobile Web has no map; the outline sheet opens instead. */
 function qtOpenMap() { if (st.device === 'phone') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; } }
-function QTKNOBS() {
-  return [['k-thrv', 'thrV', [['fx', 'Follow-ups with tree'], ['fu', 'Follow-ups']], () => {
-    qtSyncNotif(); Object.assign(st, { qtCmp: null, qtPick: null, qtAskAt: null, qtMenu: null });
-    if (!qtOn()) nst.stack = nst.stack.filter(e => e.v !== 'ask');
-    if (st.modal && st.modal.startsWith('qt-')) st.modal = null;
-    if (st.thread == null) Object.assign(st, NAVBASE(), { thread: 11, space: D.posts[11].s, home: false });
-  }],
-  ['k-fucomp', 'fuComp', [['below', 'Composer below the follow-ups'], ['button', 'Ask button above the follow-ups']], () => { if (st.thrV === 'fu') st.thrV = 'fx'; if (st.thread == null) jump('qt-root'); st.qtAskAt = null; }]];
-}
-st.thrV = 'fx'; st.fuComp = 'below';
+function QTKNOBS() { return []; }
+st.thrV = 'fx';
 Object.assign(st, { mTools: 'icons', mMenu: 'sheet', msAnim: 'slide' });
 qtSyncNotif();
 function qtReset() {
