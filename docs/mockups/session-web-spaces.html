@@ -1514,6 +1514,71 @@ button.n-row:active { background: var(--n-fill); }
 .abw-sum p { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--t-secondary); }
 .abw-sum b { font-weight: 550; color: var(--t-strong); }
 .ds-stab-only { cursor: default; }
+/* About: pages, skills, members, moderators, token use */
+.ab-ch { display: flex; justify-content: space-between; align-items: center; }
+.ab-pgl { margin: 0; }
+.ab-pgr { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; margin: 0 -6px; border: 0; background: transparent; border-radius: var(--r-md); color: var(--t-primary); font: inherit; text-align: left; cursor: pointer; }
+.ab-pgr:hover { background: var(--fill-hover); }
+.ab-pgr svg { width: 13px; height: 13px; color: var(--t-faint); flex: none; }
+.ab-pgr span { flex: 1; min-width: 0; }
+.ab-pgr small { color: var(--t-faint); font-size: var(--fs-xs); }
+.ab-pgo { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.ab-pgt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.ab-pgt svg { width: 13px; height: 13px; color: var(--t-faint); flex: none; }
+.ab-pgb { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ab-pgb .iconbtn { width: 26px; height: 26px; }
+.ab-pgb .iconbtn svg { width: 11px; height: 11px; }
+.ab-add { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: var(--fs-sm); }
+.ab-add svg { width: 12px; height: 12px; }
+.ab-pv { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ab-pvt { margin: 0; font-size: 19px; font-weight: 650; color: var(--t-heading); }
+.ab-pvt.sm { font-size: var(--fs-input); margin: 10px 0; }
+.ab-pm { margin: 0; font-size: var(--fs-xs); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ab-pm .au { font-size: var(--fs-xs); }
+.ab-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ab-ed .ab-acts { justify-content: flex-end; }
+.ab-prose p { margin: 0 0 10px; color: var(--t-body); line-height: 1.6; }
+.ab-hist { border: 1px solid var(--divider); border-radius: var(--r-md); padding: 8px 10px; }
+.ab-hist h4, .ab-h4 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--t-strong); }
+.ab-hist ol, .ab-meml, .ab-use { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ab-hist li { display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); }
+.ab-hist li > .ab-ht { flex: 1; min-width: 0; color: var(--t-secondary); }
+.ab-hist small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
+.ab-page .ab-pv { max-width: 680px; }
+.ab-page .ab-pvt { font-size: 24px; }
+.ab-skx { padding: 4px 4px 10px 34px; display: flex; flex-direction: column; gap: 8px; }
+.ab-skq { margin: 0; font-size: var(--fs-sm); color: var(--t-primary); }
+.ab-sku { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: var(--fs-sm); }
+.sk-go.open { transform: rotate(90deg); }
+.ab-sku .tlink { text-align: left; }
+.ab-skm { margin-left: auto; font-size: var(--fs-xs); }
+.ab-skr { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
+.ab-skr .sk-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ab-skr .sk-tx small { color: var(--t-faint); font-size: var(--fs-xs); }
+.ab-skf { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--divider); }
+.ab-skf input { height: 34px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); font: inherit; color: var(--t-primary); }
+.ab-meml li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.ab-meml small { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); }
+.ab-mq { margin: 0 0 10px; height: 34px; }
+.ab-mq input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: var(--t-primary); padding: 0; outline: none; }
+.ab-mq:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 2px var(--focus-ring, rgba(0,0,0,.12)); }
+.ab-use li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.ab-use li > :first-child + span, .ab-use li > .tlink { flex: 1; min-width: 0; text-align: left; }
+.ab-use b { margin-left: auto; font-weight: 500; color: var(--t-strong); }
+.ab-h4 { margin-top: 12px; }
+.ab-upd { margin: 6px 0 0; }
+.ab-diff { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); }
+.ab-add-r { background: color-mix(in srgb, var(--good, #2e7d32) 14%, transparent); border-radius: 4px; padding: 1px 4px; }
+.ab-rm-r { text-decoration: line-through; color: var(--t-faint); }
+.ab-join { margin-top: 8px; }
+.ab-cp { font-size: var(--fs-xs); }
+.note-card > .tlink, .note-card > .btn { align-self: flex-start; }
+.cs-fine.ab-f { display: block; }
+.th-facts .tlink.num { text-decoration: underline; text-decoration-color: var(--divider-strong, currentColor); text-underline-offset: 3px; }
+.ab-rrow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ab-rrow input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); font: inherit; font-size: var(--fs-sm); color: var(--t-primary); }
+.ab-radios { display: flex; flex-direction: column; gap: 8px; }
+.ds-side .mods > div .au { font-size: var(--fs-sm); color: var(--t-primary); }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
@@ -3031,6 +3096,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
+      <div class="knob"><span>Page view</span><div class="seg" id="k-abpage"></div></div>
+      <div class="knob"><span>Skill preview</span><div class="seg" id="k-abskill"></div></div>
+      <div class="knob"><span>Member list</span><div class="seg" id="k-abmem"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3157,6 +3225,8 @@ const RES = {
   dsPol:    { url: '/api/space-source-policies', kind: 'map' },
   dsReps:   { url: '/api/source-reports', kind: 'value' },
   profile:  { url: '/api/me/profile', kind: 'value' },        /* name and bio */
+  skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ([name, prompt]) */
+  pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -3482,9 +3552,11 @@ const SKILLS = {
   ],
 };
 const SKILL_ICONS = { 'Summarize': 'M3 4h10M3 7h10M3 10h6', 'Transcribe': 'M5 3.5v9l7-4.5z', 'Review': 'M3 4.5l1.5 1.5L7 3.5M9 5h4M3 10.5l1.5 1.5L7 9.5M9 11h4', 'Audit': 'M7 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM10 10l3 3', 'Find': 'M7 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM10 10l3 3', 'Trace': 'M3 12c3 0 3-8 6-8s2 6 4 6', 'Check': 'M3.5 8.5 6.5 11.5 12.5 5', 'Compare': 'M3 4h4v8H3zM9 4h4v8H9z', 'Explain': 'M8 3a3 3 0 0 0-2 5.2V10h4V8.2A3 3 0 0 0 8 3zM6.5 12.5h3' };
+D.skills = structuredClone(SKILLS);
+D.pagedocs = {};
 const skillIcon = n => { const d = SKILL_ICONS[n.split(' ')[0]] || 'M8 2.5 9.4 6.6 13.5 8 9.4 9.4 8 13.5 6.6 9.4 2.5 8 6.6 6.6z'; return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`; };
 function skillsHTML(s) {
-  const list = SKILLS[s.id]; if (!list) return '';
+  const list = D.skills[s.id]; if (!list) return '';
   const btn = (i, cls, inner, t) => `<button class="${cls}" type="button" data-skill="${i}" title="${esc(t)}">${inner}</button>`;
   const body = `<div class="sk-list">${list.map(([n, t], i) => btn(i, 'sk-row', `<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}`, t)).join('')}</div>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span></div>${body}</div>`;
@@ -4090,9 +4162,7 @@ function wikiDrawer(s) {
         ${wikiCards(s)}</div></aside>`
     : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
 }
-/* About is the second tab of the sidebar (sfAboutSide); the space has no About tab. */
-const pagesList = s => s.pages.length ? linksList(s) : '<p class="muted cs-small abw-none">No pages yet. Moderators add pages such as guides and schedules.</p>';
-const pagesCard = s => `<div class="note-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Pages</h3><a class="tlink" href="#" onclick="return false">${s.pages.length ? 'Edit' : 'Add a page'}</a></div>${pagesList(s)}</div>`;
+/* About is the second tab of the sidebar (abAbout); the space has no About tab. */
 function wikiCards(s) {
   return `<div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
         ${skillsHTML(s)}
@@ -5440,7 +5510,22 @@ function nSheet() {
   if (k === 'leave') { const x = sp(a), back = !isClosed(x) ? 'You can join again at any time.' : x.vis === 'unlisted' || x.policy === 'invite' ? 'To come back, you need a new invite.' : 'To come back, you need to request to join again.'; return act('', `Leave ${esc(nName(x))}? ${back}`, [['Leave space', 'leave:' + a, 'n-red']]); }
   if (k === 'key') { const key = st.userKeys.find(x => x.id === a); return act(esc(key.label), 'Asks that use this key will stop working. This can’t be undone.', [['Revoke key', 'revoke:' + a, 'n-red']]); }
   if (k === 'signin') return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det" role="dialog" aria-label="Log in or sign up"><span class="n-grab"></span><h2 class="n-sheet-t">Log in or sign up</h2><button class="n-xbtn" type="button" data-n="signin">${XL}<span>Continue with X</span></button><p class="n-fine">Session does not post to X.</p></div>`;
-  if (k === 'wiki') { const x = sp(nst.stack.length ? nTop().id : st.space); return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>${nGroup('Rules', x.rules.map((r, k) => `<div class="n-row"><span class="n-src-n num">${k + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`))}${nGroup('Pages', x.pages.map(([t, a2]) => `<div class="n-row"><span class="n-row-b"><b>${esc(t)}</b><small>Edited ${a2} ago</small></span></div>`))}${nGroup('Moderators', x.mods.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${({ owner: 'Owner', admin: 'Admin', mod: 'Moderator' })[r] || 'Moderator'}</span></div>`))}</div></div>`; }
+  /* About this space: the same sections, in the same order, as About in the web sidebar */
+  if (k === 'wiki') {
+    const x = sp(nst.stack.length ? nTop().id : st.space), row = (b, v) => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val">${v}</span></div>`;
+    const sk = (D.skills[x.id] || []).map(([n, t]) => `<div class="n-row"><span class="n-row-b"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span></div>`);
+    const key = st.userKeys.find(k2 => k2.valid);
+    return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>`
+      + nGroup('Rules', x.rules.map((r, k2) => `<div class="n-row"><span class="n-src-n num">${k2 + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`), x.rulesAt ? `Updated ${x.rulesAt === 'just now' ? 'just now' : x.rulesAt + ' ago'} by ${esc(x.rulesBy)}.` : '')
+      + (x.notCover ? nGroup('What this space doesn’t cover', [`<div class="n-row"><span class="n-row-b"><span>${esc(x.notCover)}</span></span></div>`]) : '')
+      + nGroup('Pages', x.pages.map(([t, a2]) => `<div class="n-row"><span class="n-row-b"><b>${esc(t)}</b><small>Edited ${a2 === 'now' ? 'just now' : a2 + ' ago'}</small></span><span class="n-chev">${NI.chev}</span></div>`))
+      + (sk.length ? nGroup('Skills', sk) : '')
+      + nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), row('Members', x.members.toLocaleString('en-US')), row('Created', `${x.created} by ${esc(abOwner(x))}`)])
+      + nGroup('Joining', [`<div class="n-row"><span class="n-row-b"><span>${visText(x)}. ${joinLabel(x)}.</span></span></div>`])
+      + nGroup('Token use', [`<div class="n-row"><span class="n-row-b"><span>${tokenUse(x)}</span>${x.byok ? `<small>${pctS(x.pct)} of extra tokens used this month · resets Dec 1</small>` : ''}</span></div>`], st.auth === 'in' && key ? `${x.byok ? 'After the limit, your asks use' : 'Your asks use'} your ${esc(key.label)}.` : '')
+      + nGroup('Moderators', x.mods.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${({ owner: 'Owner', admin: 'Admin', mod: 'Moderator' })[r] || 'Moderator'}</span></div>`))
+      + `</div></div>`;
+  }
   if (k === 'addkey') {
     const ok = KEY_RE.test(nst.keyDraft.trim());
     return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-page" role="dialog" aria-label="Add API key"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Cancel</button><b>Add API key</b><button class="n-tb" type="button" data-n="addkey-save" id="n-ak-save"${ok ? '' : ' disabled'}><b>Add</b></button></div><div class="n-sheet-sc">${nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-ak-name" type="text" placeholder="Optional" value="${esc(nst.keyName)}"></label>`, `<label class="n-row n-field"><span>Key</span><input id="n-ak-key" type="password" placeholder="sk-… or AIza…" autocomplete="off" value="${esc(nst.keyDraft)}"></label>`], nst.keyErr ? `<span class="n-bad">${esc(nst.keyErr)}</span>` : 'Paste a key from your provider. Keys start with sk- or AIza.')}</div></div>`;
@@ -5782,11 +5867,11 @@ function csOpenNotifs() {
 function layoutManage() {
   const s = sp(st.mgSpace), cl = isClosed(s), n = reqCount(s.id), nr = repCount(s.id);
   /* Reports: open reports in this space, with a count. Settings: admins and the owner only. */
-  const tabs = [...(cl && (s.policy === 'request' || n) ? [['requests', `Requests${n ? ` <span class="cs-n num">${n}</span>` : ''}`]] : []), ['reports', `Reports${nr ? ` <span class="cs-n num">${nr}</span>` : ''}`], ['members', `Members <span class="faint num">${fmt(s.members)}</span>`], ...(cl ? [['invites', 'Invites']] : []), ...(isAdminOf(s.id) ? [['settings', 'Settings']] : [])];
+  const tabs = [...(cl && (s.policy === 'request' || n) ? [['requests', `Requests${n ? ` <span class="cs-n num">${n}</span>` : ''}`]] : []), ['reports', `Reports${nr ? ` <span class="cs-n num">${nr}</span>` : ''}`], ['members', `Members <span class="faint num">${fmt(s.members)}</span>`], ...(cl ? [['invites', 'Invites']] : []), ['skills', 'Skills'], ...(isAdminOf(s.id) ? [['settings', 'Settings']] : [])];
   miMgTabs(s, tabs);
   if (!tabs.some(t => t[0] === st.mgTab)) st.mgTab = tabs[0][0];
   if (st.mgTab === 'reports') st.repSeen = true;
-  const body = { requests: csQueue, reports: csReports, members: csMembers, invites: csInvites, settings: csSettings, sources: dsManagePage }[st.mgTab](s);
+  const body = { requests: csQueue, reports: csReports, members: csMembers, invites: csInvites, settings: csSettings, sources: dsManagePage, skills: abSkillsManage }[st.mgTab](s);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-mg cs-mg-${st.mgTab}"><div class="sub-top"><div class="ys-et"><button class="th-back" type="button" data-space="${s.id}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(s)}</button><h2>Manage</h2></div>${cl ? `<span class="cs-vis cs-vis-top">${s.vis === 'unlisted' ? CI.eyeOff : LOCK}${visLabel(s)}</span>` : ''}</div><div class="pf-tabs cs-mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mgtab="${k}" aria-selected="${st.mgTab === k}">${l}</button>`).join('')}</div>${body}</div></div>`;
 }
 /* review queue ("Review queue" control) */
@@ -5917,14 +6002,14 @@ function payPicker(d) {
 const stSec = (title, sub, body) => `<section class="st-sec"><div class="st-head"><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div><div class="st-body">${body}</div></section>`;
 const csDirty = () => !!st.set && JSON.stringify(st.set) !== st.set0;
 function csSettings(s) {
-  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8', faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, notCover: s.notCover || '' }; st.set0 = JSON.stringify(st.set); }
+  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8', faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, notCover: s.notCover || '', desc: s.desc, rules: [...s.rules], pageEdit: s.pageEdit || 'mods' }; st.set0 = JSON.stringify(st.set); }
   const d = st.set, dirty = csDirty();
   /* Order: Visibility, Joining, Questions for applicants, Landing page, Topics, Posts, Domain,
      What this space doesn't cover, Token use. */
-  const secs = stSec('Visibility', 'Who can read the space, and whether people who are not members can find it.', visPicker(d))
+  const secs = abSettingsAbout(d) + stSec('Visibility', 'Who can read the space, and whether people who are not members can find it.', visPicker(d))
     + (d.vis !== 'open' ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(d)) : '')
     + (d.vis !== 'open' && d.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(d, false)) : '')
-    + landingSec(d) + (d.faq ? topicSec(d, s) : '') + postsSec(d, s) + `<div class="sf-domsec">${domainSec(d, s)}</div>` + notCoverSec(d)
+    + landingSec(d) + (d.faq ? topicSec(d, s) : '') + postsSec(d, s) + abSettingsPages(d) + `<div class="sf-domsec">${domainSec(d, s)}</div>` + notCoverSec(d)
     + stSec('Token use', 'Asks use the space’s extra tokens until the monthly limit, then the asker’s own API key. Posts use no tokens.', payPicker(d));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
@@ -5938,6 +6023,10 @@ function csApplySettings(s0, d) {
     Object.assign(s, { policy: d.policy, qs: d.qs.filter(q => q.q.trim()), invite: d.invite });
     Object.assign(s, { faq: d.faq, topics: tps, postsOff: d.postsOff, plain: d.plain && isVer(s), notCover: d.notCover.trim() });
     if (!s.byok) { s.byok = ME.u; s.budget = (+d.limit || 8) * 1e6; s.pct = s.used / s.budget; }
+    /* About: description and rules; a rules change keeps the previous rules for "See changes" */
+    if (d.desc != null) s.desc = d.desc.trim() || s.desc;
+    if (d.rules) { const rules = d.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== s.rules.join('\n')) { s.rulesPrev = s.rules.slice(); s.rules = rules; s.rulesAt = 'just now'; s.rulesBy = ME.u; } }
+    if (d.pageEdit) s.pageEdit = d.pageEdit;
   });
   if (D.posts.some(p => p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic))) db.set('posts', ps => { ps.forEach(p => { if (p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic)) p.topic = null; }); });
   const s = sp(s0.id);
@@ -6103,7 +6192,7 @@ function csUrl() {
 const CS_SUBNAME = { manage: 'Manage', create: 'Create a space', invite: 'Invite', notifs: 'Notifications', search: 'Search', csjoin: 'Request to join' };
 
 /* ---------- clicks ---------- */
-const NAVBASE = () => ({ mpOpen: false, spOpen: false, thread: null, savedPage: false, profilePage: false, subPage: null, home: false, umenu: false, pop: false, ntOpen: false, csMenu: null, modal: null, reqOpen: false, mWiki: false, compOpen: false, sortOpen: false, imenu: null, tpMenu: null, spTab: 'threads', faqView: 'topics', faqTopic: null });
+const NAVBASE = () => ({ abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abMem: false, mpOpen: false, spOpen: false, thread: null, savedPage: false, profilePage: false, subPage: null, home: false, umenu: false, pop: false, ntOpen: false, csMenu: null, modal: null, reqOpen: false, mWiki: false, compOpen: false, sortOpen: false, imenu: null, tpMenu: null, spTab: 'threads', faqView: 'topics', faqTopic: null });
 function csClick(t) {
   if (st.toast && !t.closest('.cs-toast')) st.toast = null;
   if (t.closest('[data-space],[data-home]')) st.reqOpen = false;
@@ -6140,6 +6229,7 @@ function csClick(t) {
     else if (x.k === 'reps') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'reports', space: x.sp, set: null });
     else if (x.k === 'reqs') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'requests' });
     else if (x.k === 'invite' && !x.done) Object.assign(st, nav, { subPage: 'invite', invite: { sp: x.sp, by: x.u, state: 'ok' } });
+    else if (x.k === 'page') abOpenPage(x.sp, x.page);
     else Object.assign(st, nav, { space: x.sp, welcome: x.k === 'approved' ? x.sp : st.welcome });
     return go();
   }
@@ -6284,6 +6374,7 @@ function jump(k) {
   if (role === 'mi') { miJump(k); return; }
   if (role === 'ds') { dsJump(k); return; }
   if (role === 'qt') { qtJump(k); return; }
+  if (role === 'ab') { abJump(k); return; }
   spEdit('replication', rs => { rs.dom = null; rs.plain = false; });
   if (role === 'md') { R('mod'); if (!openReqs().length || k === 'md-queue' || k === 'md-decline') { st.reqs = structuredClone(REQS0); st.rqSel = new Set(); } }
   if (role === 'mb') R('member');
@@ -6677,18 +6768,6 @@ const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy ===
 const visText = s => !isClosed(s) ? 'Open: anyone can read threads' : s.vis === 'unlisted' ? 'Closed and unlisted: members read threads; hidden from browse and search' : 'Closed: members read threads; shown in browse and search';
 const tokenUse = s => s.byok ? `Asks use ${spName(s)} extra tokens, added by ${esc(s.byok)}, up to ${fmtT(s.budget)} tokens a month. After that, asks use the asker’s own API key. Posts use no tokens.` : 'Asks use the asker’s own API key. Posts use no tokens.';
 const verNote = s => `The admins of ${spName(s)} control ${esc(s.dom.domain)}. Verified ${esc(s.dom.verified)} with ${s.dom.method === 'github' ? 'a GitHub organization' : 'a DNS record'}. The seal does not mean that the space is official.`;
-/* About, the sidebar's second tab: what the space is and how it runs, stacked for the narrow column */
-function sfAboutSide(s) {
-  const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b class="num">${s.members.toLocaleString('en-US')}</b></div><div><span>Created</span><b>${s.created}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
-  return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p></div>
-    <div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
-    ${s.notCover ? `<div class="note-card"><h3>What this space doesn’t cover</h3><p class="sf-ab-p">${esc(s.notCover)}</p></div>` : ''}
-    ${pagesCard(s)}${skillsHTML(s)}
-    <div class="note-card"><h3>Details</h3>${facts}${verShown(s) ? `<p class="cs-fine sf-vnote">${SEAL}<span>${verNote(s)}</span></p>` : ''}</div>
-    <div class="note-card"><h3>Joining and visibility</h3><ul class="sf-plain"><li>${visText(s)}.</li><li>${joinLabel(s)}.</li>${isClosed(s) ? `<li>${s.invite === 'members' ? 'Members can invite people.' : 'Moderators invite people.'}</li>` : ''}</ul></div>
-    <div class="note-card"><h3>Token use</h3><p class="sf-ab-p">${tokenUse(s)}</p>${s.byok ? meter(s) : ''}</div>
-    <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>`;
-}
 
 /* ---------- settings: landing page, topics, posts, domain, scope note ---------- */
 function sfTog(key, on, title, sub) {
@@ -7712,7 +7791,7 @@ function dsSideDrawer(s) {
   const cur = st.dsSTab || (dsList(s.id).length ? 'sources' : 'wiki');
   const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${cur === k}" data-dsstab="${k}">${l}</button>`;
   const wiki = cur === 'wiki';
-  const pane = wiki ? `<div class="dbody" role="tabpanel">${sfAboutSide(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
+  const pane = wiki ? `<div class="dbody" role="tabpanel">${abAbout(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
   const head = `<span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'About')}</span>`;
   return `<aside class="drawer wk ds-side" aria-label="Sources and about"><div class="dh ds-tabs">${head}<span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
 }
@@ -7935,6 +8014,10 @@ const dsOnSpace = () => {
 function DSKNOBS() {
   return [
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
+    /* About: where a page opens, how a skill previews, where the member list opens */
+    ['k-abpage', 'abPageV', [['side', 'In the sidebar'], ['page', 'As a page']], () => jump('ab-page')],
+    ['k-abskill', 'abSkillV', [['inline', 'In place'], ['dialog', 'In a dialog']], () => jump('ab-skill')],
+    ['k-abmem', 'abMemV', [['dialog', 'In a dialog'], ['side', 'In the sidebar']], () => jump('ab-members')],
   ];
 }
 
@@ -7992,7 +8075,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPageV: 'side', abSkillV: 'inline', abMemV: 'dialog', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -8694,6 +8777,249 @@ on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.qtMenu
 
 /* END question-trees */
 on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu || st.ntOpen)) { st.csMenu = null; st.ntOpen = false; renderAll(); } });
+/* ================= About: pages, skills, rules, members, moderators, token use =================
+   What the sidebar's About tab needs beyond a summary of the space:
+   - Pages open with their author, last editor and history (Page view control: in the sidebar, or as a
+     page with its own address). Moderators, or members when Manage › Settings › Pages allows it, edit
+     pages; moderators add, order and remove them. Members get a notification when a page changes, and
+     Search finds pages.
+   - Skills show what they ask and the threads that used them before you use one (Skill preview control);
+     moderators add, edit, order and remove skills in Manage › Skills.
+   - Description and rules are edited in Manage › Settings › About. A rules change shows "Rules updated"
+     with the changes, and members get a notification.
+   - The member count opens the member list (Member list control); moderator names open profiles; anyone
+     can message the moderators.
+   - Token use shows when the limit resets, usage by member and by thread, and which key your asks use
+     after the limit. Join, leave or request from About. About and each page have their own address. */
+const abSlug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const abKey = (s, t) => `${s.id}/${abSlug(t)}`;
+const ROLE_HELP = { owner: 'Owner: settings, extra tokens and moderators', admin: 'Admin: settings and moderation', mod: 'Moderator: reviews requests and reports, hides and removes items' };
+const abOwner = s => (s.mods.find(m => m[1] === 'owner') || s.mods[0] || [s.byok || 'lettie'])[0];
+const abCanEdit = s => st.auth === 'in' && (isModOf(s.id) || (s.pageEdit === 'members' && isMember(s.id)));
+const ABDOC_TEXT = {
+  'getting-started-guide': ['Sablefield is a hosted Postgres-compatible database that syncs a subset of your data to client devices.', 'Create a project, add a sync rule that scopes rows to the signed-in user, then install a client SDK.', 'Questions that are specific to your account go to support, not this space.'],
+  'reading-group-schedule': ['November: The Dispossessed (Le Guin). Thread opens Nov 20.', 'December: Accelerando (Stross), chapters 1–4.', 'Suggest a book in the reading-group thread; the moderators pick by vote.'],
+  'canon-starter-list': ['A short list for people new to the genre, one book per subgenre.', 'The Left Hand of Darkness; Neuromancer; The Fifth Season; Hyperion; Ancillary Justice.', 'Add a book with a sentence on why it belongs.'],
+  'spoiler-policy': ['Mark spoilers in titles with [spoilers].', 'In answers, put plot details after a line that says "Spoilers below".', 'Moderators hide threads that reveal endings without a warning.'],
+};
+/* a page's document: stored edits, else one made from the page's title */
+function abDoc(s, i) {
+  const [t, age] = s.pages[i] || ['Untitled page', 'now'], k = abKey(s, t);
+  if (D.pagedocs[k]) return D.pagedocs[k];
+  const by = abOwner(s), ed = (s.mods[1] || s.mods[0] || [by])[0];
+  const text = ABDOC_TEXT[abSlug(t)] || [`${t} for ${spName(s)}.`, 'This page collects what members ask about most, with links to the threads that answer it.', 'Moderators keep it current; suggest a change in a thread.'];
+  return { t, text, by, ed, revs: [{ by: ed, age, note: 'Updated the page' }, { by: ed, age: '3w', note: 'Added a section' }, { by, age: '2mo', note: 'Created the page' }] };
+}
+const abDocHTML = d => `<div class="prose ab-prose">${d.text.map(p => `<p>${esc(p)}</p>`).join('')}</div>`;
+
+/* ---------- pages card, page view, editor, history ---------- */
+function abPagesCard(s) {
+  const can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in', order = st.abPgOrder && mod;
+  const rows = s.pages.map(([t, a], i) => order
+    ? `<li class="ab-pgo"><span class="ab-pgt">${I.page}${esc(t)}</span><span class="ab-pgb"><button class="iconbtn" type="button" data-abpgmv="up:${i}" aria-label="Move ${esc(t)} up" ${i ? '' : 'disabled'}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-abpgmv="down:${i}" aria-label="Move ${esc(t)} down" ${i < s.pages.length - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abpgdel="${i}" aria-label="Remove ${esc(t)}">${I.close}</button></span></li>`
+    : `<li><button class="ab-pgr" type="button" data-abpage="${i}">${I.page}<span>${esc(t)}</span><small>${a}</small></button></li>`).join('');
+  const head = `<div class="ab-ch"><h3>Pages</h3>${mod ? `<button class="tlink" type="button" data-abpgorder="1">${order ? 'Done' : 'Edit'}</button>` : ''}</div>`;
+  const add = can ? `<button class="tlink ab-add" type="button" data-abpgnew="1">${PLUS}Add a page</button>` : '';
+  return `<div class="note-card ab-pages">${head}${s.pages.length ? `<ul class="links ab-pgl">${rows}</ul>` : `<p class="muted cs-small abw-none">No pages yet.${can ? '' : ' Moderators add pages such as guides and schedules.'}</p>`}${add}</div>`;
+}
+/* the page: in the sidebar (back to About) or as a page of its own (back to the space) */
+function abPageView(s, inSide) {
+  const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), back = inSide ? `<button class="th-back" type="button" data-abpage="x">${I.chev.replace('<svg', '<svg class="bk"')}About</button>` : '';
+  if (st.abPageEd != null) {
+    const ed = st.abPageEd;
+    return `${back}<div class="ab-pv ab-ed"><label class="fld"><span>Title</span><input id="ab-pg-t" type="text" value="${esc(ed.t)}"></label><label class="fld"><span>Page</span><textarea id="ab-pg-b" class="cs-ta" rows="8">${esc(ed.b)}</textarea></label><p class="cs-fine">Blank lines separate paragraphs. Members see who edited the page and when.</p><div class="ab-acts"><button class="btn" type="button" data-abpged="cancel">Cancel</button><button class="btn primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>Save</button></div></div>`;
+  }
+  const meta = `<p class="ab-pm faint">Created by ${au(d.by)} · edited by ${au(d.ed)} ${d.revs[0].age === 'now' || d.revs[0].age === 'just now' ? 'just now' : d.revs[0].age + ' ago'}</p>`;
+  const hist = st.abHist ? `<div class="ab-hist"><h4>History</h4><ol>${d.revs.map((r, k) => `<li>${avatar(r.by, 'sm')}<span class="ab-ht"><b>${esc(r.by)}</b> ${esc(r.note)}<small>${r.age === 'now' || r.age === 'just now' ? 'just now' : r.age + ' ago'}</small></span>${k && isModOf(s.id) ? `<button class="tlink" type="button" data-abrestore="${k}">Restore</button>` : k ? '' : '<small class="faint">Current</small>'}</li>`).join('')}</ol></div>` : '';
+  const acts = `<div class="ab-acts">${can ? `<button class="btn sm" type="button" data-abpged="edit">${I.write}Edit</button>` : ''}<button class="btn sm" type="button" data-abhist="1" aria-pressed="${!!st.abHist}">History</button><button class="btn sm" type="button" data-abcopy="page">Copy link</button></div>`;
+  return `${back}<article class="ab-pv"><h2 class="ab-pvt">${esc(d.t)}</h2>${meta}${acts}${hist}${abDocHTML(d)}</article>`;
+}
+CS_PAGES.abpage = () => {
+  const s = sp(st.space);
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ab-page"><div class="sub-top"><button class="th-back" type="button" data-space="${s.id}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(s)}</button></div>${abPageView(s, false)}</div></div>`;
+};
+
+/* ---------- skills: preview, then use ---------- */
+const abSkillUses = s => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 2);
+function abSkillBody(s, i) {
+  const [n, t] = D.skills[s.id][i], uses = abSkillUses(s);
+  return `<p class="ab-skq"><span class="faint">Asks:</span> ${esc(t.replace(/[:\s]+$/, ''))} <span class="faint">…</span></p><p class="cs-fine">You add what it is about (a link, a title or a passage) after the prompt. The answer is a normal ask in ${spName(s)} and uses its token rules.</p>${uses.length ? `<div class="ab-sku"><span class="faint cs-small">Used in ${uses.length + 3} threads, recently:</span>${uses.map(({ p, i: k }) => `<button class="tlink" type="button" data-open="${k}">${esc(qtClip(p.q, 70))}</button>`).join('')}</div>` : ''}<div class="ab-acts"><button class="btn sm primary" type="button" data-skill="${i}">Use this skill</button></div>`;
+}
+function abSkillsCard(s) {
+  const list = D.skills[s.id]; if (!list || !list.length) return isModOf(s.id) && st.auth === 'in' ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="1">${PLUS}Add a skill</button></div>` : '';
+  const open = st.abSkillV === 'inline' ? st.abSkill : null;
+  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-expanded="${open === i}">${`<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span>${I.chev.replace('<svg', `<svg class="sk-go${open === i ? ' open' : ''}"`)}`}</button>${open === i ? `<div class="ab-skx">${abSkillBody(s, i)}</div>` : ''}`;
+  return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${isModOf(s.id) && st.auth === 'in' ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
+}
+/* Manage › Skills */
+function abSkillsManage(s) {
+  const list = D.skills[s.id] || [], ed = st.abSkEd;
+  const form = (i, n, t) => `<div class="ab-skf"><label class="fld"><span>Name</span><input id="ab-sk-n" type="text" value="${esc(n)}" placeholder="e.g. Trace a term"></label><label class="fld"><span>What it asks</span><textarea id="ab-sk-t" class="cs-ta" rows="2" placeholder="The start of the ask; people add the rest">${esc(t)}</textarea></label><div class="ab-acts"><button class="btn" type="button" data-absk="cancel">Cancel</button><button class="btn primary" type="button" data-absk="save:${i}">${i === 'new' ? 'Add skill' : 'Save'}</button></div></div>`;
+  const rows = list.map(([n, t], i) => ed && ed.i === i ? form(i, ed.n, ed.t) : `<div class="ab-skr"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span><span class="ab-pgb"><button class="iconbtn" type="button" data-absk="up:${i}" aria-label="Move ${esc(n)} up" ${i ? '' : 'disabled'}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-absk="down:${i}" aria-label="Move ${esc(n)} down" ${i < list.length - 1 ? '' : 'disabled'}>${I.chev}</button><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
+  return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Prompts members can start an ask with, shown in About. Members see what a skill asks before using it.', `${rows || '<p class="muted cs-small">No skills yet.</p>'}${ed && ed.i === 'new' ? form('new', ed.n, ed.t) : `<button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`}`)}</div>`;
+}
+
+/* ---------- members, moderators, token use ---------- */
+function abMembersList(s) {
+  const q = (st.abMemQ || '').trim().toLowerCase(), all = memFor(s), list = all.filter(m => !q || m.u.toLowerCase().includes(q));
+  const lbl = r => r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : r === 'mod' ? 'Moderator' : '';
+  return `<label class="search ab-mq">${I.search}<input id="ab-mem-q" type="search" value="${esc(st.abMemQ || '')}" placeholder="Find a member" aria-label="Find a member"></label><ul class="ab-meml">${list.map(m => `<li>${avatar(m.u, 'sm')}${au(m.u)}${lbl(m.role) ? `<small title="${esc(ROLE_HELP[m.role] || '')}">${lbl(m.role)}</small>` : ''}</li>`).join('') || '<li class="faint">No members match.</li>'}</ul><p class="cs-fine">Showing ${list.length} of ${s.members.toLocaleString('en-US')} members. ${isClosed(s) ? 'Only members see this list.' : 'Anyone who can read the space sees this list.'}</p>`;
+}
+const abModsCard = s => `<div class="note-card"><h3>Moderators</h3><div class="mods">${s.mods.map(([h, r]) => `<div>${avatar(h, 'sm')}${au(h)}<small title="${esc(ROLE_HELP[r] || '')}">${MOD_LABEL[r] || r}</small></div>`).join('')}</div>${st.auth === 'in' ? '<button class="tlink ab-add" type="button" data-abmsg="1">Message the moderators</button>' : ''}</div>`;
+function abUsageBody(s) {
+  const used = s.used || 0, m = memFor(s).slice(0, 4), share = [0.38, 0.27, 0.19, 0.09];
+  const th = D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.tok).sort((a, b) => b.p.tok - a.p.tok).slice(0, 3);
+  return `<p class="muted">${fmtT(used)} of ${fmtT(s.budget)} tokens used this month. The limit resets on Dec 1.</p><h4 class="ab-h4">By member</h4><ul class="ab-use">${m.map((x, k) => `<li>${avatar(x.u, 'sm')}<span>${esc(x.u)}</span><b class="num">${fmtT(Math.round(used * share[k]))}</b></li>`).join('')}</ul><h4 class="ab-h4">Largest threads</h4><ul class="ab-use">${th.map(({ p, i }) => `<li><button class="tlink" type="button" data-open="${i}">${esc(qtClip(p.q, 60))}</button><b class="num">${fmtT(p.tok)}</b></li>`).join('') || '<li class="faint">No asks yet this month.</li>'}</ul>`;
+}
+function abTokenCard(s) {
+  const key = st.userKeys.find(k => k.valid), mod = isAdminOf(s.id);
+  const after = st.auth !== 'in' ? '' : s.byok ? `<p class="cs-fine ab-f">After the limit, your asks use ${key ? `your <b>${esc(key.label)}</b>` : 'your own API key (you have none yet)'}.</p>` : `<p class="cs-fine ab-f">Your asks here use ${key ? `your <b>${esc(key.label)}</b>` : 'your own API key (you have none yet)'}.</p>`;
+  return `<div class="note-card"><h3>Token use</h3><p class="sf-ab-p">${tokenUse(s)}</p>${s.byok ? `${meter(s)}<p class="cs-fine ab-f">Resets on Dec 1. <button class="tlink" type="button" data-abusage="1">See usage</button></p>` : ''}${after}${mod ? `<button class="tlink ab-add" type="button" data-abset="1">Change the limit or key</button>` : ''}</div>`;
+}
+
+/* ---------- the About tab ---------- */
+function abAbout(s) {
+  if (st.abPage != null && st.abPageV === 'side') return abPageView(s, true);
+  if (st.abMem && st.abMemV === 'side') return `<button class="th-back" type="button" data-abmem="x">${I.chev.replace('<svg', '<svg class="bk"')}About</button><h3 class="ab-pvt sm">Members of ${spName(s)}</h3>${abMembersList(s)}`;
+  const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b><button class="tlink num" type="button" data-abmem="1">${s.members.toLocaleString('en-US')}</button></b></div><div><span>Created</span><b>${s.created} by ${au(abOwner(s))}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
+  const join = joinBtn(s);
+  return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p><button class="tlink ab-cp" type="button" data-abcopy="about">Copy link</button></div>
+    <div class="note-card"><h3>Rules</h3>${rulesList(s)}${s.rulesAt ? `<p class="cs-fine ab-upd">Updated ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'} by ${esc(s.rulesBy)} · <button class="tlink" type="button" data-abrules="1">See changes</button></p>` : ''}</div>
+    ${s.notCover ? `<div class="note-card"><h3>What this space doesn’t cover</h3><p class="sf-ab-p">${esc(s.notCover)}</p></div>` : ''}
+    ${abPagesCard(s)}${abSkillsCard(s)}
+    <div class="note-card"><h3>Details</h3>${facts}${verShown(s) ? `<p class="cs-fine sf-vnote">${SEAL}<span>${verNote(s)}</span></p>` : ''}</div>
+    <div class="note-card"><h3>Joining and visibility</h3><ul class="sf-plain"><li>${visText(s)}.</li><li>${joinLabel(s)}.</li>${isClosed(s) ? `<li>${s.invite === 'members' ? 'Members can invite people.' : 'Moderators invite people.'}</li>` : ''}</ul>${join ? `<div class="ab-join">${join}</div>` : ''}</div>
+    ${abTokenCard(s)}${abModsCard(s)}`;
+}
+
+/* ---------- dialogs ---------- */
+function abModal() {
+  const [k, a] = st.modal.split(/:(.*)/s), s = sp(st.subPage === 'manage' ? st.mgSpace : st.space);
+  if (k === 'ab-mem') return dlg(`Members of ${spName(s)}`, abMembersList(s), cancelB('Close'));
+  if (k === 'ab-msg') return dlg('Message the moderators', `<p class="muted">Your message goes to the ${s.mods.length} moderators of ${spName(s)}. Replies arrive in your notifications.</p><label class="fld"><span>Message</span><textarea id="ab-msg-t" class="cs-ta" rows="4" placeholder="What would you like to ask or report?">${esc(st.abMsg || '')}</textarea></label>`, `${cancelB()}<button class="btn primary" type="button" data-abmsgsend="1" ${(st.abMsg || '').trim() ? '' : 'disabled'}>Send</button>`);
+  if (k === 'ab-usage') return dlg(`Token use in ${spName(s)}`, abUsageBody(s), cancelB('Close'));
+  if (k === 'ab-rules') {
+    const prev = s.rulesPrev || [], now = s.rules, rows = [...now.map(r => prev.includes(r) ? `<li>${esc(r)}</li>` : `<li class="ab-add-r">${esc(r)}</li>`), ...prev.filter(r => !now.includes(r)).map(r => `<li class="ab-rm-r">${esc(r)}</li>`)];
+    return dlg('Changes to the rules', `<p class="muted">${esc(s.rulesBy || '')} changed the rules ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'}. Added rules are marked; removed rules are struck through.</p><ol class="ab-diff">${rows.join('')}</ol>`, cancelB('Close'));
+  }
+  if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">The page and its history are removed from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
+  if (k === 'ab-skill') { const [n] = D.skills[s.id][+a]; return dlg(esc(n), abSkillBody(s, +a), cancelB('Close')); }
+  return '';
+}
+{ const AB_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ab-') ? abModal() : AB_csModal(); }; }
+
+/* ---------- Manage › Settings: About (description, rules) and Pages ---------- */
+function abSettingsAbout(d) {
+  const n = d.rules.length, up = I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"');
+  const rows = d.rules.map((r, i) => `<div class="ab-rrow"><span class="ts-n num">${i + 1}</span><input id="ab-rule-${i}" type="text" value="${esc(r)}" placeholder="A rule" aria-label="Rule ${i + 1}"><span class="ab-pgb"><button class="iconbtn" type="button" data-abrule="up:${i}" aria-label="Move rule ${i + 1} up" ${i ? '' : 'disabled'}>${up}</button><button class="iconbtn" type="button" data-abrule="down:${i}" aria-label="Move rule ${i + 1} down" ${i < n - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abrule="rm:${i}" aria-label="Remove rule ${i + 1}">${I.close}</button></span></div>`).join('');
+  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
+}
+const abSettingsPages = d => stSec('Pages', 'Who can edit the pages in About. Moderators can always add, order and remove pages.', `<div class="ab-radios">${[['mods', 'Moderators', 'Only moderators edit pages.'], ['members', 'Members', 'Any member can edit a page. The page history shows every change.']].map(([v, t, sub]) => `<label class="cs-rad"><input type="radio" name="ab-pgedit" value="${v}" ${d.pageEdit === v ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`).join('')}</div>`);
+
+/* ---------- addresses: About, a page, the member list ---------- */
+{ const AB_csUrl = csUrl; csUrl = function () {
+  const s = sp(st.space), base = s ? `session.app/s/${s.name}` : '';
+  if (st.subPage === 'abpage') return `${base}/pages/${abSlug(abDoc(s, st.abPage).t)}`;
+  if (!st.subPage && st.thread == null && !st.home && !st.savedPage && !st.profilePage && s && canRead(s) && st.drawer && st.dsSTab === 'wiki' && (st.device !== 'phone' || st.mWiki))
+    return st.abPage != null ? `${base}/pages/${abSlug(abDoc(s, st.abPage).t)}` : st.abMem ? `${base}/members` : `${base}/about`;
+  return AB_csUrl();
+}; }
+CS_SUBNAME.abpage = 'Page';
+
+/* ---------- clicks and typing ---------- */
+const abOpenPage = (sid, i) => Object.assign(st, st.abPageV === 'page' ? { ...NAVBASE(), space: sid, subPage: 'abpage', abPage: i } : { ...NAVBASE(), space: sid, drawer: true, dsSTab: 'wiki', abPage: i, mWiki: st.device === 'phone' });
+on($('app'), 'click', e => {
+  const t = e.target, d = sel => t.closest && t.closest(sel); let b;
+  const s = sp(st.space), go = () => { renderAll(); return true; };
+  if (d('[data-skill]') && (st.modal || '').startsWith('ab-skill')) { st.modal = null; return go(); }
+  if ((b = d('[data-abpage]'))) { const v = b.dataset.abpage; if (v === 'x') Object.assign(st, { abPage: null, abPageEd: null, abHist: false }); else if (st.abPageV === 'page') abOpenPage(s.id, +v); else Object.assign(st, { abPage: +v, abPageEd: null, abHist: false }); return go(); }
+  if ((b = d('[data-abopen]'))) { const [sid, i] = b.dataset.abopen.split(':'); abOpenPage(sid, +i); return go(); }
+  if (d('[data-abhist]')) { st.abHist = !st.abHist; return go(); }
+  if ((b = d('[data-abpgnew]'))) { Object.assign(st, st.abPageV === 'page' ? { ...NAVBASE(), space: s.id, subPage: 'abpage' } : { drawer: true, dsSTab: 'wiki' }, { abPage: s.pages.length, abHist: false, abPageEd: { t: '', b: '', isNew: true } }); return go(); }
+  if ((b = d('[data-abpged]'))) {
+    const v = b.dataset.abpged, i = st.abPage, doc = abDoc(s, i);
+    if (v === 'edit') st.abPageEd = { t: doc.t, b: doc.text.join('\n\n') };
+    if (v === 'cancel') { if (st.abPageEd && st.abPageEd.isNew) { st.abPage = null; if (st.subPage === 'abpage') Object.assign(st, { subPage: null, drawer: true, dsSTab: 'wiki' }); } st.abPageEd = null; }
+    if (v === 'save') {
+      const ed = st.abPageEd, title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+      if (!title) return go();
+      if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, 'now']); }); else spEdit(s.id, x => { x.pages[i] = [title, 'now']; });
+      if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
+      db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, revs: [{ by: ME.u, age: 'just now', note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
+      st.abPageEd = null; toast(ed.isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
+    }
+    return go();
+  }
+  if ((b = d('[data-abrestore]'))) { const doc = abDoc(s, st.abPage), r = doc.revs[+b.dataset.abrestore]; db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, revs: [{ by: ME.u, age: 'just now', note: `Restored the version from ${r.age} ago` }, ...doc.revs] }); toast('Restored. The page history keeps both versions.'); return go(); }
+  if ((b = d('[data-abcopy]'))) { toast(`Copied ${csUrl()}`); return go(); }
+  if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
+  if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; }); return go(); }
+  if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
+  if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; toast(`Removed “${t}”.`); return go(); }
+  if ((b = d('[data-abskill]'))) { const i = +b.dataset.abskill; if (st.abSkillV === 'dialog') st.modal = 'ab-skill:' + i; else st.abSkill = st.abSkill === i ? null : i; return go(); }
+  if (d('[data-abskmg]')) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); return go(); }
+  if ((b = d('[data-absk]'))) {
+    const sid = st.mgSpace, list = D.skills[sid] || [], [v, a] = b.dataset.absk.split(':'), i = +a;
+    if (v === 'new') st.abSkEd = { i: 'new', n: '', t: '' };
+    if (v === 'edit') st.abSkEd = { i, n: list[i][0], t: list[i][1] };
+    if (v === 'cancel') st.abSkEd = null;
+    if (v === 'save') { const ed = st.abSkEd; if (!ed.n.trim() || !ed.t.trim()) { toast('Add a name and what the skill asks.'); return go(); } const row = [ed.n.trim(), ed.t.trim().replace(/[:\s]*$/, ': ')]; db.put('skills', sid, a === 'new' ? [...list, row] : list.map((x, k) => k === i ? row : x)); st.abSkEd = null; toast(a === 'new' ? 'Skill added.' : 'Skill saved.'); }
+    if (v === 'up' || v === 'down') { const j = v === 'up' ? i - 1 : i + 1, l = list.slice(); [l[i], l[j]] = [l[j], l[i]]; db.put('skills', sid, l); }
+    if (v === 'rm') { db.put('skills', sid, list.filter((_, k) => k !== i)); toast(`Removed “${list[i][0]}”.`); }
+    return go();
+  }
+  if ((b = d('[data-abmem]'))) { if (b.dataset.abmem === 'x') st.abMem = false; else if (st.abMemV === 'side') Object.assign(st, { abMem: true, abMemQ: '', drawer: true, dsSTab: 'wiki' }); else Object.assign(st, { modal: 'ab-mem', abMemQ: '' }); return go(); }
+  if (d('[data-abmsg]')) { Object.assign(st, { modal: 'ab-msg', abMsg: '' }); return go(); }
+  if (d('[data-abmsgsend]')) { Object.assign(st, { modal: null, abMsg: '' }); toast(`Sent to the moderators of ${spName(s)}. Replies arrive in your notifications.`); return go(); }
+  if (d('[data-abusage]')) { st.modal = 'ab-usage'; return go(); }
+  if (d('[data-abrules]')) { st.modal = 'ab-rules'; return go(); }
+  if (d('[data-abset]')) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'settings', set: null }); return go(); }
+  if ((b = d('[data-abrule]'))) { const [v, a] = b.dataset.abrule.split(':'), i = +a; csEdit(x => { if (v === 'add') x.rules.push(''); if (v === 'rm') x.rules.splice(i, 1); if (v === 'up' || v === 'down') { const j = v === 'up' ? i - 1 : i + 1; [x.rules[i], x.rules[j]] = [x.rules[j], x.rules[i]]; } }); renderAll(); if (v === 'add') { const f = $('ab-rule-' + (st.set.rules.length - 1)); if (f) f.focus(); } return true; }
+  return false;
+});
+on($('app'), 'input', e => {
+  const el = e.target, id = el.id, v = el.value;
+  if (id === 'ab-pg-t' || id === 'ab-pg-b') { patch('abPageEd', x => { x[id === 'ab-pg-t' ? 't' : 'b'] = v; }); const b = document.querySelector('[data-abpged="save"]'); if (b) b.disabled = !st.abPageEd.t.trim(); }
+  if (id === 'ab-mem-q') { st.abMemQ = v; const c = el.selectionStart; renderAll(); const i = $('ab-mem-q'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } }
+  if (id === 'ab-msg-t') { st.abMsg = v; const b = document.querySelector('[data-abmsgsend]'); if (b) b.disabled = !v.trim(); }
+  if (id === 'ab-sk-n' || id === 'ab-sk-t') patch('abSkEd', x => { x[id === 'ab-sk-n' ? 'n' : 't'] = v; });
+  if (id === 'ab-desc' || /^ab-rule-\d+$/.test(id)) { const was = csDirty(); csEdit(x => { if (id === 'ab-desc') x.desc = v; else x.rules[+id.slice(8)] = v; }); if (was !== csDirty()) { const c = el.selectionStart; renderAll(); csRefocus(id, c); } }
+});
+on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => { x.pageEdit = e.target.value; }); renderAll(); } });
+
+/* ---------- search finds pages ---------- */
+{ const AB_layoutSearch = layoutSearch; layoutSearch = CS_PAGES.search = function () {
+  const h = AB_layoutSearch(), q = st.q.trim().toLowerCase(); if (q.length < 3) return h;
+  const hits = []; D.spaces.filter(s => canRead(s)).forEach(s => s.pages.forEach((p, i) => { const d = abDoc(s, i), txt = d.text.join(' '); if ((d.t + ' ' + txt).toLowerCase().includes(q)) hits.push({ s, i, d, txt }); }));
+  if (!hits.length) return h;
+  const sec = `<section class="sr-sec"><h3 class="br-h">Pages <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, 4).map(({ s, i, d, txt }) => `<article class="sr-row" data-abopen="${s.id}:${i}"><a class="sr-t row-link" href="#" onclick="return false" data-abopen="${s.id}:${i}">${esc(d.t)}</a><p class="sr-ex">${esc(qtClip(txt, 160))}</p><div class="sr-m faint">${spName(s)} · page · edited ${s.pages[i][1] === 'now' ? 'just now' : s.pages[i][1] + ' ago'}</div></article>`).join('')}</div></section>`;
+  return h.includes('</div><aside class="sr-side">') ? h.replace('</div><aside class="sr-side">', sec + '</div><aside class="sr-side">') : h;
+}; }
+
+/* ---------- Jump to ---------- */
+JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-page-notif', 'Notification: a page changed'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-msg', 'Message the moderators'], ['ab-usage', 'Token use by member and thread'], ['ab-join', 'Join from About']]]);
+function abJump(k) {
+  const about = sid => Object.assign(st, { space: sid, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' });
+  switch (k) {
+    case 'ab-about': about('sablefield'); break;
+    case 'ab-page': about('scifi'); abOpenPage('scifi', 1); break;
+    case 'ab-page-edit': { about('scifi'); abOpenPage('scifi', 1); const d = abDoc(sp('scifi'), 1); st.abPageEd = { t: d.t, b: d.text.join('\n\n') }; break; }
+    case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; break;
+    case 'ab-pages-order': about('scifi'); st.abPgOrder = true; break;
+    case 'ab-page-new': about('scifi'); if (st.abPageV === 'page') Object.assign(st, { subPage: 'abpage', mWiki: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
+    case 'ab-page-notif': st.notifs = [{ id: 'npg', k: 'page', u: 'tomasz', sp: 'scifi', page: 1, age: '5m', unread: true, text: 'edited the page <b>Canon starter list</b> in #sci-fi' }, ...st.notifs.filter(n => n.id !== 'npg')]; st.home = true; csOpenNotifs(); break;
+    case 'ab-search': Object.assign(st, { subPage: 'search', q: 'spoiler' }); break;
+    case 'ab-skill': about('scifi'); if (st.abSkillV === 'dialog') st.modal = 'ab-skill:0'; else st.abSkill = 0; break;
+    case 'ab-skills-mg': Object.assign(st, { subPage: 'manage', mgSpace: 'scifi', space: 'scifi', mgTab: 'skills', home: false }); break;
+    case 'ab-set': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'settings', set: null, home: false }); break;
+    case 'ab-rules-upd': spEdit('scifi', x => { x.rulesPrev = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.']; x.rules = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Put plot details after a "Spoilers below" line.']; x.rulesAt = '2d'; x.rulesBy = 'tomasz'; }); about('scifi'); break;
+    case 'ab-members': about('sablefield'); if (st.abMemV === 'side') st.abMem = true; else st.modal = 'ab-mem'; break;
+    case 'ab-msg': about('scifi'); Object.assign(st, { modal: 'ab-msg', abMsg: '' }); break;
+    case 'ab-usage': about('sablefield'); st.modal = 'ab-usage'; break;
+    case 'ab-join': about('history'); break;
+  }
+}
+
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
    the data store over HTTP, and move the Variants bar's keys from the UI store to the mockup store. */
@@ -9004,7 +9330,7 @@ on($('app'), 'click', e => {
   const so = t.closest('[data-sort]'); if (so) { st.sort = so.dataset.sort; st.sortOpen = false; renderAll(); return; }
   if (a) { if (a.dataset.act === 'compose' && st.auth === 'out') { st.modal = 'signin'; st.pop = false; renderAll(); return; } if (a.dataset.act === 'compose') { st.compOpen = true; st.pop = false; st.sortOpen = false; } if (a.dataset.act === 'sort') { st.sortOpen = !st.sortOpen; st.pop = false; } if (a.dataset.act === 'pop') { st.pop = !st.pop; st.sortOpen = false; } if (a.dataset.act === 'drawer') st.drawer = !st.drawer; if (a.dataset.act === 'umenu') { st.umenu = !st.umenu; st.pop = false; } if (a.dataset.act === 'saved-page') { st.savedPage = true; st.profilePage = false; st.thread = null; st.umenu = false; st.pop = false; } if (a.dataset.act === 'profile') { st.profileUser = ME.u; st.profilePage = true; st.savedPage = false; st.thread = null; st.umenu = false; } if (a.dataset.act === 'shortcuts') { st.modal = 'kbd'; st.umenu = false; } renderAll(); return; }
   const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = +tg.dataset.id; if (ST_DATA.has(k)) db.toggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
-  const sk = t.closest('[data-skill]'); if (sk) { st.draft = SKILLS[st.space][+sk.dataset.skill][1]; st.compOpen = true; st.pop = false; st.sortOpen = false; renderAll(); const c = $('compose-text'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  const sk = t.closest('[data-skill]'); if (sk) { st.draft = D.skills[st.space][+sk.dataset.skill][1]; st.compOpen = true; st.pop = false; st.sortOpen = false; renderAll(); const c = $('compose-text'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
   const snd = t.closest('[data-send]'); if (snd) { createThread('post'); renderAll(); return; }
   if (st.modal && t.classList.contains('modal-scrim')) { st.modal = null; renderAll(); return; }
   if (st.compOpen && !st.modal && !t.closest('.composer') && !st.draft.trim()) { st.compOpen = false; renderAll(); return; }
