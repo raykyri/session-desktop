@@ -73,6 +73,10 @@
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
 :root { --mock-bg: #0c0c0c; }
+/* the space switcher's row hover: lighter than --fill-hover in light mode */
+:root { --sw-hover: rgba(255,255,255,.06); }
+:root[data-theme="light"] { --sw-hover: rgba(0,0,0,.032); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --sw-hover: rgba(0,0,0,.032); } }
 :root[data-theme="light"] { --mock-bg: #ffffff; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --mock-bg: #ffffff; } }
 body {
@@ -167,6 +171,7 @@ a { color: inherit; }
 .pop .grp { padding: 6px 8px 3px; }
 .pop-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 5px 8px; border: 0; background: transparent; border-radius: var(--r-md); text-align: left; }
 .pop-row:hover { background: var(--fill-hover); }
+.sw-wrap .pop .pop-row:not([aria-current="true"]):hover { background: var(--sw-hover); }
 .pop-row[aria-current="true"] { background: var(--accent-soft); }
 .pop-row .nm { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--t-strong); }
 .pop-row .nm small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
@@ -278,8 +283,8 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .C .hdr .hnav .hdr-sep { margin-right: 0; }
 .C .hdr .hnav .hdr-sep + .hscroll { margin-left: -2px; padding-left: 6px; }
 @media (min-width: 641px) {
-  .C .hdr .hnav + .hdr-right { margin-left: -16px; }
-  .C .hdr .hnav + .hdr-right .sw-r { margin-left: 0; }
+  html:not([data-device="phone"]) .C .hdr .hnav + .hdr-right { margin-left: -16px; }
+  html:not([data-device="phone"]) .C .hdr .hnav + .hdr-right .sw-r { margin-left: 0; }
 }
 .utab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-muted); font-weight: 550; white-space: nowrap; flex: none; font-size: var(--fs-sm); }
 .utab:hover { background: var(--fill-hover); color: var(--t-strong); }
@@ -520,6 +525,14 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .pf-id { flex: 1; min-width: 0; }
 .pf-id h2 { margin: 0; font-size: 22.65px; font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
 .pf-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-sm); }
+.pf-stats { display: contents; }
+.pf-bio { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.5; max-width: 560px; }
+.pf-edit .fld input, .pf-edit .fld textarea { font: inherit; font-weight: 400; font-size: var(--fs-base); color: var(--t-primary); }
+.pf-edit-av { display: flex; align-items: center; gap: 12px; }
+.pf-edit-av small { color: var(--t-faint); font-size: var(--fs-xs); font-weight: 400; }
+.pf-edit .fld input { height: 36px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); }
+.pf-edit .pf-ro { font-weight: 400; color: var(--t-primary); font-size: var(--fs-base); }
+@media (max-width: 640px) { .pf-stats { display: flex; gap: 4px 14px; flex-basis: 100%; } }
 .xh { display: inline-flex; align-items: center; gap: 4px; }
 .xi { width: 12px; height: 12px; }
 .av.pf-av { width: 72px; height: 72px; font-size: 24.7px; }
@@ -909,7 +922,8 @@ kbd, .keys kbd { font: inherit; font-size: 11.35px; font-weight: 600; min-width:
   [data-mnav="tabs"] .msheet { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; background: var(--popover); border-radius: 16px 16px 0 0; padding: 8px 10px 22px; box-shadow: var(--shadow-pop); }
   .msheet::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 2px auto 8px; }
   .msheet .pop.um { position: static; width: auto; box-shadow: none; border: 0; background: none; padding: 0; }
-  .msheet .um-item, .msheet .um-head { padding-top: 10px; padding-bottom: 10px; }
+  .msheet .um-head { padding-top: 10px; padding-bottom: 10px; }
+  .msheet .um-item { padding-top: 9px; padding-bottom: 9px; }
   .um-item[data-act="shortcuts"] { display: none; }
   /* sources follow the answer; the sidebar keeps only the details */
   .m-src { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 4px 0 0; padding: 12px 0 0; border-top: 1px solid var(--divider); counter-reset: ms; }
@@ -980,7 +994,8 @@ html[data-device="phone"] .frame-bar { position: sticky; top: 0; z-index: 70; }
   .um-scrim { display: block; position: fixed; inset: 0; z-index: 60; background: rgba(8,10,12,.45); }
   .acct .pop.um { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 10px 12px 24px; }
   .acct .pop.um::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 0 auto 10px; }
-  .pop.um .um-item, .pop.um .um-head { padding-top: 10px; padding-bottom: 10px; }
+  .pop.um .um-head { padding-top: 10px; padding-bottom: 10px; }
+  .pop.um .um-item { padding-top: 9px; padding-bottom: 9px; }
   .msheet .pop.um { max-width: none; }
   /* cards: less space under the footer row */
   .p-foot .act, .p-foot button { min-height: 0; }
@@ -1481,6 +1496,11 @@ button.n-row:active { background: var(--n-fill); }
 .ds-hcard-m { margin: 4px 0 14px; }
 /* text boxes in the app grow with their text (see autosize) and have no resize handle */
 #app textarea { resize: none; }
+@keyframes sh-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sh-spring { 0% { transform: translateY(100%); } 65% { transform: translateY(-8px); } 100% { transform: none; } }
+@keyframes sh-fade { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes sh-scrim { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sh-enter, .sh-scrim-enter { animation: none !important; } }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
@@ -2653,15 +2673,20 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .th-vt { flex: none; flex-wrap: nowrap; }
   .th-vt button { white-space: nowrap; }
   /* Thread toolbar variants */
-  #app[data-mtools="icons"] .qt-tools .qt-tl { display: none; }
-  #app[data-mtools="icons"] .qt-tools [data-qt="map"] .qt-tl { display: inline; }
-  #app[data-mtools="icons"] .qt-tools .btn.sm { padding: 0 8px; }
+  /* thread toolbar: every button shows its icon and label, at the height of the Document / Transcript switch */
+  .qt-tools .btn.sm { height: 38px; padding: 0 10px; }
+  #app[data-mtools="icons"] .qt-tools .btn.sm { padding: 0 9px; }
   #app[data-mtools="rows"] .qt-bar { flex-wrap: wrap; }
   #app[data-mtools="rows"] .qt-tools { width: 100%; flex-wrap: wrap; overflow: visible; justify-content: flex-end; }
   #app[data-mtools="rows"] .qt-tools .th-vt { order: -1; flex-basis: 100%; margin: 0 0 6px; }
   #app[data-mtools="rows"] .qt-tools .th-vt button { flex: 1; }
   #app[data-mtools="toggle"] .th-vt { display: none; }
   #app[data-mtools="toggle"] .th-vtb { display: inline-flex; }
+  /* Sheet animation variants (classes added by mwSheets when a sheet opens) */
+  #app[data-msanim="slide"] .sh-enter { animation: sh-up 240ms cubic-bezier(.2, .8, .2, 1); }
+  #app[data-msanim="spring"] .sh-enter { animation: sh-spring 380ms cubic-bezier(.2, .8, .2, 1); }
+  #app[data-msanim="fade"] .sh-enter { animation: sh-fade 200ms ease-out; }
+  #app:not([data-msanim="none"]) .sh-scrim-enter { animation: sh-scrim 200ms ease-out; }
   /* Model and topic menus variants */
   #app[data-mmenu="sheet"] .mp-menu, #app[data-mmenu="sheet"] .sf-tpmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; min-width: 0; max-width: none; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
   #app[data-mmenu="sheet"] .sw-wrap .pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; max-height: 75%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
@@ -2675,7 +2700,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   #app[data-mmenu="sheet"] .c2-spmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
   /* short labels in action rows */
   .m-long { display: none; }
-  #app[data-mtools="icons"] .qt-tools [data-qt="top"] .qt-tl { display: inline; }
   /* tap targets */
   .th-vt button, .qt-tools .btn.sm, .sf-tpe-b, .sf-crumb .tlink, .tlink[data-qtcol] { min-height: 32px; }
   .tlink[data-memban], .tlink[data-memrm] { min-width: 32px; }
@@ -2692,7 +2716,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   /* inline links: a taller hit area without changing the line height */
   .rp-acts .tlink, .meta .au { padding-top: 7px; padding-bottom: 7px; margin-top: -7px; margin-bottom: -7px; }
   /* Thread map: zoomed out by default; the Outline variant hides the map button */
-  #app[data-mmap="outline"] [data-qt="map"] { display: none; }
+  /* Mobile Web has no thread map: the outline sheet shows the tree */
+  [data-qt="map"] { display: none !important; }
   .it-scrim { display: block; }
 }
 @media (min-width: 921px) {
@@ -2767,7 +2792,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-bar .th-back, .qt-bar .sf-crumb { margin-right: auto; }
 .qt-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .qt-tools .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--t-strong); }
-.qt-tools svg, .qt-pickbar svg, .qt-focusbar .btn svg { width: 13px; height: 13px; }
+.qt-tools svg, .qt-pickbar svg { width: 13px; height: 13px; }
 .qt-olbtn { display: none; }
 .qt-grid { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 36px; padding: 14px 40px 0; max-width: 1060px; margin: 0 auto; }
 .qt-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -2810,8 +2835,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-others .tlink { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 0; font: inherit; font-size: var(--fs-sm); color: var(--t-muted); }
 .qt-others .tlink:hover { color: var(--t-strong); }
 .qt-others svg { width: 13px; height: 13px; }
-.qt-ib { border-left: 2px solid var(--border-strong); padding-left: 12px; margin: 4px 0 6px; display: flex; flex-direction: column; gap: 8px; }
-.qt-ib.on { border-left-color: var(--accent); }
 /* follow-ups with the tree */
 .qt-fuv .th-fus { margin-top: 14px; }
 .qt-fu .qt-acts { margin-top: 2px; }
@@ -2844,20 +2867,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-flb { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px 22px; }
 .qt-flk { margin-top: 2px; padding-left: 14px; border-left: 1px solid var(--divider); }
 .qt-flk > .qt-qrow:first-child { border-top: 0; }
-.qt-ib-h { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 0; font: inherit; color: var(--t-strong); }
-.qt-ib-h:hover .qt-ib-q { text-decoration: underline; text-underline-offset: 3px; }
-.qt-ib-h .chv { width: 10px; height: 10px; margin-top: 5px; flex: none; color: var(--t-faint); }
-.qt-ib-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.qt-ib-q { font-weight: 550; font-size: var(--fs-input); line-height: 1.4; overflow-wrap: anywhere; }
-.qt-ib-m { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 400; }
-.qt-ib-body { display: flex; flex-direction: column; gap: 8px; }
-.qt-ib-body .prose { font-size: var(--fs-base); }
-.qt-ib-body .prose > :last-child { margin-bottom: 0; }
-.qt-ibmore { align-self: flex-start; }
-.qt-ibmore svg { width: 13px; height: 13px; }
-.qt-focusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-lg); padding: 8px 12px; }
-.qt-focusbar > svg { width: 13px; height: 13px; }
-.qt-focusbar .grow { flex: 1; }
 .qt-rootask { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 14px; }
 .qt-rootask h3, .qt-merge h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .qt-rootask h3 { margin-bottom: 2px; }
@@ -2870,8 +2879,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-ol ul { list-style: none; margin: 0; padding: 0; }
 .qt-ol li { margin: 0; }
 .qt-olr { position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 6px; align-items: start; width: 100%; text-align: left; border: 0; background: transparent; border-radius: var(--r-md); padding: 4px 6px 4px calc(6px + var(--d, 0) * 14px); font: inherit; font-size: var(--fs-sm); line-height: 1.35; color: var(--t-muted); }
-.qt-olr::before { content: ""; position: absolute; left: calc(var(--d, 0) * 14px - 6px); top: 0; bottom: 0; width: 1px; background: var(--divider); }
-.qt-olr.top::before { display: none; }
+.qt-ol ul[role="group"] { position: relative; }
+/* one guide line per level, the full height of the group: nested lines end together at the group's last row */
+.qt-ol ul[role="group"]::before { content: ""; position: absolute; z-index: 1; pointer-events: none; left: calc(var(--d, 0) * 14px - 6px); top: 0; bottom: 0; width: 1px; background: var(--divider); }
 .qt-olr:hover { background: var(--fill-hover); color: var(--t-strong); }
 .qt-olr.path { color: var(--t-strong); }
 .qt-olr.path .qt-olt { font-weight: 550; }
@@ -2998,9 +3008,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .qt-tools .btn { flex: none; }
   .qt-grid { padding: 12px 14px 0; gap: 22px; }
   .qt-q { font-size: var(--fs-input); }
-  .qt-ib { padding-left: 9px; }
-  .qt-ib .qt-ib .qt-ib { padding-left: 6px; }
-  .qt-ib-q { font-size: var(--fs-base); }
   .qt-cmp-cols { grid-template-columns: minmax(0, 1fr); }
   .qt-cmp-seg { display: inline-flex; }
   .qt-cmp-cols[data-side="a"] .qt-cmp-col.b, .qt-cmp-cols[data-side="b"] .qt-cmp-col.a { display: none; }
@@ -3034,7 +3041,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <span class="cs-kt">Mobile Web</span>
       <div class="knob"><span>Thread toolbar</span><div class="seg" id="k-mtools"></div></div>
       <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
-      <div class="knob"><span>Thread map</span><div class="seg" id="k-mmap"></div></div>
+      <div class="knob"><span>Sheet animation</span><div class="seg" id="k-msanim"></div></div>
     </div>
     <div class="knobs cs-knobs" aria-label="Ask thread controls">
       <span class="cs-kt">Ask threads</span>
@@ -3165,6 +3172,7 @@ const RES = {
   dsDrops:  { url: '/api/space-sources', kind: 'map' },      /* space id → sources added to it */
   dsPol:    { url: '/api/space-source-policies', kind: 'map' },
   dsReps:   { url: '/api/source-reports', kind: 'value' },
+  profile:  { url: '/api/me/profile', kind: 'value' },        /* name and bio */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -3681,6 +3689,16 @@ const tokenSources = () => {
 const tsIcon = t => t.kind === 'space' ? glyph(sp(curSpace())) : `<span class="ts-ic">${MI.key}</span>`;
 const tsText = t => `<span class="ts-tx"><b>${esc(t.label)}</b><small>${esc(t.sub)}</small></span>`;
 const XL = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>';
+/* Edit profile: name and bio. The handle and the X account come from the X login and do not change here. */
+function pfEditDialog() {
+  const d = st.pfDraft || { name: ME.name, bio: ME.bio };
+  return `<div class="modal-scrim"><div class="modal pf-edit" role="dialog" aria-modal="true" aria-labelledby="pf-t"><div class="modal-h"><h3 id="pf-t">Edit profile</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>
+    <div class="pf-edit-av">${avatar(ME.u, 'pf-av sm')}<div class="fld"><span class="pf-ro">Profile photo</span><small>Your X profile photo. Change it on X.</small></div></div>
+    <label class="fld"><span>Name</span><input id="pf-name" type="text" maxlength="50" value="${esc(d.name)}" autocomplete="off"></label>${d.err ? `<span class="qt-err">${d.err}</span>` : ''}
+    <label class="fld"><span>Bio <small class="faint">optional</small></span><textarea id="pf-bio" class="cs-ta" rows="3" maxlength="160">${esc(d.bio || '')}</textarea></label>
+    <div class="fld"><span>Handle and X account</span><span class="pf-ro">${ME.u} · ${XI} ${ME.x.replace('@', '')}</span><small class="faint">From your X login. Used in links to your profile.</small></div>
+    <div class="modal-f"><span class="grow" style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn primary" type="button" data-pf="save">Save</button></div></div></div>`;
+}
 function signinDialog() {
   return `<div class="modal-scrim"><div class="modal sm si" role="dialog" aria-modal="true" aria-labelledby="si-t"><div class="modal-h"><h3 id="si-t">Log in or sign up</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div><div class="si-opts"><button class="si-opt" type="button" data-act="signin-x">${XL}<span>Continue with X</span></button></div><p class="si-fine faint">Session does not post to X.</p></div></div>`;
 }
@@ -3822,7 +3840,7 @@ function apControl() {
 function userMenu() {
   const item = (icon, label, extra = '', attrs = '') => `<button class="um-item" type="button" role="menuitem" ${attrs}>${icon}<span>${label}</span>${extra}</button>`;
   return `<div class="pop um" role="menu" aria-label="Account">
-    <button class="um-head" type="button" role="menuitem" data-act="profile" aria-label="Your profile">${avatar('ines.v', 'lg')}<span class="um-id"><b>Ines V.</b><span>ines.v</span></span></button>
+    <button class="um-head" type="button" role="menuitem" data-act="profile" aria-label="Your profile">${avatar('ines.v', 'lg')}<span class="um-id"><b>${esc(ME.name)}</b><span>${ME.u}</span></span></button>
     <div class="um-sep"></div>
     ${item(CI.bell, 'Notifications', ntUnread() ? `<small class="num">${ntUnread()} new</small>` : '', 'data-csnotif="page"')}
     ${item(MI.grid, 'Your spaces', '', 'data-sub="yourspaces"')}
@@ -3954,7 +3972,10 @@ function layoutThread() {
 
 /* ---------- profile ---------- */
 const XI = '<svg class="xi" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>';
-const ME = { u: 'ines.v', name: 'Ines V.', bio: 'Reading science fiction for ideas about markets and coordination. Mostly asks in #sci-fi and #public.', joined: 'Sep 2026', x: '@ines_v' };
+const ME0 = { u: 'ines.v', name: 'Ines V.', bio: 'Reading science fiction for ideas about markets and coordination. Mostly asks in #sci-fi and #public.', joined: 'Sep 2026', x: '@ines_v' };
+D.profile = { name: ME0.name, bio: ME0.bio };
+/* the signed-in person; name and bio are server data (Edit profile writes them) */
+const ME = new Proxy(ME0, { get: (t, k) => (k === 'name' || k === 'bio') && D.profile ? D.profile[k] : t[k] });
 const NAMES = { 'ines.v': 'Ines V.', 'hal_b': 'Hal B.', 'jun.park': 'Jun Park', 'oduya': 'Oduya', 'sol': 'Sol', 'lettie': 'Lettie', 'mira_k': 'Mira K.', 'tomasz': 'Tomasz' };
 const PU = () => st.profileUser === ME.u ? ME : { u: st.profileUser, name: NAMES[st.profileUser] || st.profileUser, x: '@' + st.profileUser.replace(/\./g, '_') };
 const isSelf = () => st.profileUser === ME.u;
@@ -3968,11 +3989,11 @@ function profFeed() {
   const cl = myPosts().some(p => isClosed(sp(p.s)));
   return feed2(null, myPosts()) + (cl ? `<p class="cs-fine cs-pfnote">${LOCK}<span>Threads in closed spaces are shown only to members of those spaces.</span></p>` : '');
 }
-const editBtn = () => isSelf() ? `<button class="btn" type="button">Edit profile</button>` : '';
+const editBtn = () => isSelf() ? `<button class="btn" type="button" data-pf="edit" aria-label="Edit profile">Edit<span class="m-long"> profile</span></button>` : '';
 const LOCK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';
-const meta = () => `<span class="xh" title="X">${XI}${PU().x.replace('@', '')}</span><span class="num">${myPosts().length} thread${myPosts().length === 1 ? '' : 's'}</span><span class="num">${userSpaces()} space${userSpaces() === 1 ? '' : 's'}</span>`;
+const meta = () => `<span class="xh" title="X">${XI}${PU().x.replace('@', '')}</span><span class="pf-stats"><span class="num">${myPosts().length} thread${myPosts().length === 1 ? '' : 's'}</span><span class="num">${userSpaces()} space${userSpaces() === 1 ? '' : 's'}</span></span>`;
 function layoutProfile() {
-  const inner = `<div class="pf pf-slim2"><div class="pf-cover"></div><div class="pf-wrap"><div class="pf-row">${avatar(PU().u, 'pf-av sm')}<div class="pf-id"><h2>${PU().name}</h2><div class="pf-meta faint"><span>${PU().u}</span>${meta()}</div></div>${editBtn()}</div>${profTabs()}<div class="pf-feed">${profFeed()}</div></div></div>`;
+  const inner = `<div class="pf pf-slim2"><div class="pf-cover"></div><div class="pf-wrap"><div class="pf-row">${avatar(PU().u, 'pf-av sm')}<div class="pf-id"><h2>${PU().name}</h2><div class="pf-meta faint"><span>${PU().u}</span>${meta()}</div>${PU().bio ? `<p class="pf-bio">${esc(PU().bio)}</p>` : ''}</div>${editBtn()}</div>${profTabs()}<div class="pf-feed">${profFeed()}</div></div></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="pf-page">${inner}</div></div>`;
 }
 
@@ -7882,18 +7903,27 @@ function dsSideFit() {
 }
 on($('app'), 'scroll', () => { if (!dsSideFit.raf) dsSideFit.raf = requestAnimationFrame(() => { dsSideFit.raf = 0; dsSideFit(); }); }, { passive: true });
 on(window, 'resize', dsSideFit);
+/* Mobile Web: a sheet (dialog, menu or panel at the bottom of the screen) animates when it opens, not
+   when the page re-renders with it already open. The Sheet animation control picks the motion. */
+function mwSheets(a) {
+  const prev = mwSheets.prev || new Set(), now = new Set();
+  const sheets = [...a.querySelectorAll('.msheet, .modal-scrim > .modal, .pop, .nt-pop, .mp-menu, .ts-ddmenu, .n-sheet')].filter(el => el.getClientRects().length && (el.closest('.modal-scrim') || getComputedStyle(el).position === 'fixed'));
+  sheets.forEach(el => {
+    const k = el.className.replace(/\bsh-enter\b/, '').trim() + '|' + (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || '');
+    now.add(k);
+    if (!prev.has(k) && st.msAnim !== 'none') { el.classList.add('sh-enter'); const sc = el.closest('.modal-scrim') || a.querySelector(':scope > .it-scrim, .msheet-scrim, .um-scrim'); if (sc) sc.classList.add('sh-scrim-enter'); }
+  });
+  mwSheets.prev = now;
+}
 function mwAfterRender() {
   { const k = $('kw-mweb'); if (k) k.style.display = st.device === 'phone' ? '' : 'none'; }
   const a = $('app'); if (!a || st.device === 'native') return;
-  a.dataset.mtools = st.mTools; a.dataset.mmenu = st.mMenu; a.dataset.mmap = st.mMap;
+  a.dataset.mtools = st.mTools; a.dataset.mmenu = st.mMenu; a.dataset.msanim = st.msAnim;
   if (st.device !== 'phone') return;
   /* item menus open as bottom sheets: dim the page behind them, as the account menu does */
   const sheetMenu = st.imenu || st.dsMenu || st.qtMenu || ((st.mpOpen || st.tpMenu || st.pop || st.spOpen) && st.mMenu === 'sheet');
-  /* "Map at 80%, on your ask": the map opens scrolled to the current ask */
-  const mc = st.modal === 'qt-map' && st.mMap === 'pan' && a.querySelector('.qt-mn[aria-current="true"]');
-  if (mc && mwAfterRender.map !== st.qtNode) { mwAfterRender.map = st.qtNode; mc.scrollIntoView({ block: 'center', inline: 'center' }); }
-  if (st.modal !== 'qt-map') mwAfterRender.map = null;
   if (sheetMenu && !a.querySelector(':scope > .it-scrim')) a.insertAdjacentHTML('beforeend', '<div class="um-scrim it-scrim" aria-hidden="true"></div>');
+  mwSheets(a);
   /* the current space chip and Manage tab are scrolled into view in their rows */
   a.querySelectorAll('.mchips, .cs-mtabs').forEach(row => { const c = row.querySelector('[aria-current="true"], [aria-selected="true"]'); if (!c) return; const rr = row.getBoundingClientRect(), cr = c.getBoundingClientRect(); if (cr.left < rr.left || cr.right > rr.right) row.scrollLeft += cr.left - rr.left - 12; });
 }
@@ -8045,9 +8075,9 @@ function csReset() {
    - Node: one ask, a question and its agent answer. The thread's first ask is the root ('r');
      every other ask has exactly one parent ask and is asked about that parent's whole answer.
      Flat follow-ups are level-1 asks.
-   - The thread page shows asks nested under the answer they ask about (see qtNestView). Below
-     the nesting depth, "Continue this branch" shows that branch on its own. A map of the whole
-     thread opens in a dialog.
+   - The thread page lists the first-level asks as follow-ups; asks about a follow-up open under it
+     (see qtFuView), and the outline in the side column shows the whole tree. A map of the whole
+     thread opens in a dialog on desktop.
    - Every ask has its own address: /t/<thread>/a/<ask>.
    - The agent gets the asks on the path from the question to the parent ask; the composer
      shows how many and the estimated tokens. Each ask is paid like any ask in the space.
@@ -8195,7 +8225,6 @@ const QT_CANNED = {
 
 /* ---------- tree access ---------- */
 const QTD0 = structuredClone(D.qtd);
-const QT_DEPTH = 3; /* levels shown nested below the top of the view before "Continue this branch" */
 const qtTxt = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 const qtClip = (t, n = 90) => t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t;
 const qtAge = a => a === 'now' ? 0 : ageMin(a);
@@ -8234,8 +8263,6 @@ const qtCanPrune = T => st.auth === 'in' && (qtOwner(T) || isModOf(T.p.s));
 const qtLvName = n => n.id === 'r' ? 'Question' : `Level ${n.lv}`;
 const qtVisKids = (T, id) => T.kids(id).filter(k => !k.col || st.qtShowCol);
 const qtAddr = (T, id) => `session.app/s/${sp(T.p.s).name}/t/${T.i + 1000}${id && id !== 'r' ? '/a/' + id : ''}`;
-/* The top of the nested view: the question, or the ask that "Continue this branch" opened. */
-const qtTop = T => (st.qtFocus && T.by[st.qtFocus] ? T.by[st.qtFocus] : T.nodes[0]);
 
 /* ---------- cost ---------- */
 const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? spName(sp(T.p.s)) : `${n.u === ME.u ? 'your' : n.u + '’s'} API key`;
@@ -8273,10 +8300,6 @@ function qtNodeActs(T, n) {
   const ask = !n.running ? `<button class="btn sm" type="button" data-qtaskat="${n.id}" aria-label="Ask about this answer">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>` : '';
   return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="${fmtT(n.tok)} tokens. Token use: ${esc(qtPaidBy(T, n))}">${fmtT(n.tok)}<span class="m-long"> tokens</span></span>` : ''}${qtMenu(T, n)}</div>`;
 }
-function qtHead(T, n) {
-  const par = T.by[n.par];
-  return `<div class="qt-nh"><div class="qt-nh-top">${qtLv(n, true)}<span>${qtLvName(n)}</span><span aria-hidden="true">·</span>${avatar(n.u, 'sm')}${au(n.u)}<span>${n.age}</span></div>${par ? `<button class="qt-about" type="button" data-qtgo="${par.id}"><span><small>Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}</small>${esc(qtClip(par.q, 90))}</span></button>` : ''}${qtExtra(T, n)}<h2 class="qt-q">${esc(n.q)}</h2></div>`;
-}
 /* Lines shown with an ask: asked from a comparison, or continued as a new thread. */
 const qtExtra = (T, n) => `${n.uses ? `<div class="qt-note">Asked from a comparison. The agent also got the branch ending at ${n.uses.filter(x => T.by[x]).map(x => `<button class="tlink" type="button" data-qtgo="${x}">level ${T.by[x].lv}</button>`).join(' and ')}.</div>` : ''}${n.promoted != null && D.posts[n.promoted] ? `<div class="qt-from">${QTI.out}<span>Continued as a thread:</span><button class="tlink" type="button" data-open="${n.promoted}">${esc(qtClip(D.posts[n.promoted].t, 70))}</button></div>` : ''}`;
 
@@ -8294,7 +8317,7 @@ function qtOutline(T, cur) {
   const row = (n, d) => {
     const vis = qtVisKids(T, n.id), all = T.kids(n.id), hid = all.length - vis.length;
     const cls = ['qt-olr', d === 0 ? 'top' : '', on.has(n.id) ? 'path' : '', n.col ? 'coll' : '', st.qtHi && n.par === st.qtHi && !on.has(n.id) ? 'hi' : ''].filter(Boolean).join(' ');
-    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ' aria-expanded="true"' : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${n.running ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
+    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ' aria-expanded="true"' : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${n.running ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group" style="--d: ${d + 1}">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
   };
   return `<nav class="qt-ol" id="qt-ol" aria-label="Outline of this thread"><div class="qt-ol-h"><h3>Outline</h3><span class="num">${T.nodes.length} ask${T.nodes.length === 1 ? '' : 's'} · ${T.depth} level${T.depth === 1 ? '' : 's'}</span></div><ul role="tree">${row(T.nodes[0], 0)}</ul><div class="qt-ol-legend">${st.qtHi ? '<span><i class="qt-hidot"></i>Other questions about the same answer</span>' : ''}</div></nav>`;
 }
@@ -8326,39 +8349,11 @@ function qtBar(T, cur) {
   return `<div class="qt-bar">${thHead(p)}${tools}</div>${from ? `<div class="qt-bar" style="padding-top:10px">${from}</div>` : ''}`;
 }
 
-/* ---------- nested view ----------
-   The question's answer, then the branch you are on, nested under the answer it asks about, down
-   to the current ask. Other questions about the same answer are counted, not listed; the count
-   opens them in the outline. Below QT_DEPTH levels, "Continue this branch" shows the rest of the
-   branch with that ask at the top. */
-function qtOthers(T, par, curKid) {
-  const others = qtVisKids(T, par.id).filter(k => !curKid || k.id !== curKid.id), col = T.kids(par.id).length - qtVisKids(T, par.id).length;
-  if (!others.length && !col) return '';
-  const lbl = curKid ? `${others.length} other question${others.length === 1 ? '' : 's'} about this answer` : `${others.length} question${others.length === 1 ? '' : 's'} about this answer`;
-  return `<div class="qt-others">${others.length ? `<button class="tlink" type="button" data-qtsibs="${par.id}">${QTI.tree}${lbl}</button>` : ''}${col ? `<span>${col} collapsed</span><button class="tlink" type="button" data-qt="showcol">${st.qtShowCol ? 'Hide' : 'Show'}</button>` : ''}</div>`;
-}
-function qtBranch(T, k, top, path) {
-  const n = T.sub(k.id), deep = k.lv - top.lv >= QT_DEPTH, cur = k.id === st.qtNode;
-  const next = path[path.indexOf(k) + 1];
-  const head = `<button class="qt-ib-h" type="button" data-qtib="${k.id}" aria-expanded="true" title="Collapse: go back to ${k.par === 'r' ? 'the question' : 'level ' + T.by[k.par].lv}">${I.chev.replace('<svg', '<svg class="chv"')}${avatar(k.u, 'sm')}<span class="qt-ib-b"><span class="qt-ib-q">${esc(k.q)}</span><span class="qt-ib-m">${k.u} · ${k.age}${n ? ` · ${n} ask${n > 1 ? 's' : ''} below` : ''}</span></span></button>`;
-  const asking = st.qtAskAt === k.id;
-  const below = deep ? (qtVisKids(T, k.id).length ? `<button class="btn sm qt-ibmore" type="button" data-qtfocus="${k.id}">${QTI.out}Continue this branch (${n} more)</button>` : '') : `${next ? qtOthers(T, k, next) + qtBranch(T, next, top, path) : qtOthers(T, k, null)}`;
-  return `<div class="qt-ib${cur ? ' on' : ''}" id="qt-n-${k.id}">${head}<div class="qt-ib-body">${qtExtra(T, k)}${qtAnswer(T, k)}${qtNodeActs(T, k)}${asking ? qtComposer(T, k.id, { cancel: true }) : ''}${below}</div></div>`;
-}
+/* ---------- thread page with question trees ----------
+   The follow-ups with the tree in the side column; two branches side by side when comparing; the transcript. */
 function qtNestView(T, cur) {
-  const top = qtTop(T), path = T.path(cur.id).filter(n => n.lv >= top.lv), next = path[1];
-  const tp = T.path(top.id);
-  const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
-  const rootAsk = top.id === 'r' && cur.id === 'r' && !st.qtAskAt;
-  const head = top.id === 'r' ? `${miAbout(T.p)}<div class="meta">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
-  const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${fbar}
-    <article class="qt-node qt-inl" id="qt-n-${top.id}">${head}
-    <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`}`) : qtNodeActs(T, top)}
-    ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
-    <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
-    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : ''}</article>`;
-  const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : qtComb() && !st.qtCmp ? qtFuView(T, cur) : main;
-  return `${qtBar(T, cur)}<div class="qt-grid${qtComb() ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
+  const body = st.qtCmp ? qtCompare(T) : st.thV === 'chat' ? qtTranscript(T, cur) : qtFuView(T, cur);
+  return `${qtBar(T, cur)}<div class="qt-grid qt-calm"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
 }
 
 /* ---------- follow-ups with the tree in the side column (fx) ----------
@@ -8445,7 +8440,7 @@ const QT_layoutThread = layoutThread;
 function qtEnter(i) {
   /* Opening a thread starts at the question. */
   st.qtExp = new Set();
-  Object.assign(st, { qtTh: i, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null });
+  Object.assign(st, { qtTh: i, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtDraft: '', qtErr: '', qtHi: null });
 }
 layoutThread = function () {
   const p = D.posts[st.thread];
@@ -8511,15 +8506,13 @@ DD_SET.qtsp = v => { const s = sp(v); patch('qtPro', x => { x.sp = v; if (faqOn(
 DD_SET.qttopic = v => { patch('qtPro', x => { x.topic = v; }); };
 
 /* ---------- navigation ---------- */
-/* Go to an ask: its path opens nested; if it is deeper than the nesting depth below the top of
-   the view, the view starts further down ("Continue this branch"). */
+/* Go to an ask: the follow-ups on its path open. */
 function qtGo(T, id) {
   if (st.qtPick) { if (id !== st.qtPick) { st.qtCmp = [st.qtPick, id]; st.qtSide = 'a'; } st.qtPick = null; st.modal = null; st.qtScroll = 'top'; return; }
   Object.assign(st, { qtNode: id, qtAskAt: null, qtCmp: null, qtMenu: null, qtErr: '', qtHi: null });
   if (st.modal === 'qt-outline' || st.modal === 'qt-map') st.modal = null;
-  const n = T.by[id], p = T.path(id), top = qtTop(T);
-  if (!p.some(x => x.id === top.id) || n.lv - top.lv > QT_DEPTH) st.qtFocus = n.lv > QT_DEPTH ? p[n.lv - QT_DEPTH].id : null;
-  if (qtComb()) { st.qtExp = new Set([...st.qtExp, ...p.map(x => x.id)]); st.qtFocus = null; }
+  const p = T.path(id);
+  st.qtExp = new Set([...st.qtExp, ...p.map(x => x.id)]);
   st.qtScroll = 'node';
 }
 function qtScrollTo(el) {
@@ -8542,10 +8535,7 @@ function qtClick(t, e) {
   if ((b = d('[data-qtmap]'))) { qtGo(T, b.dataset.qtmap); return go(); }
   if ((b = d('[data-qtgo]'))) { e.preventDefault(); qtGo(T, b.dataset.qtgo); return go(); }
   /* The header of an open branch closes it: the view goes back to the ask above. */
-  if ((b = d('[data-qtib]'))) { const n = T.by[b.dataset.qtib]; qtGo(T, n.par); st.qtScroll = 'node'; return go(); }
   /* Change the top of the view and keep the path: the ask you were on stays open if it fits. */
-  if ((b = d('[data-qtfocus]'))) { const id = b.dataset.qtfocus, x = T.by[id], p = T.path(st.qtNode); st.qtFocus = id === 'r' ? null : id; st.qtNode = p.some(n => n.id === id) ? p[Math.min(p.length - 1, x.lv + QT_DEPTH)].id : id; Object.assign(st, { qtAskAt: null, qtHi: null }); st.qtScroll = 'top'; return go(); }
-  if ((b = d('[data-qtsibs]'))) { st.qtHi = b.dataset.qtsibs; if (matchMedia('(max-width: 920px)').matches || st.device === 'phone') st.modal = 'qt-outline'; else st.qtScroll = 'outline'; return go(); }
   if ((b = d('[data-qtzoom]'))) { st.qtZoom = +b.dataset.qtzoom; st.qtZoomSet = true; return go(); }
   if ((b = d('[data-qtside]'))) { st.qtSide = b.dataset.qtside; return go(); }
   if ((b = d('[data-qtfuq]'))) { st.qtFuQ = b.dataset.qtfuq === 'q'; return go(); }
@@ -8566,7 +8556,7 @@ function qtClick(t, e) {
       const txt = st.qtDraft.trim(); if (!txt) { st.qtErr = 'Write a question first.'; st.qtFocusIn = true; return go(); }
       qtAsk(T, b.dataset.qtpar, txt);
     }
-    if (a === 'top') { qtGo(T, 'r'); st.qtFocus = null; st.qtScroll = 'top'; }
+    if (a === 'top') { qtGo(T, 'r'); st.qtScroll = 'top'; }
     if (a === 'olsheet') st.modal = 'qt-outline';
     if (a === 'map') qtOpenMap();
     if (a === 'cmp-x') st.qtCmp = null;
@@ -8639,7 +8629,7 @@ const QT_csModal = csModal;
 csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : QT_csModal(); };
 
 /* ---------- state and "Jump to" ---------- */
-Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null,
+Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtDraft: '', qtErr: '', qtHi: null,
   qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtSaved: new Set(['11:c2']), qtExp: new Set(), qtFuQ: false });
 /* "Thread page" control (st.thrV): follow-ups with the tree in the side column (fx, the default), or the
@@ -8656,13 +8646,14 @@ function qtSyncNotif() {
 function MWKNOBS() {
   const onThread = () => { st.device = 'phone'; if (st.thread == null || D.posts[st.thread].k !== 'ask') jump('qt-deep'); st.device = 'phone'; };
   return [
-    ['k-mtools', 'mTools', [['icons', 'Icon buttons'], ['rows', 'Two rows'], ['toggle', 'One view button']], onThread],
+    ['k-mtools', 'mTools', [['icons', 'One row'], ['rows', 'Two rows'], ['toggle', 'One view button']], onThread],
+    ['k-msanim', 'msAnim', [['slide', 'Slide up'], ['spring', 'Slide with overshoot'], ['fade', 'Fade and rise'], ['none', 'None']], () => { st.device = 'phone'; mwSheets.prev = new Set(); Object.assign(st, { umenu: true, pop: false, modal: null }); }],
     ['k-mmenu', 'mMenu', [['sheet', 'Bottom sheet'], ['wide', 'Full-width menu'], ['pop', 'As on desktop']], () => { st.device = 'phone'; jump('mb-ask'); st.device = 'phone'; st.mpOpen = true; }],
-    ['k-mmap', 'mMap', [['canvas', 'Map, zoomed out'], ['pan', 'Map at 80%, on your ask'], ['outline', 'Outline instead']], () => { st.device = 'phone'; jump('qt-deep'); st.device = 'phone'; }],
   ];
 }
 /* The Map button: on Mobile Web the Thread map control can replace it with the outline, or open it zoomed out. */
-function qtOpenMap() { if (st.device === 'phone' && st.mMap === 'outline') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; if (st.device === 'phone' && !st.qtZoomSet) st.qtZoom = st.mMap === 'pan' ? 0.8 : 0.6; } }
+/* The map: a dialog on desktop. Mobile Web has no map; the outline sheet opens instead. */
+function qtOpenMap() { if (st.device === 'phone') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; } }
 function QTKNOBS() {
   return [['k-thrv', 'thrV', [['fx', 'Follow-ups with tree'], ['fu', 'Follow-ups']], () => {
     qtSyncNotif(); Object.assign(st, { qtCmp: null, qtPick: null, qtAskAt: null, qtMenu: null });
@@ -8673,7 +8664,7 @@ function QTKNOBS() {
   ['k-fucomp', 'fuComp', [['below', 'Composer below the follow-ups'], ['button', 'Ask button above the follow-ups']], () => { if (st.thrV === 'fu') st.thrV = 'fx'; if (st.thread == null) jump('qt-root'); st.qtAskAt = null; }]];
 }
 st.thrV = 'fx'; st.fuComp = 'below';
-Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas' });
+Object.assign(st, { mTools: 'icons', mMenu: 'sheet', msAnim: 'slide' });
 qtSyncNotif();
 function qtReset() {
   sfReset();
@@ -8682,7 +8673,7 @@ function qtReset() {
   st.qtTh = null;
 }
 JUMPS.push(
-  ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'Five levels deep: continue this branch'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
+  ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'An ask five levels deep'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
   ['Question trees: follow-ups with the tree', [['qt-fx', 'Follow-ups and the tree'], ['qt-fx-deep', 'A deep ask from the outline'], ['qt-fl', 'Follow-ups as questions'], ['qt-fl-deep', 'Follow-ups as questions: a deep ask from the outline']]],
   ['Question trees: map', [['qt-map', 'Map dialog'], ['qt-map-deep', 'Map: open a deep branch']]],
   ['Question trees: asking', [['qt-compose', 'Ask about an answer deep in a branch'], ['qt-running', 'New ask while the agent researches']]],
@@ -8939,14 +8930,14 @@ function renderAllInner() {
     return;
   }
   $('url').textContent = csUrl() || (st.subPage === 'browse' ? 'session.app/spaces/browse' : st.subPage === 'yourspaces' ? (st.ysEdit ? 'session.app/spaces/header' : 'session.app/spaces') : st.subPage === 'keys' ? 'session.app/settings/keys' : st.thread != null ? `session.app/s/${sp(D.posts[st.thread].s).name}/t/${st.thread + 1000}` : st.profilePage ? `session.app/u/${st.profileUser}` : st.savedPage ? 'session.app/saved' : st.home ? 'session.app' : `session.app/s/${sp(st.space).name}${sfPath()}`);
-  $('app').innerHTML = shellWrap(CS_PAGES[st.subPage] ? CS_PAGES[st.subPage]() : st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : L[st.opt]()) + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'addkey' ? addKeyDialog() : csModal()) + csToast();
+  $('app').innerHTML = shellWrap(CS_PAGES[st.subPage] ? CS_PAGES[st.subPage]() : st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : L[st.opt]()) + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'pf-edit' ? pfEditDialog() : st.modal === 'addkey' ? addKeyDialog() : csModal()) + csToast();
   document.documentElement.dataset.sh = st.shV;
   document.documentElement.dataset.mnav = st.mnav;
   document.documentElement.dataset.device = st.device;
   { const h = document.querySelector('#app .hdr'); if (h && st.mnav === 'chips') h.insertAdjacentHTML('afterend', mobileChips()); if (st.mnav === 'tabs') $('app').insertAdjacentHTML('beforeend', mobileTabs()); }
   document.documentElement.toggleAttribute('data-theme', st.appearance !== 'system');
   if (st.appearance !== 'system') document.documentElement.dataset.theme = st.appearance;
-  if (st.modal) { const m = document.querySelector('#key-in') || document.querySelector('#kb-q') || document.querySelector('.modal .btn.primary:not([disabled])') || document.querySelector('.modal .btn.danger') || document.querySelector('.modal [data-tsrc]:not([disabled])'); if (m) m.focus({ preventScroll: true }); }
+  if (st.modal && !(st.modal === 'pf-edit' && document.activeElement && document.activeElement.closest('.pf-edit'))) { const m = document.querySelector('#key-in') || document.querySelector('#kb-q') || document.querySelector('#pf-name') || document.querySelector('.modal .btn.primary:not([disabled])') || document.querySelector('.modal .btn.danger') || document.querySelector('.modal [data-tsrc]:not([disabled])'); if (m) m.focus({ preventScroll: true }); }
   else if (st.pop) { const q = $('sw-q'); if (q) q.focus({ preventScroll: true }); }
   else if (st.compOpen) { const c = $('compose-text'); if (c) { c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } }
   flipMenus();
@@ -8960,6 +8951,18 @@ function pickOption(id) {
   if (location.hash.slice(1) !== id) { try { history.replaceState(null, '', '#' + id); } catch (e) { location.hash = id; } }
   renderAll();
 }
+/* Edit profile */
+on($('app'), 'click', e => {
+  const b = e.target.closest && e.target.closest('[data-pf]'); if (!b) return;
+  if (b.dataset.pf === 'edit') { Object.assign(st, { pfDraft: { name: ME.name, bio: ME.bio, err: '' }, modal: 'pf-edit', umenu: false }); }
+  if (b.dataset.pf === 'save') {
+    const d = st.pfDraft, name = d.name.trim();
+    if (!name) { patch('pfDraft', x => { x.err = 'Add a name.'; }); renderAll(); const i = $('pf-name'); if (i) i.focus(); return; }
+    db.set('profile', { name, bio: (d.bio || '').trim() }); Object.assign(st, { modal: null, pfDraft: null }); toast('Profile saved.');
+  }
+  renderAll();
+});
+on($('app'), 'input', e => { if (e.target.id === 'pf-name' || e.target.id === 'pf-bio') patch('pfDraft', x => { x[e.target.id === 'pf-name' ? 'name' : 'bio'] = e.target.value; if (e.target.id === 'pf-name') x.err = ''; }); });
 on($('app'), 'click', e => {
   const t = e.target;
   if (st.device === 'native') { nClick(e); return; }
