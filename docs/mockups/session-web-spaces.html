@@ -3008,7 +3008,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     </div>
     <div class="knobs cs-knobs" aria-label="Data controls">
       <span class="cs-kt">Data</span>
-      <div class="knob"><span>Source</span><div class="seg" id="k-data"></div></div>
       <div class="knob" id="kw-api"><span>Mock backend</span><div class="seg" id="k-api"></div></div>
       <span class="k-dstat" id="k-dstat" role="status"></span>
     </div>
@@ -3034,15 +3033,13 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
                  `D` (and through `st` for the person's state); written only through `db` actions.
    - phoneStore  The phone app's navigation state. Read and written through `nst`.
    - mockupStore The mockup's own controls (the Variants bar): layout and copy variants, device,
-                 appearance, tint, data source. Not part of the application. Read and written through `st`.
+                 appearance, tint, backend speed. Not part of the application. Read and written through `st`.
 
-   Data sources. A dataStore reads and writes through one source; each source has its own store
-   instance, so mock data and server data never mix.
-   - mockData    Fixtures defined in this file. Writes apply only to the store. reset() restores the fixtures.
-   - liveData    The HTTP API (/api/*). Loads each collection with its own query; writes are applied to
-                 the store first (optimistic) and sent as requests in order. A failed request rolls the
-                 written entry back and shows a toast. The mock backend below serves /api/* in this page.
-   The Variants bar's Data control chooses which instance the app reads (default: mockData).
+   Data. The data store (liveData) reads and writes the HTTP API (/api/*): it loads each collection
+   with its own GET; writes are applied to the store first (optimistic) and sent as requests in order;
+   a failed request puts the written record back and shows a toast. The mock backend at the end of
+   this block serves /api/* inside the page. The fixtures in this file are only its seed data: the app
+   never reads them directly.
 
    `st` and `nst` are facades over the stores: reading a key returns the store's current value;
    assigning a key replaces it with setState. Collections in the stores are not changed in place:
@@ -3137,7 +3134,7 @@ const ST_DATA = new Set(['liked', 'saved', 'qtSaved', 'miSaved', 'miRead', 'miAd
 
 /* ---- data stores ---- */
 const FX = {};            /* fixtures: written by the declarations in this file while it starts */
-let FIXTURES = null;      /* a frozen copy of FX, taken when the file has started (bootData) */
+let FIXTURES = null;      /* a copy of FX, taken when the file has started (bootData): the mock backend's seed data */
 let BOOTING = true;
 function createDataStore(name, source) {
   const store = createStore(() => ({}));
@@ -3146,15 +3143,8 @@ function createDataStore(name, source) {
   meta.subscribe(m => { if (m.status === 'ready') waiting.splice(0).forEach(f => f()); });
   return { name, source, store, meta, whenReady: f => meta.getState().status === 'ready' ? f() : waiting.push(f) };
 }
-const mockSource = {
-  name: 'mock',
-  load: inst => { inst.store.setState(deepFreeze(clone(FIXTURES)), true); inst.meta.setState({ status: 'ready' }); },
-  write() {},
-  reset(inst, done) { mockSource.load(inst); done && done(); },
-};
-const mockData = createDataStore('mockData', mockSource);
-let DS = mockData;        /* the data store the app reads (Variants › Data) */
-/* D: read access to the active data store, e.g. D.posts[i], D.spaces. During start-up it is the fixtures. */
+let DS = null;            /* the data store the app reads: liveData, set below */
+/* D: read access to the data store, e.g. D.posts[i], D.spaces. While this file starts it is the fixtures being built. */
 const D = new Proxy({}, {
   get: (_, k) => (BOOTING ? FX : DS.store.getState())[k],
   set: (_, k, v) => { if (!BOOTING) throw new TypeError(`D.${String(k)} is read-only; write with db.*`); FX[k] = v; return true; },
@@ -3219,14 +3209,14 @@ function facade(route, routes) {
 const st = facade(k => ST_DATA.has(k) ? DATA : MOCKUP_KEYS.has(k) ? MOCKUP : UI, [UI, MOCKUP, DATA]);
 const nst = facade(() => PHONE, [PHONE]);
 /* a plain copy of `st` (for baselines such as ST0) */
-const stSnapshot = () => ({ ...uiStore.getState(), ...mockupStore.getState(), ...Object.fromEntries([...ST_DATA].map(k => [k, D[k]])) });
+const stSnapshot = (data = D) => ({ ...uiStore.getState(), ...mockupStore.getState(), ...Object.fromEntries([...ST_DATA].map(k => [k, data[k]])) });
 /* edit a copy of a client-state value: patch('cr', c => { c.err = 'Add a name.'; }) */
 const patch = (key, recipe) => { st[key] = produce(st[key], recipe); };
 const npatch = (key, recipe) => { nst[key] = produce(nst[key], recipe); };
 /* add or remove a member of a Set held in client state */
 const stToggle = (key, v, on) => { const prev = st[key], has = prev.has(v), want = on === undefined ? !has : !!on; if (has === want) return; const next = new Set(prev); want ? next.add(v) : next.delete(v); st[key] = next; };
 
-/* ---- liveData: the HTTP API ----
+/* ---- the data store: the HTTP API ----
    Each collection is one query (GET its URL). Writes update the store at once and are sent in the order
    they were made; each change becomes a request on the record that changed. A request that fails
    puts that record back as it was and shows a toast. */
@@ -3304,30 +3294,30 @@ const apiSource = {
   },
 };
 const liveData = createDataStore('liveData', apiSource);
+DS = liveData;
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
-const applyApiMode = () => { mockBackend.cfg.latency = st.apiMode === 'slow' ? 1200 : 120; mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
-/* for tests: true when the active store is loaded and has no requests in flight */
+const applyApiMode = () => { mockBackend.cfg.latency = st.apiMode === 'slow' ? 1200 : mockBackend.cfg.base; mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
+/* for tests: true when the data store is loaded and has no requests in flight */
 window.__dataIdle = () => dataReady() && DS.meta.getState().pending === 0;
-/* switch the data store the app reads */
-function useData(name, done) {
-  DS = name === 'live' ? liveData : mockData;
-  if (DS.meta.getState().status === 'idle') DS.source.load(DS);
-  DS.whenReady(() => done && done());
-}
-/* the live store finished loading, a request finished, or a failed write was undone: show it */
-liveData.meta.subscribe((m, p) => { if (DS !== liveData) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : 'Saved'; } });
+/* the store finished loading, a request finished, or a failed write was undone: show it */
+let APP_STARTED = false;   /* set when the first screen has been drawn; store events before that do not draw */
+liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : 'Saved'; } });
 
 /* ---- mock backend: serves /api/* in this page ----
    An in-memory database seeded from the fixtures (its own copy), saved to localStorage so it survives a
-   reload. Each request waits a set latency. Variants › Data sets the latency and can make writes fail. */
+   reload. A new version of the seed data (a changed fixture in this file) starts a new database.
+   Each request waits a set latency. Variants › Mock backend sets the latency and can make writes fail. */
 const mockBackend = (() => {
-  const LS = 'session-mock-db-v1';
-  const cfg = { latency: 120, failWrites: false };
-  let data = null;
+  const LS = 'session-mock-db-v2';
+  const base = typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120;
+  const cfg = { base, latency: base, failWrites: false };
+  let data = null, ver = null;
   const seed = () => dec(enc(FIXTURES));
-  const db0 = () => { if (data) return data; try { const s = localStorage.getItem(LS); if (s) { data = dec(s); DATA_KEYS.forEach(k => { if (!(k in data)) data[k] = seed()[k]; }); return data; } } catch (e) {} return (data = seed()); };
-  const save = () => { try { localStorage.setItem(LS, enc(data)); } catch (e) {} };
+  /* the seed data's version: a hash of its JSON */
+  const version = () => { if (ver) return ver; const t = enc(FIXTURES); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
+  const db0 = () => { if (data) return data; try { const s = localStorage.getItem(LS); if (s) { const o = dec(s); if (o && o.v === version()) return (data = o.data); } } catch (e) {} return (data = seed()); };
+  const save = () => { try { localStorage.setItem(LS, enc({ v: version(), data })); } catch (e) {} };
   const out = (status, body) => new Response(body === undefined ? null : enc(body), { status, headers: { 'Content-Type': 'application/json' } });
   const route = url => { for (const [key, r] of Object.entries(RES)) { if (url === r.url) return { key, r }; if (url.startsWith(r.url + '/') && !Object.values(RES).some(o => o !== r && o.url.startsWith(r.url + '/') && (url === o.url || url.startsWith(o.url + '/')))) return { key, r, id: decodeURIComponent(url.slice(r.url.length + 1)) }; } return null; };
   function handle(method, url, body) {
@@ -5191,10 +5181,8 @@ function renderControls() {
   seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
   /* Data: which data store the app reads; the mock backend's latency and failures */
-  seg($('k-data'), [['mock', 'Fixtures in memory'], ['live', 'Mock backend over HTTP']], 'dataSrc', () => useData(st.dataSrc));
   seg($('k-api'), [['normal', 'Normal (120 ms)'], ['slow', 'Slow (1.2 s)'], ['fail', 'Writes fail']], 'apiMode', applyApiMode);
-  $('kw-api').style.display = st.dataSrc === 'live' ? '' : 'none';
-  { const m = DS.meta.getState(); $('k-dstat').textContent = DS !== liveData ? '' : m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
+  { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
     const lettered = items.map(([v, l, sub]) => { if (sub) return [v, n ? `${String.fromCharCode(64 + n)}${sub}. ${l}` : l]; const L = n < 26 ? String.fromCharCode(65 + n) : ''; n++; if (L) HOTKEYS[L] = [key, v, pick]; return [v, L ? `${L}. ${l}` : l]; });
@@ -8675,30 +8663,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal 
 /* END question-trees */
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu || st.ntOpen)) { st.csMenu = null; st.ntOpen = false; renderAll(); } });
 buildJump();
-/* End of start-up: the fixtures are complete. Copy them, load the mock data store, and move the
-   Variants bar's keys from the UI store to the mockup store. */
+/* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
+   the data store over HTTP, and move the Variants bar's keys from the UI store to the mockup store. */
 function bootData() {
-  MOCKUP_KEYS = new Set(['device', 'opt', 'dataSrc', 'apiMode', ...KNOBDEF().map(k => k[1])]);
+  MOCKUP_KEYS = new Set(['device', 'opt', 'apiMode', ...KNOBDEF().map(k => k[1])]);
   const ui = { ...uiStore.getState() }, mk = {};
   for (const k of MOCKUP_KEYS) if (k in ui) { mk[k] = ui[k]; delete ui[k]; }
   uiStore.setState(deepFreeze(ui), true); mockupStore.setState(deepFreeze(mk), true); deepFreeze(phoneStore.getState());
   FIXTURES = clone(FX);
   BOOTING = false;
-  mockSource.load(mockData);
+  apiSource.load(liveData);
   dataError = msg => { toast(msg); renderAll(); };
 }
-Object.assign(st, { dataSrc: 'mock', apiMode: 'normal' });
+Object.assign(st, { apiMode: 'normal' });
 bootData();
-const ST0 = structuredClone(stSnapshot()), JOINED0 = [...D.joined], NST0 = structuredClone(phoneStore.getState());
+const ST0 = structuredClone(stSnapshot(FIXTURES)), JOINED0 = [...FIXTURES.joined], NST0 = structuredClone(phoneStore.getState());
 $('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
 document.getElementById('k-reset').addEventListener('click', () => {
-  /* the data goes back to the fixtures (or the mock backend's seed); then the controls and the screen */
+  /* the mock backend's data goes back to its seed; then the controls and the screen */
   db.reset(resetControls);
-  if (DS === liveData) renderAll();
+  renderAll();
 });
 function resetControls() {
-  const ap = st.appearance, src = st.dataSrc, api = st.apiMode;
-  Object.assign(st, structuredClone(ST0), { appearance: ap, dataSrc: src, apiMode: api });
+  const ap = st.appearance, api = st.apiMode;
+  Object.assign(st, structuredClone(ST0), { appearance: ap, apiMode: api });
   for (const [, key, items] of KNOBDEF()) st[key] = items[0][0];
   Object.assign(st, { auth: 'in', device: 'desktop' });
   db.set('joined', [...JOINED0]);
@@ -8760,6 +8748,83 @@ function applyTint() {
 /* The page the app is on: when it changes, the new page starts at its top. */
 const routeKey = () => [st.device, st.auth, st.home, st.space, st.thread, st.subPage, st.savedPage, st.profilePage, st.miItem, st.mgTab, st.spTab].join('|');
 /* Re-render after a timer (an answer finishing) without taking focus or the caret from a field being typed in. */
+/* ---------- focus: dialogs, sheets and menus ----------
+   - A re-render keeps focus on the same control, found again by its id or its data attributes.
+   - When a dialog, sheet or menu opens, focus moves into it: its first text field, else its selected
+     option, else its first control.
+   - Tab stays inside a modal dialog and inside a sheet (on Mobile Web and in the phone app, menus are sheets).
+   - Escape closes the top one when no other handler did (with its close button, or the menu's state).
+   - When it closes, focus returns to the control that opened it. */
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const OVERLAYS = '#app [aria-modal="true"], #app [role="dialog"], #app [role="alertdialog"], #app .pop[role="menu"], #app .ts-ddmenu, #app .dd-pop, #app .msheet';
+const shown = el => !!el && el.getClientRects().length > 0;
+const overlays = () => [...document.querySelectorAll(OVERLAYS)].filter((el, i, all) => shown(el) && !all.some(o => o !== el && o.contains(el) && o.matches('[aria-modal="true"]') && el.matches('[role="dialog"], [role="alertdialog"]')));
+const topOverlay = () => overlays().pop() || null;
+const ovKey = el => `${el.className}|${el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || ''}|${el.matches('[aria-modal="true"]') ? st.modal : ''}`;
+const traps = el => el.matches('[aria-modal="true"], .n-sheet, .msheet') || !!el.closest('[aria-modal="true"]') || getComputedStyle(el).position === 'fixed' || st.device !== 'desktop';
+/* a description of a control that still finds it after the DOM is rebuilt */
+function focusDesc(el) {
+  if (!el || el === document.body || !el.closest || !el.closest('#shell')) return null;
+  const sel0 = 'selectionStart' in el && el.selectionStart != null ? [el.selectionStart, el.selectionEnd] : null;
+  if (el.id) return { sel: '#' + CSS.escape(el.id), i: 0, sel0 };
+  const attrs = [...el.attributes].filter(a => a.name.startsWith('data-') || a.name === 'aria-label' || a.name === 'name' || (a.name === 'value' && el.type === 'radio'));
+  const sel = el.tagName.toLowerCase() + (attrs.length ? attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join('') : [...el.classList].map(c => '.' + CSS.escape(c)).join(''));
+  const all = [...document.querySelectorAll('#shell ' + sel)];
+  return { sel, i: Math.max(0, all.indexOf(el)), sel0 };
+}
+function findDesc(d) {
+  if (!d) return null;
+  const all = d.sel.startsWith('#') ? [document.querySelector(d.sel)] : [...document.querySelectorAll('#shell ' + d.sel)];
+  const el = all[d.i] || all[0]; return shown(el) ? el : null;
+}
+function focusTo(el, d) {
+  if (!el) return false;
+  el.focus({ preventScroll: true });
+  if (d && d.sel0 && el.setSelectionRange) try { el.setSelectionRange(d.sel0[0], d.sel0[1]); } catch (e) {}
+  return document.activeElement === el;
+}
+function focusInto(ov) {
+  const vis = l => [...l].find(shown);
+  const f = vis(ov.querySelectorAll('[autofocus]')) || vis(ov.querySelectorAll('input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([disabled]), textarea:not([disabled])'))
+    || vis(ov.querySelectorAll('[aria-selected="true"], [aria-checked="true"], [aria-current="true"]')) || vis(ov.querySelectorAll(FOCUSABLE));
+  if (f) return focusTo(f);
+  if (!ov.hasAttribute('tabindex')) ov.setAttribute('tabindex', '-1');
+  return focusTo(ov);
+}
+const focusStack = [];       /* open overlays, oldest first: { key, opener, fallback } */
+let lastPress = null;        /* the control last pressed with a pointer (Safari does not focus buttons on click) */
+document.addEventListener('pointerdown', e => { const c = e.target.closest && e.target.closest(FOCUSABLE); lastPress = c ? focusDesc(c) : null; }, true);
+function focusAfterRender(before) {
+  const ovs = overlays(), keys = ovs.map(ovKey);
+  let popped = null, opened = null;
+  while (focusStack.length && !keys.includes(focusStack[focusStack.length - 1].key)) popped = focusStack.pop();
+  ovs.forEach((ov, i) => { if (!focusStack.some(x => x.key === keys[i])) { focusStack.push({ key: keys[i], opener: before || lastPress, fallback: popped && popped.opener }); opened = ov; } });
+  const act = document.activeElement, lost = !act || act === document.body;
+  if (opened) { if (!opened.contains(act)) focusInto(opened); return; }
+  if (popped && (lost || !document.contains(act))) { if (focusTo(findDesc(popped.opener), popped.opener) || focusTo(findDesc(popped.fallback))) return; }
+  if (lost && before) focusTo(findDesc(before), before);
+}
+/* Tab and Shift+Tab stay inside a modal dialog or a sheet */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const ov = topOverlay(); if (!ov || !traps(ov)) return;
+  const f = [...ov.querySelectorAll(FOCUSABLE)].filter(shown); if (!f.length) { e.preventDefault(); return; }
+  const i = f.indexOf(document.activeElement);
+  if (i < 0) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+  else if (e.shiftKey && i === 0) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+}, true);
+/* Escape: when no other handler closed anything, close the top overlay */
+let escCount = 0;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') escCount = overlays().length; }, true);
+function escFallback(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const ovs = overlays(); if (!ovs.length || ovs.length < escCount) return;
+  const ov = ovs[ovs.length - 1];
+  const c = ov.querySelector('[data-act="modal-close"], [data-n="close"], [aria-label="Close"], [aria-label="Dismiss"]');
+  if (c) { c.click(); return; }
+  if (st.mpOpen || st.spOpen || st.tpMenu || st.dd) { Object.assign(st, { mpOpen: false, spOpen: false, tpMenu: null, dd: null }); renderAll(); }
+}
 function renderKeepFocus() {
   const a = document.activeElement, id = a && a.id, c = a && 'selectionStart' in a ? [a.selectionStart, a.selectionEnd] : null;
   renderAll();
@@ -8770,7 +8835,9 @@ function renderAll() {
   renderAll.route = route;
   if (_app && moved) _app.scrollTop = 0;
   const _st = _app && !moved ? _app.scrollTop : 0;
+  const _fd = focusDesc(document.activeElement);
   renderAllInner();
+  focusAfterRender(_fd);
   if (renderAll.tint !== st.tint + st.appearance) { renderAll.tint = st.tint + st.appearance; applyTint(); }
   if (_app && _st) _app.scrollTop = _st;
   /* Mobile Web: a sheet over the page (Sources and wiki, request panel) keeps the page under it still */
@@ -8932,6 +8999,8 @@ function buildPhoneSim() {
 window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h !== st.opt && L[h]) pickOption(h); });
 const h0 = location.hash.slice(1);
 buildPhoneSim();
+document.addEventListener('keydown', escFallback);   /* registered last, so it runs after the other Escape handlers */
+APP_STARTED = true;
 pickOption(L[h0] ? h0 : 'b');
 /* The page that hosts this file can set data-theme on <html> after load to match its own
    theme. Adopt that value, so the tint (applied as inline token values) is recomputed for it
