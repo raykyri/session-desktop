@@ -2534,6 +2534,11 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-units .mi-u2 > .ds-ux { grid-column: -2; margin-top: -6px; padding: 0 14px 0 42px; }
 .ds-units .ds-rn { align-self: flex-start; margin-top: 0; }
 .ds-units .ds-m .ds-n:first-child { margin-left: 0; }
+/* sidebar on the left of the space page ("Sidebar side": Left); below 920px it stacks as before */
+@media (min-width: 921px) {
+  .Af.ds-left .body { grid-template-columns: auto minmax(0, 1fr); }
+  .Af.ds-left .body > .drawer { order: -1; border-left: 0; border-right: 1px solid var(--divider); }
+}
 /* right sidebar: Sources and Wiki tabs */
 .ds-pane > .ds-sunits { margin: 0 -4px; }
 .ds-sunits .mi-u-t { font-size: var(--fs-sm); }
@@ -2641,6 +2646,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
       <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
+      <div class="knob" id="kw-dspos"><span>Sidebar side</span><div class="seg" id="k-dspos"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -6876,9 +6882,10 @@ function dsSideDrawer(s) {
 }
 
 /* ---------- space page ---------- */
-/* Parts of the space page: main column (the full list on the Sources tab) and the sidebar. */
+/* Parts of the space page: main column (the full list on the Sources tab) and the sidebar, on the right or
+   the left ("Sidebar side" control, st.dsPos). */
 function dsSpaceParts(s, tab, body) {
-  const x = { mcol: banner(s) + body, side: wikiDrawer(s), cls: '' };
+  const x = { mcol: banner(s) + body, side: wikiDrawer(s), cls: st.dsPos === 'left' ? ' ds-left' : '' };
   if (canRead(s) && tab === 'sources') x.mcol = banner(s) + dsAllMain(s);
   return x;
 }
@@ -7054,13 +7061,14 @@ const dsOnSpace = () => {
 function DSKNOBS() {
   return [
     ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1'], ['tabsty', 'Sources and Wiki tabs, social feed', '2']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dspos', 'dsPos', [['right', 'Right'], ['left', 'Left']], () => { st.drawer = true; dsOnSpace(); }],
   ];
 }
 
 /* ---------- "Jump to" ---------- */
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
-  ['Sources in the right sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: full list']]],
+  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: full list']]],
   ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
 function dsNewSpace() {
@@ -7112,7 +7120,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsSide: 'tabs', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsSide: 'tabs', dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsFromAll: false,
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
