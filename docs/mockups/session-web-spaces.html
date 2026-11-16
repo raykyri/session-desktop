@@ -272,7 +272,12 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 
 /* ================= Option C: banner ================= */
 .C .hdr { display: flex; align-items: center; gap: 16px; padding: 0 24px; height: 50px; background: var(--chrome); border-bottom: 1px solid var(--divider); }
-.C .hdr .hscroll { flex: 1; gap: 2px; }
+.C .hdr .hnav { flex: 1; display: flex; align-items: center; gap: 2px; min-width: 0; align-self: stretch; }
+.C .hdr .hnav .hscroll { flex: 1; gap: 2px; align-self: stretch; align-items: center; }
+@media (min-width: 641px) {
+  .C .hdr .hnav + .hdr-right { margin-left: -16px; }
+  .C .hdr .hnav + .hdr-right .sw-r { margin-left: 0; }
+}
 .utab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-muted); font-weight: 550; white-space: nowrap; flex: none; font-size: var(--fs-sm); }
 .utab:hover { background: var(--fill-hover); color: var(--t-strong); }
 .utab[aria-current="true"] { background: var(--fill-subtle); color: var(--t-heading); }
@@ -833,7 +838,7 @@ kbd, .keys kbd { font: inherit; font-size: 11.35px; font-weight: 600; min-width:
 @media (max-width: 640px) {
   /* header: logo + current place + actions; tabs move to the chips row or bottom bar */
   .hdr { position: relative; gap: 8px; padding-left: 12px; padding-right: 12px; }
-  .hdr .hscroll, .hdr .hdr-sep { display: none; }
+  .hdr .hscroll, .hdr .hdr-sep, .hdr .hnav { display: none; }
   .hdr-right { margin-left: auto; flex: 1; justify-content: flex-end; min-width: 0; }
   .hdr-right .sw-r { border-left: 0; padding-left: 0; margin-left: 0; margin-right: auto; min-width: 0; }
   .sw-d { display: none; }
@@ -3226,7 +3231,7 @@ const hdrGroups = () => {
   const g = (n, icon, label) => n > 0 ? `<button class="btn${st.savedPage ? ' on' : ''}" type="button" data-act="saved-page" title="${label}" aria-label="${label}: ${n}">${icon}<span class="num">${n}</span></button>` : '';
   return g(st.saved.size, I.mark, 'Saved');
 };
-const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><div class="hscroll" role="navigation" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}${csTabs()}</div><div class="hdr-right">${switcher()}${ntBell()}${hdrGroups()}${account(true)}</div></div>`;
+const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><nav class="hnav" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}<div class="hscroll">${csTabs()}</div></nav><div class="hdr-right">${switcher()}${ntBell()}${hdrGroups()}${account(true)}</div></div>`;
 /* Header tabs leave out closed spaces the user is not a member of. */
 function csTabs() {
   const tab = x => `<button class="utab" type="button" data-space="${x.id}" aria-current="${!st.home && !st.profilePage && !st.savedPage && !st.subPage && st.thread == null && x.id === st.space}">${spName(x)}${spSeal(x, 'sm')}${csAfter(x, false)}</button>`;
@@ -3664,7 +3669,8 @@ const SRCD = {};
 const srcItems = p => { const i = POSTS.indexOf(p); return SRCD[i] ? SRCD[i].map(([t, d, n]) => ({ t, d, n })) : srcFor(p).map(d => ({ t: d, d, n: '' })); };
 /* Citation markers are written into each RICH answer next to the claim their source supports. */
 const ansBody = p => RICH[POSTS.indexOf(p)] || `<p>${esc(p.sum)}</p>`;
-const paidOf = p => { const s = sp(p.s); return s.byok ? `${spName(s)} extra tokens` : `${p.mine ? 'your' : p.u + '’s'} API key`; };
+/* Token use: the space's name when asks draw on its tokens, otherwise the asker's API key */
+const paidOf = p => { const s = sp(p.s); return s.byok ? spName(s) : `${p.mine ? 'your' : p.u + '’s'} API key`; };
 function fuSection(p) {
   const ask = p.k === 'ask', fus = ask ? fuFor(p) : [], rps = ask ? [] : rpFor(p);
   return ask ? `<section class="tr-sec" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(fq2).join('') || '<p class="muted">Follow-ups can be added once the answer is ready.</p>'}</section>`
@@ -7606,7 +7612,7 @@ const qtAddr = (T, id) => `session.app/s/${sp(T.p.s).name}/t/${T.i + 1000}${id &
 const qtTop = T => (st.qtFocus && T.by[st.qtFocus] ? T.by[st.qtFocus] : T.nodes[0]);
 
 /* ---------- cost ---------- */
-const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? `${spName(sp(T.p.s))} extra tokens` : `${n.u === ME.u ? 'your' : n.u + '’s'} API key`;
+const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? spName(sp(T.p.s)) : `${n.u === ME.u ? 'your' : n.u + '’s'} API key`;
 
 /* ---------- small parts ---------- */
 function qtAnswer(T, n) {
@@ -7668,7 +7674,7 @@ function qtOutline(T, cur) {
 }
 function qtFacts(T) {
   const p = T.p, s = sp(p.s);
-  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? `${spName(s)} extra tokens` : 'Each asker’s API key'}</b></div><div><span>Answered by</span><b>${MODEL_NAME}</b></div></div>`;
+  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? spName(s) : 'Each asker’s API key'}</b></div><div><span>Answered by</span><b>${MODEL_NAME}</b></div></div>`;
 }
 
 /* ---------- compare ---------- */
