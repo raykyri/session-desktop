@@ -102,7 +102,8 @@ a { color: inherit; }
 .opt kbd { font-size: 10.8px; color: var(--t-faint); }
 .knobs { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
 .knob { display: flex; align-items: center; gap: 8px; }
-.knob-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.knob-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.knob-meta .cs-jk, .knob-meta .jd, .knob-meta .jd-btn { min-width: 0; max-width: 100%; }
 .knob > span { font-size: var(--fs-xs); color: var(--t-faint); text-transform: uppercase; letter-spacing: .06em; }
 .seg { display: inline-flex; background: var(--control); border: 1px solid var(--control-border); border-radius: var(--r-md); padding: 2px; gap: 2px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 3px 9px; border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--t-secondary); }
@@ -2092,6 +2093,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-sech h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .sf-recent { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .sf-recent .row-x { padding-left: 0; padding-right: 0; }
+.sf-recent > .sf-sech { margin-bottom: 4px; }
 .sf-tchips { display: none; }
 .sf-empty h3 { margin: 0 0 4px; font-size: var(--fs-input); color: var(--t-heading); }
 .sf-empty p { margin: 0; }
@@ -2160,8 +2162,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-vnote { border-top: 1px solid var(--divider); padding-top: 10px; }
 .sf-vnote > svg { color: var(--t-muted); }
 .sf-abcard .th-facts { gap: 6px; }
-.sf-wiki { display: flex; flex-direction: column; gap: 12px; padding: 22px 28px 48px; max-width: 760px; margin: 0 auto; width: 100%; }
-.sf-wiki .note-card { background: var(--card); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
 /* settings */
 .sf-tog { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; padding: 10px 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); }
 .sf-tog-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -2218,7 +2218,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 }
 @media (max-width: 640px) {
   .sp-tabs { padding: 0 8px; }
-  .rf-idx, .sf-about, .sf-wiki { padding: 16px 14px 40px; }
+  .rf-idx, .sf-about { padding: 16px 14px 40px; }
   .rf-topics { grid-template-columns: minmax(0, 1fr); }
   .rf-sbox .btn { padding: 0 14px; }
   .wz-opts.c2x { grid-template-columns: minmax(0, 1fr); }
@@ -2232,6 +2232,409 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .sf-racts .btn { flex: 1; }
   .sf-tpm .sf-tpmenu { left: auto; right: 0; width: 240px; }
 }
+/* BEGIN media items css */
+/* ---------- media items ---------- */
+.mi-knobs .cs-kt { font-weight: 550; color: var(--t-secondary); }
+.mi-ic { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; flex: none; background: var(--fill-subtle); color: var(--t-secondary); border: 1px solid var(--border-subtle); }
+.mi-ic svg { width: 14px; height: 14px; }
+.mi-ic.sm { width: 22px; height: 22px; border-radius: 6px; }
+.mi-ic.sm svg { width: 12px; height: 12px; }
+.mi-ic.xs { width: 16px; height: 16px; border-radius: 4px; border: 0; background: transparent; }
+.mi-ic.xs svg { width: 12px; height: 12px; }
+.mi-ver { display: inline-flex; color: var(--t-muted); }
+.mi-ver svg { width: 13px; height: 13px; }
+.mi-flag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.8px; font-weight: 600; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-radius: 999px; padding: 0 7px; line-height: 18px; white-space: nowrap; }
+.mi-flag svg { width: 11px; height: 11px; }
+.mi-flag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.mi-flag.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.mi-flag.plain { color: var(--t-muted); background: var(--fill-subtle); font-weight: 550; }
+/* compact item reference */
+.mi-mini { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); min-width: 0; }
+.mi-mini > svg { width: 16px; height: 16px; color: var(--t-muted); flex: none; }
+.mi-mini[role="link"] { cursor: pointer; }
+.mi-mini[role="link"]:hover { border-color: var(--border-strong); }
+.mi-mini-tx { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.mi-mini-tx b { font-weight: 600; color: var(--t-strong); font-size: var(--fs-sm); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mi-mini-tx > span { font-size: var(--fs-xs); color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-mini-go svg { width: 10px; height: 10px; transform: rotate(-90deg); color: var(--t-faint); }
+/* rows (Saved) */
+.mi-pk { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--control-border); background: var(--field); display: grid; place-items: center; color: transparent; margin-top: 4px; }
+.mi-pk svg { width: 12px; height: 12px; }
+.mi-pk.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* source units: Plain rows in Saved; Social feed in the full list and the sidebar list */
+.mi-units { display: flex; flex-direction: column; }
+.mi-u { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; cursor: pointer; min-width: 0; }
+.mi-u.has-ic { grid-template-columns: 26px minmax(0, 1fr); }
+.mi-u.picking { grid-template-columns: 18px minmax(0, 1fr); }
+.mi-u.picking.has-ic { grid-template-columns: 18px 26px minmax(0, 1fr); }
+.mi-u-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 14px; }
+.mi-u-src { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--t-secondary); }
+.mi-u-t { color: var(--t-heading); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.mi-u-x { color: var(--t-muted); font-size: var(--fs-sm); line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.mi-u-dot { position: absolute; top: 6px; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.mi-u .mi-pk { margin-top: 2px; }
+.mi-u:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-md); }
+/* Plain rows: no box, hairlines between units */
+.mi-sty-plain .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-plain.mi-lay-rows .mi-u:first-child { border-top: 0; }
+.mi-sty-plain .mi-u:hover .mi-u-t { text-decoration: underline; text-underline-offset: 2px; }
+.mi-sty-plain .mi-u-dot { top: 20px; }
+.mi-u.picked .mi-u-t { color: var(--accent-strong); }
+/* Social feed: every source in a social-post shape, X posts as posts, others with a link preview */
+.mi-u2 { grid-template-columns: minmax(0, 1fr); }
+.mi-u2.picking { grid-template-columns: 18px minmax(0, 1fr); }
+.mi-p { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mi-p > .av { width: 32px; height: 32px; font-size: 12.35px; }
+.mi-p > .mi-ic { width: 32px; height: 32px; border-radius: 8px; }
+.mi-p-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 14px; }
+.mi-p-h { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; font-size: var(--fs-sm); min-width: 0; }
+.mi-p-h b { color: var(--t-heading); font-weight: 650; }
+.mi-p-h .faint { font-size: var(--fs-sm); }
+.mi-p-th { font-size: var(--fs-xs); color: var(--t-faint); border: 1px solid var(--border-subtle); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.mi-p-t { margin: 0; color: var(--t-primary); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-line; }
+.mi-p-q { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); line-height: 1.45; }
+.mi-p-q p { margin: 3px 0 0; color: var(--t-secondary); overflow-wrap: anywhere; }
+.mi-p-qh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mi-p-qh b { font-weight: 600; color: var(--t-strong); }
+.mi-p-qh .av.sm { width: 18px; height: 18px; font-size: 8.5px; }
+.mi-sty-social .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
+.mi-sty-social .mi-u-dot { top: 20px; }
+/* Social feed: link previews */
+.mi-lp { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); min-width: 0; }
+.mi-lp-m { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
+.mi-lp-m svg { width: 12px; height: 12px; }
+/* item page */
+.mi-page { position: relative; padding: 18px 40px 48px; max-width: 1120px; margin: 0 auto; }
+.mi-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
+.mi-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.mi-acts .btn svg { width: 13px; height: 13px; }
+.mi-acts .btn[aria-pressed="true"] svg { fill: currentColor; }
+.mi-grid { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 48px; align-items: start; }
+.mi-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; max-width: 680px; }
+.mi-aside { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.mi-head { display: flex; flex-direction: column; gap: 8px; }
+.mi-src { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-secondary); }
+.mi-src .mi-ic { width: 22px; height: 22px; border-radius: 6px; }
+.mi-src .mi-ic svg { width: 12px; height: 12px; }
+.mi-title { margin: 0; font-size: 26.5px; line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); font-weight: 700; text-wrap: pretty; }
+.mi-title.sm { font-size: 20.6px; }
+.mi-via::before { content: "· "; }
+.mi-by { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-secondary); }
+.mi-note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-lg); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--divider)); background: color-mix(in srgb, var(--warn) 7%, transparent); font-size: var(--fs-sm); flex-wrap: wrap; }
+.mi-note > svg { width: 15px; height: 15px; flex: none; color: var(--warn); margin-top: 2px; }
+.mi-note > div:not(.mi-note-a) { flex: 1; min-width: 200px; }
+.mi-note b { color: var(--t-strong); font-weight: 600; }
+.mi-note p { margin: 2px 0 0; color: var(--t-secondary); line-height: 1.45; }
+.mi-note.bad { border-color: color-mix(in srgb, var(--bad) 35%, var(--divider)); background: color-mix(in srgb, var(--bad) 6%, transparent); }
+.mi-note.bad > svg { color: var(--bad); }
+.mi-note.ok { border-color: color-mix(in srgb, var(--good) 35%, var(--divider)); background: color-mix(in srgb, var(--good) 6%, transparent); }
+.mi-note.ok > svg { color: var(--good); }
+.mi-note-a { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* reader copy */
+.mi-reader { display: flex; flex-direction: column; color: var(--t-body); font-size: var(--fs-input); line-height: 1.65; }
+.mi-h { margin: 18px 0 6px; font-size: var(--fs-input); color: var(--t-heading); }
+.mi-b { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); padding: 6px 40px 6px 12px; margin: 0 -40px 0 -12px; border-radius: var(--r-lg); border-left: 2px solid transparent; transition: background var(--ease); }
+.mi-b p { margin: 0; overflow-wrap: anywhere; }
+.mi-reader.askable .mi-b { cursor: text; }
+.mi-reader.askable .mi-b:hover { background: var(--fill-subtle); }
+.mi-b.has-asks { border-left-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.mi-b.sel, .mi-b.hi { background: var(--accent-soft) !important; border-left-color: var(--accent); }
+.mi-b.mi-seg, .mi-b.mi-post { grid-template-columns: 52px minmax(0, 1fr); column-gap: 8px; }
+.mi-post { border-top: 1px solid var(--divider); border-radius: 0; padding-top: 12px; padding-bottom: 12px; }
+.mi-post:first-child { border-top: 0; }
+.mi-gl { font-size: var(--fs-xs); color: var(--t-faint); padding-top: 4px; }
+.mi-spk { display: block; font-size: var(--fs-xs); color: var(--t-secondary); font-weight: 650; margin-bottom: 1px; }
+.mi-hl { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+.mi-b del { color: var(--bad); text-decoration-thickness: 1px; }
+.mi-b ins, .mi-q ins { color: var(--good); text-decoration: none; background: color-mix(in srgb, var(--good) 12%, transparent); }
+.mi-q del { color: var(--bad); }
+.mi-qt { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); line-height: 1.5; }
+.mi-qt > svg { width: 13px; height: 13px; margin-top: 3px; color: var(--t-muted); }
+.mi-qt b { font-weight: 600; color: var(--t-strong); }
+.mi-qt p { margin: 2px 0 0; color: var(--t-secondary); }
+.mi-bask { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: var(--r-md); border: 1px solid var(--control-border); background: var(--control); color: var(--t-muted); display: grid; place-items: center; opacity: 0; transition: opacity var(--ease); }
+.mi-bask svg { width: 13px; height: 13px; }
+.mi-b:hover .mi-bask, .mi-bask:focus-visible { opacity: 1; }
+.mi-b.sel .mi-bask { display: none; }
+.mi-bask:hover { color: var(--t-strong); background: var(--control-hover); }
+.mi-selpop { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.mi-selpop .btn svg { width: 12px; height: 12px; }
+.mi-selbar { display: none; }
+.mi-paywall { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--fill-subtle); font-size: var(--fs-sm); color: var(--t-secondary); }
+.mi-paywall svg { width: 14px; height: 14px; flex: none; }
+.mi-q { margin: 0; padding: 8px 12px; border-left: 3px solid var(--border-strong); background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.55; }
+.mi-q p { margin: 0; }
+.mi-q cite { display: block; margin-top: 3px; font-style: normal; font-size: var(--fs-xs); color: var(--t-faint); }
+.mi-q[data-miopen] { cursor: pointer; }
+.mi-q[data-miopen]:hover { border-left-color: var(--accent); }
+.mi-q.sm { font-size: var(--fs-xs); }
+.mi-askbox { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+/* inline ask composer at the end of the reader */
+.mi-icomp .mi-iq { margin: 0 34px 2px 0; }
+.mi-icomp .c2-bar { display: flex; align-items: center; gap: 6px; }
+.mi-icsp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+.mi-icsp .dd-btn { max-width: 180px; }
+.mi-orig { padding: 0 8px; }
+.mi-orig svg { margin: 0; }
+.mi-asks { border-top: 1px solid var(--divider); padding-top: 18px; }
+.mi-asks h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
+.mi-asks h3 .tlink { margin-left: auto; font-size: var(--fs-xs); font-weight: 500; }
+.mi-acs { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.mi-ac { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); cursor: pointer; background: var(--pane); }
+.mi-ac:hover { border-color: var(--border-strong); }
+.mi-ac-q { color: var(--t-strong); font-weight: 600; font-size: var(--fs-sm); line-height: 1.4; text-decoration: none; }
+.mi-ac-a { display: flex; gap: 7px; }
+.mi-ac-a .agent { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.mi-ac-a .agent svg { width: 9px; height: 9px; }
+.mi-ac-a p { margin: 0; font-size: var(--fs-xs); color: var(--t-muted); line-height: 1.45; }
+.mi-scope { display: inline-flex; align-items: center; gap: 3px; font-size: 10.8px; font-weight: 600; color: var(--t-secondary); background: var(--fill-subtle); border-radius: 999px; padding: 0 6px; line-height: 17px; }
+.mi-scope svg { width: 10px; height: 10px; }
+.mi-facts { gap: 7px; }
+.mi-facts b { text-align: right; }
+.mi-also { gap: 6px; }
+.mi-sprow { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 5px 4px; border-radius: var(--r-md); font: inherit; font-size: var(--fs-sm); color: var(--t-strong); text-align: left; }
+.mi-sprow:hover { background: var(--fill-hover); }
+.mi-sprow .cs-nmrow { flex: 1; min-width: 0; }
+.mi-sprow small { color: var(--t-faint); font-size: var(--fs-xs); }
+.mi-sprow .glyph { width: 18px; height: 18px; font-size: 9.5px; border-radius: 5px; }
+/* thread page: About card, sources */
+.mi-about { display: flex; flex-direction: column; gap: 8px; }
+.mi-ab-h { display: flex; align-items: center; gap: 6px; font-size: 10.8px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--t-faint); }
+.mi-ab-h svg { width: 12px; height: 12px; }
+.mi-chg { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--warn); }
+.mi-chg svg { width: 13px; height: 13px; }
+.mi-chg > span { flex: 1 1 200px; }
+.mi-chg .tlink { font-size: var(--fs-xs); }
+.mi-qgone { margin: 0; font-size: var(--fs-sm); color: var(--t-faint); font-style: italic; }
+.mi-cx { white-space: nowrap; }
+.mi-src h3 + .sx-src { margin-bottom: 12px; }
+.mi-src > * { align-self: stretch; }
+.mi-src h3 { margin-top: 2px; text-align: left; }
+.mi-acts a.btn { text-decoration: none; }
+.mi-src li[data-miopen] { cursor: pointer; }
+.mi-src li[data-miopen]:hover b { color: var(--t-strong); text-decoration: underline; text-underline-offset: 2px; }
+.mi-sxl { min-width: 30px; color: var(--accent); }
+.mi-msrc { display: none; }
+/* composer: pasted link */
+.mi-att-w:empty { display: none; }
+.mi-att { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 2px; }
+.mi-att p { margin: 0; }
+.mi-att-a { display: flex; gap: 14px; flex-wrap: wrap; }
+.mi-att-a .tlink { font-size: var(--fs-xs); }
+/* ask dialog */
+.mi-askdlg { width: 600px; }
+.mi-askdlg textarea, .mi-dsp .dd-btn { font: inherit; }
+.mi-askdlg .fld textarea { border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); padding: 8px 10px; font-size: var(--fs-base); resize: vertical; min-height: 60px; }
+.mi-askdlg .fld textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.mi-askdlg { max-height: 100%; overflow-y: auto; }
+.mi-dlist { list-style: none; margin: 0; padding: 4px 10px; max-height: 176px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
+.mi-dlist li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--divider); font-size: var(--fs-sm); line-height: 1.4; }
+.mi-dlist li:first-child { border-top: 0; }
+.mi-dlist li .mi-ic { margin-top: 1px; }
+.mi-dlist b { font-weight: 550; color: var(--t-strong); }
+.mi-dlist small { color: var(--t-faint); font-size: var(--fs-xs); }
+.mi-dscope { display: flex; flex-direction: column; gap: 8px; }
+.mi-tplrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.mi-tplb { border: 1px solid var(--divider); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: var(--fs-xs); color: var(--t-secondary); text-align: left; }
+.mi-tplb:hover { border-color: var(--border-strong); color: var(--t-strong); }
+.mi-dsp { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.modal-f .grow { flex: 1; }
+.modal-f a.btn { text-decoration: none; }
+.modal-f .btn svg { width: 13px; height: 13px; }
+.mi-plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); line-height: 1.5; color: var(--t-secondary); }
+@media (max-width: 1240px) {
+  .mi-grid { grid-template-columns: minmax(0, 1fr) 260px; gap: 36px; }
+}
+@media (max-width: 920px) {
+  .mi-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .mi-main { max-width: none; }
+  .mi-aside { position: static; }
+  .mi-b { margin-right: 0; padding-right: 12px; }
+  .mi-bask { display: none; }
+}
+@media (max-width: 640px) {
+  .mi-page { padding: 14px 14px 40px; }
+  .mi-bar { margin-bottom: 12px; }
+  .mi-acts .btn:not([data-misave]):not([data-micopy]) { padding: 0 8px; }
+  .mi-title { font-size: 22.65px; }
+  .mi-src .mi-via { flex-basis: 100%; }
+  .mi-src .mi-via::before { content: none; }
+  .mi-reader { font-size: 15.45px; }
+  .mi-b.mi-seg, .mi-b.mi-post { grid-template-columns: 40px minmax(0, 1fr); }
+  .mi-selpop { display: none; }
+  .mi-selbar { display: flex; position: sticky; bottom: 0; z-index: 30; align-items: center; gap: 8px; margin: 10px -14px -40px; padding: 10px 14px 14px; background: var(--popover); border-top: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
+  .mi-selbar-t { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--accent); padding-left: 8px; }
+  .mi-askdlg { width: 100%; }
+  .mi-dsp { flex-wrap: wrap; }
+  .mi-msrc { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 12px; margin-top: 4px; }
+  .mi-msrc h3 { margin: 0; font-size: var(--fs-xs); font-weight: 500; color: var(--t-faint); }
+  .mi-note-a { width: 100%; }
+}
+/* END media items css */
+/* BEGIN dropped sources css */
+/* ---------- dropped sources ---------- */
+/* drop and paste target */
+.ds-drop { display: flex; flex-direction: column; gap: 8px; }
+.ds-in { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 4px 0 10px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); background: var(--field); color: var(--t-faint); }
+.ds-in:focus-within { border-style: solid; border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.ds-in > svg { width: 14px; height: 14px; flex: none; }
+.ds-in input[type="url"] { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; font: inherit; font-size: var(--fs-sm); color: var(--t-primary); outline: none; padding: 0; }
+.ds-in input::placeholder { color: var(--placeholder); }
+.ds-up { width: 28px; height: 28px; flex: none; cursor: pointer; }
+.ds-up svg { width: 14px; height: 14px; }
+.ds-det { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
+.ds-det:empty { display: none; }
+.ds-det .mi-mini { border: 0; padding: 0; background: transparent; }
+.ds-det .cs-fine { margin: 0; }
+.ds-note-in { height: 32px; min-width: 0; border-radius: var(--r-md); border: 1px solid var(--divider); background: var(--field); color: var(--t-primary); padding: 0 8px; font: inherit; font-size: var(--fs-sm); }
+.ds-note-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ds-note-in::placeholder { color: var(--placeholder); }
+.ds-acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.ds-dup { display: flex; flex-direction: column; gap: 8px; }
+.ds-dupt { display: flex; gap: 6px; margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--t-secondary); }
+.ds-dupt svg { width: 13px; height: 13px; flex: none; margin-top: 1px; color: var(--good); }
+.ds-ro { align-items: flex-start; }
+.ds-ronly { margin: 0; }
+/* drag over a source list */
+[data-dsdz] { position: relative; }
+.ds-over { display: none; position: absolute; inset: 6px; z-index: 6; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; border: 2px dashed var(--accent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--accent) 10%, var(--pane)); color: var(--t-heading); font-size: var(--fs-sm); font-weight: 600; text-align: center; cursor: copy; }
+.ds-over svg { width: 22px; height: 22px; color: var(--accent); }
+[data-dsdz][data-drag] > .ds-over { display: flex; }
+/* source rows */
+.ds-list { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ds-r { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: var(--r-lg); cursor: pointer; min-width: 0; }
+.ds-r:hover { background: var(--fill-hover); }
+.ds-r.picked { background: var(--accent-soft); }
+.ds-r:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ds-r > .mi-ic { margin-top: 1px; }
+.ds-rb { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; padding-right: 10px; }
+.ds-t { font-weight: 600; font-size: var(--fs-sm); line-height: 1.38; color: var(--t-strong); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ds-r.new .ds-t { color: var(--t-heading); }
+.ds-m { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--t-faint); min-width: 0; }
+.ds-n { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; color: var(--t-muted); }
+.ds-n svg { width: 11px; height: 11px; }
+.ds-r .mi-u-dot { top: 14px; right: 6px; }
+.ds-r .mi-pk { flex: none; margin-top: 2px; }
+.ds-rv { align-self: flex-start; margin-top: 3px; }
+.ds-r.flash, .mi-u.flash { animation: ds-flash 1.7s ease-out; }
+@keyframes ds-flash { 0%, 45% { background: color-mix(in srgb, var(--accent) 22%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ds-r.flash, .mi-u.flash { animation: none; background: var(--accent-soft); } }
+.ds-rn { display: flex; gap: 6px; align-items: flex-start; margin-top: 2px; padding: 6px 8px; border-radius: var(--r-md); background: var(--fill-subtle); font-size: var(--fs-xs); line-height: 1.45; color: var(--t-secondary); }
+.ds-rn b { font-weight: 600; color: var(--t-strong); }
+.ds-rn .av { flex: none; }
+.ds-empty { display: flex; flex-direction: column; gap: 4px; padding: 20px 10px; text-align: center; font-size: var(--fs-sm); }
+.ds-empty b { font-weight: 600; color: var(--t-strong); }
+.ds-empty span { font-size: var(--fs-xs); color: var(--t-faint); }
+/* selection */
+.ds-selb[aria-pressed="true"] { background: var(--accent-soft); color: var(--t-heading); }
+.ds-selb svg { width: 15px; height: 15px; }
+.ds-pickbar { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: var(--r-lg); background: var(--popover); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: var(--fs-sm); }
+.ds-pickbar > span { flex: 1; color: var(--t-secondary); }
+.ds-pickbar .btn[disabled] { opacity: .5; }
+.ds-pane .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
+.mi-bar .th-back { white-space: nowrap; flex: none; }
+/* sidebar list (tabs, expanded stack) in the Social feed style, plus who added the source, the note and asks */
+.ds-units .ds-ux { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ds-units .mi-u2 > .ds-ux { grid-column: -2; margin-top: -6px; padding: 0 14px 0 42px; }
+.ds-units .ds-rn { align-self: flex-start; margin-top: 0; }
+.ds-units .ds-m .ds-n:first-child { margin-left: 0; }
+/* sidebar on the left of the space page ("Sidebar side": Left); below 920px it stacks as before */
+@media (min-width: 921px) {
+  .Af.ds-left .body { grid-template-columns: auto minmax(0, 1fr); }
+  .Af.ds-left .body > .drawer { order: -1; border-left: 0; border-right: 1px solid var(--divider); }
+}
+/* "Layout" control: the sidebar on the right or the left, with the space header in the main column (E, F)
+   or across both columns with separate tab strips below it (G, H) */
+.ds-side .dh .grow { flex: 1; }
+.ds-top { min-width: 0; }
+@media (min-width: 921px) {
+  .Af.ds-hd .body { grid-template-rows: auto 1fr; }
+  .Af.ds-hd .body > .ds-top { grid-column: 1 / -1; order: -2; }
+  .Af.ds-hd .drawer .dh.ds-tabs { background: var(--pane); }
+  .Af.ds-hd .ds-stab { height: 38px; }
+  .Af.ds-hd .drawer.closed .dh { padding-top: 6px; }
+  /* the sidebar's divider starts below the tab strips, so the two strips read as one row */
+  .Af.ds-hd .body > .drawer { border-left: 0; border-right: 0; }
+  .Af.ds-hd .body > .drawer::before { content: ""; position: absolute; top: 39px; bottom: 0; left: 0; width: 1px; background: var(--divider); pointer-events: none; }
+  .Af.ds-hd.ds-left .body > .drawer::before { left: auto; right: 0; }
+}
+/* right sidebar: Sources and Wiki tabs */
+.ds-pane > .ds-sunits { margin: 0 -4px; }
+.ds-sunits .mi-u-t { font-size: var(--fs-sm); }
+.ds-sunits .mi-u-x { font-size: var(--fs-xs); }
+.ds-sunits .mi-p-t { font-size: var(--fs-sm); }
+.ds-sunits .mi-p { grid-template-columns: 26px minmax(0, 1fr); gap: 8px; }
+.ds-sunits .mi-p > .av, .ds-sunits .mi-p > .mi-ic { width: 26px; height: 26px; }
+.ds-sunits .mi-u2 > .ds-ux { padding-left: 34px; }
+.ds-side .dh .grow { flex: 1; }
+.drawer .dh.ds-tabs { gap: 2px; padding: 0 12px 0 6px; }
+.ds-stab { position: relative; height: 46px; padding: 0 10px; border: 0; background: transparent; color: var(--t-muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.ds-stab:hover { color: var(--t-strong); }
+.ds-stab[aria-selected="true"] { color: var(--t-heading); }
+.ds-stab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
+.drawer .dbody.ds-pane { gap: 10px; }
+.ds-tabl { display: flex; gap: 2px; align-self: stretch; }
+.ds-tabs .ds-selb { width: 28px; height: 28px; }
+.ds-pane > .ds-list, .ds-hcard .ds-list { margin: 0 -8px; }
+/* source page: note, actions, cited pages */
+.ds-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: var(--r-lg); background: var(--fill-subtle); font-size: var(--fs-sm); line-height: 1.45; color: var(--t-secondary); }
+.ds-note b { font-weight: 600; color: var(--t-strong); }
+.ds-note .av { flex: none; }
+.ds-more { padding: 0 8px; }
+.ds-more svg { width: 14px; height: 14px; }
+.ds-mw .pop.sf-ipop { width: 240px; }
+.ds-csend { flex: none; width: 26px; height: 26px; margin-left: auto; }
+.ds-csend svg, .ds-msend svg { width: 13px; height: 13px; }
+.ds-msend { flex: none; width: 26px; height: 26px; }
+/* send dialog */
+.ds-senddlg { width: 480px; max-height: 100%; overflow-y: auto; }
+.ds-shared { display: flex; gap: 6px; align-items: center; margin: 0; overflow-wrap: anywhere; }
+.ds-shared svg { width: 13px; height: 13px; flex: none; }
+.ds-splist { display: flex; flex-direction: column; max-height: 264px; overflow-y: auto; border: 1px solid var(--divider); border-radius: var(--r-lg); }
+.ds-sprow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 0; border-top: 1px solid var(--divider); background: transparent; font: inherit; font-size: var(--fs-sm); color: var(--t-strong); text-align: left; cursor: pointer; }
+.ds-sprow:first-child { border-top: 0; }
+.ds-sprow:hover:not(.dis) { background: var(--fill-hover); }
+.ds-sprow .cs-nmrow { flex: 1; min-width: 0; }
+.ds-sprow small { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
+.ds-sprow .mi-pk { margin-top: 0; flex: none; }
+.ds-sprow .glyph { width: 20px; height: 20px; font-size: 10px; border-radius: 5px; flex: none; }
+.ds-sprow.dis { cursor: default; color: var(--t-muted); }
+.ds-sprow.dis .mi-pk { opacity: .45; }
+/* Manage › Sources */
+.ds-manage { margin-top: 6px; }
+.ds-manage > .st-sec:first-child { border-top: 0; padding-top: 14px; }
+.ds-mlist { display: flex; flex-direction: column; margin-top: 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); }
+.ds-mrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--divider); }
+.ds-mrow:first-child { border-top: 0; }
+.ds-mrow-t { display: flex; flex-direction: column; min-width: 0; }
+.ds-mrow-t b { font-weight: 600; font-size: var(--fs-sm); color: var(--t-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-mrow-t small { font-size: var(--fs-xs); color: var(--t-faint); }
+.ds-mrow-a { display: flex; gap: 6px; }
+@media (max-width: 640px) {
+  .ds-senddlg { width: 100%; }
+  .ds-mrow { grid-template-columns: 22px minmax(0, 1fr); }
+  .ds-mrow-a { grid-column: 2; }
+  .ds-csend { width: 30px; height: 30px; }
+  .ds-in { height: 40px; }
+  .mi-acts .um-item.m-only { display: flex; }
+  .mi-bar { gap: 6px; }
+  .mi-bar .th-back { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  .mi-bar .mi-acts { flex-wrap: nowrap; gap: 4px; }
+  .mi-bar .mi-acts .btn { padding: 0 7px; }
+}
+/* END dropped sources css */
+
+
+
+
+
+
+
+
+
+
+
 /* BEGIN question-trees css */
 /* ================= question trees (qt-) ================= */
 .qt-page { padding-bottom: 48px; }
@@ -2455,6 +2858,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
     </div>
+    <div class="knobs cs-knobs" aria-label="Sources controls">
+      <span class="cs-kt">Sources</span>
+      <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
+    </div>
   </div>
   <div class="frame">
     <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url" id="url"></div><div style="width:42px"></div></div>
@@ -2525,7 +2932,7 @@ const SPACES = [
   { id: 'ml', name: 'ml-papers', title: 'ML papers', av: 5, byok: 'mira_k', members: 3105, online: 188, posts: 940, used: 5.84e6, budget: 8e6, created: 'Sep 2026',
     desc: 'Paper summaries, replications, and arguments about benchmarks.',
     rules: ['Link the arXiv ID in the first line.', 'Say which results you checked yourself.'],
-    pages: [['Weekly digest', '2d'], ['Benchmark glossary', '3w']],
+    pages: [['Reading list', '2d'], ['Benchmark glossary', '3w']],
     mods: [['mira_k', 'admin']] },
   { id: 'bio', name: 'biology', title: 'Biology', av: 3, members: 980, online: 22, posts: 251, used: 3.28e6, budget: 8e6, created: 'Oct 2026',
     desc: 'Molecular and organismal biology questions, from mechanisms to field notes.',
@@ -2782,6 +3189,7 @@ function createThread(kind) {
   /* In a space with the FAQ landing, an ask takes the topic picked in the composer; otherwise the agent assigns one when it answers. */
   const tp = kind === 'ask' && faqOn(s) && topicsOf(s).some(t => t[0] === st.compTopic) ? st.compTopic : null;
   POSTS.push({ s: s.id, u: 'ines.v', mine: true, k: kind, t: null, q, sum: null, r: 0, tok: 0, age: 'now', likes: 0, running: kind === 'ask', kw: q, topic: tp, topicBy: tp ? 'asker' : null });
+  if (kind === 'ask') miAttachAsk(POSTS[POSTS.length - 1]);
   Object.assign(st, { thread: POSTS.length - 1, draft: '', compOpen: false, modal: null, clar: {}, home: false, savedPage: false, space: s.id, compTopic: null, tpMenu: null });
   if (kind === 'ask' && faqOn(s)) sfFinish(POSTS.length - 1);
 }
@@ -2814,12 +3222,13 @@ function csTabs() {
 }
 /* Banner: name (title when "Show as …" is on) and seal, description, and a meta line with visibility for
    closed spaces and the verified domain ("Verified line" control). On spaces with the FAQ landing the
-   "FAQ banner" control can make it compact or put the search box in it. The space tabs follow it. */
-const banner = (s, noCta) => {
-  const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
+   banner is compact. The space tabs follow it. */
+/* noTabs: the space tabs are placed by the layout (header across both columns) */
+const banner = (s, noCta, noTabs) => {
+  const bv = faqOn(s) ? 'compact' : 'full', tabs = noTabs ? '' : sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const mw = `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
-  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
+  const mw = canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs || noTabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
 const layoutSpace = () => {
@@ -2828,19 +3237,20 @@ const layoutSpace = () => {
   /* Tabs Threads and About: Threads shows the FAQ landing or the composer and feed; About is a page of
      its own. The wiki stays in the sidebar on both. */
   const tab = sfTabCur();
-  const body = tab === 'about' ? sfAbout(s) : faqOn(s) ? faqLanding(s) : `<div class="main">
+  const threads = faqOn(s) ? faqLanding(s) : `<div class="main">
         ${csSpaceStrips(s)}
         ${composer()}
         ${feedBar()}
         ${feed2(s.id)}
       </div>`;
-  const side = wikiDrawer(s);
-  return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}">
+  const body = tab === 'about' ? sfAbout(s) : threads;
+  /* Sources are in the sidebar, on the right or the left (dsSpaceParts). */
+  const x = dsSpaceParts(s, tab, body);
+  return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
     ${topHeader()}
-    <div class="body">
-      <div class="mcol">${banner(s)}
-      ${body}</div>
-      ${side}
+    <div class="body">${x.top || ''}
+      <div class="mcol">${x.mcol}</div>
+      ${x.side}
     </div></div>`;
 };
 L.b = layoutSpace;
@@ -2868,6 +3278,7 @@ function homeFeed() {
       ${joined.length ? `<div class="note-card"><div class="sk-head"><h3>Your spaces</h3></div><div class="sp-rows">${joined.map(spRow).join('')}</div></div>` : ''}
       <div class="note-card"><div class="sk-head"><h3>${joined.length ? 'More spaces' : 'Spaces'}</h3><button class="tlink" type="button" data-sub="browse">Browse all</button></div><div class="sp-rows">${(joined.length ? more : SPACES.filter(visibleSp)).map(spRow).join('')}</div></div>
       ${sug.length ? `<div class="note-card"><div class="sk-head"><h3>Closed spaces</h3>${LK('cs-lk', 'Closed spaces')}</div><p class="faint cs-small">Only members can read these. You can ask to join.</p>${sug.map(sugRow).join('')}</div>` : ''}
+      ${dsHomeCard()}
     </div></aside>
   </div>`;
 }
@@ -2921,7 +3332,7 @@ function savedFilters() {
   const ids = [...new Set([...st.saved].map(id => POSTS[id].s))];
   const chip = (k, l, n) => `<button type="button" data-sfilter="${k}" aria-pressed="${st.savedFilter === k}">${l}<small class="num">${n}</small></button>`;
   const vbtn = (k, icon, l) => `<button type="button" data-sview="${k}" aria-pressed="${st.savedView === k}" aria-label="${l}" title="${l}">${icon}</button>`;
-  return `<div class="sv-filters"><div class="sv-chips">${chip('all', 'All', st.saved.size)}${ids.map(id => chip(id, spName(sp(id)), [...st.saved].filter(x => POSTS[x].s === id).length)).join('')}</div><div class="seg sv-vsw">${vbtn('list', SVI.list, 'List view')}${vbtn('reader', SVI.reader, 'Reader view')}</div></div>`;
+  return `<div class="sv-filters"><div class="sv-chips">${chip('all', 'All', st.saved.size)}${st.miSaved.size ? chip('mi-items', 'Sources', st.miSaved.size) : ''}${ids.map(id => chip(id, spName(sp(id)), [...st.saved].filter(x => POSTS[x].s === id).length)).join('')}</div><div class="seg sv-vsw">${vbtn('list', SVI.list, 'List view')}${vbtn('reader', SVI.reader, 'Reader view')}</div></div>`;
 }
 
 function savedList(items) {
@@ -2940,7 +3351,7 @@ function savedReader(items) {
 function layoutSaved() {
   const items = savedItems(), v = st.savedView;
   const body = !st.saved.size ? `<p class="muted sv-empty">Nothing saved yet. Use the bookmark on any post to keep it here.</p>`
-    : v === 'reader' ? savedReader(items) : savedList(items);
+    : st.savedFilter === 'mi-items' ? miSavedList() : v === 'reader' ? savedReader(items) : savedList(items);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sv-page svp-${v}">
     <div class="sv-top"><div class="sv-title"><h2>Saved</h2><span class="faint num">${st.saved.size} thread${st.saved.size === 1 ? '' : 's'}</span></div><div class="search sv-search">${I.search}Search saved</div></div>
     ${savedFilters()}
@@ -2967,6 +3378,7 @@ const srcFor = p => SOURCES[POSTS.indexOf(p)] || SOURCES[p.s] || [];
 /* Every count of follow-ups or replies reads the same lists the thread page renders. */
 const replyCount = p => { const o = p.orig || p; return o.k === 'ask' ? fuFor(o).length : rpFor(o).length; };
 function answerHTML(p) {
+  if (p.running && p.about) return miRun(p);
   if (p.running) return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 18K tokens so far</span></div><ol class="run-steps"><li class="done">Read the question and planned 4 searches</li><li class="done">Searched the web and ${spName(sp(p.s))} threads</li><li class="cur">Reading 9 sources</li><li>Write the answer</li></ol></div>`;
   const src = srcFor(p);
   return `<div class="prose">${RICH[POSTS.indexOf(p)] || `<p>${esc(p.sum)}</p>`}</div>${src.length ? `<div class="srcs"><span class="ao-l">Sources</span>${src.map(d => `<span class="src">${d}</span>`).join('')}</div>` : ''}`;
@@ -2997,7 +3409,7 @@ const MODEL_NAME = 'Gemini 4 Argon';
 const creditHead = () => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer</div>`;
 function thDoc(p) {
   const fus = fuFor(p), rps = p.k === 'post' ? rpFor(p) : [], pid = POSTS.indexOf(p), am = modOf('a:' + pid), pm = modOf('p:' + pid);
-  return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${pm ? modPh('p:' + pid, 'post') : `<p class="th-q${p.k === 'post' ? ' th-post' : ''}" id="th-q">${esc(p.q)}</p>`}
+  return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : `<p class="th-q${p.k === 'post' ? ' th-post' : ''}" id="th-q">${esc(p.q)}</p>`}
       ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''}" id="th-a">${creditHead(p)}${am ? modPh('a:' + pid, 'answer') : answerHTML(p)}</section>` : ''}${thActs(p)}
       ${p.k === 'ask' ? `<section class="th-fus" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map((f, i) => fuCard(f, i, pid)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
@@ -3142,6 +3554,7 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
+  if (canRead(s)) return dsSideDrawer(s);
   return st.drawer
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
@@ -3178,7 +3591,7 @@ function rowHTML(p) {
   const q = `<a class="row-t row-link${ask ? '' : ' row-tp'}" href="#t${id}" data-open="${id}">${!ask && ms ? `Post ${ms} by a moderator.` : esc(p.q)}</a>`;
   const ans = ask ? `<span class="row-s">${p.running ? 'Researching…' : ms ? `Answer ${ms} by a moderator.` : esc(p.sum)}</span>` : '';
   const meta = `<span class="row-meta">${au(p.u)}<span>${p.age}</span>${p.tag ? `<button class="row-sp" type="button" data-space="${p.s}">${spTagTx(sp(p.s))}</button>` : ''}<span class="row-n num" aria-label="${nLbl}">${I.reply}${rc}</span></span>`;
-  return `<article class="row row-x row-rowsq row-i-lefttxt ${ask ? 'row-ask' : 'row-post'}" role="listitem" data-open="${id}">${k}<div class="row-m">${q}${ans}${meta}</div></article>`;
+  return `<article class="row row-x row-rowsq row-i-lefttxt ${ask ? 'row-ask' : 'row-post'}" role="listitem" data-open="${id}">${k}<div class="row-m">${q}${miRowChip(p)}${ans}${meta}</div></article>`;
 }
 function feed2(id, src) {
   let list = src || postsFor(id).map(p => ({ ...p, orig: p }));
@@ -3228,7 +3641,7 @@ function composer(force) {
   const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post">Post</button>`;
   const left = ask ? modelPicker() + (faqOn(s) ? tpPicker(s) : '') : '<span class="c2-note">Posts use no tokens.</span>';
   const off = s.postsOff ? `<span class="c2-note sf-pnote">Posts are turned off in ${spName(s)}. You can still reply to existing posts.</span>` : '';
-  return `<div class="composer open c2 c2v-bar">${closeB}${ta}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}${spaceSel}${submit}${off}</div></div>`;
+  return `<div class="composer open c2 c2v-bar">${closeB}${ta}${ask ? `<div id="mi-att" class="mi-att-w">${miAttHTML()}</div>` : ''}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}${spaceSel}${submit}${off}</div></div>`;
 }
 function homeTop() {
   const out = st.auth === 'out';
@@ -3260,8 +3673,9 @@ function thDocSrc(p) {
   let h = thDoc(p);
   if (p.k !== 'ask' || p.running || modOf('a:' + POSTS.indexOf(p))) return h;
   const src = srcItems(p);
-  h = h.replace(answerHTML(p), `<div class="prose">${ansBody(p)}</div><ol class="m-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>`);
-  const list = `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>`;
+  const mis = miSrc(p, src);
+  h = h.replace(answerHTML(p), `<div class="prose">${ansBody(p)}</div>${mis ? mis.m : `<ol class="m-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>`}`);
+  const list = mis ? mis.d : `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>`;
   h = h.replace('<div class="th-facts">', list + '<div class="th-facts">');
   return h;
 }
@@ -3271,7 +3685,7 @@ function thChat(p) {
   const um = (u, age, txt) => `<div class="ch-m ch-u">${avatar(u, 'sm')}<div><div class="ch-h">${au(u)}<span>${age}</span></div><p>${esc(txt)}</p></div></div>`;
   const pid = POSTS.indexOf(p), am = (html, foot, key) => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b>${key && modOf(key) !== 'removed' ? itemMenu(key) : ''}</div>${key && modOf(key) ? modPh(key, key[0] === 'a' ? 'answer' : 'follow-up answer') : html}${foot || ''}</div></div>`;
   const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Paid from<\/span><b>[^<]*<\/b><\/div>/, '');
-  const stream = `<div class="ch-stream">${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
+  const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
   return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}${relatedHTML(p)}</article>${aside}</div>`;
 }
 /* BEGIN part1 */
@@ -4267,6 +4681,8 @@ const KNOBDEF = () => [
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
+  ...MIKNOBS(),
+  ...DSKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -4712,7 +5128,7 @@ function ntItems() {
 }
 const ntUnread = () => ntItems().filter(x => x.unread).length;
 function ntItem(x) {
-  const icon = x.k === 'reqs' ? `<span class="nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="nt-ic">${SFI.flag}</span>` : avatar(x.u);
+  const icon = x.ic ? `<span class="nt-ic">${x.ic}</span>` : x.k === 'reqs' ? `<span class="nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="nt-ic">${SFI.flag}</span>` : avatar(x.u);
   const who = x.u && x.k !== 'declined' ? `<b>${x.u}</b> ` : '';
   const extra = x.k === 'invite' && !x.done ? `<span class="nt-acts"><button class="btn sm primary" type="button" data-ntinv="ok:${x.id}">Accept</button><button class="btn sm" type="button" data-ntinv="no:${x.id}">Decline</button></span>`
     : x.k === 'invite' ? `<span class="nt-done">${x.done}</span>`
@@ -4744,9 +5160,10 @@ function layoutManage() {
   const s = sp(st.mgSpace), cl = isClosed(s), n = reqCount(s.id), nr = repCount(s.id);
   /* Reports: open reports in this space, with a count. Settings: admins and the owner only. */
   const tabs = [...(cl && (s.policy === 'request' || n) ? [['requests', `Requests${n ? ` <span class="cs-n num">${n}</span>` : ''}`]] : []), ['reports', `Reports${nr ? ` <span class="cs-n num">${nr}</span>` : ''}`], ['members', `Members <span class="faint num">${fmt(s.members)}</span>`], ...(cl ? [['invites', 'Invites']] : []), ...(isAdminOf(s.id) ? [['settings', 'Settings']] : [])];
+  miMgTabs(s, tabs);
   if (!tabs.some(t => t[0] === st.mgTab)) st.mgTab = tabs[0][0];
   if (st.mgTab === 'reports') st.repSeen = true;
-  const body = { requests: csQueue, reports: csReports, members: csMembers, invites: csInvites, settings: csSettings }[st.mgTab](s);
+  const body = { requests: csQueue, reports: csReports, members: csMembers, invites: csInvites, settings: csSettings, sources: dsManagePage }[st.mgTab](s);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-mg cs-mg-${st.mgTab}"><div class="sub-top"><div class="ys-et"><button class="th-back" type="button" data-space="${s.id}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(s)}</button><h2>Manage</h2></div>${cl ? `<span class="cs-vis cs-vis-top">${s.vis === 'unlisted' ? CI.eyeOff : LOCK}${visLabel(s)}</span>` : ''}</div><div class="pf-tabs cs-mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mgtab="${k}" aria-selected="${st.mgTab === k}">${l}</button>`).join('')}</div>${body}</div></div>`;
 }
 /* review queue ("Review queue" control) */
@@ -5025,6 +5442,8 @@ function csModal() {
   if (k === 'cs-toclosed') return csVisDlg('closed', sp(st.mgSpace));
   if (k === 'cs-toopen') return csVisDlg('open', sp(st.mgSpace));
   if (k.startsWith('sf-')) return sfModal();
+  if (k.startsWith('mi-')) return miModal();
+  if (k.startsWith('ds-')) return dsModal();
   if (k === 'cs-share') {
     const p = POSTS[+a], sx = sp(p.s), url = `session.app/s/${sx.name}/t/${+a + 1000}`;
     const link = `<div class="cs-url"><input type="text" readonly value="${url}" aria-label="Thread link"><button class="btn" type="button" data-cssh="copy">Copy link</button></div><p class="cs-fine">${LOCK}<span>Only members of ${spName(sx)} can open this link. Other people see ${sx.vis === 'unlisted' ? 'a "not available" page' : "the space's join page"}.</span></p>`;
@@ -5040,6 +5459,7 @@ const csToast = () => st.toast ? `<div class="cs-toast-wrap"><div class="cs-toas
 /* ---------- page routing for the new screens ---------- */
 const CS_PAGES = { manage: layoutManage, create: layoutCreate, invite: layoutInvite, notifs: layoutNotifs, search: layoutSearch, csjoin: layoutJoinPage };
 function csUrl() {
+  { const u = miUrl(); if (u) return u; }
   if (st.subPage === 'manage') return `session.app/s/${sp(st.mgSpace).name}/manage/${st.mgTab}`;
   if (st.subPage === 'create') return 'session.app/spaces/new';
   if (st.subPage === 'invite') return `session.app/i/${st.invite.state === 'expired' ? 'p0Wd4' : 'rk7Q2'}`;
@@ -5061,6 +5481,8 @@ function csClick(t) {
   if (st.ntOpen && !t.closest('.nt-wrap')) { st.ntOpen = false; closed = true; }
   const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
   let b;
+  if (dsClick(t)) return true;
+  if (miClick(t)) return true;
   if (sfClick(t)) return true;
   if ((b = d('[data-cstoast]'))) { const v = b.dataset.cstoast; st.toast = null; if (v.startsWith('open:')) Object.assign(st, NAVBASE(), { space: v.slice(5) }); if (v.startsWith('undo:')) { const r = st.reqs.find(x => x.u === v.slice(5)); if (r) r.st = 'open'; } if (v === 'undo-link') st.links.unshift(st.linkGone); return go(); }
   if ((b = d('[data-csnotif]'))) {
@@ -5222,7 +5644,10 @@ function jump(k) {
   const repThread = () => POSTS.findIndex(p => p.s === 'replication' && p.k === 'ask');
   const pushN = n => { st.notifs = st.notifs.filter(x => x.k !== n.k || x.sp !== n.sp); st.notifs.unshift(n); };
   const role = k.split('-')[0];
+  st.dsSTab = null; /* each screen opens the sidebar on its default tab */
   if (role === 'sf') { sfJump(k); return; }
+  if (role === 'mi') { miJump(k); return; }
+  if (role === 'ds') { dsJump(k); return; }
   if (role === 'qt') { qtJump(k); return; }
   { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
   if (role === 'md') { R('mod'); if (!openReqs().length || k === 'md-queue' || k === 'md-decline') { st.reqs = structuredClone(REQS0); st.rqSel = new Set(); } }
@@ -5615,7 +6040,8 @@ function sfResolve(r, how) {
   toast(`${REP_DONE[how][0]}. ${who} a notification that the report was resolved.`, 'repundo:' + r.id, 'Undo');
 }
 
-/* ---------- space tabs: Threads / Wiki / About ("About and wiki" control) ---------- */
+/* ---------- space tabs: Threads / About ---------- */
+/* Tabs: Threads, About. Sources and the wiki are in the sidebar. */
 const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
   const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
@@ -5792,7 +6218,7 @@ function SFKNOBS() {
 JUMPS.push(
   ['FAQ landing', [['sf-faq', 'FAQ landing (Sablefield)'], ['sf-faq-match', 'FAQ landing: search with matches'], ['sf-faq-tried', 'FAQ landing: Ask with matches'], ['sf-faq-new', 'FAQ landing: no match, ask'], ['sf-faq-topic', 'FAQ landing: one topic'], ['sf-faq-latest', 'Latest view on an FAQ space'], ['sf-faq-out', 'FAQ landing, signed out']]],
   ['Topics and posts', [['sf-compose-topic', 'Topic picker in the composer'], ['sf-thread-topic', 'Thread: topic breadcrumb, change topic'], ['sf-posts-off', 'Posts turned off: space composer'], ['sf-posts-home', 'Posts turned off: Home composer'], ['sf-related', 'Related answers'], ['sf-related-open', 'Related answers in an open space']]],
-  ['Domain and About', [['sf-about', 'About (verified domain)'], ['sf-about-plain', 'About (no domain)'], ['sf-wiki', 'Wiki tab'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
+  ['Domain and About', [['sf-about', 'About (verified domain)'], ['sf-about-plain', 'About (no domain)'], ['sf-wiki', 'Wiki in the sidebar'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
   ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
   ['Settings', [['sf-settings', 'Sablefield settings'], ['sf-topics', 'Topic editor'], ['sf-landing-on', 'Turn on the FAQ landing'], ['sf-create', 'Create a space with the FAQ landing']]],
 );
@@ -5817,7 +6243,7 @@ function sfJump(k) {
     case 'sf-related-open': st.space = 'public'; st.thread = 0; setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'sf-about': st.spTab = 'about'; break;
     case 'sf-about-plain': st.space = 'scifi'; st.spTab = 'about'; break;
-    case 'sf-wiki': st.space = 'scifi'; st.spTab = 'threads'; st.drawer = true; st.mWiki = true; break;
+    case 'sf-wiki': st.space = 'scifi'; st.spTab = 'threads'; st.drawer = true; st.mWiki = true; st.dsSTab = 'wiki'; break;
     case 'sf-seal-closed': Object.assign(st, { home: true, pop: true }); break;
     case 'sf-dom-none': case 'sf-dom-checking': case 'sf-dom-ok': {
       const s = sp('replication'); setRel('replication', 'mod'); mg('settings', 'replication');
@@ -5840,6 +6266,1087 @@ function sfJump(k) {
     case 'sf-create': Object.assign(st, { subPage: 'create', cr: Object.assign(CR0(), { name: 'larkdown-help', desc: 'Questions about Larkdown, the open-source Markdown notes editor.', faq: true }) }); break;
   }
 }
+
+/* BEGIN media items js */
+/* ================= media items =================
+   Model. A media item is one record per original URL: an X post or thread (with quoted posts), an
+   article or newsletter post, a forum post, a podcast episode or a video. Session keeps a reader copy
+   (full text, the whole thread, or a transcript with timestamps) and its versions, and the item is
+   shared by every space that has it, so it is fetched and versioned once. In this copy the UI calls
+   an item a "source". A source reaches a space only when a member adds it there (see "dropped
+   sources" below); spaces do not subscribe to feeds.
+   Each source has a page with the reader copy. Asks about a source, a passage of it or several
+   sources are ordinary threads with an "About" card; sources appear in the Threads and Home feeds
+   only through such asks.
+   Authors, publications, benchmarks, papers and quotes are invented. */
+const MII = {
+  x: XL,
+  article: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.2h6M5 7.8h6M5 10.4h3.5"/></svg>',
+  forum: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h8v5.5h-4.5L3.5 11V9h-1z"/><path d="M10.5 6h3v5.5h-1V13.5l-2.5-2h-3V9"/></svg>',
+  audio: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="6" y="2" width="4" height="7.5" rx="2"/><path d="M3.8 7.5a4.2 4.2 0 0 0 8.4 0M8 11.7v2.3"/></svg>',
+  video: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="3.2" width="12.4" height="9.6" rx="2"/><path d="M6.6 5.9v4.2L10 8z" fill="currentColor"/></svg>',
+  feed: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 7.5a5.5 5.5 0 0 1 5.5 5.5M3 3a10 10 0 0 1 10 10"/><circle cx="3.8" cy="12.2" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  ext: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.8h4.2V7M13.2 2.8 7.5 8.5M11.5 9.5v3.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8V5.3a.8.8 0 0 1 .8-.8h3.2"/></svg>',
+  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9 4.3 3.3h7.4L13.5 9v3.7h-11z"/><path d="M2.5 9h3.2l.8 1.6h3l.8-1.6h3.2"/></svg>',
+  library: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3z"/><path d="m10.6 3.3 2.8-.7 2 10.6-2.8.6z" transform="translate(-1.2 .2)"/></svg>',
+  ask: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.2h11v7.3H7.2L4.2 13v-2.5H2.5z"/><path d="M8 5.2v3.2M6.4 6.8h3.2" stroke-linecap="round"/></svg>',
+  changed: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 6.2A5.2 5.2 0 0 0 3.6 4.4M3 9.8a5.2 5.2 0 0 0 9.4 1.8"/><path d="M3.4 2.4v2.4h2.4M12.6 13.6v-2.4h-2.4"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
+  lock: LOCK,
+  vote: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></svg>',
+  select: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="m5.3 8.2 1.9 1.9 3.6-3.8" stroke-linecap="round"/></svg>',
+  plus: PLUS,
+  pdf: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 2h6l3 3v9h-9z"/><path d="M9.5 2v3h3"/><path d="M5.6 8.6h4.8M5.6 11h3.2" stroke-linecap="round"/></svg>',
+  send: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.6 13.5 2.5 9.8 13.5 7.6 8.6z"/><path d="M7.6 8.6 13.5 2.5"/></svg>',
+  upload: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5V2.8M4.8 5.8 8 2.6l3.2 3.2"/><path d="M2.8 10v2.4c0 .5.4.9.9.9h8.6c.5 0 .9-.4.9-.9V10"/></svg>',
+  link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>',
+  more: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.6" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.4" cy="8" r="1.25"/></svg>',
+  side: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6 2.5v11"/></svg>',
+};
+/* Platforms. "kind" decides how the reader copy is laid out and how passages are labelled. */
+const MIPLAT = {
+  x: { n: 'X', ic: 'x' }, substack: { n: 'Substack', ic: 'article' }, lw: { n: 'LessWrong', ic: 'forum' },
+  pod: { n: 'Podcast', ic: 'audio' }, yt: { n: 'YouTube', ic: 'video' }, web: { n: 'Website', ic: 'article' },
+  docs: { n: 'Docs', ic: 'article' }, rss: { n: 'RSS', ic: 'feed' }, arxiv: { n: 'arXiv', ic: 'pdf' }, pdf: { n: 'PDF', ic: 'pdf' },
+};
+Object.assign(USERS, { 'tamsin_rook': 3, 'priya.venn': 6, 'quietmodel': 1 });
+/* Items. body blocks: { p } paragraph or post, { h } heading, { ts, sp, p } transcript segment,
+   q: quoted post. edited: an upstream edit of block b (old text kept). sp: spaces that have the source. */
+const MEDIA = [
+  { id: 'm1', pl: 'x', kind: 'thread', au: 'Tamsin Rook', h: '@tamsin_rook', date: 'Nov 15', age: '1d', len: '7 posts', tok: 1.4e3, sp: ['ml', 'replication'], url: 'x.com/tamsin_rook/status/18573',
+    sum: 'Reports near-duplicates in public data for 41% of RB-2 test problems, with the method and match list, and suggests reporting the clean 47% separately.',
+    body: [
+      { p: 'I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited this month, for contamination. Short version: a large share of the test set has close matches in public data. Thread.' },
+      { p: 'Method: I took the 1,200 test problems and searched three public web crawls and two code datasets for near-duplicates (13-gram overlap first, then manual review of every candidate).' },
+      { p: 'Result: 41% of problems have a near-duplicate with the same numbers and the same answer that was public before the benchmark was released. Another 12% match with the numbers changed.' },
+      { p: 'This does not show that any particular model trained on them. It shows that RB-2 scores cannot separate reasoning from recall without a decontaminated split.' },
+      { p: 'The maintainers say the set was written from scratch. Some of it clearly was. Some of it comes from a 2019 olympiad training forum, with the numbers intact.', q: { au: 'Orbit Lab', h: '@orbitlab_ai', t: 'RB-2 is a fresh set of 1,200 problems written from scratch by our team. No problem appears in prior public datasets.' } },
+      { p: 'The match list and the search script are in a public repository. Please check my manual review: I marked 31 borderline cases.' },
+      { p: 'If you report RB-2 numbers, consider also reporting the 47% of problems with no match. That subset ranks models in the same order, but the gaps between them shrink by about half.' },
+    ] },
+  { id: 'm2', pl: 'substack', kind: 'article', pub: 'Gradient Notes', au: 'Priya Venn', h: 'gradientnotes.substack.com', date: 'Nov 15', age: '1d', len: '9 min read', tok: 3.2e3, sp: ['ml', 'public'], url: 'gradientnotes.substack.com/p/where-test-time-compute-stops-paying',
+    t: 'Where test-time compute stops paying', desc: 'Accuracy per dollar rises steeply with longer reasoning on checkable tasks, then flattens. The flat part arrives earlier than most launch posts suggest.',
+    sum: 'Replots test-time scaling results as accuracy per dollar: the first tenfold increase in reasoning pays for itself on most tasks, the second on about half. Asks labs to publish accuracy at fixed spend.',
+    edited: { age: '3h', b: 6, old: 'In the numbers I collected, the best configuration reached 3.1 times the accuracy per dollar of the no-reasoning baseline on math, and 1.4 times on the knowledge-heavy subset. The math figure comes from the appendix table of the Halvorsen et al. scaling paper.' },
+    body: [
+      { p: 'Accuracy per dollar rises steeply with longer reasoning on checkable tasks, then flattens. The flat part arrives earlier than most launch posts suggest.' },
+      { h: 'The curve everyone shows' },
+      { p: 'Most reports on test-time compute plot accuracy against the number of reasoning tokens on a log scale. On competition math and unit-tested code the line rises for two or three orders of magnitude. It is the most persuasive chart in the field right now, and it leaves out the cost axis.' },
+      { p: 'If you replot the same numbers as accuracy per dollar, using list prices for the tokens, the picture changes. The first tenfold increase in reasoning length pays for itself on almost every task in the RB-2 suite. The second tenfold increase pays for itself on about half of them.' },
+      { h: 'Where it flattens' },
+      { p: 'The flat region starts where the model’s errors stop being search failures and start being knowledge failures. More sampling finds a correct proof if the model can check one; it does not supply a fact that the model never learned.' },
+      { p: 'In the numbers I collected, the best configuration reached 2.4 times the accuracy per dollar of the no-reasoning baseline on math, and 1.4 times on the knowledge-heavy subset. The math figure is computed from Table 3 of the Halvorsen et al. scaling paper. (Corrected from 3.1 times; see the note at the end.)' },
+      { p: 'Two things would move the flat region to the right: cheaper verification, and verifiers that can return “unknown”. Neither appears in a chart of token counts.' },
+      { h: 'What I would like labs to publish' },
+      { p: 'Accuracy at a fixed spend, not at a fixed token count. The length of a hidden reasoning trace is not a cost that customers can audit, and the price of those tokens differs between providers by a factor of four.' },
+      { p: 'Per-task breakdowns. An average over a suite that mixes checkable and knowledge-heavy tasks reports a mix of two different curves.' },
+      { p: 'Correction, Nov 16: an earlier version of this post gave 3.1 times for math. That was the ratio of accuracies at equal token budgets, not accuracy per dollar. Thanks to readers who pointed this out.' },
+    ] },
+  { id: 'm3', pl: 'lw', kind: 'article', pub: 'LessWrong', au: 'quietmodel', h: 'lesswrong.com', date: 'Nov 14', age: '2d', len: '6 min read', tok: 2.1e3, sp: ['ml'], url: 'lesswrong.com/posts/k3v9/thinking-tokens-are-not-a-unit-of-compute',
+    t: 'Thinking tokens are not a unit of compute', desc: 'Papers on test-time scaling treat a reasoning token as a fixed amount of work. It is not, and the difference changes some conclusions.',
+    sum: 'Argues that tokens are a poor x-axis for test-time scaling because their compute cost depends on model size, context length and sampling method; proposes reporting estimated FLOPs per problem as well.',
+    body: [
+      { p: 'Papers on test-time scaling put “reasoning tokens” on the x-axis as if a token were a fixed amount of work. It is not, and the difference changes some conclusions.' },
+      { p: 'A token from a small model and a token from a large one cost different amounts of compute. So do tokens generated late in a long context and early in a short one, because attention cost grows with context length.' },
+      { p: 'Parallel sampling, where the model writes 32 short answers and a verifier picks one, and sequential reasoning, where it writes one long trace, can use the same number of tokens and very different amounts of compute and latency.' },
+      { p: 'My proposal: report estimated FLOPs per problem, from model size and context length, next to token counts. It is a rough estimate, but it is comparable across methods.' },
+      { p: 'The objection I expect: FLOPs are not cost either, because hardware and batching differ. That is true. But FLOPs are a property of the method, and dollars are a property of the provider.' },
+    ] },
+  { id: 'm4', pl: 'pod', kind: 'audio', pub: 'Weights and Measures', au: 'Dara Okafor with Lin Feld', h: 'Episode 112', date: 'Nov 13', age: '3d', len: '1 h 12 min', tok: 18e3, sp: ['ml'], url: 'weightsandmeasures.fm/112',
+    t: 'Evals after saturation', desc: 'Lin Feld, who runs evaluation at a nonprofit lab, on what to do when benchmarks saturate, and why contamination should be the default assumption.',
+    sum: 'Lin Feld argues that saturated benchmarks mostly measure label errors, that contamination should be assumed until a benchmark shows otherwise, and that third parties should hold private test sets.',
+    body: [
+      { ts: '00:00', sp: 'Dara Okafor', p: 'This is Weights and Measures. My guest is Lin Feld, who runs the evaluation team at a nonprofit lab. Today: what to do when benchmarks saturate.' },
+      { ts: '03:40', sp: 'Lin Feld', p: 'A benchmark is saturated when most of the remaining errors are label errors. At that point a higher score tells you about the annotators, not the model.' },
+      { ts: '09:15', sp: 'Dara Okafor', p: 'How do you tell a model that is better from a model that has seen the test?' },
+      { ts: '09:30', sp: 'Lin Feld', p: 'You need held-out problems that did not exist when the model was trained. That is expensive, so most people do not do it.' },
+      { ts: '14:02', sp: 'Lin Feld', p: 'There is a paper from this spring that rewrote every problem in a math benchmark with new numbers and the same structure. Scores dropped between five and twenty points depending on the model. I think that is the clearest test we have.' },
+      { ts: '21:48', sp: 'Dara Okafor', p: 'Does that mean contamination is everywhere?' },
+      { ts: '22:05', sp: 'Lin Feld', p: 'It means we should assume it until a benchmark shows otherwise. The burden of proof should be on the benchmark, not on the people using it.' },
+      { ts: '38:10', sp: 'Lin Feld', p: 'The other thing I would like to see is private test sets held by a third party, the way exam boards hold exam papers.' },
+    ] },
+  { id: 'm5', pl: 'web', kind: 'article', pub: 'Orbit Lab blog', au: 'Orbit Lab', h: 'orbitlab.ai', date: 'Nov 15', age: '20h', len: '4 min read', tok: 1.3e3, sp: ['ml'], url: 'orbitlab.ai/blog/rb-2-response',
+    t: 'RB-2: our response to the contamination report', desc: 'The RB-2 maintainers agree with 298 of 492 reported matches and will release RB-2.1 on Dec 1.',
+    sum: 'The RB-2 maintainers agree with 298 of the 492 reported matches, dispute 194 that share only a standard setup, and will release RB-2.1 on Dec 1.',
+    body: [
+      { p: 'On Nov 15 an independent researcher reported that 41% of RB-2 test problems have near-duplicates in public data. We have reviewed the match list.' },
+      { p: 'We agree with 298 of the 492 reported matches. Most come from a set of problems that a contractor adapted from public sources without telling us. Checking for this was our job, and we did not do it.' },
+      { p: 'We do not agree with the other 194. In these cases the shared text is a standard problem setup, such as a probability question about drawing cards, and the questions differ in what they ask.' },
+      { p: 'We will publish RB-2.1 on Dec 1 with the 298 problems replaced, and a decontamination report for every problem. Scores on the original set stay on the leaderboard, marked as such.' },
+      { p: 'We thank Tamsin Rook for the report and for publishing the method.' },
+    ] },
+  { id: 'm6', pl: 'yt', kind: 'video', pub: 'Bayfront ML Workshop', au: 'Sam Iyer', h: 'youtube.com/@bayfrontml', date: 'Nov 12', age: '4d', len: '41 min', tok: 9.5e3, sp: ['ml'], url: 'youtube.com/watch?v=bf26-iyer',
+    t: 'Verifier-guided search, one year on', desc: 'Talk from the Bayfront ML Workshop 2026 on what a year of verifier-guided search results shows.',
+    sum: 'A talk arguing that verifier quality, not sampling budget, limits search on most tasks, with results where a better verifier beats 8x more samples.',
+    body: [
+      { ts: '00:40', sp: 'Sam Iyer', p: 'A year ago the question was how many samples to draw. The question now is how good the verifier is.' },
+      { ts: '06:15', sp: 'Sam Iyer', p: 'On our math tasks, improving the verifier’s precision from 80 to 92 percent did more than drawing eight times as many samples.' },
+      { ts: '17:30', sp: 'Sam Iyer', p: 'Where there is no reliable verifier, as in open-ended writing, search mostly finds answers that the verifier likes, not answers that are right.' },
+      { ts: '33:05', sp: 'Sam Iyer', p: 'My recommendation is to report verifier precision alongside every search result. Without it the sample count is hard to interpret.' },
+    ] },
+  { id: 'm7', pl: 'x', kind: 'post', au: 'Kestrel', h: '@kestrel_ml', date: 'Nov 13', age: '3d', len: '1 post', tok: 0.1e3, sp: ['ml'], by: 'sol', url: 'x.com/kestrel_ml/status/18561', deleted: 'Nov 14',
+    sum: 'Deleted by the author.', body: [{ p: '' }] },
+  { id: 'm8', pl: 'substack', kind: 'article', pub: 'Gradient Notes', au: 'Priya Venn', h: 'gradientnotes.substack.com', date: 'Nov 11', age: '5d', len: '14 min read', tok: 4.8e3, sp: ['ml'], url: 'gradientnotes.substack.com/p/workshop-notes', paid: 2,
+    t: 'Workshop notes: what the eval track agreed on', desc: 'Notes from the evaluation track at the Bayfront workshop. For paid subscribers.',
+    sum: 'Paid post. The free part lists the three sessions of the evaluation track.',
+    body: [
+      { p: 'The evaluation track at Bayfront had three sessions: contamination, verifier quality, and reporting standards. These are my notes from all three.' },
+      { p: 'The short version: people agreed on the problems and disagreed on who should fix them.' },
+      { h: 'Contamination' }, { p: '…' }, { p: '…' }, { h: 'Reporting standards' }, { p: '…' },
+    ] },
+  { id: 'm9', pl: 'x', kind: 'post', au: 'Tamsin Rook', h: '@tamsin_rook', date: 'Nov 15', age: '18h', len: '1 post', tok: 0.1e3, sp: ['ml'], url: 'x.com/tamsin_rook/status/18580',
+    sum: 'Says the maintainers replied and agreed with most of the matches; links their post.',
+    body: [{ p: 'The RB-2 maintainers replied. They agree with 298 of my 492 matches and dispute the rest. Their post is fair and I will go through the 194 again this week.' }] },
+  { id: 'm10', pl: 'lw', kind: 'article', pub: 'LessWrong', au: 'heldout', h: 'lesswrong.com', date: 'Nov 6', age: '10d', len: '5 min read', tok: 1.7e3, sp: ['ml'], url: 'lesswrong.com/posts/p7x2/three-kinds-of-contamination', by: 'hal_b',
+    t: 'Three kinds of benchmark contamination', desc: 'Exact copies, paraphrases and shared templates call for different checks.',
+    sum: 'Distinguishes exact copies, paraphrases and shared templates, and says that only the first two are usually checked.',
+    body: [
+      { p: 'Contamination checks usually look for exact copies. There are at least three kinds of contamination, and they need different checks.' },
+      { p: 'Exact copies are found with n-gram overlap. Paraphrases need embedding search and manual review. Shared templates, where only the numbers change, need a structural comparison that almost nobody runs.' },
+      { p: 'Whether a shared template counts as contamination depends on what the benchmark claims to measure. If it claims to measure reasoning, it does.' },
+    ] },
+  /* not in any space yet: used by the drop, paste and send flows */
+  { id: 'm11', pl: 'arxiv', kind: 'article', pub: 'arXiv', au: 'Achebe and Lund', h: 'arxiv.org', date: 'Apr 2', age: '7mo', len: 'Paper, 18 pages', tok: 14e3, sp: [], url: 'arxiv.org/abs/2604.0981',
+    t: 'Same structure, new numbers: rewriting math benchmarks to test for contamination', desc: 'Rewrites every problem of a math benchmark with new numbers and the same structure; scores drop by 4 to 19 points.',
+    sum: 'Rewrites every problem of a math benchmark with new numbers and the same structure. Scores drop by 4 to 19 points depending on the model.',
+    body: [{ p: 'We rewrite every problem of a public math benchmark with new numbers while keeping its structure, and evaluate 11 models on both versions.' }, { h: 'Results' }, { p: 'Scores drop by 4 to 19 points. The drop is largest for the models whose training data overlaps most with public problem collections.' }, { p: 'Rewriting costs about two hours of annotator time per hundred problems and needs no access to training data.' }] },
+  { id: 'm12', pl: 'x', kind: 'post', au: 'Lin Feld', h: '@lin_feld', date: 'Nov 16', age: '2h', len: '1 post', tok: 0.1e3, sp: [], url: 'x.com/lin_feld/status/18590',
+    sum: 'Says that rewriting problems with new numbers is the cheapest contamination test available.',
+    body: [{ p: 'Rewriting benchmark problems with new numbers is the cheapest contamination test we have. It needs no access to training data, and it would have caught most of RB-2.' }] },
+  /* #replication-club items */
+  { id: 'r1', pl: 'substack', kind: 'article', pub: 'Lab Notes', au: 'Ana Ruiz', h: 'labnotes.substack.com', date: 'Nov 15', age: '1d', len: '7 min read', tok: 2.3e3, sp: ['replication'], url: 'labnotes.substack.com/p/spindles',
+    t: 'Sleep spindles and a 30% recall effect', desc: 'A new study reports that people with more sleep spindles recall 30% more word pairs. The sample is 24 people.',
+    sum: 'Reports a 30% recall advantage for people with more sleep spindles, from a study of 24 participants with no preregistration.',
+    body: [{ p: 'A study published this week reports that people with more sleep spindles in the night after learning recalled 30% more word pairs the next morning.' }, { p: 'The sample was 24 university students, and the analysis was not preregistered. The authors split participants at the median spindle count.' }, { p: 'The data and analysis code are public, which makes this a good candidate for a re-analysis before anyone runs a new study.' }] },
+  { id: 'r2', pl: 'x', kind: 'thread', au: 'Pat Reyes', h: '@prereg_pat', date: 'Nov 14', age: '2d', len: '3 posts', tok: 0.4e3, sp: ['replication'], url: 'x.com/prereg_pat/status/18555',
+    sum: 'Says the national savings survey revised its weights and that default-enrolment estimates should be re-run.',
+    body: [{ p: 'The national savings survey revised its weights last month. Every default-enrolment estimate that uses it should be re-run.' }, { p: 'The revision mostly changes the weights for part-time workers, who are the group most affected by default enrolment.' }, { p: 'I expect effects to shrink a little, not disappear. Happy to be wrong.' }] },
+  { id: 'r3', pl: 'lw', kind: 'article', pub: 'LessWrong', au: 'stepwise', h: 'lesswrong.com', date: 'Nov 13', age: '3d', len: '8 min read', tok: 2.6e3, sp: ['replication'], url: 'lesswrong.com/posts/g1r2/grokking-on-one-gpu',
+    t: 'I re-ran the grokking result on one GPU', desc: 'Four of six settings reproduce. The two largest models need about three times the reported steps.',
+    sum: 'An independent re-run of the modular-arithmetic grokking result: four of six settings reproduce; the largest models need about 3x the steps.',
+    body: [{ p: 'I re-ran the main table of the modular-arithmetic grokking paper with the released code on one consumer GPU.' }, { p: 'Four of the six settings reproduce within the reported error bars. The two largest models need about three times the stated number of steps before test accuracy jumps.' }, { p: 'I have not found the reason. The learning-rate schedule in the code differs from the one in the paper, which is my first guess.' }] },
+  { id: 'r4', pl: 'rss', kind: 'article', pub: 'OpenArchive', au: 'Mendel, Osei, Varga et al.', h: 'openarchive.org', date: 'Nov 15', age: '12h', len: 'Preprint, 22 pages', tok: 11e3, sp: ['replication'], url: 'openarchive.org/abs/2611.0412',
+    t: 'Anchoring effects in online samples: a 12-lab test', desc: 'A preregistered test of a classic anchoring effect in 12 labs, with 6,100 online participants.',
+    sum: 'A preregistered 12-lab test of a classic anchoring effect with 6,100 online participants finds an effect about 40% of the original size.',
+    body: [{ p: 'We tested a classic anchoring effect in 12 labs with 6,100 participants recruited online. The protocol and analysis were preregistered.' }, { p: 'The pooled effect was about 40% of the originally reported size, and it varied between labs more than sampling error predicts.' }, { p: 'Materials, data and code are available on the project page.' }] },
+];
+const MIT = id => MEDIA.find(m => m.id === id) || (st.miAdded || []).find(m => m.id === id);
+const miTitle = m => { if (m.t) return m.t; const p = m.body[0].p || `Post by ${m.h}`, s1 = (p.match(/^.+?[.?!](?=\s|$)/) || [p])[0]; return s1.length <= 110 ? s1 : clip(p, 90); };
+/* Passage labels: articles count paragraphs (¶3), threads count posts (3/7), audio and video use the timestamp. */
+function miLbl(m, i) {
+  const b = m.body[i]; if (!b) return '';
+  if (b.ts) return b.ts;
+  const n = m.body.slice(0, i + 1).filter(x => !x.h).length;
+  return m.kind === 'thread' ? `${n}/${m.body.length}` : '¶' + n;
+}
+const miLblLong = (m, i) => { const b = m.body[i]; return b.ts ? b.ts : m.kind === 'thread' ? `post ${miLbl(m, i).split('/')[0]}` : `paragraph ${miLbl(m, i).slice(1)}`; };
+const miIc = (m, cls = '') => `<span class="mi-ic mi-k-${m.kind}${cls ? ' ' + cls : ''}" title="${MIPLAT[m.pl].n}">${MII[MIPLAT[m.pl].ic]}</span>`;
+const miByline = m => `${esc(m.au)}${m.h && m.pl === 'x' ? ` <span class="faint">${esc(m.h)}</span>` : ''}`;
+const miSrcLine = m => `${MIPLAT[m.pl].n}${m.pub && m.pub !== m.au && m.pub !== MIPLAT[m.pl].n ? ' · ' + esc(m.pub) : ''}`;
+/* Passage citation marker used inside answers. */
+const MC = (id, b) => { const m = MIT(id); return `<sup class="cite mi-cite" data-miref="${id}:${b}" title="${esc(miTitle(m))}, ${miLblLong(m, b)}">${miLbl(m, b)}</sup>`; };
+const MCX = (id, b) => { const m = MIT(id); return `<sup class="cite mi-cite mi-cx" data-miref="${id}:${b}" title="${esc(miTitle(m))}, ${miLblLong(m, b)}">${esc((m.body[b].sp || m.au).split(' ')[0])} ${miLbl(m, b)}</sup>`; };
+
+/* Asks about items. about: { it, b } passage, { it } whole item, { its } several items. */
+const MI_ASKS = [
+  { rf: 'mia1', s: 'ml', u: 'jun.park', k: 'ask', q: 'Is the 3.1x figure in this paragraph right? It says it comes from the appendix table of Halvorsen et al.', about: { it: 'm2', b: 6 }, sum: 'The appendix table gives accuracy and token counts, not cost. Converted at the article’s own prices, the best math configuration is about 2.4x, not 3.1x.', r: 1, tok: 46e3, age: '5h', likes: 14 },
+  { rf: 'mia2', s: 'ml', u: 'hal_b', k: 'ask', q: 'Which of the contamination claims in this thread has anyone else checked?', about: { it: 'm1' }, sum: 'Orbit Lab confirmed 298 of the 492 matches and where the adapted problems came from. Nobody else has checked the claim about the clean subset yet.', r: 2, tok: 58e3, age: '14h', likes: 21 },
+  { rf: 'mia3', s: 'ml', u: 'mira_k', k: 'ask', q: 'Where do the thread and Orbit Lab’s response disagree, and what evidence does each give?', about: { its: ['m1', 'm5'] }, sum: 'They agree on 298 matches. They disagree on 194 that share a standard problem setup: the thread counts them as contamination, Orbit Lab does not.', r: 1, tok: 52e3, age: '10h', likes: 17 },
+  { rf: 'mia4', s: 'ml', u: 'oduya', k: 'ask', q: 'Which paper is Lin Feld describing here?', about: { it: 'm4', b: 4 }, sum: 'Probably “Same structure, new numbers” (Achebe and Lund, 2026), which reports drops of 4 to 19 points. Feld rounds this to five to twenty.', r: 1, tok: 31e3, age: '2d', likes: 9 },
+  { rf: 'mia5', s: 'ml', u: 'lettie', k: 'ask', q: 'What would it take to report FLOPs per problem the way this post proposes, for a closed model?', about: { it: 'm3', b: 3 }, sum: 'For a closed model the parameter count and context handling are not public, so FLOPs can only be bounded. Two papers estimate them from latency and price; both give ranges of about 3x.', r: 1, tok: 39e3, age: '1d', likes: 8 },
+  { rf: 'mia6', s: 'replication', u: 'lettie', k: 'ask', q: 'Re-run the near-duplicate search from the published script on a random sample of 200 problems and compare with the reported matches.', about: { it: 'm1' }, sum: 'On 200 sampled problems the script reproduces 79 of the 82 reported matches. The three differences are borderline cases from the manual review.', r: 1, tok: 88e3, age: '8h', likes: 6 },
+];
+POSTS.push(...MI_ASKS);
+/* Answers to the item asks. MC() marks a passage of the item; numbered markers are web sources (SRCD). */
+const MI_RICH = {
+  mia1: () => `<p>Not as stated. The paragraph gives 3.1 times the accuracy per dollar of the no-reasoning baseline on math and attributes the figure to the appendix table of Halvorsen et al. ${MC('m2', 6)}</p>
+<p>That table reports accuracy and the number of reasoning tokens for each configuration, not cost. <sup class="cite">1</sup> Converting the token counts with the list prices the article uses earlier ${MC('m2', 3)} gives about 2.4 times for the best math configuration. 3.1 is the ratio of accuracies at equal token budgets, which is a different quantity. <sup class="cite">1</sup></p>
+<p>The knowledge-heavy figure of 1.4 times is consistent with the same table under either reading. <sup class="cite">1</sup> The argument of the article does not depend on the exact math figure: the flat region it describes ${MC('m2', 5)} appears with 2.4 as well.</p>`,
+  mia2: () => `<p>The thread makes three checkable claims. Two have been checked by the benchmark maintainers; one has not been checked by anyone else yet.</p>
+<table><thead><tr><th>Claim</th><th>Checked by</th><th>Result</th></tr></thead><tbody>
+<tr><td>41% of problems have a public near-duplicate ${MC('m1', 2)}</td><td>Orbit Lab ${MCX('m5', 1)}</td><td>Agree with 298 of 492 matches; dispute 194</td></tr>
+<tr><td>Some problems come from a 2019 olympiad forum ${MC('m1', 4)}</td><td>Orbit Lab ${MCX('m5', 1)}</td><td>Confirmed: a contractor adapted public problems</td></tr>
+<tr><td>The 47% with no match keeps the model ranking ${MC('m1', 6)}</td><td>Nobody yet</td><td>The match list is public, so this can be checked <sup class="cite">1</sup></td></tr>
+</tbody></table>
+<p>The search script reproduces on the author’s published match list. <sup class="cite">1</sup> No independent re-run has been published so far. <sup class="cite">2</sup></p>`,
+  mia3: () => `<p>Both sides agree on the 298 matches that came from adapted public problems. ${MCX('m5', 1)} The disagreement is about the remaining 194.</p>
+<h4>What each side says</h4>
+<ul><li>The thread counts a problem as contaminated when a public problem has the same numbers and the same answer. ${MCX('m1', 2)}</li><li>Orbit Lab says the 194 share only a standard setup, such as drawing cards, and ask different questions. ${MCX('m5', 2)}</li></ul>
+<h4>Evidence</h4>
+<p>The thread publishes the match list and the script, with 31 borderline cases marked for review. ${MCX('m1', 5)} The response does not publish its own review of the 194; it says a per-problem decontamination report will come with RB-2.1 on Dec 1. ${MCX('m5', 3)}</p>
+<p>Until that report is out, the 194 cannot be checked from Orbit Lab’s side. The match list is enough to sample them. <sup class="cite">1</sup></p>`,
+  mia4: () => `<p>Probably “Same structure, new numbers” by Achebe and Lund (2026). It rewrote every problem of a math benchmark with new numbers and the same structure, as Feld describes. ${MC('m4', 4)} <sup class="cite">1</sup></p>
+<p>The paper reports drops of 4 to 19 points across the models it tested. <sup class="cite">1</sup> Feld rounds this to between five and twenty. No other paper from this spring matches the description. <sup class="cite">2</sup></p>`,
+  mia5: () => `<p>For a closed model, FLOPs per problem cannot be computed as the post proposes ${MC('m3', 3)}, because the parameter count and how the context is processed are not published.</p>
+<p>Two papers bound it instead: one from measured latency on known hardware, one from the price per token. <sup class="cite">1</sup> <sup class="cite">2</sup> Both give ranges of about three times, which is still enough to separate parallel sampling from long sequential traces ${MC('m3', 2)}.</p>`,
+  mia6: () => `<p>On a random sample of 200 problems, the published script reproduces 79 of the 82 matches reported for those problems. ${MC('m1', 5)} <sup class="cite">1</sup></p>
+<p>The three differences are problems that the author marked as borderline in the manual review. The sample is consistent with the 41% figure ${MC('m1', 2)}.</p>`,
+};
+const MI_SRCD = {
+  mia1: [['Scaling test-time search (Halvorsen et al.), Table 3 and appendix C', 'arxiv.org', '']],
+  mia2: [['rb2-matches: match list and search script', 'github.com', ''], ['Search: RB-2 contamination replication', 'web search', '']],
+  mia3: [['rb2-matches: match list and search script', 'github.com', '']],
+  mia4: [['Same structure, new numbers (Achebe and Lund, 2026)', 'arxiv.org', ''], ['Search: rewritten math benchmark new numbers 2026', 'web search', '']],
+  mia5: [['Estimating inference FLOPs from latency (Ortiz, 2026)', 'arxiv.org', ''], ['What does a reasoning token cost? (Nakamura, 2026)', 'arxiv.org', '']],
+  mia6: [['rb2-matches: match list and search script', 'github.com', '']],
+};
+Object.keys(MI_RICH).forEach(k => { const i = sfIdx(k); if (i >= 0) { RICH[i] = MI_RICH[k](); SRCD[i] = MI_SRCD[k]; } });
+/* two replication-club threads are asks about items */
+{ const p = POSTS.find(x => x.s === 'replication' && /Default enrolment/.test(x.t || '')); if (p) p.about = { it: 'r2' }; }
+{ const p = POSTS.find(x => x.s === 'replication' && /grokking/.test(x.t || '')); if (p) p.about = { it: 'r3' }; }
+const MI_TPL = {
+  replication: ['Check the main claim against the published data.', 'Plan a replication: data, code and the sample size needed.', 'Find earlier replications of this result.'],
+  ml: ['Is this claim supported by its sources?', 'What does this cite, and does the source say the same?', 'Who disagrees with this, and why?', 'Explain this passage.'],
+  public: ['Summarize the main claims and the evidence for each.', 'Who disagrees with this, and why?'],
+};
+/* item-level notifications used by the jumps */
+const MI_NOTIF = {
+  edited: { id: 'mi-n-edit', k: 'mi', ic: MII.changed, age: '3h', unread: true, open: 'item:m2:6', text: 'Priya Venn edited <b>Where test-time compute stops paying</b>, a source you saved. One ask quotes the paragraph that changed.' },
+  ask: { id: 'mi-n-ask', k: 'mi', u: 'jun.park', age: '5h', unread: true, open: 'thread:mia1', text: 'asked about <b>Where test-time compute stops paying</b>, a source you saved' },
+};
+
+/* ---------- helpers ---------- */
+const miRefs = p => !p.about ? [] : p.about.its ? p.about.its : [p.about.it];
+/* asks about an item in spaces the viewer can read */
+const miAsksOf = id => POSTS.map((p, i) => ({ p, i })).filter(({ p }) => p.about && miRefs(p).includes(id) && canRead(sp(p.s)));
+const miTok = n => n >= 1e3 ? fmt(n) : Math.round(n / 100) * 100 || 100;
+const miIsAdmin = sid => isAdminOf(sid);
+/* No Items tab: a space's sources are listed in the sidebar and the full list (see dropped sources). */
+function miUrl() {
+  if (st.subPage !== 'mitem') return null;
+  const m = MIT(st.miItem); if (!m) return null;
+  const hash = st.miHi != null ? '#' + miLbl(m, st.miHi).replace(/[^0-9a-z:]/gi, '') : '';
+  return `session.app/source/${m.url.split('/').pop()}${hash}`;
+}
+CS_PAGES.mitem = () => miItemPage();
+/* ---------- shared pieces ---------- */
+const miRest = m => { const t = miTitle(m), p = m.body[0].p || ''; return t.endsWith('…') ? p : p.slice(t.length).trim(); };
+const miPlain = h => h.replace(/<sup[\s\S]*?<\/sup>/g, '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
+const miMini = (m, extra = '', attrs = '') => `<div class="mi-mini"${attrs}>${miIc(m)}<span class="mi-mini-tx"><b>${esc(miTitle(m))}</b><span>${esc(m.au)} · ${miSrcLine(m)} · ${m.date}</span></span>${extra}</div>`;
+/* open an item on its page */
+const miOpenAttr = (m, b) => `data-miopen="${m.id}${b != null ? ':' + b : ''}"`;
+/* In selection mode an item toggles its selection; otherwise it opens. */
+const miPickBox = m => st.miPickMode ? `<span class="mi-pk${st.miPick.includes(m.id) ? ' on' : ''}" aria-hidden="true">${I.check}</span>` : '';
+const miItemAttr = (m, pick, open) => st.miPickMode && pick ? `data-mipick="${m.id}" role="checkbox" aria-checked="${st.miPick.includes(m.id)}"` : open || miOpenAttr(m);
+/* Source unit in Saved (Plain rows): source, author and age, title and excerpt, plus an
+   unread dot at the top right. Statuses (edited, deleted, paid) are on the source page. o.extra goes
+   under the text (who added the source, the note, asks); o.unread and o.cls override the defaults. */
+const miExcerpt = m => m.deleted ? '' : m.desc || (m.t ? m.body.find(b => b.p).p : miRest(m));
+function miUnit(m, o = {}) {
+  const unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
+  const pick = o.pick ? miPickBox(m) : '', ex = miExcerpt(m), on = st.miPickMode && o.pick && st.miPick.includes(m.id);
+  const src = `<span class="mi-u-src">${miByline(m)}<span class="faint">· ${miSrcLine(m)} · ${m.age}</span></span>`;
+  const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : '';
+  const body = `${src}${t}${x}`;
+  const ic = miIc(m, 'mi-u-ic');
+  return `<article class="mi-u${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}${o.extra || ''}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+}
+const miRow = (m, o = {}) => miUnit(m, o);
+/* Social feed unit (full list, sidebar list): every source in a social-post shape. X posts read as posts: avatar,
+   name and handle, the full first post, a quoted post as an inset box and the thread length. */
+const miDomain = m => m.url.split('/')[0];
+const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
+const miPostHead = m => `<span class="mi-p-h"><b>${esc(m.au)}</b><span class="faint">${esc(m.h)}</span><span class="faint">· ${m.age}</span>${m.kind === 'thread' ? `<span class="mi-p-th num" title="Thread of ${m.body.length} posts">1/${m.body.length}</span>` : ''}</span>`;
+const miPostText = m => { const b = m.body[0]; return `${m.deleted ? '<p class="mi-p-t faint">This post is unavailable.</p>' : `<p class="mi-p-t">${esc(b.p)}</p>`}${b.q && !m.deleted ? `<div class="mi-p-q"><span class="mi-p-qh">${avatar(b.q.h.slice(1), 'sm')}<b>${esc(b.q.au)}</b><span class="faint">${esc(b.q.h)}</span></span><p>${esc(b.q.t)}</p></div>` : ''}`; };
+const miAV = m => m.kind === 'audio' || m.kind === 'video';
+function miUnit2(m, o) {
+  const unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
+  const pick = o.pick ? miPickBox(m) : '', on = st.miPickMode && o.pick && st.miPick.includes(m.id), ex = miExcerpt(m);
+  let inner;
+  if (m.pl === 'x') inner = `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
+  else inner = `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-p-h"><b>${esc(m.pub && m.pub !== m.au && !miAV(m) ? m.pub : m.au)}</b><span class="faint">· ${m.age}</span></span><div class="mi-lp"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b>${miAV(m) ? `<span class="mi-lp-m faint">${MII[MIPLAT[m.pl].ic]}${esc(m.pub || m.au)}</span>` : ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div></div>`;
+  return `<article class="mi-u mi-u2${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${inner}${o.extra || ''}${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+}
+function miHead(m, big = true, noVia) {
+  const d = typeof dsDropOf === 'function' ? dsDropOf(st.space, m.id) : null;
+  const via = noVia ? '' : d ? `Added by ${esc(d.by === ME.u ? 'you' : d.by)} ${d.age === 'now' ? 'just now' : d.age + ' ago'}` : '';
+  return `<header class="mi-head"><div class="mi-src">${miIc(m)}<span>${miSrcLine(m)}</span>${m.ver ? `<span class="mi-ver" title="From the verified domain">${SEAL}</span>` : ''}${via ? `<span class="faint mi-via">${via}</span>` : ''}</div>${m.t ? `<h1 class="mi-title${big ? '' : ' sm'}">${esc(m.t)}</h1>` : ''}<div class="mi-by">${avatar(m.h && m.h.startsWith('@') ? m.h.slice(1) : m.au, 'sm')}<span>${miByline(m)}</span><span class="faint mi-via">${m.date} · ${m.len}</span></div></header>`;
+}
+/* Opens the original; icon only, the label is in the tooltip. */
+const miOrigBtn = (m, cls = 'btn sm mi-orig') => `<a class="${cls}" href="#" onclick="return false" title="${m.pl === 'x' ? 'Open on X' : m.pl === 'yt' ? 'Watch on YouTube' : m.pl === 'pod' ? 'Listen' : m.pl === 'substack' ? 'Read on Substack' : m.pl === 'lw' ? 'Read on LessWrong' : 'Open the original'}: ${esc(m.url)}" aria-label="${m.pl === 'x' ? 'Open on X' : m.pl === 'yt' ? 'Watch on YouTube' : m.pl === 'pod' ? 'Listen' : m.pl === 'substack' ? 'Read on Substack' : m.pl === 'lw' ? 'Read on LessWrong' : 'Open the original'}">${MII.ext}</a>`;
+const miSaveBtn = m => `<button class="btn sm" type="button" data-misave="${m.id}" aria-pressed="${st.miSaved.has(m.id)}">${I.mark}${st.miSaved.has(m.id) ? 'Saved' : 'Save'}</button>`;
+/* edited / deleted / paid notes above the reader copy */
+function miStateNote(m) {
+  if (m.deleted) {
+    const n = miAsksOf(m.id).length;
+    return `<div class="mi-note bad">${MII.trash}<div><b>The author deleted this post on ${m.deleted}.</b><p>Session removed its reader copy and stopped showing it to the agent. ${n ? `Quotes of it in ${n} thread${n === 1 ? '' : 's'} were replaced with a note.` : 'No thread quoted it.'} The record stays so that links to it keep working.</p></div></div>`;
+  }
+  if (m.edited) {
+    const n = miAsksOf(m.id).filter(x => x.p.about.b === m.edited.b && ageMin(x.p.age) > ageMin(m.edited.age)).length;
+    return `<div class="mi-note">${MII.changed}<div><b>The author edited ${miLblLong(m, m.edited.b)} ${m.edited.age.includes(' ') ? 'on ' + m.edited.age : m.edited.age + ' ago'}.</b><p>${n ? `${n} ask${n === 1 ? ' quotes' : 's quote'} the earlier text. ` : ''}Session keeps both versions.</p></div><button class="btn sm" type="button" data-midiff="1" aria-pressed="${!!st.miDiff}">${st.miDiff ? 'Hide changes' : 'Show changes'}</button></div>`;
+  }
+  if (m.paid) return `<div class="mi-note">${LOCK}<div><b>Paid post on ${esc(m.pub)}.</b><p>Session shows and reads only the free part. The rest is for paid subscribers on ${MIPLAT[m.pl].n}.</p></div></div>`;
+  return '';
+}
+const miHl = (txt, q) => { const t = esc(txt); if (!q) return t; const e = esc(q.trim()); const k = t.indexOf(e); return k < 0 ? t : t.slice(0, k) + `<mark class="mi-hl">${e}</mark>` + t.slice(k + e.length); };
+/* Reader copy. o.byB: asks by block (marked with a thin rule);
+   o.ask: passages can be selected and asked about. */
+function miReader(m, o = {}) {
+  const byB = o.byB || {}, paidCut = m.paid ? m.body.findIndex((b, i) => i >= m.paid) : -1;
+  const out = [];
+  for (let i = 0; i < m.body.length; i++) {
+    const b = m.body[i];
+    if (paidCut >= 0 && i >= paidCut) { out.push(`<div class="mi-paywall">${LOCK}<span>The rest of this post is for paid subscribers of ${esc(m.pub)}.</span></div>`); break; }
+    if (b.h) { out.push(`<h3 class="mi-h">${esc(b.h)}</h3>`); continue; }
+    const asks = byB[i] || [], sel = o.ask && st.miSel === i, hi = st.miHi === i;
+    const diff = st.miDiff && m.edited && m.edited.b === i;
+    const txt = diff ? `<del>${esc(m.edited.old)}</del> <ins>${esc(b.p)}</ins>` : miHl(b.p, sel ? st.miQuote : '');
+    const gut = b.ts ? `<span class="mi-gl num">${b.ts}</span>` : m.kind === 'thread' ? `<span class="mi-gl num">${miLbl(m, i)}</span>` : '';
+    const q = b.q ? `<div class="mi-qt">${XL}<div><b>${esc(b.q.au)}</b> <span class="faint">${esc(b.q.h)}</span><p>${esc(b.q.t)}</p></div></div>` : '';
+    const ab = o.ask ? `<button class="mi-bask" type="button" data-miask="b:${i}" aria-label="Ask about ${miLblLong(m, i)}" title="Ask about this passage">${MII.ask}</button>` : '';
+    const pop = sel ? `<div class="mi-selpop" role="toolbar" aria-label="Selected passage"><button class="btn sm primary" type="button" data-miask="b:${i}">${MII.ask}Ask about this passage</button><button class="btn sm" type="button" data-micopy="${i}">${CI.link}Copy link</button><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button></div>` : '';
+    out.push(`<div class="mi-b${asks.length ? ' has-asks' : ''}${sel ? ' sel' : ''}${hi ? ' hi' : ''}${b.ts ? ' mi-seg' : ''}${m.kind === 'thread' ? ' mi-post' : ''}" id="mib-${i}" data-mib="${i}">${gut}<div class="mi-bt">${b.sp ? `<b class="mi-spk">${esc(b.sp)}</b>` : ''}<p>${txt}</p>${q}</div>${ab}${pop}</div>`);
+  }
+  return `<div class="mi-reader mi-r-${m.kind}${o.ask ? ' askable' : ''}">${out.join('')}</div>`;
+}
+const miScopeLbl = (p, m) => p.about.its ? `${p.about.its.length} sources` : p.about.b != null && p.about.it === m.id ? miLbl(m, p.about.b) : 'Whole source';
+function miAskCard({ p, i }, m) {
+  const ans = p.running ? '<span class="faint">Researching…</span>' : esc(clip(p.sum || '', 220));
+  return `<article class="mi-ac" data-open="${i}"><div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${m ? `<span class="mi-scope">${miScopeLbl(p, m)}</span>` : ''}${p.s !== st.space ? `<span class="mi-scope">${isClosed(sp(p.s)) ? LOCK : ''}${spName(sp(p.s))}</span>` : ''}</div><a class="mi-ac-q row-link" href="#t${i}" data-open="${i}">${esc(p.q)}</a><div class="mi-ac-a"><span class="agent">${I.agent}</span><p>${ans}</p></div></article>`;
+}
+function miAlsoIn(m) {
+  const list = m.sp.map(sp).filter(x => x && canRead(x));
+  if (list.length < 2) return '';
+  return `<div class="rf-card mi-also"><h3>Spaces with this source</h3>${list.map(x => { const n = miAsksOf(m.id).filter(a => a.p.s === x.id).length; return `<button class="mi-sprow" type="button" data-mispace="${x.id}">${csGlyph(x)}<span class="cs-nmrow">${spName(x)}${isClosed(x) ? LK() : ''}</span><small class="num">${n} ask${n === 1 ? '' : 's'}</small></button>`; }).join('')}${list.some(isClosed) ? `<p class="cs-fine">${LOCK}<span>Asks in closed spaces are shown only to their members.</span></p>` : ''}</div>`;
+}
+function miFacts(m) {
+  const v = m.edited ? `2 versions · latest ${m.edited.age.includes(' ') ? m.edited.age : m.edited.age + ' ago'}` : m.deleted ? 'Removed' : 'Fetched Nov 16, 09:12';
+  return `<div class="th-facts mi-facts"><div><span>Source</span><b>${miSrcLine(m)}</b></div><div><span>Author</span><b>${esc(m.au)}</b></div><div><span>Published</span><b>${m.date}</b></div><div><span>Reader copy</span><b>${v}</b></div><div><span>Length</span><b>${m.len}</b></div><div><span>Reading it in full</span><b class="num">${m.deleted ? '–' : miTok(m.paid ? m.tok * 0.15 : m.tok) + ' tokens'}</b></div></div>`;
+}
+
+/* ---------- item page ---------- */
+function miItemPage() {
+  const m = MIT(st.miItem); if (!m) return layoutHome();
+  st.miRead.add(m.id);
+  const x = miParts(m);
+  const back = `<button class="th-back" type="button" data-miback="1">${I.chev.replace('<svg', '<svg class="bk"')}${st.miFrom === 'saved' ? 'Saved' : spName(sp(st.space))}</button>`;
+  const side = `<aside class="mi-aside">${x.side}</aside>`;
+  return `<div class="A C Af H">${topHeader()}<div class="mi-page"><div class="mi-bar">${back}${x.acts}</div><div class="mi-grid"><article class="mi-main">${x.main}</article>${side}</div>${x.selBar}</div></div>`;
+}
+/* Parts of a source page: the reader copy with asks below it, the actions, and the side cards.
+   The source page and the reader in the Sources column use the same parts. */
+function miParts(m) {
+  const s = sp(st.space), asks = miAsksOf(m.id), byB = {};
+  asks.forEach(x => { const b = x.p.about.b; if (b != null && x.p.about.it === m.id) (byB[b] = byB[b] || []).push(x); });
+  const reader = m.deleted ? '' : miReader(m, { byB, ask: true });
+  const list = l => l.map(x => miAskCard(x, m)).join('') || '<p class="muted cs-small">No asks yet.</p>';
+  const askList = `<section class="mi-asks" id="mi-asks"><h3>Asks about this source <span class="faint num">${asks.length}</span></h3><div class="mi-acs">${list(asks)}</div></section>`;
+  /* Asking about this source or a passage opens the composer in place of the ask box, at the end of the
+     reader; the passage is quoted above the question. Asks about several sources use the dialog. */
+  const a = st.miAsk && !st.modal && st.miAsk.it === m.id ? st.miAsk : null;
+  const askBox = m.deleted ? '' : `<div class="mi-askbox">${a ? miInlineComp(m, a) : '<button class="composer c2-closed" type="button" data-miask="item"><span class="ph">Ask about this source…</span></button>'}</div>`;
+  const acts = `<div class="mi-acts">${miOrigBtn(m)}${miSaveBtn(m)}${typeof dsSourceActs === 'function' ? dsSourceActs(m, s) : ''}</div>`;
+  const selBar = st.miSel != null && !m.deleted ? `<div class="mi-selbar" role="toolbar" aria-label="Selected passage"><span class="mi-selbar-t">${esc(clip(st.miQuote || m.body[st.miSel].p, 70))}</span><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button><button class="btn primary" type="button" data-miask="b:${st.miSel}">Ask</button></div>` : '';
+  const side = `<div class="rf-card"><h3>Details</h3>${miFacts(m)}</div>${miAlsoIn(m)}`;
+  const note = typeof dsNoteHTML === 'function' ? dsNoteHTML(m, s) : '';
+  return { main: `${miHead(m)}${note}${miStateNote(m)}${reader}${askBox}${askList}`, acts, side, selBar };
+}
+const miQuoteText = (p, m) => { const b = p.about.b; if (p.about.quote) return p.about.quote; if (m.edited && m.edited.b === b && ageMin(p.age) > ageMin(m.edited.age)) return m.edited.old; return m.body[b] ? m.body[b].p : ''; };
+
+/* ---------- thread page: "About" card, citations and sources ---------- */
+function miAbout(p) {
+  if (!p.about) return '';
+  const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
+  const m = its[0], b = p.about.b;
+  const changed = b != null && m.edited && m.edited.b === b && ageMin(p.age) > ageMin(m.edited.age);
+  const quote = b != null ? (m.deleted ? `<p class="mi-qgone">The quoted passage was removed because the author deleted the post on ${m.deleted}.</p>` : `<blockquote class="mi-q" ${miOpenAttr(m, b)}><p>${st.miDiff && changed ? `<del>${esc(m.edited.old)}</del> <ins>${esc(m.body[b].p)}</ins>` : esc(miQuoteText(p, m))}</p><cite>${miLbl(m, b)}</cite></blockquote>`) : '';
+  const flag = changed ? `<div class="mi-chg">${MII.changed}<span>The author edited this passage ${m.edited.age} ago, after this answer was written.</span><button class="tlink" type="button" data-midiff="1">${st.miDiff ? 'Hide changes' : 'Show changes'}</button><button class="tlink" type="button" data-miagain="${POSTS.indexOf(p)}">Ask again with the new text</button></div>` : '';
+  const lbl = its.length > 1 ? `Asked about ${its.length} sources` : b != null ? 'Asked about a passage' : 'Asked about';
+  const send = x => st.auth === 'in' ? `<button class="iconbtn ds-msend" type="button" data-dssend="m:${x.id}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
+  return `<section class="mi-about"><div class="mi-ab-h">${MII.ask}<span>${lbl}</span></div>${its.map(x => miMini(x, `${send(x)}<span class="mi-mini-go">${I.chev}</span>`, ` role="link" tabindex="0" ${miOpenAttr(x)}`)).join('')}${quote}${flag}</section>`;
+}
+/* running steps for an ask about items */
+function miRun(p) {
+  const its = miRefs(p).map(MIT).filter(Boolean), m = its[0], b = p.about.b;
+  const read = its.length > 1 ? `Read ${its.length} sources (${miTok(its.reduce((a, x) => a + x.tok, 0))} tokens)` : b != null ? `Read ${miLblLong(m, b)} and the section around it (${miTok(Math.max(400, m.tok * 3 / m.body.length))} tokens)` : `Read the source in full (${miTok(m.tok)} tokens)`;
+  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 9K tokens so far</span></div><ol class="run-steps"><li class="done">${read}</li><li class="done">Checked other sources in ${spName(sp(p.s))} that mention the same claims</li><li class="cur">Searching the web for the pages the ${its.length > 1 ? 'sources cite' : m.kind === 'thread' ? 'thread cites' : 'source cites'}</li><li>Write the answer</li></ol></div>`;
+}
+/* Sources for item asks: passages of the item, other items in the space, then the web. */
+function miSrc(p, src) {
+  const i = POSTS.indexOf(p), h = RICH[i] || '';
+  const refs = [...new Set([...h.matchAll(/data-miref="([^"]+)"/g)].map(x => x[1]))];
+  if (!refs.length) return null;
+  const own = new Set(miRefs(p));
+  const grp = { own: refs.filter(r => own.has(r.split(':')[0])), other: refs.filter(r => !own.has(r.split(':')[0])) };
+  const pas = r => { const [id, b] = r.split(':'), m = MIT(id); return `<li ${miOpenAttr(m, +b)}><span class="sx-n num mi-sxl">${miLbl(m, +b)}</span><div><b>${esc(clip(m.body[+b].p, 90))}</b><span>${esc(m.au)} · ${miSrcLine(m)}</span></div></li>`; };
+  const web = l => l.map((x, k) => `<li><span class="sx-n num">${k + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div>${typeof dsCiteBtn === 'function' ? dsCiteBtn(p, k) : ''}</li>`).join('');
+  const d = `<div class="ds-src mi-src">${grp.own.length ? `<h3>From ${own.size > 1 ? 'the sources' : 'the source'}</h3><ol class="sx-src">${grp.own.map(pas).join('')}</ol>` : ''}${grp.other.length ? `<h3>From other sources in ${spName(sp(p.s))}</h3><ol class="sx-src">${grp.other.map(pas).join('')}</ol>` : ''}${src.length ? `<h3>From the web</h3><ol class="sx-src">${web(src)}</ol>` : ''}</div>`;
+  return { d, m: d.replace('ds-src mi-src', 'mi-msrc') };
+}
+/* feed row: what an ask is about */
+function miRowChip(p) {
+  if (!p.about) return '';
+  const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
+  return `<span class="mi-rchip">${miIc(its[0], 'xs')}<span>${its.length > 1 ? `${esc(clip(miTitle(its[0]), 40))} and ${its.length - 1} more` : esc(clip(miTitle(its[0]), 64))}${p.about.b != null ? ` · ${miLbl(its[0], p.about.b)}` : ''}</span></span>`;
+}
+/* ---------- Manage › Sources (replaces Manage › Feeds) ---------- */
+function miMgTabs(s, tabs) {
+  if (!isModOf(s.id)) return;
+  const n = typeof dsPending === 'function' ? dsPending(s.id).length : 0;
+  const k = tabs.findIndex(t => t[0] === 'settings');
+  tabs.splice(k < 0 ? tabs.length : k, 0, ['sources', `Sources${n ? ` <span class="cs-n num">${n}</span>` : ''}`]);
+}
+const miFindUrl = u => { u = (u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/^twitter\.com/, 'x.com').replace(/[?#].*$/, '').replace(/\/$/, ''); if (!u) return null; return [...MEDIA, ...(st.miAdded || [])].find(m => u === m.url.toLowerCase() || (u.length > 12 && (u.includes(m.url.toLowerCase()) || m.url.toLowerCase().includes(u)))); };
+
+/* ---------- ask dialog ---------- */
+/* The inline ask composer: the space composer's shape, with the passage quoted above the question. */
+function miInlineComp(m, a) {
+  const opts = m.sp.filter(x => isMember(x) && canRead(sp(x)));
+  const sid = opts.includes(st.miAskSp) ? st.miAskSp : opts.includes(st.space) ? st.space : opts[0] || st.space;
+  const spSel = opts.length > 1 ? `<span class="mi-icsp"><span id="mi-icsp-l" class="faint">in</span>${ddSel('miSp', opts.map(x => [x, spName(sp(x))]), sid, 'mi-icsp-l')}</span>` : '';
+  const quote = a.b != null ? `<blockquote class="mi-q sm mi-iq"><p>${esc(clip(a.quote || m.body[a.b].p, 200))}</p><cite>${miLbl(m, a.b)}</cite></blockquote>` : '';
+  const ph = a.b != null ? 'Ask about this passage' : 'Ask about this source';
+  return `<div class="composer open c2 c2v-bar mi-icomp" data-ck="mi:${a.b != null ? a.b : 'item'}"><button class="iconbtn c2-x" type="button" data-miaskx="1" aria-label="Close" title="Close">${I.close}</button>${quote}<textarea id="mi-askq" rows="2" placeholder="${ph}" aria-label="${ph}">${esc(st.miAskQ)}</textarea><div class="c2-bar">${modelPicker()}<span class="grow"></span>${spSel}<button class="btn primary" type="button" data-miaskgo="1">Ask</button></div></div>`;
+}
+function miAskDlg() {
+  const a = st.miAsk; if (!a) return '';
+  const its = (a.its || [a.it]).map(MIT).filter(Boolean), m = its[0];
+  const opts = [...new Set(its.flatMap(x => x.sp))].filter(x => isMember(x) && canRead(sp(x)));
+  const sid = opts.includes(st.miAskSp) ? st.miAskSp : opts.includes(st.space) ? st.space : opts[0] || st.space, s = sp(sid);
+  const title = its.length > 1 ? `Ask about ${its.length} sources` : a.b != null ? `Ask about ${miLblLong(m, a.b)}` : 'Ask about this source';
+  const scope = its.length > 3 ? `<ul class="mi-dlist" aria-label="${its.length} sources">${its.map(x => `<li>${miIc(x, 'xs')}<span><b>${esc(miTitle(x))}</b> <small>${esc(x.au)} · ${x.age}</small></span></li>`).join('')}</ul>` : its.length > 1 ? `<div class="mi-dscope">${its.map(x => miMini(x)).join('')}</div>` : `<div class="mi-dscope">${miMini(m)}${a.b != null ? `<blockquote class="mi-q"><p>${esc(a.quote || m.body[a.b].p)}</p><cite>${miLbl(m, a.b)}</cite></blockquote>` : ''}</div>`;
+  const tok = its.length > 1 ? its.reduce((x, y) => x + y.tok, 0) : a.b != null ? Math.max(400, m.tok * 3 / m.body.length) : m.tok;
+  const spSel = opts.length > 1 ? `<div class="mi-dsp"><span id="mi-asksp-l">Ask in</span>${ddSel('miSp', opts.map(x => [x, sp(x).title + ' (' + (isPlain(sp(x)) ? sp(x).title : '#' + sp(x).name) + ')']), sid, 'mi-asksp-l')}</div>` : '';
+  const vis = isClosed(s) ? `Only members of ${spName(s)} can read the thread.` : `The thread is public in ${spName(s)}.`;
+  const body = `${scope}<label class="fld"><span>Question</span><textarea id="mi-askq" rows="3" placeholder="${a.b != null ? 'What do you want to know about this passage?' : 'What do you want to know about this source?'}">${esc(st.miAskQ)}</textarea></label>${spSel}`;
+  return dlg(title, body, `${cancelB()}<button class="btn primary" type="button" data-miaskgo="1">Ask</button>`).replace('class="modal cs-m"', 'class="modal cs-m mi-askdlg"');
+}
+function miModal() {
+  const [k, a] = (st.modal || '').split(/:(.*)/s);
+  if (k === 'mi-ask') return miAskDlg();
+  return '';
+}
+DD_SET.miSp = v => { st.miAskSp = v; };
+
+/* ---------- composer: a pasted link ---------- */
+const MI_URLRE = /(?:https?:\/\/)?(?:www\.)?((?:x\.com|[\w-]+\.substack\.com|lesswrong\.com|youtube\.com|orbitlab\.ai|weightsandmeasures\.fm|[\w-]+\.(?:com|org|dev|io|ai|fm|net))\/[^\s]*)/i;
+function miAttHTML() {
+  const mm = (st.draft || '').match(MI_URLRE); if (!mm) return '';
+  const m = miFindUrl(mm[1]), s = sp(curSpace());
+  const card = m ? miMini(m) : `<div class="mi-mini">${MII.article}<span class="mi-mini-tx"><b>${esc(mm[1].split('/')[0])}</b><span>Reader copy ready · about 6 min read</span></span></div>`;
+  const note = `The ask is about this source. It is also added to the sources of ${spName(s)}.`;
+  const alt = `<button class="tlink" type="button" data-milinkadd="1">Add as a source without asking</button>`;
+  return `<div class="mi-att">${card}<p class="faint cs-small">${note} Fetching uses no tokens; the agent reads it when you ask.</p><div class="mi-att-a">${alt}<button class="tlink" type="button" data-miattx="1">Remove the link</button></div></div>`;
+}
+function miAttachAsk(p) {
+  const mm = p.q.match(MI_URLRE); if (!mm) return;
+  let m = miFindUrl(mm[1]);
+  m = dsAdd(mm[1], p.s).m;
+  p.about = { it: m.id };
+  p.q = p.q.replace(mm[0], '').replace(/\s+/g, ' ').trim() || 'Summarize this source and list its main claims with the evidence for each.';
+  p.kw = p.q;
+}
+
+/* ---------- saved items ---------- */
+function miSavedList() {
+  const l = [...st.miSaved].map(MIT).filter(Boolean);
+  return `<div class="mi-units mi-lay-rows mi-sty-plain mi-saved">${l.map(m => miRow(m, { noDot: true }).replace('data-miopen="', 'data-mifrom="saved" data-miopen="')).join('')}</div><p class="faint cs-small">You get a notification when someone asks about a saved source or when its author edits it.</p>`;
+}
+/* ---------- navigation and clicks ---------- */
+const MI_CLEAR = () => ({ miSel: null, miQuote: '', miHi: null, miDiff: false, miPickMode: false, miPick: [] });
+function miOpen(id, b, from) {
+  const m = MIT(id); if (!m) return;
+  const sid = m.sp.includes(st.space) && canRead(sp(st.space)) ? st.space : m.sp.find(x => canRead(sp(x))) || st.space;
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { miAsk: null, miAskQ: '',  space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null });
+  if (b != null) setTimeout(() => { const el = $('mib-' + b); if (el) el.scrollIntoView({ block: 'center' }); }, 0); else setTimeout(scrollMockTop, 0);
+}
+function miBack() {
+  if (st.miFrom === 'saved') { Object.assign(st, NAVBASE(), MI_CLEAR(), { savedPage: true, savedFilter: 'mi-items' }); return; }
+  const s = sp(st.space);
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { miAsk: null, miAskQ: '', space: s.id, spTab: 'threads' });
+}
+function miCreateAsk() {
+  const a = st.miAsk; if (!a) return;
+  const its = (a.its || [a.it]).map(MIT), opts = [...new Set(its.flatMap(x => x.sp))].filter(x => isMember(x));
+  const sid = opts.includes(st.miAskSp) ? st.miAskSp : opts.includes(st.space) ? st.space : opts[0] || st.space;
+  const q = st.miAskQ.trim() || (a.b != null ? 'Is the claim in this passage supported by its sources?' : its.length > 1 ? 'Where do these sources agree and disagree, and what evidence does each give?' : (MI_TPL[sid] || MI_TPL.public)[0]);
+  const about = a.its ? { its: a.its } : Object.assign({ it: a.it }, a.b != null ? { b: a.b } : {}, a.quote ? { quote: a.quote } : {});
+  POSTS.push({ s: sid, u: ME.u, mine: true, k: 'ask', q, about, sum: null, r: 0, tok: 0, age: 'now', likes: 0, running: true, kw: q });
+  const i = POSTS.length - 1;
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, miAsk: null, miAskQ: '' });
+  st.thread = i;
+  setTimeout(scrollMockTop, 0);
+}
+const miFocusQ = id => { const q = $(id); if (q) { q.focus({ preventScroll: true }); q.setSelectionRange(q.value.length, q.value.length); } };
+function miClick(t) {
+  const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
+  let b;
+  if (d('[data-space],[data-home],[data-user],[data-sub],[data-act="saved-page"]') && !d('[data-mispace]')) Object.assign(st, MI_CLEAR());
+  if ((b = d('[data-cstoast^="mi:"]'))) {
+    const v = b.dataset.cstoast.slice(3); st.toast = null;
+    if (v.startsWith('open:')) miOpen(v.slice(5));
+    return go();
+  }
+  if ((b = d('[data-ntopen^="mi-n-"]'))) {
+    const n = st.notifs.find(x => x.id === b.dataset.ntopen); if (!n) return false;
+    n.unread = false; st.ntOpen = false;
+    const [k, a, c] = n.open.split(':');
+    if (k === 'item') miOpen(a, c != null ? +c : null);
+    if (k === 'thread') Object.assign(st, NAVBASE(), MI_CLEAR(), { thread: sfIdx(a), space: POSTS[sfIdx(a)].s });
+    return go();
+  }
+  /* item links; a control inside the linked element keeps its own action */
+  if ((b = d('[data-miopen]'))) {
+    const ctl = d('button, a, input, textarea');
+    if (!ctl || ctl === b || ctl.contains(b) || ctl.hasAttribute('data-miopen')) {
+      const el = ctl && ctl.hasAttribute('data-miopen') ? ctl : b, [id, bi] = el.dataset.miopen.split(':');
+      miOpen(id, bi != null ? +bi : null, el.dataset.mifrom || (d('[data-mifrom]') || {}).dataset?.mifrom);
+      return go();
+    }
+  }
+  if ((b = d('[data-miref]'))) { const [id, bi] = b.dataset.miref.split(':'); miOpen(id, +bi); return go(); }
+  if ((b = d('[data-miback]'))) { miBack(); setTimeout(scrollMockTop, 0); return go(); }
+  /* passages: select one (or the selected text in it) */
+  if ((b = d('.mi-reader.askable [data-mib]')) && !d('button, a, .mi-selpop')) {
+    let q = ''; try { q = String(window.getSelection() || '').trim(); } catch (e) {}
+    const i = +b.dataset.mib, inB = q && b.textContent.replace(/\s+/g, ' ').includes(q.replace(/\s+/g, ' '));
+    if (st.miSel === i && !inB) { st.miSel = null; st.miQuote = ''; } else { st.miSel = i; st.miQuote = inB && q.length < b.textContent.length - 2 ? q : ''; }
+    st.miHi = null;
+    renderAll();
+    return true;
+  }
+  if ((b = d('[data-misel]'))) { st.miSel = null; st.miQuote = ''; return go(); }
+  if ((b = d('[data-miask]'))) {
+    const v = b.dataset.miask;
+    if (st.auth !== 'in') { st.modal = 'signin'; return go(); }
+    let a = null;
+    if (v === 'item') a = { it: st.miItem };
+    else if (v.startsWith('b:')) { const i = +v.slice(2); a = { it: st.miItem, b: i, quote: st.miSel === i ? st.miQuote : '' }; }
+    else if (v === 'pick') { if (st.miPick.length < 2) return true; a = { its: [...st.miPick] }; }
+    else if (v.startsWith('item:')) a = { it: v.slice(5) };
+    const inline = st.subPage === 'mitem' && !a.its && a.it === st.miItem;
+    Object.assign(st, { miAsk: a, miAskQ: '', miAskSp: st.space, modal: inline ? null : 'mi-ask' });
+    if (inline) Object.assign(st, { miSel: null, miQuote: a.quote ? st.miQuote : '' });
+    renderAll(); miFocusQ('mi-askq');
+    if (inline) { const c = document.querySelector('#app .mi-icomp'); if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    return true;
+  }
+  if ((b = d('[data-miaskgo]'))) { miCreateAsk(); return go(); }
+  if ((b = d('[data-miaskx]'))) { Object.assign(st, { miAsk: null, miAskQ: '' }); return go(); }
+  if ((b = d('[data-miagain]'))) { const p = POSTS[+b.dataset.miagain]; Object.assign(st, { miAsk: { it: p.about.it, b: p.about.b }, miAskQ: p.q, miAskSp: p.s, modal: 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
+  if ((b = d('[data-misave]'))) { const id = b.dataset.misave; st.miSaved.has(id) ? st.miSaved.delete(id) : st.miSaved.add(id); return go(); }
+  if ((b = d('[data-micopy]'))) { const v = b.dataset.micopy, m = MIT(st.miItem); toast(v === 'item' ? 'Link to the source copied.' : `Link to ${miLblLong(m, +v)} copied.`); st.miSel = null; return go(); }
+  if ((b = d('[data-midiff]'))) { st.miDiff = !st.miDiff; return go(); }
+  if ((b = d('[data-mipickmode]'))) { st.miPickMode = !st.miPickMode; st.miPick = []; return go(); }
+  if ((b = d('[data-mipickx]'))) { st.miPickMode = false; st.miPick = []; return go(); }
+  if ((b = d('[data-mipick]'))) { const id = b.dataset.mipick, k = st.miPick.indexOf(id); if (k < 0) st.miPick.push(id); else st.miPick.splice(k, 1); return go(); }
+  if ((b = d('[data-milinkadd]'))) {
+    const mm = st.draft.match(MI_URLRE), s = sp(curSpace());
+    Object.assign(st, { draft: '', compOpen: false });
+    if (mm) { const r = dsAdd(mm[1], s.id); toast(r.dup ? `Already in ${spName(s)}.` : `Added to the sources of ${spName(s)}. No tokens used.`, 'mi:open:' + r.m.id, 'Open'); }
+    return go();
+  }
+  if ((b = d('[data-miattx]'))) { st.draft = st.draft.replace(MI_URLRE, '').replace(/\s+/g, ' ').trim(); renderAll(); miFocusQ('compose-text'); return true; }
+  if ((b = d('[data-mispace]'))) {
+    const sid = b.dataset.mispace;
+    Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, spTab: 'threads' }); return go();
+  }
+  return false;
+}
+function miInput(e) {
+  const el = e.target, id = el.id;
+  if (id === 'mi-askq') { st.miAskQ = el.value; return true; }
+  if (id === 'mi-lq') { const q = el.value.trim().toLowerCase(); document.querySelectorAll('#app [data-mitxt]').forEach(r => { r.hidden = !!q && !r.dataset.mitxt.includes(q); }); return true; }
+  if (id === 'compose-text') { st.draft = el.value; const x = $('mi-att'); if (x) { const h = miAttHTML(); if (x.innerHTML !== h) x.innerHTML = h; } return true; }
+  if (el.dataset && el.dataset.sftog && el.dataset.sftog.startsWith('mi-')) return true;
+  return false;
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !st.modal && st.miAsk && !st.miAskQ.trim()) { st.miAsk = null; renderAll(); return; }
+  if (e.key === 'Escape' && !st.modal && (st.miSel != null || st.miPickMode)) { st.miSel = null; st.miQuote = ''; st.miPickMode = false; st.miPick = []; renderAll(); }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'mi-askq') { e.preventDefault(); const b = document.querySelector('[data-miaskgo]'); if (b) b.click(); }
+  if (e.key === 'Enter' && e.target.closest && e.target.closest('.mi-u, .mi-mini[role="link"]')) { e.preventDefault(); e.target.click(); }
+}, true);
+/* ---------- control bar ---------- */
+/* The Items tab and its controls are gone in this copy; see DSKNOBS. */
+function MIKNOBS() { return []; }
+
+/* ---------- "Jump to" ---------- */
+JUMPS.push(
+  ['Source pages', [['mi-a-item', 'Source page: article'], ['mi-a-pass', 'Select a passage'], ['mi-a-askdlg', 'Ask about a passage'], ['mi-a-thread', 'Answer about a passage'], ['mi-a-xthread', 'Source page: X thread with a quoted post'], ['mi-a-pod', 'Source page: podcast transcript'], ['mi-a-multi', 'Answer across two sources'], ['mi-a-feed', 'Threads feed: asks about sources'], ['mi-a-edited', 'Source edited upstream'], ['mi-a-deleted', 'Source deleted upstream'], ['mi-a-paid', 'Paid post'], ['mi-a-closed', 'Source in an open and a closed space'], ['mi-a-saved', 'Saved sources'], ['mi-a-notif', 'Notification: saved source edited'], ['mi-f-paste', 'Paste a link in the composer']]],
+);
+function miJump(k) {
+  if (st.device === 'native') st.device = 'desktop';
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all' });
+  { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
+  if (k !== 'mi-a-closed') setRel('replication', 'none');
+  dsReset();
+  const item = (id, b) => miOpen(id, b);
+  const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
+  const pushN = n => { st.notifs = st.notifs.filter(x => x.id !== n.id); st.notifs.unshift({ ...n, unread: true }); };
+  const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
+  switch (k) {
+    case 'mi-a-item': item('m2'); break;
+    case 'mi-a-pass': item('m2'); Object.assign(st, { miSel: 3, miQuote: 'The second tenfold increase pays for itself on about half of them.' }); setTimeout(() => { const el = $('mib-3'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break;
+    case 'mi-a-askdlg': item('m2'); ask({ it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where the second tenfold increase does not pay for itself?'); break;
+    case 'mi-a-thread': th('mia1'); break;
+    case 'mi-a-xthread': item('m1'); break;
+    case 'mi-a-pod': item('m4'); break;
+    case 'mi-a-multi': th('mia3'); break;
+    case 'mi-a-feed': st.spTab = 'threads'; break;
+    case 'mi-a-edited': item('m2', 6); st.miDiff = true; break;
+    case 'mi-a-deleted': item('m7'); break;
+    case 'mi-a-paid': item('m8'); break;
+    case 'mi-a-closed': setRel('replication', 'member'); item('m1'); break;
+    case 'mi-a-saved': st.miSaved = new Set(['m2', 'm4', 'm1']); Object.assign(st, { savedPage: true, savedFilter: 'mi-items' }); break;
+    case 'mi-a-notif': st.miSaved.add('m2'); pushN(MI_NOTIF.edited); pushN(MI_NOTIF.ask); st.home = true; st.ntOpen = true; break;
+    case 'mi-f-paste': Object.assign(st, { compOpen: true, mode: 'ask', draft: 'What does the maintainers’ response leave unanswered? orbitlab.ai/blog/rb-2-response' }); break;
+  }
+}
+
+/* ---------- state ---------- */
+Object.assign(st, {
+  miItem: null, miFrom: null, ...MI_CLEAR(), miAsk: null, miAskQ: '', miAskSp: null,
+  miRead: new Set(['m6', 'm8']), miSaved: new Set(['m2']), miAdded: [],
+});
+/* END media items js */
+/* BEGIN dropped sources js */
+/* ================= dropped sources =================
+   Model. A source (article, post, thread, video, PDF, paper) is one record per URL, as above. It
+   reaches a space only when someone adds it there, one at a time: by pasting a link or dropping a
+   link or file on the space's source list, with "Send to a space" (from a source page, an About card,
+   a cited web page, or the browser share target), or by pasting a link into the composer with an ask.
+   Spaces do not subscribe to feeds.
+   - Who can add: anyone who can post in the space (members of a closed space). Manage › Sources can
+     limit this to moderators, or require moderator review (here #public).
+   - A note is optional; an ask is optional ("Add and ask").
+   - URLs are normalized (scheme, www, twitter.com, query and fragment). A URL that is already in the
+     space is not added again; the existing entry is shown instead.
+   - A source can be in several spaces; each space has its own entry: who added it, when, the note.
+   - Order: newest addition first. "New": added since your last visit by someone else, not opened.
+   - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
+   Placement ("Layout" control, st.dsPos): a sidebar with Sources and Wiki tabs on the right or the
+   left, below the space header (in the main column, or across both columns). Sources are listed in the Social feed style. */
+const DS_DROPS0 = {
+  ml: [
+    { m: 'm9', by: 'hal_b', age: '16h' },
+    { m: 'm5', by: 'mira_k', age: '19h', note: 'The maintainers’ reply to the RB-2 report.' },
+    { m: 'm1', by: 'jun.park', age: '1d', note: 'The match list and the script are linked in post 6.' },
+    { m: 'm2', by: 'lettie', age: '1d' },
+    { m: 'm3', by: 'oduya', age: '2d' },
+    { m: 'm4', by: 'mira_k', age: '3d', note: 'The part on contamination starts at 09:15.' },
+    { m: 'm7', by: 'sol', age: '3d' },
+    { m: 'm6', by: 'hal_b', age: '4d' },
+    { m: 'm8', by: 'mira_k', age: '5d' },
+    { m: 'm10', by: 'hal_b', age: '10d' },
+  ],
+  replication: [
+    { m: 'r4', by: 'lettie', age: '11h' },
+    { m: 'm1', by: 'lettie', age: '20h' },
+    { m: 'r1', by: 'tomasz', age: '1d', note: 'Data and analysis code are public.' },
+    { m: 'r2', by: 'lettie', age: '2d' },
+    { m: 'r3', by: 'tomasz', age: '3d' },
+  ],
+  public: [
+    { m: 'r4', by: 'tomasz', age: '40m', rv: true, note: 'A preregistered 12-lab test, relevant to the anchoring threads.' },
+    { m: 'm2', by: 'sol', age: '1d' },
+  ],
+};
+/* minutes since your last visit: sources added after it are marked new */
+const DS_SEEN = { ml: 20 * 60, replication: 16 * 60, public: 120 };
+const DS_POL0 = { public: 'review' };
+const DS_REPS0 = [{ m: 'm7', sid: 'ml', by: 'oduya', why: 'broken', age: '1d' }];
+const DS_SP0 = MEDIA.map(m => [m.id, [...m.sp]]);
+const DS_DRAG_URL = 'arxiv.org/abs/2604.0981';
+const DS_WHY = { spam: 'Spam or advertising', topic: 'Not about this space', broken: 'Broken link or wrong reader copy', other: 'Something else' };
+
+/* ---------- helpers ---------- */
+const dsNarrow = () => st.device === 'phone' || innerWidth <= 640;
+const dsAll = sid => st.dsDrops[sid] || [];
+const dsPol = sid => st.dsPol[sid] || 'members';
+const dsShown = (sid, d) => !d.rm && MIT(d.m) && (!d.rv || d.by === ME.u || isModOf(sid));
+const dsList = sid => dsAll(sid).filter(d => dsShown(sid, d)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
+const dsPending = sid => dsAll(sid).filter(d => d.rv && !d.rm);
+const dsDropOf = (sid, mid) => dsAll(sid).find(d => d.m === mid && !d.rm) || null;
+const dsIsNew = (sid, d) => st.auth === 'in' && d.by !== ME.u && !st.miRead.has(d.m) && ageMin(d.age) < (DS_SEEN[sid] || 0);
+const dsWho = by => by === ME.u ? 'you' : esc(by);
+const dsAgo = a => a === 'now' ? 'just now' : a + ' ago';
+function dsCanAdd(s) {
+  if (!s || st.auth !== 'in') return false;
+  if (isClosed(s) && !isMember(s.id)) return false;
+  return dsPol(s.id) !== 'mods' || isModOf(s.id);
+}
+function dsReset() {
+  st.dsDrops = structuredClone(DS_DROPS0); st.dsPol = { ...DS_POL0 }; st.dsReps = structuredClone(DS_REPS0);
+  DS_SP0.forEach(([id, l]) => { const m = MEDIA.find(x => x.id === id); if (m) m.sp = [...l]; });
+  st.miAdded = []; st.miRead = new Set(['m6', 'm8']);
+  setRel('public', 'member'); if (!MYROLES0.public) delete MYROLES.public;
+  /* the new space from "New space with no sources" exists only on that screen */
+  const k = SPACES.findIndex(x => x.id === 'sp-field-notes');
+  if (k >= 0) { setRel('sp-field-notes', 'none'); SPACES.splice(k, 1); delete st.rel['sp-field-notes']; delete st.dsDrops['sp-field-notes']; }
+}
+/* A new record for a URL or file that Session has not seen. */
+function dsMake(u, file) {
+  u = (u || '').trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '');
+  const host = (u.split('/')[0] || u).toLowerCase();
+  const pl = file || /\.pdf$/i.test(u) ? 'pdf' : /^(x|twitter)\.com/.test(host) ? 'x' : /youtube|youtu\.be/.test(host) ? 'yt' : /arxiv/.test(host) ? 'arxiv' : /substack/.test(host) ? 'substack' : /lesswrong/.test(host) ? 'lw' : 'web';
+  const kind = pl === 'x' ? 'post' : pl === 'yt' ? 'video' : 'article';
+  const raw = (file || u.split('/').slice(1).filter(Boolean).pop() || host).replace(/\.(pdf|html?)$/i, '').replace(/[-_]+/g, ' ').trim();
+  const m = { id: 'u' + (st.miAdded.length + 1), pl, kind, au: pl === 'x' ? '@' + (u.split('/')[1] || 'x') : file ? 'Uploaded file' : host, h: host, date: 'Nov 16', age: 'now', len: pl === 'pdf' || pl === 'arxiv' ? 'PDF, 12 pages' : kind === 'video' ? '24 min' : kind === 'post' ? '1 post' : '6 min read', tok: pl === 'pdf' ? 9e3 : 2e3, sp: [], url: file ? 'session.app/files/' + encodeURIComponent(file) : u, desc: '', sum: '', body: [{ p: kind === 'post' ? `Post by ${pl === 'x' ? '@' + (u.split('/')[1] || 'x') : host}.` : 'Reader copy of the page.' }] };
+  if (kind !== 'post') m.t = raw ? raw[0].toUpperCase() + raw.slice(1) : host;
+  st.miAdded.push(m); return m;
+}
+/* Add a URL or file to a space. Returns { m, dup } when the space already has it. */
+function dsAdd(u, sid, note, file) {
+  const m = (!file && miFindUrl(u)) || dsMake(u, file);
+  const ex = dsDropOf(sid, m.id);
+  if (ex) { st.dsFlash = m.id; return { m, dup: ex }; }
+  const rv = dsPol(sid) === 'review' && !isModOf(sid);
+  (st.dsDrops[sid] = st.dsDrops[sid] || []).unshift({ m: m.id, by: ME.u, age: 'now', note: (note || '').trim(), rv });
+  if (!m.sp.includes(sid)) m.sp.push(sid);
+  st.miRead.add(m.id); st.dsFlash = m.id;
+  return { m, rv };
+}
+function dsDropped(sid, u, file) {
+  st.dsDrag = null;
+  const s = sp(sid);
+  if ((!u && !file) || !dsCanAdd(s)) { renderAll(); return; }
+  const r = dsAdd(u || '', sid, '', file);
+  if (r.dup) toast(`Already in ${spName(s)}. Added by ${dsWho(r.dup.by)} ${dsAgo(r.dup.age)}.`, `ds:open:${sid}:${r.m.id}`, 'Open');
+  else if (r.rv) toast('Added. A moderator reviews it before others see it.');
+  renderAll();
+}
+/* a cited web page: the source record with that title, or a new one */
+function dsFromCite(pi, k) {
+  const x = (SRCD[pi] || [])[k]; if (!x) return MIT('m11');
+  const key = x[0].toLowerCase().slice(0, 18);
+  const m = [...MEDIA, ...st.miAdded].find(y => y.t && y.t.toLowerCase().startsWith(key));
+  if (m) return m;
+  const n = dsMake(`${x[1].replace(/\s.*/, '')}/${x[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`);
+  n.t = x[0]; return n;
+}
+
+/* ---------- pieces ---------- */
+function dsGuessMini(u) {
+  const v = u.trim().replace(/^https?:\/\//, '').replace(/^www\./, ''), host = v.split('/')[0];
+  const pl = /\.pdf($|\?)/i.test(v) ? 'pdf' : /^(x|twitter)\.com/.test(host) ? 'x' : /youtube|youtu\.be/.test(host) ? 'yt' : /arxiv/.test(host) ? 'arxiv' : 'web';
+  return `<div class="mi-mini">${miIc({ pl, kind: 'article' })}<span class="mi-mini-tx"><b>${esc(clip(v, 64))}</b><span>${MIPLAT[pl].n} · reader copy ready</span></span></div>`;
+}
+/* Preview under the paste field: the source, an optional note and Add, or the existing entry. */
+function dsDetHTML(u, sid) {
+  if (!(u || '').trim()) return '';
+  const s = sp(sid), m = miFindUrl(u), d = m && dsDropOf(sid, m.id);
+  if (d) return `<div class="ds-dup">${miMini(m)}<p class="ds-dupt">${I.check}<span>Already in ${spName(s)}. Added by ${dsWho(d.by)} ${dsAgo(d.age)}.</span></p><div class="ds-acts"><button class="btn sm" type="button" data-dsclear="1">Clear</button><button class="btn sm" type="button" data-miask="item:${m.id}">Ask about it</button><button class="btn sm primary" type="button" data-dsgo="${sid}:${m.id}">Open</button></div></div>`;
+  const lines = (isClosed(s) ? `<p class="cs-fine">${LOCK}<span>Only members of ${spName(s)} see it.</span></p>` : '') + (dsPol(sid) === 'review' && !isModOf(sid) ? `<p class="cs-fine">${MII.select}<span>A moderator reviews it before others see it.</span></p>` : '');
+  return `${m ? miMini(m) : dsGuessMini(u)}<input id="ds-note" class="ds-note-in" type="text" value="${esc(st.dsNote)}" placeholder="Note (optional)" aria-label="Note (optional)" autocomplete="off">${lines}<div class="ds-acts"><button class="btn sm" type="button" data-dsadd="ask">Add and ask</button><button class="btn sm primary" type="button" data-dsadd="1">Add</button></div>`;
+}
+/* The paste and drop target at the top of a source list. */
+function dsDropBox(s) {
+  if (st.auth !== 'in') return `<div class="ds-drop ds-ro"><button class="btn sm" type="button" data-dssignin="1">Sign in to add a source</button></div>`;
+  if (!dsCanAdd(s)) return dsPol(s.id) === 'mods' ? '<p class="faint cs-small ds-ronly">Moderators add sources here.</p>' : '';
+  return `<div class="ds-drop"><div class="ds-in">${MII.link}<input id="ds-url" type="url" value="${esc(st.dsUrl)}" placeholder="${dsNarrow() ? 'Paste a link' : 'Paste a link or drop a file'}" aria-label="Add a source to ${spName(s)}: paste a link" autocomplete="off"><label class="iconbtn ds-up" title="Upload a file" aria-label="Upload a file">${MII.upload}<input type="file" id="ds-file" accept=".pdf,.html,.txt,.md,.epub" hidden></label></div><div id="ds-det" class="ds-det">${dsDetHTML(st.dsUrl, s.id)}</div></div>`;
+}
+/* overlay shown while a link or file is dragged over a source list */
+const dsOver = s => dsCanAdd(s) ? `<div class="ds-over" data-dsdropdemo="${s.id}" aria-hidden="true">${MII.upload}<span>Drop to add to ${spName(s)}</span></div>` : '';
+const dsZoneAttr = s => `data-dsdz="${s.id}"${st.dsDrag === s.id ? ' data-drag="1"' : ''}`;
+const dsSelBtn = s => st.auth === 'in' && dsList(s.id).length > 1 ? `<button class="iconbtn ds-selb" type="button" data-mipickmode="1" aria-pressed="${!!st.miPickMode}" aria-label="Select sources to ask about" title="Select sources to ask about">${MII.select}</button>` : '';
+const dsPickBar = () => st.miPickMode ? `<div class="ds-pickbar" role="toolbar" aria-label="Selected sources"><span><b class="num">${st.miPick.length}</b> selected</span><button class="tlink" type="button" data-mipickx="1">Cancel</button><button class="btn sm primary" type="button" data-miask="pick" ${st.miPick.length > 1 ? '' : 'disabled aria-disabled="true"'}>Ask</button></div>` : '';
+const dsAsks = (m, sid) => { const n = miAsksOf(m.id).filter(a => a.p.s === sid).length; return n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : ''; };
+const dsFlag = d => d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
+/* One source in the Social feed style (full list, sidebar list), with who added it, the note and asks. */
+function dsUnit(d, sid) {
+  const m = MIT(d.m);
+  const meta = `<span class="ds-m">${d.note ? `Added ${dsAgo(d.age)}` : `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}${dsAsks(m, sid)}</span>`;
+  const extra = `<span class="ds-ux">${d.note ? `<span class="ds-rn">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></span>` : ''}${meta}${dsFlag(d)}</span>`;
+  const o = { pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
+  return miUnit2(m, o);
+}
+const dsEmpty = s => `<div class="ds-empty"><b>No sources yet</b>${dsCanAdd(s) ? '<span>Paste a link or drop a file above.</span>' : ''}</div>`;
+/* note from the person who added the source to this space; review state */
+function dsNoteHTML(m, s) {
+  const d = s && dsDropOf(s.id, m.id); if (!d) return '';
+  const rv = d.rv ? `<div class="mi-note">${MII.select}<div><b>Waiting for review.</b><p>Only you and the moderators of ${spName(s)} see this source until a moderator approves it.</p></div></div>` : '';
+  return `${d.note ? `<p class="ds-note">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></p>` : ''}${rv}`;
+}
+/* actions on a source page or in the reader: send, copy link, remove and report */
+function dsSourceActs(m, s) {
+  const d = s && dsDropOf(s.id, m.id), open = st.dsMenu === m.id;
+  const canRm = d && st.auth === 'in' && (d.by === ME.u || isModOf(s.id));
+  const menu = `<span class="sf-imw ds-mw"><button class="btn sm ds-more" type="button" data-dsmenu="${m.id}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${MII.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu">${canRm ? `<button class="um-item" type="button" role="menuitem" data-dsrm="${m.id}:${s.id}">${MII.trash}<span>Remove from ${spName(s)}</span></button>` : ''}<button class="um-item m-only" type="button" role="menuitem" data-micopy="item">${CI.link}<span>Copy link</span></button><button class="um-item" type="button" role="menuitem" data-dsreport="${m.id}:${s.id}">${SFI.flag}<span>Report</span></button></div>` : ''}</span>`;
+  return `<button class="btn sm" type="button" data-dssend="m:${m.id}" aria-label="Send to a space">${MII.send}<span class="d-only">Send to a space</span></button><button class="btn sm d-only" type="button" data-micopy="item">${CI.link}Copy link</button>${menu}`;
+}
+const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend" type="button" data-dssend="w:${POSTS.indexOf(p)}:${k}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
+
+/* ---------- right sidebar: Sources and Wiki tabs ---------- */
+/* The Sources list: every source in the Social feed style. */
+function dsSideList(s) {
+  const l = dsList(s.id);
+  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsEmpty(s);
+}
+function dsSideDrawer(s) {
+  const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
+  if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
+  const cur = st.dsSTab || (dsList(s.id).length ? 'sources' : 'wiki');
+  const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${cur === k}" data-dsstab="${k}">${l}</button>`;
+  const wiki = cur === 'wiki';
+  const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
+  return `<aside class="drawer wk ds-side" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
+}
+/* the drop box, the list and the selection bar */
+const dsSrcPane = s => `${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}`;
+
+/* ---------- space page ---------- */
+/* Parts of the space page for the "Layout" control (st.dsPos): right, left, hd-right, hd-left. With hd-*
+   the space header spans both columns and the space tabs and the sidebar tabs sit side by side below it. */
+function dsSpaceParts(s, tab, body) {
+  const pos = st.dsPos, hd = pos.startsWith('hd-'), left = pos.endsWith('left');
+  const x = { top: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: `${left ? ' ds-left' : ''}${hd ? ' ds-hd' : ''}` };
+  if (hd) { x.top = `<div class="ds-top">${banner(s, false, true)}</div>`; x.mcol = sfTabs(s) + body; }
+  return x;
+}
+/* Home: the latest sources added to your spaces */
+function dsHomeCard() {
+  if (st.auth !== 'in') return '';
+  const l = JOINED.map(sp).filter(s => s && canRead(s)).flatMap(s => dsList(s.id).filter(d => !d.rv).map(d => ({ d, s }))).sort((a, b) => ageMin(a.d.age) - ageMin(b.d.age)).slice(0, 5);
+  if (!l.length) return '';
+  return `<div class="note-card ds-hcard"><div class="sk-head"><h3>New sources</h3></div><div class="ds-list">${l.map(({ d, s }) => { const m = MIT(d.m); return `<div class="ds-r ds-r-home" role="link" tabindex="0" data-dsgo="${s.id}:${m.id}">${miIc(m, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(m))}</b><span class="ds-m">${spName(s)}${isClosed(s) ? LK() : ''} · ${dsWho(d.by)} · ${d.age}</span></span></div>`; }).join('')}</div></div>`;
+}
+
+/* ---------- Manage › Sources ---------- */
+function dsManagePage(s) {
+  const pol = dsPol(s.id), all = dsAll(s.id);
+  const row = (d, acts, sub) => { const m = MIT(d.m); return `<div class="ds-mrow">${miIc(m, 'sm')}<div class="ds-mrow-t"><b>${esc(miTitle(m))}</b><small>${sub || `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}</small></div><span class="ds-mrow-a">${acts}</span></div>`; };
+  const b = (k, d, l, cls = '') => `<button class="btn sm${cls}" type="button" data-dsmod="${k}:${s.id}:${d.m}">${l}</button>`;
+  const pend = all.filter(d => d.rv && !d.rm), rem = all.filter(d => d.rm), reps = st.dsReps.filter(r => r.sid === s.id && dsDropOf(s.id, r.m));
+  const who = stSec('Who can add sources', '', `<div class="cs-radios">${radio('ds-pol', 'members', pol, isClosed(s) ? 'Members' : 'Anyone who can post', 'Sources appear in the list when they are added.')}${radio('ds-pol', 'review', pol, isClosed(s) ? 'Members, after review' : 'Anyone who can post, after review', 'A moderator approves each source before others see it.')}${radio('ds-pol', 'mods', pol, 'Moderators', 'Others can still ask about a link they paste into the composer.')}</div>`);
+  const sec = (t, l) => l ? `<section class="st-sec"><div class="st-head"><h3>${t}</h3></div><div class="ds-mlist">${l}</div></section>` : '';
+  const copies = stSec('Reader copies', '', `<ul class="mi-plain"><li>Session keeps one reader copy of each source, shared by the spaces that have it.</li><li>Paid posts: only the free part is kept.</li><li>When the author edits a source, both versions are kept and answers that quote the old text are marked.</li><li>When the author deletes a source, its copy is removed and quotes are replaced with a note.</li>${isClosed(s) ? `<li>Sources and asks in ${spName(s)} are visible to members only. The originals stay public on their sites.</li>` : ''}</ul>`);
+  return `<div class="ds-manage">${sec('Waiting for review', pend.map(d => row(d, b('reject', d, 'Remove') + b('approve', d, 'Approve', ' primary'), `Added by ${dsWho(d.by)} ${dsAgo(d.age)}${d.note ? ' · ' + esc(d.note) : ''}`)).join(''))}${sec('Reported', reps.map(r => row({ m: r.m, by: r.by, age: r.age }, b('keep', r, 'Keep') + b('reject', r, 'Remove'), `${DS_WHY[r.why]} · reported by ${dsWho(r.by)} ${dsAgo(r.age)}`)).join(''))}${who}${sec('Removed', rem.map(d => row(d, b('restore', d, 'Restore'))).join(''))}${copies}</div>`;
+}
+
+/* ---------- dialogs ---------- */
+function dsSendDlg() {
+  const x = st.dsSend; if (!x) return '';
+  const m = MIT(x.m); if (!m) return '';
+  const mine = SPACES.filter(s => JOINED.includes(s.id) && canRead(s) && dsCanAdd(s));
+  const rows = mine.map(s => {
+    const d = dsDropOf(s.id, m.id), on = x.pick.includes(s.id), nm = `${csGlyph(s)}<span class="cs-nmrow">${spName(s)}${isClosed(s) ? LK() : ''}</span>`;
+    return d ? `<div class="ds-sprow dis" aria-disabled="true"><span class="mi-pk on" aria-hidden="true">${I.check}</span>${nm}<small>Already there</small></div>` : `<button class="ds-sprow" type="button" role="checkbox" aria-checked="${on}" data-dspick="${s.id}"><span class="mi-pk${on ? ' on' : ''}" aria-hidden="true">${I.check}</span>${nm}${dsPol(s.id) === 'review' && !isModOf(s.id) ? '<small>After review</small>' : ''}</button>`;
+  }).join('');
+  const closed = x.pick.map(sp).filter(isClosed);
+  const fine = closed.length ? `<p class="cs-fine">${LOCK}<span>In ${closed.map(spName).join(' and ')}, only members see it.</span></p>` : '';
+  const body = `${x.share ? `<p class="faint cs-small ds-shared">${MII.link}<span>${esc(m.url)}</span></p>` : ''}${miMini(m)}<div class="ds-splist" role="group" aria-label="Spaces">${rows}</div><label class="fld"><span>Note (optional)</span><input id="ds-sendnote" type="text" value="${esc(x.note)}" autocomplete="off"></label>${fine}`;
+  return dlg('Send to a space', body, `${cancelB()}<button class="btn primary" type="button" data-dssendgo="1" ${x.pick.length ? '' : 'disabled aria-disabled="true"'}>Send</button>`).replace('class="modal cs-m"', 'class="modal cs-m ds-senddlg"');
+}
+function dsModal() {
+  const [k, a] = (st.modal || '').split(/:(.*)/s);
+  if (k === 'ds-send') return dsSendDlg();
+  const [mid, sid] = (a || '').split(':'), m = MIT(mid), s = sp(sid);
+  if (k === 'ds-rm') return dlg(`Remove this source from ${spName(s)}?`, `${miMini(m)}<p class="muted">It is no longer listed in ${spName(s)}. Asks about it stay in the space.</p>`, `${cancelB()}<button class="btn danger" type="button" data-dsrmok="${mid}:${sid}">Remove</button>`, 'alertdialog');
+  if (k === 'ds-report') return dlg('Report this source', `${miMini(m)}<div class="cs-radios" role="radiogroup" aria-label="Reason">${Object.entries(DS_WHY).map(([v, l]) => radio('ds-why', v, st.dsWhy, l, '')).join('')}</div><label class="fld"><span>Details (optional)</span><textarea id="ds-repnote" rows="2">${esc(st.dsRepNote)}</textarea></label><p class="cs-fine">${SFI.flag}<span>The moderators of ${spName(s)} see the report.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-dsrepgo="${mid}:${sid}">Send report</button>`);
+  return '';
+}
+
+/* ---------- clicks, input, drag and drop ---------- */
+function dsClick(t) {
+  const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
+  let b;
+  if (st.dsMenu && !d('.ds-mw')) st.dsMenu = null;
+  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null, dsSTab: null });
+  if ((b = d('[data-cstoast^="ds:"]'))) {
+    const [, v, sid, mid] = b.dataset.cstoast.split(':'); st.toast = null;
+    if (v === 'open') { Object.assign(st, NAVBASE(), { space: sid }); miOpen(mid); }
+    if (v === 'undo') { const x = dsAll(sid).find(y => y.m === mid && y.rm); if (x) x.rm = false; }
+    return go();
+  }
+  if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
+  if ((b = d('[data-dssignin]'))) { st.modal = 'signin'; return go(); }
+  if ((b = d('[data-dsstab]'))) { st.dsSTab = b.dataset.dsstab; return go(); }
+  if ((b = d('[data-dsdropdemo]'))) { dsDropped(b.dataset.dsdropdemo, DS_DRAG_URL); return true; }
+  if ((b = d('[data-dsclear]'))) { Object.assign(st, { dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
+  if ((b = d('[data-dsadd]'))) {
+    const z = b.closest('[data-dsdz]'), sid = z ? z.dataset.dsdz : st.space, s = sp(sid);
+    if (!st.dsUrl.trim()) return true;
+    const r = dsAdd(st.dsUrl, sid, st.dsNote);
+    Object.assign(st, { dsUrl: '', dsNote: '' });
+    if (r.dup) toast(`Already in ${spName(s)}.`, `ds:open:${sid}:${r.m.id}`, 'Open');
+    else if (b.dataset.dsadd === 'ask' && !r.dup) { Object.assign(st, { miAsk: { it: r.m.id }, miAskQ: '', miAskSp: sid, modal: 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
+    else if (r.rv) toast('Added. A moderator reviews it before others see it.');
+    return go();
+  }
+  if ((b = d('[data-dssend]'))) {
+    if (st.auth !== 'in') { st.modal = 'signin'; return go(); }
+    const v = b.dataset.dssend;
+    const m = v.startsWith('w:') ? dsFromCite(+v.split(':')[1], +v.split(':')[2]) : MIT(v.slice(2));
+    Object.assign(st, { dsSend: { m: m.id, pick: [], note: '' }, dsMenu: null, modal: 'ds-send' });
+    return go();
+  }
+  if ((b = d('[data-dspick]'))) { const p = st.dsSend.pick, k = p.indexOf(b.dataset.dspick); if (k < 0) p.push(b.dataset.dspick); else p.splice(k, 1); return go(); }
+  if ((b = d('[data-dssendgo]'))) {
+    const x = st.dsSend, m = MIT(x.m); if (!x.pick.length) return true;
+    const res = x.pick.map(sid => ({ sid, r: dsAdd(m.url, sid, x.note) }));
+    const rv = res.filter(y => y.r.rv).map(y => spName(sp(y.sid)));
+    Object.assign(st, { modal: null, dsSend: null, dsFlash: null });
+    toast(`Sent to ${res.map(y => spName(sp(y.sid))).join(' and ')}.${rv.length ? ` A moderator of ${rv.join(' and ')} reviews it first.` : ''}`, `ds:open:${res[0].sid}:${m.id}`, 'Open');
+    return go();
+  }
+  if ((b = d('[data-dsrm]'))) { Object.assign(st, { dsMenu: null, modal: 'ds-rm:' + b.dataset.dsrm }); return go(); }
+  if ((b = d('[data-dsrmok]'))) {
+    const [mid, sid] = b.dataset.dsrmok.split(':'), x = dsDropOf(sid, mid);
+    if (x) x.rm = true;
+    st.modal = null;
+    if (st.subPage === 'mitem' && st.miItem === mid) miBack();
+    toast(`Removed from ${spName(sp(sid))}.`, `ds:undo:${sid}:${mid}`, 'Undo');
+    return go();
+  }
+  if ((b = d('[data-dsreport]'))) { st.dsMenu = null; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { dsWhy: 'spam', dsRepNote: '', modal: 'ds-report:' + b.dataset.dsreport }); return go(); }
+  if ((b = d('[data-dsrepgo]'))) { const [mid, sid] = b.dataset.dsrepgo.split(':'); st.dsReps.push({ m: mid, sid, by: ME.u, why: st.dsWhy, age: 'now' }); st.modal = null; toast(`Report sent to the moderators of ${spName(sp(sid))}.`); return go(); }
+  if ((b = d('[data-dsmod]'))) {
+    const [k, sid, mid] = b.dataset.dsmod.split(':'), x = dsAll(sid).find(y => y.m === mid && (k === 'restore' ? y.rm : !y.rm));
+    if (x && k === 'approve') x.rv = false;
+    if (x && (k === 'reject')) x.rm = true;
+    if (x && k === 'restore') x.rm = false;
+    if (k === 'keep' || k === 'reject') st.dsReps = st.dsReps.filter(r => !(r.sid === sid && r.m === mid));
+    return go();
+  }
+  if ((b = d('[data-dsgo]'))) { const [sid, mid] = b.dataset.dsgo.split(':'); Object.assign(st, NAVBASE(), { space: sid, dsUrl: '', dsNote: '', modal: null }); miOpen(mid); return go(); }
+  return false;
+}
+function dsInput(e) {
+  const el = e.target, id = el.id;
+  if (id === 'ds-url') {
+    st.dsUrl = el.value;
+    const z = el.closest('[data-dsdz]'), x = $('ds-det'); if (x) x.innerHTML = dsDetHTML(el.value, z ? z.dataset.dsdz : st.space);
+    const n = $('ds-note'); if (n) n.value = st.dsNote;
+    return true;
+  }
+  if (id === 'ds-note') { st.dsNote = el.value; return true; }
+  if (id === 'ds-sendnote') { if (st.dsSend) st.dsSend.note = el.value; return true; }
+  if (id === 'ds-repnote') { st.dsRepNote = el.value; return true; }
+  if (el.name === 'ds-why') { st.dsWhy = el.value; return true; }
+  if (el.name === 'ds-pol') { st.dsPol[st.mgSpace] = el.value; return true; }
+  if (id === 'ds-file') return true;
+  return false;
+}
+document.addEventListener('change', e => {
+  const el = e.target; if (!el || el.id !== 'ds-file' || !el.files || !el.files[0]) return;
+  const z = el.closest('[data-dsdz]'); dsDropped(z ? z.dataset.dsdz : st.space, null, el.files[0].name);
+});
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t && t.id === 'ds-url' && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('#ds-det [data-dsadd="1"], #ds-det [data-dsgo]'); if (b) b.click(); }
+  if (t && t.id === 'ds-note' && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('#ds-det [data-dsadd="1"]'); if (b) b.click(); }
+  if (t && t.id === 'ds-url' && e.key === 'Escape' && st.dsUrl) { e.preventDefault(); e.stopPropagation(); st.dsUrl = ''; st.dsNote = ''; renderAll(); miFocusQ('ds-url'); }
+  if (e.key === 'Enter' && t && t.closest && t.closest('.ds-r') && t.classList.contains('ds-r')) { e.preventDefault(); t.click(); }
+  if (e.key === 'Escape' && st.dsMenu) { st.dsMenu = null; renderAll(); }
+}, true);
+/* Real drag and drop: a link or a file dropped on a source list adds it to that space. */
+const dsZone = e => e.target && e.target.closest ? e.target.closest('[data-dsdz]') : null;
+document.addEventListener('dragover', e => {
+  const z = dsZone(e); if (!z || st.device === 'native' || !z.querySelector('.ds-over')) return;
+  e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  document.querySelectorAll('[data-dsdz][data-drag]').forEach(x => { if (x !== z) x.removeAttribute('data-drag'); });
+  z.setAttribute('data-drag', '1');
+});
+document.addEventListener('dragleave', e => { const z = dsZone(e); if (z && !z.contains(e.relatedTarget)) z.removeAttribute('data-drag'); });
+document.addEventListener('drop', e => {
+  const z = dsZone(e); if (!z || !z.querySelector('.ds-over')) return;
+  e.preventDefault(); z.removeAttribute('data-drag');
+  const dt = e.dataTransfer, f = dt && dt.files && dt.files[0];
+  const u = dt ? (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/\r?\n/).find(x => x && !x.startsWith('#')) : '';
+  dsDropped(z.dataset.dsdz, f ? null : u, f ? f.name : null);
+});
+/* after each render: height for the Sources column, hide the sub-control that does not apply,
+   and briefly mark a source that was just added (or was already there) */
+/* A composer rises into place the render it opens: fade, 4px rise and a slight scale, 120ms ease-out.
+   Skipped with reduced motion. */
+const COMP_EASE = 'cubic-bezier(.2, .8, .2, 1)';
+function compAnim() {
+  const open = [...document.querySelectorAll('#app .composer.open')];
+  const prev = compAnim.prev || new Set(); compAnim.prev = new Set(open.map(el => el.dataset.ck || 'main'));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || st.device === 'native') return;
+  open.filter(el => !prev.has(el.dataset.ck || 'main')).forEach(el => el.animate([{ opacity: 0, transform: 'translateY(4px) scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 120, easing: COMP_EASE }));
+}
+function dsAfterRender() {
+  compAnim();
+  if (st.dsFlash && st.device !== 'native') {
+    const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+    const id = st.dsFlash; clearTimeout(dsAfterRender.t);
+    dsAfterRender.t = setTimeout(() => { if (st.dsFlash === id) st.dsFlash = null; document.querySelectorAll('#app .ds-r.flash, #app .mi-u.flash').forEach(x => x.classList.remove('flash')); }, 1800);
+  }
+}
+
+/* ---------- control bar ---------- */
+const dsOnSpace = () => {
+  const onSp = st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && canRead(sp(st.space));
+  if (!onSp && st.subPage !== 'mitem') dsJump('ds-s-space');
+};
+function DSKNOBS() {
+  return [
+    ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
+  ];
+}
+
+/* ---------- "Jump to" ---------- */
+const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
+JUMPS.push(
+  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l])]],
+  ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
+);
+function dsNewSpace() {
+  let s = sp('sp-field-notes');
+  if (!s) {
+    s = { id: 'sp-field-notes', name: 'field-notes', title: 'field-notes', av: 3, members: 1, online: 1, posts: 0, used: 0, budget: 8e6, created: 'Nov 2026', desc: 'Methods and sources for ecology field surveys.', rules: ['Say in a note why a source matters.'], pages: [], mods: [], pct: 0, byok: ME.u, faq: false, topics: [] };
+    SPACES.push(s); MYROLES[s.id] = 'Owner'; MYROLES0[s.id] = 'Owner';
+  }
+  setRel(s.id, 'mod');
+  return s;
+}
+function dsJump(k) {
+  if (st.device === 'native') st.device = 'desktop';
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
+  { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
+  setRel('replication', 'none');
+  dsReset();
+  const [, g, v] = k.split('-');
+  const nar = dsNarrow();
+  /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
+  const list = () => { if (nar) st.mWiki = true; };
+  const listFull = list;
+  const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
+  const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
+  switch (g === 'x' ? 'x-' + v : v) {
+    case 'space': break;
+    case 'paste': list(); st.dsUrl = 'x.com/lin_feld/status/18590'; break;
+    case 'drag': list(); st.dsDrag = 'ml'; break;
+    case 'dup': list(); st.dsUrl = 'https://www.orbitlab.ai/blog/rb-2-response?utm_source=x'; break;
+    case 'reader': miOpen('m1'); break;
+    case 'pass': miOpen('m2', 3); Object.assign(st, { miSel: 3, miQuote: 'The second tenfold increase pays for itself on about half of them.' }); ask({ it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where the second tenfold increase does not pay for itself?'); break;
+    case 'pick': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); break;
+    case 'multi': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); ask({ its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree, and what evidence does each give?'); break;
+    case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
+    case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
+    case 'out': st.auth = 'out'; list(); break;
+    case 'x-send': setRel('replication', 'member'); miOpen('m3'); Object.assign(st, { dsSend: { m: 'm3', pick: ['replication'], note: '' }, modal: 'ds-send' }); break;
+    case 'x-cite': th('mia4'); Object.assign(st, { dsSend: { m: 'm11', pick: [], note: '' }, modal: 'ds-send' }); break;
+    case 'x-share': setRel('replication', 'member'); st.home = true; Object.assign(st, { dsSend: { m: 'm12', pick: ['ml'], note: '', share: true }, modal: 'ds-send' }); break;
+    case 'x-home': st.home = true; break;
+    case 'x-review': st.space = 'public'; list(); st.dsUrl = 'x.com/lin_feld/status/18590'; break;
+    case 'x-queue': setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); break;
+    case 'x-manage': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', mgTab: 'sources', set: null }); break;
+    case 'x-report': miOpen('m10'); Object.assign(st, { dsWhy: 'topic', dsRepNote: '', modal: 'ds-report:m10:ml' }); break;
+    case 'x-remove': miOpen('m10'); st.modal = 'ds-rm:m10:ml'; break;
+  }
+}
+
+/* ---------- state ---------- */
+Object.assign(st, {
+  dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
+  dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
+});
+/* END dropped sources js */
+
+
+
+
+
+
+
+
+
+
 
 /* ---------- state ---------- */
 const REPS0 = [
@@ -6092,13 +7599,14 @@ const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? `${spNa
 
 /* ---------- small parts ---------- */
 function qtAnswer(T, n) {
-  if (n.running) return answerHTML({ running: true, s: T.p.s });
+  if (n.running) return n.id === 'r' && T.p.about ? miRun(T.p) : answerHTML({ running: true, s: T.p.s });
   if (modOf(n.rep)) return modPh(n.rep, n.id === 'r' ? 'answer' : 'follow-up answer');
   return `<div class="prose qt-prose">${n.html}</div>`;
 }
 const qtSrcs = (T, n) => {
   if (n.id !== 'r' || n.running) return '';
-  const src = srcItems(T.p);
+  const src = srcItems(T.p), mis = miSrc(T.p, src); /* asks about sources list the passages they used */
+  if (mis) return mis.m;
   return src.length ? `<ol class="m-src qt-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : '';
 };
 const qtLv = (n, on) => `<span class="qt-lv num${on ? ' on' : ''}" title="${qtLvName(n)}">${n.id === 'r' ? 'Q' : n.lv}</span>`;
@@ -6199,7 +7707,7 @@ function qtNestView(T, cur) {
   const tp = T.path(top.id);
   const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
   const rootAsk = top.id === 'r' && cur.id === 'r' && !st.qtAskAt;
-  const head = top.id === 'r' ? `<div class="qt-nh"><div class="qt-nh-top">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
+  const head = top.id === 'r' ? `${miAbout(T.p)}<div class="qt-nh"><div class="qt-nh-top">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
   const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${fbar}
     <article class="qt-node qt-inl" id="qt-n-${top.id}">${head}
     <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r">${QTI.ask}Ask about this answer</button>`}`) : qtNodeActs(T, top)}
@@ -6573,6 +8081,7 @@ function renderAllInner() {
   else if (st.compOpen) { const c = $('compose-text'); if (c) { c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } }
   flipMenus();
   csAfterRender();
+  dsAfterRender();
   qtAfterRender();
 }
 function pickOption(id) {
@@ -6653,6 +8162,8 @@ $('app').addEventListener('click', e => {
 });
 $('app').addEventListener('input', e => {
   if (st.device === 'native') { nInput(e); return; }
+  if (dsInput(e)) return;
+  if (miInput(e)) return;
   if (qtInput(e)) return;
   if (sfInput(e)) return;
   if (csInput(e)) return;
