@@ -2368,14 +2368,11 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-q[data-miopen]:hover { border-left-color: var(--accent); }
 .mi-q.sm { font-size: var(--fs-xs); }
 .mi-askbox { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-/* inline ask composer ("Ask about a source": inline at the end, at the passage, docked) */
+/* inline ask composer at the end of the reader */
 .mi-icomp .mi-iq { margin: 0 34px 2px 0; }
 .mi-icomp .c2-bar { display: flex; align-items: center; gap: 6px; }
 .mi-icsp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
 .mi-icsp .dd-btn { max-width: 180px; }
-.mi-atp { margin: 4px 0 14px; }
-.mi-dock { position: sticky; bottom: 12px; z-index: 6; margin-top: 18px; }
-.mi-dock > .composer { box-shadow: var(--shadow-pop); background: var(--popover, var(--field)); }
 .mi-orig { padding: 0 8px; }
 .mi-orig svg { margin: 0; }
 .mi-asks { border-top: 1px solid var(--divider); padding-top: 18px; }
@@ -2660,8 +2657,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
-      <div class="knob" id="kw-dsask"><span>Ask about a source</span><div class="seg" id="k-dsask"></div></div>
-      <div class="knob" id="kw-companim"><span>Composer opening</span><div class="seg" id="k-companim"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -6393,7 +6388,6 @@ function miReader(m, o = {}) {
     const ab = o.ask ? `<button class="mi-bask" type="button" data-miask="b:${i}" aria-label="Ask about ${miLblLong(m, i)}" title="Ask about this passage">${MII.ask}</button>` : '';
     const pop = sel ? `<div class="mi-selpop" role="toolbar" aria-label="Selected passage"><button class="btn sm primary" type="button" data-miask="b:${i}">${MII.ask}Ask about this passage</button><button class="btn sm" type="button" data-micopy="${i}">${CI.link}Copy link</button><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button></div>` : '';
     out.push(`<div class="mi-b${asks.length ? ' has-asks' : ''}${sel ? ' sel' : ''}${hi ? ' hi' : ''}${b.ts ? ' mi-seg' : ''}${m.kind === 'thread' ? ' mi-post' : ''}" id="mib-${i}" data-mib="${i}">${gut}<div class="mi-bt">${b.sp ? `<b class="mi-spk">${esc(b.sp)}</b>` : ''}<p>${txt}</p>${q}</div>${ab}${pop}</div>`);
-    if (o.after && o.after[i]) out.push(o.after[i]);
   }
   return `<div class="mi-reader mi-r-${m.kind}${o.ask ? ' askable' : ''}">${out.join('')}</div>`;
 }
@@ -6426,21 +6420,18 @@ function miItemPage() {
 function miParts(m) {
   const s = sp(st.space), asks = miAsksOf(m.id), byB = {};
   asks.forEach(x => { const b = x.p.about.b; if (b != null && x.p.about.it === m.id) (byB[b] = byB[b] || []).push(x); });
-  const pa = st.miAsk && !st.modal && st.dsAsk === 'passage' && st.miAsk.it === m.id && st.miAsk.b != null ? st.miAsk : null;
-  const reader = m.deleted ? '' : miReader(m, { byB, ask: true, after: pa ? { [pa.b]: `<div class="mi-askbox mi-atp">${miInlineComp(m, pa)}</div>` } : null });
+  const reader = m.deleted ? '' : miReader(m, { byB, ask: true });
   const list = l => l.map(x => miAskCard(x, m)).join('') || '<p class="muted cs-small">No asks yet.</p>';
   const askList = `<section class="mi-asks" id="mi-asks"><h3>Asks about this source <span class="faint num">${asks.length}</span></h3><div class="mi-acs">${list(asks)}</div></section>`;
-  /* "Ask about a source" control (st.dsAsk): dialog, inline at the end, inline at the passage, docked */
-  const a = st.miAsk && !st.modal && st.miAsk.it === m.id ? st.miAsk : null, mode = st.dsAsk;
-  const atEnd = a && (mode === 'end' || mode === 'dock' || (mode === 'passage' && a.b == null));
-  const closed = mode === 'dock' && st.miSel != null ? `<button class="composer c2-closed" type="button" data-miask="b:${st.miSel}"><span class="ph">Ask about the selected passage…</span></button>`
-    : `<button class="composer c2-closed" type="button" data-miask="item"><span class="ph">Ask about this source…</span></button>`;
-  const askBox = m.deleted ? '' : `<div class="mi-askbox${mode === 'dock' ? ' mi-dock' : ''}">${atEnd ? miInlineComp(m, a) : closed}</div>`;
+  /* Asking about this source or a passage opens the composer in place of the ask box, at the end of the
+     reader; the passage is quoted above the question. Asks about several sources use the dialog. */
+  const a = st.miAsk && !st.modal && st.miAsk.it === m.id ? st.miAsk : null;
+  const askBox = m.deleted ? '' : `<div class="mi-askbox">${a ? miInlineComp(m, a) : '<button class="composer c2-closed" type="button" data-miask="item"><span class="ph">Ask about this source…</span></button>'}</div>`;
   const acts = `<div class="mi-acts">${miOrigBtn(m)}${miSaveBtn(m)}${typeof dsSourceActs === 'function' ? dsSourceActs(m, s) : ''}</div>`;
   const selBar = st.miSel != null && !m.deleted ? `<div class="mi-selbar" role="toolbar" aria-label="Selected passage"><span class="mi-selbar-t">${esc(clip(st.miQuote || m.body[st.miSel].p, 70))}</span><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button><button class="btn primary" type="button" data-miask="b:${st.miSel}">Ask</button></div>` : '';
   const side = `<div class="rf-card"><h3>Details</h3>${miFacts(m)}</div>${miAlsoIn(m)}`;
   const note = typeof dsNoteHTML === 'function' ? dsNoteHTML(m, s) : '';
-  return { main: st.dsAsk === 'dock' ? `${miHead(m)}${note}${miStateNote(m)}${reader}${askList}${askBox}` : `${miHead(m)}${note}${miStateNote(m)}${reader}${askBox}${askList}`, acts, side, selBar };
+  return { main: `${miHead(m)}${note}${miStateNote(m)}${reader}${askBox}${askList}`, acts, side, selBar };
 }
 const miQuoteText = (p, m) => { const b = p.about.b; if (p.about.quote) return p.about.quote; if (m.edited && m.edited.b === b && ageMin(p.age) > ageMin(m.edited.age)) return m.edited.old; return m.body[b] ? m.body[b].p : ''; };
 
@@ -6615,7 +6606,7 @@ function miClick(t) {
     else if (v.startsWith('b:')) { const i = +v.slice(2); a = { it: st.miItem, b: i, quote: st.miSel === i ? st.miQuote : '' }; }
     else if (v === 'pick') { if (st.miPick.length < 2) return true; a = { its: [...st.miPick] }; }
     else if (v.startsWith('item:')) a = { it: v.slice(5) };
-    const inline = st.dsAsk !== 'dialog' && st.subPage === 'mitem' && !a.its && a.it === st.miItem;
+    const inline = st.subPage === 'mitem' && !a.its && a.it === st.miItem;
     Object.assign(st, { miAsk: a, miAskQ: '', miAskSp: st.space, modal: inline ? null : 'mi-ask' });
     if (inline) Object.assign(st, { miSel: null, miQuote: a.quote ? st.miQuote : '' });
     renderAll(); miFocusQ('mi-askq');
@@ -7069,34 +7060,14 @@ document.addEventListener('drop', e => {
 });
 /* after each render: height for the Sources column, hide the sub-control that does not apply,
    and briefly mark a source that was just added (or was already there) */
-/* "Composer opening" control (st.compAnim): animates a composer the render it opens. Very short and
-   ease-out so it reads as immediate: Expand (height grows from the closed composer, content below
-   moves with it), Unfold (clipped reveal from the closed height), Rise (fade, 4px rise, slight scale),
-   Fade, None. */
+/* A composer rises into place the render it opens: fade, 4px rise and a slight scale, 120ms ease-out.
+   Skipped with reduced motion. */
 const COMP_EASE = 'cubic-bezier(.2, .8, .2, 1)';
 function compAnim() {
   const open = [...document.querySelectorAll('#app .composer.open')];
-  const keys = new Set(open.map(el => el.dataset.ck || 'main'));
-  const closed = document.querySelector('#app .composer.c2-closed');
-  if (closed) compAnim.h0 = closed.offsetHeight;
-  const prev = compAnim.prev || new Set(); compAnim.prev = keys;
-  const v = st.compAnim, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (v === 'none' || reduce || st.device === 'native') return;
-  open.filter(el => !prev.has(el.dataset.ck || 'main')).forEach(el => {
-    const h0 = compAnim.h0 || 44, h1 = el.offsetHeight, kids = [...el.children];
-    if (v === 'expand') {
-      el.style.overflow = 'hidden';
-      el.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: 140, easing: COMP_EASE }).onfinish = () => { el.style.overflow = ''; };
-      kids.forEach(k => k.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 110, delay: 30, easing: 'ease-out', fill: 'backwards' }));
-    } else if (v === 'unfold') {
-      const r = getComputedStyle(el).borderRadius;
-      el.animate([{ clipPath: `inset(0 0 ${h1 - h0}px 0 round ${r})` }, { clipPath: `inset(0 0 0 0 round ${r})` }], { duration: 130, easing: COMP_EASE });
-    } else if (v === 'rise') {
-      el.animate([{ opacity: 0, transform: 'translateY(4px) scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 120, easing: COMP_EASE });
-    } else if (v === 'fade') {
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100, easing: 'ease-out' });
-    }
-  });
+  const prev = compAnim.prev || new Set(); compAnim.prev = new Set(open.map(el => el.dataset.ck || 'main'));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || st.device === 'native') return;
+  open.filter(el => !prev.has(el.dataset.ck || 'main')).forEach(el => el.animate([{ opacity: 0, transform: 'translateY(4px) scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 120, easing: COMP_EASE }));
 }
 /* the panel over the page is as tall as the visible part of the page below the header */
 function dsOvFit() {
@@ -7125,8 +7096,6 @@ const dsOnSpace = () => {
 function DSKNOBS() {
   return [
     ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['tabs', 'Tabs beside Threads'], ['split', 'Sources left, wiki right'], ['overlay', 'Panel over the page']], () => { Object.assign(st, { drawer: true, dsLOpen: true, dsOvOpen: st.dsPos === 'overlay', dsSTab: 'sources', mWiki: false }); if (['sources', 'wiki'].includes(st.spTab)) st.spTab = 'threads'; dsOnSpace(); }],
-    ['k-dsask', 'dsAsk', [['dialog', 'Dialog'], ['end', 'Inline at the end'], ['passage', 'Inline at the passage'], ['dock', 'Docked']], () => { Object.assign(st, { miAsk: null, miAskQ: '', modal: null }); if (st.subPage !== 'mitem') { dsJump('ds-s-space'); miOpen('m2'); } }],
-    ['k-companim', 'compAnim', [['expand', 'Expand'], ['unfold', 'Unfold'], ['rise', 'Rise'], ['fade', 'Fade'], ['none', 'None']], () => { compAnim.prev = new Set(); }],
   ];
 }
 
@@ -7184,7 +7153,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'right', dsLOpen: true, dsOvOpen: false, dsAsk: 'dialog', compAnim: 'expand', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'right', dsLOpen: true, dsOvOpen: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
