@@ -2258,7 +2258,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-pk { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--control-border); background: var(--field); display: grid; place-items: center; color: transparent; margin-top: 4px; }
 .mi-pk svg { width: 12px; height: 12px; }
 .mi-pk.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-/* source units in Saved ("Item style" is fixed to Plain rows in this copy) */
+/* source units: the full source list ("Item style") and Saved (Plain rows) */
 .mi-units { display: flex; flex-direction: column; }
 .mi-units.mi-lay-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .mi-u { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; cursor: pointer; min-width: 0; }
@@ -2272,9 +2272,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-u-dot { position: absolute; top: 6px; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .mi-u .mi-pk { margin-top: 2px; }
 .mi-u:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-md); }
-.mi-u-top { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-xs); color: var(--t-faint); }
-.mi-u-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 18px; padding: 0 7px; border-radius: 999px; background: var(--fill-subtle); border: 1px solid var(--border-subtle); color: var(--t-secondary); font-weight: 600; font-size: 10.8px; }
-.mi-u-by { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Plain rows: no box, hairlines between units */
 .mi-sty-plain .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
 .mi-sty-plain.mi-lay-rows .mi-u:first-child { border-top: 0; }
@@ -2286,26 +2283,43 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-sty-boxed .mi-u { padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
 .mi-sty-boxed .mi-u:hover { border-color: var(--border-strong); }
 .mi-sty-boxed .mi-u-dot { top: 20px; right: 14px; }
-/* Reader: larger title, source line under it, longer excerpt */
-.mi-sty-reader .mi-u { padding: 18px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-reader.mi-lay-rows .mi-u:first-child { border-top: 0; padding-top: 6px; }
-.mi-sty-reader.mi-lay-cards { gap: 0 28px; }
-.mi-sty-reader .mi-u-b { gap: 6px; }
-.mi-sty-reader .mi-u-t { font-size: 17.5px; line-height: 1.35; letter-spacing: -.01em; }
-.mi-sty-reader .mi-u-x { font-size: var(--fs-base); color: var(--t-secondary); -webkit-line-clamp: 4; }
-.mi-sty-reader .mi-u-dot { top: 26px; }
-.mi-sty-reader.mi-lay-rows .mi-u:first-child .mi-u-dot { top: 14px; }
+/* Boxed media only: plain rows, with podcasts and videos in a box */
+.mi-sty-boxedav .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-boxedav.mi-lay-rows .mi-u:first-child, .mi-sty-boxedav.mi-lay-rows .mi-u.mi-box + .mi-u { border-top: 0; }
+.mi-sty-boxedav.mi-lay-cards { gap: 0 24px; }
+.mi-sty-boxedav .mi-u:not(.mi-box):hover .mi-u-t { text-decoration: underline; text-underline-offset: 2px; }
+.mi-sty-boxedav .mi-u-dot { top: 20px; }
+.mi-sty-boxedav .mi-u.mi-box { padding: 14px 16px; margin: 6px 0; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.mi-sty-boxedav .mi-u.mi-box:hover { border-color: var(--border-strong); }
+.mi-sty-boxedav .mi-u.mi-box .mi-u-dot { right: 14px; }
 /* Compact: source badge above the title, two-line excerpt */
-.mi-sty-compact .mi-u { padding: 10px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-compact.mi-lay-rows .mi-u:first-child { border-top: 0; }
-.mi-sty-compact.mi-lay-cards { gap: 8px; }
-.mi-sty-compact.mi-lay-cards .mi-u { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--fill-subtle); }
-.mi-sty-compact .mi-u-b { gap: 4px; }
-.mi-sty-compact .mi-u-t { font-size: var(--fs-sm); -webkit-line-clamp: 2; }
-.mi-sty-compact .mi-u-x { font-size: var(--fs-xs); }
-.mi-sty-compact .mi-u-dot { top: 15px; }
 .mi-u.picked .mi-u-t { color: var(--accent-strong); }
-.mi-sty-boxed .mi-u.picked, .mi-sty-compact.mi-lay-cards .mi-u.picked { border-color: var(--accent); background: var(--accent-soft); }
+.mi-sty-boxed .mi-u.picked, .mi-sty-boxedav .mi-u.mi-box.picked { border-color: var(--accent); background: var(--accent-soft); }
+/* Native by type, Social feed */
+.mi-u2 { grid-template-columns: minmax(0, 1fr); }
+.mi-u2.picking { grid-template-columns: 18px minmax(0, 1fr); }
+.mi-p { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; }
+.mi-p > .av { width: 32px; height: 32px; font-size: 12.35px; }
+.mi-p > .mi-ic { width: 32px; height: 32px; border-radius: 8px; }
+.mi-p-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 14px; }
+.mi-p-h { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; font-size: var(--fs-sm); min-width: 0; }
+.mi-p-h b { color: var(--t-heading); font-weight: 650; }
+.mi-p-h .faint { font-size: var(--fs-sm); }
+.mi-p-th { font-size: var(--fs-xs); color: var(--t-faint); border: 1px solid var(--border-subtle); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.mi-p-t { margin: 0; color: var(--t-primary); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-line; }
+.mi-p-q { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); line-height: 1.45; }
+.mi-p-q p { margin: 3px 0 0; color: var(--t-secondary); overflow-wrap: anywhere; }
+.mi-p-qh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mi-p-qh b { font-weight: 600; color: var(--t-strong); }
+.mi-p-qh .av.sm { width: 18px; height: 18px; font-size: 8.5px; }
+.mi-sty-native .mi-u, .mi-sty-social .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-native.mi-lay-rows .mi-u:first-child, .mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
+.mi-sty-native.mi-lay-cards, .mi-sty-social.mi-lay-cards { gap: 0 24px; }
+.mi-sty-native .mi-u-dot, .mi-sty-social .mi-u-dot { top: 20px; }
+/* Social feed: link previews */
+.mi-lp { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); min-width: 0; }
+.mi-lp-m { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
+.mi-lp-m svg { width: 12px; height: 12px; }
 /* item page */
 .mi-page { position: relative; padding: 18px 40px 48px; max-width: 1120px; margin: 0 auto; }
 .mi-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
@@ -2466,8 +2480,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .mi-msrc { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 12px; margin-top: 4px; }
   .mi-msrc h3 { margin: 0; font-size: var(--fs-xs); font-weight: 500; color: var(--t-faint); }
   .mi-units.mi-lay-cards { grid-template-columns: minmax(0, 1fr); }
-  .mi-sty-plain.mi-lay-cards .mi-u:first-child, .mi-sty-reader.mi-lay-cards .mi-u:first-child { border-top: 0; }
-  .mi-sty-reader .mi-u-t { font-size: var(--fs-input); }
+  .mi-sty-plain.mi-lay-cards .mi-u:first-child, .mi-sty-boxedav.mi-lay-cards .mi-u:first-child { border-top: 0; }
+  .mi-sty-native.mi-lay-cards .mi-u:first-child, .mi-sty-social.mi-lay-cards .mi-u:first-child { border-top: 0; }
   .mi-note-a { width: 100%; }
 }
 /* END media items css */
@@ -2496,7 +2510,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-ro { align-items: flex-start; }
 .ds-ronly { margin: 0; }
 /* drag over a source list */
-[data-dsdz]:not(.ds-col) { position: relative; }
+[data-dsdz] { position: relative; }
 .ds-over { display: none; position: absolute; inset: 6px; z-index: 6; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; border: 2px dashed var(--accent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--accent) 10%, var(--pane)); color: var(--t-heading); font-size: var(--fs-sm); font-weight: 600; text-align: center; cursor: copy; }
 .ds-over svg { width: 22px; height: 22px; color: var(--accent); }
 [data-dsdz][data-drag] > .ds-over { display: flex; }
@@ -2504,7 +2518,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-list { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .ds-r { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: var(--r-lg); cursor: pointer; min-width: 0; }
 .ds-r:hover { background: var(--fill-hover); }
-.ds-r[aria-current="true"], .ds-r.picked { background: var(--accent-soft); }
+.ds-r.picked { background: var(--accent-soft); }
 .ds-r:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ds-r > .mi-ic { margin-top: 1px; }
 .ds-rb { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; padding-right: 10px; }
@@ -2516,29 +2530,12 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-r .mi-u-dot { top: 14px; right: 6px; }
 .ds-r .mi-pk { flex: none; margin-top: 2px; }
 .ds-rv { align-self: flex-start; margin-top: 3px; }
-.ds-r.flash { animation: ds-flash 1.7s ease-out; }
+.ds-r.flash, .mi-u.flash { animation: ds-flash 1.7s ease-out; }
 @keyframes ds-flash { 0%, 45% { background: color-mix(in srgb, var(--accent) 22%, transparent); } 100% { background: transparent; } }
-@media (prefers-reduced-motion: reduce) { .ds-r.flash { animation: none; background: var(--accent-soft); } }
-/* by day */
-.ds-gh { margin: 12px 8px 2px; font-size: 10.8px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t-faint); }
-.ds-gh:first-child { margin-top: 4px; }
-.ds-r-day .av { margin-top: 1px; flex: none; }
-.ds-tm { flex: none; font-size: var(--fs-xs); padding-top: 1px; }
-.ds-r-day .ds-rb { padding-right: 4px; }
-.ds-r-day .mi-u-dot { top: 31px; right: 10px; }
-/* cards */
-.ds-c-cards .ds-list, .ds-list-main { gap: 8px; }
-.ds-r-card { padding: 12px; border: 1px solid var(--border-subtle); background: var(--card); }
-.ds-r-card:hover { border-color: var(--border-strong); background: var(--card); }
-.ds-r-card[aria-current="true"], .ds-r-card.picked { border-color: var(--accent); background: var(--accent-soft); }
-.ds-r-card .ds-rb { gap: 4px; }
-.ds-srcl { color: var(--t-secondary); }
-.ds-srcl .mi-ic.xs { margin-left: -2px; color: var(--t-muted); }
-.ds-x { font-size: var(--fs-xs); line-height: 1.45; color: var(--t-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .ds-r.flash, .mi-u.flash { animation: none; background: var(--accent-soft); } }
 .ds-rn { display: flex; gap: 6px; align-items: flex-start; margin-top: 2px; padding: 6px 8px; border-radius: var(--r-md); background: var(--fill-subtle); font-size: var(--fs-xs); line-height: 1.45; color: var(--t-secondary); }
 .ds-rn b { font-weight: 600; color: var(--t-strong); }
 .ds-rn .av { flex: none; }
-.ds-r-card .mi-u-dot { top: 16px; right: 12px; }
 .ds-empty { display: flex; flex-direction: column; gap: 4px; padding: 20px 10px; text-align: center; font-size: var(--fs-sm); }
 .ds-empty b { font-weight: 600; color: var(--t-strong); }
 .ds-empty span { font-size: var(--fs-xs); color: var(--t-faint); }
@@ -2548,38 +2545,19 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-pickbar { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: var(--r-lg); background: var(--popover); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: var(--fs-sm); }
 .ds-pickbar > span { flex: 1; color: var(--t-secondary); }
 .ds-pickbar .btn[disabled] { opacity: .5; }
-.ds-scard .ds-pickbar, .ds-pane .ds-pickbar, .ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
-/* placement 1: Sources column */
-.Af .body.ds-body { grid-template-columns: auto minmax(0, 1fr) auto; }
-.ds-col { position: sticky; top: 0; align-self: start; height: var(--ds-vh, 100vh); width: 272px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--divider); background: var(--pane); }
-.ds-col.ds-c-cards { width: 328px; }
-.ds-col.min { width: 48px; align-items: center; gap: 6px; padding: 12px 0; }
-.ds-col.min .vlabel { margin-top: 6px; }
-.ds-ch { display: flex; align-items: center; gap: 2px; padding: 12px 10px 10px 16px; }
-.ds-ch h3 { flex: 1; margin: 0; font-size: var(--fs-sm); font-weight: 650; color: var(--t-heading); }
-.ds-ch .iconbtn svg { width: 15px; height: 15px; }
-.ds-col > .ds-drop, .ds-col > .ds-ronly { margin: 0 12px 10px; }
-.ds-col > .ds-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px; scrollbar-width: thin; }
-.ds-col > .ds-pickbar { margin: 0 10px 10px; }
-.ds-rpage { max-width: 800px; margin: 0; padding: 18px 36px 48px; }
-.ds-rpage .mi-main { max-width: 680px; }
-.ds-rpage .mi-selbar { margin-left: -14px; margin-right: -14px; }
-.ds-mdet { display: none; }
-.ds-rside .dbody { gap: 14px; padding-top: 18px; }
-.ds-rside .rf-card { margin: 0; }
-.ds-rbar .th-back .m-only { display: none; }
-/* Sources tab: on phones only in the column placement */
-.sp-tab.ds-ph, .ds-tabwrap { display: none; }
-.sp-tab.ds-alt { color: var(--t-heading); }
-.sp-tab.ds-alt::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
+.ds-pane .ds-pickbar, .ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
 .ds-allm { gap: 12px !important; }
 .ds-allh { display: flex; align-items: flex-start; gap: 6px; }
 .ds-allh > .ds-drop { flex: 1; min-width: 0; }
 .ds-allh > .ds-selb { width: 36px; height: 36px; flex: none; }
 .mi-bar .th-back { white-space: nowrap; flex: none; }
-/* placement 2: right sidebar */
+/* full list in the main column (Stack): item style units, plus who added the source, the note and asks */
+.ds-units .ds-ux { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ds-units .mi-u2 > .ds-ux { grid-column: -2; margin-top: -6px; padding: 0 14px 0 42px; }
+.ds-units .ds-rn { align-self: flex-start; margin-top: 0; }
+.ds-units .ds-m .ds-n:first-child { margin-left: 0; }
+/* right sidebar: Sources and Wiki tabs */
 .ds-side .dh .grow { flex: 1; }
-.ds-dht { color: var(--t-heading); font-size: var(--fs-sm); }
 .drawer .dh.ds-tabs { gap: 2px; padding: 0 12px 0 6px; }
 .ds-stab { position: relative; height: 46px; padding: 0 10px; border: 0; background: transparent; color: var(--t-muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
 .ds-stab:hover { color: var(--t-strong); }
@@ -2588,10 +2566,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .drawer .dbody.ds-pane { gap: 10px; }
 .ds-tabl { display: flex; gap: 2px; align-self: stretch; }
 .ds-tabs .ds-selb { width: 28px; height: 28px; }
-.ds-pane > .ds-list, .ds-scard .ds-list, .ds-hcard .ds-list { margin: 0 -8px; }
-.ds-scard .sk-head { display: flex; align-items: center; justify-content: space-between; min-height: 26px; }
-.ds-scard .sk-head h3 { margin: 0; }
-.ds-scard .sk-head .iconbtn { width: 26px; height: 26px; margin: -4px -4px -4px 0; }
+.ds-pane > .ds-list, .ds-hcard .ds-list { margin: 0 -8px; }
 .ds-morel { align-self: flex-start; font-size: var(--fs-sm); }
 .ds-stk { position: relative; display: block; width: 100%; padding: 0 0 14px; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .ds-stk-c { position: relative; z-index: 2; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
@@ -2628,7 +2603,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-sprow .glyph { width: 20px; height: 20px; font-size: 10px; border-radius: 5px; flex: none; }
 .ds-sprow.dis { cursor: default; color: var(--t-muted); }
 .ds-sprow.dis .mi-pk { opacity: .45; }
-.ds-adddlg { display: flex; flex-direction: column; min-height: 60px; }
 /* Manage › Sources */
 .ds-manage { margin-top: 6px; }
 .ds-manage > .st-sec:first-child { border-top: 0; padding-top: 14px; }
@@ -2639,23 +2613,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-mrow-t b { font-weight: 600; font-size: var(--fs-sm); color: var(--t-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-mrow-t small { font-size: var(--fs-xs); color: var(--t-faint); }
 .ds-mrow-a { display: flex; gap: 6px; }
-@media (max-width: 920px) {
-  .Af .body.ds-body { grid-template-columns: auto minmax(0, 1fr); }
-  .ds-body > .drawer { grid-column: 2; }
-}
 @media (max-width: 640px) {
-  .ds-col { display: none !important; }
-  .Af .body.ds-body { grid-template-columns: minmax(0, 1fr) !important; }
-  .ds-body > .drawer { grid-column: 1; }
-  .ds-pcol .sp-tab.ds-ph { display: block; }
-  .ds-tabwrap { display: block; }
-  .ds-dt { display: none; }
-  .sp-tab.ds-alt { color: var(--t-muted); }
-  .sp-tab.ds-alt::after { content: none; }
-  .ds-rpage { padding: 14px 14px 40px; }
-  .ds-rbar .th-back .m-only { display: inline; }
-  .ds-mdet { display: flex; flex-direction: column; gap: 14px; margin-top: 22px; }
-  .ds-list-main .ds-r { padding: 10px 8px; }
   .ds-senddlg { width: 100%; }
   .ds-mrow { grid-template-columns: 22px minmax(0, 1fr); }
   .ds-mrow-a { grid-column: 2; }
@@ -2697,9 +2655,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     </div>
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
-      <div class="knob"><span>Sources placement</span><div class="seg" id="k-dsplace"></div></div>
-      <div class="knob" id="kw-dscol"><span>Column</span><div class="seg" id="k-dscol"></div></div>
       <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
+      <div class="knob" id="kw-dssty"><span>Item style</span><div class="seg" id="k-dssty"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3064,7 +3021,7 @@ function csTabs() {
 const banner = (s, noCta) => {
   const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const mw = st.dsPlace === 'side' && canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  const mw = canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
   return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
@@ -3081,11 +3038,11 @@ const layoutSpace = () => {
         ${feed2(s.id)}
       </div>`;
   const body = tab === 'about' ? sfAbout(s) : threads;
-  /* Sources placement: a Sources column on the left, or sources in the right sidebar (dsSpaceParts). */
-  const x = dsSpaceParts(s, tab, body, threads);
+  /* Sources are in the right sidebar; the Stack variant adds a full list in the main column (dsSpaceParts). */
+  const x = dsSpaceParts(s, tab, body);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
     ${topHeader()}
-    <div class="body${x.left ? ' ds-body' : ''}">${x.left}
+    <div class="body">
       <div class="mcol">${x.mcol}</div>
       ${x.side}
     </div></div>`;
@@ -3391,7 +3348,7 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
-  if (st.dsPlace === 'side' && canRead(s)) return dsSideDrawer(s);
+  if (canRead(s)) return dsSideDrawer(s);
   return st.drawer
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
@@ -5876,14 +5833,12 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* Tabs: Threads, Sources (the full source list: on phones in the Sources column placement, and in the
-   sidebar "Stack" variant), About. */
+/* Tabs: Threads, Sources (the full source list, in the sidebar "Stack" variant), About. */
 const sfTabCur = () => st.spTab === 'sources' && dsTabOn(sp(st.space)) ? 'sources' : st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  const ds = dsTabOn(s), col = st.dsPlace === 'col';
+  const ds = dsTabOn(s);
   const cur = sfTabCur(), items = [['threads', 'Threads'], ...(ds ? [['sources', 'Sources']] : []), ['about', 'About']];
-  const cls = k => k === 'sources' && col ? ' ds-ph' : k === 'threads' && col && cur === 'sources' ? ' ds-alt' : '';
-  return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab${cls(k)}" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
+  return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
 const visText = s => !isClosed(s) ? 'Open: anyone can read threads' : s.vis === 'unlisted' ? 'Closed and unlisted: members read threads; hidden from browse and search' : 'Closed: members read threads; shown in browse and search';
@@ -6349,13 +6304,12 @@ const miRefs = p => !p.about ? [] : p.about.its ? p.about.its : [p.about.it];
 const miAsksOf = id => POSTS.map((p, i) => ({ p, i })).filter(({ p }) => p.about && miRefs(p).includes(id) && canRead(sp(p.s)));
 const miTok = n => n >= 1e3 ? fmt(n) : Math.round(n / 100) * 100 || 100;
 const miIsAdmin = sid => isAdminOf(sid);
-/* No Items tab: a space's sources are listed in the Sources column or sidebar (see dropped sources). */
+/* No Items tab: a space's sources are listed in the sidebar and the full list (see dropped sources). */
 function miUrl() {
-  const inSp = st.dsOpen && !st.subPage && st.thread == null && !st.home;
-  if (st.subPage !== 'mitem' && !inSp) return null;
+  if (st.subPage !== 'mitem') return null;
   const m = MIT(st.miItem); if (!m) return null;
   const hash = st.miHi != null ? '#' + miLbl(m, st.miHi).replace(/[^0-9a-z:]/gi, '') : '';
-  return inSp ? `session.app/s/${sp(st.space).name}/source/${m.url.split('/').pop()}${hash}` : `session.app/source/${m.url.split('/').pop()}${hash}`;
+  return `session.app/source/${m.url.split('/').pop()}${hash}`;
 }
 CS_PAGES.mitem = () => miItemPage();
 /* ---------- shared pieces ---------- */
@@ -6367,19 +6321,38 @@ const miOpenAttr = (m, b) => `data-miopen="${m.id}${b != null ? ':' + b : ''}"`;
 /* In selection mode an item toggles its selection; otherwise it opens. */
 const miPickBox = m => st.miPickMode ? `<span class="mi-pk${st.miPick.includes(m.id) ? ' on' : ''}" aria-hidden="true">${I.check}</span>` : '';
 const miItemAttr = (m, pick, open) => st.miPickMode && pick ? `data-mipick="${m.id}" role="checkbox" aria-checked="${st.miPick.includes(m.id)}"` : open || miOpenAttr(m);
-/* Source unit in Saved: source, author and age, title and excerpt, plus an unread dot at the top
-   right. Statuses (edited, deleted, paid) are on the source page. st.miSty: plain | boxed | reader | compact. */
+/* Source unit in the full source list and in Saved: source, author and age, title and excerpt, plus an
+   unread dot at the top right. Statuses (edited, deleted, paid) are on the source page. o.extra goes
+   under the text (who added the source, the note, asks); o.unread and o.cls override the defaults.
+   st.miSty ("Item style" control): plain | boxed | boxedav (podcasts and videos boxed, others plain). */
 const miExcerpt = m => m.deleted ? '' : m.desc || (m.t ? m.body.find(b => b.p).p : miRest(m));
 function miUnit(m, o = {}) {
-  const sty = o.sty || st.miSty, unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
+  const sty = o.sty || st.miSty, unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
   const pick = o.pick ? miPickBox(m) : '', ex = miExcerpt(m), on = st.miPickMode && o.pick && st.miPick.includes(m.id);
   const src = `<span class="mi-u-src">${miByline(m)}<span class="faint">· ${miSrcLine(m)} · ${m.age}</span></span>`;
-  const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, sty === 'reader' ? 320 : 200))}</span>` : '';
-  const body = sty === 'reader' ? `${t}${src}${x}` : sty === 'compact' ? `<span class="mi-u-top"><span class="mi-u-badge">${MIPLAT[m.pl].n}</span><span class="mi-u-by">${esc(m.au)} · ${m.age}</span></span>${t}${x}` : `${src}${t}${x}`;
-  const ic = sty === 'plain' || sty === 'boxed' ? miIc(m, 'mi-u-ic') : '';
-  return `<article class="mi-u${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+  const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : '';
+  const body = `${src}${t}${x}`;
+  const ic = ['plain', 'boxed', 'boxedav'].includes(sty) ? miIc(m, 'mi-u-ic') : '', box = sty === 'boxedav' && miAV(m);
+  return `<article class="mi-u${box ? ' mi-box' : ''}${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}${o.extra || ''}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
 const miRow = (m, o = {}) => miUnit(m, { ...o, sty: o.sty || 'plain' });
+/* Styles that take the item's own shape (native, social). X posts read as posts: avatar,
+   name and handle, the full first post, a quoted post as an inset box and the thread length. */
+const miDomain = m => m.url.split('/')[0];
+const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
+const miPostHead = m => `<span class="mi-p-h"><b>${esc(m.au)}</b><span class="faint">${esc(m.h)}</span><span class="faint">· ${m.age}</span>${m.kind === 'thread' ? `<span class="mi-p-th num" title="Thread of ${m.body.length} posts">1/${m.body.length}</span>` : ''}</span>`;
+const miPostText = m => { const b = m.body[0]; return `${m.deleted ? '<p class="mi-p-t faint">This post is unavailable.</p>' : `<p class="mi-p-t">${esc(b.p)}</p>`}${b.q && !m.deleted ? `<div class="mi-p-q"><span class="mi-p-qh">${avatar(b.q.h.slice(1), 'sm')}<b>${esc(b.q.au)}</b><span class="faint">${esc(b.q.h)}</span></span><p>${esc(b.q.t)}</p></div>` : ''}`; };
+const miAV = m => m.kind === 'audio' || m.kind === 'video';
+function miUnit2(m, o) {
+  const sty = st.miSty, unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
+  const pick = o.pick ? miPickBox(m) : '', on = st.miPickMode && o.pick && st.miPick.includes(m.id), ex = miExcerpt(m);
+  let inner;
+  if (m.pl === 'x') inner = `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
+  else if (sty === 'native') inner = miAV(m) ? `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-u-src">${esc(m.pub || m.au)}<span class="faint">· ${m.len} · ${m.age}</span></span>${ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div>`
+    : `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-u-src">${esc(m.pub && m.pub !== m.au ? m.pub : MIPLAT[m.pl].n)}<span class="faint">· ${esc(m.au)} · ${m.age}</span></span><b class="mi-u-t">${esc(miTitle(m))}</b>${ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : ''}</div></div>`;
+  else inner = `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-p-h"><b>${esc(m.pub && m.pub !== m.au && !miAV(m) ? m.pub : m.au)}</b><span class="faint">· ${m.age}</span></span><div class="mi-lp"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b>${miAV(m) ? `<span class="mi-lp-m faint">${MII[MIPLAT[m.pl].ic]}${esc(m.pub || m.au)}</span>` : ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div></div>`;
+  return `<article class="mi-u mi-u2${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${inner}${o.extra || ''}${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+}
 function miHead(m, big = true, noVia) {
   const d = typeof dsDropOf === 'function' ? dsDropOf(st.space, m.id) : null;
   const via = noVia ? '' : d ? `Added by ${esc(d.by === ME.u ? 'you' : d.by)} ${d.age === 'now' ? 'just now' : d.age + ' ago'}` : '';
@@ -6559,14 +6532,13 @@ function miOpen(id, b, from) {
   const m = MIT(id); if (!m) return;
   const sid = m.sp.includes(st.space) && canRead(sp(st.space)) ? st.space : m.sp.find(x => canRead(sp(x))) || st.space;
   const fromAll = st.spTab === 'sources' && !st.subPage && st.thread == null;
-  if (st.dsPlace === 'col' && canRead(sp(sid)) && m.sp.includes(sid)) Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, dsOpen: id, miItem: id, miHi: b != null ? b : null, miFrom: from || null, spTab: dsNarrow() ? 'sources' : 'threads' });
-  else Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null, dsOpen: null, dsFromAll: fromAll });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null, dsFromAll: fromAll });
   if (b != null) setTimeout(() => { const el = $('mib-' + b); if (el) el.scrollIntoView({ block: 'center' }); }, 0); else setTimeout(scrollMockTop, 0);
 }
 function miBack() {
   if (st.miFrom === 'saved') { Object.assign(st, NAVBASE(), MI_CLEAR(), { savedPage: true, savedFilter: 'mi-items' }); return; }
   const s = sp(st.space);
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: s.id, spTab: st.dsPlace === 'side' && st.dsSide === 'stack' && st.dsFromAll ? 'sources' : 'threads', dsOpen: null });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: s.id, spTab: st.dsSide === 'stack' && st.dsFromAll ? 'sources' : 'threads' });
 }
 function miCreateAsk() {
   const a = st.miAsk; if (!a) return;
@@ -6723,8 +6695,9 @@ Object.assign(st, {
    - A source can be in several spaces; each space has its own entry: who added it, when, the note.
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
-   Placement ("Sources placement" control): a Sources column left of the main column
-   (st.dsCol: list | day | cards), or the right sidebar (st.dsSide: card | tabs | stack). */
+   Placement: the right sidebar with Sources and Wiki tabs ("Sidebar" control, st.dsSide): the Sources
+   tab lists every source (tabs), or shows a stack of the newest three with Show all, which opens the
+   full list in the main column (stack). The full list uses the "Item style" control (st.miSty). */
 const DS_DROPS0 = {
   ml: [
     { m: 'm9', by: 'hal_b', age: '16h' },
@@ -6769,7 +6742,7 @@ const dsDropOf = (sid, mid) => dsAll(sid).find(d => d.m === mid && !d.rm) || nul
 const dsIsNew = (sid, d) => st.auth === 'in' && d.by !== ME.u && !st.miRead.has(d.m) && ageMin(d.age) < (DS_SEEN[sid] || 0);
 const dsWho = by => by === ME.u ? 'you' : esc(by);
 const dsAgo = a => a === 'now' ? 'just now' : a + ' ago';
-const dsTabOn = s => !!s && canRead(s) && (st.dsPlace === 'col' || st.dsSide === 'stack');
+const dsTabOn = s => !!s && canRead(s) && st.dsSide === 'stack';
 function dsCanAdd(s) {
   if (!s || st.auth !== 'in') return false;
   if (isClosed(s) && !isMember(s.id)) return false;
@@ -6813,7 +6786,6 @@ function dsDropped(sid, u, file) {
   const r = dsAdd(u || '', sid, '', file);
   if (r.dup) toast(`Already in ${spName(s)}. Added by ${dsWho(r.dup.by)} ${dsAgo(r.dup.age)}.`, `ds:open:${sid}:${r.m.id}`, 'Open');
   else if (r.rv) toast('Added. A moderator reviews it before others see it.');
-  if ((st.modal || '').startsWith('ds-add')) st.modal = null;
   renderAll();
 }
 /* a cited web page: the source record with that title, or a new one */
@@ -6851,32 +6823,29 @@ const dsOver = s => dsCanAdd(s) ? `<div class="ds-over" data-dsdropdemo="${s.id}
 const dsZoneAttr = s => `data-dsdz="${s.id}"${st.dsDrag === s.id ? ' data-drag="1"' : ''}`;
 const dsSelBtn = s => st.auth === 'in' && dsList(s.id).length > 1 ? `<button class="iconbtn ds-selb" type="button" data-mipickmode="1" aria-pressed="${!!st.miPickMode}" aria-label="Select sources to ask about" title="Select sources to ask about">${MII.select}</button>` : '';
 const dsPickBar = () => st.miPickMode ? `<div class="ds-pickbar" role="toolbar" aria-label="Selected sources"><span><b class="num">${st.miPick.length}</b> selected</span><button class="tlink" type="button" data-mipickx="1">Cancel</button><button class="btn sm primary" type="button" data-miask="pick" ${st.miPick.length > 1 ? '' : 'disabled aria-disabled="true"'}>Ask</button></div>` : '';
-/* One source in a list. sty: list | day | card | home */
-function dsRow(d, sid, sty) {
+/* One source in the sidebar list. */
+function dsRow(d, sid) {
   const m = MIT(d.m), n = miAsksOf(m.id).filter(a => a.p.s === sid).length, nw = dsIsNew(sid, d);
-  const on = st.dsPlace === 'col' && st.dsOpen === m.id, pk = st.miPickMode, picked = pk && st.miPick.includes(m.id);
-  const attrs = pk ? `data-mipick="${m.id}" role="checkbox" aria-checked="${picked}"` : `data-miopen="${m.id}" role="link"${on ? ' aria-current="true"' : ''}`;
-  const asks = n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : '';
-  const flag = d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
+  const pk = st.miPickMode, picked = pk && st.miPick.includes(m.id);
+  const attrs = pk ? `data-mipick="${m.id}" role="checkbox" aria-checked="${picked}"` : `data-miopen="${m.id}" role="link"`;
   const box = pk ? `<span class="mi-pk${picked ? ' on' : ''}" aria-hidden="true">${I.check}</span>` : '';
-  const t = `<b class="ds-t">${esc(miTitle(m))}</b>`;
-  let inner;
-  if (sty === 'day') inner = `${avatar(d.by, 'sm')}<span class="ds-rb">${t}<span class="ds-m">${dsWho(d.by)} · ${MIPLAT[m.pl].n}${asks}</span>${flag}</span><span class="ds-tm faint num">${d.age}</span>`;
-  else if (sty === 'card') {
-    const ex = miExcerpt(m);
-    inner = `<span class="ds-rb"><span class="ds-m ds-srcl">${miIc(m, 'xs')}${miSrcLine(m)} · ${esc(m.au)}</span>${t}${ex && !m.deleted ? `<span class="ds-x">${esc(clip(ex, 160))}</span>` : ''}${d.note ? `<span class="ds-rn">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></span>` : ''}<span class="ds-m">${d.note ? '' : `${dsWho(d.by)} · `}${d.age}${asks}</span>${flag}</span>`;
-  } else inner = `${miIc(m, 'sm')}<span class="ds-rb">${t}<span class="ds-m">${dsWho(d.by)} · ${d.age}${asks}</span>${flag}</span>`;
-  return `<div class="ds-r ds-r-${sty}${nw ? ' new' : ''}${on ? ' on' : ''}${picked ? ' picked' : ''}${st.dsFlash === m.id ? ' flash' : ''}" ${attrs} tabindex="0">${box}${inner}${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</div>`;
+  const inner = `${miIc(m, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(m))}</b><span class="ds-m">${dsWho(d.by)} · ${d.age}${dsAsks(m, sid)}</span>${dsFlag(d)}</span>`;
+  return `<div class="ds-r${nw ? ' new' : ''}${picked ? ' picked' : ''}${st.dsFlash === m.id ? ' flash' : ''}" ${attrs} tabindex="0">${box}${inner}${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</div>`;
 }
-const DS_DAY = a => { const n = ageMin(a); return n < 1440 ? 'Today' : n < 2880 ? 'Yesterday' : n < 10080 ? 'This week' : 'Earlier'; };
-function dsListHTML(s, sty, max) {
-  let l = dsList(s.id);
+const dsAsks = (m, sid) => { const n = miAsksOf(m.id).filter(a => a.p.s === sid).length; return n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : ''; };
+const dsFlag = d => d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
+/* One source in the full list, in the "Item style" (st.miSty), with who added it, the note and asks. */
+function dsUnit(d, sid) {
+  const m = MIT(d.m);
+  const meta = `<span class="ds-m">${d.note ? `Added ${dsAgo(d.age)}` : `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}${dsAsks(m, sid)}</span>`;
+  const extra = `<span class="ds-ux">${d.note ? `<span class="ds-rn">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></span>` : ''}${meta}${dsFlag(d)}</span>`;
+  const o = { pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
+  return ['native', 'social'].includes(st.miSty) ? miUnit2(m, o) : miUnit(m, o);
+}
+function dsListHTML(s) {
+  const l = dsList(s.id);
   if (!l.length) return `<div class="ds-empty"><b>No sources yet</b>${dsCanAdd(s) ? '<span>Paste a link or drop a file above.</span>' : ''}</div>`;
-  if (max) l = l.slice(0, max);
-  if (sty !== 'day') return l.map(d => dsRow(d, s.id, sty)).join('');
-  const out = []; let g = '';
-  l.forEach(d => { const h = DS_DAY(d.age); if (h !== g) { g = h; out.push(`<h4 class="ds-gh">${h}</h4>`); } out.push(dsRow(d, s.id, sty)); });
-  return out.join('');
+  return l.map(d => dsRow(d, s.id)).join('');
 }
 /* note from the person who added the source to this space; review state */
 function dsNoteHTML(m, s) {
@@ -6893,67 +6862,40 @@ function dsSourceActs(m, s) {
 }
 const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend" type="button" data-dssend="w:${POSTS.indexOf(p)}:${k}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
 
-/* ---------- placement 1: Sources column left of the main column ---------- */
-function dsColumn(s) {
-  /* on phones the column is replaced by the Sources tab (CSS hides it; not rendering it keeps ids unique) */
-  if (!canRead(s) || dsNarrow()) return '';
-  if (!st.dsColOpen) return `<aside class="ds-col min" aria-label="Sources"><button class="iconbtn" type="button" data-dscol="open" aria-label="Show sources" title="Show sources">${MII.side}</button>${dsCanAdd(s) ? `<button class="iconbtn" type="button" data-dsaddlg="${s.id}" aria-label="Add a source" title="Add a source">${PLUS}</button>` : ''}<span class="vlabel">Sources</span></aside>`;
-  const sty = st.dsCol === 'cards' ? 'card' : st.dsCol;
-  return `<aside class="ds-col ds-c-${st.dsCol}" aria-label="Sources" ${dsZoneAttr(s)}><div class="ds-ch"><h3>Sources</h3>${dsSelBtn(s)}<button class="iconbtn" type="button" data-dscol="min" aria-label="Collapse the Sources column" title="Collapse">${MII.side}</button></div>${dsDropBox(s)}<div class="ds-list" role="list">${dsListHTML(s, sty)}</div>${dsPickBar()}${dsOver(s)}</aside>`;
-}
-/* the source reader in the main column, with its details on the right */
-function dsReader(s) {
-  const m = MIT(st.dsOpen); if (!m) { st.dsOpen = null; return null; }
-  st.miRead.add(m.id); st.miItem = m.id;
-  const x = miParts(m);
-  const bar = `<div class="mi-bar ds-rbar"><button class="th-back" type="button" data-dsclose="1">${I.chev.replace('<svg', '<svg class="bk"')}<span class="d-only">${spName(s)}</span><span class="m-only">Sources</span></button><div class="mi-acts">${x.acts.replace(/^<div class="mi-acts">|<\/div>$/g, '')}</div></div>`;
-  return {
-    main: `<div class="mi-page ds-rpage">${bar}<article class="mi-main">${x.main}</article><div class="ds-mdet">${x.side}</div>${x.selBar}</div>`,
-    side: `<aside class="drawer ds-rside" aria-label="Source details"><div class="dbody">${x.side}</div></aside>`,
-  };
-}
-/* full list in the main column: the phone Sources tab (column placement) and the stack's full list */
-function dsAllMain(s, sty) {
-  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div><div class="ds-list ds-list-main" role="list">${dsListHTML(s, sty)}</div>${dsPickBar()}${dsOver(s)}</div>`;
+/* ---------- full list in the main column (Stack) ---------- */
+function dsAllMain(s) {
+  const l = dsList(s.id);
+  const list = l.length ? `<div class="mi-units mi-lay-rows mi-sty-${st.miSty} ds-units" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsListHTML(s);
+  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${list}${dsPickBar()}${dsOver(s)}</div>`;
 }
 
-/* ---------- placement 2: Sources in the right sidebar ---------- */
-function dsSideList(s, max) {
-  const l = dsList(s.id), more = max && l.length > max;
-  return `<div class="ds-list" role="list">${dsListHTML(s, 'list', more && !st.dsMore ? max : 0)}</div>${more ? `<button class="tlink ds-morel" type="button" data-dsmore="1" aria-expanded="${!!st.dsMore}">${st.dsMore ? 'Show fewer' : 'Show all'}</button>` : ''}`;
+/* ---------- right sidebar: Sources and Wiki tabs ---------- */
+function dsSideList(s) {
+  return `<div class="ds-list" role="list">${dsListHTML(s)}</div>`;
 }
 function dsStack(s) {
   const l = dsList(s.id).slice(0, 3);
-  if (!l.length) return `<div class="ds-list">${dsListHTML(s, 'list')}</div>`;
+  if (!l.length) return `<div class="ds-list">${dsListHTML(s)}</div>`;
   const top = MIT(l[0].m), nw = dsList(s.id).some(d => dsIsNew(s.id, d));
   return `<button class="ds-stk n${l.length}" type="button" data-dsall="1" aria-label="Show all sources"><span class="ds-stk-c">${miIc(top, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(top))}</b><span class="ds-m">${dsWho(l[0].by)} · ${l[0].age}</span></span>${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</span></button><div class="ds-stk-more">${l.slice(1).map(d => `<span>${miIc(MIT(d.m), 'xs')}<span>${esc(clip(miTitle(MIT(d.m)), 46))}</span></span>`).join('')}</div><button class="tlink ds-morel" type="button" data-dsall="1">Show all</button>`;
 }
 function dsSideDrawer(s) {
   const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
   if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
-  if (st.dsSide === 'tabs') {
-    const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${st.dsSTab === k}" data-dsstab="${k}">${l}</button>`;
-    const wiki = st.dsSTab === 'wiki';
-    const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}</div>`;
-    return `<aside class="drawer wk ds-side ds-s-tabs" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
-  }
-  const card = st.dsSide === 'stack'
-    ? `<div class="note-card ds-scard ds-stack" ${dsZoneAttr(s)}><div class="sk-head"><h3>Sources</h3></div>${sfTabCur() === 'sources' ? '' : dsDropBox(s)}${dsStack(s)}${dsOver(s)}</div>`
-    : `<div class="note-card ds-scard" ${dsZoneAttr(s)}><div class="sk-head"><h3>Sources</h3>${dsSelBtn(s)}</div>${dsDropBox(s)}${dsSideList(s, 5)}${dsPickBar()}${dsOver(s)}</div>`;
-  return `<aside class="drawer wk ds-side ds-s-${st.dsSide}" aria-label="Sources and wiki"><div class="dh">${MII.library.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b class="ds-dht">Sources and wiki</b><span class="grow"></span>${close}</div><div class="dbody">${card}${wikiCards(s)}</div></aside>`;
+  const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${st.dsSTab === k}" data-dsstab="${k}">${l}</button>`;
+  const wiki = st.dsSTab === 'wiki', stack = st.dsSide === 'stack';
+  /* Stack: the drop box (hidden while the full list, which has its own, is open), then the stack */
+  const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>`
+    : stack ? `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${sfTabCur() === 'sources' ? '' : dsDropBox(s)}${dsStack(s)}${dsOver(s)}</div>`
+    : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}</div>`;
+  return `<aside class="drawer wk ds-side ds-s-${st.dsSide}" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki || stack ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
 }
 
 /* ---------- space page ---------- */
-/* Parts of the space page for the current placement: left column, main column, right side. */
-function dsSpaceParts(s, tab, body, threads) {
-  const x = { left: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: ` ds-p${st.dsPlace}` };
-  if (!canRead(s)) return x;
-  if (st.dsPlace === 'col') {
-    x.left = dsColumn(s);
-    if (tab === 'sources') x.mcol = banner(s) + `<div class="ds-tabwrap">${dsAllMain(s, st.dsCol === 'cards' ? 'card' : st.dsCol)}</div><div class="ds-dt">${threads}</div>`;
-    const r = st.dsOpen ? dsReader(s) : null;
-    if (r) { x.mcol = r.main; x.side = r.side; x.cls += ' ds-reading'; }
-  } else if (tab === 'sources') x.mcol = banner(s) + dsAllMain(s, 'card');
+/* Parts of the space page: main column (the full list on the Sources tab) and the sidebar. */
+function dsSpaceParts(s, tab, body) {
+  const x = { mcol: banner(s) + body, side: wikiDrawer(s), cls: '' };
+  if (canRead(s) && tab === 'sources') x.mcol = banner(s) + dsAllMain(s);
   return x;
 }
 /* Home: the latest sources added to your spaces */
@@ -6993,7 +6935,6 @@ function dsSendDlg() {
 function dsModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
   if (k === 'ds-send') return dsSendDlg();
-  if (k === 'ds-add') { const s = sp(a); return dlg(`Add a source to ${spName(s)}`, `<div class="ds-adddlg" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsOver(s)}</div>`, ''); }
   const [mid, sid] = (a || '').split(':'), m = MIT(mid), s = sp(sid);
   if (k === 'ds-rm') return dlg(`Remove this source from ${spName(s)}?`, `${miMini(m)}<p class="muted">It is no longer listed in ${spName(s)}. Asks about it stay in the space.</p>`, `${cancelB()}<button class="btn danger" type="button" data-dsrmok="${mid}:${sid}">Remove</button>`, 'alertdialog');
   if (k === 'ds-report') return dlg('Report this source', `${miMini(m)}<div class="cs-radios" role="radiogroup" aria-label="Reason">${Object.entries(DS_WHY).map(([v, l]) => radio('ds-why', v, st.dsWhy, l, '')).join('')}</div><label class="fld"><span>Details (optional)</span><textarea id="ds-repnote" rows="2">${esc(st.dsRepNote)}</textarea></label><p class="cs-fine">${SFI.flag}<span>The moderators of ${spName(s)} see the report.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-dsrepgo="${mid}:${sid}">Send report</button>`);
@@ -7005,7 +6946,7 @@ function dsClick(t) {
   const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
   let b;
   if (st.dsMenu && !d('.ds-mw')) st.dsMenu = null;
-  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsOpen: null, dsUrl: '', dsNote: '', dsDrag: null });
+  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null });
   if ((b = d('[data-cstoast^="ds:"]'))) {
     const [, v, sid, mid] = b.dataset.cstoast.split(':'); st.toast = null;
     if (v === 'open') { Object.assign(st, NAVBASE(), { space: sid }); miOpen(mid); }
@@ -7014,11 +6955,8 @@ function dsClick(t) {
   }
   if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
   if ((b = d('[data-dssignin]'))) { st.modal = 'signin'; return go(); }
-  if ((b = d('[data-dscol]'))) { st.dsColOpen = b.dataset.dscol === 'open'; return go(); }
   if ((b = d('[data-dsstab]'))) { st.dsSTab = b.dataset.dsstab; return go(); }
-  if ((b = d('[data-dsmore]'))) { st.dsMore = !st.dsMore; return go(); }
   if ((b = d('[data-dsall]'))) { Object.assign(st, NAVBASE(), MI_CLEAR(), { space: st.space, spTab: 'sources' }); setTimeout(scrollMockTop, 0); return go(); }
-  if ((b = d('[data-dsclose]'))) { Object.assign(st, MI_CLEAR(), { dsOpen: null }); if (!dsNarrow()) st.spTab = 'threads'; return go(); }
   if ((b = d('[data-dsdropdemo]'))) { dsDropped(b.dataset.dsdropdemo, DS_DRAG_URL); return true; }
   if ((b = d('[data-dsclear]'))) { Object.assign(st, { dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
   if ((b = d('[data-dsadd]'))) {
@@ -7026,13 +6964,11 @@ function dsClick(t) {
     if (!st.dsUrl.trim()) return true;
     const r = dsAdd(st.dsUrl, sid, st.dsNote);
     Object.assign(st, { dsUrl: '', dsNote: '' });
-    if ((st.modal || '').startsWith('ds-add')) st.modal = null;
     if (r.dup) toast(`Already in ${spName(s)}.`, `ds:open:${sid}:${r.m.id}`, 'Open');
     else if (b.dataset.dsadd === 'ask' && !r.dup) { Object.assign(st, { miAsk: { it: r.m.id }, miAskQ: '', miAskSp: sid, modal: 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
     else if (r.rv) toast('Added. A moderator reviews it before others see it.');
     return go();
   }
-  if ((b = d('[data-dsaddlg]'))) { Object.assign(st, { modal: 'ds-add:' + b.dataset.dsaddlg, dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
   if ((b = d('[data-dssend]'))) {
     if (st.auth !== 'in') { st.modal = 'signin'; return go(); }
     const v = b.dataset.dssend;
@@ -7054,7 +6990,6 @@ function dsClick(t) {
     const [mid, sid] = b.dataset.dsrmok.split(':'), x = dsDropOf(sid, mid);
     if (x) x.rm = true;
     st.modal = null;
-    if (st.dsOpen === mid) Object.assign(st, MI_CLEAR(), { dsOpen: null });
     if (st.subPage === 'mitem' && st.miItem === mid) miBack();
     toast(`Removed from ${spName(sp(sid))}.`, `ds:undo:${sid}:${mid}`, 'Undo');
     return go();
@@ -7118,46 +7053,34 @@ document.addEventListener('drop', e => {
 });
 /* after each render: height for the Sources column, hide the sub-control that does not apply,
    and briefly mark a source that was just added (or was already there) */
-/* The Sources column is sticky; its height is the visible part of the page below the header. */
-function dsFit() {
-  const a = $('app'), c = a && a.querySelector('.ds-col'); if (!c) return;
-  const ar = a.getBoundingClientRect(), br = c.parentElement.getBoundingClientRect();
-  a.style.setProperty('--ds-vh', Math.round(ar.bottom - Math.max(ar.top, br.top)) + 'px');
-}
-$('app').addEventListener('scroll', () => { if (!dsFit.raf) dsFit.raf = requestAnimationFrame(() => { dsFit.raf = 0; dsFit(); }); }, { passive: true });
 function dsAfterRender() {
-  dsFit();
-  const c = $('kw-dscol'), sd = $('kw-dsside');
-  if (c) c.style.display = st.dsPlace === 'col' ? '' : 'none';
-  if (sd) sd.style.display = st.dsPlace === 'side' ? '' : 'none';
+  const sy = $('kw-dssty');
+  if (sy) sy.style.display = st.dsSide === 'stack' ? '' : 'none';
   if (st.dsFlash && st.device !== 'native') {
-    const el = document.querySelector('#app .ds-r.flash');
+    const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
     const id = st.dsFlash; clearTimeout(dsAfterRender.t);
-    dsAfterRender.t = setTimeout(() => { if (st.dsFlash === id) st.dsFlash = null; document.querySelectorAll('#app .ds-r.flash').forEach(x => x.classList.remove('flash')); }, 1800);
+    dsAfterRender.t = setTimeout(() => { if (st.dsFlash === id) st.dsFlash = null; document.querySelectorAll('#app .ds-r.flash, #app .mi-u.flash').forEach(x => x.classList.remove('flash')); }, 1800);
   }
 }
-window.addEventListener('resize', dsFit);
 
 /* ---------- control bar ---------- */
 const dsOnSpace = () => {
   const onSp = st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && canRead(sp(st.space));
-  if (st.dsPlace === 'side') st.dsOpen = null;
-  if (!onSp && st.subPage !== 'mitem') { dsJump(st.dsPlace === 'col' ? 'ds-c-space' : 'ds-s-space'); return; }
-  if (st.subPage === 'mitem' && st.dsPlace === 'col') { const id = st.miItem; miOpen(id); }
+  if (!onSp && st.subPage !== 'mitem') dsJump('ds-s-space');
 };
+/* Item style applies to the full list: picking one opens it (and the Stack variant, which has it). */
+const dsOnAll = () => { if (!(st.dsSide === 'stack' && st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && sfTabCur() === 'sources')) dsJump('ds-s-all'); };
 function DSKNOBS() {
   return [
-    ['k-dsplace', 'dsPlace', [['col', 'Sources column'], ['side', 'Right sidebar']], dsOnSpace],
-    ['k-dscol', 'dsCol', [['list', 'Compact list'], ['day', 'By day'], ['cards', 'Cards']], () => { st.dsPlace = 'col'; st.dsColOpen = true; dsOnSpace(); }],
-    ['k-dsside', 'dsSide', [['card', 'Card above the wiki'], ['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list']], () => { st.dsPlace = 'side'; st.drawer = true; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dssty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['boxedav', 'Boxed media only', '1'], ['native', 'Native by type'], ['social', 'Social feed']], dsOnAll],
   ];
 }
 
 /* ---------- "Jump to" ---------- */
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
-  ['Sources column', [...DS_LIST_J.map(([k, l]) => ['ds-c-' + k, k === 'reader' ? 'Open a source beside the list' : l]), ['ds-c-min', 'Column collapsed']]],
   ['Sources in the right sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: full list']]],
   ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
@@ -7172,17 +7095,15 @@ function dsNewSpace() {
 }
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsOpen: null, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsMore: false, dsSTab: 'sources', dsColOpen: true });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
   { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
   setRel('replication', 'none');
   dsReset();
   const [, g, v] = k.split('-');
-  if (g === 'c') st.dsPlace = 'col';
-  if (g === 's') st.dsPlace = 'side';
   const nar = dsNarrow();
-  /* show the source list: the Sources tab (column on phones, stack), or the sidebar panel on phones */
-  const list = () => { if (st.dsPlace === 'col') { if (nar) st.spTab = 'sources'; } else if (nar) st.mWiki = true; };
-  const listFull = () => { if (st.dsPlace === 'side' && st.dsSide === 'stack') st.spTab = 'sources'; else list(); };
+  /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
+  const list = () => { if (nar) st.mWiki = true; };
+  const listFull = () => { if (st.dsSide === 'stack') st.spTab = 'sources'; else list(); };
   const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
   const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
   switch (g === 'x' ? 'x-' + v : v) {
@@ -7194,11 +7115,10 @@ function dsJump(k) {
     case 'pass': miOpen('m2', 3); Object.assign(st, { miSel: 3, miQuote: 'The second tenfold increase pays for itself on about half of them.' }); ask({ it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where the second tenfold increase does not pay for itself?'); break;
     case 'pick': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); break;
     case 'multi': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); ask({ its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree, and what evidence does each give?'); break;
-    case 'min': st.dsColOpen = false; break;
     case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
     case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
     case 'out': st.auth = 'out'; list(); break;
-    case 'all': st.dsPlace = 'side'; st.dsSide = 'stack'; st.spTab = 'sources'; break;
+    case 'all': st.dsSide = 'stack'; st.spTab = 'sources'; break;
     case 'x-send': setRel('replication', 'member'); miOpen('m3'); Object.assign(st, { dsSend: { m: 'm3', pick: ['replication'], note: '' }, modal: 'ds-send' }); break;
     case 'x-cite': th('mia4'); Object.assign(st, { dsSend: { m: 'm11', pick: [], note: '' }, modal: 'ds-send' }); break;
     case 'x-share': setRel('replication', 'member'); st.home = true; Object.assign(st, { dsSend: { m: 'm12', pick: ['ml'], note: '', share: true }, modal: 'ds-send' }); break;
@@ -7213,8 +7133,8 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPlace: 'col', dsCol: 'list', dsSide: 'card', dsColOpen: true, dsOpen: null, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
-  dsMenu: null, dsSend: null, dsMore: false, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsFromAll: false,
+  dsSide: 'tabs', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsFromAll: false,
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
 /* END dropped sources js */
