@@ -2514,7 +2514,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .sf-ab-side { position: static; }
 }
 @media (max-width: 640px) {
-  .sp-tabs { padding: 0 8px; }
+  /* one tab only (Threads): no tab strip on phones */
+  .sp-tabs { display: none; }
+  .banner { border-bottom: 1px solid var(--divider); }
   .rf-idx, .sf-about { padding: 16px 14px 40px; }
   .rf-topics { grid-template-columns: minmax(0, 1fr); }
   .rf-sbox .btn { padding: 0 14px; }
@@ -6922,7 +6924,7 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* Tabs: Threads, About. Sources and the wiki are in the sidebar. */
+/* One tab, Threads; Sources and About are in the sidebar. Hidden on phones. */
 const sfTabCur = () => 'threads';
 function sfTabs(s) {
   const cur = sfTabCur(), items = [['threads', 'Threads']];
