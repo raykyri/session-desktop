@@ -2258,7 +2258,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-pk { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--control-border); background: var(--field); display: grid; place-items: center; color: transparent; margin-top: 4px; }
 .mi-pk svg { width: 12px; height: 12px; }
 .mi-pk.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-/* source units: Plain rows in Saved; Social feed in the full list and the E2 sidebar list */
+/* source units: Plain rows in Saved; Social feed in the full list and the sidebar list */
 .mi-units { display: flex; flex-direction: column; }
 .mi-u { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; cursor: pointer; min-width: 0; }
 .mi-u.has-ic { grid-template-columns: 26px minmax(0, 1fr); }
@@ -2523,13 +2523,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-pickbar { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: var(--r-lg); background: var(--popover); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: var(--fs-sm); }
 .ds-pickbar > span { flex: 1; color: var(--t-secondary); }
 .ds-pickbar .btn[disabled] { opacity: .5; }
-.ds-pane .ds-pickbar, .ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
-.ds-allm { gap: 12px !important; }
-.ds-allh { display: flex; align-items: flex-start; gap: 6px; }
-.ds-allh > .ds-drop { flex: 1; min-width: 0; }
-.ds-allh > .ds-selb { width: 36px; height: 36px; flex: none; }
+.ds-pane .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
 .mi-bar .th-back { white-space: nowrap; flex: none; }
-/* full list in the main column (Stack, Social feed) and the E2 sidebar list: item style units, plus who added the source, the note and asks */
+/* sidebar list (tabs, expanded stack) in the Social feed style, plus who added the source, the note and asks */
 .ds-units .ds-ux { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .ds-units .mi-u2 > .ds-ux { grid-column: -2; margin-top: -6px; padding: 0 14px 0 42px; }
 .ds-units .ds-rn { align-self: flex-start; margin-top: 0; }
@@ -2609,7 +2605,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .ds-mrow-a { grid-column: 2; }
   .ds-csend { width: 30px; height: 30px; }
   .ds-in { height: 40px; }
-  .ds-allh > .ds-selb { width: 40px; height: 40px; }
   .mi-acts .um-item.m-only { display: flex; }
   .mi-bar { gap: 6px; }
   .mi-bar .th-back { flex: 0 1 auto; min-width: 0; overflow: hidden; }
@@ -3028,7 +3023,7 @@ const layoutSpace = () => {
         ${feed2(s.id)}
       </div>`;
   const body = tab === 'about' ? sfAbout(s) : threads;
-  /* Sources are in the right sidebar; the Stack variant adds a full list in the main column (dsSpaceParts). */
+  /* Sources are in the sidebar, on the right or the left (dsSpaceParts). */
   const x = dsSpaceParts(s, tab, body);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
     ${topHeader()}
@@ -5823,11 +5818,10 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* Tabs: Threads, Sources (the full source list, in the sidebar "Stack" variant), About. */
-const sfTabCur = () => st.spTab === 'sources' && dsTabOn(sp(st.space)) ? 'sources' : st.spTab === 'about' ? 'about' : 'threads';
+/* Tabs: Threads, About. Sources are in the sidebar. */
+const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  const ds = dsTabOn(s);
-  const cur = sfTabCur(), items = [['threads', 'Threads'], ...(ds ? [['sources', 'Sources']] : []), ['about', 'About']];
+  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -6325,7 +6319,7 @@ function miUnit(m, o = {}) {
   return `<article class="mi-u${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}${o.extra || ''}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
 const miRow = (m, o = {}) => miUnit(m, o);
-/* Social feed unit (full list, E2 sidebar list): every source in a social-post shape. X posts read as posts: avatar,
+/* Social feed unit (full list, sidebar list): every source in a social-post shape. X posts read as posts: avatar,
    name and handle, the full first post, a quoted post as an inset box and the thread length. */
 const miDomain = m => m.url.split('/')[0];
 const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
@@ -6518,14 +6512,13 @@ const MI_CLEAR = () => ({ miSel: null, miQuote: '', miHi: null, miDiff: false, m
 function miOpen(id, b, from) {
   const m = MIT(id); if (!m) return;
   const sid = m.sp.includes(st.space) && canRead(sp(st.space)) ? st.space : m.sp.find(x => canRead(sp(x))) || st.space;
-  const fromAll = st.spTab === 'sources' && !st.subPage && st.thread == null;
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null, dsFromAll: fromAll });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null });
   if (b != null) setTimeout(() => { const el = $('mib-' + b); if (el) el.scrollIntoView({ block: 'center' }); }, 0); else setTimeout(scrollMockTop, 0);
 }
 function miBack() {
   if (st.miFrom === 'saved') { Object.assign(st, NAVBASE(), MI_CLEAR(), { savedPage: true, savedFilter: 'mi-items' }); return; }
   const s = sp(st.space);
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: s.id, spTab: st.dsSide === 'stack' && st.dsFromAll ? 'sources' : 'threads' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: s.id, spTab: 'threads' });
 }
 function miCreateAsk() {
   const a = st.miAsk; if (!a) return;
@@ -6683,8 +6676,8 @@ Object.assign(st, {
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
    Placement: the right sidebar with Sources and Wiki tabs ("Sidebar" control, st.dsSide): the Sources
-   tab lists every source as compact rows (tabs) or in the Social feed style (tabsty), or shows a stack of the newest three with Show all, which opens the
-   full list in the main column (stack). The full list is a list in the Social feed style. */
+   tab shows a stack of the newest three, which expands in place into the full list (stack), or lists
+   every source (tabsty). The list is in the Social feed style. */
 const DS_DROPS0 = {
   ml: [
     { m: 'm9', by: 'hal_b', age: '16h' },
@@ -6729,7 +6722,6 @@ const dsDropOf = (sid, mid) => dsAll(sid).find(d => d.m === mid && !d.rm) || nul
 const dsIsNew = (sid, d) => st.auth === 'in' && d.by !== ME.u && !st.miRead.has(d.m) && ageMin(d.age) < (DS_SEEN[sid] || 0);
 const dsWho = by => by === ME.u ? 'you' : esc(by);
 const dsAgo = a => a === 'now' ? 'just now' : a + ' ago';
-const dsTabOn = s => !!s && canRead(s) && st.dsSide === 'stack';
 function dsCanAdd(s) {
   if (!s || st.auth !== 'in') return false;
   if (isClosed(s) && !isMember(s.id)) return false;
@@ -6810,18 +6802,9 @@ const dsOver = s => dsCanAdd(s) ? `<div class="ds-over" data-dsdropdemo="${s.id}
 const dsZoneAttr = s => `data-dsdz="${s.id}"${st.dsDrag === s.id ? ' data-drag="1"' : ''}`;
 const dsSelBtn = s => st.auth === 'in' && dsList(s.id).length > 1 ? `<button class="iconbtn ds-selb" type="button" data-mipickmode="1" aria-pressed="${!!st.miPickMode}" aria-label="Select sources to ask about" title="Select sources to ask about">${MII.select}</button>` : '';
 const dsPickBar = () => st.miPickMode ? `<div class="ds-pickbar" role="toolbar" aria-label="Selected sources"><span><b class="num">${st.miPick.length}</b> selected</span><button class="tlink" type="button" data-mipickx="1">Cancel</button><button class="btn sm primary" type="button" data-miask="pick" ${st.miPick.length > 1 ? '' : 'disabled aria-disabled="true"'}>Ask</button></div>` : '';
-/* One source in the sidebar list. */
-function dsRow(d, sid) {
-  const m = MIT(d.m), n = miAsksOf(m.id).filter(a => a.p.s === sid).length, nw = dsIsNew(sid, d);
-  const pk = st.miPickMode, picked = pk && st.miPick.includes(m.id);
-  const attrs = pk ? `data-mipick="${m.id}" role="checkbox" aria-checked="${picked}"` : `data-miopen="${m.id}" role="link"`;
-  const box = pk ? `<span class="mi-pk${picked ? ' on' : ''}" aria-hidden="true">${I.check}</span>` : '';
-  const inner = `${miIc(m, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(m))}</b><span class="ds-m">${dsWho(d.by)} · ${d.age}${dsAsks(m, sid)}</span>${dsFlag(d)}</span>`;
-  return `<div class="ds-r${nw ? ' new' : ''}${picked ? ' picked' : ''}${st.dsFlash === m.id ? ' flash' : ''}" ${attrs} tabindex="0">${box}${inner}${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</div>`;
-}
 const dsAsks = (m, sid) => { const n = miAsksOf(m.id).filter(a => a.p.s === sid).length; return n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : ''; };
 const dsFlag = d => d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
-/* One source in the Social feed style (full list, E2 sidebar list), with who added it, the note and asks. */
+/* One source in the Social feed style (full list, sidebar list), with who added it, the note and asks. */
 function dsUnit(d, sid) {
   const m = MIT(d.m);
   const meta = `<span class="ds-m">${d.note ? `Added ${dsAgo(d.age)}` : `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}${dsAsks(m, sid)}</span>`;
@@ -6829,11 +6812,7 @@ function dsUnit(d, sid) {
   const o = { pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
   return miUnit2(m, o);
 }
-function dsListHTML(s) {
-  const l = dsList(s.id);
-  if (!l.length) return `<div class="ds-empty"><b>No sources yet</b>${dsCanAdd(s) ? '<span>Paste a link or drop a file above.</span>' : ''}</div>`;
-  return l.map(d => dsRow(d, s.id)).join('');
-}
+const dsEmpty = s => `<div class="ds-empty"><b>No sources yet</b>${dsCanAdd(s) ? '<span>Paste a link or drop a file above.</span>' : ''}</div>`;
 /* note from the person who added the source to this space; review state */
 function dsNoteHTML(m, s) {
   const d = s && dsDropOf(s.id, m.id); if (!d) return '';
@@ -6849,44 +6828,35 @@ function dsSourceActs(m, s) {
 }
 const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend" type="button" data-dssend="w:${POSTS.indexOf(p)}:${k}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
 
-/* ---------- full list in the main column (Stack): a list in the Social feed style ---------- */
-function dsAllMain(s) {
-  const l = dsList(s.id);
-  const list = l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsListHTML(s);
-  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${list}${dsPickBar()}${dsOver(s)}</div>`;
-}
-
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
-/* The Sources tab's list: compact rows (tabs), or the Social feed style (tabsty). */
+/* The Sources tab's list (tabsty, and the expanded stack): every source in the Social feed style. */
 function dsSideList(s) {
   const l = dsList(s.id);
-  if (st.dsSide === 'tabsty' && l.length) return `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>`;
-  return `<div class="ds-list" role="list">${dsListHTML(s)}</div>`;
+  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsEmpty(s);
 }
 function dsStack(s) {
   const l = dsList(s.id).slice(0, 3);
-  if (!l.length) return `<div class="ds-list">${dsListHTML(s)}</div>`;
+  if (!l.length) return dsEmpty(s);
   const top = MIT(l[0].m), nw = dsList(s.id).some(d => dsIsNew(s.id, d));
-  return `<button class="ds-stk n${l.length}" type="button" data-dsall="1" aria-label="Show all sources"><span class="ds-stk-c">${miIc(top, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(top))}</b><span class="ds-m">${dsWho(l[0].by)} · ${l[0].age}</span></span>${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</span></button><div class="ds-stk-more">${l.slice(1).map(d => `<span>${miIc(MIT(d.m), 'xs')}<span>${esc(clip(miTitle(MIT(d.m)), 46))}</span></span>`).join('')}</div><button class="tlink ds-morel" type="button" data-dsall="1">Show all</button>`;
+  return `<button class="ds-stk n${l.length}" type="button" data-dsexp="1" aria-label="Show all sources"><span class="ds-stk-c">${miIc(top, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(top))}</b><span class="ds-m">${dsWho(l[0].by)} · ${l[0].age}</span></span>${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</span></button><div class="ds-stk-more">${l.slice(1).map(d => `<span>${miIc(MIT(d.m), 'xs')}<span>${esc(clip(miTitle(MIT(d.m)), 46))}</span></span>`).join('')}</div><button class="tlink ds-morel" type="button" data-dsexp="1">Show all</button>`;
 }
 function dsSideDrawer(s) {
   const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
   if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
   const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${st.dsSTab === k}" data-dsstab="${k}">${l}</button>`;
-  const wiki = st.dsSTab === 'wiki', stack = st.dsSide === 'stack';
-  /* Stack: the drop box (hidden while the full list, which has its own, is open), then the stack */
+  const wiki = st.dsSTab === 'wiki', stack = st.dsSide === 'stack' && !st.dsExp;
+  /* Stack: the newest three; clicking the stack (or Show all) expands it into the full list, with Show fewer */
+  const fewer = st.dsSide === 'stack' ? '<button class="tlink ds-morel" type="button" data-dsexp="0">Show fewer</button>' : '';
   const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>`
-    : stack ? `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${sfTabCur() === 'sources' ? '' : dsDropBox(s)}${dsStack(s)}${dsOver(s)}</div>`
-    : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}</div>`;
+    : stack ? `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsStack(s)}${dsOver(s)}</div>`
+    : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${fewer}${dsSideList(s)}${fewer}${dsPickBar()}${dsOver(s)}</div>`;
   return `<aside class="drawer wk ds-side ds-s-${st.dsSide}" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki || stack ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
 }
 
 /* ---------- space page ---------- */
-/* Parts of the space page: main column (the full list on the Sources tab) and the sidebar, on the right or
-   the left ("Sidebar side" control, st.dsPos). */
+/* Parts of the space page: main column and the sidebar, on the right or the left ("Sidebar side" control, st.dsPos). */
 function dsSpaceParts(s, tab, body) {
   const x = { mcol: banner(s) + body, side: wikiDrawer(s), cls: st.dsPos === 'left' ? ' ds-left' : '' };
-  if (canRead(s) && tab === 'sources') x.mcol = banner(s) + dsAllMain(s);
   return x;
 }
 /* Home: the latest sources added to your spaces */
@@ -6937,7 +6907,7 @@ function dsClick(t) {
   const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
   let b;
   if (st.dsMenu && !d('.ds-mw')) st.dsMenu = null;
-  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null });
+  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null, dsExp: false });
   if ((b = d('[data-cstoast^="ds:"]'))) {
     const [, v, sid, mid] = b.dataset.cstoast.split(':'); st.toast = null;
     if (v === 'open') { Object.assign(st, NAVBASE(), { space: sid }); miOpen(mid); }
@@ -6947,7 +6917,7 @@ function dsClick(t) {
   if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
   if ((b = d('[data-dssignin]'))) { st.modal = 'signin'; return go(); }
   if ((b = d('[data-dsstab]'))) { st.dsSTab = b.dataset.dsstab; return go(); }
-  if ((b = d('[data-dsall]'))) { Object.assign(st, NAVBASE(), MI_CLEAR(), { space: st.space, spTab: 'sources' }); setTimeout(scrollMockTop, 0); return go(); }
+  if ((b = d('[data-dsexp]'))) { st.dsExp = b.dataset.dsexp === '1'; if (!st.dsExp) Object.assign(st, { miPickMode: false, miPick: [] }); return go(); }
   if ((b = d('[data-dsdropdemo]'))) { dsDropped(b.dataset.dsdropdemo, DS_DRAG_URL); return true; }
   if ((b = d('[data-dsclear]'))) { Object.assign(st, { dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
   if ((b = d('[data-dsadd]'))) {
@@ -7060,7 +7030,7 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
-    ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1'], ['tabsty', 'Sources and Wiki tabs, social feed', '2']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dsside', 'dsSide', [['stack', 'Stack that expands'], ['tabsty', 'Sources and Wiki tabs, social feed']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', dsExp: false }); dsOnSpace(); }],
     ['k-dspos', 'dsPos', [['right', 'Right'], ['left', 'Left']], () => { st.drawer = true; dsOnSpace(); }],
   ];
 }
@@ -7068,7 +7038,7 @@ function DSKNOBS() {
 /* ---------- "Jump to" ---------- */
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
-  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: full list']]],
+  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: expanded']]],
   ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
 function dsNewSpace() {
@@ -7082,7 +7052,7 @@ function dsNewSpace() {
 }
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsExp: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
   { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
   setRel('replication', 'none');
   dsReset();
@@ -7090,7 +7060,7 @@ function dsJump(k) {
   const nar = dsNarrow();
   /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
   const list = () => { if (nar) st.mWiki = true; };
-  const listFull = () => { if (st.dsSide === 'stack') st.spTab = 'sources'; else list(); };
+  const listFull = () => { if (st.dsSide === 'stack') st.dsExp = true; list(); };
   const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
   const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
   switch (g === 'x' ? 'x-' + v : v) {
@@ -7105,7 +7075,7 @@ function dsJump(k) {
     case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
     case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
     case 'out': st.auth = 'out'; list(); break;
-    case 'all': st.dsSide = 'stack'; st.spTab = 'sources'; break;
+    case 'all': st.dsSide = 'stack'; st.dsExp = true; break;
     case 'x-send': setRel('replication', 'member'); miOpen('m3'); Object.assign(st, { dsSend: { m: 'm3', pick: ['replication'], note: '' }, modal: 'ds-send' }); break;
     case 'x-cite': th('mia4'); Object.assign(st, { dsSend: { m: 'm11', pick: [], note: '' }, modal: 'ds-send' }); break;
     case 'x-share': setRel('replication', 'member'); st.home = true; Object.assign(st, { dsSend: { m: 'm12', pick: ['ml'], note: '', share: true }, modal: 'ds-send' }); break;
@@ -7120,8 +7090,8 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsSide: 'tabs', dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
-  dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsFromAll: false,
+  dsSide: 'stack', dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsExp: false,
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
 /* END dropped sources js */
