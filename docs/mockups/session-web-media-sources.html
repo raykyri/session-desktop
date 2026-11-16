@@ -2258,7 +2258,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-pk { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--control-border); background: var(--field); display: grid; place-items: center; color: transparent; margin-top: 4px; }
 .mi-pk svg { width: 12px; height: 12px; }
 .mi-pk.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-/* source units: the full source list ("Item style") and Saved (Plain rows) */
+/* source units: Plain rows in Saved; Social feed in the full list and the E2 sidebar list */
 .mi-units { display: flex; flex-direction: column; }
 .mi-u { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; cursor: pointer; min-width: 0; }
 .mi-u.has-ic { grid-template-columns: 26px minmax(0, 1fr); }
@@ -2276,23 +2276,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-sty-plain.mi-lay-rows .mi-u:first-child { border-top: 0; }
 .mi-sty-plain .mi-u:hover .mi-u-t { text-decoration: underline; text-underline-offset: 2px; }
 .mi-sty-plain .mi-u-dot { top: 20px; }
-/* Boxed: a bordered box per unit, source icon at left */
-.mi-sty-boxed { gap: 8px; }
-.mi-sty-boxed .mi-u { padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
-.mi-sty-boxed .mi-u:hover { border-color: var(--border-strong); }
-.mi-sty-boxed .mi-u-dot { top: 20px; right: 14px; }
-/* Boxed media only: plain rows, with podcasts and videos in a box */
-.mi-sty-boxedav .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-boxedav.mi-lay-rows .mi-u:first-child, .mi-sty-boxedav.mi-lay-rows .mi-u.mi-box + .mi-u { border-top: 0; }
-.mi-sty-boxedav .mi-u:not(.mi-box):hover .mi-u-t { text-decoration: underline; text-underline-offset: 2px; }
-.mi-sty-boxedav .mi-u-dot { top: 20px; }
-.mi-sty-boxedav .mi-u.mi-box { padding: 14px 16px; margin: 6px 0; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
-.mi-sty-boxedav .mi-u.mi-box:hover { border-color: var(--border-strong); }
-.mi-sty-boxedav .mi-u.mi-box .mi-u-dot { right: 14px; }
-/* Compact: source badge above the title, two-line excerpt */
 .mi-u.picked .mi-u-t { color: var(--accent-strong); }
-.mi-sty-boxed .mi-u.picked, .mi-sty-boxedav .mi-u.mi-box.picked { border-color: var(--accent); background: var(--accent-soft); }
-/* Native by type, Social feed */
+/* Social feed: every source in a social-post shape, X posts as posts, others with a link preview */
 .mi-u2 { grid-template-columns: minmax(0, 1fr); }
 .mi-u2.picking { grid-template-columns: 18px minmax(0, 1fr); }
 .mi-p { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; }
@@ -2309,9 +2294,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-p-qh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mi-p-qh b { font-weight: 600; color: var(--t-strong); }
 .mi-p-qh .av.sm { width: 18px; height: 18px; font-size: 8.5px; }
-.mi-sty-native .mi-u, .mi-sty-social .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-native.mi-lay-rows .mi-u:first-child, .mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
-.mi-sty-native .mi-u-dot, .mi-sty-social .mi-u-dot { top: 20px; }
+.mi-sty-social .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
+.mi-sty-social .mi-u-dot { top: 20px; }
 /* Social feed: link previews */
 .mi-lp { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); min-width: 0; }
 .mi-lp-m { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
@@ -2554,10 +2539,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-sunits .mi-u-t { font-size: var(--fs-sm); }
 .ds-sunits .mi-u-x { font-size: var(--fs-xs); }
 .ds-sunits .mi-p-t { font-size: var(--fs-sm); }
-.ds-sunits.mi-sty-boxed, .ds-sunits.mi-sty-boxedav .mi-u.mi-box { gap: 6px; }
-.ds-sunits.mi-sty-boxed .mi-u, .ds-sunits.mi-sty-boxedav .mi-u.mi-box { padding: 12px; }
-.ds-sunits .mi-u.has-ic { grid-template-columns: 22px minmax(0, 1fr); gap: 10px; }
-.ds-sunits .mi-u.picking.has-ic { grid-template-columns: 18px 22px minmax(0, 1fr); }
 .ds-sunits .mi-p { grid-template-columns: 26px minmax(0, 1fr); gap: 8px; }
 .ds-sunits .mi-p > .av, .ds-sunits .mi-p > .mi-ic { width: 26px; height: 26px; }
 .ds-sunits .mi-u2 > .ds-ux { padding-left: 34px; }
@@ -2660,7 +2641,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
       <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
-      <div class="knob" id="kw-dssty"><span>Item style</span><div class="seg" id="k-dssty"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3073,10 +3053,10 @@ function homeFeed() {
       ${feed2(null, homePosts())}
     </div></div>
     <aside class="drawer wk home-side" aria-label="Spaces"><div class="dbody">
-      ${dsHomeCard()}
       ${joined.length ? `<div class="note-card"><div class="sk-head"><h3>Your spaces</h3></div><div class="sp-rows">${joined.map(spRow).join('')}</div></div>` : ''}
       <div class="note-card"><div class="sk-head"><h3>${joined.length ? 'More spaces' : 'Spaces'}</h3><button class="tlink" type="button" data-sub="browse">Browse all</button></div><div class="sp-rows">${(joined.length ? more : SPACES.filter(visibleSp)).map(spRow).join('')}</div></div>
       ${sug.length ? `<div class="note-card"><div class="sk-head"><h3>Closed spaces</h3>${LK('cs-lk', 'Closed spaces')}</div><p class="faint cs-small">Only members can read these. You can ask to join.</p>${sug.map(sugRow).join('')}</div>` : ''}
+      ${dsHomeCard()}
     </div></aside>
   </div>`;
 }
@@ -6325,22 +6305,21 @@ const miOpenAttr = (m, b) => `data-miopen="${m.id}${b != null ? ':' + b : ''}"`;
 /* In selection mode an item toggles its selection; otherwise it opens. */
 const miPickBox = m => st.miPickMode ? `<span class="mi-pk${st.miPick.includes(m.id) ? ' on' : ''}" aria-hidden="true">${I.check}</span>` : '';
 const miItemAttr = (m, pick, open) => st.miPickMode && pick ? `data-mipick="${m.id}" role="checkbox" aria-checked="${st.miPick.includes(m.id)}"` : open || miOpenAttr(m);
-/* Source unit in the full source list and in Saved: source, author and age, title and excerpt, plus an
+/* Source unit in Saved (Plain rows): source, author and age, title and excerpt, plus an
    unread dot at the top right. Statuses (edited, deleted, paid) are on the source page. o.extra goes
-   under the text (who added the source, the note, asks); o.unread and o.cls override the defaults.
-   st.miSty ("Item style" control): plain | boxed | boxedav (podcasts and videos boxed, others plain). */
+   under the text (who added the source, the note, asks); o.unread and o.cls override the defaults. */
 const miExcerpt = m => m.deleted ? '' : m.desc || (m.t ? m.body.find(b => b.p).p : miRest(m));
 function miUnit(m, o = {}) {
-  const sty = o.sty || st.miSty, unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
+  const unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
   const pick = o.pick ? miPickBox(m) : '', ex = miExcerpt(m), on = st.miPickMode && o.pick && st.miPick.includes(m.id);
   const src = `<span class="mi-u-src">${miByline(m)}<span class="faint">· ${miSrcLine(m)} · ${m.age}</span></span>`;
   const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : '';
   const body = `${src}${t}${x}`;
-  const ic = ['plain', 'boxed', 'boxedav'].includes(sty) ? miIc(m, 'mi-u-ic') : '', box = sty === 'boxedav' && miAV(m);
-  return `<article class="mi-u${box ? ' mi-box' : ''}${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}${o.extra || ''}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+  const ic = miIc(m, 'mi-u-ic');
+  return `<article class="mi-u${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}${o.extra || ''}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
-const miRow = (m, o = {}) => miUnit(m, { ...o, sty: o.sty || 'plain' });
-/* Styles that take the item's own shape (native, social). X posts read as posts: avatar,
+const miRow = (m, o = {}) => miUnit(m, o);
+/* Social feed unit (full list, E2 sidebar list): every source in a social-post shape. X posts read as posts: avatar,
    name and handle, the full first post, a quoted post as an inset box and the thread length. */
 const miDomain = m => m.url.split('/')[0];
 const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
@@ -6348,12 +6327,10 @@ const miPostHead = m => `<span class="mi-p-h"><b>${esc(m.au)}</b><span class="fa
 const miPostText = m => { const b = m.body[0]; return `${m.deleted ? '<p class="mi-p-t faint">This post is unavailable.</p>' : `<p class="mi-p-t">${esc(b.p)}</p>`}${b.q && !m.deleted ? `<div class="mi-p-q"><span class="mi-p-qh">${avatar(b.q.h.slice(1), 'sm')}<b>${esc(b.q.au)}</b><span class="faint">${esc(b.q.h)}</span></span><p>${esc(b.q.t)}</p></div>` : ''}`; };
 const miAV = m => m.kind === 'audio' || m.kind === 'video';
 function miUnit2(m, o) {
-  const sty = o.sty || st.miSty, unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
+  const unread = o.unread != null ? o.unread : !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
   const pick = o.pick ? miPickBox(m) : '', on = st.miPickMode && o.pick && st.miPick.includes(m.id), ex = miExcerpt(m);
   let inner;
   if (m.pl === 'x') inner = `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
-  else if (sty === 'native') inner = miAV(m) ? `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-u-src">${esc(m.pub || m.au)}<span class="faint">· ${m.len} · ${m.age}</span></span>${ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div>`
-    : `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-u-src">${esc(m.pub && m.pub !== m.au ? m.pub : MIPLAT[m.pl].n)}<span class="faint">· ${esc(m.au)} · ${m.age}</span></span><b class="mi-u-t">${esc(miTitle(m))}</b>${ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : ''}</div></div>`;
   else inner = `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-p-h"><b>${esc(m.pub && m.pub !== m.au && !miAV(m) ? m.pub : m.au)}</b><span class="faint">· ${m.age}</span></span><div class="mi-lp"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b>${miAV(m) ? `<span class="mi-lp-m faint">${MII[MIPLAT[m.pl].ic]}${esc(m.pub || m.au)}</span>` : ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div></div>`;
   return `<article class="mi-u mi-u2${o.cls || ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${inner}${o.extra || ''}${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
@@ -6680,7 +6657,7 @@ function miJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  miSty: 'plain', miItem: null, miFrom: null, ...MI_CLEAR(), miAsk: null, miAskQ: '', miAskSp: null,
+  miItem: null, miFrom: null, ...MI_CLEAR(), miAsk: null, miAskQ: '', miAskSp: null,
   miRead: new Set(['m6', 'm8']), miSaved: new Set(['m2']), miAdded: [],
 });
 /* END media items js */
@@ -6700,7 +6677,7 @@ Object.assign(st, {
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
    Placement: the right sidebar with Sources and Wiki tabs ("Sidebar" control, st.dsSide): the Sources
-   tab lists every source as compact rows (tabs) or in the "Item style" (tabsty), or shows a stack of the newest three with Show all, which opens the
+   tab lists every source as compact rows (tabs) or in the Social feed style (tabsty), or shows a stack of the newest three with Show all, which opens the
    full list in the main column (stack). The full list is a list in the Social feed style. */
 const DS_DROPS0 = {
   ml: [
@@ -6838,13 +6815,13 @@ function dsRow(d, sid) {
 }
 const dsAsks = (m, sid) => { const n = miAsksOf(m.id).filter(a => a.p.s === sid).length; return n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : ''; };
 const dsFlag = d => d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
-/* One source in the full list, in the "Item style" (st.miSty), with who added it, the note and asks. */
-function dsUnit(d, sid, sty = st.miSty) {
+/* One source in the Social feed style (full list, E2 sidebar list), with who added it, the note and asks. */
+function dsUnit(d, sid) {
   const m = MIT(d.m);
   const meta = `<span class="ds-m">${d.note ? `Added ${dsAgo(d.age)}` : `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}${dsAsks(m, sid)}</span>`;
   const extra = `<span class="ds-ux">${d.note ? `<span class="ds-rn">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></span>` : ''}${meta}${dsFlag(d)}</span>`;
-  const o = { sty, pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
-  return ['native', 'social'].includes(sty) ? miUnit2(m, o) : miUnit(m, o);
+  const o = { pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
+  return miUnit2(m, o);
 }
 function dsListHTML(s) {
   const l = dsList(s.id);
@@ -6869,15 +6846,15 @@ const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend"
 /* ---------- full list in the main column (Stack): a list in the Social feed style ---------- */
 function dsAllMain(s) {
   const l = dsList(s.id);
-  const list = l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units" role="list">${l.map(d => dsUnit(d, s.id, 'social')).join('')}</div>` : dsListHTML(s);
+  const list = l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsListHTML(s);
   return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${list}${dsPickBar()}${dsOver(s)}</div>`;
 }
 
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
-/* The Sources tab's list: compact rows (tabs), or units in the "Item style" (tabsty). */
+/* The Sources tab's list: compact rows (tabs), or the Social feed style (tabsty). */
 function dsSideList(s) {
   const l = dsList(s.id);
-  if (st.dsSide === 'tabsty' && l.length) return `<div class="mi-units mi-lay-rows mi-sty-${st.miSty} ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>`;
+  if (st.dsSide === 'tabsty' && l.length) return `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>`;
   return `<div class="ds-list" role="list">${dsListHTML(s)}</div>`;
 }
 function dsStack(s) {
@@ -7061,8 +7038,6 @@ document.addEventListener('drop', e => {
 /* after each render: height for the Sources column, hide the sub-control that does not apply,
    and briefly mark a source that was just added (or was already there) */
 function dsAfterRender() {
-  const sty = $('kw-dssty');
-  if (sty) sty.style.display = st.dsSide === 'tabsty' ? '' : 'none';
   if (st.dsFlash && st.device !== 'native') {
     const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
@@ -7076,12 +7051,9 @@ const dsOnSpace = () => {
   const onSp = st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && canRead(sp(st.space));
   if (!onSp && st.subPage !== 'mitem') dsJump('ds-s-space');
 };
-/* Item style applies to the E2 sidebar list: picking one shows the space page with the Sources tab open. */
-const dsOnAll = () => { Object.assign(st, { dsSide: 'tabsty', drawer: true, dsSTab: 'sources' }); if (st.spTab === 'sources') st.spTab = 'threads'; dsOnSpace(); };
 function DSKNOBS() {
   return [
-    ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1'], ['tabsty', 'Tabs with item styles', '2']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
-    ['k-dssty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['boxedav', 'Boxed media only', '1'], ['native', 'Native by type'], ['social', 'Social feed']], dsOnAll],
+    ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1'], ['tabsty', 'Sources and Wiki tabs, social feed', '2']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
   ];
 }
 
