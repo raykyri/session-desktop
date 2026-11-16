@@ -7651,10 +7651,10 @@ const dsSelBtn = s => st.auth === 'in' && dsList(s.id).length > 1 ? `<button cla
 const dsPickBar = () => st.miPickMode ? `<div class="ds-pickbar" role="toolbar" aria-label="Selected sources"><span><b class="num">${st.miPick.length}</b> selected</span><button class="tlink" type="button" data-mipickx="1">Cancel</button><button class="btn sm primary" type="button" data-miask="pick" ${st.miPick.length > 1 ? '' : 'disabled aria-disabled="true"'}>Ask</button></div>` : '';
 const dsAsks = (m, sid) => { const n = miAsksOf(m.id).filter(a => a.p.s === sid).length; return n ? `<span class="ds-n num" title="Asks about it">${MII.ask}${n}</span>` : ''; };
 const dsFlag = d => d.rv ? '<span class="mi-flag ds-rv">Waiting for review</span>' : '';
-/* One source in the Social feed style (full list, sidebar list), with who added it, the note and asks. */
+/* One source in the sidebar list, in the Social feed style: the note from whoever added it, and the asks about it. */
 function dsUnit(d, sid) {
-  const m = MIT(d.m);
-  const meta = `<span class="ds-m">${d.note ? `Added ${dsAgo(d.age)}` : `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}${dsAsks(m, sid)}</span>`;
+  const m = MIT(d.m), asks = dsAsks(m, sid);
+  const meta = asks ? `<span class="ds-m">${asks}</span>` : '';
   const extra = `<span class="ds-ux">${d.note ? `<span class="ds-rn">${avatar(d.by, 'sm')}<span><b>${dsWho(d.by)}</b> ${esc(d.note)}</span></span>` : ''}${meta}${dsFlag(d)}</span>`;
   const o = { pick: true, unread: dsIsNew(sid, d), cls: st.dsFlash === m.id ? ' flash' : '', extra };
   return miUnit2(m, o);
