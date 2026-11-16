@@ -2547,6 +2547,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-pickbar .btn[disabled] { opacity: .5; }
 .ds-pane .ds-pickbar, .ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
 .ds-allm { gap: 12px !important; }
+.A .main.mi-wide { max-width: 960px; }
 .ds-allh { display: flex; align-items: flex-start; gap: 6px; }
 .ds-allh > .ds-drop { flex: 1; min-width: 0; }
 .ds-allh > .ds-selb { width: 36px; height: 36px; flex: none; }
@@ -2656,6 +2657,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
       <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
+      <div class="knob" id="kw-dslay"><span>Full list</span><div class="seg" id="k-dslay"></div></div>
       <div class="knob" id="kw-dssty"><span>Item style</span><div class="seg" id="k-dssty"></div></div>
     </div>
   </div>
@@ -6676,7 +6678,7 @@ function miJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  miSty: 'plain', miItem: null, miFrom: null, ...MI_CLEAR(), miAsk: null, miAskQ: '', miAskSp: null,
+  miLay: 'rows', miSty: 'plain', miItem: null, miFrom: null, ...MI_CLEAR(), miAsk: null, miAskQ: '', miAskSp: null,
   miRead: new Set(['m6', 'm8']), miSaved: new Set(['m2']), miAdded: [],
 });
 /* END media items js */
@@ -6865,8 +6867,8 @@ const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend"
 /* ---------- full list in the main column (Stack) ---------- */
 function dsAllMain(s) {
   const l = dsList(s.id);
-  const list = l.length ? `<div class="mi-units mi-lay-rows mi-sty-${st.miSty} ds-units" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsListHTML(s);
-  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${list}${dsPickBar()}${dsOver(s)}</div>`;
+  const list = l.length ? `<div class="mi-units mi-lay-${st.miLay} mi-sty-${st.miSty} ds-units" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsListHTML(s);
+  return `<div class="main ds-allm${st.miLay === 'cards' ? ' mi-wide' : ''}" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${list}${dsPickBar()}${dsOver(s)}</div>`;
 }
 
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
@@ -7054,8 +7056,7 @@ document.addEventListener('drop', e => {
 /* after each render: height for the Sources column, hide the sub-control that does not apply,
    and briefly mark a source that was just added (or was already there) */
 function dsAfterRender() {
-  const sy = $('kw-dssty');
-  if (sy) sy.style.display = st.dsSide === 'stack' ? '' : 'none';
+  ['kw-dslay', 'kw-dssty'].forEach(id => { const k = $(id); if (k) k.style.display = st.dsSide === 'stack' ? '' : 'none'; });
   if (st.dsFlash && st.device !== 'native') {
     const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
@@ -7069,11 +7070,12 @@ const dsOnSpace = () => {
   const onSp = st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && canRead(sp(st.space));
   if (!onSp && st.subPage !== 'mitem') dsJump('ds-s-space');
 };
-/* Item style applies to the full list: picking one opens it (and the Stack variant, which has it). */
+/* Full list layout and item style apply to the full list: picking one opens it (and the Stack variant, which has it). */
 const dsOnAll = () => { if (!(st.dsSide === 'stack' && st.subPage == null && st.thread == null && !st.home && !st.savedPage && !st.profilePage && sfTabCur() === 'sources')) dsJump('ds-s-all'); };
 function DSKNOBS() {
   return [
     ['k-dsside', 'dsSide', [['tabs', 'Sources and Wiki tabs'], ['stack', 'Stack and full list', '1']], () => { st.drawer = true; st.dsSTab = 'sources'; if (st.spTab === 'sources' && st.dsSide !== 'stack') st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dslay', 'miLay', [['rows', 'List'], ['cards', 'Cards']], dsOnAll],
     ['k-dssty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['boxedav', 'Boxed media only', '1'], ['native', 'Native by type'], ['social', 'Social feed']], dsOnAll],
   ];
 }
