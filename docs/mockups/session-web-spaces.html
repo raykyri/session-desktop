@@ -8338,7 +8338,7 @@ function qtNestView(T, cur) {
     <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`}`) : qtNodeActs(T, top)}
     ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
     <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
-    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>`;
+    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : ''}</article>`;
   const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : qtComb() && !st.qtCmp ? qtFuView(T, cur) : main;
   return `${qtBar(T, cur)}<div class="qt-grid${qtComb() ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
 }
