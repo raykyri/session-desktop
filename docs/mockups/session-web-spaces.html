@@ -8664,7 +8664,7 @@ function qtReset() {
 }
 JUMPS.push(
   ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'An ask five levels deep'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
-  ['Question trees: follow-ups with the tree', [['qt-fx', 'Follow-ups and the tree'], ['qt-fx-deep', 'A deep ask from the outline'], ['qt-fl', 'Follow-ups as questions'], ['qt-fl-deep', 'Follow-ups as questions: a deep ask from the outline']]],
+  ['Question trees: follow-ups as questions', [['qt-fl', 'Follow-ups as questions'], ['qt-fl-deep', 'A deep ask from the outline']]],
   ['Question trees: map', [['qt-map', 'Map dialog'], ['qt-map-deep', 'Map: open a deep branch']]],
   ['Question trees: asking', [['qt-compose', 'Ask about an answer deep in a branch'], ['qt-running', 'New ask while the agent researches']]],
   ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
@@ -8672,15 +8672,15 @@ JUMPS.push(
 );
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = 'fx'; st.qtFuQ = !!m && m[1] === 'fl'; } qtSyncNotif();
+  st.thrV = 'fx'; st.qtFuQ = /^qt-fl\b/.test(k); qtSyncNotif();
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
   qtReset();
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: D.posts[i].s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
   const M = 11;
   switch (k) {
     case 'qt-root': open(M); break;
-    case 'qt-fx': case 'qt-fl': open(M); break;
-    case 'qt-fx-deep': case 'qt-fl-deep': open(M, 'e1'); break;
+    case 'qt-fl': open(M); break;
+    case 'qt-fl-deep': open(M, 'e1'); break;
     case 'qt-deep': open(M, 'e1'); break;
     case 'qt-sib': open(M, 'b2', { qtHi: 'a2', modal: matchMedia('(max-width: 920px)').matches || st.device === 'phone' ? 'qt-outline' : null }); break;
     case 'qt-up': open(M, 'e1'); qtGo(qtT(M), 'a2'); break;
