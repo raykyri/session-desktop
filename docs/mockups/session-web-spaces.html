@@ -1498,6 +1498,12 @@ button.n-row:active { background: var(--n-fill); }
 @keyframes sh-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes sh-scrim { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sh-enter, .sh-scrim-enter { animation: none !important; } }
+.abw-meter { margin-top: 10px; max-width: 360px; }
+.abw-skills { margin-top: 4px; }
+.abw-sum { display: flex; flex-direction: column; align-items: flex-start; }
+.abw-sum p { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.abw-sum b { font-weight: 550; color: var(--t-strong); }
+.ds-stab-only { cursor: default; }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
@@ -3015,6 +3021,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
+      <div class="knob"><span>About and wiki</span><div class="seg" id="k-abw"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -4073,6 +4080,19 @@ function wikiDrawer(s) {
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
     : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
+}
+/* About and wiki (st.abW):
+   split    About: what the space is and how it runs. Sidebar "Pages": the pages and the space's skills.
+   fold     About also lists the pages and skills; the sidebar is Sources only.
+   side     No About tab: the sidebar's "About" tab holds everything.
+   summary  Sidebar "Wiki": pages and skills, then one line each for the rules and moderators, linking to About.
+   dup      As before: the wiki repeats the rules, moderators and token use from About. */
+const pagesCard = s => `<div class="note-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Pages</h3><a class="tlink" href="#" onclick="return false">Edit</a></div>${linksList(s)}</div>`;
+function sideCards(s) {
+  if (st.abW === 'split') return `${pagesCard(s)}${skillsHTML(s)}`;
+  if (st.abW === 'side') return sfAboutSide(s);
+  if (st.abW === 'summary') return `${pagesCard(s)}${skillsHTML(s)}<div class="note-card abw-sum"><p><b>${s.rules.length} rule${s.rules.length === 1 ? '' : 's'}</b> · <b>${s.mods.length} moderator${s.mods.length === 1 ? '' : 's'}</b>${s.byok ? ` · <b>${pctS(s.pct)}</b> of extra tokens used` : ''}</p><button class="tlink" type="button" data-sptab="about">See About</button></div>`;
+  return wikiCards(s);
 }
 function wikiCards(s) {
   return `<div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
@@ -6644,9 +6664,9 @@ function sfResolve(r, how) {
 
 /* ---------- space tabs: Threads / About ---------- */
 /* Tabs: Threads, About. Sources and the wiki are in the sidebar. */
-const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
+const sfTabCur = () => st.spTab === 'about' && st.abW !== 'side' ? 'about' : 'threads';
 function sfTabs(s) {
-  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
+  const cur = sfTabCur(), items = st.abW === 'side' ? [['threads', 'Threads']] : [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -6660,11 +6680,23 @@ function sfAbout(s) {
     <section><h3 class="rf-h">Rules</h3><div class="wk">${rulesList(s)}</div></section>
     ${s.notCover ? `<section><h3 class="rf-h">What this space doesn’t cover</h3><p class="sf-ab-p">${esc(s.notCover)}</p></section>` : ''}
     <section><h3 class="rf-h">Joining and visibility</h3><ul class="sf-plain"><li>${visText(s)}.</li><li>${joinLabel(s)}.</li>${isClosed(s) ? `<li>${s.invite === 'members' ? 'Members can invite people.' : 'Moderators invite people.'}</li>` : ''}</ul></section>
-    <section><h3 class="rf-h">Token use</h3><p class="sf-ab-p">${tokenUse(s)}</p></section>
+    <section><h3 class="rf-h">Token use</h3><p class="sf-ab-p">${tokenUse(s)}</p>${s.byok && st.abW !== 'dup' ? `<div class="abw-meter">${meter(s)}</div>` : ''}</section>
+    ${st.abW === 'fold' ? `<section><h3 class="rf-h">Pages</h3>${linksList(s)}</section>${skillsHTML(s).replace('note-card', 'abw-skills')}` : ''}
   </div><aside class="sf-ab-side"><div class="rf-card"><h3>Details</h3>${facts}${verShown(s) ? `<p class="cs-fine sf-vnote">${SEAL}<span>${verNote(s)}</span></p>` : ''}</div>
     <div class="rf-card"><h3>Moderators</h3>${modsList(s)}</div></aside></div>`;
 }
-/* "No tabs" variant: About is the first section of the sidebar (the sheet on phones). */
+/* About and wiki › About in the sidebar: everything from the About tab, stacked for the narrow column, then pages and skills */
+function sfAboutSide(s) {
+  const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b class="num">${s.members.toLocaleString('en-US')}</b></div><div><span>Created</span><b>${s.created}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
+  return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p></div>
+    <div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
+    ${s.notCover ? `<div class="note-card"><h3>What this space doesn’t cover</h3><p class="sf-ab-p">${esc(s.notCover)}</p></div>` : ''}
+    ${pagesCard(s)}${skillsHTML(s)}
+    <div class="note-card"><h3>Joining and visibility</h3><ul class="sf-plain"><li>${visText(s)}.</li><li>${joinLabel(s)}.</li></ul></div>
+    <div class="note-card"><h3>Token use</h3><p class="sf-ab-p">${tokenUse(s)}</p>${s.byok ? meter(s) : ''}</div>
+    <div class="note-card"><h3>Details</h3>${facts}</div>
+    <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>`;
+}
 
 /* ---------- settings: landing page, topics, posts, domain, scope note ---------- */
 function sfTog(key, on, title, sub) {
@@ -7684,11 +7716,14 @@ function dsSideList(s) {
 function dsSideDrawer(s) {
   const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
   if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
-  const cur = st.dsSTab || (dsList(s.id).length ? 'sources' : 'wiki');
+  /* the second sidebar tab, by the About and wiki control: Pages, About, Wiki, or none */
+  const second = { split: 'Pages', side: 'About', summary: 'Wiki', dup: 'Wiki' }[st.abW] || null;
+  const cur = !second ? 'sources' : st.dsSTab || (dsList(s.id).length ? 'sources' : 'wiki');
   const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${cur === k}" data-dsstab="${k}">${l}</button>`;
   const wiki = cur === 'wiki';
-  const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
-  return `<aside class="drawer wk ds-side" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
+  const pane = wiki ? `<div class="dbody" role="tabpanel">${sideCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
+  const head = second ? `<span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', second)}</span>` : '<span class="ds-tabl"><b class="ds-stab ds-stab-only">Sources</b></span>';
+  return `<aside class="drawer wk ds-side" aria-label="${second ? 'Sources and ' + second.toLowerCase() : 'Sources'}"><div class="dh ds-tabs">${head}<span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
 }
 /* the drop box, the list and the selection bar */
 const dsSrcPane = s => `${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}`;
@@ -7909,6 +7944,8 @@ const dsOnSpace = () => {
 function DSKNOBS() {
   return [
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
+    /* About and wiki: how the space's About tab and the sidebar's Wiki tab divide their content (see abwMode) */
+    ['k-abw', 'abW', [['split', 'About, and a Pages tab'], ['fold', 'Pages in About, no wiki tab'], ['side', 'About in the sidebar'], ['summary', 'Wiki with a summary'], ['dup', 'As now']], () => { if (st.thread != null || st.subPage || st.home) Object.assign(st, NAVBASE(), { space: 'sablefield' }); Object.assign(st, { drawer: true, dsSTab: st.abW === 'fold' ? 'sources' : 'wiki', spTab: st.abW === 'side' ? 'threads' : st.spTab }); }],
   ];
 }
 
@@ -7966,7 +8003,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abW: 'split', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
