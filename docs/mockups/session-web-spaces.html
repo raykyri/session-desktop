@@ -274,6 +274,9 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .C .hdr { display: flex; align-items: center; gap: 16px; padding: 0 24px; height: 50px; background: var(--chrome); border-bottom: 1px solid var(--divider); }
 .C .hdr .hnav { flex: 1; display: flex; align-items: center; gap: 2px; min-width: 0; align-self: stretch; }
 .C .hdr .hnav .hscroll { flex: 1; gap: 2px; align-self: stretch; align-items: center; }
+/* no space to the right of the divider: the strip starts at the divider and its own left padding spaces the first tab, so scrolled tabs run up to the divider */
+.C .hdr .hnav .hdr-sep { margin-right: 0; }
+.C .hdr .hnav .hdr-sep + .hscroll { margin-left: -2px; padding-left: 6px; }
 @media (min-width: 641px) {
   .C .hdr .hnav + .hdr-right { margin-left: -16px; }
   .C .hdr .hnav + .hdr-right .sw-r { margin-left: 0; }
@@ -1483,7 +1486,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
 .jd-o[aria-selected="true"] { color: var(--t-heading); font-weight: 550; }
-/* "Choose a screen" stays to the right of the device toggle: on a narrow window its label wraps instead of moving it to the next line */
+/* "Screen…" (Jump to) stays to the right of the device toggle: on a narrow window its label wraps instead of moving it to the next line */
 @media (min-width: 641px) {
   .knob-meta { flex-wrap: nowrap; }
   .knob-meta > .knob:not(.cs-jk) { flex: none; }
@@ -2788,6 +2791,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-about small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
 .qt-q { margin: 0; font-size: 18.55px; line-height: 1.45; color: var(--t-heading); font-weight: 550; text-wrap: pretty; overflow-wrap: anywhere; }
 .qt-node { display: flex; flex-direction: column; gap: 12px; }
+.qt-rootask-in { margin-top: -2px; }
+/* the thread's question: author line and title spaced as on the Follow-ups page */
+#qt-n-r.qt-node { gap: 14px; }
 .qt-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-xs); color: var(--t-faint); }
 .qt-acts .btn svg, .p-foot .btn svg { width: 13px; height: 13px; }
 .qt-acts .grow { flex: 1; }
@@ -2811,7 +2817,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-fu .qt-acts { margin-top: 2px; }
 .qt-fu.on > .fu-q { color: var(--t-heading); font-weight: 550; }
 .qt-fub { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); }
-.qt-fub svg { width: 13px; height: 13px; }
+.qt-fub svg { width: 12px; height: 13px; color: var(--t-faint); }
 .qt-fub .chv { transform: rotate(-90deg); transition: transform .12s; }
 .qt-fub[aria-expanded="true"] .chv { transform: none; }
 .qt-fuk { margin: 6px 0 0 4px; padding-left: 14px; border-left: 2px solid var(--border-strong); }
@@ -2823,8 +2829,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-cacts .grow { flex: 1; }
 .qt-cacts .act.sf-im { width: 22px; height: 22px; }
 .qt-flb:hover > .qt-cacts, .qt-flb:focus-within > .qt-cacts { opacity: 1; }
-.qt-calm .qt-olr { grid-template-columns: minmax(0, 1fr) auto; }
-.qt-calm .qt-olr .av { display: none; }
 .qt-fls h3 { margin-bottom: 6px; }
 .th-fus h3 .qt-fut { order: 1; margin-left: 10px; align-self: center; } /* after the heading's rule line */
 .qt-fut button { height: 24px; padding: 0 9px; font-size: var(--fs-xs); }
@@ -3035,6 +3039,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Ask thread controls">
       <span class="cs-kt">Ask threads</span>
       <div class="knob" id="kw-thrv"><span>Thread page</span><div class="seg" id="k-thrv"></div></div>
+      <div class="knob"><span>Follow-up composer</span><div class="seg" id="k-fucomp"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3610,6 +3615,8 @@ try { const ap = localStorage.getItem('session-web-appearance'); if (ap === 'lig
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2).replace(/\.(\d*?)0+$/, '.$1').replace(/\.$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
+/* token amounts use a lowercase k (156k tokens); other counts keep K (3K members) */
+const fmtT = n => fmt(n).replace(/K$/, 'k');
 const pctS = p => Math.round(p * 100) + '%';
 const lvl = p => p >= 0.85 ? 'm-bad' : p >= 0.6 ? 'm-warn' : 'm-ok';
 const sp = id => D.spaces.find(s => s.id === id);
@@ -3624,8 +3631,8 @@ function ring(p, size, w) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle class="track" cx="${c}" cy="${c}" r="${r}" fill="none" stroke-width="${w}"/><circle class="fillarc" cx="${c}" cy="${c}" r="${r}" fill="none" stroke-width="${w}" stroke-linecap="round" pathLength="100" stroke-dasharray="${Math.max(p * 100, 0.5)} 100" transform="rotate(-90 ${c} ${c})"/></svg>`;
 }
 function meter(s) {
-  const p = s.pct, label = `${fmt(s.used)} of ${fmt(s.budget)} tokens used this month, ${pctS(p)}`;
-  const cap = `<span>${fmt(s.used)} / ${fmt(s.budget)} tokens${s.byok ? ` · From ${s.byok}` : ''}</span>`;
+  const p = s.pct, label = `${fmtT(s.used)} of ${fmtT(s.budget)} tokens used this month, ${pctS(p)}`;
+  const cap = `<span>${fmtT(s.used)} / ${fmtT(s.budget)} tokens${s.byok ? ` · From ${s.byok}` : ''}</span>`;
   return `<div class="mtr-donut ${lvl(p)}" style="gap:10px" role="img" aria-label="${label}"><div class="ring">${ring(p, 36, 5)}</div><div class="mtr-cap"><b class="num">${pctS(p)} tokens used</b>${cap}</div></div>`;
 }
 const miniMeter = s => `<span class="mini-ring ${lvl(s.pct)}" title="${pctS(s.pct)} of tokens used">${ring(s.pct, 14, 2.5)}</span>`;
@@ -3890,7 +3897,7 @@ const srcFor = p => SOURCES[D.posts.indexOf(p)] || SOURCES[p.s] || [];
 const replyCount = p => { const o = p.orig || p; return o.k === 'ask' ? nFuList(D.posts.indexOf(o)).length : rpFor(o).length; };
 function answerHTML(p) {
   if (p.running && p.about) return miRun(p);
-  if (p.running) return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 18K tokens so far</span></div><ol class="run-steps"><li class="done">Read the question and planned 4 searches</li><li class="done">Searched the web and ${spName(sp(p.s))} threads</li><li class="cur">Reading 9 sources</li><li>Write the answer</li></ol></div>`;
+  if (p.running) return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 18k tokens so far</span></div><ol class="run-steps"><li class="done">Read the question and planned 4 searches</li><li class="done">Searched the web and ${spName(sp(p.s))} threads</li><li class="cur">Reading 9 sources</li><li>Write the answer</li></ol></div>`;
   const src = srcFor(p);
   return `<div class="prose">${D.rich[D.posts.indexOf(p)] || `<p>${esc(p.sum)}</p>`}</div>${src.length ? `<div class="srcs"><span class="ao-l">Sources</span>${src.map(d => `<span class="src">${d}</span>`).join('')}</div>` : ''}`;
 }
@@ -3909,7 +3916,7 @@ function fuInput(p) {
 const thHead = p => sfCrumb(p, `<button class="th-back" type="button" data-space="${p.s}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(sp(p.s))}${isClosed(sp(p.s)) ? LK('cs-lk', 'Closed space') : ''}</button>`);
 const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${p.k === 'post' ? '<span class="faint">· post</span>' : ''}</div>`;
 /* Thread page meta line: like, save, share (closed spaces), then the token count, all left-aligned. The follow-up or reply count is in the section heading below. */
-const thActs = p => { const i = D.posts.indexOf(p), key = (p.k === 'ask' ? 'a:' : 'p:') + i; return `<div class="p-foot">${acts(p, false)}${csShareBtn(p)}${p.tok ? `<span class="num" title="${fmt(p.tok)} tokens">${fmt(p.tok)}<span class="m-long"> tokens</span></span>` : ''}${p.running || modOf(key) === 'removed' ? '' : itemMenu(key, 'sf-pend')}</div>`; };
+const thActs = p => { const i = D.posts.indexOf(p), key = (p.k === 'ask' ? 'a:' : 'p:') + i; return `<div class="p-foot">${acts(p, false)}${csShareBtn(p)}${p.tok ? `<span class="num" title="${fmtT(p.tok)} tokens">${fmtT(p.tok)}<span class="m-long"> tokens</span></span>` : ''}${p.running || modOf(key) === 'removed' ? '' : itemMenu(key, 'sf-pend')}</div>`; };
 /* Settled: sharing a closed thread gives a link that only members can open. */
 const csShareBtn = p => !isClosed(sp(p.s)) ? '' : `<button class="act" type="button" data-csshare="${D.posts.indexOf(p)}" aria-label="Share">${CI.share}<span>Share</span></button>`;
 /* key: "<thread>:<path>" of the reply, used for reports and moderation (r:<key>). */
@@ -3934,7 +3941,7 @@ function thDoc(p) {
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
       ${fuInput(p)}</article>
     <aside class="th-aside">
-      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Token use</span><b>${paidOf(p)}</b></div>` : ''}</div></aside></div>`;
+      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18k so far' : fmtT(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Token use</span><b>${paidOf(p)}</b></div>` : ''}</div></aside></div>`;
 }
 function layoutThread() {
   const p = D.posts[st.thread];
@@ -4181,7 +4188,7 @@ function fuSection(p) {
 /* C. reading column: one centered column, details inline */
 function thRead(p) {
   const ask = p.k === 'ask', s = sp(p.s), src = srcItems(p);
-  const meta = `<div class="rd-meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span><span class="rd-dot">·</span><button class="tlink" type="button" data-space="${p.s}">${spName(s)}</button>${ask && !p.running ? `<span class="rd-dot">·</span><span class="num">${fmt(p.tok)} tokens from ${paidOf(p)}</span>` : ''}</div>`;
+  const meta = `<div class="rd-meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span><span class="rd-dot">·</span><button class="tlink" type="button" data-space="${p.s}">${spName(s)}</button>${ask && !p.running ? `<span class="rd-dot">·</span><span class="num">${fmtT(p.tok)} tokens from ${paidOf(p)}</span>` : ''}</div>`;
   return `<div class="rd"><article class="rd-main"><div class="th-top">${thHead(p)}</div>${ask && p.t ? `<h1 class="rd-title">${esc(p.t)}</h1>` : ''}${meta}
     <p class="rd-q${ask ? '' : ' rd-post'}">${esc(p.q)}</p>
     ${ask ? (p.running ? answerHTML(p) : `<div class="prose rd-ans">${ansBody(p)}</div>${src.length ? `<ol class="rd-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : ''}`) : ''}
@@ -4205,7 +4212,7 @@ function thChat(p) {
   const um = (u, age, txt) => `<div class="ch-m ch-u">${avatar(u, 'sm')}<div><div class="ch-h">${au(u)}<span>${age}</span></div><p>${esc(txt)}</p></div></div>`;
   const pid = D.posts.indexOf(p), am = (html, foot, key) => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b>${key && modOf(key) !== 'removed' ? itemMenu(key) : ''}</div>${key && modOf(key) ? modPh(key, key[0] === 'a' ? 'answer' : 'follow-up answer') : html}${foot || ''}</div></div>`;
   const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Token use<\/span><b>[^<]*<\/b><\/div>/, '');
-  const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
+  const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmtT(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
   return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}</article>${aside}</div>`;
 }
 /* BEGIN part1 */
@@ -5891,7 +5898,7 @@ function qsEditor(d, note = true) {
 }
 function payPicker(d) {
   const keys = st.userKeys.filter(k => k.valid);
-  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>The extra tokens use an API key added by ${sp(d.id).byok}, with a limit of ${fmt(sp(d.id).budget)} tokens a month. Only they can change the key.</span></p>` : ''}
+  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>The extra tokens use an API key added by ${sp(d.id).byok}, with a limit of ${fmtT(sp(d.id).budget)} tokens a month. Only they can change the key.</span></p>` : ''}
     ${!(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the extra tokens</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
     ${d.vis !== 'open' ? `<p class="cs-fine">${LOCK}<span>Who pays does not change who can read. Answers to asks in a closed space are visible to members only.</span></p>` : ''}`;
 }
@@ -6328,11 +6335,11 @@ function buildJump() {
   const wrap = $('k-jump'); if (!wrap) return;
   const flat = JUMPS.flatMap(([g, list]) => list.map(([k, l]) => ({ k, l, g })));
   let cur = -1, act = -1, open = false;
-  wrap.innerHTML = `<button type="button" class="cs-jump jd-btn" id="jd-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="jd-list" aria-label="Jump to a screen"><span class="jd-cur">Choose a screen…</span>${I.chev}</button><div class="jd-pop" id="jd-list" role="listbox" tabindex="-1" aria-label="Screens" hidden>${JUMPS.map(([g, list]) => `<div role="group" aria-label="${esc(g)}"><div class="jd-gh" aria-hidden="true">${esc(g)}</div>${list.map(([k, l]) => `<div class="jd-o" role="option" id="jd-${k}" data-jd="${k}" aria-selected="false">${esc(l)}</div>`).join('')}</div>`).join('')}</div>`;
+  wrap.innerHTML = `<button type="button" class="cs-jump jd-btn" id="jd-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="jd-list" aria-label="Jump to a screen"><span class="jd-cur">Screen…</span>${I.chev}</button><div class="jd-pop" id="jd-list" role="listbox" tabindex="-1" aria-label="Screens" hidden>${JUMPS.map(([g, list]) => `<div role="group" aria-label="${esc(g)}"><div class="jd-gh" aria-hidden="true">${esc(g)}</div>${list.map(([k, l]) => `<div class="jd-o" role="option" id="jd-${k}" data-jd="${k}" aria-selected="false">${esc(l)}</div>`).join('')}</div>`).join('')}</div>`;
   const btn = $('jd-btn'), pop = $('jd-list'), opts = [...pop.querySelectorAll('.jd-o')];
   const paint = () => {
     opts.forEach((o, i) => { o.classList.toggle('act', i === act); o.setAttribute('aria-selected', String(i === cur)); });
-    btn.querySelector('.jd-cur').innerHTML = cur < 0 ? 'Choose a screen…' : `${esc(flat[cur].g)} · ${esc(flat[cur].l)} <span class="jd-pos num">(${cur + 1}/${flat.length})</span>`;
+    btn.querySelector('.jd-cur').innerHTML = cur < 0 ? 'Screen…' : `${esc(flat[cur].g)} · ${esc(flat[cur].l)} <span class="jd-pos num">(${cur + 1}/${flat.length})</span>`;
     if (act >= 0) { pop.setAttribute('aria-activedescendant', opts[act].id); if (open) opts[act].scrollIntoView({ block: 'nearest' }); }
   };
   const setOpen = o => { open = o; pop.hidden = !o; btn.setAttribute('aria-expanded', String(o)); if (o) { act = cur < 0 ? 0 : cur; paint(); pop.focus({ preventScroll: true }); } };
@@ -6657,7 +6664,7 @@ function sfTabs(s) {
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
 const visText = s => !isClosed(s) ? 'Open: anyone can read threads' : s.vis === 'unlisted' ? 'Closed and unlisted: members read threads; hidden from browse and search' : 'Closed: members read threads; shown in browse and search';
-const tokenUse = s => s.byok ? `Asks use ${spName(s)} extra tokens, added by ${esc(s.byok)}, up to ${fmt(s.budget)} tokens a month. After that, asks use the asker’s own API key. Posts use no tokens.` : 'Asks use the asker’s own API key. Posts use no tokens.';
+const tokenUse = s => s.byok ? `Asks use ${spName(s)} extra tokens, added by ${esc(s.byok)}, up to ${fmtT(s.budget)} tokens a month. After that, asks use the asker’s own API key. Posts use no tokens.` : 'Asks use the asker’s own API key. Posts use no tokens.';
 const verNote = s => `The admins of ${spName(s)} control ${esc(s.dom.domain)}. Verified ${esc(s.dom.verified)} with ${s.dom.method === 'github' ? 'a GitHub organization' : 'a DNS record'}. The seal does not mean that the space is official.`;
 function sfAbout(s) {
   const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b class="num">${s.members.toLocaleString('en-US')}</b></div><div><span>Created</span><b>${s.created}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
@@ -7267,7 +7274,7 @@ function miAbout(p) {
 function miRun(p) {
   const its = miRefs(p).map(MIT).filter(Boolean), m = its[0], b = p.about.b;
   const read = its.length > 1 ? `Read ${its.length} sources (${miTok(its.reduce((a, x) => a + x.tok, 0))} tokens)` : b != null ? `Read ${miLblLong(m, b)} and the section around it (${miTok(Math.max(400, m.tok * 3 / m.body.length))} tokens)` : `Read the source in full (${miTok(m.tok)} tokens)`;
-  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 9K tokens so far</span></div><ol class="run-steps"><li class="done">${read}</li><li class="done">Checked other sources in ${spName(sp(p.s))} that mention the same claims</li><li class="cur">Searching the web for the pages the ${its.length > 1 ? 'sources cite' : m.kind === 'thread' ? 'thread cites' : 'source cites'}</li><li>Write the answer</li></ol></div>`;
+  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 9k tokens so far</span></div><ol class="run-steps"><li class="done">${read}</li><li class="done">Checked other sources in ${spName(sp(p.s))} that mention the same claims</li><li class="cur">Searching the web for the pages the ${its.length > 1 ? 'sources cite' : m.kind === 'thread' ? 'thread cites' : 'source cites'}</li><li>Write the answer</li></ol></div>`;
 }
 /* Sources for item asks: passages of the item, other items in the space, then the web. */
 function miSrc(p, src) {
@@ -8264,7 +8271,7 @@ function qtMenu(T, n) {
 function qtNodeActs(T, n) {
   const key = `${T.i}:${n.id}`, sv = st.qtSaved.has(key);
   const ask = !n.running ? `<button class="btn sm" type="button" data-qtaskat="${n.id}" aria-label="Ask about this answer">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>` : '';
-  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="${fmt(n.tok)} tokens. Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)}<span class="m-long"> tokens</span></span>` : ''}${qtMenu(T, n)}</div>`;
+  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="${fmtT(n.tok)} tokens. Token use: ${esc(qtPaidBy(T, n))}">${fmtT(n.tok)}<span class="m-long"> tokens</span></span>` : ''}${qtMenu(T, n)}</div>`;
 }
 function qtHead(T, n) {
   const par = T.by[n.par];
@@ -8293,7 +8300,7 @@ function qtOutline(T, cur) {
 }
 function qtFacts(T) {
   const p = T.p, s = sp(p.s);
-  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? spName(s) : 'Each asker’s API key'}</b></div></div>`;
+  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div><div><span>Tokens, all asks</span><b class="num">${fmtT(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? spName(s) : 'Each asker’s API key'}</b></div></div>`;
 }
 
 /* ---------- compare ---------- */
@@ -8333,7 +8340,7 @@ function qtOthers(T, par, curKid) {
 function qtBranch(T, k, top, path) {
   const n = T.sub(k.id), deep = k.lv - top.lv >= QT_DEPTH, cur = k.id === st.qtNode;
   const next = path[path.indexOf(k) + 1];
-  const head = `<button class="qt-ib-h" type="button" data-qtib="${k.id}" aria-expanded="true" title="Collapse: go back to ${k.par === 'r' ? 'the question' : 'level ' + T.by[k.par].lv}">${I.chev.replace('<svg', '<svg class="chv"')}${avatar(k.u, 'sm')}<span class="qt-ib-b"><span class="qt-ib-q">${esc(k.q)}</span><span class="qt-ib-m">${qtLvName(k)} · ${k.u} · ${k.age}${n ? ` · ${n} ask${n > 1 ? 's' : ''} below` : ''}</span></span></button>`;
+  const head = `<button class="qt-ib-h" type="button" data-qtib="${k.id}" aria-expanded="true" title="Collapse: go back to ${k.par === 'r' ? 'the question' : 'level ' + T.by[k.par].lv}">${I.chev.replace('<svg', '<svg class="chv"')}${avatar(k.u, 'sm')}<span class="qt-ib-b"><span class="qt-ib-q">${esc(k.q)}</span><span class="qt-ib-m">${k.u} · ${k.age}${n ? ` · ${n} ask${n > 1 ? 's' : ''} below` : ''}</span></span></button>`;
   const asking = st.qtAskAt === k.id;
   const below = deep ? (qtVisKids(T, k.id).length ? `<button class="btn sm qt-ibmore" type="button" data-qtfocus="${k.id}">${QTI.out}Continue this branch (${n} more)</button>` : '') : `${next ? qtOthers(T, k, next) + qtBranch(T, next, top, path) : qtOthers(T, k, null)}`;
   return `<div class="qt-ib${cur ? ' on' : ''}" id="qt-n-${k.id}">${head}<div class="qt-ib-body">${qtExtra(T, k)}${qtAnswer(T, k)}${qtNodeActs(T, k)}${asking ? qtComposer(T, k.id, { cancel: true }) : ''}${below}</div></div>`;
@@ -8343,7 +8350,7 @@ function qtNestView(T, cur) {
   const tp = T.path(top.id);
   const fbar = top.id !== 'r' ? `<div class="qt-focusbar">${QTI.up}<span>Showing a branch from level ${top.lv}.</span>${tp.slice(0, -1).map(n => `<button class="tlink" type="button" data-qtfocus="${n.id}">${n.id === 'r' ? 'Whole thread' : 'Level ' + n.lv}</button>`).join('<span aria-hidden="true">›</span>')}<span class="grow"></span><button class="btn sm" type="button" data-qt="map">${QTI.map}Map</button></div>` : '';
   const rootAsk = top.id === 'r' && cur.id === 'r' && !st.qtAskAt;
-  const head = top.id === 'r' ? `${miAbout(T.p)}<div class="qt-nh"><div class="qt-nh-top">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
+  const head = top.id === 'r' ? `${miAbout(T.p)}<div class="meta">${avatar(top.u, 'sm')}${au(top.u)}<span>${top.age}</span></div><p class="th-q" id="th-q">${esc(top.q)}</p>` : qtHead(T, top);
   const main = st.qtCmp ? qtCompare(T) : `${qtPickBar(T)}${fbar}
     <article class="qt-node qt-inl" id="qt-n-${top.id}">${head}
     <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`}`) : qtNodeActs(T, top)}
@@ -8363,7 +8370,7 @@ function qtNestView(T, cur) {
 /* Follow-ups as questions (the Questions toggle): opening one shows its answer, one faint line of text
    actions (brighter on hover; save, compare and the rest are in the menu) and the asks below it. */
 function qtCalmActs(T, n) {
-  return `<div class="qt-cacts">${!n.running ? `<button class="tlink" type="button" data-qtaskat="${n.id}">Ask about this answer</button>` : ''}<span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="${fmt(n.tok)} tokens. Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)}<span class="m-long"> tokens</span></span>` : ''}${qtMenu(T, n)}</div>`;
+  return `<div class="qt-cacts">${!n.running ? `<button class="tlink" type="button" data-qtaskat="${n.id}">Ask about this answer</button>` : ''}<span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="${fmtT(n.tok)} tokens. Token use: ${esc(qtPaidBy(T, n))}">${fmtT(n.tok)}<span class="m-long"> tokens</span></span>` : ''}${qtMenu(T, n)}</div>`;
 }
 function qtFlRow(T, n, cur) {
   const k = T.sub(n.id), open = st.qtExp.has(n.id), kids = qtVisKids(T, n.id);
@@ -8375,15 +8382,20 @@ function qtFuCard(T, n, cur) {
   if (st.qtFuQ) return qtFlRow(T, n, cur);
   const kids = qtVisKids(T, n.id), k = T.sub(n.id), open = st.qtExp.has(n.id);
   const below = !kids.length ? '' : `<button class="tlink qt-fub" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>`;
-  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span>${n.lv > 1 ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
+  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span></div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
 }
 function qtFuView(T, cur) {
   const r = T.nodes[0], l1 = qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age));
-  const head = `${miAbout(T.p)}<div class="qt-nh"><div class="qt-nh-top">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span></div></div><p class="th-q" id="th-q">${esc(r.q)}</p>`;
+  const head = `${miAbout(T.p)}<div class="meta">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span></div><p class="th-q" id="th-q">${esc(r.q)}</p>`;
   const tog = `<div class="seg qt-fut" role="group" aria-label="Show follow-ups as">${[['a', 'Answers'], ['q', 'Questions']].map(([k, l]) => `<button type="button" data-qtfuq="${k}" aria-pressed="${(st.qtFuQ ? 'q' : 'a') === k}">${l}</button>`).join('')}</div>`;
   const fus = `<section class="th-fus${st.qtFuQ ? ' qt-fls' : ''}" id="th-f"><h3>Follow-ups <span class="faint num">${l1.length}</span>${l1.length ? tog : ''}</h3>${l1.map(n => qtFuCard(T, n, cur)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`;
-  const comp = !r.running ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : '';
-  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${thActs(T.p)}${fus}${comp}</article>`;
+  /* Follow-up composer control: below the follow-ups (as before), or an "Ask about this answer" button in the
+     answer's action row that opens the composer there, above the follow-ups */
+  const btn = st.fuComp === 'button';
+  const comp = !r.running && !btn ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : '';
+  const acts = btn && !r.running ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot"><button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer" aria-expanded="${st.qtAskAt === 'r'}">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`) : thActs(T.p);
+  const inl = btn && st.qtAskAt === 'r' && !r.running ? `<div class="qt-rootask qt-rootask-in">${qtComposer(T, 'r', { cancel: true })}</div>` : '';
+  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}${comp}</article>`;
 }
 /* ---------- sources of the question's answer, in the side column ---------- */
 function qtSrcList(T) {
@@ -8398,7 +8410,7 @@ function qtSrcList(T) {
 function qtTranscript(T, cur) {
   const path = T.path(cur.id), last = path[path.length - 1];
   const um = n => `<div class="ch-m ch-u" id="qt-n-${n.id}">${avatar(n.u, 'sm')}<div><div class="ch-h">${au(n.u)}<span>${n.age}</span>${n.id !== 'r' ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p>${esc(n.q)}</p></div></div>`;
-  const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : `<div class="ch-cost num">${fmt(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
+  const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : `<div class="ch-cost num">${fmtT(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
   const more = n => { const k = qtVisKids(T, n.id).filter(x => !path.includes(x)).length; return k ? `<p class="qt-trmore faint cs-small">${k} other question${k > 1 ? 's' : ''} about this answer, in the outline</p>` : ''; };
   const stream = path.map(n => um(n) + am(n) + more(n)).join('');
   return `<div class="ch ch-divided qt-chat">${miAbout(T.p)}<div class="ch-stream">${stream}</div>${last.running ? '' : `<div class="qt-trask">${qtComposer(T, last.id)}</div>`}</div>`;
@@ -8630,8 +8642,8 @@ csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : 
 Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null,
   qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtSaved: new Set(['11:c2']), qtExp: new Set(), qtFuQ: false });
-/* "Thread page" control (st.thrV): question trees (qt), the existing flat follow-ups (fu), or follow-ups
-   with the tree in the side column (fx). Every question
+/* "Thread page" control (st.thrV): follow-ups with the tree in the side column (fx, the default), or the
+   flat follow-ups (fu). The nested question-tree view is still used to compare two branches. Every question
    trees addition (thread page, feed row line, Saved and Search sections, the notification) checks it. */
 const qtOn = () => st.thrV !== 'fu';
 const qtComb = () => st.thrV === 'fx';
@@ -8652,14 +8664,15 @@ function MWKNOBS() {
 /* The Map button: on Mobile Web the Thread map control can replace it with the outline, or open it zoomed out. */
 function qtOpenMap() { if (st.device === 'phone' && st.mMap === 'outline') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; if (st.device === 'phone' && !st.qtZoomSet) st.qtZoom = st.mMap === 'pan' ? 0.8 : 0.6; } }
 function QTKNOBS() {
-  return [['k-thrv', 'thrV', [['qt', 'Question trees'], ['fu', 'Follow-ups'], ['fx', 'Follow-ups with tree']], () => {
+  return [['k-thrv', 'thrV', [['fx', 'Follow-ups with tree'], ['fu', 'Follow-ups']], () => {
     qtSyncNotif(); Object.assign(st, { qtCmp: null, qtPick: null, qtAskAt: null, qtMenu: null });
     if (!qtOn()) nst.stack = nst.stack.filter(e => e.v !== 'ask');
     if (st.modal && st.modal.startsWith('qt-')) st.modal = null;
     if (st.thread == null) Object.assign(st, NAVBASE(), { thread: 11, space: D.posts[11].s, home: false });
-  }]];
+  }],
+  ['k-fucomp', 'fuComp', [['below', 'Composer below the follow-ups'], ['button', 'Ask button above the follow-ups']], () => { if (st.thrV === 'fu') st.thrV = 'fx'; if (st.thread == null) jump('qt-root'); st.qtAskAt = null; }]];
 }
-st.thrV = 'qt';
+st.thrV = 'fx'; st.fuComp = 'below';
 Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas' });
 qtSyncNotif();
 function qtReset() {
@@ -8678,7 +8691,7 @@ JUMPS.push(
 );
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = m ? 'fx' : 'qt'; st.qtFuQ = !!m && m[1] === 'fl'; } qtSyncNotif();
+  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = 'fx'; st.qtFuQ = !!m && m[1] === 'fl'; } qtSyncNotif();
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
   qtReset();
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: D.posts[i].s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
