@@ -2120,9 +2120,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-tpmenu .ts-tx { display: flex; flex-direction: column; min-width: 0; }
 .sf-tpmenu .ts-tx small { white-space: normal; color: var(--t-faint); font-size: var(--fs-xs); }
 .sf-tpm .chip.dd > svg:first-child { width: 13px; height: 13px; color: var(--t-faint); }
-.sf-rel { border-top: 1px solid var(--divider); padding-top: 18px; margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
-.sf-rel h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
-.sf-rel > p { margin: 0 0 4px; }
 .sf-imw { position: relative; display: inline-flex; }
 .act.sf-im { border: 0; background: transparent; padding: 0 2px; color: var(--t-faint); display: inline-flex; align-items: center; border-radius: var(--r-sm); }
 .act.sf-im:hover, .act.sf-im[aria-expanded="true"] { color: var(--t-strong); background: var(--fill-hover); }
@@ -2709,7 +2706,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-fuk { margin: 6px 0 0 4px; padding-left: 14px; border-left: 2px solid var(--border-strong); }
 .qt-fuk > .fu:first-child { border-top: 0; padding-top: 4px; }
 .qt-fuk .fu + .fu { padding-top: 14px; }
-/* questions first (fl) */
+/* follow-ups as questions (the Questions toggle) */
 .qt-cacts { display: flex; align-items: center; gap: 14px; font-size: var(--fs-xs); color: var(--t-faint); opacity: .6; transition: opacity .12s; }
 .qt-cacts .tlink { font-size: var(--fs-xs); color: var(--t-muted); }
 .qt-cacts .grow { flex: 1; }
@@ -2718,6 +2715,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-calm .qt-olr { grid-template-columns: minmax(0, 1fr) auto; }
 .qt-calm .qt-olr .av { display: none; }
 .qt-fls h3 { margin-bottom: 6px; }
+.th-fus h3 .qt-fut { order: 1; margin-left: 10px; align-self: center; } /* after the heading's rule line */
+.qt-fut button { height: 24px; padding: 0 9px; font-size: var(--fs-xs); }
 .qt-qrow { border-top: 1px solid var(--divider); }
 .qt-fls h3 + .qt-qrow { border-top: 0; }
 .qt-flr { display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 8px; width: 100%; padding: 10px 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: var(--t-primary); }
@@ -2746,6 +2745,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-focusbar .grow { flex: 1; }
 .qt-rootask { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--divider); padding-top: 14px; }
 .qt-rootask h3, .qt-merge h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
+.qt-rootask h3 { margin-bottom: 2px; }
 
 /* outline */
 .qt-ol { display: flex; flex-direction: column; gap: 6px; }
@@ -3468,7 +3468,7 @@ function thDoc(p) {
       ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''}" id="th-a">${creditHead(p)}${am ? modPh('a:' + pid, 'answer') : answerHTML(p)}</section>` : ''}${thActs(p)}
       ${p.k === 'ask' ? `<section class="th-fus" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map((f, i) => fuCard(f, i, pid)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
-      ${fuInput(p)}${relatedHTML(p)}</article>
+      ${fuInput(p)}</article>
     <aside class="th-aside">
       <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Token use</span><b>${paidOf(p)}</b></div>` : ''}</div></aside></div>`;
 }
@@ -3742,7 +3742,7 @@ function thChat(p) {
   const pid = POSTS.indexOf(p), am = (html, foot, key) => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b>${key && modOf(key) !== 'removed' ? itemMenu(key) : ''}</div>${key && modOf(key) ? modPh(key, key[0] === 'a' ? 'answer' : 'follow-up answer') : html}${foot || ''}</div></div>`;
   const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Token use<\/span><b>[^<]*<\/b><\/div>/, '');
   const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
-  return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}${relatedHTML(p)}</article>${aside}</div>`;
+  return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}</article>${aside}</div>`;
 }
 /* BEGIN part1 */
 RICH[0] = `<p>Science fiction rarely uses the term "intention marketplace", but many works describe systems that make what people want, plan or believe visible to others and then price, rank or match it. The examples fall into four mechanisms: reputation ledgers, prediction and decision markets, attention auctions, and agent-brokered matching. The list below covers the clearest cases; the full scan found 31 works published between 1953 and 2024. <sup class="cite">5</sup></p>
@@ -5904,7 +5904,7 @@ const topicsOf = s => (s && s.topics) || [];
 const topicOf = p => topicsOf(sp(p.s)).some(t => t[0] === p.topic) ? p.topic : null;
 const topicName = (s, k) => (k && k !== 'other' && (topicsOf(s).find(t => t[0] === k) || [])[1]) || 'Other';
 const modOf = key => st.modSt[key] || null;
-/* Asks listed in the FAQ index, search and Related answers: answered and not hidden or removed. */
+/* Asks listed in the FAQ index and search: answered and not hidden or removed. */
 const asksOf = s => POSTS.map((p, i) => ({ p, i })).filter(({ p, i }) => p.s === s.id && p.k === 'ask' && !p.running && !modOf('a:' + i));
 const KW_STOP = new Set('a an the i my me we our to of in on for and or is are do does did can could how what why when where with be it its this that you your from at by as which will would there should if im get use using any have has not no yes'.split(' '));
 const kwToks = (txt, s) => txt.toLowerCase().replace(/[^a-z0-9_ ]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !KW_STOP.has(w) && (!s || (w !== s.name && w !== s.title.toLowerCase()))).map(w => w.replace(/(ies|es|s)$/, ''));
@@ -5921,20 +5921,6 @@ function sfClassify(s, q) {
   const qt = new Set(kwToks(q, s)); let best = null, top = 0;
   topicsOf(s).forEach(([k, l]) => { const words = new Set(kwToks(l + ' ' + asksOf(s).filter(x => x.p.topic === k).map(x => askText(x.p)).join(' '), s)); const n = [...qt].filter(w => tokHit(w, words)).length; if (n > top) { top = n; best = k; } });
   return best;
-}
-/* Related answers: answered asks from the same space, ranked by keyword overlap with the question.
-   Only readable spaces get here, so a closed space shows members its own threads only. */
-function relatedFor(p) {
-  const i0 = POSTS.indexOf(p), s = sp(p.s), qt = new Set(kwToks(askText(p), s));
-  if (!canRead(s)) return [];
-  return asksOf(s).filter(x => x.i !== i0).map(x => { const it = new Set(kwToks(askText(x.p), s)); const n = [...qt].filter(w => tokHit(w, it)).length; return { ...x, sc: n / Math.sqrt((qt.size || 1) * (it.size || 1)) + (p.topic && x.p.topic === p.topic ? 0.15 : 0) }; })
-    .sort((a, b) => b.sc - a.sc || ageMin(a.p.age) - ageMin(b.p.age)).slice(0, 3);
-}
-const relRow = ({ p, i }) => `<article class="rf-row" data-open="${i}"><a class="rf-row-q row-link" href="#t${i}" data-open="${i}">${esc(p.q)}</a><span class="rf-row-s">${esc(p.sum || '')}</span><span class="rf-row-m">${au(p.u)}<span>${p.age}</span><span class="num">${replyCount(p)} follow-up${replyCount(p) === 1 ? '' : 's'}</span></span></article>`;
-function relatedHTML(p) {
-  if (p.k !== 'ask' || p.running) return '';
-  const list = relatedFor(p);
-  return list.length ? `<section class="rf-rel sf-rel" id="th-rel"><h3>Related answers</h3><p class="faint cs-small">From ${spName(sp(p.s))}, by similarity to this question.</p><div class="rf-rows">${list.map(relRow).join('')}</div></section>` : '';
 }
 
 /* ---------- FAQ landing ---------- */
@@ -5963,7 +5949,8 @@ function faqChips(s) {
   const chip = (k, l) => `<button type="button" class="mchip sf-tchip" data-faqtopic="${k}" aria-current="${cur === k}">${esc(l)}</button>`;
   return `<div class="sf-tchips" role="navigation" aria-label="Topics">${chip('', 'All')}${topicsOf(s).filter(([k]) => cnt(k)).map(([k, l]) => chip(k, l)).join('')}${cnt('other') ? chip('other', 'Other') : ''}</div>`;
 }
-const faqRow = ({ p, i }) => relRow({ p, i });
+/* An answered ask as a row: question, summary and meta. */
+const faqRow = ({ p, i }) => `<article class="rf-row" data-open="${i}"><a class="rf-row-q row-link" href="#t${i}" data-open="${i}">${esc(p.q)}</a><span class="rf-row-s">${esc(p.sum || '')}</span><span class="rf-row-m">${au(p.u)}<span>${p.age}</span><span class="num">${replyCount(p)} follow-up${replyCount(p) === 1 ? '' : 's'}</span></span></article>`;
 function faqIndex(s) {
   const all = asksOf(s), tp = st.faqTopic;
   if (!all.length) return `<div class="sf-empty"><h3>No answers yet</h3><p class="muted">Ask the first question in the box above. Answers appear here grouped by topic.</p></div>`;
@@ -6274,7 +6261,7 @@ function SFKNOBS() {
 /* ---------- "Jump to" entries ---------- */
 JUMPS.push(
   ['FAQ landing', [['sf-faq', 'FAQ landing (Sablefield)'], ['sf-faq-match', 'FAQ landing: search with matches'], ['sf-faq-tried', 'FAQ landing: Ask with matches'], ['sf-faq-new', 'FAQ landing: no match, ask'], ['sf-faq-topic', 'FAQ landing: one topic'], ['sf-faq-latest', 'Latest view on an FAQ space'], ['sf-faq-out', 'FAQ landing, signed out']]],
-  ['Topics and posts', [['sf-compose-topic', 'Topic picker in the composer'], ['sf-thread-topic', 'Thread: topic breadcrumb, change topic'], ['sf-posts-off', 'Posts turned off: space composer'], ['sf-posts-home', 'Posts turned off: Home composer'], ['sf-related', 'Related answers'], ['sf-related-open', 'Related answers in an open space']]],
+  ['Topics and posts', [['sf-compose-topic', 'Topic picker in the composer'], ['sf-thread-topic', 'Thread: topic breadcrumb, change topic'], ['sf-posts-off', 'Posts turned off: space composer'], ['sf-posts-home', 'Posts turned off: Home composer']]],
   ['Domain and About', [['sf-about', 'About (verified domain)'], ['sf-about-plain', 'About (no domain)'], ['sf-wiki', 'Wiki in the sidebar'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
   ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
   ['Settings', [['sf-settings', 'Sablefield settings'], ['sf-topics', 'Topic editor'], ['sf-landing-on', 'Turn on the FAQ landing'], ['sf-create', 'Create a space with the FAQ landing']]],
@@ -6296,8 +6283,6 @@ function sfJump(k) {
     case 'sf-thread-topic': Object.assign(st, { thread: thr('q2'), tpMenu: 'th' + thr('q2') }); break;
     case 'sf-posts-off': Object.assign(st, { faqView: 'latest', compOpen: true, mode: 'ask' }); break;
     case 'sf-posts-home': Object.assign(st, { home: true, compOpen: true, compSpace: 'sablefield', mode: 'ask' }); break;
-    case 'sf-related': st.thread = thr('q1'); setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
-    case 'sf-related-open': st.space = 'public'; st.thread = 0; setTimeout(() => { const r = $('th-rel'); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'sf-about': st.spTab = 'about'; break;
     case 'sf-about-plain': st.space = 'scifi'; st.spTab = 'about'; break;
     case 'sf-wiki': st.space = 'scifi'; st.spTab = 'threads'; st.drawer = true; st.mWiki = true; st.dsSTab = 'wiki'; break;
@@ -7768,17 +7753,18 @@ function qtNestView(T, cur) {
     <section class="th-ans${top.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, top)}${qtSrcs(T, top)}</section>${top.id === 'r' ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot">${top.running ? '' : `<button class="btn sm" type="button" data-qtaskat="r">${QTI.ask}Ask about this answer</button>`}`) : qtNodeActs(T, top)}
     ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
     <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
-    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>${top.id === 'r' ? relatedHTML(T.p) : ''}`;
+    ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>`;
   const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : qtComb() && !st.qtCmp ? qtFuView(T, cur) : main;
-  return `${qtBar(T, cur)}<div class="qt-grid${st.thrV === 'fl' ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
+  return `${qtBar(T, cur)}<div class="qt-grid${qtComb() ? ' qt-calm' : ''}"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
 }
 
-/* ---------- follow-ups with the tree in the side column (fx, fl) ----------
+/* ---------- follow-ups with the tree in the side column (fx) ----------
    The main column reads like the Follow-ups page: the question, its answer, then every first-level ask
    as a follow-up, oldest first, and the composer for a new follow-up. The outline on the right shows
-   the whole tree. Asks below a follow-up expand under it (fx), or the follow-ups are listed as
-   questions that open to their answer and the asks below them (fl). */
-/* Questions first (fl): the follow-ups as questions; opening one shows its answer, one faint line of text
+   the whole tree, without avatars. Asks below a follow-up expand under it. A toggle in the Follow-ups
+   heading lists the follow-ups as questions instead (st.qtFuQ); opening one shows its answer and the asks
+   below it. */
+/* Follow-ups as questions (the Questions toggle): opening one shows its answer, one faint line of text
    actions (brighter on hover; save, compare and the rest are in the menu) and the asks below it. */
 function qtCalmActs(T, n) {
   return `<div class="qt-cacts">${!n.running ? `<button class="tlink" type="button" data-qtaskat="${n.id}">Ask about this answer</button>` : ''}<span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
@@ -7790,7 +7776,7 @@ function qtFlRow(T, n, cur) {
   return `<div class="qt-qrow${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}">${row}${body}</div>`;
 }
 function qtFuCard(T, n, cur) {
-  if (st.thrV === 'fl') return qtFlRow(T, n, cur);
+  if (st.qtFuQ) return qtFlRow(T, n, cur);
   const kids = qtVisKids(T, n.id), k = T.sub(n.id), open = st.qtExp.has(n.id);
   const below = !kids.length ? '' : `<button class="tlink qt-fub" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>`;
   return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span>${n.lv > 1 ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
@@ -7798,9 +7784,10 @@ function qtFuCard(T, n, cur) {
 function qtFuView(T, cur) {
   const r = T.nodes[0], l1 = qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age));
   const head = `${miAbout(T.p)}<div class="qt-nh"><div class="qt-nh-top">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span></div></div><p class="th-q" id="th-q">${esc(r.q)}</p>`;
-  const fus = `<section class="th-fus${st.thrV === 'fl' ? ' qt-fls' : ''}" id="th-f"><h3>Follow-ups <span class="faint num">${l1.length}</span></h3>${l1.map(n => qtFuCard(T, n, cur)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`;
+  const tog = `<div class="seg qt-fut" role="group" aria-label="Show follow-ups as">${[['a', 'Answers'], ['q', 'Questions']].map(([k, l]) => `<button type="button" data-qtfuq="${k}" aria-pressed="${(st.qtFuQ ? 'q' : 'a') === k}">${l}</button>`).join('')}</div>`;
+  const fus = `<section class="th-fus${st.qtFuQ ? ' qt-fls' : ''}" id="th-f"><h3>Follow-ups <span class="faint num">${l1.length}</span>${l1.length ? tog : ''}</h3>${l1.map(n => qtFuCard(T, n, cur)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`;
   const comp = !r.running ? `<div class="qt-rootask"><h3>Ask a follow-up</h3>${qtComposer(T, 'r')}</div>` : '';
-  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${thActs(T.p)}${fus}${comp}</article>${relatedHTML(T.p)}`;
+  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${thActs(T.p)}${fus}${comp}</article>`;
 }
 /* ---------- sources of the question's answer, in the side column ---------- */
 function qtSrcList(T) {
@@ -7818,7 +7805,7 @@ function qtTranscript(T, cur) {
   const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : `<div class="ch-cost num">${fmt(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
   const more = n => { const k = qtVisKids(T, n.id).filter(x => !path.includes(x)).length; return k ? `<p class="qt-trmore faint cs-small">${k} other question${k > 1 ? 's' : ''} about this answer, in the outline</p>` : ''; };
   const stream = path.map(n => um(n) + am(n) + more(n)).join('');
-  return `<div class="ch ch-divided qt-chat">${miAbout(T.p)}<div class="ch-stream">${stream}</div>${last.running ? '' : `<div class="qt-trask">${qtComposer(T, last.id)}</div>`}</div>${relatedHTML(T.p)}`;
+  return `<div class="ch ch-divided qt-chat">${miAbout(T.p)}<div class="ch-stream">${stream}</div>${last.running ? '' : `<div class="qt-trask">${qtComposer(T, last.id)}</div>`}</div>`;
 }
 /* ---------- map dialog ---------- */
 function qtMapLayout(T) {
@@ -7905,7 +7892,7 @@ function qtModal() {
       <label class="qt-fl">Title, used in lists and notifications<input type="text" id="qt-pro-t" value="${esc(pro.title)}" autocomplete="off"></label>
       <div class="qt-fl"><span id="qt-pro-spl">Space</span>${ddSel('qtsp', qtProSpaces(T), pro.sp, 'qt-pro-spl')}</div>
       ${isClosed(src) ? `<p class="qt-note">${LOCK} ${spName(src)} is closed. A branch from a closed space can only become a thread in the same space, so members-only text does not become public.</p>` : pro.sp !== src.id ? `<p class="qt-note">The new thread is readable by everyone who can read ${spName(tgt)}. The original branch stays in ${spName(src)}.</p>` : ''}
-      ${faqOn(tgt) && topicsOf(tgt).length ? `<div class="qt-fl"><span id="qt-pro-tpl">Topic</span>${ddSel('qttopic', topicsOf(tgt), pro.topic, 'qt-pro-tpl')}</div><p class="qt-note">${spName(tgt)} uses the FAQ landing. The new thread is listed under this topic, and Related answers and search find it like any other answer.</p>` : ''}
+      ${faqOn(tgt) && topicsOf(tgt).length ? `<div class="qt-fl"><span id="qt-pro-tpl">Topic</span>${ddSel('qttopic', topicsOf(tgt), pro.topic, 'qt-pro-tpl')}</div><p class="qt-note">${spName(tgt)} uses the FAQ landing. The new thread is listed under this topic, and search finds it like any other answer.</p>` : ''}
       ${sub ? `<div class="qt-fl"><span>Include</span><div class="qt-radio" role="radiogroup">${radio('all', `This ask and the ${sub} below it`, 'They are copied into the new thread. Their askers are notified.')}${radio('one', 'This ask only', 'The asks below it stay only in this thread.')}</div></div>` : ''}
       <p class="qt-note">The asker of a branch, the thread owner and moderators can do this. ${T.owner === ME.u ? 'People who asked in this branch are' : T.owner + ' is'} notified.</p></div>`;
     return dlg('Start a thread from this branch', body, `${cancelB()}<button class="btn primary" type="button" data-qtpro-ok="1">Start thread</button>`);
@@ -7953,6 +7940,7 @@ function qtClick(t, e) {
   if ((b = d('[data-qtsibs]'))) { st.qtHi = b.dataset.qtsibs; if (matchMedia('(max-width: 920px)').matches || st.device === 'phone') st.modal = 'qt-outline'; else st.qtScroll = 'outline'; return go(); }
   if ((b = d('[data-qtzoom]'))) { st.qtZoom = +b.dataset.qtzoom; return go(); }
   if ((b = d('[data-qtside]'))) { st.qtSide = b.dataset.qtside; return go(); }
+  if ((b = d('[data-qtfuq]'))) { st.qtFuQ = b.dataset.qtfuq === 'q'; return go(); }
   if ((b = d('[data-qtexp]'))) { const id = b.dataset.qtexp; if (st.qtExp.has(id)) st.qtExp.delete(id); else st.qtExp.add(id); return go(); }
   if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtErr: '', qtFocusIn: true }); return go(); }
   if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { st.qtSaved.delete(k); toast('Removed from Saved.'); } else { st.qtSaved.add(k); toast('Saved. It is listed under Saved with its path.'); } st.qtMenu = null; return go(); }
@@ -8045,19 +8033,19 @@ csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : 
 /* ---------- state and "Jump to" ---------- */
 Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtFocus: null, qtDraft: '', qtErr: '', qtHi: null,
   qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
-  qtSaved: new Set(['11:c2']), qtExp: new Set() });
+  qtSaved: new Set(['11:c2']), qtExp: new Set(), qtFuQ: false });
 /* "Thread page" control (st.thrV): question trees (qt), the existing flat follow-ups (fu), or follow-ups
-   with the tree in the side column (fx: asks below a follow-up expand under it; fl: follow-ups listed as questions). Every question
+   with the tree in the side column (fx). Every question
    trees addition (thread page, feed row line, Saved and Search sections, the notification) checks it. */
 const qtOn = () => st.thrV !== 'fu';
-const qtComb = () => st.thrV === 'fx' || st.thrV === 'fl';
+const qtComb = () => st.thrV === 'fx';
 const QT_NOTIF = { id: 'nqt1', k: 'reply', u: 'hal_b', age: '5m', unread: true, open: 0, qtNode: 'h1', text: 'asked about your ask <b>How does the Daemon’s darknet decide who gets which task?</b>', why: 'Is that closer to a labour market or to a reputation ledger?' };
 function qtSyncNotif() {
   const has = st.notifs.some(n => n.id === QT_NOTIF.id);
   if (qtOn() && !has) st.notifs.unshift(QT_NOTIF); else if (!qtOn() && has) st.notifs = st.notifs.filter(n => n.id !== QT_NOTIF.id);
 }
 function QTKNOBS() {
-  return [['k-thrv', 'thrV', [['qt', 'Question trees'], ['fu', 'Follow-ups'], ['fx', 'Follow-ups with tree: expand in place'], ['fl', 'Follow-ups with tree: questions first']], () => {
+  return [['k-thrv', 'thrV', [['qt', 'Question trees'], ['fu', 'Follow-ups'], ['fx', 'Follow-ups with tree']], () => {
     qtSyncNotif(); Object.assign(st, { qtCmp: null, qtPick: null, qtAskAt: null, qtMenu: null });
     if (st.modal && st.modal.startsWith('qt-')) st.modal = null;
     if (st.thread == null) Object.assign(st, NAVBASE(), { thread: 11, space: POSTS[11].s, home: false });
@@ -8073,7 +8061,7 @@ function qtReset() {
 }
 JUMPS.push(
   ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'Five levels deep: continue this branch'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
-  ['Question trees: follow-ups with the tree', [['qt-fx', 'Expand in place: follow-ups and the tree'], ['qt-fx-deep', 'Expand in place: a deep ask from the outline'], ['qt-fl', 'Questions first: follow-ups and the tree'], ['qt-fl-deep', 'Questions first: a deep ask from the outline']]],
+  ['Question trees: follow-ups with the tree', [['qt-fx', 'Follow-ups and the tree'], ['qt-fx-deep', 'A deep ask from the outline'], ['qt-fl', 'Follow-ups as questions'], ['qt-fl-deep', 'Follow-ups as questions: a deep ask from the outline']]],
   ['Question trees: map', [['qt-map', 'Map dialog'], ['qt-map-deep', 'Map: open a deep branch']]],
   ['Question trees: asking', [['qt-compose', 'Ask about an answer deep in a branch'], ['qt-running', 'New ask while the agent researches']]],
   ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
@@ -8081,7 +8069,7 @@ JUMPS.push(
 );
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = m ? m[1] : 'qt'; } qtSyncNotif();
+  { const m = k.match(/^qt-(fx|fl)\b/); st.thrV = m ? 'fx' : 'qt'; st.qtFuQ = !!m && m[1] === 'fl'; } qtSyncNotif();
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
   qtReset();
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: POSTS[i].s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
