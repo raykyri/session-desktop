@@ -1631,29 +1631,36 @@ button.n-row:active { background: var(--n-fill); }
 .abp-dl .au { font-size: var(--fs-sm); }
 .abp-aside .abp-hist { padding: 10px 12px; }
 
-/* C. Cover */
-.ab-page.abv-cover, .H .ab-page.abv-cover { padding: 0 0 48px; }
-.abp-cover { display: flex; flex-direction: column; }
-.abp-band { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 150px; padding: 18px max(32px, calc((100% - 720px) / 2)); background: linear-gradient(135deg, color-mix(in srgb, var(--ab-c) 26%, var(--feed)), color-mix(in srgb, var(--ab-c) 8%, var(--feed))); border-bottom: 1px solid var(--divider); }
-.abp-band .abp-crumb .tlink { color: var(--t-secondary); }
-.abp-band .abp-acts .btn { background: color-mix(in srgb, var(--card) 85%, transparent); }
-.abp-icon { position: absolute; left: max(32px, calc((100% - 720px) / 2)); bottom: -28px; display: grid; place-items: center; width: 60px; height: 60px; border-radius: 16px; background: var(--card); color: var(--ab-c); box-shadow: 0 0 0 1px var(--divider), 0 6px 18px rgba(0, 0, 0, .08); }
-.abp-icon svg { width: 26px; height: 26px; }
-.abp-in { width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 32px 0; box-sizing: content-box; display: flex; flex-direction: column; gap: 20px; }
-.abp-cover .abp-in { max-width: 720px; }
-.abp-props { margin: 0; display: grid; grid-template-columns: 120px 1fr; row-gap: 2px; padding: 4px 0 16px; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
-.abp-props > div { display: contents; }
-.abp-props dt { color: var(--t-faint); padding: 5px 0; }
-.abp-props dd { margin: 0; padding: 5px 0; display: flex; align-items: center; gap: 7px; color: var(--t-primary); }
-.abp-props .au { font-size: var(--fs-sm); }
-.abp-toc.inline { padding: 12px 16px; border-radius: var(--r-lg); background: var(--fill-subtle); }
-.abp-toc.inline ul { border-left: 0; flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
-.abp-toc.inline .tlink { padding-left: 0; border-left: 0; }
-.abp-rel.cards ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.abp-rel.cards .abp-th { margin: 0; height: 100%; padding: 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); justify-content: space-between; gap: 8px; }
+/* Article: icon actions */
+.abp-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.abp-tools { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--divider); border-radius: var(--r-md); background: var(--card); }
+.abp-ib { width: 30px; height: 30px; }
+.abp-ib svg { width: 14px; height: 14px; }
+.abp-ib[aria-pressed="true"] { background: var(--fill-subtle); color: var(--t-heading); }
+.abp-ib[data-abpgdel]:hover { color: var(--bad); }
+/* Article: details at the end */
+.abp-hd.plain { gap: 6px; }
+.abp-upd { margin: 0; font-size: var(--fs-sm); color: var(--t-faint); }
+.abp-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); }
+.abp-fm { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.abp-fm small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
+.abp-fm .au { font-size: inherit; }
+/* Article: centred title */
+.abp-hd.center { align-items: center; text-align: center; padding-bottom: 28px; }
+.abp-hd.center h1 { font-size: 38px; max-width: 600px; }
+.abp-hd.center .abp-by, .abp-hd.center .abp-acts { justify-content: center; }
+.abp-hd.center .abp-by > span:last-child { flex: 0 1 auto; }
+.abp-a-center { padding-top: 20px; }
+/* Docs: one side column */
+.abp-docs.no-aside { grid-template-columns: 210px minmax(0, 1fr); max-width: 1000px; }
+.abp-docs.no-aside .abp-main { max-width: 720px; }
+.abp-docs.no-nav { grid-template-columns: minmax(0, 1fr) 220px; max-width: 1000px; }
+.abp-docs.no-nav.no-aside { grid-template-columns: minmax(0, 1fr); max-width: 720px; }
 
 @media (max-width: 980px) {
-  .abp-docs, .abp-docs.editing { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .abp-docs, .abp-docs.editing, .abp-docs.no-aside, .abp-docs.no-nav { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .abp-hd.center h1 { font-size: 28px; }
+  .abp-hd.center { padding-bottom: 20px; }
   .abp-nav { position: static; min-height: 0; border-right: 0; border-bottom: 1px solid var(--divider); padding: 14px 0 10px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
   .abp-nav h4, .abp-nav .abp-navab, .abp-nav .ab-add { display: none; }
   .abp-nav ul { flex-direction: row; gap: 4px; overflow-x: auto; margin: 0; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
@@ -1666,11 +1673,6 @@ button.n-row:active { background: var(--n-fill); }
 @media (max-width: 760px) {
   .abp h1, .abp-edt { font-size: 26px; }
   .abp-prose { font-size: 15px; }
-  .abp-band { padding: 14px 16px 48px; min-height: 0; flex-direction: column; gap: 14px; }
-  .abp-icon { left: 16px; width: 52px; height: 52px; bottom: -24px; }
-  .abp-in { padding: 40px 16px 0; box-sizing: border-box; }
-  .abp-props { grid-template-columns: 96px 1fr; }
-  .abp-rel.cards ul { grid-template-columns: minmax(0, 1fr); }
   .abp-edbar { flex-direction: column; align-items: stretch; }
   .abp-edb-a { justify-content: flex-end; }
 }
@@ -3302,7 +3304,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
       <div class="knob"><span>Page view</span><div class="seg" id="k-abpage"></div></div>
-      <div class="knob"><span>Skill preview</span><div class="seg" id="k-abskill"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -8242,8 +8243,7 @@ function DSKNOBS() {
   return [
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
     /* About: where a page opens, how a skill previews, where the member list opens */
-    ['k-abpage', 'abPageV', [['article', 'Article'], ['docs', 'Docs'], ['cover', 'Cover']], () => jump('ab-page')],
-    ['k-abskill', 'abSkillV', [['summary', 'Summary'], ['full', 'Instructions'], ['file', 'SKILL.md']], () => jump('ab-skill')],
+    ['k-abpage', 'abPageV', [['article', 'Article'], ['icons', 'Article, icon actions'], ['foot', 'Article, details at the end'], ['center', 'Article, centred title'], ['docs', 'Docs'], ['docs-nav', 'Docs, page list'], ['docs-toc', 'Docs, contents']], () => jump('ab-page')],
   ];
 }
 
@@ -8302,7 +8302,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'summary', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPageV: 'article', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -9072,34 +9072,39 @@ function abPageParts(s) {
     const ed = st.abPageEd;
     editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing. Members get a notification when you save.'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div><input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
   }
-  return { s, i, d, can, mod, age, crumb, acts, byline, hist, rel, toc, tocHTML, editor };
+  return { s, i, d, can, mod, age, mins, created: abAge(d.revs[d.revs.length - 1].age), crumb, acts, byline, hist, rel, toc, tocHTML, editor };
 }
 /* A. Article: one reading column */
-function abPageArticle(s) {
+/* Article layouts: one reading column; they differ in where the page facts and actions sit */
+const PG_TRASH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>';
+function abPageArticle(s, v) {
   const x = abPageParts(s);
   if (x.editor) return `<div class="abp abp-article">${x.crumb}${x.editor}</div>`;
-  return `<article class="abp abp-article">${x.crumb}<header class="abp-hd"><h1>${esc(x.d.t)}</h1>${x.byline}${x.acts}</header>${st.abHist ? x.hist : ''}${abDocHTML(x.d)}${x.rel}</article>`;
+  const body = abDocHTML(x.d), hist = st.abHist ? x.hist : '', h1 = `<h1>${esc(x.d.t)}</h1>`;
+  if (v === 'icons') {
+    const ib = (attr, icon, label, extra = '') => `<button class="iconbtn abp-ib" type="button" ${attr} aria-label="${label}" title="${label}" ${extra}>${icon}</button>`;
+    const tools = `<div class="abp-tools">${x.can ? ib('data-abpged="edit"', I.write, 'Edit') : ''}${ib('data-abhist="1"', CI.clock, 'History', `aria-pressed="${!!st.abHist}"`)}${ib('data-abcopy="page"', CI.link, 'Copy link')}${x.mod ? ib(`data-abpgdel="${x.i}"`, PG_TRASH, 'Remove page') : ''}</div>`;
+    return `<article class="abp abp-article abp-a-icons"><div class="abp-top">${x.crumb}${tools}</div><header class="abp-hd">${h1}${x.byline}</header>${hist}${body}${x.rel}</article>`;
+  }
+  if (v === 'foot') {
+    const foot = `<footer class="abp-foot"><div class="abp-fm"><span class="abp-avs">${avatar(x.d.ed, 'sm')}</span><span>Last edited by ${au(x.d.ed)} ${x.age}<small>Created by ${au(x.d.by)} ${x.created}</small></span></div>${x.acts}</footer>`;
+    return `<article class="abp abp-article abp-a-foot">${x.crumb}<header class="abp-hd plain">${h1}<p class="abp-upd">Updated ${x.age} · ${x.mins} min read</p></header>${body}${foot}${hist}${x.rel}</article>`;
+  }
+  if (v === 'center') return `<article class="abp abp-article abp-a-center"><header class="abp-hd center">${x.crumb}${h1}${x.byline}${x.acts}</header>${hist}${body}${x.rel}</article>`;
+  return `<article class="abp abp-article">${x.crumb}<header class="abp-hd">${h1}${x.byline}${x.acts}</header>${hist}${body}${x.rel}</article>`;
 }
-/* B. Docs: the space's pages on the left, contents and page details on the right */
-function abPageDocs(s) {
-  const x = abPageParts(s);
+/* Docs layouts: the space's pages on the left and/or contents and page details on the right */
+function abPageDocs(s, v) {
+  const x = abPageParts(s), withNav = v !== 'docs-toc', withAside = v !== 'docs-nav';
   const nav = `<nav class="abp-nav" aria-label="Pages in ${esc(spName(s))}"><h4>Pages</h4><ul>${s.pages.map(([t, a], k) => `<li><button type="button" data-abopen="${s.id}:${k}" ${k === x.i ? 'aria-current="page"' : ''}>${I.page}<span>${esc(t)}</span></button></li>`).join('')}${x.i >= s.pages.length ? `<li><button type="button" aria-current="page">${I.page}<span>${esc(st.abPageEd && st.abPageEd.t || 'New page')}</span></button></li>` : ''}</ul>${x.can && !x.editor ? `<button class="tlink ab-add" type="button" data-abpgnew="1">${PLUS}Add a page</button>` : ''}<button class="tlink abp-navab" type="button" data-abtoabout="1">About ${spName(s)}</button></nav>`;
-  const det = `<dl class="abp-dl"><div><dt>Created</dt><dd>${au(x.d.by)} · ${abAge(x.d.revs[x.d.revs.length - 1].age)}</dd></div><div><dt>Last edited</dt><dd>${au(x.d.ed)} · ${x.age}</dd></div><div><dt>Who can edit</dt><dd>${s.pageEdit === 'members' ? 'Members' : 'Moderators'}</dd></div></dl>`;
-  const aside = x.editor ? '' : `<aside class="abp-aside">${st.abHist ? x.hist : x.tocHTML}<div class="abp-ac"><h4>Page</h4>${det}${x.acts}</div></aside>`;
-  const main = x.editor ? `<div class="abp-main">${x.crumb}${x.editor}</div>` : `<article class="abp-main">${x.crumb}<header class="abp-hd"><h1>${esc(x.d.t)}</h1>${x.byline}</header>${abDocHTML(x.d)}${x.rel}</article>`;
-  return `<div class="abp abp-docs${x.editor ? ' editing' : ''}">${nav}${main}${aside}</div>`;
-}
-/* C. Cover: a band in the space's colour, then page properties above the text */
-function abPageCover(s) {
-  const x = abPageParts(s);
-  const band = `<div class="abp-band" style="--ab-c:${avColor(s.av)}">${x.crumb}${x.editor ? '' : x.acts}<span class="abp-icon">${I.page}</span></div>`;
-  if (x.editor) return `<div class="abp abp-cover">${band}<div class="abp-in">${x.editor}</div></div>`;
-  const props = `<dl class="abp-props"><div><dt>Space</dt><dd>${glyph(s, 'abp-gl')}${spName(s)}</dd></div><div><dt>Created by</dt><dd>${avatar(x.d.by, 'sm')}${au(x.d.by)}<span class="faint">${abAge(x.d.revs[x.d.revs.length - 1].age)}</span></dd></div><div><dt>Last edited</dt><dd>${avatar(x.d.ed, 'sm')}${au(x.d.ed)}<span class="faint">${x.age}</span></dd></div><div><dt>Visible to</dt><dd>${isClosed(s) ? 'Members' : 'Anyone'}</dd></div></dl>`;
-  return `<article class="abp abp-cover">${band}<div class="abp-in"><h1>${esc(x.d.t)}</h1>${props}${st.abHist ? x.hist : ''}${x.tocHTML ? x.tocHTML.replace('abp-toc', 'abp-toc inline') : ''}${abDocHTML(x.d)}${x.rel.replace('abp-rel', 'abp-rel cards')}</div></article>`;
+  const det = `<dl class="abp-dl"><div><dt>Created</dt><dd>${au(x.d.by)} · ${x.created}</dd></div><div><dt>Last edited</dt><dd>${au(x.d.ed)} · ${x.age}</dd></div><div><dt>Who can edit</dt><dd>${s.pageEdit === 'members' ? 'Members' : 'Moderators'}</dd></div></dl>`;
+  const aside = withAside && !x.editor ? `<aside class="abp-aside">${st.abHist ? x.hist : x.tocHTML}<div class="abp-ac"><h4>Page</h4>${det}${x.acts}</div></aside>` : '';
+  const main = x.editor ? `<div class="abp-main">${x.crumb}${x.editor}</div>` : `<article class="abp-main">${x.crumb}<header class="abp-hd"><h1>${esc(x.d.t)}</h1>${x.byline}${withAside ? '' : x.acts}</header>${!withAside && st.abHist ? x.hist : ''}${abDocHTML(x.d)}${x.rel}</article>`;
+  return `<div class="abp abp-docs abp-d-${v}${x.editor || !withAside ? ' no-aside' : ''}${withNav ? '' : ' no-nav'}">${withNav ? nav : ''}${main}${aside}</div>`;
 }
 CS_PAGES.abpage = () => {
-  const s = sp(st.space), v = st.abPageV;
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide ab-page abv-${v}">${v === 'docs' ? abPageDocs(s) : v === 'cover' ? abPageCover(s) : abPageArticle(s)}</div></div>`;
+  const s = sp(st.space), v = st.abPageV, docs = v.startsWith('docs');
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide ab-page abv-${docs ? 'docs' : 'article'}">${docs ? abPageDocs(s, v) : abPageArticle(s, v)}</div></div>`;
 };
 
 /* ---------- skills: preview, then use ---------- */
@@ -9141,16 +9146,12 @@ const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
   return `<p>${il(bk)}</p>`;
 }).join('');
 
-/* the preview dialog (Variants › Skill preview: Summary, Instructions, SKILL.md) */
+/* the preview dialog: the description and the skill's SKILL.md */
 function abSkillDlg(s, i) {
-  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t), v = st.abSkillV;
-  const how = `<p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
-  let body;
-  if (v === 'file') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div>${how}`;
-  else if (v === 'full') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skins"><span class="ab-skl">Instructions</span>${b ? `<div class="ab-md">${abMd(b)}</div>` : '<p class="faint cs-small">This skill has no instructions beyond its description.</p>'}</div>${how}`;
-  else body = `<p class="ab-skd">${esc(d)}</p>${how}${b ? `<details class="ab-skdet"><summary>Instructions</summary><div class="ab-md">${abMd(b)}</div></details>` : ''}`;
+  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t);
+  const body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div><p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
   const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-mono">${esc(n)}</span></span>`;
-  return dlg(title, `<div class="ab-skp ab-skp-${v}">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', `modal cs-m ab-skm-d${v === 'file' ? ' wide' : ''}`);
+  return dlg(title, `<div class="ab-skp">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', 'modal cs-m ab-skm-d wide');
 }
 function abSkillsCard(s) {
   const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in';
