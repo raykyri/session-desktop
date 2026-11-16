@@ -2558,6 +2558,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .Af.ds-hd .body > .drawer { border-left: 0; border-right: 0; }
   .Af.ds-hd .body > .drawer::before { content: ""; position: absolute; top: 39px; bottom: 0; left: 0; width: 1px; background: var(--divider); pointer-events: none; }
   .Af.ds-hd.ds-left .body > .drawer::before { left: auto; right: 0; }
+  /* sidebar on the left: the add box sits level with the composer and matches its height */
+  .Af.ds-hd.ds-left .ds-pane .ds-in { height: 44px; padding-left: 14px; }
+  .Af.ds-hd.ds-left .drawer .dbody.ds-pane { padding-top: 22px; }
 }
 /* right sidebar: Sources and Wiki tabs */
 .ds-pane > .ds-sunits { margin: 0 -4px; }
@@ -6920,8 +6923,8 @@ Object.assign(st, {
    - A source can be in several spaces; each space has its own entry: who added it, when, the note.
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
-   Placement ("Layout" control, st.dsPos): a sidebar with Sources and Wiki tabs on the right or the
-   left, below the space header (in the main column, or across both columns). Sources are listed in the Social feed style. */
+   Placement ("Layout" control, st.dsPos): the space header spans the page; below it the space tabs
+   and a sidebar with Sources and Wiki tabs, on the right or the left. Sources are listed in the Social feed style. */
 const DS_DROPS0 = {
   ml: [
     { m: 'm9', by: 'hal_b', age: '16h' },
@@ -7091,13 +7094,11 @@ function dsSideDrawer(s) {
 const dsSrcPane = s => `${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}`;
 
 /* ---------- space page ---------- */
-/* Parts of the space page for the "Layout" control (st.dsPos): right, left, hd-right, hd-left. With hd-*
-   the space header spans both columns and the space tabs and the sidebar tabs sit side by side below it. */
+/* Parts of the space page for the "Layout" control (st.dsPos: hd-right, hd-left): the space header spans
+   both columns, and the space tabs and the sidebar tabs sit side by side below it. */
 function dsSpaceParts(s, tab, body) {
-  const pos = st.dsPos, hd = pos.startsWith('hd-'), left = pos.endsWith('left');
-  const x = { top: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: `${left ? ' ds-left' : ''}${hd ? ' ds-hd' : ''}` };
-  if (hd) { x.top = `<div class="ds-top">${banner(s, false, true)}</div>`; x.mcol = sfTabs(s) + body; }
-  return x;
+  const left = st.dsPos === 'hd-left';
+  return { top: `<div class="ds-top">${banner(s, false, true)}</div>`, mcol: sfTabs(s) + body, side: wikiDrawer(s), cls: ` ds-hd${left ? ' ds-left' : ''}` };
 }
 /* Home: the latest sources added to your spaces */
 function dsHomeCard() {
@@ -7279,7 +7280,7 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
-    ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
+    ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
   ];
 }
 
@@ -7337,7 +7338,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
