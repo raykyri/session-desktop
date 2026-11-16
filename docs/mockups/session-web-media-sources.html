@@ -2367,7 +2367,16 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-q[data-miopen]:hover { border-left-color: var(--accent); }
 .mi-q.sm { font-size: var(--fs-xs); }
 .mi-askbox { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.mi-askbox .cs-fine svg { width: 13px; height: 13px; }
+/* inline ask composer ("Ask about a source": inline at the end, at the passage, docked) */
+.mi-icomp .mi-iq { margin: 0 34px 2px 0; }
+.mi-icomp .c2-bar { display: flex; align-items: center; gap: 6px; }
+.mi-icsp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); }
+.mi-icsp .dd-btn { max-width: 180px; }
+.mi-atp { margin: 4px 0 14px; }
+.mi-dock { position: sticky; bottom: 12px; z-index: 6; margin-top: 18px; }
+.mi-dock > .composer { box-shadow: var(--shadow-pop); background: var(--popover, var(--field)); }
+.mi-orig { padding: 0 8px; }
+.mi-orig svg { margin: 0; }
 .mi-asks { border-top: 1px solid var(--divider); padding-top: 18px; }
 .mi-asks h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .mi-asks h3 .tlink { margin-left: auto; font-size: var(--fs-xs); font-weight: 500; }
@@ -2642,6 +2651,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <span class="cs-kt">Dropped sources</span>
       <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
       <div class="knob" id="kw-dspos"><span>Sidebar side</span><div class="seg" id="k-dspos"></div></div>
+      <div class="knob" id="kw-dsask"><span>Ask about a source</span><div class="seg" id="k-dsask"></div></div>
+      <div class="knob" id="kw-companim"><span>Composer opening</span><div class="seg" id="k-companim"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -6339,7 +6350,8 @@ function miHead(m, big = true, noVia) {
   const via = noVia ? '' : d ? `Added by ${esc(d.by === ME.u ? 'you' : d.by)} ${d.age === 'now' ? 'just now' : d.age + ' ago'}` : '';
   return `<header class="mi-head"><div class="mi-src">${miIc(m)}<span>${miSrcLine(m)}</span>${m.ver ? `<span class="mi-ver" title="From the verified domain">${SEAL}</span>` : ''}${via ? `<span class="faint mi-via">${via}</span>` : ''}</div>${m.t ? `<h1 class="mi-title${big ? '' : ' sm'}">${esc(m.t)}</h1>` : ''}<div class="mi-by">${avatar(m.h && m.h.startsWith('@') ? m.h.slice(1) : m.au, 'sm')}<span>${miByline(m)}</span><span class="faint mi-via">${m.date} · ${m.len}</span></div></header>`;
 }
-const miOrigBtn = (m, cls = 'btn sm') => `<a class="${cls}" href="#" onclick="return false" title="${esc(m.url)}">${MII.ext}${m.pl === 'x' ? 'Open on X' : m.pl === 'yt' ? 'Watch on YouTube' : m.pl === 'pod' ? 'Listen' : m.pl === 'substack' ? 'Read on Substack' : m.pl === 'lw' ? 'Read on LessWrong' : 'Open the original'}</a>`;
+/* Opens the original; icon only, the label is in the tooltip. */
+const miOrigBtn = (m, cls = 'btn sm mi-orig') => `<a class="${cls}" href="#" onclick="return false" title="${m.pl === 'x' ? 'Open on X' : m.pl === 'yt' ? 'Watch on YouTube' : m.pl === 'pod' ? 'Listen' : m.pl === 'substack' ? 'Read on Substack' : m.pl === 'lw' ? 'Read on LessWrong' : 'Open the original'}: ${esc(m.url)}" aria-label="${m.pl === 'x' ? 'Open on X' : m.pl === 'yt' ? 'Watch on YouTube' : m.pl === 'pod' ? 'Listen' : m.pl === 'substack' ? 'Read on Substack' : m.pl === 'lw' ? 'Read on LessWrong' : 'Open the original'}">${MII.ext}</a>`;
 const miSaveBtn = m => `<button class="btn sm" type="button" data-misave="${m.id}" aria-pressed="${st.miSaved.has(m.id)}">${I.mark}${st.miSaved.has(m.id) ? 'Saved' : 'Save'}</button>`;
 /* edited / deleted / paid notes above the reader copy */
 function miStateNote(m) {
@@ -6372,6 +6384,7 @@ function miReader(m, o = {}) {
     const ab = o.ask ? `<button class="mi-bask" type="button" data-miask="b:${i}" aria-label="Ask about ${miLblLong(m, i)}" title="Ask about this passage">${MII.ask}</button>` : '';
     const pop = sel ? `<div class="mi-selpop" role="toolbar" aria-label="Selected passage"><button class="btn sm primary" type="button" data-miask="b:${i}">${MII.ask}Ask about this passage</button><button class="btn sm" type="button" data-micopy="${i}">${CI.link}Copy link</button><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button></div>` : '';
     out.push(`<div class="mi-b${asks.length ? ' has-asks' : ''}${sel ? ' sel' : ''}${hi ? ' hi' : ''}${b.ts ? ' mi-seg' : ''}${m.kind === 'thread' ? ' mi-post' : ''}" id="mib-${i}" data-mib="${i}">${gut}<div class="mi-bt">${b.sp ? `<b class="mi-spk">${esc(b.sp)}</b>` : ''}<p>${txt}</p>${q}</div>${ab}${pop}</div>`);
+    if (o.after && o.after[i]) out.push(o.after[i]);
   }
   return `<div class="mi-reader mi-r-${m.kind}${o.ask ? ' askable' : ''}">${out.join('')}</div>`;
 }
@@ -6404,15 +6417,21 @@ function miItemPage() {
 function miParts(m) {
   const s = sp(st.space), asks = miAsksOf(m.id), byB = {};
   asks.forEach(x => { const b = x.p.about.b; if (b != null && x.p.about.it === m.id) (byB[b] = byB[b] || []).push(x); });
-  const reader = m.deleted ? '' : miReader(m, { byB, ask: true });
+  const pa = st.miAsk && !st.modal && st.dsAsk === 'passage' && st.miAsk.it === m.id && st.miAsk.b != null ? st.miAsk : null;
+  const reader = m.deleted ? '' : miReader(m, { byB, ask: true, after: pa ? { [pa.b]: `<div class="mi-askbox mi-atp">${miInlineComp(m, pa)}</div>` } : null });
   const list = l => l.map(x => miAskCard(x, m)).join('') || '<p class="muted cs-small">No asks yet.</p>';
   const askList = `<section class="mi-asks" id="mi-asks"><h3>Asks about this source <span class="faint num">${asks.length}</span></h3><div class="mi-acs">${list(asks)}</div></section>`;
-  const askBox = m.deleted ? '' : `<div class="mi-askbox"><button class="composer c2-closed" type="button" data-miask="item"><span class="ph">Ask about this source…</span></button><p class="cs-fine">${MII.ask}<span>To ask about one passage, select it or use the button beside it. Asks are threads in ${spName(s)}.</span></p></div>`;
+  /* "Ask about a source" control (st.dsAsk): dialog, inline at the end, inline at the passage, docked */
+  const a = st.miAsk && !st.modal && st.miAsk.it === m.id ? st.miAsk : null, mode = st.dsAsk;
+  const atEnd = a && (mode === 'end' || mode === 'dock' || (mode === 'passage' && a.b == null));
+  const closed = mode === 'dock' && st.miSel != null ? `<button class="composer c2-closed" type="button" data-miask="b:${st.miSel}"><span class="ph">Ask about the selected passage…</span></button>`
+    : `<button class="composer c2-closed" type="button" data-miask="item"><span class="ph">Ask about this source…</span></button>`;
+  const askBox = m.deleted ? '' : `<div class="mi-askbox${mode === 'dock' ? ' mi-dock' : ''}">${atEnd ? miInlineComp(m, a) : closed}</div>`;
   const acts = `<div class="mi-acts">${miOrigBtn(m)}${miSaveBtn(m)}${typeof dsSourceActs === 'function' ? dsSourceActs(m, s) : ''}</div>`;
   const selBar = st.miSel != null && !m.deleted ? `<div class="mi-selbar" role="toolbar" aria-label="Selected passage"><span class="mi-selbar-t">${esc(clip(st.miQuote || m.body[st.miSel].p, 70))}</span><button class="iconbtn" type="button" data-misel="x" aria-label="Clear selection">${I.close}</button><button class="btn primary" type="button" data-miask="b:${st.miSel}">Ask</button></div>` : '';
   const side = `<div class="rf-card"><h3>Details</h3>${miFacts(m)}</div>${miAlsoIn(m)}`;
   const note = typeof dsNoteHTML === 'function' ? dsNoteHTML(m, s) : '';
-  return { main: `${miHead(m)}${note}${miStateNote(m)}${reader}${askBox}${askList}`, acts, side, selBar };
+  return { main: st.dsAsk === 'dock' ? `${miHead(m)}${note}${miStateNote(m)}${reader}${askList}${askBox}` : `${miHead(m)}${note}${miStateNote(m)}${reader}${askBox}${askList}`, acts, side, selBar };
 }
 const miQuoteText = (p, m) => { const b = p.about.b; if (p.about.quote) return p.about.quote; if (m.edited && m.edited.b === b && ageMin(p.age) > ageMin(m.edited.age)) return m.edited.old; return m.body[b] ? m.body[b].p : ''; };
 
@@ -6462,6 +6481,15 @@ function miMgTabs(s, tabs) {
 const miFindUrl = u => { u = (u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/^twitter\.com/, 'x.com').replace(/[?#].*$/, '').replace(/\/$/, ''); if (!u) return null; return [...MEDIA, ...(st.miAdded || [])].find(m => u === m.url.toLowerCase() || (u.length > 12 && (u.includes(m.url.toLowerCase()) || m.url.toLowerCase().includes(u)))); };
 
 /* ---------- ask dialog ---------- */
+/* The inline ask composer: the space composer's shape, with the passage quoted above the question. */
+function miInlineComp(m, a) {
+  const opts = m.sp.filter(x => isMember(x) && canRead(sp(x)));
+  const sid = opts.includes(st.miAskSp) ? st.miAskSp : opts.includes(st.space) ? st.space : opts[0] || st.space;
+  const spSel = opts.length > 1 ? `<span class="mi-icsp"><span id="mi-icsp-l" class="faint">in</span>${ddSel('miSp', opts.map(x => [x, spName(sp(x))]), sid, 'mi-icsp-l')}</span>` : '';
+  const quote = a.b != null ? `<blockquote class="mi-q sm mi-iq"><p>${esc(clip(a.quote || m.body[a.b].p, 200))}</p><cite>${miLbl(m, a.b)}</cite></blockquote>` : '';
+  const ph = a.b != null ? 'Ask about this passage' : 'Ask about this source';
+  return `<div class="composer open c2 c2v-bar mi-icomp" data-ck="mi:${a.b != null ? a.b : 'item'}"><button class="iconbtn c2-x" type="button" data-miaskx="1" aria-label="Close" title="Close">${I.close}</button>${quote}<textarea id="mi-askq" rows="2" placeholder="${ph}" aria-label="${ph}">${esc(st.miAskQ)}</textarea><div class="c2-bar">${modelPicker()}<span class="grow"></span>${spSel}<button class="btn primary" type="button" data-miaskgo="1">Ask</button></div></div>`;
+}
 function miAskDlg() {
   const a = st.miAsk; if (!a) return '';
   const its = (a.its || [a.it]).map(MIT).filter(Boolean), m = its[0];
@@ -6470,10 +6498,9 @@ function miAskDlg() {
   const title = its.length > 1 ? `Ask about ${its.length} sources` : a.b != null ? `Ask about ${miLblLong(m, a.b)}` : 'Ask about this source';
   const scope = its.length > 3 ? `<ul class="mi-dlist" aria-label="${its.length} sources">${its.map(x => `<li>${miIc(x, 'xs')}<span><b>${esc(miTitle(x))}</b> <small>${esc(x.au)} · ${x.age}</small></span></li>`).join('')}</ul>` : its.length > 1 ? `<div class="mi-dscope">${its.map(x => miMini(x)).join('')}</div>` : `<div class="mi-dscope">${miMini(m)}${a.b != null ? `<blockquote class="mi-q"><p>${esc(a.quote || m.body[a.b].p)}</p><cite>${miLbl(m, a.b)}</cite></blockquote>` : ''}</div>`;
   const tok = its.length > 1 ? its.reduce((x, y) => x + y.tok, 0) : a.b != null ? Math.max(400, m.tok * 3 / m.body.length) : m.tok;
-  const tpl = MI_TPL[sid] || MI_TPL.public;
   const spSel = opts.length > 1 ? `<div class="mi-dsp"><span id="mi-asksp-l">Ask in</span>${ddSel('miSp', opts.map(x => [x, sp(x).title + ' (' + (isPlain(sp(x)) ? sp(x).title : '#' + sp(x).name) + ')']), sid, 'mi-asksp-l')}</div>` : '';
   const vis = isClosed(s) ? `Only members of ${spName(s)} can read the thread.` : `The thread is public in ${spName(s)}.`;
-  const body = `${scope}<label class="fld"><span>Question</span><textarea id="mi-askq" rows="3" placeholder="${a.b != null ? 'What do you want to know about this passage?' : 'What do you want to know about this source?'}">${esc(st.miAskQ)}</textarea></label><div class="mi-tplrow">${tpl.map((x, k) => `<button class="mi-tplb" type="button" data-mitpl="${k}">${esc(x)}</button>`).join('')}</div>${spSel}<p class="cs-fine">${I.agent}<span>Reads ${a.b != null ? 'this passage and the section around it' : its.length > 1 ? 'the sources' : 'the source'} (about ${miTok(tok)} tokens), other sources in ${spName(s)} that mention the same claims, and the web. Paid from ${s.byok ? spName(s) + ' extra tokens' : 'your API key'}. ${vis}</span></p>`;
+  const body = `${scope}<label class="fld"><span>Question</span><textarea id="mi-askq" rows="3" placeholder="${a.b != null ? 'What do you want to know about this passage?' : 'What do you want to know about this source?'}">${esc(st.miAskQ)}</textarea></label>${spSel}`;
   return dlg(title, body, `${cancelB()}<button class="btn primary" type="button" data-miaskgo="1">Ask</button>`).replace('class="modal cs-m"', 'class="modal cs-m mi-askdlg"');
 }
 function miModal() {
@@ -6512,13 +6539,13 @@ const MI_CLEAR = () => ({ miSel: null, miQuote: '', miHi: null, miDiff: false, m
 function miOpen(id, b, from) {
   const m = MIT(id); if (!m) return;
   const sid = m.sp.includes(st.space) && canRead(sp(st.space)) ? st.space : m.sp.find(x => canRead(sp(x))) || st.space;
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { miAsk: null, miAskQ: '',  space: sid, subPage: 'mitem', miItem: id, miHi: b != null ? b : null, miFrom: from || null });
   if (b != null) setTimeout(() => { const el = $('mib-' + b); if (el) el.scrollIntoView({ block: 'center' }); }, 0); else setTimeout(scrollMockTop, 0);
 }
 function miBack() {
   if (st.miFrom === 'saved') { Object.assign(st, NAVBASE(), MI_CLEAR(), { savedPage: true, savedFilter: 'mi-items' }); return; }
   const s = sp(st.space);
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { space: s.id, spTab: 'threads' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { miAsk: null, miAskQ: '', space: s.id, spTab: 'threads' });
 }
 function miCreateAsk() {
   const a = st.miAsk; if (!a) return;
@@ -6579,11 +6606,15 @@ function miClick(t) {
     else if (v.startsWith('b:')) { const i = +v.slice(2); a = { it: st.miItem, b: i, quote: st.miSel === i ? st.miQuote : '' }; }
     else if (v === 'pick') { if (st.miPick.length < 2) return true; a = { its: [...st.miPick] }; }
     else if (v.startsWith('item:')) a = { it: v.slice(5) };
-    Object.assign(st, { miAsk: a, miAskQ: '', miAskSp: st.space, modal: 'mi-ask' });
-    renderAll(); miFocusQ('mi-askq'); return true;
+    const inline = st.dsAsk !== 'dialog' && st.subPage === 'mitem' && !a.its && a.it === st.miItem;
+    Object.assign(st, { miAsk: a, miAskQ: '', miAskSp: st.space, modal: inline ? null : 'mi-ask' });
+    if (inline) Object.assign(st, { miSel: null, miQuote: a.quote ? st.miQuote : '' });
+    renderAll(); miFocusQ('mi-askq');
+    if (inline) { const c = document.querySelector('#app .mi-icomp'); if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    return true;
   }
-  if ((b = d('[data-mitpl]'))) { st.miAskQ = (MI_TPL[st.miAskSp] || MI_TPL[st.space] || MI_TPL.public)[+b.dataset.mitpl] || ''; renderAll(); miFocusQ('mi-askq'); return true; }
   if ((b = d('[data-miaskgo]'))) { miCreateAsk(); return go(); }
+  if ((b = d('[data-miaskx]'))) { Object.assign(st, { miAsk: null, miAskQ: '' }); return go(); }
   if ((b = d('[data-miagain]'))) { const p = POSTS[+b.dataset.miagain]; Object.assign(st, { miAsk: { it: p.about.it, b: p.about.b }, miAskQ: p.q, miAskSp: p.s, modal: 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
   if ((b = d('[data-misave]'))) { const id = b.dataset.misave; st.miSaved.has(id) ? st.miSaved.delete(id) : st.miSaved.add(id); return go(); }
   if ((b = d('[data-micopy]'))) { const v = b.dataset.micopy, m = MIT(st.miItem); toast(v === 'item' ? 'Link to the source copied.' : `Link to ${miLblLong(m, +v)} copied.`); st.miSel = null; return go(); }
@@ -6613,6 +6644,7 @@ function miInput(e) {
   return false;
 }
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !st.modal && st.miAsk && !st.miAskQ.trim()) { st.miAsk = null; renderAll(); return; }
   if (e.key === 'Escape' && !st.modal && (st.miSel != null || st.miPickMode)) { st.miSel = null; st.miQuote = ''; st.miPickMode = false; st.miPick = []; renderAll(); }
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'mi-askq') { e.preventDefault(); const b = document.querySelector('[data-miaskgo]'); if (b) b.click(); }
   if (e.key === 'Enter' && e.target.closest && e.target.closest('.mi-u, .mi-mini[role="link"]')) { e.preventDefault(); e.target.click(); }
@@ -7014,7 +7046,37 @@ document.addEventListener('drop', e => {
 });
 /* after each render: height for the Sources column, hide the sub-control that does not apply,
    and briefly mark a source that was just added (or was already there) */
+/* "Composer opening" control (st.compAnim): animates a composer the render it opens. Very short and
+   ease-out so it reads as immediate: Expand (height grows from the closed composer, content below
+   moves with it), Unfold (clipped reveal from the closed height), Rise (fade, 4px rise, slight scale),
+   Fade, None. */
+const COMP_EASE = 'cubic-bezier(.2, .8, .2, 1)';
+function compAnim() {
+  const open = [...document.querySelectorAll('#app .composer.open')];
+  const keys = new Set(open.map(el => el.dataset.ck || 'main'));
+  const closed = document.querySelector('#app .composer.c2-closed');
+  if (closed) compAnim.h0 = closed.offsetHeight;
+  const prev = compAnim.prev || new Set(); compAnim.prev = keys;
+  const v = st.compAnim, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (v === 'none' || reduce || st.device === 'native') return;
+  open.filter(el => !prev.has(el.dataset.ck || 'main')).forEach(el => {
+    const h0 = compAnim.h0 || 44, h1 = el.offsetHeight, kids = [...el.children];
+    if (v === 'expand') {
+      el.style.overflow = 'hidden';
+      el.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: 140, easing: COMP_EASE }).onfinish = () => { el.style.overflow = ''; };
+      kids.forEach(k => k.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 110, delay: 30, easing: 'ease-out', fill: 'backwards' }));
+    } else if (v === 'unfold') {
+      const r = getComputedStyle(el).borderRadius;
+      el.animate([{ clipPath: `inset(0 0 ${h1 - h0}px 0 round ${r})` }, { clipPath: `inset(0 0 0 0 round ${r})` }], { duration: 130, easing: COMP_EASE });
+    } else if (v === 'rise') {
+      el.animate([{ opacity: 0, transform: 'translateY(4px) scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 120, easing: COMP_EASE });
+    } else if (v === 'fade') {
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100, easing: 'ease-out' });
+    }
+  });
+}
 function dsAfterRender() {
+  compAnim();
   if (st.dsFlash && st.device !== 'native') {
     const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
@@ -7032,6 +7094,8 @@ function DSKNOBS() {
   return [
     ['k-dsside', 'dsSide', [['stack', 'Stack that expands'], ['tabsty', 'Sources and Wiki tabs, social feed']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', dsExp: false }); dsOnSpace(); }],
     ['k-dspos', 'dsPos', [['right', 'Right'], ['left', 'Left']], () => { st.drawer = true; dsOnSpace(); }],
+    ['k-dsask', 'dsAsk', [['dialog', 'Dialog'], ['end', 'Inline at the end'], ['passage', 'Inline at the passage'], ['dock', 'Docked']], () => { Object.assign(st, { miAsk: null, miAskQ: '', modal: null }); if (st.subPage !== 'mitem') { dsJump('ds-s-space'); miOpen('m2'); } }],
+    ['k-companim', 'compAnim', [['expand', 'Expand'], ['unfold', 'Unfold'], ['rise', 'Rise'], ['fade', 'Fade'], ['none', 'None']], () => { compAnim.prev = new Set(); }],
   ];
 }
 
@@ -7090,7 +7154,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsSide: 'stack', dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsSide: 'stack', dsPos: 'right', dsAsk: 'dialog', compAnim: 'expand', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsExp: false,
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
