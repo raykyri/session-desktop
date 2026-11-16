@@ -3046,6 +3046,14 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 <script>
 (() => {
 'use strict';
+/* Hot reload: a host can run a new version of this script in the same document. The previous version
+   is disposed first: its event listeners (all added with on(), tied to LIFE), its observers, its fetch
+   patch and its rendering stop, and the inline tint tokens and generated stylesheet it left are removed. */
+try { if (window.__sessionDispose) window.__sessionDispose(); } catch (e) {}
+const LIFE = new AbortController(), OBSERVERS = [];
+let DISPOSED = false;
+const on = (target, type, fn, opts) => target.addEventListener(type, fn, { ...(typeof opts === 'boolean' ? { capture: opts } : opts || {}), signal: LIFE.signal });
+{ const r = document.documentElement; [...r.style].filter(k => k.startsWith('--')).forEach(k => r.style.removeProperty(k)); const o = document.getElementById('phonesim-css'); if (o) o.remove(); }
 /* ================= state =================
    All application state lives in stores created with zustand/vanilla's createStore (vendored below).
 
@@ -3320,6 +3328,7 @@ const apiSource = {
 };
 const liveData = createDataStore('liveData', apiSource);
 DS = liveData;
+window.__sessionDispose = () => { DISPOSED = true; LIFE.abort(); OBSERVERS.forEach(o => o.disconnect()); mockBackend.restore(); window.__sessionDispose = null; };
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
 const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
@@ -3366,7 +3375,7 @@ const mockBackend = (() => {
     const method = (init.method || 'GET').toUpperCase(), body = init.body ? dec(init.body) : undefined;
     return new Promise(res => setTimeout(() => { try { res(handle(method, url, body)); } catch (e) { res(out(500, { error: e.message })); } }, cfg.latency));
   };
-  return { cfg, wipe: () => { data = null; try { localStorage.removeItem(LS); } catch (e) {} } };
+  return { cfg, wipe: () => { data = null; try { localStorage.removeItem(LS); } catch (e) {} }, restore: () => { window.fetch = realFetch; } };
 })();
 
 /* Pinwheel mark (5 blades): tapered blades on a spiral centerline (r 13→47, 115° sweep,
@@ -4003,10 +4012,10 @@ function ysList() {
 }
 const GRIP = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></svg>';
 let dragId = null;
-document.addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r) return; dragId = r.dataset.drag; r.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} });
-document.addEventListener('dragover', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const b = r.getBoundingClientRect(); document.querySelectorAll('.drop-a, .drop-b').forEach(x => x.classList.remove('drop-a', 'drop-b')); if (r.dataset.drag !== dragId) r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-a' : 'drop-b'); });
-document.addEventListener('drop', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const after = r.classList.contains('drop-b'); const from = ids.indexOf(dragId); ids.splice(from, 1); let to = ids.indexOf(r.dataset.drag); if (after) to++; ids.splice(to, 0, dragId); st.tabOrder = ids; dragId = null; renderAll(); });
-document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.dragging, .drop-a, .drop-b').forEach(x => x.classList.remove('dragging', 'drop-a', 'drop-b')); });
+on(document, 'dragstart', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r) return; dragId = r.dataset.drag; r.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} });
+on(document, 'dragover', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const b = r.getBoundingClientRect(); document.querySelectorAll('.drop-a, .drop-b').forEach(x => x.classList.remove('drop-a', 'drop-b')); if (r.dataset.drag !== dragId) r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-a' : 'drop-b'); });
+on(document, 'drop', e => { const r = e.target.closest && e.target.closest('[data-drag]'); if (!r || !dragId) return; e.preventDefault(); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const after = r.classList.contains('drop-b'); const from = ids.indexOf(dragId); ids.splice(from, 1); let to = ids.indexOf(r.dataset.drag); if (after) to++; ids.splice(to, 0, dragId); st.tabOrder = ids; dragId = null; renderAll(); });
+on(document, 'dragend', () => { dragId = null; document.querySelectorAll('.dragging, .drop-a, .drop-b').forEach(x => x.classList.remove('dragging', 'drop-a', 'drop-b')); });
 function ysOrder() {
   const order = st.tabOrder.length ? st.tabOrder : defaultTabOrder();
   return `<p class="muted ys-note">Choose which spaces appear as tabs in the header. Drag to reorder.</p><div class="ts-list ys-olist">${order.map((id, k) => { const x = sp(id), on = !st.tabHidden.has(id); return `<div class="ts-row ts-srow ys-drag" draggable="true" data-drag="${id}"><span class="ys-grip" aria-hidden="true">${GRIP}</span><span class="ts-n num">${k + 1}</span><span class="ts-move"><button class="iconbtn" type="button" data-tabmove="${id}:-1" aria-label="Move #${x.name} up" ${k === 0 ? 'disabled' : ''}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-tabmove="${id}:1" aria-label="Move #${x.name} down" ${k === order.length - 1 ? 'disabled' : ''}>${I.chev}</button></span>${glyph(x)}<span class="ts-tx"><b class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csMark(x, false)}</b><small>${D.joined.includes(id) ? roleLabel(role(x)) : isClosed(x) ? 'Not a member. Closed spaces you are not in are not shown in the header.' : 'Not joined'}</small></span><label class="ts-sw"><input type="checkbox" data-tabshow="${id}" ${on ? 'checked' : ''} aria-label="Show #${x.name} in the header"><span class="sw-track" aria-hidden="true"></span></label></div>`; }).join('')}</div>`;
@@ -5823,7 +5832,7 @@ function ddSel(id, opts, val, labelId) {
   const cur = opts.find(o => o[0] === val) || opts[0], open = st.dd === id;
   return `<div class="dd${open ? ' open' : ''}"><button type="button" class="dd-btn" data-dd="${id}" aria-haspopup="listbox" aria-expanded="${open}" aria-labelledby="${labelId} dd-v-${id}"><span id="dd-v-${id}">${esc(cur[1])}</span>${I.chev}</button>${open ? `<div class="dd-pop" role="listbox" aria-labelledby="${labelId}">${opts.map(([v, l]) => `<button type="button" class="dd-o" role="option" aria-selected="${v === cur[0]}" data-ddv="${id}:${v}"><span>${esc(l)}</span>${v === cur[0] ? I.check : ''}</button>`).join('')}</div>` : ''}</div>`;
 }
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   const t = e.target;
   if (!t.closest) return;
   if (!st.dd && t.matches('.dd-btn') && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); t.click(); return; }
@@ -6338,17 +6347,17 @@ function buildJump() {
     const n = flat.length, base = open ? act : cur;
     go(abs != null ? abs : base < 0 ? (d > 0 ? 0 : n - 1) : Math.min(n - 1, Math.max(0, base + d)), true);
   };
-  btn.addEventListener('click', () => setOpen(!open));
-  pop.addEventListener('click', e => { const o = e.target.closest('.jd-o'); if (!o) return; go(opts.indexOf(o), false); setOpen(false); btn.focus({ preventScroll: true }); });
-  pop.addEventListener('mousemove', e => { const o = e.target.closest('.jd-o'); if (o && opts.indexOf(o) !== act) { act = opts.indexOf(o); paint(); } });
+  on(btn, 'click', () => setOpen(!open));
+  on(pop, 'click', e => { const o = e.target.closest('.jd-o'); if (!o) return; go(opts.indexOf(o), false); setOpen(false); btn.focus({ preventScroll: true }); });
+  on(pop, 'mousemove', e => { const o = e.target.closest('.jd-o'); if (o && opts.indexOf(o) !== act) { act = opts.indexOf(o); paint(); } });
   const keys = e => {
     const k = e.key;
     if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); if (e.altKey) setOpen(!open); else step(k === 'ArrowDown' ? 1 : -1); }
     else if (k === 'Home' || k === 'End') { e.preventDefault(); e.stopPropagation(); step(0, k === 'Home' ? 0 : flat.length - 1); }
     else if (open && (k === 'Enter' || k === ' ' || k === 'Escape' || k === 'Tab')) { if (k !== 'Tab') e.preventDefault(); e.stopPropagation(); setOpen(false); if (k !== 'Tab') btn.focus({ preventScroll: true }); }
   };
-  btn.addEventListener('keydown', keys); pop.addEventListener('keydown', keys);
-  document.addEventListener('pointerdown', e => { if (open && !e.target.closest('#k-jump')) setOpen(false); }, true);
+  on(btn, 'keydown', keys); on(pop, 'keydown', keys);
+  on(document, 'pointerdown', e => { if (open && !e.target.closest('#k-jump')) setOpen(false); }, true);
 }
 /* after each render: focus the first field of a dialog that has one */
 function csAfterRender() {
@@ -6356,10 +6365,10 @@ function csAfterRender() {
   if (csAfterRender.io) { csAfterRender.io.disconnect(); csAfterRender.io = null; }
   const endBtns = document.querySelector('#app .cs-setf');
   if (endBtns && 'IntersectionObserver' in window) {
-    csAfterRender.io = new IntersectionObserver(([e]) => {
+    OBSERVERS.push(csAfterRender.io = new IntersectionObserver(([e]) => {
       csSettings.endVis = e.isIntersecting;
       const w = document.querySelector('#app .st-barw'); if (w) w.classList.toggle('off', e.isIntersecting);
-    });
+    }));
     csAfterRender.io.observe(endBtns);
   }
   /* keep the current space tab in view when the header tabs overflow */
@@ -6785,13 +6794,13 @@ function sfInput(e) {
   if (id === 'sf-dom' || id === 'sf-dorg') { patch('sfDom', w => { w[id === 'sf-dom' ? 'domain' : 'org'] = v; }); const b = document.querySelector('[data-sfdom="check"]'); if (b) b.disabled = !st.sfDom.domain.trim(); return true; }
   return false;
 }
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   if (st.device === 'native' || !e.target.id) return;
   if (e.key === 'Enter' && e.target.id === 'faq-q') { e.preventDefault(); st.faqQ = e.target.value; if (faqAsk(false) !== 'focus') { renderAll(); const i = $('faq-q'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length); } } }
   if (e.key === 'Escape' && (st.imenu || st.tpMenu) && !st.modal) { st.imenu = null; st.tpMenu = null; renderAll(); }
 }, true);
 /* "c" (new ask) on the FAQ landing focuses the search-and-ask box, which is the composer there. */
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   if (e.key !== 'c' || e.metaKey || e.ctrlKey || e.altKey || st.modal || (e.target.closest && e.target.closest('input, textarea, [contenteditable]'))) return;
   const i = $('faq-q'); if (!i) return;
   e.preventDefault(); e.stopPropagation(); i.focus();
@@ -7454,7 +7463,7 @@ function miInput(e) {
   if (el.dataset && el.dataset.sftog && el.dataset.sftog.startsWith('mi-')) return true;
   return false;
 }
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   if (e.key === 'Escape' && !st.modal && st.miAsk && !st.miAskQ.trim()) { st.miAsk = null; renderAll(); return; }
   if (e.key === 'Escape' && !st.modal && (st.miSel != null || st.miPickMode)) { st.miSel = null; st.miQuote = ''; st.miPickMode = false; st.miPick = []; renderAll(); }
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target.id === 'mi-askq') { e.preventDefault(); const b = document.querySelector('[data-miaskgo]'); if (b) b.click(); }
@@ -7820,11 +7829,11 @@ function dsInput(e) {
   if (id === 'ds-file') return true;
   return false;
 }
-document.addEventListener('change', e => {
+on(document, 'change', e => {
   const el = e.target; if (!el || el.id !== 'ds-file' || !el.files || !el.files[0]) return;
   const z = el.closest('[data-dsdz]'); dsDropped(z ? z.dataset.dsdz : st.space, null, el.files[0].name);
 });
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   const t = e.target;
   if (t && t.id === 'ds-url' && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('#ds-det [data-dsadd="1"], #ds-det [data-dsgo]'); if (b) b.click(); }
   if (t && t.id === 'ds-note' && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('#ds-det [data-dsadd="1"]'); if (b) b.click(); }
@@ -7834,14 +7843,14 @@ document.addEventListener('keydown', e => {
 }, true);
 /* Real drag and drop: a link or a file dropped on a source list adds it to that space. */
 const dsZone = e => e.target && e.target.closest ? e.target.closest('[data-dsdz]') : null;
-document.addEventListener('dragover', e => {
+on(document, 'dragover', e => {
   const z = dsZone(e); if (!z || st.device === 'native' || !z.querySelector('.ds-over')) return;
   e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
   document.querySelectorAll('[data-dsdz][data-drag]').forEach(x => { if (x !== z) x.removeAttribute('data-drag'); });
   z.setAttribute('data-drag', '1');
 });
-document.addEventListener('dragleave', e => { const z = dsZone(e); if (z && !z.contains(e.relatedTarget)) z.removeAttribute('data-drag'); });
-document.addEventListener('drop', e => {
+on(document, 'dragleave', e => { const z = dsZone(e); if (z && !z.contains(e.relatedTarget)) z.removeAttribute('data-drag'); });
+on(document, 'drop', e => {
   const z = dsZone(e); if (!z || !z.querySelector('.ds-over')) return;
   e.preventDefault(); z.removeAttribute('data-drag');
   const dt = e.dataTransfer, f = dt && dt.files && dt.files[0];
@@ -7864,8 +7873,8 @@ function dsSideFit() {
   const a = $('app'), d = a && a.querySelector('.body > .drawer.ds-side'); if (!d || st.device !== 'desktop') return;
   d.style.setProperty('--ds-sh', Math.max(240, Math.round(a.getBoundingClientRect().bottom - d.getBoundingClientRect().top)) + 'px');
 }
-$('app').addEventListener('scroll', () => { if (!dsSideFit.raf) dsSideFit.raf = requestAnimationFrame(() => { dsSideFit.raf = 0; dsSideFit(); }); }, { passive: true });
-window.addEventListener('resize', dsSideFit);
+on($('app'), 'scroll', () => { if (!dsSideFit.raf) dsSideFit.raf = requestAnimationFrame(() => { dsSideFit.raf = 0; dsSideFit(); }); }, { passive: true });
+on(window, 'resize', dsSideFit);
 function mwAfterRender() {
   { const k = $('kw-mweb'); if (k) k.style.display = st.device === 'phone' ? '' : 'none'; }
   const a = $('app'); if (!a || st.device === 'native') return;
@@ -8702,10 +8711,10 @@ function qtJump(k) {
     case 'qt-search': Object.assign(st, { subPage: 'search', q: 'void' }); break;
   }
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.qtMenu || st.qtPick)) { st.qtMenu = null; st.qtPick = null; renderAll(); } });
+on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.qtMenu || st.qtPick)) { st.qtMenu = null; st.qtPick = null; renderAll(); } });
 
 /* END question-trees */
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu || st.ntOpen)) { st.csMenu = null; st.ntOpen = false; renderAll(); } });
+on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu || st.ntOpen)) { st.csMenu = null; st.ntOpen = false; renderAll(); } });
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
    the data store over HTTP, and move the Variants bar's keys from the UI store to the mockup store. */
@@ -8722,8 +8731,8 @@ function bootData() {
 Object.assign(st, { apiMode: 'normal' });
 bootData();
 const ST0 = structuredClone(stSnapshot(FIXTURES)), JOINED0 = [...FIXTURES.joined], NST0 = structuredClone(phoneStore.getState());
-$('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
-document.getElementById('k-reset').addEventListener('click', () => {
+on($('ctl-toggle'), 'click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
+on(document.getElementById('k-reset'), 'click', () => {
   /* the mock backend's data goes back to its seed; then the controls and the screen */
   db.reset(resetControls);
   renderAll();
@@ -8838,7 +8847,7 @@ function focusInto(ov) {
 }
 const focusStack = [];       /* open overlays, oldest first: { key, opener, fallback } */
 let lastPress = null;        /* the control last pressed with a pointer (Safari does not focus buttons on click) */
-document.addEventListener('pointerdown', e => { const c = e.target.closest && e.target.closest(FOCUSABLE); lastPress = c ? focusDesc(c) : null; }, true);
+on(document, 'pointerdown', e => { const c = e.target.closest && e.target.closest(FOCUSABLE); lastPress = c ? focusDesc(c) : null; }, true);
 function focusAfterRender(before) {
   const ovs = overlays(), keys = ovs.map(ovKey);
   let popped = null, opened = null;
@@ -8850,7 +8859,7 @@ function focusAfterRender(before) {
   if (lost && before) focusTo(findDesc(before), before);
 }
 /* Tab and Shift+Tab stay inside a modal dialog or a sheet */
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   if (e.key !== 'Tab') return;
   const ov = topOverlay(); if (!ov || !traps(ov)) return;
   const f = [...ov.querySelectorAll(FOCUSABLE)].filter(shown); if (!f.length) { e.preventDefault(); return; }
@@ -8861,7 +8870,7 @@ document.addEventListener('keydown', e => {
 }, true);
 /* Escape: when no other handler closed anything, close the top overlay */
 let escCount = 0;
-document.addEventListener('keydown', e => { if (e.key === 'Escape') escCount = overlays().length; }, true);
+on(document, 'keydown', e => { if (e.key === 'Escape') escCount = overlays().length; }, true);
 function escFallback(e) {
   if (e.key !== 'Escape' || e.defaultPrevented) return;
   const ovs = overlays(); if (!ovs.length || ovs.length < escCount) return;
@@ -8879,13 +8888,14 @@ function autosize(t) {
   t.style.height = Math.min(h, max) + 'px';
   t.style.overflowY = h > max ? 'auto' : 'hidden';
 }
-document.addEventListener('input', e => { if (e.target.matches && e.target.matches('#app textarea')) autosize(e.target); }, true);
+on(document, 'input', e => { if (e.target.matches && e.target.matches('#app textarea')) autosize(e.target); }, true);
 function renderKeepFocus() {
   const a = document.activeElement, id = a && a.id, c = a && 'selectionStart' in a ? [a.selectionStart, a.selectionEnd] : null;
   renderAll();
   const b = id && document.getElementById(id); if (b && b !== document.activeElement) { b.focus({ preventScroll: true }); if (c && b.setSelectionRange) try { b.setSelectionRange(c[0], c[1]); } catch (e) {} }
 }
 function renderAll() {
+  if (DISPOSED) return;   /* a timer from a version replaced by hot reload */
   const _app = document.getElementById('app'), route = routeKey(), moved = renderAll.route != null && renderAll.route !== route;
   renderAll.route = route;
   if (_app && moved) _app.scrollTop = 0;
@@ -8901,6 +8911,8 @@ function renderAll() {
 }
 function renderAllInner() {
   renderControls();
+  /* the page-wide attributes come first, also while data loads: the tint is computed from the theme they select */
+  { const R = document.documentElement; R.dataset.device = st.device; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
   if (!dataReady()) {
     const m = DS.meta.getState();
     $('app').innerHTML = `<div class="data-wait" role="status">${m.status === 'error' ? `Couldn’t load data from the server (${esc(m.error)}).` : 'Loading…'}</div>`;
@@ -8935,7 +8947,7 @@ function pickOption(id) {
   if (location.hash.slice(1) !== id) { try { history.replaceState(null, '', '#' + id); } catch (e) { location.hash = id; } }
   renderAll();
 }
-$('app').addEventListener('click', e => {
+on($('app'), 'click', e => {
   const t = e.target;
   if (st.device === 'native') { nClick(e); return; }
   if (qtClick(t, e)) return;
@@ -9005,7 +9017,7 @@ $('app').addEventListener('click', e => {
   if (st.compOpen && !st.modal && !t.closest('.composer') && !st.draft.trim()) { st.compOpen = false; renderAll(); return; }
   if ((st.pop || st.sortOpen) && !t.closest('.pop')) { st.pop = false; st.sortOpen = false; renderAll(); }
 });
-$('app').addEventListener('input', e => {
+on($('app'), 'input', e => {
   if (st.device === 'native') { nInput(e); return; }
   if (dsInput(e)) return;
   if (miInput(e)) return;
@@ -9022,11 +9034,11 @@ $('app').addEventListener('input', e => {
   e.target.closest('.pop').querySelectorAll('.pop-row').forEach(r => { r.hidden = q && !r.dataset.name.includes(q); });
 });
 let gPending = false;
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   if (e.key === 'Enter' && (e.target.id === 'key-in' || e.target.id === 'key-name')) { e.preventDefault(); document.querySelector('[data-act="key-save"]').click(); }
   if (e.target.id === 'rn-in' && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.stopPropagation(); document.querySelector(e.key === 'Enter' ? '[data-act="rn-save"]' : '[data-act="rn-cancel"]').click(); }
 }, true);
-document.addEventListener('keydown', e => {
+on(document, 'keydown', e => {
   const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
   if (!typing && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && /^[A-Z]$/.test(e.key) && HOTKEYS[e.key]) { const [k, v, pick] = HOTKEYS[e.key]; st[k] = v; if (pick) pick(); renderAll(); e.preventDefault(); return; }
   if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && st.device !== 'native') {
@@ -9055,18 +9067,18 @@ function buildPhoneSim() {
   }
   const el = document.createElement('style'); el.id = 'phonesim-css'; el.textContent = out.join('\n'); document.head.appendChild(el);
 }
-window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h !== st.opt && L[h]) pickOption(h); });
+on(window, 'hashchange', () => { const h = location.hash.slice(1); if (h !== st.opt && L[h]) pickOption(h); });
 const h0 = location.hash.slice(1);
 buildPhoneSim();
-document.addEventListener('keydown', escFallback);   /* registered last, so it runs after the other Escape handlers */
+on(document, 'keydown', escFallback);   /* registered last, so it runs after the other Escape handlers */
 APP_STARTED = true;
 pickOption(L[h0] ? h0 : 'b');
 /* The page that hosts this file can set data-theme on <html> after load to match its own
    theme. Adopt that value, so the tint (applied as inline token values) is recomputed for it
    instead of mixing with the other theme's tokens. */
-new MutationObserver(() => {
+{ const o = new MutationObserver(() => {
   const t = document.documentElement.dataset.theme;
   if ((t === 'light' || t === 'dark') && t !== st.appearance) { st.appearance = t; renderAll(); }
-}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}); o.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); OBSERVERS.push(o); }
 })();
 </script>
