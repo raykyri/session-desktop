@@ -2648,7 +2648,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-stab[aria-selected="true"] { color: var(--t-heading); }
 .ds-stab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
 .drawer .dbody.ds-pane { gap: 10px; }
-.th-vtb, .it-scrim { display: none; }
+.it-scrim { display: none; }
 #app.sheet-lock { overflow: hidden !important; }
 /* ---------- Mobile Web fixes and variants ---------- */
 @media (max-width: 640px) {
@@ -2672,16 +2672,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   /* the view switch never stacks */
   .th-vt { flex: none; flex-wrap: nowrap; }
   .th-vt button { white-space: nowrap; }
-  /* Thread toolbar variants */
-  /* thread toolbar: every button shows its icon and label, at the height of the Document / Transcript switch */
-  .qt-tools .btn.sm { height: 38px; padding: 0 10px; }
-  #app[data-mtools="icons"] .qt-tools .btn.sm { padding: 0 9px; }
-  #app[data-mtools="rows"] .qt-bar { flex-wrap: wrap; }
-  #app[data-mtools="rows"] .qt-tools { width: 100%; flex-wrap: wrap; overflow: visible; justify-content: flex-end; }
-  #app[data-mtools="rows"] .qt-tools .th-vt { order: -1; flex-basis: 100%; margin: 0 0 6px; }
-  #app[data-mtools="rows"] .qt-tools .th-vt button { flex: 1; }
-  #app[data-mtools="toggle"] .th-vt { display: none; }
-  #app[data-mtools="toggle"] .th-vtb { display: inline-flex; }
+  /* thread toolbar: one row, each button with its icon and label, at the desktop heights */
   /* Sheet animation variants (classes added by mwSheets when a sheet opens) */
   #app[data-msanim="slide"] .sh-enter { animation: sh-up 240ms cubic-bezier(.2, .8, .2, 1); }
   #app[data-msanim="spring"] .sh-enter { animation: sh-spring 380ms cubic-bezier(.2, .8, .2, 1); }
@@ -2701,7 +2692,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   /* short labels in action rows */
   .m-long { display: none; }
   /* tap targets */
-  .th-vt button, .qt-tools .btn.sm, .sf-tpe-b, .sf-crumb .tlink, .tlink[data-qtcol] { min-height: 32px; }
+  .sf-tpe-b, .sf-crumb .tlink, .tlink[data-qtcol] { min-height: 32px; }
   .tlink[data-memban], .tlink[data-memrm] { min-width: 32px; }
   /* the composer's close button does not cover the text */
   .c2 textarea { padding-right: 32px; }
@@ -3039,7 +3030,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     </div>
     <div class="knobs cs-knobs" id="kw-mweb" aria-label="Mobile Web controls">
       <span class="cs-kt">Mobile Web</span>
-      <div class="knob"><span>Thread toolbar</span><div class="seg" id="k-mtools"></div></div>
       <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
       <div class="knob"><span>Sheet animation</span><div class="seg" id="k-msanim"></div></div>
     </div>
@@ -4211,7 +4201,7 @@ function thRead(p) {
     ${thActs(p)}${fuSection(p)}${fuInput(p)}</article></div>`;
 }
 /* Document layout with the numbered source list in its sidebar */
-const viewToggle = p => `<div class="seg th-vt" role="group" aria-label="View">${[['docsrc', 'Document'], ['chat', 'Transcript']].map(([k, l]) => `<button type="button" data-thv="${k}" aria-pressed="${(st.thV === 'chat' ? 'chat' : 'docsrc') === k}">${l}</button>`).join('')}</div><button class="btn sm th-vtb" type="button" data-thv="${st.thV === 'chat' ? 'docsrc' : 'chat'}" aria-label="Switch to ${st.thV === 'chat' ? 'Document' : 'Transcript'}">${st.thV === 'chat' ? 'Document' : 'Transcript'}</button>`;
+const viewToggle = p => `<div class="seg th-vt" role="group" aria-label="View">${[['docsrc', 'Document'], ['chat', 'Transcript']].map(([k, l]) => `<button type="button" data-thv="${k}" aria-pressed="${(st.thV === 'chat' ? 'chat' : 'docsrc') === k}">${l}</button>`).join('')}</div>`;
 function thDocSrc(p) {
   let h = thDoc(p);
   if (p.k !== 'ask' || p.running || modOf('a:' + D.posts.indexOf(p))) return h;
@@ -7913,7 +7903,7 @@ function mwSheets(a) {
 function mwAfterRender() {
   { const k = $('kw-mweb'); if (k) k.style.display = st.device === 'phone' ? '' : 'none'; }
   const a = $('app'); if (!a || st.device === 'native') return;
-  a.dataset.mtools = st.mTools; a.dataset.mmenu = st.mMenu; a.dataset.msanim = st.msAnim;
+  a.dataset.mmenu = st.mMenu; a.dataset.msanim = st.msAnim;
   if (st.device !== 'phone') return;
   /* item menus open as bottom sheets: dim the page behind them, as the account menu does */
   const sheetMenu = st.imenu || st.dsMenu || st.qtMenu || ((st.mpOpen || st.tpMenu || st.pop || st.spOpen) && st.mMenu === 'sheet');
@@ -8642,9 +8632,7 @@ function qtSyncNotif() {
 }
 /* Mobile Web variants for places where the phone layout is a design choice. */
 function MWKNOBS() {
-  const onThread = () => { st.device = 'phone'; if (st.thread == null || D.posts[st.thread].k !== 'ask') jump('qt-deep'); st.device = 'phone'; };
   return [
-    ['k-mtools', 'mTools', [['icons', 'One row'], ['rows', 'Two rows'], ['toggle', 'One view button']], onThread],
     ['k-msanim', 'msAnim', [['slide', 'Slide up'], ['spring', 'Slide with overshoot'], ['fade', 'Fade and rise'], ['none', 'None']], () => { st.device = 'phone'; mwSheets.prev = new Set(); Object.assign(st, { umenu: true, pop: false, modal: null }); }],
     ['k-mmenu', 'mMenu', [['sheet', 'Bottom sheet'], ['wide', 'Full-width menu'], ['pop', 'As on desktop']], () => { st.device = 'phone'; jump('mb-ask'); st.device = 'phone'; st.mpOpen = true; }],
   ];
@@ -8654,7 +8642,7 @@ function MWKNOBS() {
 function qtOpenMap() { if (st.device === 'phone') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; } }
 function QTKNOBS() { return []; }
 st.thrV = 'fx';
-Object.assign(st, { mTools: 'icons', mMenu: 'sheet', msAnim: 'slide' });
+Object.assign(st, { mMenu: 'sheet', msAnim: 'slide' });
 qtSyncNotif();
 function qtReset() {
   sfReset();
