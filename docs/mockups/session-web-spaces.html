@@ -1476,6 +1476,8 @@ button.n-row:active { background: var(--n-fill); }
 .jd-pop:focus { outline: none; }
 .jd-gh { padding: 8px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t-faint); }
 .ds-hcard-m { margin: 4px 0 14px; }
+/* text boxes in the app grow with their text (see autosize) and have no resize handle */
+#app textarea { resize: none; }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
@@ -2886,7 +2888,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 
 /* composer */
 .qt-comp { border: 1px solid var(--border-strong); border-radius: var(--r-xl); background: var(--field); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.qt-comp textarea { width: 100%; resize: vertical; min-height: 44px; border: 0; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-input); line-height: 1.45; padding: 2px 0; }
+.qt-comp textarea { width: 100%; resize: none; min-height: 44px; border: 0; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-input); line-height: 1.45; padding: 2px 0; }
 .qt-comp textarea:focus { outline: none; }
 .qt-comp textarea::placeholder { color: var(--placeholder); }
 .qt-comp:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
@@ -8867,6 +8869,16 @@ function escFallback(e) {
   if (c) { c.click(); return; }
   if (st.mpOpen || st.spOpen || st.tpMenu || st.dd) { Object.assign(st, { mpOpen: false, spOpen: false, tpMenu: null, dd: null }); renderAll(); }
 }
+/* Text boxes grow with their text, up to half the window, then scroll. Runs on input and after each render. */
+function autosize(t) {
+  if (!t.getClientRects().length) return;
+  const max = Math.round(window.innerHeight * 0.5), edge = t.offsetHeight - t.clientHeight;
+  t.style.height = 'auto';
+  const h = t.scrollHeight + edge;
+  t.style.height = Math.min(h, max) + 'px';
+  t.style.overflowY = h > max ? 'auto' : 'hidden';
+}
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('#app textarea')) autosize(e.target); }, true);
 function renderKeepFocus() {
   const a = document.activeElement, id = a && a.id, c = a && 'selectionStart' in a ? [a.selectionStart, a.selectionEnd] : null;
   renderAll();
@@ -8879,6 +8891,7 @@ function renderAll() {
   const _st = _app && !moved ? _app.scrollTop : 0;
   const _fd = focusDesc(document.activeElement);
   renderAllInner();
+  document.querySelectorAll('#app textarea').forEach(autosize);
   focusAfterRender(_fd);
   if (renderAll.tint !== st.tint + st.appearance) { renderAll.tint = st.tint + st.appearance; applyTint(); }
   if (_app && _st) _app.scrollTop = _st;
