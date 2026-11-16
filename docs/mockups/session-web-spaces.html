@@ -3303,7 +3303,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
       <div class="knob"><span>Page view</span><div class="seg" id="k-abpage"></div></div>
       <div class="knob"><span>Skill preview</span><div class="seg" id="k-abskill"></div></div>
-      <div class="knob"><span>Skill editor</span><div class="seg" id="k-abske"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -8245,7 +8244,6 @@ function DSKNOBS() {
     /* About: where a page opens, how a skill previews, where the member list opens */
     ['k-abpage', 'abPageV', [['article', 'Article'], ['docs', 'Docs'], ['cover', 'Cover']], () => jump('ab-page')],
     ['k-abskill', 'abSkillV', [['summary', 'Summary'], ['full', 'Instructions'], ['file', 'SKILL.md']], () => jump('ab-skill')],
-    ['k-abske', 'abSkEditV', [['fields', 'Fields'], ['file', 'SKILL.md'], ['preview', 'Fields and preview']], () => jump('ab-skill-edit')],
   ];
 }
 
@@ -8304,7 +8302,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'summary', abSkEditV: 'fields', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'summary', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -9142,17 +9140,15 @@ const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
   if (ls.every(l => /^\d+\. /.test(l))) return `<ol>${ls.map(l => `<li>${il(l.replace(/^\d+\. /, ''))}</li>`).join('')}</ol>`;
   return `<p>${il(bk)}</p>`;
 }).join('');
-const abSkillUses = s => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 2);
 
 /* the preview dialog (Variants › Skill preview: Summary, Instructions, SKILL.md) */
 function abSkillDlg(s, i) {
-  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t), uses = abSkillUses(s), v = st.abSkillV;
-  const how = `<p class="cs-fine ab-f">The agent applies this skill when an ask matches the description. You can also start an ask with <code>/${esc(n)}</code>.</p>`;
-  const used = uses.length ? `<div class="ab-sku"><span class="ab-skl">Used in ${uses.length + 3} threads, recently</span>${uses.map(({ p, i: k }) => `<button class="ab-skt" type="button" data-open="${k}">${esc(qtClip(p.q, 80))}<small>${esc(p.u)} · ${p.age}</small></button>`).join('')}</div>` : '';
+  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t), v = st.abSkillV;
+  const how = `<p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
   let body;
-  if (v === 'file') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div>${how}${used}`;
-  else if (v === 'full') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skins"><span class="ab-skl">Instructions</span>${b ? `<div class="ab-md">${abMd(b)}</div>` : '<p class="faint cs-small">This skill has no instructions beyond its description.</p>'}</div>${how}${used}`;
-  else body = `<p class="ab-skd">${esc(d)}</p>${how}${b ? `<details class="ab-skdet"><summary>Instructions</summary><div class="ab-md">${abMd(b)}</div></details>` : ''}${used}`;
+  if (v === 'file') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div>${how}`;
+  else if (v === 'full') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skins"><span class="ab-skl">Instructions</span>${b ? `<div class="ab-md">${abMd(b)}</div>` : '<p class="faint cs-small">This skill has no instructions beyond its description.</p>'}</div>${how}`;
+  else body = `<p class="ab-skd">${esc(d)}</p>${how}${b ? `<details class="ab-skdet"><summary>Instructions</summary><div class="ab-md">${abMd(b)}</div></details>` : ''}`;
   const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-mono">${esc(n)}</span></span>`;
   return dlg(title, `<div class="ab-skp ab-skp-${v}">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', `modal cs-m ab-skm-d${v === 'file' ? ' wide' : ''}`);
 }
@@ -9170,32 +9166,30 @@ function abSkillsManage(s) {
   const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b class="ab-mono">${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
   return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Agent skills for asks in this space. The agent applies a skill when an ask matches its description; members can also choose one. Shown in About in this order.', `<div class="ab-skl-list">${rows || '<p class="muted cs-small">No skills yet.</p>'}</div><button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`)}</div>`;
 }
-/* the add and edit dialog (Variants › Skill editor: Fields, SKILL.md, Fields and preview) */
+/* the add and edit dialog: fields on the left, how the skill appears in About and its SKILL.md on the right */
 function abSkEdDlg() {
   const ed = st.abSkEd; if (!ed) return '';
-  const v = st.abSkEditV, isNew = ed.i === 'new', errs = abSkCheck(abSkVals(ed), st.mgSpace, ed.i), seen = ed.seen || {};
-  const em = f => seen[f] ? errs.filter(e => f === 'raw' || e[0] === f).map(e => e[1]).join(' ') : '';
+  const v = 'preview', isNew = ed.i === 'new', errs = abSkCheck(abSkVals(ed), st.mgSpace, ed.i), seen = ed.seen || {};
+  const em = f => seen[f] ? errs.filter(e => e[0] === f).map(e => e[1]).join(' ') : '';
   const errP = (id, f) => `<p class="ab-skerr" id="${id}-e" ${em(f) ? '' : 'hidden'}>${esc(em(f))}</p>`;
   const slug = abSkSlug(ed.n), sug = ed.n && slug && slug !== ed.n ? ` <button class="tlink" type="button" data-absk="slug">Use ${esc(slug)}</button>` : '';
   const fld = (id, label, extra, hint, inner) => `<div class="fld ab-skfld"><label for="${id}"><span>${label}</span>${extra || ''}</label>${inner}${hint ? `<p class="ab-skhint" id="${id}-h">${hint}</p>` : ''}${errP(id, id.slice(6))}</div>`;
   const fields = fld('ab-sk-n', 'Name', '', `Lowercase letters, numbers and hyphens, up to 64 characters. Members type it as <code>/name</code>.<span id="ab-sk-sug">${sug}</span>`, `<input id="ab-sk-n" class="ab-mono" type="text" value="${esc(ed.n)}" placeholder="summarizing-papers" autocomplete="off" spellcheck="false">`)
     + fld('ab-sk-d', 'Description', `<small class="ab-skc" id="ab-sk-dc">${ed.d.length} / 1,024</small>`, 'What the skill does and when to use it, in the third person. The agent reads it to decide whether the skill fits an ask.', `<textarea id="ab-sk-d" class="cs-ta" rows="3" placeholder="Summarizes a research paper: the claim, the method and the results. Use when someone gives an arXiv ID.">${esc(ed.d)}</textarea>`)
-    + fld('ab-sk-b', 'Instructions', '<small class="ab-skc">Markdown, optional</small>', 'The steps and output format the agent follows when it uses the skill. Leave out what the agent already knows.', `<textarea id="ab-sk-b" class="cs-ta ab-mono" rows="${v === 'preview' ? 9 : 7}" spellcheck="false" placeholder="## Steps&#10;1. …">${esc(ed.b)}</textarea>`);
-  const file = `<div class="ab-skcode edit"><div class="ab-skch"><span>SKILL.md</span><span class="faint cs-small">YAML frontmatter, then Markdown</span></div><textarea id="ab-sk-raw" class="ab-mono" rows="15" spellcheck="false" aria-label="SKILL.md">${esc(ed.raw)}</textarea></div>${errP('ab-sk-raw', 'raw')}<p class="ab-skhint">Required: <code>name</code> (lowercase letters, numbers and hyphens, up to 64 characters) and <code>description</code> (what the skill does and when to use it, up to 1,024 characters). The instructions follow the second --- line.</p>`;
+    + fld('ab-sk-b', 'Instructions', '<small class="ab-skc">Markdown, optional</small>', 'The steps and output format the agent follows when it uses the skill. Leave out what the agent already knows.', `<textarea id="ab-sk-b" class="cs-ta ab-mono" rows="9" spellcheck="false" placeholder="## Steps&#10;1. …">${esc(ed.b)}</textarea>`);
   const prev = `<aside class="ab-skprev" aria-label="Preview"><span class="ab-skl">In About</span><div class="sk-row ab-skrp"><span class="sk-ic" id="ab-sk-pi">${skillIcon(ed.n || 'x')}</span><span class="sk-tx"><b class="ab-mono" id="ab-sk-pn">${esc(ed.n || 'name')}</b><small id="ab-sk-pd">${esc(ed.d || 'Description')}</small></span></div><span class="ab-skl">SKILL.md</span><pre class="ab-skpre" id="ab-sk-pf">${esc(abSkFile(ed.n, ed.d, ed.b))}</pre></aside>`;
-  const body = v === 'file' ? file : v === 'preview' ? `<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>` : `<div class="ab-ske">${fields}</div>`;
+  const body = `<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>`;
   const imp = `<label class="tlink ab-skimp">Import a SKILL.md file<input id="ab-sk-file" type="file" accept=".md,text/markdown,text/plain" hidden></label>`;
   return `<div class="modal-scrim"><div class="modal cs-m ab-sked ab-sked-${v}" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">${isNew ? 'Add a skill' : 'Edit skill'}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${body}<div class="modal-f">${imp}<span style="flex:1"></span>${cancelB()}<button class="btn primary" type="button" data-absk="save">${isNew ? 'Add skill' : 'Save'}</button></div></div></div>`;
 }
-/* the values the dialog would save, from the fields or from the file */
-const abSkVals = ed => st.abSkEditV === 'file' ? abSkReadFile(ed.raw) : { n: ed.n.trim(), d: ed.d.trim(), b: ed.b.trim(), bad: false };
+/* the values the dialog would save */
+const abSkVals = ed => ({ n: ed.n.trim(), d: ed.d.trim(), b: ed.b.trim(), bad: false });
 /* update counters, errors, the name suggestion and the preview in place (no re-render while typing) */
 function abSkRefresh(showAll) {
   const ed = st.abSkEd; if (!ed) return;
   const x = abSkVals(ed), errs = abSkCheck(x, st.mgSpace, ed.i), seen = ed.seen || {};
   const set = (id, t) => { const e = document.getElementById(id); if (e) { e.hidden = !t; e.textContent = t || ''; } };
-  if (st.abSkEditV === 'file') set('ab-sk-raw-e', (showAll || seen.raw) && errs.length ? errs.map(e => e[1]).join(' ') : '');
-  else ['n', 'd'].forEach(f => set(`ab-sk-${f}-e`, (showAll || seen[f]) ? (errs.filter(e => e[0] === f).map(e => e[1]).join(' ')) : ''));
+  ['n', 'd'].forEach(f => set(`ab-sk-${f}-e`, (showAll || seen[f]) ? (errs.filter(e => e[0] === f).map(e => e[1]).join(' ')) : ''));
   const dc = $('ab-sk-dc'); if (dc) { dc.textContent = `${ed.d.length.toLocaleString('en-US')} / 1,024`; dc.classList.toggle('over', ed.d.length > 1024); }
   const sug = $('ab-sk-sug'), slug = abSkSlug(ed.n); if (sug) sug.innerHTML = ed.n && slug && slug !== ed.n ? ` <button class="tlink" type="button" data-absk="slug">Use ${esc(slug)}</button>` : '';
   const pn = $('ab-sk-pn'); if (pn) { pn.textContent = ed.n || 'name'; $('ab-sk-pd').textContent = ed.d || 'Description'; $('ab-sk-pf').textContent = abSkFile(ed.n, ed.d, ed.b); $('ab-sk-pi').innerHTML = skillIcon(ed.n || 'x'); }
@@ -9203,7 +9197,7 @@ function abSkRefresh(showAll) {
 }
 function abSkOpen(sid, i) {
   const list = D.skills[sid] || [], [n, t] = i === 'new' ? ['', ''] : list[i], { d, b } = abSkParse(t);
-  st.abSkEd = { i, n, d, b, raw: i === 'new' ? abSkFile('', '', '## Steps\n1. ') : abSkFile(n, d, b), seen: {} };
+  st.abSkEd = { i, n, d, b, seen: {} };
   st.modal = 'ab-sked';
 }
 /* drag to reorder (pointer events, so touch works too) */
@@ -9241,7 +9235,7 @@ on($('app'), 'change', e => {
   if (e.target.id !== 'ab-sk-file' || !e.target.files[0]) return;
   e.target.files[0].text().then(raw => {
     const x = abSkReadFile(raw); if (!st.abSkEd) return;
-    patch('abSkEd', ed => { ed.raw = raw; if (!x.bad) { ed.n = x.n; ed.d = x.d; ed.b = x.b; } ed.seen = { n: 1, d: 1, raw: 1 }; });
+    patch('abSkEd', ed => { if (!x.bad) { ed.n = x.n; ed.d = x.d; ed.b = x.b; } ed.seen = { n: 1, d: 1 }; });
     renderAll(); abSkRefresh(true); toast(x.bad ? 'The file has no name and description at the top.' : `Imported ${x.n || 'the skill'}.`);
   });
 });
@@ -9354,7 +9348,7 @@ on($('app'), 'click', e => {
     if (v === 'slug') { patch('abSkEd', x => { x.n = abSkSlug(x.n); x.seen = { ...x.seen, n: 1 }; }); const el = $('ab-sk-n'); if (el) { el.value = st.abSkEd.n; el.focus(); } abSkRefresh(); return true; }
     if (v === 'save') {
       const ed = st.abSkEd, x = abSkVals(ed), errs = abSkCheck(x, sid, ed.i);
-      if (errs.length) { patch('abSkEd', y => { y.seen = { n: 1, d: 1, raw: 1 }; }); abSkRefresh(true); const f = errs[0][0], el = $(st.abSkEditV === 'file' ? 'ab-sk-raw' : 'ab-sk-' + f); if (el) el.focus(); return true; }
+      if (errs.length) { patch('abSkEd', y => { y.seen = { n: 1, d: 1 }; }); abSkRefresh(true); const f = errs[0][0], el = $('ab-sk-' + f); if (el) el.focus(); return true; }
       const row = [x.n, abSkJoin(x.d, x.b)];
       db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y));
       Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
@@ -9374,7 +9368,7 @@ on($('app'), 'input', e => {
   const el = e.target, id = el.id, v = el.value;
   if (id === 'ab-pg-t' || id === 'ab-pg-b') { patch('abPageEd', x => { x[id === 'ab-pg-t' ? 't' : 'b'] = v; }); const b = document.querySelector('[data-abpged="save"]'); if (b) b.disabled = !st.abPageEd.t.trim(); }
   if (id === 'ab-mem-q') { st.abMemQ = v; const c = el.selectionStart; renderAll(); const i = $('ab-mem-q'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } }
-  if (/^ab-sk-(n|d|b|raw)$/.test(id) && st.abSkEd) { const f = id.slice(6); patch('abSkEd', x => { x[f] = v; x.seen = { ...x.seen, [f]: 1 }; }); abSkRefresh(); }
+  if (/^ab-sk-(n|d|b)$/.test(id) && st.abSkEd) { const f = id.slice(6); patch('abSkEd', x => { x[f] = v; x.seen = { ...x.seen, [f]: 1 }; }); abSkRefresh(); }
   if (id === 'ab-desc' || /^ab-rule-\d+$/.test(id)) { const was = csDirty(); csEdit(x => { if (id === 'ab-desc') x.desc = v; else x.rules[+id.slice(8)] = v; }); if (was !== csDirty()) { const c = el.selectionStart; renderAll(); csRefocus(id, c); } }
 });
 on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => { x.pageEdit = e.target.value; }); renderAll(); } });
@@ -9406,7 +9400,7 @@ function abJump(k) {
       Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'skills', home: false });
       if (k === 'ab-skill-rm') { st.modal = 'ab-skrm:2'; break; }
       abSkOpen('ml', k === 'ab-skill-edit' ? 0 : 'new');
-      if (k === 'ab-skill-err') st.abSkEd = { ...st.abSkEd, n: 'Summarize a paper', d: '', raw: abSkFile('Summarize a paper', '', '## Steps'), seen: { n: 1, d: 1, raw: 1 } };
+      if (k === 'ab-skill-err') st.abSkEd = { ...st.abSkEd, n: 'Summarize a paper', d: '', seen: { n: 1, d: 1 } };
       break;
     }
     case 'ab-skills-mg': Object.assign(st, { subPage: 'manage', mgSpace: 'scifi', space: 'scifi', mgTab: 'skills', home: false }); break;
