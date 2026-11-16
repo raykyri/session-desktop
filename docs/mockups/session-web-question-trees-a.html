@@ -2646,6 +2646,11 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-olbtn { display: none; }
 .qt-grid { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 36px; padding: 14px 40px 0; max-width: 1060px; margin: 0 auto; }
 .qt-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.qt-chat { padding: 0; }
+.qt-chat .ch-stream { margin-top: 4px; }
+.qt-trmore { margin: -6px 0 6px 34px; }
+.qt-trask { margin-top: 12px; }
+.qt-aside .ds-src { margin: 0; }
 .qt-aside { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 16px; max-height: calc(100dvh - 140px); overflow-y: auto; scrollbar-width: thin; }
 .qt-from { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-muted); border: 1px solid var(--divider); background: var(--pane); border-radius: var(--r-lg); padding: 8px 12px; }
 .qt-from svg { width: 13px; height: 13px; }
@@ -3415,7 +3420,7 @@ function thDoc(p) {
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
       ${fuInput(p)}${relatedHTML(p)}</article>
     <aside class="th-aside">
-      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Paid from</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
+      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Token use</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
 }
 function layoutThread() {
   const p = POSTS[st.thread];
@@ -3684,7 +3689,7 @@ function thChat(p) {
   if (p.k !== 'ask') return thRead(p);
   const um = (u, age, txt) => `<div class="ch-m ch-u">${avatar(u, 'sm')}<div><div class="ch-h">${au(u)}<span>${age}</span></div><p>${esc(txt)}</p></div></div>`;
   const pid = POSTS.indexOf(p), am = (html, foot, key) => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b>${key && modOf(key) !== 'removed' ? itemMenu(key) : ''}</div>${key && modOf(key) ? modPh(key, key[0] === 'a' ? 'answer' : 'follow-up answer') : html}${foot || ''}</div></div>`;
-  const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Paid from<\/span><b>[^<]*<\/b><\/div>/, '');
+  const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Token use<\/span><b>[^<]*<\/b><\/div>/, '');
   const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
   return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}${relatedHTML(p)}</article>${aside}</div>`;
 }
@@ -7628,7 +7633,7 @@ function qtMenu(T, n) {
 function qtNodeActs(T, n) {
   const key = `${T.i}:${n.id}`, sv = st.qtSaved.has(key);
   const ask = !n.running ? `<button class="btn sm" type="button" data-qtaskat="${n.id}">${QTI.ask}Ask about this answer</button>` : '';
-  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Paid from ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
+  return `<div class="qt-acts">${ask}<button class="act sf-im qt-save" type="button" data-qtsave="${n.id}" aria-pressed="${sv}" aria-label="${sv ? 'Saved' : 'Save this ask'}" title="${sv ? 'Saved' : 'Save this ask'}">${I.mark}</button><span class="grow"></span>${n.tok && !n.running ? `<span class="num" title="Token use: ${esc(qtPaidBy(T, n))}">${fmt(n.tok)} tokens</span>` : ''}${qtMenu(T, n)}</div>`;
 }
 function qtHead(T, n) {
   const par = T.by[n.par];
@@ -7657,7 +7662,7 @@ function qtOutline(T, cur) {
 }
 function qtFacts(T) {
   const p = T.p, s = sp(p.s);
-  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Answered by</span><b>${MODEL_NAME}</b></div></div>`;
+  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Tokens, all asks</span><b class="num">${fmt(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? `${spName(s)} extra tokens` : 'Each asker’s API key'}</b></div><div><span>Answered by</span><b>${MODEL_NAME}</b></div></div>`;
 }
 
 /* ---------- compare ---------- */
@@ -7679,7 +7684,7 @@ function qtBar(T, cur) {
   const p = T.p, n = T.nodes.length;
   const t = (k, icon, lbl, on, extra = '') => `<button class="btn sm${extra}" type="button" data-qt="${k}" aria-pressed="${!!on}">${icon}${lbl}</button>`;
   const from = p.from ? `<div class="qt-from">${QTI.out}<span>Branched from</span><button class="tlink" type="button" data-qtopen="${p.from.th}:${p.from.node}">${esc(qtClip(POSTS[p.from.th].t || POSTS[p.from.th].q, 70))}, level ${p.from.lv}</button></div>` : '';
-  const tools = n > 1 ? `<div class="qt-tools">${t('map', QTI.map, 'Map', st.modal === 'qt-map')}${t('olsheet', QTI.tree, 'Outline', st.modal === 'qt-outline', ' qt-olbtn')}${cur.id !== 'r' ? t('top', QTI.up, 'Question', false) : ''}</div>` : '';
+  const tools = `<div class="qt-tools">${viewToggle(p)}${n > 1 ? `${t('map', QTI.map, 'Map', st.modal === 'qt-map')}${t('olsheet', QTI.tree, 'Outline', st.modal === 'qt-outline', ' qt-olbtn')}${cur.id !== 'r' ? t('top', QTI.up, 'Question', false) : ''}` : ''}</div>`;
   return `<div class="qt-bar">${thHead(p)}${tools}</div>${from ? `<div class="qt-bar" style="padding-top:10px">${from}</div>` : ''}`;
 }
 
@@ -7714,9 +7719,28 @@ function qtNestView(T, cur) {
     ${st.qtAskAt === top.id ? qtComposer(T, top.id, { cancel: true }) : ''}
     <div class="qt-nest">${next ? qtOthers(T, top, next) + qtBranch(T, next, top, path) : qtOthers(T, top, null)}</div>
     ${rootAsk && !top.running ? `<div class="qt-rootask"><h3>Ask a follow-up to the question</h3>${qtComposer(T, 'r')}</div>` : ''}</article>${top.id === 'r' ? relatedHTML(T.p) : ''}`;
-  return `${qtBar(T, cur)}<div class="qt-grid"><div class="qt-main">${main}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtFacts(T)}</aside></div>`;
+  const body = st.thV === 'chat' && !st.qtCmp ? qtTranscript(T, cur) : main;
+  return `${qtBar(T, cur)}<div class="qt-grid"><div class="qt-main">${body}</div><aside class="qt-aside">${qtOutline(T, cur)}${qtSrcList(T)}${qtFacts(T)}</aside></div>`;
 }
 
+/* ---------- sources of the question's answer, in the side column ---------- */
+function qtSrcList(T) {
+  const r = T.nodes[0]; if (r.running || modOf(r.rep)) return '';
+  const src = srcItems(T.p), mis = miSrc(T.p, src);
+  if (mis) return mis.d;
+  return src.length ? `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>` : '';
+}
+/* ---------- transcript: the path to the selected ask as a conversation ----------
+   The question, its answer and each ask on the path to the selected ask, in order. The outline
+   switches branches; the composer asks about the last answer on the path. */
+function qtTranscript(T, cur) {
+  const path = T.path(cur.id), last = path[path.length - 1];
+  const um = n => `<div class="ch-m ch-u">${avatar(n.u, 'sm')}<div><div class="ch-h">${au(n.u)}<span>${n.age}</span>${n.id !== 'r' ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p>${esc(n.q)}</p></div></div>`;
+  const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : `<div class="ch-cost num">${fmt(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
+  const more = n => { const k = qtVisKids(T, n.id).filter(x => !path.includes(x)).length; return k ? `<p class="qt-trmore faint cs-small">${k} other question${k > 1 ? 's' : ''} about this answer, in the outline</p>` : ''; };
+  const stream = path.map(n => um(n) + am(n) + more(n)).join('');
+  return `<div class="ch ch-divided qt-chat">${miAbout(T.p)}<div class="ch-stream">${stream}</div>${last.running ? '' : `<div class="qt-trask">${qtComposer(T, last.id)}</div>`}</div>${relatedHTML(T.p)}`;
+}
 /* ---------- map dialog ---------- */
 function qtMapLayout(T) {
   const W = 196, H = 62, GX = 46, GY = 14, pos = {};
