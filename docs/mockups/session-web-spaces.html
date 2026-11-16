@@ -1115,7 +1115,7 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-lt.sm { font-size: 28.85px; }
 .n-bar-root { grid-template-columns: minmax(0, 1fr) auto; }
 .n-bar-h { margin: 0; padding-left: 8px; font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Phone › Composer › Inline */
+/* phone composer (inline above the feed) */
 .n-icomp-f { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--n-fill, var(--fill-subtle)); color: var(--t-faint); font: inherit; font-size: 15px; text-align: left; }
 .n-icomp-f svg { width: 18px; height: 18px; flex: none; }
 .n-icomp { position: relative; border-radius: 14px; background: var(--n-cell, var(--pane)); border: 1px solid var(--divider); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -1129,6 +1129,7 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-chip svg { width: 12px; height: 12px; flex: none; color: var(--t-faint); }
 .n-icomp-x { position: absolute; top: 4px; right: 6px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 15px; padding: 0 6px; height: 32px; }
 .n-icomp .n-capbtn { height: 32px; padding: 0 14px; }
+.n-icomp .n-capbtn:disabled { opacity: .4; }
 .n-icomp-m { margin: 0; font-size: 12px; color: var(--t-faint); }
 .n-icomp-m .tlink { font-size: 12px; }
 .n-pad { padding: 0 16px 10px; }
@@ -3027,10 +3028,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><span>Thread toolbar</span><div class="seg" id="k-mtools"></div></div>
       <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
       <div class="knob"><span>Thread map</span><div class="seg" id="k-mmap"></div></div>
-    </div>
-    <div class="knobs cs-knobs" id="kw-native" aria-label="Phone controls">
-      <span class="cs-kt">Phone</span>
-      <div class="knob"><span>Composer</span><div class="seg" id="k-ncomp"></div></div>
     </div>
     <div class="knobs cs-knobs" aria-label="Ask thread controls">
       <span class="cs-kt">Ask threads</span>
@@ -5202,8 +5199,6 @@ const KNOBDEF = () => [
   ...DSKNOBS(),
   ...QTKNOBS(),
   ...MWKNOBS(),
-  /* Phone: the compose sheet from the header button, or a composer inline above the feed */
-  ['k-ncomp', 'nComp', [['sheet', 'Sheet from the header'], ['inline', 'Inline above the feed']], () => { st.device = 'native'; Object.assign(nst, { tab: 'home', stack: [], sheet: null, inl: false }); }],
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -5212,7 +5207,6 @@ function renderControls() {
   seg($('k-theme'), [['light', 'Light'], ['dark', 'Dark']], 'appearance', () => { try { localStorage.setItem('session-web-appearance', st.appearance); } catch (e) {} });
   seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
-  { const k = $('kw-native'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }
   /* Data: the mock backend's latency and failures */
   seg($('k-api'), [['normal', 'Normal (120 ms)'], ['slow', 'Slow (1.2 s)'], ['fail', 'Writes fail']], 'apiMode', applyApiMode);
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
@@ -5297,26 +5291,28 @@ function nCell(p) {
 }
 const nFeed = list => `<div class="n-feed">${list.map(nCell).join('') || '<p class="n-empty">Nothing here yet.</p>'}</div>`;
 
-/* Phone › Composer › Inline: a field above the feed on Home and in a space that opens in place,
-   instead of the compose sheet from the header button. In a space, the ask or post goes to that space. */
-const nInlineOn = () => st.nComp === 'inline';
+/* The phone composer: a field above the feed on Home and in a joined space that opens in place.
+   In a space, the ask or post goes to that space.
+   On Home the All / Asks / Posts filter sets what it makes: Asks an ask, Posts a post, All shows the Ask/Post toggle. */
 let nInlineFocus = false;
 function nInline(sid) {
-  if (!nInlineOn()) return '';
-  const at = sid || 'home', field = act => `<div class="n-pad"><button class="n-icomp-f" type="button" data-n="${act}">${NI.compose}<span>Make a query, or write a post…</span></button></div>`;
+  const at = sid || 'home', f = sid ? 'all' : nst.homeF;
+  const ph = f === 'ask' ? 'Make a query…' : f === 'post' ? 'Write a post…' : 'Make a query, or write a post…';
+  const field = act => `<div class="n-pad"><button class="n-icomp-f" type="button" data-n="${act}">${NI.compose}<span>${ph}</span></button></div>`;
   if (!nSignedIn()) return field('sheet:signin');
   if (!nst.inl || nst.inlAt !== at) return field('inline:' + at);
-  const x = sp(nst.cSpace), ask = nst.cMode === 'ask' || !!x.postsOff, pay = !ask || nCanPay(x);
-  const note = ask ? (pay ? `Gemini 4 Argon · ${esc(nProvider(x))}` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : 'Posts use no tokens.';
+  const x = sp(nst.cSpace), ask = f === 'ask' || (f === 'all' && (nst.cMode === 'ask' || !!x.postsOff));
+  const off = !ask && !!x.postsOff, pay = ask ? nCanPay(x) : !off;
+  const note = ask ? (pay ? `Gemini 4 Argon · ${esc(nProvider(x))}` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : off ? `Posts are turned off in ${spName(x)}. Choose another space.` : 'Posts use no tokens.';
   return `<div class="n-pad"><div class="n-icomp"><textarea id="n-draft" class="n-draft n-idraft" rows="3" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>`
-    + `<div class="n-icomp-r">${nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : [])}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}<span class="grow"></span>`
+    + `<div class="n-icomp-r">${f === 'all' ? nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : []) : ''}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}<span class="grow"></span>`
     + `<button class="n-icomp-x" type="button" data-n="inline:close">Cancel</button><button class="n-capbtn" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && pay ? '' : ' disabled'}>${ask ? 'Ask' : 'Post'}</button></div>`
     + `<p class="n-icomp-m">${note}</p></div></div>`;
 }
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
   const posts = D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
-  return { body: `${nRootBar(nInlineOn() ? '' : nBtn('sheet:compose', NI.compose, 'New ask or post'), nSignedIn() ? 'Home' : 'Everything on Session')}${nInline(null)}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nFeed(posts)}` };
+  return { body: `${nRootBar('', nSignedIn() ? 'Home' : 'Everything on Session')}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${nFeed(posts)}` };
 }
 function nSpacesRoot() {
   const order = st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces();
@@ -5338,7 +5334,7 @@ function nSpace(id) {
     const r = relOf(id), cta = r === 'out' ? `<button class="n-capbtn" type="button" data-n="sheet:signin">Log in</button>` : r === 'pending' ? '<span class="n-val">Request sent</span>' : x.policy === 'request' ? `<button class="n-capbtn" type="button" data-n="join:${id}">Request to join</button>` : `<span class="n-val">${policyLabel(x)}</span>`;
     return { body: `${nPushBar(nNameH(x), nBtn('sheet:wiki', NI.info, 'About this space'))}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span><span>${fmt(x.members)} members</span></div>${cta}</div><p class="n-empty">Threads in ${spName(x)} are visible to members only.</p>` };
   }
-  const right = nBtn('sheet:wiki', NI.info, 'About this space') + (nInlineOn() && j ? '' : nBtn('sheet:compose', NI.compose, 'New ask or post'));
+  const right = nBtn('sheet:wiki', NI.info, 'About this space');
   return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${j || !nSignedIn() ? nInline(id) : ''}${nFeed(postsFor(id))}` };
 }
 /* Follow-ups of an ask thread, from the same data as the web: with question trees on, the asks about
@@ -5426,14 +5422,6 @@ function nSheet() {
     const ok = KEY_RE.test(nst.keyDraft.trim());
     return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-page" role="dialog" aria-label="Add API key"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Cancel</button><b>Add API key</b><button class="n-tb" type="button" data-n="addkey-save" id="n-ak-save"${ok ? '' : ' disabled'}><b>Add</b></button></div><div class="n-sheet-sc">${nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-ak-name" type="text" placeholder="Optional" value="${esc(nst.keyName)}"></label>`, `<label class="n-row n-field"><span>Key</span><input id="n-ak-key" type="password" placeholder="sk-… or AIza…" autocomplete="off" value="${esc(nst.keyDraft)}"></label>`], nst.keyErr ? `<span class="n-bad">${esc(nst.keyErr)}</span>` : 'Paste a key from your provider. Keys start with sk- or AIza.')}</div></div>`;
   }
-  if (k === 'compose') {
-    if (sp(nst.cSpace).postsOff) nst.cMode = 'ask';
-    const ask = nst.cMode === 'ask', x = sp(nst.cSpace);
-    if (nst.sub === 'space') return `<div class="n-scrim"></div><div class="n-sheet n-page" role="dialog" aria-label="Choose a space"><div class="n-sheet-bar"><button class="n-back" type="button" data-n="sub:">${NI.back}<span>Back</span></button><b>Space</b><span></span></div><div class="n-sheet-sc">${nGroup('', D.spaces.filter(y => D.joined.includes(y.id)).map(y => `<button class="n-row" type="button" data-n="cspace:${y.id}">${glyph(y, 'n-gl')}<span class="n-row-b"><b>${nNameH(y)}</b></span>${y.id === nst.cSpace ? `<span class="n-check">✓</span>` : ''}</button>`))}</div></div>`;
-    const rows = [`<button class="n-row" type="button" data-n="sub:space"><span class="n-row-b"><b>Space</b></span><span class="n-val">${nNameH(x)}</span><span class="n-chev">${NI.chev}</span></button>`];
-    if (ask) rows.push(`<div class="n-row"><span class="n-row-b"><b>Model</b></span><span class="n-val">Gemini 4 Argon</span></div>`, `<div class="n-row"><span class="n-row-b"><b>Web search</b></span>${nSwitch(nst.web, 'web', 'Web search')}</div>`, `<div class="n-row"><span class="n-row-b"><b>Provider</b></span><span class="n-val">${esc(nProvider(x))}</span></div>`);
-    return `<div class="n-scrim"></div><div class="n-sheet n-page" role="dialog" aria-label="New ${ask ? 'ask' : 'post'}"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Cancel</button>${nSeg([['ask', 'Ask'], ['post', 'Post']], nst.cMode, 'cmode', x.postsOff ? ['post'] : [])}<button class="n-tb" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && (!ask || nCanPay(x)) ? '' : ' disabled'}><b>${ask ? 'Ask' : 'Post'}</b></button></div><div class="n-sheet-sc">${x.postsOff ? `<p class="n-grp-f n-postsoff">Posts are turned off in ${spName(x)}. You can still reply to existing posts.</p>` : ''}<textarea id="n-draft" class="n-draft" placeholder="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>${nGroup('', rows, ask ? (nCanPay(x) ? '' : `${spName(x)} has no extra tokens. Add an API key to ask here.`) : 'Posts use no tokens.')}${ask && !nCanPay(x) ? `<div class="n-pad"><button class="n-cap" type="button" data-n="tokeys">Add an API key</button></div>` : ''}</div></div>`;
-  }
   return '';
 }
 
@@ -5456,22 +5444,19 @@ function nClick(e) {
   if (k === 'back') return nGo(() => { nst.stack = nst.stack.slice(0, -1); nst.fu = ''; });
   if (k === 'close') return nGo(() => { nst.sheet = null; nst.sub = null; nst.keyErr = ''; });
   if (k === 'sheet') return nGo(() => {
-    if (a === 'compose') { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const t = nTop(); nst.cSpace = t && t.v === 'space' ? t.id : t && t.v === 'thread' ? D.posts[t.id].s : 'public'; nst.draft = ''; nst.sub = null; }
     if (a === 'addkey') { nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; }
     nst.sheet = a;
   });
-  if (k === 'sub') return nGo(() => { nst.sub = a || null; });
-  if (k === 'cspace') return nGo(() => { nst.cSpace = a; nst.sub = null; });
   /* inline composer: open it on Home or in a space, close it, pick its space */
   if (k === 'inline') return nGo(() => {
     if (a === 'close') { nst.inl = false; nst.draft = ''; return; }
-    nst.inl = true; nst.inlAt = a; nst.cMode = 'ask'; nInlineFocus = true;
+    nst.inl = true; nst.inlAt = a; nst.cMode = a === 'home' && nst.homeF === 'post' ? 'post' : 'ask'; nInlineFocus = true;
     nst.cSpace = a !== 'home' ? a : D.joined.includes(nst.cSpace) ? nst.cSpace : D.joined[0] || 'public';
   });
-  if (k === 'icspace') return nGo(() => { nst.cSpace = a; nst.sheet = null; if (sp(a).postsOff) nst.cMode = 'ask'; nInlineFocus = true; });
+  if (k === 'icspace') return nGo(() => { nst.cSpace = a; nst.sheet = null; if (sp(a).postsOff && nst.homeF !== 'post') nst.cMode = 'ask'; nInlineFocus = true; });
   if (k === 'cmode') return nGo(() => { nst.cMode = a; });
   if (k === 'web') return nGo(() => { nst.web = !nst.web; });
-  if (k === 'homef') return nGo(() => { nst.homeF = a; });
+  if (k === 'homef') return nGo(() => { nst.homeF = a; if (a !== 'all') nst.cMode = a; });
   if (k === 'seg') return nGo(() => { nst.seg = a; });
   if (k === 'appear') return nGo(() => { st.appearance = a; try { localStorage.setItem('session-web-appearance', a); } catch (x) {} });
   if (k === 'edit') return nGo(() => { nst.edit = !nst.edit; });
@@ -5489,7 +5474,8 @@ function nClick(e) {
   });
   if (k === 'tokeys') return nGo(() => { nst.sheet = null; nst.sub = null; nst.stack = [...nst.stack, { v: 'keys', id: '' }]; });
   if (k === 'submit') return nGo(() => {
-    const kind = sp(nst.cSpace).postsOff ? 'ask' : nst.cMode;
+    if (nst.cMode === 'post' && sp(nst.cSpace).postsOff) return;
+    const kind = nst.cMode;
     if (kind === 'ask' && !nCanPay(sp(nst.cSpace))) return;
     Object.assign(st, { home: false, space: nst.cSpace, draft: nst.draft });
     createThread(kind);
@@ -5507,7 +5493,7 @@ function nClick(e) {
 function nInput(e) {
   const id = e.target.id, v = e.target.value;
   if (id === 'n-sq') { nst.sq = v; const c = e.target.selectionStart; renderAll(); const i = $('n-sq'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } return; }
-  if (id === 'n-draft') { nst.draft = v; const s = $('n-submit'), x = sp(nst.cSpace); if (s) s.disabled = !v.trim() || ((x.postsOff || nst.cMode === 'ask') && !nCanPay(x)); }
+  if (id === 'n-draft') { nst.draft = v; const s = $('n-submit'), x = sp(nst.cSpace); if (s) s.disabled = !v.trim() || (nst.cMode === 'post' ? !!x.postsOff : !nCanPay(x)); }
   if (id === 'n-fu') { nst.fu = v; const s = document.querySelector('.n-send'); if (s) s.disabled = !v.trim(); }
   if (id === 'n-ak-name') nst.keyName = v;
   if (id === 'n-ak-key') { nst.keyDraft = v; nst.keyErr = ''; const s = $('n-ak-save'); if (s) s.disabled = !KEY_RE.test(v.trim()); }
@@ -5515,7 +5501,7 @@ function nInput(e) {
 function renderNative() {
   $('app').innerHTML = nativeApp();
   const sc = $('n-scr'); if (sc) sc.scrollTop = nst.scroll[nKey()] || 0;
-  if ((nst.sheet === 'compose' && !nst.sub) || (nInlineFocus && !nst.sheet)) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
+  if (nInlineFocus && !nst.sheet) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
 }
 
 /* ================= closed spaces =================
@@ -8665,7 +8651,7 @@ function QTKNOBS() {
   }]];
 }
 st.thrV = 'qt';
-Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas', nComp: 'sheet' });
+Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas' });
 qtSyncNotif();
 function qtReset() {
   sfReset();
