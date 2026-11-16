@@ -1,4 +1,4 @@
-<title>Session Web - Main</title>
+<title>Session - Main</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style id="app-css">
 /* Valley Sans 100–900 variable (SIL OFL 1.1), the file bundled in web/packages/client/src/assets/fonts. Not on Google Fonts, so embedded. */
@@ -1113,6 +1113,24 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-tb:disabled { color: var(--t-dim); }
 .n-lt { font-size: 32.95px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; color: var(--t-heading); margin: 2px 16px 10px; }
 .n-lt.sm { font-size: 28.85px; }
+.n-bar-root { grid-template-columns: minmax(0, 1fr) auto; }
+.n-bar-h { margin: 0; padding-left: 8px; font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Phone › Composer › Inline */
+.n-icomp-f { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--n-fill, var(--fill-subtle)); color: var(--t-faint); font: inherit; font-size: 15px; text-align: left; }
+.n-icomp-f svg { width: 18px; height: 18px; flex: none; }
+.n-icomp { position: relative; border-radius: 14px; background: var(--n-cell, var(--pane)); border: 1px solid var(--divider); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.n-icomp .n-idraft { min-height: 72px; margin: 0; padding: 0 64px 0 0; border: 0; background: transparent; }
+.n-icomp-r { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.n-icomp-r .grow { flex: 1; }
+.n-icomp-r .n-seg { width: auto; margin: 0; }
+.n-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; max-width: 150px; padding: 0 8px 0 4px; border-radius: 999px; border: 1px solid var(--divider); background: transparent; color: var(--t-strong); font: inherit; font-size: 13px; }
+.n-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.n-chip .n-gl { width: 22px; height: 22px; font-size: 11px; border-radius: 6px; }
+.n-chip svg { width: 12px; height: 12px; flex: none; color: var(--t-faint); }
+.n-icomp-x { position: absolute; top: 4px; right: 6px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 15px; padding: 0 6px; height: 32px; }
+.n-icomp .n-capbtn { height: 32px; padding: 0 14px; }
+.n-icomp-m { margin: 0; font-size: 12px; color: var(--t-faint); }
+.n-icomp-m .tlink { font-size: 12px; }
 .n-pad { padding: 0 16px 10px; }
 .n-pad0 { padding: 6px 0 4px; }
 /* tab bar */
@@ -2990,7 +3008,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 <div class="shell" id="shell">
   <div class="ctl">
     <div class="knobs">
-      <span class="mock-title">Session Web</span><button class="btn sm ctl-toggle" id="ctl-toggle" type="button" aria-expanded="false">Controls</button>
+      <span class="mock-title">Session</span><button class="btn sm ctl-toggle" id="ctl-toggle" type="button" aria-expanded="false">Controls</button>
       <div class="knob-meta">
       <div class="knob"><div class="seg k-grp"><button class="k-reset" id="k-reset" type="button" title="Reset controls to their defaults (keeps the theme)" aria-label="Reset controls to their defaults"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4"/><path d="M4 6.2v7h3v-3.4h2v3.4h3v-7"/></svg></button><span class="k-sep" aria-hidden="true"></span><div id="k-theme" class="k-inner"></div></div></div>
       <div class="knob"><div class="seg" id="k-auth"></div></div>
@@ -3009,6 +3027,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><span>Thread toolbar</span><div class="seg" id="k-mtools"></div></div>
       <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
       <div class="knob"><span>Thread map</span><div class="seg" id="k-mmap"></div></div>
+    </div>
+    <div class="knobs cs-knobs" id="kw-native" aria-label="Phone controls">
+      <span class="cs-kt">Phone</span>
+      <div class="knob"><span>Composer</span><div class="seg" id="k-ncomp"></div></div>
     </div>
     <div class="knobs cs-knobs" aria-label="Ask thread controls">
       <span class="cs-kt">Ask threads</span>
@@ -5180,6 +5202,8 @@ const KNOBDEF = () => [
   ...DSKNOBS(),
   ...QTKNOBS(),
   ...MWKNOBS(),
+  /* Phone: the compose sheet from the header button, or a composer inline above the feed */
+  ['k-ncomp', 'nComp', [['sheet', 'Sheet from the header'], ['inline', 'Inline above the feed']], () => { st.device = 'native'; Object.assign(nst, { tab: 'home', stack: [], sheet: null, inl: false }); }],
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -5188,7 +5212,8 @@ function renderControls() {
   seg($('k-theme'), [['light', 'Light'], ['dark', 'Dark']], 'appearance', () => { try { localStorage.setItem('session-web-appearance', st.appearance); } catch (e) {} });
   seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
-  /* Data: which data store the app reads; the mock backend's latency and failures */
+  { const k = $('kw-native'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }
+  /* Data: the mock backend's latency and failures */
   seg($('k-api'), [['normal', 'Normal (120 ms)'], ['slow', 'Slow (1.2 s)'], ['fail', 'Writes fail']], 'apiMode', applyApiMode);
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
@@ -5235,7 +5260,7 @@ const NI = {
   sparkle: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5c.4 2.9 1.7 4.6 5 5.2v.6c-3.3.6-4.6 2.3-5 5.2h-.6c-.4-2.9-1.7-4.6-5-5.2v-.6c3.3-.6 4.6-2.3 5-5.2z"/></svg>',
   lock: NS('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'),
 };
-Object.assign(nst, { tab: 'home', stack: [], sheet: null, sub: null, seg: 'doc', homeF: 'all', cMode: 'ask', cSpace: 'public', web: true, draft: '', fu: '', edit: false, keyName: '', keyDraft: '', keyErr: '', scroll: {} });
+Object.assign(nst, { tab: 'home', stack: [], sheet: null, sub: null, seg: 'doc', homeF: 'all', cMode: 'ask', cSpace: 'public', web: true, draft: '', fu: '', inl: false, inlAt: null, edit: false, keyName: '', keyDraft: '', keyErr: '', scroll: {} });
 const nTop = () => nst.stack[nst.stack.length - 1] || null;
 const nKey = () => { const t = nTop(); return t ? t.v + ':' + (t.id ?? '') : 'tab:' + nst.tab; };
 const nTitles = { home: 'Home', spaces: 'Spaces', saved: 'Saved', you: 'You' };
@@ -5249,7 +5274,8 @@ function nTabs() {
   return `<nav class="n-tabbar">${it('home', NI.home)}${it('spaces', NI.spaces)}${it('saved', NI.saved)}${it('you', NI.you)}</nav>`;
 }
 /* top bar for tab roots: actions only; the large title scrolls with the content */
-const nRootBar = right => `<div class="n-bar n-bar-root"><span></span><span></span><span class="n-bar-r">${right || ''}</span></div>`;
+/* a top-level screen's bar: its title on the left, actions on the right */
+const nRootBar = (right, title) => `<div class="n-bar n-bar-root"><h1 class="n-bar-h">${title || ''}</h1><span class="n-bar-r">${right || ''}</span></div>`;
 const nBtn = (act, ic, label) => `<button class="n-ib" type="button" data-n="${act}" aria-label="${label}">${ic}</button>`;
 function nPushBar(title, right) {
   const prev = nst.stack.length > 1 ? nLabel(nst.stack[nst.stack.length - 2]) : nTitles[nst.tab];
@@ -5271,10 +5297,26 @@ function nCell(p) {
 }
 const nFeed = list => `<div class="n-feed">${list.map(nCell).join('') || '<p class="n-empty">Nothing here yet.</p>'}</div>`;
 
+/* Phone › Composer › Inline: a field above the feed on Home and in a space that opens in place,
+   instead of the compose sheet from the header button. In a space, the ask or post goes to that space. */
+const nInlineOn = () => st.nComp === 'inline';
+let nInlineFocus = false;
+function nInline(sid) {
+  if (!nInlineOn()) return '';
+  const at = sid || 'home', field = act => `<div class="n-pad"><button class="n-icomp-f" type="button" data-n="${act}">${NI.compose}<span>Make a query, or write a post…</span></button></div>`;
+  if (!nSignedIn()) return field('sheet:signin');
+  if (!nst.inl || nst.inlAt !== at) return field('inline:' + at);
+  const x = sp(nst.cSpace), ask = nst.cMode === 'ask' || !!x.postsOff, pay = !ask || nCanPay(x);
+  const note = ask ? (pay ? `Gemini 4 Argon · ${esc(nProvider(x))}` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : 'Posts use no tokens.';
+  return `<div class="n-pad"><div class="n-icomp"><textarea id="n-draft" class="n-draft n-idraft" rows="3" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>`
+    + `<div class="n-icomp-r">${nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : [])}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}<span class="grow"></span>`
+    + `<button class="n-icomp-x" type="button" data-n="inline:close">Cancel</button><button class="n-capbtn" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && pay ? '' : ' disabled'}>${ask ? 'Ask' : 'Post'}</button></div>`
+    + `<p class="n-icomp-m">${note}</p></div></div>`;
+}
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
   const posts = D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
-  return { body: `${nRootBar(nBtn('sheet:compose', NI.compose, 'New ask or post'))}<h1 class="n-lt">${nSignedIn() ? 'Home' : 'Everything on Session'}</h1><div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nFeed(posts)}` };
+  return { body: `${nRootBar(nInlineOn() ? '' : nBtn('sheet:compose', NI.compose, 'New ask or post'), nSignedIn() ? 'Home' : 'Everything on Session')}${nInline(null)}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nFeed(posts)}` };
 }
 function nSpacesRoot() {
   const order = st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces();
@@ -5288,7 +5330,7 @@ function nSpacesRoot() {
   const q = nst.edit ? '' : (nst.sq || '').trim().toLowerCase(), hit = x => !q || (x.name + ' ' + (x.title || '') + ' ' + spName(x)).toLowerCase().includes(q);
   const mineH = mine.filter(hit), otherH = (nSignedIn() ? other : D.spaces.filter(visibleSp)).filter(hit);
   const groups = `${nSignedIn() && mineH.length ? nGroup('Your spaces', mineH.map(row), nst.edit ? 'Drag to reorder. This order is used across the app.' : '') : ''}${nst.edit || !otherH.length ? '' : nGroup(nSignedIn() ? 'Discover' : 'Spaces', otherH.map(disc))}`;
-  return { body: `${nRootBar(right)}<h1 class="n-lt">Spaces</h1>${nst.edit ? '' : `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-sq" type="search" placeholder="Search spaces" aria-label="Search spaces" value="${esc(nst.sq || '')}"></label></div>`}${groups || `<p class="n-empty">No spaces match “${esc(nst.sq.trim())}”.</p>`}` };
+  return { body: `${nRootBar(right, 'Spaces')}${nst.edit ? '' : `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-sq" type="search" placeholder="Search spaces" aria-label="Search spaces" value="${esc(nst.sq || '')}"></label></div>`}${groups || `<p class="n-empty">No spaces match “${esc(nst.sq.trim())}”.</p>`}` };
 }
 function nSpace(id) {
   const x = sp(id), j = D.joined.includes(id);
@@ -5296,8 +5338,8 @@ function nSpace(id) {
     const r = relOf(id), cta = r === 'out' ? `<button class="n-capbtn" type="button" data-n="sheet:signin">Log in</button>` : r === 'pending' ? '<span class="n-val">Request sent</span>' : x.policy === 'request' ? `<button class="n-capbtn" type="button" data-n="join:${id}">Request to join</button>` : `<span class="n-val">${policyLabel(x)}</span>`;
     return { body: `${nPushBar(nNameH(x), nBtn('sheet:wiki', NI.info, 'About this space'))}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span><span>${fmt(x.members)} members</span></div>${cta}</div><p class="n-empty">Threads in ${spName(x)} are visible to members only.</p>` };
   }
-  const right = nBtn('sheet:wiki', NI.info, 'About this space') + nBtn('sheet:compose', NI.compose, 'New ask or post');
-  return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${nFeed(postsFor(id))}` };
+  const right = nBtn('sheet:wiki', NI.info, 'About this space') + (nInlineOn() && j ? '' : nBtn('sheet:compose', NI.compose, 'New ask or post'));
+  return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${j || !nSignedIn() ? nInline(id) : ''}${nFeed(postsFor(id))}` };
 }
 /* Follow-ups of an ask thread, from the same data as the web: with question trees on, the asks about
    the question's answer (asks below them open on their own screen); otherwise the flat follow-ups. */
@@ -5343,13 +5385,13 @@ function nThread(i) {
 }
 function nSaved() {
   const list = [...st.saved].map(i => D.posts[i]);
-  return { body: `${nRootBar('')}<h1 class="n-lt">Saved</h1>${nSignedIn() ? nFeed(list) : nSignedOut('Log in to save threads and read them later.')}` };
+  return { body: `${nRootBar('', 'Saved')}${nSignedIn() ? nFeed(list) : nSignedOut('Log in to save threads and read them later.')}` };
 }
 const nSignedOut = msg => `<div class="n-out"><p>${msg}</p><button class="n-capbtn wide" type="button" data-n="sheet:signin">Log in or sign up</button></div>`;
 function nYou() {
-  if (!nSignedIn()) return { body: `${nRootBar('')}<h1 class="n-lt">You</h1>${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
+  if (!nSignedIn()) return { body: `${nRootBar('', 'You')}${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
   const mine = D.posts.filter(p => p.u === ME.u && canRead(sp(p.s))).length;
-  return { body: `${nRootBar('')}<h1 class="n-lt">You</h1><div class="n-me">${avatar(ME.u, 'n-av xl')}<div><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></div></div>${nGroup('', [
+  return { body: `${nRootBar('', 'You')}<div class="n-me">${avatar(ME.u, 'n-av xl')}<div><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></div></div>${nGroup('', [
     `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${D.joined.length}</span><span class="n-chev">${NI.chev}</span></button>`,
     `<button class="n-row" type="button" data-n="push:keys"><span class="n-row-b"><b>API keys</b></span><span class="n-val">${st.userKeys.length}</span><span class="n-chev">${NI.chev}</span></button>`,
   ])}${nAppearance()}${nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:signout"><span class="n-row-b"><b>Sign out</b></span></button>`])}` };
@@ -5358,7 +5400,7 @@ const nAppearance = () => nGroup('Appearance', [`<div class="n-row"><span class=
 function nKeys() {
   const rows = st.userKeys.map(k => `<button class="n-row" type="button" data-n="sheet:key:${k.id}"><span class="n-row-b"><b>${esc(k.label)}</b><small${k.valid ? '' : ' class="n-bad"'}>${esc(k.sub)}</small></span><span class="n-chev">${NI.chev}</span></button>`);
   rows.push(`<button class="n-row n-add" type="button" data-n="sheet:addkey">${NI.plus}<span class="n-row-b"><b>Add API key</b></span></button>`);
-  return { body: `${nPushBar('', '')}<h1 class="n-lt sm">API keys</h1>${nGroup('', rows, 'Keys are stored encrypted and used only for asks you make. Usage is billed by the provider.')}` };
+  return { body: `${nPushBar('API keys', '')}${nGroup('', rows, 'Keys are stored encrypted and used only for asks you make. Usage is billed by the provider.')}` };
 }
 
 /* sheets */
@@ -5373,6 +5415,7 @@ function nProvider(x) {
 function nSheet() {
   const s = nst.sheet, [k, a] = s.split(/:(.*)/s);
   const act = (title, msg, items) => `<div class="n-scrim" data-n="close"></div><div class="n-act" role="dialog" aria-label="${esc(title || 'Actions')}"><div class="n-act-g">${title || msg ? `<div class="n-act-h">${title ? `<b>${title}</b>` : ''}${msg ? `<p>${msg}</p>` : ''}</div>` : ''}${items.map(([l, d, cls]) => `<button type="button" class="${cls || ''}" data-n="${d}">${l}</button>`).join('')}</div><div class="n-act-g"><button type="button" class="n-act-c" data-n="close">Cancel</button></div></div>`;
+  if (k === 'ispace') return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det" role="dialog" aria-label="Choose a space"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>Space</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${nGroup('', D.spaces.filter(y => D.joined.includes(y.id)).map(y => `<button class="n-row" type="button" data-n="icspace:${y.id}">${glyph(y, 'n-gl')}<span class="n-row-b"><b>${nNameH(y)}</b></span>${y.id === nst.cSpace ? '<span class="n-check">✓</span>' : ''}</button>`))}</div></div>`;
   if (k === 'tmore') return act('', '', [['Share…', 'close'], ['Copy link', 'close'], ['Report', 'close', 'n-red']]);
   if (k === 'signout') return act('', 'You can sign back in with X at any time.', [['Sign out', 'signout', 'n-red']]);
   if (k === 'leave') { const x = sp(a), back = !isClosed(x) ? 'You can join again at any time.' : x.vis === 'unlisted' || x.policy === 'invite' ? 'To come back, you need a new invite.' : 'To come back, you need to request to join again.'; return act('', `Leave ${esc(nName(x))}? ${back}`, [['Leave space', 'leave:' + a, 'n-red']]); }
@@ -5419,6 +5462,13 @@ function nClick(e) {
   });
   if (k === 'sub') return nGo(() => { nst.sub = a || null; });
   if (k === 'cspace') return nGo(() => { nst.cSpace = a; nst.sub = null; });
+  /* inline composer: open it on Home or in a space, close it, pick its space */
+  if (k === 'inline') return nGo(() => {
+    if (a === 'close') { nst.inl = false; nst.draft = ''; return; }
+    nst.inl = true; nst.inlAt = a; nst.cMode = 'ask'; nInlineFocus = true;
+    nst.cSpace = a !== 'home' ? a : D.joined.includes(nst.cSpace) ? nst.cSpace : D.joined[0] || 'public';
+  });
+  if (k === 'icspace') return nGo(() => { nst.cSpace = a; nst.sheet = null; if (sp(a).postsOff) nst.cMode = 'ask'; nInlineFocus = true; });
   if (k === 'cmode') return nGo(() => { nst.cMode = a; });
   if (k === 'web') return nGo(() => { nst.web = !nst.web; });
   if (k === 'homef') return nGo(() => { nst.homeF = a; });
@@ -5443,7 +5493,7 @@ function nClick(e) {
     if (kind === 'ask' && !nCanPay(sp(nst.cSpace))) return;
     Object.assign(st, { home: false, space: nst.cSpace, draft: nst.draft });
     createThread(kind);
-    nst.sheet = null; nst.draft = '';
+    nst.sheet = null; nst.draft = ''; nst.inl = false;
     nst.stack = [...nst.stack, { v: 'thread', id: st.thread }]; nst.scroll = { ...nst.scroll, ['thread:' + st.thread]: 0 };
   });
   if (k === 'addkey-save') return nGo(() => {
@@ -5465,7 +5515,7 @@ function nInput(e) {
 function renderNative() {
   $('app').innerHTML = nativeApp();
   const sc = $('n-scr'); if (sc) sc.scrollTop = nst.scroll[nKey()] || 0;
-  if (nst.sheet === 'compose' && !nst.sub) { const d = $('n-draft'); if (d) d.focus({ preventScroll: true }); }
+  if ((nst.sheet === 'compose' && !nst.sub) || (nInlineFocus && !nst.sheet)) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
 }
 
 /* ================= closed spaces =================
@@ -8615,7 +8665,7 @@ function QTKNOBS() {
   }]];
 }
 st.thrV = 'qt';
-Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas' });
+Object.assign(st, { mTools: 'icons', mMenu: 'sheet', mMap: 'canvas', nComp: 'sheet' });
 qtSyncNotif();
 function qtReset() {
   sfReset();
