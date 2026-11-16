@@ -6138,7 +6138,8 @@ const linkLive = l => !l.dead;
 const linkMeta = l => l.dead ? (l.dead === 'Used' ? `Used by ${l.usedBy}` : `Expired ${l.exp}`) : `One use · ${l.exp ? `expires ${l.exp}` : 'no expiry'}`;
 /* In-page dropdown: a button and a listbox, re-rendered from state (st.dd is the open one).
    Up/Down moves between options, Enter or Space picks one, Escape closes. */
-const DD_SET = { role: (v, u) => { const s2 = sp(st.mgSpace), l = ROLES.find(x => x[0] === v)[1]; setMembers(s2, memFor(s2).map(x => x.u === u ? { ...x, role: v } : x)); toast(`${u} is now ${v === 'admin' ? 'an admin' : 'a ' + l.toLowerCase()}.`); },
+const DD_SET = { role: (v, u) => { const s2 = sp(st.mgSpace), m = memFor(s2).find(x => x.u === u); if (!m || m.role === v) return; st.modal = `cs-role:${u}:${v}`; },
+  roleSet: (v, u) => { const s2 = sp(st.mgSpace), l = ROLES.find(x => x[0] === v)[1]; setMembers(s2, memFor(s2).map(x => x.u === u ? { ...x, role: v } : x)); toast(`${u} is now ${v === 'admin' ? 'an admin' : 'a ' + l.toLowerCase()}.`); },
   lexp: v => { st.linkExp = v; }, key: v => { csEdit(d => { d.key = v; }); }, limit: v => { csEdit(d => { d.limit = v; }); } };
 function ddSel(id, opts, val, labelId) {
   const cur = opts.find(o => o[0] === val) || opts[0], open = st.dd === id;
@@ -6350,6 +6351,14 @@ function csModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
   const s = a && sp(a);
   if (k === 'cs-req') return `<div class="modal-scrim"><div class="modal cs-m" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">Request to join ${spName(s)}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${csReqForm(s, 'modal')}</div></div>`;
+  if (k === 'cs-role') {
+    const [u, v] = a.split(':'), s2 = sp(st.mgSpace), m = memFor(s2).find(x => x.u === u), was = m ? m.role : 'member';
+    const L = r => ROLES.find(x => x[0] === r)[1], rank = { member: 0, mod: 1, admin: 2 };
+    const can = { member: 'post and ask', mod: 'approve requests, handle reports and remove members', admin: 'approve requests, handle reports, remove members and change roles and settings' };
+    const up = rank[v] > rank[was];
+    const what = up ? `${esc(u)} will be able to ${can[v]}.` : v === 'member' ? `${esc(u)} will no longer be able to ${can[was]}.` : `${esc(u)} will no longer be able to change roles or settings, but can still ${can.mod}.`;
+    return dlg(`Change ${esc(u)} from ${L(was)} to ${L(v)}?`, `<p class="muted">${what}</p><p class="cs-fine">${MI.mods}<span>Moderators can approve requests and remove members. Admins can also change roles and settings.</span></p>`, `${cancelB()}<button class="btn ${up ? 'primary' : 'danger'}" type="button" data-csrole-ok="${esc(u)}:${v}">${up ? `Make ${L(v).toLowerCase()}` : 'Change role'}</button>`, 'alertdialog');
+  }
   if (k === 'cs-myreq') return dlg(`Your request to join ${spName(s)}`, `<p class="faint cs-small">Sent ${st.reqAge === 'just now' ? 'just now' : st.reqAge + ' ago'}. A moderator has not decided yet.</p>${csAnswers(s)}`, `<button class="btn" type="button" data-cswithdraw="${s.id}">Withdraw request</button>${cancelB('Close')}`);
   if (k === 'cs-withdraw') return dlg('Withdraw your request?', `<p class="muted">Moderators of ${spName(s)} will no longer see it. You can request again at any time.</p>`, `${cancelB('Keep request')}<button class="btn danger" type="button" data-cswithdraw-ok="${s.id}">Withdraw</button>`, 'alertdialog');
   /* joining and leaving an open space ask first */
@@ -6491,6 +6500,7 @@ function csClick(t) {
   /* invites */
   if (st.dd && !t.closest('.dd')) { st.dd = null; renderAll(); }
   if ((b = d('[data-dd]'))) { const id = b.dataset.dd; st.dd = st.dd === id ? null : id; renderAll(); const f = st.dd ? document.querySelector('.dd-pop [aria-selected="true"]') || document.querySelector('.dd-pop .dd-o') : document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
+  if ((b = d('[data-csrole-ok]'))) { const [u, v] = b.dataset.csroleOk.split(':'); st.modal = null; DD_SET.roleSet(v, u); return go(); }
   if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s); DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
@@ -6565,7 +6575,7 @@ const JUMPS = [
   ['Not a member', [['nm-browse', 'Browse: listed closed spaces'], ['nm-search', 'Search results'], ['nm-switcher', 'Space switcher'], ['nm-space', 'Closed space page'], ['nm-request', 'Request form'], ['nm-thread', 'Link to a closed thread'], ['nm-unlisted', 'Unlisted space link, no access'], ['nm-invite', 'Invite link'], ['nm-expired', 'Expired invite link']]],
   ['Pending applicant', [['pd-space', 'Space page while pending'], ['pd-switcher', 'Switcher while pending'], ['pd-yours', 'Your spaces while pending'], ['pd-withdraw', 'Withdraw the request'], ['pd-approved', 'Request approved'], ['pd-declined', 'Request declined']]],
   ['Member', [['mb-space', 'Closed space, member view'], ['mb-welcome', 'First visit after approval'], ['mb-ask', 'Ask in a closed space'], ['mb-thread', 'Closed thread: share'], ['mb-home', 'Home feed with closed threads'], ['mb-leave', 'Leave a closed space'], ['mb-unlisted', 'Unlisted space, member view'], ['mb-invite', 'Member invites to an unlisted space']]],
-  ['Moderator', [['md-space', 'Space page with request count'], ['md-queue', 'Review queue'], ['md-decline', 'Decline a request'], ['md-members', 'Members: roles, remove, ban'], ['md-invite', 'Invite people'], ['md-links', 'Invite links'], ['md-settings', 'Space settings'], ['md-toclosed', 'Switch #math from open to closed'], ['md-toopen', 'Switch #replication-club to open']]],
+  ['Moderator', [['md-space', 'Space page with request count'], ['md-queue', 'Review queue'], ['md-decline', 'Decline a request'], ['md-members', 'Members: roles, remove, ban'], ['md-role', 'Change a role (confirm)'], ['md-invite', 'Invite people'], ['md-links', 'Invite links'], ['md-settings', 'Space settings'], ['md-toclosed', 'Switch #math from open to closed'], ['md-toopen', 'Switch #replication-club to open']]],
   ['Owner', [['ow-create', 'Create a space'], ['ow-create-closed', 'Create a closed space']]],
 ];
 const SAMPLE_ANS = ['The default-enrolment savings result, using the public survey microdata.', 'github.com/ines-v/replications'];
@@ -6617,6 +6627,7 @@ function jump(k) {
     case 'md-queue': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', reqSeen: true }); break;
     case 'md-decline': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', declIds: [openReqs()[0].u], modal: 'cs-decline' }); break;
     case 'md-members': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'members', space: 'replication' }); break;
+    case 'md-role': { Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'members', space: 'replication' }); const m = memFor(sp('replication')).find(x => x.u !== ME.u && x.role === 'member'); if (m) st.modal = `cs-role:${m.u}:mod`; break; }
     case 'md-links': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'invites', space: 'replication' }); break;
     case 'md-invite': space('replication'); csInvite('replication'); break;
     case 'md-settings': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); break;
@@ -8032,7 +8043,7 @@ function dsManagePage(s) {
   const who = stSec('Who can add sources', '', `<div class="cs-radios">${radio('ds-pol', 'members', pol, isClosed(s) ? 'Members' : 'Anyone who can post', 'Sources appear in the list when they are added.')}${radio('ds-pol', 'review', pol, isClosed(s) ? 'Members, after review' : 'Anyone who can post, after review', 'A moderator approves each source before others see it.')}${radio('ds-pol', 'mods', pol, 'Moderators', 'Others can still ask about a link they paste into the composer.')}</div>`);
   const sec = (t, l) => l ? `<section class="st-sec"><div class="st-head"><h3>${t}</h3></div><div class="ds-mlist">${l}</div></section>` : '';
   const copies = stSec('Reader copies', '', `<ul class="mi-plain"><li>Session keeps one reader copy of each source, shared by the spaces that have it.</li><li>Paid posts: only the free part is kept.</li><li>When the author edits a source, both versions are kept and answers that quote the old text are marked.</li><li>When the author deletes a source, its copy is removed and quotes are replaced with a note.</li>${isClosed(s) ? `<li>Sources and asks in ${spName(s)} are visible to members only. The originals stay public on their sites.</li>` : ''}</ul>`);
-  return `<div class="ds-manage">${sec('Waiting for review', pend.map(d => row(d, b('reject', d, 'Remove') + b('approve', d, 'Approve', ' primary'), `Added by ${dsWho(d.by)} ${dsAgo(d.age)}${d.note ? ' · ' + esc(d.note) : ''}`)).join(''))}${sec('Reported', reps.map(r => row({ m: r.m, by: r.by, age: r.age }, b('keep', r, 'Keep') + b('reject', r, 'Remove'), `${DS_WHY[r.why]} · reported by ${dsWho(r.by)} ${dsAgo(r.age)}`)).join(''))}${who}${sec('Removed', rem.map(d => row(d, b('restore', d, 'Restore'))).join(''))}${copies}</div>`;
+  return `<div class="ds-manage">${sec('Waiting for review', pend.map(d => row(d, `<button class="btn sm" type="button" data-dsrmq="${d.m}:${s.id}:pend">Remove</button>` + b('approve', d, 'Approve', ' primary'), `Added by ${dsWho(d.by)} ${dsAgo(d.age)}${d.note ? ' · ' + esc(d.note) : ''}`)).join(''))}${sec('Reported', reps.map(r => row({ m: r.m, by: r.by, age: r.age }, b('keep', r, 'Keep') + `<button class="btn sm" type="button" data-dsrmq="${r.m}:${s.id}:rep">Remove</button>`, `${DS_WHY[r.why]} · reported by ${dsWho(r.by)} ${dsAgo(r.age)}`)).join(''))}${who}${sec('Removed', rem.map(d => row(d, b('restore', d, 'Restore'))).join(''))}${copies}</div>`;
 }
 
 /* ---------- dialogs ---------- */
@@ -8053,6 +8064,11 @@ function dsModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
   if (k === 'ds-send') return dsSendDlg();
   const [mid, sid] = (a || '').split(':'), m = MIT(mid), s = sp(sid);
+  if (k === 'ds-rmq') {
+    const kind = (a || '').split(':')[2], x = dsAll(sid).find(y => y.m === mid && !y.rm), rp = st.dsReps.find(r => r.sid === sid && r.m === mid);
+    const body = kind === 'pend' ? `<p class="muted">It has not been shown to others and will not be listed in ${spName(s)}. ${x && x.by !== ME.u ? `${dsWho(x.by)} can still ask about the link in the composer.` : ''}</p>` : `<p class="muted">It is no longer listed in ${spName(s)}, and the report is resolved. Asks about it stay in the space.</p>${rp ? `<p class="cs-fine">${CI.users}<span>${dsWho(rp.by)} gets a notification that the report was resolved.</span></p>` : ''}`;
+    return dlg(kind === 'pend' ? `Remove this source from the review queue?` : `Remove this source from ${spName(s)}?`, `${miMini(m)}${body}`, `${cancelB()}<button class="btn danger" type="button" data-dsmod="reject:${sid}:${mid}">Remove</button>`, 'alertdialog');
+  }
   if (k === 'ds-rm') return dlg(`Remove this source from ${spName(s)}?`, `${miMini(m)}<p class="muted">It is no longer listed in ${spName(s)}. Asks about it stay in the space.</p>`, `${cancelB()}<button class="btn danger" type="button" data-dsrmok="${mid}:${sid}">Remove</button>`, 'alertdialog');
   if (k === 'ds-report') return dlg('Report this source', `${miMini(m)}<div class="cs-radios" role="radiogroup" aria-label="Reason">${Object.entries(DS_WHY).map(([v, l]) => radio('ds-why', v, st.dsWhy, l, '')).join('')}</div><label class="fld"><span>Details (optional)</span><textarea id="ds-repnote" rows="2">${esc(st.dsRepNote)}</textarea></label><p class="cs-fine">${SFI.flag}<span>The moderators of ${spName(s)} see the report.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-dsrepgo="${mid}:${sid}">Send report</button>`);
   return '';
@@ -8102,6 +8118,7 @@ function dsClick(t) {
     toast(`Sent to ${res.map(y => spName(sp(y.sid))).join(' and ')}.${rv.length ? ` A moderator of ${rv.join(' and ')} reviews it first.` : ''}`, `ds:open:${res[0].sid}:${m.id}`, 'Open');
     return go();
   }
+  if ((b = d('[data-dsrmq]'))) { st.modal = 'ds-rmq:' + b.dataset.dsrmq; return go(); }
   if ((b = d('[data-dsrm]'))) { Object.assign(st, { dsMenu: null, modal: 'ds-rm:' + b.dataset.dsrm }); return go(); }
   if ((b = d('[data-dsrmok]'))) {
     const [mid, sid] = b.dataset.dsrmok.split(':'), x = dsDropOf(sid, mid);
@@ -8116,6 +8133,7 @@ function dsClick(t) {
   if ((b = d('[data-dsmod]'))) {
     const [k, sid, mid] = b.dataset.dsmod.split(':'), x = dsAll(sid).find(y => y.m === mid && (k === 'restore' ? y.rm : !y.rm));
     if (x) dsEdit(sid, y => y === x, y => { if (k === 'approve') y.rv = false; if (k === 'reject') y.rm = true; if (k === 'restore') y.rm = false; });
+    if (k === 'reject') { st.modal = null; toast(`Removed from ${spName(sp(sid))}. It is listed under Removed.`); }
     if (k === 'keep' || k === 'reject') st.dsReps = st.dsReps.filter(r => !(r.sid === sid && r.m === mid));
     return go();
   }
@@ -8235,7 +8253,7 @@ function DSKNOBS() {
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
   ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l])]],
-  ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
+  ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-rmq', 'Manage › Sources: remove a source (confirm)'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
 function dsNewSpace() {
   let s = sp('sp-field-notes');
@@ -8277,6 +8295,7 @@ function dsJump(k) {
     case 'x-home': st.home = true; break;
     case 'x-review': st.space = 'public'; list(); st.dsUrl = 'x.com/lin_feld/status/18590'; break;
     case 'x-queue': setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); break;
+    case 'x-rmq': { setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); const x = dsAll('public').find(d => d.rv && !d.rm); if (x) st.modal = `ds-rmq:${x.m}:public:pend`; break; }
     case 'x-manage': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', mgTab: 'sources', set: null }); break;
     case 'x-report': miOpen('m10'); Object.assign(st, { dsWhy: 'topic', dsRepNote: '', modal: 'ds-report:m10:ml' }); break;
     case 'x-remove': miOpen('m10'); st.modal = 'ds-rm:m10:ml'; break;
