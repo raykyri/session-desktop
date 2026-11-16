@@ -2542,27 +2542,17 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .Af.ds-left .body { grid-template-columns: auto minmax(0, 1fr); }
   .Af.ds-left .body > .drawer { order: -1; border-left: 0; border-right: 1px solid var(--divider); }
 }
-/* "Layout" control (desktop; on phones the sidebar layouts open as a sheet) */
-.ds-dht { color: var(--t-heading); font-size: var(--fs-sm); }
+/* "Layout" control: the sidebar on the right or the left, with the space header in the main column (E, F)
+   or across both columns with separate tab strips below it (G, H) */
 .ds-side .dh .grow { flex: 1; }
-.ds-allm { gap: 12px !important; }
-.ds-allh { display: flex; align-items: flex-start; gap: 6px; }
-.ds-allh > .ds-drop { flex: 1; min-width: 0; }
-.ds-allh > .ds-selb { width: 36px; height: 36px; flex: none; }
-.ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
-.ds-wikim > .drawer { position: static; width: auto; border: 0; background: transparent; }
-.ds-wikim > .drawer .dbody { padding: 0; }
-.ds-ovb[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.ds-top { min-width: 0; }
 @media (min-width: 921px) {
-  .Af.ds-l-split .body { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .Af.ds-l-split .body > .ds-lsrc { border-left: 0; border-right: 1px solid var(--divider); }
-  .Af.ds-l-overlay .body { grid-template-columns: minmax(0, 1fr); }
-  .Af.ds-l-overlay .body > .mcol { grid-row: 1; grid-column: 1; }
-  .Af.ds-l-overlay .body > .drawer { display: none; }
-  .Af.ds-l-overlay.ds-ovopen .body > .drawer { display: flex; grid-row: 1; grid-column: 1; justify-self: end; align-self: start; position: sticky; top: 0; height: var(--ds-ovh, 600px); z-index: 30; border: 1px solid var(--divider); box-shadow: var(--shadow-pop); }
-  .Af.ds-l-overlay.ds-ovopen .body > .drawer .dbody { overflow-y: auto; min-height: 0; flex: 1; }
+  .Af.ds-hd .body { grid-template-rows: auto 1fr; }
+  .Af.ds-hd .body > .ds-top { grid-column: 1 / -1; order: -2; }
+  .Af.ds-hd .drawer .dh.ds-tabs { background: var(--pane); }
+  .Af.ds-hd .ds-stab { height: 38px; }
+  .Af.ds-hd .drawer.closed .dh { padding-top: 6px; }
 }
-@media (max-width: 640px) { .ds-allh > .ds-selb { width: 40px; height: 40px; } }
 /* right sidebar: Sources and Wiki tabs */
 .ds-pane > .ds-sunits { margin: 0 -4px; }
 .ds-sunits .mi-u-t { font-size: var(--fs-sm); }
@@ -3018,11 +3008,12 @@ function csTabs() {
 /* Banner: name (title when "Show as …" is on) and seal, description, and a meta line with visibility for
    closed spaces and the verified domain ("Verified line" control). On spaces with the FAQ landing the
    banner is compact. The space tabs follow it. */
-const banner = (s, noCta) => {
-  const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
+/* noTabs: the space tabs are placed by the layout (header across both columns) */
+const banner = (s, noCta, noTabs) => {
+  const bv = faqOn(s) ? 'compact' : 'full', tabs = noTabs ? '' : sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const lay = dsLay(), mw = !canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>` : lay === 'tabs' ? '' : lay === 'overlay' ? `<button class="btn sm ds-ovb" type="button" data-dsov="${st.dsOvOpen ? 0 : 1}" aria-pressed="${!!st.dsOvOpen}">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>`;
-  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
+  const mw = canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs || noTabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
 const layoutSpace = () => {
@@ -3042,7 +3033,7 @@ const layoutSpace = () => {
   const x = dsSpaceParts(s, tab, body);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
     ${topHeader()}
-    <div class="body">${x.left || ''}
+    <div class="body">${x.top || ''}
       <div class="mcol">${x.mcol}</div>
       ${x.side}
     </div></div>`;
@@ -3348,7 +3339,7 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
-  if (canRead(s) && dsLay() !== 'split') return dsSideDrawer(s);
+  if (canRead(s)) return dsSideDrawer(s);
   return st.drawer
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
@@ -5833,10 +5824,10 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* Tabs: Threads, About; with the "Tabs beside Threads" layout also Sources and Wiki. */
-const sfTabCur = () => dsLay() === 'tabs' && ['sources', 'wiki'].includes(st.spTab) && canRead(sp(st.space)) ? st.spTab : st.spTab === 'about' ? 'about' : 'threads';
+/* Tabs: Threads, About. Sources and the wiki are in the sidebar. */
+const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  const cur = sfTabCur(), items = dsLay() === 'tabs' && canRead(s) ? [['threads', 'Threads'], ['sources', 'Sources'], ['wiki', 'Wiki'], ['about', 'About']] : [['threads', 'Threads'], ['about', 'About']];
+  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -6708,8 +6699,7 @@ Object.assign(st, {
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
    Placement ("Layout" control, st.dsPos): a sidebar with Sources and Wiki tabs on the right or the
-   left, Sources and Wiki as space tabs beside Threads and About, Sources on the left with the wiki on
-   the right, or the sidebar as a panel over the page. Sources are listed in the Social feed style. */
+   left, below the space header (in the main column, or across both columns). Sources are listed in the Social feed style. */
 const DS_DROPS0 = {
   ml: [
     { m: 'm9', by: 'hal_b', age: '16h' },
@@ -6867,40 +6857,23 @@ function dsSideList(s) {
   return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsEmpty(s);
 }
 function dsSideDrawer(s) {
-  const ov = st.dsPos === 'overlay';
-  const close = ov ? `<button class="iconbtn" type="button" data-dsov="0" aria-label="Close">${I.close}</button>` : `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
-  if (!st.drawer && !ov) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
+  const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
+  if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
   const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${st.dsSTab === k}" data-dsstab="${k}">${l}</button>`;
   const wiki = st.dsSTab === 'wiki';
   const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
-  return `<aside class="drawer wk ds-side${ov ? ' ds-ovl' : ''}" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
+  return `<aside class="drawer wk ds-side" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
 }
 /* the drop box, the list and the selection bar */
 const dsSrcPane = s => `${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}`;
-/* Sources on the left, wiki on the right (Layout: split) */
-function dsSrcDrawer(s) {
-  if (!st.dsLOpen) return `<aside class="drawer closed ds-lsrc" aria-label="Sources"><div class="dh"><button class="iconbtn" type="button" data-dsl="1" aria-label="Open sources">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
-  return `<aside class="drawer wk ds-side ds-lsrc" aria-label="Sources"><div class="dh">${MII.library.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b class="ds-dht">Sources</b><span class="grow"></span>${dsSelBtn(s)}<button class="iconbtn" type="button" data-dsl="0" aria-label="Collapse sources">${I.close}</button></div><div class="dbody ds-pane" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div></aside>`;
-}
-/* Sources tab in the main column (Layout: tabs) */
-function dsAllMain(s) {
-  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${dsSideList(s)}${dsPickBar()}${dsOver(s)}</div>`;
-}
 
 /* ---------- space page ---------- */
-/* Parts of the space page for the "Layout" control (st.dsPos). On phones the split and the panel use the
-   sidebar sheet like the other sidebar layouts. */
-const dsLay = () => dsNarrow() && ['split', 'overlay'].includes(st.dsPos) ? 'right' : st.dsPos;
+/* Parts of the space page for the "Layout" control (st.dsPos): right, left, hd-right, hd-left. With hd-*
+   the space header spans both columns and the space tabs and the sidebar tabs sit side by side below it. */
 function dsSpaceParts(s, tab, body) {
-  const lay = dsLay();
-  const x = { left: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: ` ds-l-${lay}${lay === 'left' ? ' ds-left' : ''}${lay === 'overlay' && st.dsOvOpen ? ' ds-ovopen' : ''}` };
-  if (!canRead(s)) return x;
-  if (lay === 'tabs') {
-    x.side = '';
-    if (tab === 'sources') x.mcol = banner(s) + dsAllMain(s);
-    if (tab === 'wiki') x.mcol = banner(s) + `<div class="main ds-wikim"><aside class="drawer wk" aria-label="Space wiki"><div class="dbody">${wikiCards(s)}</div></aside></div>`;
-  }
-  if (lay === 'split') x.left = dsSrcDrawer(s);
+  const pos = st.dsPos, hd = pos.startsWith('hd-'), left = pos.endsWith('left');
+  const x = { top: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: `${left ? ' ds-left' : ''}${hd ? ' ds-hd' : ''}` };
+  if (hd) { x.top = `<div class="ds-top">${banner(s, false, true)}</div>`; x.mcol = sfTabs(s) + body; }
   return x;
 }
 /* Home: the latest sources added to your spaces */
@@ -6961,9 +6934,6 @@ function dsClick(t) {
   if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
   if ((b = d('[data-dssignin]'))) { st.modal = 'signin'; return go(); }
   if ((b = d('[data-dsstab]'))) { st.dsSTab = b.dataset.dsstab; return go(); }
-  if ((b = d('[data-dsl]'))) { st.dsLOpen = b.dataset.dsl === '1'; return go(); }
-  if ((b = d('[data-dsov]'))) { st.dsOvOpen = b.dataset.dsov === '1'; return go(); }
-  if (st.dsOvOpen && !d('.ds-ovl') && !d('.modal, .modal-scrim')) { st.dsOvOpen = false; renderAll(); }
   if ((b = d('[data-dsdropdemo]'))) { dsDropped(b.dataset.dsdropdemo, DS_DRAG_URL); return true; }
   if ((b = d('[data-dsclear]'))) { Object.assign(st, { dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
   if ((b = d('[data-dsadd]'))) {
@@ -7069,17 +7039,8 @@ function compAnim() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || st.device === 'native') return;
   open.filter(el => !prev.has(el.dataset.ck || 'main')).forEach(el => el.animate([{ opacity: 0, transform: 'translateY(4px) scale(.985)' }, { opacity: 1, transform: 'none' }], { duration: 120, easing: COMP_EASE }));
 }
-/* the panel over the page is as tall as the visible part of the page below the header */
-function dsOvFit() {
-  const a = $('app'), el = a && a.querySelector('.ds-ovopen .ds-ovl'); if (!el) { dsOvFit.was = false; return; }
-  const b = el.parentElement.getBoundingClientRect(), r = a.getBoundingClientRect();
-  a.style.setProperty('--ds-ovh', Math.round(r.bottom - Math.max(r.top, b.top)) + 'px');
-  if (!dsOvFit.was && !matchMedia('(prefers-reduced-motion: reduce)').matches) el.animate([{ opacity: 0, transform: `translateX(${st.dsPos === 'overlay' ? 12 : 0}px)` }, { opacity: 1, transform: 'none' }], { duration: 140, easing: COMP_EASE });
-  dsOvFit.was = true;
-}
-$('app').addEventListener('scroll', () => { if (st.dsOvOpen) dsOvFit(); }, { passive: true });
 function dsAfterRender() {
-  compAnim(); dsOvFit();
+  compAnim();
   if (st.dsFlash && st.device !== 'native') {
     const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
@@ -7095,7 +7056,7 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
-    ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['tabs', 'Tabs beside Threads'], ['split', 'Sources left, wiki right'], ['overlay', 'Panel over the page']], () => { Object.assign(st, { drawer: true, dsLOpen: true, dsOvOpen: st.dsPos === 'overlay', dsSTab: 'sources', mWiki: false }); if (['sources', 'wiki'].includes(st.spTab)) st.spTab = 'threads'; dsOnSpace(); }],
+    ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
   ];
 }
 
@@ -7116,14 +7077,14 @@ function dsNewSpace() {
 }
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsLOpen: true, dsOvOpen: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
   { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
   setRel('replication', 'none');
   dsReset();
   const [, g, v] = k.split('-');
   const nar = dsNarrow();
   /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
-  const list = () => { const l = dsLay(); if (l === 'tabs') st.spTab = 'sources'; else if (l === 'overlay') st.dsOvOpen = true; else if (nar) st.mWiki = true; };
+  const list = () => { if (nar) st.mWiki = true; };
   const listFull = list;
   const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
   const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
@@ -7153,7 +7114,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'right', dsLOpen: true, dsOvOpen: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'right', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
