@@ -1477,7 +1477,7 @@ button.n-row:active { background: var(--n-fill); }
 .jd-gh { padding: 8px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t-faint); }
 .ds-hcard-m { margin: 4px 0 14px; }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
-.k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; }
+.knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
 .jd-o[aria-selected="true"] { color: var(--t-heading); font-weight: 550; }
@@ -3014,12 +3014,13 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob"><div class="seg k-grp"><button class="k-reset" id="k-reset" type="button" title="Reset controls to their defaults (keeps the theme)" aria-label="Reset controls to their defaults"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4"/><path d="M4 6.2v7h3v-3.4h2v3.4h3v-7"/></svg></button><span class="k-sep" aria-hidden="true"></span><div id="k-theme" class="k-inner"></div></div></div>
       <div class="knob"><div class="seg" id="k-auth"></div></div>
       <div class="knob"><div class="seg" id="k-dev"></div></div>
+      <div class="knob" title="Mock backend: request latency, or every write fails"><div class="seg" id="k-api" aria-label="Mock backend"></div><span class="k-dstat" id="k-dstat" role="status"></span></div>
       <div class="knob cs-jk"><div id="k-jump" class="jd"></div></div>
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
     </div>
-    <div class="knobs cs-knobs" aria-label="Sources controls">
+    <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
     </div>
@@ -3032,11 +3033,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" aria-label="Ask thread controls">
       <span class="cs-kt">Ask threads</span>
       <div class="knob" id="kw-thrv"><span>Thread page</span><div class="seg" id="k-thrv"></div></div>
-    </div>
-    <div class="knobs cs-knobs" aria-label="Data controls">
-      <span class="cs-kt">Data</span>
-      <div class="knob" id="kw-api"><span>Mock backend</span><div class="seg" id="k-api"></div></div>
-      <span class="k-dstat" id="k-dstat" role="status"></span>
     </div>
   </div>
   <div class="frame">
@@ -3324,7 +3320,7 @@ const liveData = createDataStore('liveData', apiSource);
 DS = liveData;
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
-const applyApiMode = () => { mockBackend.cfg.latency = st.apiMode === 'slow' ? 1200 : mockBackend.cfg.base; mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
+const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
 /* for tests: true when the data store is loaded and has no requests in flight */
 window.__dataIdle = () => dataReady() && DS.meta.getState().pending === 0;
 /* the store finished loading, a request finished, or a failed write was undone: show it */
@@ -3334,7 +3330,7 @@ liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p
 /* ---- mock backend: serves /api/* in this page ----
    An in-memory database seeded from the fixtures (its own copy), saved to localStorage so it survives a
    reload. A new version of the seed data (a changed fixture in this file) starts a new database.
-   Each request waits a set latency. Variants › Mock backend sets the latency and can make writes fail. */
+   Each request waits 120 ms. The Variants bar's 120ms / Fail control can make every write fail. */
 const mockBackend = (() => {
   const LS = 'session-mock-db-v2';
   const base = typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120;
@@ -5208,7 +5204,9 @@ function renderControls() {
   seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
   /* Data: the mock backend's latency and failures */
-  seg($('k-api'), [['normal', 'Normal (120 ms)'], ['slow', 'Slow (1.2 s)'], ['fail', 'Writes fail']], 'apiMode', applyApiMode);
+  seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail']], 'apiMode', applyApiMode);
+  /* the Sources layout control has no effect in the phone app */
+  { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
